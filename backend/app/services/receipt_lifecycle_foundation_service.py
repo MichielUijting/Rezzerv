@@ -189,14 +189,18 @@ def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
 
 
 def install_receipt_lifecycle_foundation(app, engine) -> None:
-    """Register the idempotent schema foundation on FastAPI startup."""
+    """Apply the Release-A foundation once when the loaded runtime is ready.
+
+    app.__init__ already waits until app.main has created the FastAPI app, engine,
+    receipt schema and delete route. Registering another FastAPI startup handler at
+    that late point is unsafe because the startup phase may already have passed.
+    Therefore the same idempotent schema function is executed directly here.
+    """
     marker = "_rezzerv_receipt_lifecycle_foundation_installed"
     if getattr(app.state, marker, False):
         return
 
-    async def _ensure_on_startup() -> None:
-        with engine.begin() as conn:
-            ensure_receipt_lifecycle_foundation_schema(conn)
+    with engine.begin() as conn:
+        ensure_receipt_lifecycle_foundation_schema(conn)
 
-    app.add_event_handler("startup", _ensure_on_startup)
     setattr(app.state, marker, True)
