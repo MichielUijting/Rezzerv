@@ -1,8 +1,7 @@
-import sqlite3
-
 from sqlalchemy import create_engine, text
 
 from app.services.receipt_reimport_lineage_service import (
+    get_prior_processed_line_fact,
     load_deleted_reimport_lineage,
     resolve_reimport_logical_line_key,
 )
@@ -44,26 +43,47 @@ def _engine():
                 created_at DATETIME
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE purchase_import_batches (
+                id TEXT PRIMARY KEY,
+                source_type TEXT,
+                source_reference TEXT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE purchase_import_lines (
+                id TEXT PRIMARY KEY,
+                batch_id TEXT NOT NULL,
+                external_line_ref TEXT,
+                processing_status TEXT,
+                processed_at DATETIME,
+                processed_event_id TEXT,
+                created_at DATETIME
+            )
+        """))
     return engine
+
+
+def _seed_deleted_receipt(conn, *, workflow_state="removed_reimport_allowed"):
+    conn.execute(text("INSERT INTO raw_receipts VALUES ('raw-old','0','abc',CURRENT_TIMESTAMP)"))
+    conn.execute(text("""
+        INSERT INTO receipt_tables
+            (id, raw_receipt_id, logical_receipt_key, workflow_state, deleted_at, updated_at)
+        VALUES
+            ('receipt-old','raw-old','receipt-key',:workflow_state,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+    """), {"workflow_state": workflow_state})
+    conn.execute(text("""
+        INSERT INTO receipt_table_lines
+            (id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, logical_line_key, created_at)
+        VALUES
+            ('line-old','receipt-old',0,'Melk','melk',1,'liter',1.25,1.25,'line-key',CURRENT_TIMESTAMP)
+    """))
 
 
 def test_reimport_lineage_reuses_exact_receipt_and_line_keys_only():
     engine = _engine()
     with engine.begin() as conn:
-        conn.execute(text("INSERT INTO raw_receipts VALUES ('raw-old','0','abc',CURRENT_TIMESTAMP)"))
-        conn.execute(text("""
-            INSERT INTO receipt_tables
-                (id, raw_receipt_id, logical_receipt_key, workflow_state, deleted_at, updated_at)
-            VALUES
-                ('receipt-old','raw-old','receipt-key','removed_reimport_allowed',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-        """))
-        conn.execute(text("""
-            INSERT INTO receipt_table_lines
-                (id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, logical_line_key, created_at)
-            VALUES
-                ('line-old','receipt-old',0,'Melk','melk',1,'liter',1.25,1.25,'line-key',CURRENT_TIMESTAMP)
-        """))
-
+        _seed_deleted_receipt(conn)
         lineage = load_deleted_reimport_lineage(conn, '0', 'abc')
 
     assert lineage is not None
@@ -84,11 +104,40 @@ def test_reimport_lineage_reuses_exact_receipt_and_line_keys_only():
 def test_non_reimportable_deleted_receipt_is_not_lineage_source():
     engine = _engine()
     with engine.begin() as conn:
-        conn.execute(text("INSERT INTO raw_receipts VALUES ('raw-old','0','abc',CURRENT_TIMESTAMP)"))
-        conn.execute(text("""
-            INSERT INTO receipt_tables
-                (id, raw_receipt_id, logical_receipt_key, workflow_state, deleted_at, updated_at)
-            VALUES
-                ('receipt-old','raw-old','receipt-key','legacy_deleted',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-        """))
+        _seed_deleted_receipt(conn, workflow_state='legacy_deleted')
         assert load_deleted_reimport_lineage(conn, '0', 'abc') is None
+
+
+def test_prior_processed_line_fact_uses_existing_unpack_state():
+    engine = _engine()
+    with engine.begin() as conn:
+        _seed_deleted_receipt(conn)
+        conn.execute(text("INSERT INTO purchase_import_batches VALUES ('batch-old','receipt','receipt:receipt-old')"))
+        conn.execute(text("""
+            INSERT INTO purchase_import_lines
+                (id, batch_id, external_line_ref, processing_status, processed_at, processed_event_id, created_at)
+            VALUES
+                ('pil-old','batch-old','receipt-line:line-old','processed',CURRENT_TIMESTAMP,'event-old',CURRENT_TIMESTAMP)
+        """))
+        fact = get_prior_processed_line_fact(conn, 'line-key', current_receipt_table_id='receipt-new')
+
+    assert fact is not None
+    assert fact['purchase_import_line_id'] == 'pil-old'
+    assert fact['processing_status'] == 'processed'
+    assert fact['processed_event_id'] == 'event-old'
+
+
+def test_unprocessed_logical_line_remains_available_for_unpacking():
+    engine = _engine()
+    with engine.begin() as conn:
+        _seed_deleted_receipt(conn)
+        conn.execute(text("INSERT INTO purchase_import_batches VALUES ('batch-old','receipt','receipt:receipt-old')"))
+        conn.execute(text("""
+            INSERT INTO purchase_import_lines
+                (id, batch_id, external_line_ref, processing_status, processed_at, processed_event_id, created_at)
+            VALUES
+                ('pil-old','batch-old','receipt-line:line-old','pending',NULL,NULL,CURRENT_TIMESTAMP)
+        """))
+        fact = get_prior_processed_line_fact(conn, 'line-key', current_receipt_table_id='receipt-new')
+
+    assert fact is None
