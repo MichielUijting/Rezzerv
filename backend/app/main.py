@@ -12033,18 +12033,15 @@ def delete_receipts(payload: ReceiptDeleteRequest, authorization: Optional[str] 
         raw_ids = [str(row['raw_receipt_id']) for row in rows if row.get('raw_receipt_id')]
         receipt_params = {f"rid_{idx}": value for idx, value in enumerate(deleted_receipt_ids)}
         receipt_placeholders = ", ".join([f":rid_{idx}" for idx, _ in enumerate(deleted_receipt_ids)])
-        for row in rows:
-            remove_receipt_inventory_events(
-                conn,
-                receipt_table_id=str(row['receipt_table_id']),
-                household_id=str(row.get('household_id') or ''),
-            )
-        conn.execute(text(f"UPDATE receipt_tables SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id IN ({receipt_placeholders})"), receipt_params)
+        conn.execute(
+            text(f"UPDATE receipt_tables SET deleted_at = CURRENT_TIMESTAMP, workflow_state = 'removed_reimport_allowed', updated_at = CURRENT_TIMESTAMP WHERE id IN ({receipt_placeholders})"),
+            receipt_params,
+        )
         if raw_ids:
             raw_params = {f"raw_{idx}": value for idx, value in enumerate(raw_ids)}
             raw_placeholders = ", ".join([f":raw_{idx}" for idx, _ in enumerate(raw_ids)])
-            conn.execute(text(f"UPDATE raw_receipts SET deleted_at = CURRENT_TIMESTAMP, sha256_hash = sha256_hash || ':deleted:' || id || ':' || strftime('%s','now') WHERE id IN ({raw_placeholders})"), raw_params)
-    return {'deleted_receipt_table_ids': deleted_receipt_ids, 'deleted_count': len(deleted_receipt_ids)}
+            conn.execute(text(f"UPDATE raw_receipts SET deleted_at = CURRENT_TIMESTAMP WHERE id IN ({raw_placeholders})"), raw_params)
+    return {'deleted_receipt_table_ids': deleted_receipt_ids, 'deleted_count': len(deleted_receipt_ids), 'workflow_state': 'removed_reimport_allowed', 'reimport_allowed': True}
 
 
 @app.post("/api/admin/receipts/purge-archived")

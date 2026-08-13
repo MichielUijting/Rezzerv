@@ -106,6 +106,10 @@ from app.receipt_ingestion.service_parts.text_extraction import (
     _preprocess_pdf_text,
 )
 from app.services.receipt_status_baseline_service import STATUS_LABELS
+from app.services.receipt_reimport_lineage_service import (
+    load_deleted_reimport_lineage,
+    resolve_reimport_logical_line_key,
+)
 from app.integrations.receipt_scanners.runtime import (
     scan_receipt_content_via_gateway,
     validate_receipt_scanner_configuration,
@@ -1985,6 +1989,7 @@ def _store_raw_file(storage_root: Path, household_id: str, raw_receipt_id: str, 
 def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False, create_failed_receipt_table: bool = False, failed_store_name: str | None = None, failed_purchase_at: str | None = None, include_debug: bool = False) -> dict[str, Any]:
     detected_mime = detect_mime_type(filename, file_bytes, mime_type)
     digest = sha256_hex(file_bytes)
+    reimport_lineage = None
     with engine.begin() as conn:
         duplicate = conn.execute(
             text(
@@ -2014,6 +2019,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
         ).mappings().first()
         if duplicate:
             return _build_duplicate_receipt_response(duplicate)
+        reimport_lineage = load_deleted_reimport_lineage(conn, household_id, digest)
 
     parse_result = scan_receipt_content_via_gateway(file_bytes, filename, detected_mime)
     if reject_non_receipt and not parse_result.is_receipt:
@@ -2064,9 +2070,9 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                 text(
                     '''
                     INSERT INTO receipt_tables (
-                        id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount, discount_total, currency, parse_status, confidence_score, line_count
+                        id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount, discount_total, currency, parse_status, confidence_score, line_count, logical_receipt_key, workflow_state
                     ) VALUES (
-                        :id, :raw_receipt_id, :household_id, :store_name, :store_branch, :purchase_at, :total_amount, :discount_total, :currency, :parse_status, :confidence_score, :line_count
+                        :id, :raw_receipt_id, :household_id, :store_name, :store_branch, :purchase_at, :total_amount, :discount_total, :currency, :parse_status, :confidence_score, :line_count, :logical_receipt_key, 'active'
                     )
                     '''
                 ),
@@ -2083,6 +2089,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                     'parse_status': table_parse_status,
                     'confidence_score': table_confidence,
                     'line_count': table_line_count,
+                    'logical_receipt_key': (reimport_lineage or {}).get('logical_receipt_key') or uuid.uuid4().hex,
                 },
             )
             if parse_result.is_receipt:
@@ -2091,9 +2098,9 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                         text(
                             '''
                             INSERT INTO receipt_table_lines (
-                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score
+                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, logical_line_key
                             ) VALUES (
-                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score
+                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key
                             )
                             '''
                         ),
@@ -2112,6 +2119,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                             'article_match_status': 'unmatched',
                             'matched_article_id': None,
                             'confidence_score': line.get('confidence_score'),
+                            'logical_line_key': resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex,
                         },
                     )
         response = {
