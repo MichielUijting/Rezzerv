@@ -110,6 +110,7 @@ from app.services.receipt_reimport_lineage_service import (
     get_prior_processed_line_fact,
     load_deleted_reimport_lineage,
     resolve_reimport_logical_line_key,
+    was_prior_line_validated,
 )
 from app.integrations.receipt_scanners.runtime import (
     scan_receipt_content_via_gateway,
@@ -2096,6 +2097,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             if parse_result.is_receipt:
                 for index, line in enumerate(parse_result.lines):
                     logical_line_key = resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex
+                    prior_validated = was_prior_line_validated(reimport_lineage, index, line)
                     prior_processed = get_prior_processed_line_fact(
                         conn, logical_line_key, current_receipt_table_id=receipt_table_id
                     )
@@ -2125,7 +2127,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                             'matched_article_id': None,
                             'confidence_score': line.get('confidence_score'),
                             'logical_line_key': logical_line_key,
-                            'is_validated': 1 if prior_processed else 0,
+                            'is_validated': 1 if (prior_validated or prior_processed) else 0,
                         },
                     )
         response = {
