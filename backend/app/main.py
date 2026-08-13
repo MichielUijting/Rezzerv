@@ -71,6 +71,7 @@ from app.services.receipt_inventory_lifecycle_service import (
     remove_receipt_inventory_events,
     retime_receipt_inventory_events,
 )
+from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 import tempfile
 import cv2
@@ -9760,7 +9761,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
 
     line_rows = conn.execute(
         text("""
-        SELECT id, line_index,
+        SELECT id, line_index, logical_line_key,
                COALESCE(corrected_raw_label, raw_label) AS raw_label,
                COALESCE(corrected_quantity, quantity) AS quantity,
                COALESCE(corrected_unit, unit) AS unit,
@@ -9783,6 +9784,9 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         if not raw_label:
             continue
         external_line_ref = f"receipt-line:{line.get('id') or offset}"
+        prior_processed = get_prior_processed_line_fact(
+            conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id
+        )
         try:
             quantity_value = float(line.get('quantity')) if line.get('quantity') is not None else 1.0
         except Exception:
@@ -9853,12 +9857,12 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 id, batch_id, external_line_ref, external_article_code, article_name_raw,
                 brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
                 match_status, review_decision, ui_sort_order, matched_global_product_id,
-                matched_household_article_id, suggested_household_article_id, created_at
+                matched_household_article_id, suggested_household_article_id, processing_status, processed_at, processed_event_id, created_at
             ) VALUES (
                 :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,
                 :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
                 :match_status, 'selected', :ui_sort_order, :matched_global_product_id,
-                :matched_household_article_id, :suggested_household_article_id, CURRENT_TIMESTAMP
+                :matched_household_article_id, :suggested_household_article_id, :processing_status, :processed_at, :processed_event_id, CURRENT_TIMESTAMP
             )
             """),
             {
@@ -9877,6 +9881,9 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 'matched_global_product_id': matched_global_product_id,
                 'matched_household_article_id': matched_household_article_id,
                 'suggested_household_article_id': matched_household_article_id,
+                'processing_status': 'processed' if prior_processed else 'pending',
+                'processed_at': (prior_processed or {}).get('processed_at'),
+                'processed_event_id': (prior_processed or {}).get('processed_event_id'),
             },
         )
         existing_refs.add(external_line_ref)

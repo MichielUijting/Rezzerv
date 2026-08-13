@@ -107,6 +107,7 @@ from app.receipt_ingestion.service_parts.text_extraction import (
 )
 from app.services.receipt_status_baseline_service import STATUS_LABELS
 from app.services.receipt_reimport_lineage_service import (
+    get_prior_processed_line_fact,
     load_deleted_reimport_lineage,
     resolve_reimport_logical_line_key,
 )
@@ -2094,13 +2095,17 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             )
             if parse_result.is_receipt:
                 for index, line in enumerate(parse_result.lines):
+                    logical_line_key = resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex
+                    prior_processed = get_prior_processed_line_fact(
+                        conn, logical_line_key, current_receipt_table_id=receipt_table_id
+                    )
                     conn.execute(
                         text(
                             '''
                             INSERT INTO receipt_table_lines (
-                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, logical_line_key
+                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, logical_line_key, is_validated
                             ) VALUES (
-                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key
+                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key, :is_validated
                             )
                             '''
                         ),
@@ -2119,7 +2124,8 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                             'article_match_status': 'unmatched',
                             'matched_article_id': None,
                             'confidence_score': line.get('confidence_score'),
-                            'logical_line_key': resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex,
+                            'logical_line_key': logical_line_key,
+                            'is_validated': 1 if prior_processed else 0,
                         },
                     )
         response = {
