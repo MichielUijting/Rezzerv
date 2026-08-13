@@ -28,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -116,5 +118,8 @@ jobs:
           assert "WHERE deleted_at IS NULL" in foundation
           print('RECEIPT_LIFECYCLE_RELEASE_B_SOURCE_CONTRACT_GREEN')
 
+      - name: Fetch comparison base
+        run: git fetch origin "${{ github.base_ref || 'main' }}:refs/remotes/origin/${{ github.base_ref || 'main' }}"
+
       - name: No diff whitespace errors
-        run: git diff --check origin/${{ github.base_ref || 'main' }}...HEAD
+        run: git diff --check "origin/${{ github.base_ref || 'main' }}...HEAD"
