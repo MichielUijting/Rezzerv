@@ -14,7 +14,7 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - name: Patch and commit source through GitHub API
+      - name: Apply core readiness repair through GitHub API
         shell: python
         env:
           GH_TOKEN: ${{ github.token }}
@@ -24,14 +24,19 @@ jobs:
           import base64
           import json
           import os
-          import re
+          import sys
           import urllib.request
+
+          def report_exception(exc_type, exc, tb):
+              message = f'{exc_type.__name__}: {exc}'.replace('\n', ' ')
+              print(f'::error title=Unpacking readiness repair::{message}')
+              sys.__excepthook__(exc_type, exc, tb)
+          sys.excepthook = report_exception
 
           repo = os.environ['REPOSITORY']
           branch = os.environ['BRANCH']
           token = os.environ['GH_TOKEN']
           path = 'frontend/src/features/stores/StoreBatchDetailPage.jsx'
-          api = f'https://api.github.com/repos/{repo}/contents/{path}?ref={branch}'
 
           def request(url, *, method='GET', payload=None):
               data = json.dumps(payload).encode() if payload is not None else None
@@ -44,6 +49,7 @@ jobs:
               with urllib.request.urlopen(req) as response:
                   return json.loads(response.read().decode())
 
+          api = f'https://api.github.com/repos/{repo}/contents/{path}?ref={branch}'
           current = request(api)
           sha = current['sha']
           text = base64.b64decode(current['content']).decode('utf-8').replace('\r\n', '\n')
@@ -52,8 +58,10 @@ jobs:
           def replace_once(old, new, label):
               global text
               count = text.count(old)
-              assert count == 1, f'{label}: expected 1 match, got {count}'
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected 1 match, got {count}')
               text = text.replace(old, new, 1)
+              print(f'PASS {label}')
 
           replace_once(
               "  const effectiveLocationId = String(draft?.locationId || '')\n\n  const hasValidArticle",
@@ -75,13 +83,11 @@ jobs:
               "    hasProcessSource,\n    hasArticleGroup,\n    hasValidQuantity,\n    hasValidLocation,\n    isProcessable,",
               'return quantity readiness',
           )
-
           replace_once(
               "        const hasArticle = Boolean(String(line.matched_household_article_id || '').trim())\n        const hasGlobalProduct = Boolean(String(line.matched_global_product_id || '').trim())\n        const hasRawArticleName = Boolean(String(line.article_name_raw || '').trim())\n        const hasArticleGroup = Boolean(String(draft.articleGroupId || '').trim())\n        const hasValidLocation = validLocationIds.has(String(draft.locationId || ''))\n        return !hasArticle\n          && !hasGlobalProduct\n          && hasRawArticleName\n          && hasArticleGroup\n          && hasValidLocation",
               "        const hasArticle = Boolean(String(line.matched_household_article_id || '').trim())\n        const hasRawArticleName = Boolean(String(line.article_name_raw || '').trim())\n        const quantity = Number(line.quantity_raw ?? 0)\n        const hasValidQuantity = Number.isFinite(quantity) && quantity > 0\n        const hasValidLocation = validLocationIds.has(String(draft.locationId || ''))\n        return !hasArticle\n          && hasRawArticleName\n          && hasValidQuantity\n          && hasValidLocation",
-              'auto create hidden household article',
+              'hidden household article creation',
           )
-
           replace_once(
               "        hasProcessSource,\n        hasArticleGroup,\n        hasValidLocation,\n        isProcessable,",
               "        hasProcessSource,\n        hasArticleGroup,\n        hasValidQuantity,\n        hasValidLocation,\n        isProcessable,",
@@ -97,76 +103,29 @@ jobs:
               "        hasProcessSource,\n        hasArticleGroup,\n        hasValidQuantity,\n        hasValidLocation,\n        statusKey,",
               'line ui state quantity',
           )
-
-          replace_once('>Mijn artikel</ResizableHeaderCell>', '>Artikelgroep</ResizableHeaderCell>', 'table heading')
-          old_filter = '<th><select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)} aria-label="Filter op Mijn artikel">{MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>'
-          replace_once(old_filter, '<th />', 'obsolete mapping filter')
-
-          old_selector = '''                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-                        <StoreArticleSelector
-                          lineId={line.id}
-                          lineName={line.article_name_raw}
-                          selectedArticleId={entry.draft.articleId || ''}
-                          articleOptions={articleOptions}
-                          disabled={busyLineId === line.id || isProcessingBatch}
-                          onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
-                          onClearArticle={() => persistLineDraft(line, { articleId: '' })}
-                          onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                          canCreateArticle={Boolean(household?.permissions?.['article.create'])}
-                        />
-                      </td>'''
-          new_selector = '''                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-                        <select
-                          className="rz-input rz-inline-input"
-                          value={entry.draft.articleGroupId || ''}
-                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}
-                          aria-label={`Artikelgroep voor ${line.article_name_raw}`}
-                          data-testid={`receipt-line-article-group-select-${line.id}`}
-                          onChange={(event) => {
-                            const nextValue = event.target.value
-                            if (nextValue === '__add_article_group__') {
-                              openCreateArticleGroup(line.id)
-                              return
-                            }
-                            persistLineDraft(line, { articleGroupId: nextValue })
-                          }}
-                        >
-                          <option value="">Niet ingedeeld</option>
-                          {articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                          {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}
-                        </select>
-                      </td>'''
-          replace_once(old_selector, new_selector, 'table article group selector')
-
-          detail_pattern = r'\n\s*<div className="rz-receipt-line-detail__wide"><dt>Mijn artikel</dt><dd data-testid=\{`receipt-line-article-select-\$\{line\.id\}`\}><StoreArticleSelector.*?</dd></div>'
-          text, count = re.subn(detail_pattern, '', text, count=1, flags=re.S)
-          assert count == 1, f'detail Mijn artikel removal: expected 1 match, got {count}'
-          text = text.replace('<option value="">Kies artikelgroep</option>', '<option value="">Niet ingedeeld</option>')
-          text = text.replace("'Kies eerst Mijn artikel.'", "'Deze cataloguskoppeling is pas beschikbaar nadat het voorraadartikel technisch bestaat.'")
-          text = text.replace("'Mijn artikel was al aan dit universele artikel gekoppeld.'", "'Het voorraadartikel was al aan dit universele artikel gekoppeld.'")
-          text = text.replace("'Mijn artikel is aan het universele artikel gekoppeld.'", "'Het voorraadartikel is aan het universele artikel gekoppeld.'")
-          text = text.replace("'Koppelen aan Mijn artikel'", "'Koppelen'")
-          text = text.replace('<span>Kies eerst Mijn artikel.</span>', '<span>Het technische voorraadartikel bestaat nog niet.</span>')
           replace_once(
               '{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog artikel/product, locatie of artikelgroep.',
               '{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog bonartikel, geldig aantal of locatie.',
               'process warning',
           )
 
-          assert '&& hasArticleGroup\n    && hasValidLocation' not in text
-          assert "statusReason = 'Artikelgroep ontbreekt.'" not in text
-          assert 'artikel/product, locatie of artikelgroep' not in text
-          assert '&& hasArticleGroup\n          && hasValidLocation' not in text
-          assert '&& !hasGlobalProduct\n          && hasRawArticleName' not in text
-          assert '>Mijn artikel</ResizableHeaderCell>' not in text
-          assert '>Artikelgroep</ResizableHeaderCell>' in text
-          assert '<option value="">Niet ingedeeld</option>' in text
-          assert 'hasValidQuantity' in text and 'effectiveQuantity' in text
-          assert 'matched_household_article_id' in text
-          assert text != original
+          if '&& hasArticleGroup\n    && hasValidLocation' in text:
+              raise RuntimeError('Artikelgroep blokkeert nog de primaire readiness')
+          if "statusReason = 'Artikelgroep ontbreekt.'" in text:
+              raise RuntimeError('Artikelgroep staat nog als blokkerende statusreden')
+          if 'artikel/product, locatie of artikelgroep' in text:
+              raise RuntimeError('oude verwerkingsmelding staat nog in bron')
+          if '&& hasArticleGroup\n          && hasValidLocation' in text:
+              raise RuntimeError('Artikelgroep blokkeert nog hidden household article creation')
+          if '&& !hasGlobalProduct\n          && hasRawArticleName' in text:
+              raise RuntimeError('Universeel artikel blokkeert nog hidden household article creation')
+          if 'hasValidQuantity' not in text or 'effectiveQuantity' not in text:
+              raise RuntimeError('quantity readiness ontbreekt')
+          if text == original:
+              raise RuntimeError('geen bronwijziging geproduceerd')
 
           payload = {
-              'message': 'fix: apply unpacking readiness article model',
+              'message': 'fix: make article group optional in unpacking readiness',
               'content': base64.b64encode(text.encode('utf-8')).decode('ascii'),
               'sha': sha,
               'branch': branch,
