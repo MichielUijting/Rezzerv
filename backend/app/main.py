@@ -16111,10 +16111,10 @@ def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None))
                 """
                 INSERT INTO receipt_tables (
                     id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount,
-                    discount_total, currency, parse_status, confidence_score, line_count, created_at, updated_at
+                    discount_total, currency, parse_status, confidence_score, line_count, workflow_state, created_at, updated_at
                 ) VALUES (
                     :id, :raw_receipt_id, :household_id, 'Jumbo', 'Regressiefixture', '2026-03-25T09:00:00', 3.58,
-                    0.0, 'EUR', 'parsed', 0.99, 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    0.0, 'EUR', 'parsed', 0.99, 2, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """
             ),
@@ -19339,10 +19339,10 @@ def seed_regression_kassa_receipts(authorization: Optional[str] = Header(None)):
                 text("""
                 INSERT INTO receipt_tables (
                     id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount,
-                    discount_total, currency, parse_status, confidence_score, line_count, created_at, updated_at
+                    discount_total, currency, parse_status, confidence_score, line_count, workflow_state, created_at, updated_at
                 ) VALUES (
                     :id, :raw_receipt_id, :household_id, :store_name, NULL, :purchase_at, :total_amount,
-                    :discount_total, 'EUR', :parse_status, 0.99, :line_count, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    :discount_total, 'EUR', :parse_status, 0.99, :line_count, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """),
                 {
