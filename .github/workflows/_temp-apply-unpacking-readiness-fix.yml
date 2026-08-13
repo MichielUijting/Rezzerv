@@ -123,7 +123,7 @@ jobs:
           replace_once(old_selector, new_selector, 'table article group selector')
 
           detail_pattern = r'\n\s*<div className="rz-receipt-line-detail__wide"><dt>Mijn artikel</dt><dd data-testid=\{`receipt-line-article-select-\$\{line\.id\}`\}><StoreArticleSelector.*?</dd></div>'
-          text, count = re.subn(detail_pattern, '', text, count=1)
+          text, count = re.subn(detail_pattern, '', text, count=1, flags=re.S)
           assert count == 1, f'detail Mijn artikel removal: expected 1 match, got {count}'
           text = text.replace('<option value="">Kies artikelgroep</option>', '<option value="">Niet ingedeeld</option>')
 
