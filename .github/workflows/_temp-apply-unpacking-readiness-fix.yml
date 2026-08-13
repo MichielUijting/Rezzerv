@@ -14,19 +14,39 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: fix/unpacking-readiness-article-model
-          fetch-depth: 0
-
-      - name: Apply focused source patch
+      - name: Patch and commit source through GitHub API
         shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: fix/unpacking-readiness-article-model
         run: |
-          from pathlib import Path
+          import base64
+          import json
+          import os
           import re
+          import urllib.request
 
-          path = Path('frontend/src/features/stores/StoreBatchDetailPage.jsx')
-          text = path.read_text(encoding='utf-8').replace('\r\n', '\n')
+          repo = os.environ['REPOSITORY']
+          branch = os.environ['BRANCH']
+          token = os.environ['GH_TOKEN']
+          path = 'frontend/src/features/stores/StoreBatchDetailPage.jsx'
+          api = f'https://api.github.com/repos/{repo}/contents/{path}?ref={branch}'
+
+          def request(url, *, method='GET', payload=None):
+              data = json.dumps(payload).encode() if payload is not None else None
+              req = urllib.request.Request(url, data=data, method=method)
+              req.add_header('Authorization', f'Bearer {token}')
+              req.add_header('Accept', 'application/vnd.github+json')
+              req.add_header('X-GitHub-Api-Version', '2022-11-28')
+              if data is not None:
+                  req.add_header('Content-Type', 'application/json')
+              with urllib.request.urlopen(req) as response:
+                  return json.loads(response.read().decode())
+
+          current = request(api)
+          sha = current['sha']
+          text = base64.b64decode(current['content']).decode('utf-8').replace('\r\n', '\n')
           original = text
 
           def replace_once(old, new, label):
@@ -78,11 +98,7 @@ jobs:
               'line ui state quantity',
           )
 
-          replace_once(
-              ">Mijn artikel</ResizableHeaderCell>",
-              ">Artikelgroep</ResizableHeaderCell>",
-              'table heading',
-          )
+          replace_once('>Mijn artikel</ResizableHeaderCell>', '>Artikelgroep</ResizableHeaderCell>', 'table heading')
           old_filter = '<th><select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)} aria-label="Filter op Mijn artikel">{MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>'
           replace_once(old_filter, '<th />', 'obsolete mapping filter')
 
@@ -126,32 +142,34 @@ jobs:
           text, count = re.subn(detail_pattern, '', text, count=1, flags=re.S)
           assert count == 1, f'detail Mijn artikel removal: expected 1 match, got {count}'
           text = text.replace('<option value="">Kies artikelgroep</option>', '<option value="">Niet ingedeeld</option>')
-
           text = text.replace("'Kies eerst Mijn artikel.'", "'Deze cataloguskoppeling is pas beschikbaar nadat het voorraadartikel technisch bestaat.'")
           text = text.replace("'Mijn artikel was al aan dit universele artikel gekoppeld.'", "'Het voorraadartikel was al aan dit universele artikel gekoppeld.'")
           text = text.replace("'Mijn artikel is aan het universele artikel gekoppeld.'", "'Het voorraadartikel is aan het universele artikel gekoppeld.'")
           text = text.replace("'Koppelen aan Mijn artikel'", "'Koppelen'")
           text = text.replace('<span>Kies eerst Mijn artikel.</span>', '<span>Het technische voorraadartikel bestaat nog niet.</span>')
-
           replace_once(
               '{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog artikel/product, locatie of artikelgroep.',
               '{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog bonartikel, geldig aantal of locatie.',
               'process warning',
           )
 
-          assert text != original, 'No source changes applied'
-          path.write_text(text, encoding='utf-8')
+          assert '&& hasArticleGroup\n    && hasValidLocation' not in text
+          assert "statusReason = 'Artikelgroep ontbreekt.'" not in text
+          assert 'artikel/product, locatie of artikelgroep' not in text
+          assert '&& hasArticleGroup\n          && hasValidLocation' not in text
+          assert '&& !hasGlobalProduct\n          && hasRawArticleName' not in text
+          assert '>Mijn artikel</ResizableHeaderCell>' not in text
+          assert '>Artikelgroep</ResizableHeaderCell>' in text
+          assert '<option value="">Niet ingedeeld</option>' in text
+          assert 'hasValidQuantity' in text and 'effectiveQuantity' in text
+          assert 'matched_household_article_id' in text
+          assert text != original
 
-      - name: Validate focused contracts
-        run: |
-          python tools/check_unpacking_readiness_article_model.py
-          python -m pytest -q backend/tests/test_unpacking_readiness_article_model_contract.py
-
-      - name: Commit product repair
-        run: |
-          git config user.name "Rezzerv Release Bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add frontend/src/features/stores/StoreBatchDetailPage.jsx
-          git diff --cached --check
-          git commit -m "fix: apply unpacking readiness article model"
-          git push origin HEAD:fix/unpacking-readiness-article-model
+          payload = {
+              'message': 'fix: apply unpacking readiness article model',
+              'content': base64.b64encode(text.encode('utf-8')).decode('ascii'),
+              'sha': sha,
+              'branch': branch,
+          }
+          result = request(f'https://api.github.com/repos/{repo}/contents/{path}', method='PUT', payload=payload)
+          print('PRODUCT_COMMIT', result['commit']['sha'])
