@@ -3,10 +3,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "frontend/src/features/stores/StoreBatchDetailPage.jsx"
+BACKEND_MAIN = ROOT / "backend/app/main.py"
 
 
 def _source() -> str:
     return SOURCE.read_text(encoding="utf-8")
+
+
+def _backend_source() -> str:
+    return BACKEND_MAIN.read_text(encoding="utf-8")
 
 
 def test_article_group_is_not_an_unpacking_readiness_gate():
@@ -41,3 +46,15 @@ def test_household_article_remains_internal_inventory_anchor():
     source = _source()
     assert "matched_household_article_id" in source
     assert "articleId" in source
+
+
+def test_backend_does_not_require_article_group_for_inventory_processing():
+    source = _backend_source()
+    assert 'if not article_group_id:\n                    error = "Geen geldige artikelgroep gekozen"' not in source
+
+
+def test_backend_validates_article_group_only_when_one_is_selected():
+    source = _backend_source()
+    assert 'if article_group_id:' in source
+    assert 'FROM article_groups' in source
+    assert 'household_id = :household_id' in source
