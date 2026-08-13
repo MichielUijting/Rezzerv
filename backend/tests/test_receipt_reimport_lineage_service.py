@@ -4,6 +4,7 @@ from app.services.receipt_reimport_lineage_service import (
     get_prior_processed_line_fact,
     load_deleted_reimport_lineage,
     resolve_reimport_logical_line_key,
+    was_prior_line_validated,
 )
 
 
@@ -40,6 +41,7 @@ def _engine():
                 unit_price NUMERIC,
                 line_total NUMERIC,
                 logical_line_key TEXT,
+                is_validated INTEGER NOT NULL DEFAULT 0,
                 created_at DATETIME
             )
         """))
@@ -64,7 +66,7 @@ def _engine():
     return engine
 
 
-def _seed_deleted_receipt(conn, *, workflow_state="removed_reimport_allowed"):
+def _seed_deleted_receipt(conn, *, workflow_state="removed_reimport_allowed", is_validated=0):
     conn.execute(text("INSERT INTO raw_receipts VALUES ('raw-old','0','abc',CURRENT_TIMESTAMP)"))
     conn.execute(text("""
         INSERT INTO receipt_tables
@@ -74,10 +76,21 @@ def _seed_deleted_receipt(conn, *, workflow_state="removed_reimport_allowed"):
     """), {"workflow_state": workflow_state})
     conn.execute(text("""
         INSERT INTO receipt_table_lines
-            (id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, logical_line_key, created_at)
+            (id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, logical_line_key, is_validated, created_at)
         VALUES
-            ('line-old','receipt-old',0,'Melk','melk',1,'liter',1.25,1.25,'line-key',CURRENT_TIMESTAMP)
-    """))
+            ('line-old','receipt-old',0,'Melk','melk',1,'liter',1.25,1.25,'line-key',:is_validated,CURRENT_TIMESTAMP)
+    """), {"is_validated": int(bool(is_validated))})
+
+
+def _matching_line():
+    return {
+        'raw_label': 'Melk',
+        'normalized_label': 'melk',
+        'quantity': 1,
+        'unit': 'liter',
+        'unit_price': 1.25,
+        'line_total': 1.25,
+    }
 
 
 def test_reimport_lineage_reuses_exact_receipt_and_line_keys_only():
@@ -89,16 +102,31 @@ def test_reimport_lineage_reuses_exact_receipt_and_line_keys_only():
     assert lineage is not None
     assert lineage['receipt_table_id'] == 'receipt-old'
     assert lineage['logical_receipt_key'] == 'receipt-key'
-    assert resolve_reimport_logical_line_key(
-        lineage,
-        0,
-        {'raw_label': 'Melk', 'normalized_label': 'melk', 'quantity': 1, 'unit': 'liter', 'unit_price': 1.25, 'line_total': 1.25},
-    ) == 'line-key'
+    assert resolve_reimport_logical_line_key(lineage, 0, _matching_line()) == 'line-key'
     assert resolve_reimport_logical_line_key(
         lineage,
         0,
         {'raw_label': 'Melk', 'normalized_label': 'melk', 'quantity': 2, 'unit': 'liter', 'unit_price': 1.25, 'line_total': 2.50},
     ) is None
+
+
+def test_prior_kassa_validation_is_preserved_for_exact_line_match():
+    engine = _engine()
+    with engine.begin() as conn:
+        _seed_deleted_receipt(conn, is_validated=1)
+        lineage = load_deleted_reimport_lineage(conn, '0', 'abc')
+
+    assert resolve_reimport_logical_line_key(lineage, 0, _matching_line()) == 'line-key'
+    assert was_prior_line_validated(lineage, 0, _matching_line()) is True
+
+
+def test_unvalidated_prior_line_stays_unvalidated():
+    engine = _engine()
+    with engine.begin() as conn:
+        _seed_deleted_receipt(conn, is_validated=0)
+        lineage = load_deleted_reimport_lineage(conn, '0', 'abc')
+
+    assert was_prior_line_validated(lineage, 0, _matching_line()) is False
 
 
 def test_non_reimportable_deleted_receipt_is_not_lineage_source():
@@ -111,7 +139,7 @@ def test_non_reimportable_deleted_receipt_is_not_lineage_source():
 def test_prior_processed_line_fact_uses_existing_unpack_state():
     engine = _engine()
     with engine.begin() as conn:
-        _seed_deleted_receipt(conn)
+        _seed_deleted_receipt(conn, is_validated=1)
         conn.execute(text("INSERT INTO purchase_import_batches VALUES ('batch-old','receipt','receipt:receipt-old')"))
         conn.execute(text("""
             INSERT INTO purchase_import_lines
@@ -127,10 +155,10 @@ def test_prior_processed_line_fact_uses_existing_unpack_state():
     assert fact['processed_event_id'] == 'event-old'
 
 
-def test_unprocessed_logical_line_remains_available_for_unpacking():
+def test_approved_but_unprocessed_line_remains_pending_for_unpacking():
     engine = _engine()
     with engine.begin() as conn:
-        _seed_deleted_receipt(conn)
+        _seed_deleted_receipt(conn, is_validated=1)
         conn.execute(text("INSERT INTO purchase_import_batches VALUES ('batch-old','receipt','receipt:receipt-old')"))
         conn.execute(text("""
             INSERT INTO purchase_import_lines
@@ -138,6 +166,8 @@ def test_unprocessed_logical_line_remains_available_for_unpacking():
             VALUES
                 ('pil-old','batch-old','receipt-line:line-old','pending',NULL,NULL,CURRENT_TIMESTAMP)
         """))
-        fact = get_prior_processed_line_fact(conn, 'line-key', current_receipt_table_id='receipt-new')
+        lineage = load_deleted_reimport_lineage(conn, '0', 'abc')
+        processed_fact = get_prior_processed_line_fact(conn, 'line-key', current_receipt_table_id='receipt-new')
 
-    assert fact is None
+    assert was_prior_line_validated(lineage, 0, _matching_line()) is True
+    assert processed_fact is None
