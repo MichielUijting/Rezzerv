@@ -1,0 +1,56 @@
+name: Temporary patch Release A receipt fixture
+
+on:
+  push:
+    branches:
+      - fix/release-a-receipt-fixture-workflow-state
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/release-a-receipt-fixture-workflow-state
+          fetch-depth: 0
+      - name: Patch stale direct receipt inserts
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+
+          old_columns = "discount_total, currency, parse_status, confidence_score, line_count, created_at, updated_at"
+          new_columns = "discount_total, currency, parse_status, confidence_score, line_count, workflow_state, created_at, updated_at"
+          if text.count(old_columns) != 2:
+              raise SystemExit(f'Expected exactly 2 stale receipt column lists, found {text.count(old_columns)}')
+          text = text.replace(old_columns, new_columns)
+
+          old_fixture_values = "0.0, 'EUR', 'parsed', 0.99, 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP"
+          new_fixture_values = "0.0, 'EUR', 'parsed', 0.99, 2, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP"
+          if text.count(old_fixture_values) != 1:
+              raise SystemExit(f'Expected exactly 1 fixed fixture values list, found {text.count(old_fixture_values)}')
+          text = text.replace(old_fixture_values, new_fixture_values)
+
+          old_seed_values = ":discount_total, 'EUR', :parse_status, 0.99, :line_count, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP"
+          new_seed_values = ":discount_total, 'EUR', :parse_status, 0.99, :line_count, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP"
+          if text.count(old_seed_values) != 1:
+              raise SystemExit(f'Expected exactly 1 seed values list, found {text.count(old_seed_values)}')
+          text = text.replace(old_seed_values, new_seed_values)
+
+          path.write_text(text, encoding='utf-8')
+      - name: Verify patch
+        run: |
+          git diff --check
+          git diff -- backend/app/main.py
+      - name: Commit patch
+        run: |
+          git config user.name "Rezzerv CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add backend/app/main.py
+          git commit -m "Fix receipt regression seeds for lifecycle workflow state"
+          git push origin HEAD:fix/release-a-receipt-fixture-workflow-state
