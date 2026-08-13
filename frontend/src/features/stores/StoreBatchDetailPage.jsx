@@ -186,14 +186,16 @@ function deriveLineSelectionState({ line, draft, validLocationIds, processingSta
   const effectiveRawArticleName = String(line?.article_name_raw || '').trim()
   const effectiveArticleGroupId = String(draft?.articleGroupId || '')
   const effectiveLocationId = String(draft?.locationId || '')
+  const effectiveQuantity = Number(line?.quantity_raw ?? 0)
 
   const hasValidArticle = Boolean(effectiveArticleId)
   const hasValidProductOrArticle = Boolean(effectiveArticleId || effectiveGlobalProductId)
   const hasProcessSource = Boolean(effectiveArticleId || effectiveGlobalProductId || effectiveRawArticleName)
   const hasArticleGroup = Boolean(effectiveArticleGroupId)
+  const hasValidQuantity = Number.isFinite(effectiveQuantity) && effectiveQuantity > 0
   const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
   const isProcessable = hasProcessSource
-    && hasArticleGroup
+    && hasValidQuantity
     && hasValidLocation
     && processingStatus !== 'processed'
 
@@ -203,10 +205,12 @@ function deriveLineSelectionState({ line, draft, validLocationIds, processingSta
     effectiveRawArticleName,
     effectiveArticleGroupId,
     effectiveLocationId,
+    effectiveQuantity,
     hasValidArticle,
     hasValidProductOrArticle,
     hasProcessSource,
     hasArticleGroup,
+    hasValidQuantity,
     hasValidLocation,
     isProcessable,
   }
@@ -1423,14 +1427,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         if (String(line.processing_status || 'pending') === 'processed') return false
         const draft = getDraftValues(line)
         const hasArticle = Boolean(String(line.matched_household_article_id || '').trim())
-        const hasGlobalProduct = Boolean(String(line.matched_global_product_id || '').trim())
         const hasRawArticleName = Boolean(String(line.article_name_raw || '').trim())
-        const hasArticleGroup = Boolean(String(draft.articleGroupId || '').trim())
+        const quantity = Number(line.quantity_raw ?? 0)
+        const hasValidQuantity = Number.isFinite(quantity) && quantity > 0
         const hasValidLocation = validLocationIds.has(String(draft.locationId || ''))
         return !hasArticle
-          && !hasGlobalProduct
           && hasRawArticleName
-          && hasArticleGroup
+          && hasValidQuantity
           && hasValidLocation
       })
 
@@ -1536,6 +1539,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         hasValidProductOrArticle,
         hasProcessSource,
         hasArticleGroup,
+        hasValidQuantity,
         hasValidLocation,
         isProcessable,
       } = selectionState
@@ -1565,14 +1569,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           statusKey = 'action_needed'
           statusLabel = 'Actie nodig'
           statusReason = 'Bonartikel ontbreekt.'
+        } else if (!hasValidQuantity) {
+          statusKey = 'action_needed'
+          statusLabel = 'Actie nodig'
+          statusReason = 'Aantal ontbreekt of is niet geldig.'
         } else if (!hasValidLocation) {
           statusKey = 'action_needed'
           statusLabel = 'Actie nodig'
           statusReason = 'Locatie ontbreekt.'
-        } else if (!hasArticleGroup) {
-          statusKey = 'action_needed'
-          statusLabel = 'Actie nodig'
-          statusReason = 'Artikelgroep ontbreekt.'
         } else {
           statusKey = 'ready'
           statusLabel = 'Klaar'
@@ -1598,6 +1602,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         hasValidProductOrArticle,
         hasProcessSource,
         hasArticleGroup,
+        hasValidQuantity,
         hasValidLocation,
         statusKey,
         statusLabel,
@@ -2294,7 +2299,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             <div className="rz-modal-backdrop" role="presentation">
               <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="process-selected-title">
                 <h3 id="process-selected-title" className="rz-modal-title">Niet alle geselecteerde regels zijn compleet</h3>
-                <p className="rz-modal-text">{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog artikel/product, locatie of artikelgroep.</p>
+                <p className="rz-modal-text">{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog bonartikel, geldig aantal of locatie.</p>
                 <div className="rz-modal-actions">
                   <Button variant="secondary" type="button" onClick={() => setProcessConfirm(null)} disabled={isProcessingBatch}>Annuleren</Button>
                   <Button variant="primary" type="button" onClick={() => handleProcessSelected('ready_only')} disabled={isProcessingBatch || processConfirm.readyCount === 0}>Verwerk alleen complete regels</Button>
