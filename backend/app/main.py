@@ -18521,16 +18521,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     failed_count += 1
                     continue
 
-                article_group_id = str(line.get("selected_article_group_id") or "").strip()
-                if not article_group_id:
-                    error = "Geen geldige artikelgroep gekozen"
-                    conn.execute(
-                        text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
-                        {"error": error, "id": line_id},
-                    )
-                    results.append({"line_id": line_id, "line_reference": line_reference, "status": "failed", "error": error})
-                    failed_count += 1
-                    continue
+                article_group_id = str(line.get("selected_article_group_id") or "").strip() or None
 
                 valid_article_group = conn.execute(
                     text(
@@ -18548,7 +18539,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                         "household_id": str(batch["household_id"]),
                     },
                 ).mappings().first()
-                if not valid_article_group:
+                if article_group_id and not valid_article_group:
                     error = "De gekozen artikelgroep bestaat niet binnen het actieve huishouden"
                     conn.execute(
                         text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
