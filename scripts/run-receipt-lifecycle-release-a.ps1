@@ -1,3 +1,8 @@
+param(
+    [switch]$PostMerge,
+    [string]$ExpectedCommit
+)
+
 CLS
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -5,31 +10,29 @@ Set-StrictMode -Version Latest
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
-function Stop-ReleaseA([string]$Message) {
-    Write-Host "" 
-    Write-Host "==================================================" -ForegroundColor Red
-    Write-Host " RELEASE A - CONTROLE ROOD" -ForegroundColor Red
-    Write-Host " $Message" -ForegroundColor Red
-    Write-Host "==================================================" -ForegroundColor Red
-    exit 1
-}
+$ExpectedBranch = if ($PostMerge) { "main" } else { "feature/receipt-lifecycle-release-a" }
+$ModeLabel = if ($PostMerge) { "POST-MERGE MAIN" } else { "LOKALE RUNTIME/DB" }
 
 try {
     Write-Host "==================================================" -ForegroundColor Cyan
-    Write-Host " REZZERV RELEASE A - LOKALE RUNTIME/DB CONTROLE" -ForegroundColor Cyan
+    Write-Host " REZZERV RELEASE A - $ModeLabel CONTROLE" -ForegroundColor Cyan
     Write-Host "==================================================" -ForegroundColor Cyan
 
     $Branch = (git branch --show-current).Trim()
-    if ($Branch -ne "feature/receipt-lifecycle-release-a") {
-        throw "Verkeerde branch: $Branch"
+    if ($Branch -ne $ExpectedBranch) {
+        throw "Verkeerde branch: $Branch. Verwacht: $ExpectedBranch"
     }
 
     git fetch origin
     if ($LASTEXITCODE -ne 0) { throw "git fetch origin mislukt" }
-    git pull --ff-only origin feature/receipt-lifecycle-release-a
+    git pull --ff-only origin $ExpectedBranch
     if ($LASTEXITCODE -ne 0) { throw "git pull mislukt" }
 
     $Commit = (git rev-parse HEAD).Trim()
+    if ($PostMerge -and $ExpectedCommit -and $Commit -ne $ExpectedCommit) {
+        throw "main staat niet op de verwachte mergecommit. Verwacht $ExpectedCommit, gevonden $Commit"
+    }
+
     $Dirty = git status --porcelain
     if ($Dirty) { throw "Git-werkmap is niet schoon: $Dirty" }
 
@@ -39,18 +42,19 @@ try {
     $Db = Join-Path $ProjectRoot "backend\data\rezzerv.db"
     if (-not (Test-Path $Db)) { throw "Lokale database ontbreekt: $Db" }
     $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $Backup = Join-Path $ProjectRoot "backend\data\rezzerv-before-release-a-$Timestamp.db"
+    $BackupPrefix = if ($PostMerge) { "rezzerv-before-release-a-postmerge" } else { "rezzerv-before-release-a" }
+    $Backup = Join-Path $ProjectRoot "backend\data\$BackupPrefix-$Timestamp.db"
     Copy-Item $Db $Backup
     Write-Host "[PASS] Databasebackup: $Backup" -ForegroundColor Green
 
-    Write-Host "" 
+    Write-Host ""
     Write-Host "=== VOLLEDIGE REBUILD ===" -ForegroundColor Cyan
     docker compose down
     if ($LASTEXITCODE -ne 0) { throw "docker compose down mislukt" }
     docker compose up -d --build
     if ($LASTEXITCODE -ne 0) { throw "docker compose up -d --build mislukt" }
 
-    Write-Host "" 
+    Write-Host ""
     Write-Host "=== BACKEND HEALTH ===" -ForegroundColor Cyan
     $Health = $null
     for ($Attempt = 1; $Attempt -le 18; $Attempt++) {
@@ -73,7 +77,7 @@ try {
     }
     Write-Host "[PASS] Backend health op 8011; database /app/data/rezzerv.db" -ForegroundColor Green
 
-    Write-Host "" 
+    Write-Host ""
     Write-Host "=== RELEASE-A DATABASECONTRACT ===" -ForegroundColor Cyan
     $DatabaseCheck = @'
 import sqlite3
@@ -140,9 +144,6 @@ if columns_ok:
     missing_line_keys = cur.execute(
         "SELECT COUNT(*) FROM receipt_table_lines WHERE COALESCE(TRIM(logical_line_key), '') = ''"
     ).fetchone()[0]
-    duplicate_receipt_rows = cur.execute(
-        "SELECT COUNT(*) FROM receipt_tables WHERE COALESCE(TRIM(logical_receipt_key), '') = ''"
-    ).fetchone()[0]
 
     passed("alle bonnen hebben logical_receipt_key") if missing_receipt_keys == 0 else fail(f"{missing_receipt_keys} bonnen zonder logical_receipt_key")
     passed("alle bonregels hebben logical_line_key") if missing_line_keys == 0 else fail(f"{missing_line_keys} bonregels zonder logical_line_key")
@@ -179,7 +180,7 @@ print("RELEASE_A_DATABASE_CHECK_GREEN")
     $DatabaseCheck | docker compose exec -T backend python -
     if ($LASTEXITCODE -ne 0) { throw "Release-A databasecontract is rood" }
 
-    Write-Host "" 
+    Write-Host ""
     Write-Host "=== IDEMPOTENTIE OP PRODUCTIERUNTIME ===" -ForegroundColor Cyan
     $IdempotencyCheck = @'
 from app.main import engine
@@ -194,24 +195,49 @@ print("RELEASE_A_IDEMPOTENCY_GREEN", result)
     $IdempotencyCheck | docker compose exec -T backend python -
     if ($LASTEXITCODE -ne 0) { throw "Release-A idempotentiecontrole is rood" }
 
-    Write-Host "" 
+    if ($PostMerge) {
+        Write-Host ""
+        Write-Host "=== CENTRALE FRONTENDREGRESSIE ===" -ForegroundColor Cyan
+        Write-Host "De runner vraagt nu zelf om het PO-superuserwachtwoord indien dit niet al in de omgeving staat." -ForegroundColor Yellow
+        & "$PSScriptRoot\run-frontend-regression-report.ps1" -SkipDockerBuild
+        if ($LASTEXITCODE -ne 0) { throw "Centrale frontendregressie is rood" }
+    }
+
+    Write-Host ""
     Write-Host "=== BESTAANDE KASSABONKETEN ===" -ForegroundColor Cyan
     & "$PSScriptRoot\run-receipt-inventory-chain-v2.ps1" -SkipBackendBuild
     if ($LASTEXITCODE -ne 0) { throw "Kassabon -> Voorraad -> Bijna op is rood" }
 
+    $EndBranch = (git branch --show-current).Trim()
     $EndCommit = (git rev-parse HEAD).Trim()
     $DirtyAfter = git status --porcelain
+    if ($EndBranch -ne $ExpectedBranch) { throw "Branch wijzigde tijdens de controle" }
     if ($EndCommit -ne $Commit) { throw "Commit wijzigde tijdens de controle" }
     if ($DirtyAfter) { throw "Controle liet Git-wijzigingen achter: $DirtyAfter" }
 
-    Write-Host "" 
+    Write-Host ""
     Write-Host "==================================================" -ForegroundColor Green
-    Write-Host " RELEASE A - LOKALE RUNTIME/DB CONTROLE GROEN" -ForegroundColor Green
+    if ($PostMerge) {
+        Write-Host " RELEASE A - POST-MERGE MAIN CONTROLE GROEN" -ForegroundColor Green
+    }
+    else {
+        Write-Host " RELEASE A - LOKALE RUNTIME/DB CONTROLE GROEN" -ForegroundColor Green
+    }
     Write-Host " Commit : $EndCommit" -ForegroundColor Green
     Write-Host " Backup : $Backup" -ForegroundColor Green
     Write-Host "==================================================" -ForegroundColor Green
-    exit 0
+    return
 }
 catch {
-    Stop-ReleaseA $_.Exception.Message
+    Write-Host ""
+    Write-Host "==================================================" -ForegroundColor Red
+    if ($PostMerge) {
+        Write-Host " RELEASE A - POST-MERGE CONTROLE ROOD" -ForegroundColor Red
+    }
+    else {
+        Write-Host " RELEASE A - CONTROLE ROOD" -ForegroundColor Red
+    }
+    Write-Host " $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "==================================================" -ForegroundColor Red
+    throw
 }
