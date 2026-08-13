@@ -1,0 +1,96 @@
+"""Release B receipt reimport lineage helpers.
+
+Uses existing receipt and unpack/inventory facts only. No parallel ledger is
+introduced. A deleted receipt with workflow_state=removed_reimport_allowed may
+lend its logical receipt/line keys to a later exact-source reimport.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal, InvalidOperation
+from typing import Any
+
+from sqlalchemy import text
+
+
+def _norm_text(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _norm_number(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    try:
+        return format(Decimal(str(value)).normalize(), "f")
+    except (InvalidOperation, ValueError, TypeError):
+        return str(value).strip()
+
+
+def receipt_line_signature(line_index: int, line: dict[str, Any]) -> tuple[str, ...]:
+    return (
+        str(int(line_index)),
+        _norm_text(line.get("normalized_label") or line.get("raw_label")),
+        _norm_number(line.get("quantity")),
+        _norm_text(line.get("unit")),
+        _norm_number(line.get("unit_price")),
+        _norm_number(line.get("line_total")),
+    )
+
+
+def load_deleted_reimport_lineage(conn, household_id: str, sha256_hash: str) -> dict[str, Any] | None:
+    """Return the most recent explicitly reimportable exact-source receipt."""
+    row = conn.execute(
+        text(
+            """
+            SELECT rt.id AS receipt_table_id, rt.logical_receipt_key
+            FROM raw_receipts rr
+            JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
+            WHERE rr.household_id = :household_id
+              AND rr.sha256_hash = :sha256_hash
+              AND rr.deleted_at IS NOT NULL
+              AND rt.deleted_at IS NOT NULL
+              AND rt.workflow_state = 'removed_reimport_allowed'
+              AND COALESCE(TRIM(rt.logical_receipt_key), '') <> ''
+            ORDER BY datetime(rt.deleted_at) DESC, datetime(rt.updated_at) DESC, rt.id DESC
+            LIMIT 1
+            """
+        ),
+        {"household_id": str(household_id), "sha256_hash": str(sha256_hash)},
+    ).mappings().first()
+    if not row:
+        return None
+
+    lines = conn.execute(
+        text(
+            """
+            SELECT line_index, raw_label, normalized_label, quantity, unit,
+                   unit_price, line_total, logical_line_key
+            FROM receipt_table_lines
+            WHERE receipt_table_id = :receipt_table_id
+              AND COALESCE(TRIM(logical_line_key), '') <> ''
+            ORDER BY line_index ASC, created_at ASC, id ASC
+            """
+        ),
+        {"receipt_table_id": str(row["receipt_table_id"])},
+    ).mappings().all()
+
+    by_signature: dict[tuple[str, ...], str] = {}
+    for old_line in lines:
+        signature = receipt_line_signature(int(old_line.get("line_index") or 0), dict(old_line))
+        # Reuse only an unambiguous exact signature.
+        if signature in by_signature:
+            by_signature[signature] = ""
+        else:
+            by_signature[signature] = str(old_line.get("logical_line_key") or "")
+
+    return {
+        "receipt_table_id": str(row["receipt_table_id"]),
+        "logical_receipt_key": str(row["logical_receipt_key"]),
+        "line_keys_by_signature": {key: value for key, value in by_signature.items() if value},
+    }
+
+
+def resolve_reimport_logical_line_key(lineage: dict[str, Any] | None, line_index: int, line: dict[str, Any]) -> str | None:
+    if not lineage:
+        return None
+    return (lineage.get("line_keys_by_signature") or {}).get(receipt_line_signature(line_index, line)) or None
