@@ -64,7 +64,8 @@ def load_deleted_reimport_lineage(conn, household_id: str, sha256_hash: str) -> 
         text(
             """
             SELECT line_index, raw_label, normalized_label, quantity, unit,
-                   unit_price, line_total, logical_line_key
+                   unit_price, line_total, logical_line_key,
+                   COALESCE(is_validated, 0) AS is_validated
             FROM receipt_table_lines
             WHERE receipt_table_id = :receipt_table_id
               AND COALESCE(TRIM(logical_line_key), '') <> ''
@@ -74,26 +75,45 @@ def load_deleted_reimport_lineage(conn, household_id: str, sha256_hash: str) -> 
         {"receipt_table_id": str(row["receipt_table_id"])},
     ).mappings().all()
 
-    by_signature: dict[tuple[str, ...], str] = {}
+    by_signature: dict[tuple[str, ...], dict[str, Any] | None] = {}
     for old_line in lines:
         signature = receipt_line_signature(int(old_line.get("line_index") or 0), dict(old_line))
-        # Reuse only an unambiguous exact signature.
+        fact = {
+            "logical_line_key": str(old_line.get("logical_line_key") or ""),
+            "is_validated": bool(old_line.get("is_validated")),
+        }
+        # Reuse only an unambiguous exact signature. If the same signature occurs
+        # more than once, do not guess which historic line it represents.
         if signature in by_signature:
-            by_signature[signature] = ""
+            by_signature[signature] = None
         else:
-            by_signature[signature] = str(old_line.get("logical_line_key") or "")
+            by_signature[signature] = fact
 
     return {
         "receipt_table_id": str(row["receipt_table_id"]),
         "logical_receipt_key": str(row["logical_receipt_key"]),
-        "line_keys_by_signature": {key: value for key, value in by_signature.items() if value},
+        "line_facts_by_signature": {
+            key: value for key, value in by_signature.items() if value is not None
+        },
     }
 
 
-def resolve_reimport_logical_line_key(lineage: dict[str, Any] | None, line_index: int, line: dict[str, Any]) -> str | None:
+def _lineage_line_fact(lineage: dict[str, Any] | None, line_index: int, line: dict[str, Any]) -> dict[str, Any] | None:
     if not lineage:
         return None
-    return (lineage.get("line_keys_by_signature") or {}).get(receipt_line_signature(line_index, line)) or None
+    fact = (lineage.get("line_facts_by_signature") or {}).get(receipt_line_signature(line_index, line))
+    return dict(fact) if isinstance(fact, dict) else None
+
+
+def resolve_reimport_logical_line_key(lineage: dict[str, Any] | None, line_index: int, line: dict[str, Any]) -> str | None:
+    fact = _lineage_line_fact(lineage, line_index, line)
+    return str((fact or {}).get("logical_line_key") or "").strip() or None
+
+
+def was_prior_line_validated(lineage: dict[str, Any] | None, line_index: int, line: dict[str, Any]) -> bool:
+    """Return the existing Kassa approval fact for an exact logical-line match."""
+    fact = _lineage_line_fact(lineage, line_index, line)
+    return bool((fact or {}).get("is_validated"))
 
 
 def get_prior_processed_line_fact(conn, logical_line_key: str | None, *, current_receipt_table_id: str | None = None) -> dict[str, Any] | None:
