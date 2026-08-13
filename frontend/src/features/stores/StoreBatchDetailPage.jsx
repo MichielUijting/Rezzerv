@@ -346,7 +346,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       showUitpakkenFeedback('warning', 'Vul eerst een GTIN in.', { key: `barcode-empty-${lineId}-${Date.now()}` })
       return
     }
-    setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'loading', message: 'GTIN controleren…' } }))
+    setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'loading', message: 'GTIN controlerenâ€¦' } }))
     try {
       const validation = await fetchJson('/api/barcodes/validate', {
         method: 'POST',
@@ -938,7 +938,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   async function openBulkLocationPicker() {
     if (selectedLineIds.length === 0) {
-      setError('Selecteer eerst minstens één bonregel.')
+      setError('Selecteer eerst minstens Ã©Ã©n bonregel.')
       return
     }
     const selectedSet = new Set(selectedLineIds)
@@ -1091,7 +1091,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         ...(current[line.id] || {}),
         dirty: true,
         status: 'saving',
-        message: 'Opslaan…',
+        message: 'Opslaanâ€¦',
         error: '',
       },
     }))
@@ -1345,7 +1345,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   async function handleProcessSelected(mode = 'selected_only') {
     if (!batch) return
     if (selectedLineIds.length === 0) {
-      setError('Selecteer eerst minstens één bonregel.')
+      setError('Selecteer eerst minstens Ã©Ã©n bonregel.')
       return
     }
     await syncSelectedReviewDecisions()
@@ -1356,7 +1356,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   function handlePrimaryProcessClick() {
     if (!batch) return
     if (selectedLineIds.length === 0) {
-      setError('Selecteer eerst minstens één bonregel.')
+      setError('Selecteer eerst minstens Ã©Ã©n bonregel.')
       return
     }
     const selectedSet = new Set(selectedLineIds)
@@ -1503,7 +1503,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         parts.push(`Overgeslagen: ${skippedCount}`)
         parts.push(`Mislukt: ${failedCount}`)
       }
-      setProcessResultOverlay(parts.join(' · '))
+      setProcessResultOverlay(parts.join(' Â· '))
       setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
@@ -1802,8 +1802,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           {!isReceiptLineDetail ? (<>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
             <div style={{ display: 'grid', gap: '4px' }}>
-                            <div style={{ color: '#2e7d4d' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
-              <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
+                            <div style={{ color: '#2e7d4d' }}>{batch?.purchase_date || 'Onbekende datum'} Â· {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+              <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} Â· {summaryCounts.total} regels Â· Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
@@ -1812,7 +1812,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             </div>
           </div>
 
-          <div style={{ color: '#2e7d4d' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
+          <div style={{ color: '#2e7d4d' }}>Totaal: {summaryCounts.total} Â· Klaar: {summaryCounts.ready} Â· Actie nodig: {summaryCounts.action_needed} Â· Verwerkt: {summaryCounts.processed}</div>
 
           <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths), '--rz-sticky-header-offset': '36px' }}>
               <colgroup>
@@ -1926,7 +1926,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <section className="rz-receipt-line-detail" data-testid="receipt-line-detail-panel">
                     <div className="rz-receipt-line-detail__header">
                       <h3 id="receipt-line-detail-title">Bonartikel details</h3>
-                      <button type="button" className="rz-modal-close" aria-label="Sluit bonartikeldetails" onClick={closeReceiptLineDetail}>×</button>
+                      <button type="button" className="rz-modal-close" aria-label="Sluit bonartikeldetails" onClick={closeReceiptLineDetail}>Ã—</button>
                     </div>
                 <dl className="rz-receipt-line-detail__grid">
                   <div><dt>Bonartikel</dt><dd>{formatReceiptLineLabel(line.article_name_raw)}</dd></div>
@@ -1934,7 +1934,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div><dt>Aankoopdatum</dt><dd>{batch?.purchase_date || 'Onbekend'}</dd></div>
                   <div><dt>Aantal</dt><dd>{formatQuantity(line.quantity_raw, line.unit_raw)}</dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Locatie / sublocatie</dt><dd><button type="button" className="rz-input rz-store-select" data-testid={`receipt-line-location-select-${line.id}`} disabled={lineBusy} onClick={() => openLocationPicker(line.id)}>{selectedLocationLabel || 'Kies locatie'}</button></dd></div>
-                  
+
                   <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}</select></dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd><BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} /></dd></div>
                   <div className="rz-receipt-line-detail__wide">
@@ -1965,7 +1965,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             data-testid={`receipt-line-barcode-link-${line.id}`}
                           >
                             {lineBusy
-                              ? 'Koppelen…'
+                              ? 'Koppelenâ€¦'
                               : alreadyLinked
                                 ? 'Al gekoppeld'
                                 : 'Koppelen'}
@@ -2189,7 +2189,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             >
                               <span>{location.label}</span>
                               <span style={{ color: hasSublocations ? '#2e7d4d' : '#9aa8a0', fontSize: 14, fontWeight: 700 }}>
-                                {hasSublocations ? '›' : ''}
+                                {hasSublocations ? 'â€º' : ''}
                               </span>
                             </button>
                           )
@@ -2229,7 +2229,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             }}
                           >
                             <span>{location.sublocation_label || location.label}</span>
-                            <span style={{ color: '#2e7d4d', fontSize: 14, fontWeight: 700 }}>✓</span>
+                            <span style={{ color: '#2e7d4d', fontSize: 14, fontWeight: 700 }}>âœ“</span>
                           </button>
                         )) : null}
                       </div>
@@ -2296,7 +2296,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     onClick={saveConfirmedReceiptLineBarcode}
                     data-testid="receipt-line-barcode-save-confirm-button"
                   >
-                    {busyLineId ? 'Opslaan…' : 'Opslaan'}
+                    {busyLineId ? 'Opslaanâ€¦' : 'Opslaan'}
                   </Button>
                 </div>
               </div>
@@ -2323,7 +2323,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         <div><strong>Vereenvoudigingsniveau:</strong> {simplificationLevelLabel}</div>
         <div><strong>Huishoudinstelling:</strong> {detailValue(household?.default_consume_mode || household?.consume_mode || 'Uit')}</div>
         <div><strong>Batchstatus:</strong> {batch ? batchStatusLabel(batch.import_status) : '-'}</div>
-        <div><strong>Laatst resultaat:</strong> {lastProcessResult ? `Verwerkt ${lastProcessResult.processed_count || 0} · Overgeslagen ${lastProcessResult.skipped_count || 0} · Mislukt ${lastProcessResult.failed_count || 0}` : 'Nog geen verwerking in deze sessie'}</div>
+        <div><strong>Laatst resultaat:</strong> {lastProcessResult ? `Verwerkt ${lastProcessResult.processed_count || 0} Â· Overgeslagen ${lastProcessResult.skipped_count || 0} Â· Mislukt ${lastProcessResult.failed_count || 0}` : 'Nog geen verwerking in deze sessie'}</div>
       </div>
     ),
   }
@@ -2334,7 +2334,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         {batch ? buildBatchTitle(batch) : 'Kassabon'}
       </div>
       {isLoading ? (
-        <div>Bongegevens laden…</div>
+        <div>Bongegevens ladenâ€¦</div>
       ) : batch ? (
         <Tabs tabs={['Bonregels', 'Diagnose']}>
           {(activeTab) => tabContent[activeTab]}
