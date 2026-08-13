@@ -463,7 +463,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     if (!householdArticleId) {
       showUitpakkenFeedback(
         'warning',
-        'Kies eerst Mijn artikel.',
+        'Het technische voorraadartikel bestaat nog niet.',
         { key: `barcode-link-no-article-${lineId}` }
       )
       return
@@ -500,8 +500,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       await refreshBatch(batch.batch_id)
 
       const message = result?.idempotent
-        ? 'Mijn artikel was al aan dit universele artikel gekoppeld.'
-        : 'Mijn artikel is aan het universele artikel gekoppeld.'
+        ? 'Het voorraadartikel was al aan dit universele artikel gekoppeld.'
+        : 'Het voorraadartikel is aan het universele artikel gekoppeld.'
 
       setBarcodeStates((current) => ({
         ...current,
@@ -571,7 +571,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     if (!householdArticleId) {
       showUitpakkenFeedback(
         'warning',
-        'Kies eerst Mijn artikel.',
+        'Het technische voorraadartikel bestaat nog niet.',
         { key: `barcode-save-no-article-${confirmation.lineId}` }
       )
       return
@@ -1830,14 +1830,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', status: 'asc' }))}>Bonartikel</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Locatie</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Mijn artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Artikelgroep</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
                   <th><input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of artikelgroep" /></th>
                   <th />
                   <th><select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Filter op locatie">{LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>
-                  <th><select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)} aria-label="Filter op Mijn artikel">{MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -1867,18 +1867,26 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         </select>
                       </td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-                        <StoreArticleSelector
-                          lineId={line.id}
-                          lineName={line.article_name_raw}
-                          selectedArticleId={entry.draft.articleId || ''}
-                          articleOptions={articleOptions}
-                          disabled={busyLineId === line.id || isProcessingBatch}
-                          onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
-                          onClearArticle={() => persistLineDraft(line, { articleId: '' })}
-                          onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                          canCreateArticle={Boolean(household?.permissions?.['article.create'])}
-                        />
-                      </td>
+              <select
+                className="rz-input rz-inline-input"
+                value={entry.draft.articleGroupId || ''}
+                disabled={busyLineId === line.id || isProcessingBatch || isViewer}
+                aria-label={`Artikelgroep voor ${line.article_name_raw}`}
+                data-testid={`receipt-line-article-group-select-${line.id}`}
+                onChange={(event) => {
+                  const nextValue = event.target.value
+                  if (nextValue === '__add_article_group__') {
+                    openCreateArticleGroup(line.id)
+                    return
+                  }
+                  persistLineDraft(line, { articleGroupId: nextValue })
+                }}
+              >
+                <option value="">Niet ingedeeld</option>
+                {articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}
+              </select>
+            </td>
                     </tr>
                   )
                 })}
@@ -1926,8 +1934,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div><dt>Aankoopdatum</dt><dd>{batch?.purchase_date || 'Onbekend'}</dd></div>
                   <div><dt>Aantal</dt><dd>{formatQuantity(line.quantity_raw, line.unit_raw)}</dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Locatie / sublocatie</dt><dd><button type="button" className="rz-input rz-store-select" data-testid={`receipt-line-location-select-${line.id}`} disabled={lineBusy} onClick={() => openLocationPicker(line.id)}>{selectedLocationLabel || 'Kies locatie'}</button></dd></div>
-                  <div className="rz-receipt-line-detail__wide"><dt>Mijn artikel</dt><dd data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector lineId={line.id} lineName={line.article_name_raw} selectedArticleId={draft.articleId || ''} articleOptions={articleOptions} disabled={lineBusy} onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })} onClearArticle={() => persistLineDraft(line, { articleId: '' })} onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)} canCreateArticle={Boolean(household?.permissions?.['article.create'])} /></dd></div>
-                  <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Kies artikelgroep</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}</select></dd></div>
+                  
+                  <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}</select></dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd><BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} /></dd></div>
                   <div className="rz-receipt-line-detail__wide">
                     <dt>Universeel artikel</dt>
@@ -1960,10 +1968,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                               ? 'Koppelen…'
                               : alreadyLinked
                                 ? 'Al gekoppeld'
-                                : 'Koppelen aan Mijn artikel'}
+                                : 'Koppelen'}
                           </Button>
                           {!selectedHouseholdArticleId ? (
-                            <span>Kies eerst Mijn artikel.</span>
+                            <span>Het technische voorraadartikel bestaat nog niet.</span>
                           ) : null}
                         </div>
                       ) : null}
