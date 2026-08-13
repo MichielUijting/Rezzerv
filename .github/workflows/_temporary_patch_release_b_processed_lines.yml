@@ -1,0 +1,99 @@
+name: Temporary Release B processed-line patch
+
+on:
+  push:
+    branches:
+      - feature/receipt-lifecycle-release-b
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/receipt-lifecycle-release-b
+          fetch-depth: 0
+      - name: Patch processed logical-line carryover
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # receipt_service: already processed logical lines are already validated on reimport.
+          path = Path('backend/app/services/receipt_service.py')
+          text = path.read_text(encoding='utf-8')
+          old = "from app.services.receipt_reimport_lineage_service import (\n    load_deleted_reimport_lineage,\n    resolve_reimport_logical_line_key,\n)\n"
+          new = "from app.services.receipt_reimport_lineage_service import (\n    get_prior_processed_line_fact,\n    load_deleted_reimport_lineage,\n    resolve_reimport_logical_line_key,\n)\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'receipt_service lineage import anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "            if parse_result.is_receipt:\n                for index, line in enumerate(parse_result.lines):\n                    conn.execute(\n"
+          new = "            if parse_result.is_receipt:\n                for index, line in enumerate(parse_result.lines):\n                    logical_line_key = resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex\n                    prior_processed = get_prior_processed_line_fact(\n                        conn, logical_line_key, current_receipt_table_id=receipt_table_id\n                    )\n                    conn.execute(\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'receipt line loop anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "confidence_score, logical_line_key\n                            ) VALUES (\n                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key"
+          new = "confidence_score, logical_line_key, is_validated\n                            ) VALUES (\n                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key, :is_validated"
+          if text.count(old) != 1:
+              raise SystemExit(f'receipt line insert processed anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "                            'logical_line_key': resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex,\n"
+          new = "                            'logical_line_key': logical_line_key,\n                            'is_validated': 1 if prior_processed else 0,\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'logical line param anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # main: new Uitpakken work item inherits only the existing processed fact.
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+          old = "from app.services.receipt_inventory_lifecycle_service import (\n    remove_receipt_inventory_events,\n    retime_receipt_inventory_events,\n)\n"
+          new = old + "from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'main lineage import anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "        SELECT id, line_index,\n               COALESCE(corrected_raw_label, raw_label) AS raw_label,\n"
+          new = "        SELECT id, line_index, logical_line_key,\n               COALESCE(corrected_raw_label, raw_label) AS raw_label,\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'unpack select anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "        external_line_ref = f\"receipt-line:{line.get('id') or offset}\"\n        try:\n"
+          new = "        external_line_ref = f\"receipt-line:{line.get('id') or offset}\"\n        prior_processed = get_prior_processed_line_fact(\n            conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id\n        )\n        try:\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'unpack prior fact anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "                matched_household_article_id, suggested_household_article_id, created_at\n            ) VALUES (\n                :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,\n                :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,\n                :match_status, 'selected', :ui_sort_order, :matched_global_product_id,\n                :matched_household_article_id, :suggested_household_article_id, CURRENT_TIMESTAMP\n"
+          new = "                matched_household_article_id, suggested_household_article_id, processing_status, processed_at, processed_event_id, created_at\n            ) VALUES (\n                :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,\n                :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,\n                :match_status, 'selected', :ui_sort_order, :matched_global_product_id,\n                :matched_household_article_id, :suggested_household_article_id, :processing_status, :processed_at, :processed_event_id, CURRENT_TIMESTAMP\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'unpack insert columns anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "                'suggested_household_article_id': matched_household_article_id,\n            },\n        )\n        existing_refs.add(external_line_ref)\n"
+          new = "                'suggested_household_article_id': matched_household_article_id,\n                'processing_status': 'processed' if prior_processed else 'pending',\n                'processed_at': (prior_processed or {}).get('processed_at'),\n                'processed_event_id': (prior_processed or {}).get('processed_event_id'),\n            },\n        )\n        existing_refs.add(external_line_ref)\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'unpack params anchor={text.count(old)}')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+      - name: Verify patched runtime
+        run: |
+          python -m py_compile backend/app/main.py backend/app/services/receipt_service.py backend/app/services/receipt_reimport_lineage_service.py
+          git diff --check
+      - name: Commit patch
+        run: |
+          git config user.name "Rezzerv CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add backend/app/main.py backend/app/services/receipt_service.py
+          if git diff --cached --quiet; then
+            echo "No processed-line patch left to commit"
+          else
+            git commit -m "Protect previously processed lines on receipt reimport"
+            git push origin HEAD:feature/receipt-lifecycle-release-b
+          fi
