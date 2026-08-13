@@ -25,7 +25,7 @@ $original = $text
 
 function Replace-ExactOnce([string]$Old, [string]$New, [string]$Label) {
     $count = ([regex]::Matches($script:text, [regex]::Escape($Old))).Count
-    if ($count -ne 1) { throw "$Label: verwacht 1 match, gevonden $count" }
+    if ($count -ne 1) { throw "${Label}: verwacht 1 match, gevonden $count" }
     $script:text = $script:text.Replace($Old, $New)
 }
 
