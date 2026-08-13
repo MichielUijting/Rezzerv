@@ -94,3 +94,50 @@ def resolve_reimport_logical_line_key(lineage: dict[str, Any] | None, line_index
     if not lineage:
         return None
     return (lineage.get("line_keys_by_signature") or {}).get(receipt_line_signature(line_index, line)) or None
+
+
+def get_prior_processed_line_fact(conn, logical_line_key: str | None, *, current_receipt_table_id: str | None = None) -> dict[str, Any] | None:
+    """Return the existing processing fact for this logical receipt line.
+
+    purchase_import_lines remains the work-state truth and inventory_events remains
+    the inventory-effect truth. This helper only resolves those existing facts; it
+    creates no copy or ledger.
+    """
+    normalized_key = str(logical_line_key or "").strip()
+    if not normalized_key:
+        return None
+    params = {
+        "logical_line_key": normalized_key,
+        "current_receipt_table_id": str(current_receipt_table_id or "").strip(),
+    }
+    row = conn.execute(
+        text(
+            """
+            SELECT
+                pil.id AS purchase_import_line_id,
+                pil.processing_status,
+                pil.processed_at,
+                pil.processed_event_id,
+                rtl.receipt_table_id
+            FROM receipt_table_lines rtl
+            JOIN purchase_import_batches pib
+              ON pib.source_type = 'receipt'
+             AND pib.source_reference = ('receipt:' || rtl.receipt_table_id)
+            JOIN purchase_import_lines pil
+              ON pil.batch_id = pib.id
+             AND pil.external_line_ref = ('receipt-line:' || rtl.id)
+            WHERE rtl.logical_line_key = :logical_line_key
+              AND (:current_receipt_table_id = '' OR rtl.receipt_table_id <> :current_receipt_table_id)
+              AND (
+                    lower(trim(COALESCE(pil.processing_status, ''))) = 'processed'
+                 OR COALESCE(trim(pil.processed_event_id), '') <> ''
+              )
+            ORDER BY datetime(COALESCE(pil.processed_at, pil.created_at)) DESC, pil.id DESC
+            LIMIT 1
+            """
+        ),
+        params,
+    ).mappings().first()
+    if not row:
+        return None
+    return dict(row)
