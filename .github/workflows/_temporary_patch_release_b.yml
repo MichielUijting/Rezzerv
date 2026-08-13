@@ -1,0 +1,111 @@
+name: Temporary Release B implementation patch
+
+on:
+  push:
+    branches:
+      - feature/receipt-lifecycle-release-b
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/receipt-lifecycle-release-b
+          fetch-depth: 0
+      - name: Patch Release B runtime
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # ---- receipt_service.py: lineage-aware exact-source reimport ----
+          path = Path('backend/app/services/receipt_service.py')
+          text = path.read_text(encoding='utf-8')
+
+          old = "from app.services.receipt_status_baseline_service import STATUS_LABELS\n"
+          new = old + "from app.services.receipt_reimport_lineage_service import (\n    load_deleted_reimport_lineage,\n    resolve_reimport_logical_line_key,\n)\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'receipt_service import anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "    digest = sha256_hex(file_bytes)\n    with engine.begin() as conn:\n"
+          new = "    digest = sha256_hex(file_bytes)\n    reimport_lineage = None\n    with engine.begin() as conn:\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'ingest digest anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "        if duplicate:\n            return _build_duplicate_receipt_response(duplicate)\n\n    parse_result = scan_receipt_content_via_gateway(file_bytes, filename, detected_mime)\n"
+          new = "        if duplicate:\n            return _build_duplicate_receipt_response(duplicate)\n        reimport_lineage = load_deleted_reimport_lineage(conn, household_id, digest)\n\n    parse_result = scan_receipt_content_via_gateway(file_bytes, filename, detected_mime)\n"
+          if text.count(old) != 1:
+              raise SystemExit(f'duplicate anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = """                    INSERT INTO receipt_tables (\n                        id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount, discount_total, currency, parse_status, confidence_score, line_count\n                    ) VALUES (\n                        :id, :raw_receipt_id, :household_id, :store_name, :store_branch, :purchase_at, :total_amount, :discount_total, :currency, :parse_status, :confidence_score, :line_count\n                    )\n"""
+          new = """                    INSERT INTO receipt_tables (\n                        id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount, discount_total, currency, parse_status, confidence_score, line_count, logical_receipt_key, workflow_state\n                    ) VALUES (\n                        :id, :raw_receipt_id, :household_id, :store_name, :store_branch, :purchase_at, :total_amount, :discount_total, :currency, :parse_status, :confidence_score, :line_count, :logical_receipt_key, 'active'\n                    )\n"""
+          if text.count(old) != 1:
+              raise SystemExit(f'receipt insert anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "                    'line_count': table_line_count,\n                },\n            )\n"
+          new = "                    'line_count': table_line_count,\n                    'logical_receipt_key': (reimport_lineage or {}).get('logical_receipt_key') or uuid.uuid4().hex,\n                },\n            )\n"
+          if text.count(old) < 1:
+              raise SystemExit('receipt insert params anchor missing')
+          text = text.replace(old, new, 1)
+
+          old = """                            INSERT INTO receipt_table_lines (\n                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score\n                            ) VALUES (\n                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score\n                            )\n"""
+          new = """                            INSERT INTO receipt_table_lines (\n                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, logical_line_key\n                            ) VALUES (\n                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key\n                            )\n"""
+          if text.count(old) < 1:
+              raise SystemExit('receipt line insert anchor missing')
+          text = text.replace(old, new, 1)
+
+          old = "                            'confidence_score': line.get('confidence_score'),\n                        },\n                    )\n"
+          new = "                            'confidence_score': line.get('confidence_score'),\n                            'logical_line_key': resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex,\n                        },\n                    )\n"
+          if text.count(old) < 1:
+              raise SystemExit('receipt line params anchor missing')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+          # ---- main.py: Kassa delete is soft-delete only; inventory remains history ----
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+
+          old = """        for row in rows:\n            remove_receipt_inventory_events(\n                conn,\n                receipt_table_id=str(row['receipt_table_id']),\n                household_id=str(row.get('household_id') or ''),\n            )\n        conn.execute(text(f\"UPDATE receipt_tables SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id IN ({receipt_placeholders})\"), receipt_params)\n"""
+          new = """        conn.execute(\n            text(f\"UPDATE receipt_tables SET deleted_at = CURRENT_TIMESTAMP, workflow_state = 'removed_reimport_allowed', updated_at = CURRENT_TIMESTAMP WHERE id IN ({receipt_placeholders})\"),\n            receipt_params,\n        )\n"""
+          if text.count(old) != 1:
+              raise SystemExit(f'delete inventory anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "conn.execute(text(f\"UPDATE raw_receipts SET deleted_at = CURRENT_TIMESTAMP, sha256_hash = sha256_hash || ':deleted:' || id || ':' || strftime('%s','now') WHERE id IN ({raw_placeholders})\"), raw_params)"
+          new = "conn.execute(text(f\"UPDATE raw_receipts SET deleted_at = CURRENT_TIMESTAMP WHERE id IN ({raw_placeholders})\"), raw_params)"
+          if text.count(old) != 1:
+              raise SystemExit(f'hash mutation anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = "    return {'deleted_receipt_table_ids': deleted_receipt_ids, 'deleted_count': len(deleted_receipt_ids)}\n\n\n@app.post(\"/api/admin/receipts/purge-archived\")"
+          new = "    return {'deleted_receipt_table_ids': deleted_receipt_ids, 'deleted_count': len(deleted_receipt_ids), 'workflow_state': 'removed_reimport_allowed', 'reimport_allowed': True}\n\n\n@app.post(\"/api/admin/receipts/purge-archived\")"
+          if text.count(old) != 1:
+              raise SystemExit(f'delete response anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+      - name: Verify syntax and forbidden Release A delete behavior
+        run: |
+          python -m py_compile backend/app/main.py backend/app/services/receipt_service.py backend/app/services/receipt_reimport_lineage_service.py
+          ! grep -F "sha256_hash = sha256_hash || ':deleted:'" backend/app/main.py
+          git diff --check
+          git diff -- backend/app/main.py backend/app/services/receipt_service.py
+      - name: Commit runtime patch
+        run: |
+          git config user.name "Rezzerv CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add backend/app/main.py backend/app/services/receipt_service.py
+          if git diff --cached --quiet; then
+            echo "No runtime patch left to commit"
+          else
+            git commit -m "Implement Release B Kassa delete and exact-source lineage"
+            git push origin HEAD:feature/receipt-lifecycle-release-b
+          fi
