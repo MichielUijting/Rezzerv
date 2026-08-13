@@ -44,13 +44,19 @@ Er wordt dus geen oude rij fysiek heropend. Herimport is een nieuwe fysieke waar
 
 ### B3. Gedeeltelijk goedgekeurde kassabon
 
-De regelstatus wordt niet opnieuw gedupliceerd in een nieuwe ledger.
+De regelstatus wordt niet opnieuw gedupliceerd in een nieuwe ledger. Er zijn twee bestaande feiten die apart betekenis houden:
 
-Voor iedere herkende `logical_line_key` wordt de bestaande waarheid gebruikt:
+- `receipt_table_lines.is_validated` is de waarheid of de regel in **Kassa** al is goedgekeurd;
+- `purchase_import_lines.processing_status` plus `processed_at`/`processed_event_id` is de waarheid of de regel in **Uitpakken** al definitief is verwerkt.
 
-- als de regel al een definitieve verwerking in `purchase_import_lines`/`inventory_events` heeft, mag deze niet opnieuw leiden tot goedkeuring of voorraadmutatie;
-- als de regel nog niet definitief is verwerkt, mag deze opnieuw in de actieve Kassa-/Uitpakkenstroom terechtkomen;
-- een herimport mag nooit een tweede `inventory_event` voor dezelfde reeds verwerkte logische aankoopregel veroorzaken.
+Voor iedere bewezen herkende `logical_line_key` geldt daarom:
+
+1. **eerder goedgekeurd, nog niet uitgepakt:** de herimportregel blijft goedgekeurd in Kassa en komt in Uitpakken als `pending` beschikbaar;
+2. **eerder goedgekeurd én uitgepakt:** de herimportregel blijft goedgekeurd en wordt in Uitpakken direct als reeds `processed` behandeld; er ontstaat geen nieuwe voorraadmutatie;
+3. **eerder niet goedgekeurd:** de regel blijft onbehandeld en kan opnieuw in Kassa worden beoordeeld;
+4. alleen een exacte, ondubbelzinnige lijnmatch mag historische goedkeurings-/verwerkingsfeiten erven.
+
+Een herimport mag dus nooit een tweede `inventory_event` voor dezelfde reeds verwerkte logische aankoopregel veroorzaken, maar mag evenmin een nog niet uitgepakte goedgekeurde regel verloren laten gaan.
 
 ### B4. Geen regressie op normale duplicate-detectie
 
@@ -62,13 +68,15 @@ Alleen wanneer de eerdere fysieke import soft-deleted is en `workflow_state = re
 
 1. De Release-A partial unique index op `(household_id, sha256_hash) WHERE deleted_at IS NULL` blijft leidend.
 2. `ingest_receipt()` blijft actieve duplicaten afvangen met `deleted_at IS NULL`.
-3. Na succesvolle nieuwe import wordt gezocht naar de meest recente verwijderde voorganger met dezelfde `household_id` en originele `sha256_hash`.
+3. Voor een nieuwe import wordt gezocht naar de meest recente expliciet herimporteerbare voorganger met dezelfde `household_id` en originele `sha256_hash`.
 4. De nieuwe bon neemt diens `logical_receipt_key` over.
-5. Nieuwe bonregels worden één-op-één gematcht aan historische regels op een stabiele lijnfingerprint plus occurrence/index fallback; bij een bewezen match wordt `logical_line_key` overgenomen.
-6. Een match mag alleen binnen hetzelfde huishouden en dezelfde `logical_receipt_key` plaatsvinden.
-7. Onzekere lijnmatches worden niet geforceerd; zij krijgen een nieuwe logical key en blijven behandelbaar.
-8. Geen hard delete in de normale Kassa-flow.
-9. Geen wijziging aan inventory-eventhistorie bij Kassa-delete.
+5. Nieuwe bonregels worden gematcht aan historische regels met een exacte lijnsignatuur: positie/index, genormaliseerd label, hoeveelheid, eenheid, eenheidsprijs en regeltotaal. Alleen een ondubbelzinnige match neemt `logical_line_key` over.
+6. Een match mag alleen binnen hetzelfde huishouden en dezelfde exact-source lineage plaatsvinden.
+7. Onzekere of dubbelzinnige lijnmatches worden niet geforceerd; zij krijgen een nieuwe logical key en blijven behandelbaar.
+8. Bij een bewezen lijnmatch wordt de bestaande Kassa-validatie uit `receipt_table_lines.is_validated` hergebruikt.
+9. Bij een bewezen lijnmatch wordt de bestaande definitieve Uitpakken-verwerking uit `purchase_import_lines` herkend; een nieuwe work-itemrij mag dan alleen de bestaande processed-fact refereren en geen nieuwe inventorymutatie veroorzaken.
+10. Geen hard delete in de normale Kassa-flow.
+11. Geen wijziging aan inventory-eventhistorie bij Kassa-delete.
 
 ## Acceptatiecriteria Release B
 
@@ -81,11 +89,12 @@ Release B is pas groen wanneer geautomatiseerd is bewezen dat:
 5. dezelfde bron daarna opnieuw kan worden geïmporteerd;
 6. herimport dezelfde `logical_receipt_key` hergebruikt;
 7. overeenkomende regels dezelfde `logical_line_key` hergebruiken;
-8. reeds verwerkte regels niet opnieuw tot voorraadmutaties leiden;
-9. nog niet verwerkte regels opnieuw behandelbaar zijn;
-10. gedeeltelijke verwerking + delete + herimport exact één voorraadmutatie per reeds verwerkte logische regel behoudt;
-11. bestaande Kassa -> Uitpakken -> Voorraad -> Bijna op-keten groen blijft;
-12. geen nieuwe datatabellen, parallelle ledgers of onnodige datakopieën ontstaan.
+8. een eerder in Kassa goedgekeurde maar nog niet uitgepakte regel goedgekeurd blijft en nog steeds uitpakbaar is;
+9. reeds verwerkte regels niet opnieuw tot voorraadmutaties leiden;
+10. nog niet goedgekeurde regels opnieuw behandelbaar zijn;
+11. gedeeltelijke verwerking + delete + herimport exact één voorraadmutatie per reeds verwerkte logische regel behoudt;
+12. bestaande Kassa -> Uitpakken -> Voorraad -> Bijna op-keten groen blijft;
+13. geen nieuwe datatabellen, parallelle ledgers of onnodige datakopieën ontstaan.
 
 ## Buiten scope van Release B
 
