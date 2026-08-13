@@ -67,7 +67,7 @@ jobs:
           replace_once('>Mijn artikel</ResizableHeaderCell>', '>Artikelgroep</ResizableHeaderCell>', 'table heading')
 
           text, count = re.subn(
-              r'<th><select className="rz-input rz-inline-input" value=\{mappingFilter\}[^>]*aria-label="Filter op Mijn artikel">.*?</select></th>',
+              r'<th><select(?:(?!</th>).)*?value=\{mappingFilter\}(?:(?!</th>).)*?</select></th>',
               '<th />',
               text,
               count=1,
