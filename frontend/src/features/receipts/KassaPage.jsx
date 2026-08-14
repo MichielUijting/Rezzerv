@@ -2277,6 +2277,10 @@ export default function KassaPage() {
     setDuplicateNotice(message)
 
     if (String(result?.duplicate_reason || '').trim().toLowerCase() === 'archived') {
+      clearTransientReceiptPreview()
+      setOpenedReceiptId('')
+      setOpenedReceipt(null)
+      setSelectedReceiptIds([])
       setArchivedDuplicate({
         receiptTableId: existingReceiptId,
         message,
@@ -3395,7 +3399,7 @@ export default function KassaPage() {
         </div>
       )}
 
-      {archivedDuplicate && currentUserDisplayRole === 'admin' ? (
+      {archivedDuplicate ? (
         <div className="rz-modal-backdrop" role="presentation">
           <div
             className="rz-modal-card"
@@ -3415,15 +3419,17 @@ export default function KassaPage() {
                 type="button"
                 onClick={() => setArchivedDuplicate(null)}
               >
-                Annuleren
+                Sluiten
               </Button>
-              <Button
-                variant="primary"
-                type="button"
-                onClick={restoreArchivedDuplicateToKassa}
-              >
-                Terugzetten uit Archief
-              </Button>
+              {currentUserDisplayRole === 'admin' ? (
+                <Button
+                  variant="primary"
+                  type="button"
+                  onClick={restoreArchivedDuplicateToKassa}
+                >
+                  Terugzetten uit Archief
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
