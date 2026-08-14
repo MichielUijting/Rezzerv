@@ -10,8 +10,12 @@ on:
       - 'backend/app/services/receipt_lifecycle_foundation_service.py'
       - 'backend/tests/test_receipt_reimport_lineage_service.py'
       - 'backend/tests/test_receipt_lifecycle_foundation.py'
+      - 'backend/tests/test_receipt_lifecycle_release_b_chain.py'
       - 'frontend/src/features/receipts/ReceiptsPage.jsx'
       - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/kassa.frontend-regression.spec.js'
+      - 'scripts/run-receipt-lifecycle-release-b-premerge.ps1'
       - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-B.md'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
   push:
@@ -25,8 +29,12 @@ on:
       - 'backend/app/services/receipt_lifecycle_foundation_service.py'
       - 'backend/tests/test_receipt_reimport_lineage_service.py'
       - 'backend/tests/test_receipt_lifecycle_foundation.py'
+      - 'backend/tests/test_receipt_lifecycle_release_b_chain.py'
       - 'frontend/src/features/receipts/ReceiptsPage.jsx'
       - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/kassa.frontend-regression.spec.js'
+      - 'scripts/run-receipt-lifecycle-release-b-premerge.ps1'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
 
 jobs:
@@ -58,7 +66,8 @@ jobs:
         run: |
           python -m pytest -q \
             tests/test_receipt_lifecycle_foundation.py \
-            tests/test_receipt_reimport_lineage_service.py
+            tests/test_receipt_reimport_lineage_service.py \
+            tests/test_receipt_lifecycle_release_b_chain.py
 
       - name: Enforce Release B source contract
         shell: python
@@ -72,6 +81,7 @@ jobs:
           foundation = Path('backend/app/services/receipt_lifecycle_foundation_service.py').read_text(encoding='utf-8')
           receipts_ui = Path('frontend/src/features/receipts/ReceiptsPage.jsx').read_text(encoding='utf-8')
           kassa_ui = Path('frontend/src/features/receipts/KassaPage.jsx').read_text(encoding='utf-8')
+          lifecycle_ui_test = Path('frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.spec.js').read_text(encoding='utf-8')
 
           start = main.index('def delete_receipts(payload: ReceiptDeleteRequest')
           end = main.index('@app.post("/api/admin/receipts/purge-archived")', start)
@@ -153,6 +163,16 @@ jobs:
           ]
           for token in required_ui_tokens:
               assert token in receipts_ui, f'Uitpakken delete-UI contract ontbreekt: {token}'
+
+          required_lifecycle_ui_test_tokens = [
+              'Uitpakken toont exact de drie lifecyclekeuzes plus annuleren',
+              'Terugzetten naar Kassa gebruikt uitsluitend lifecycle action return_to_kassa',
+              'Archiveren gebruikt uitsluitend lifecycle action archive',
+              'Volledig verwijderen gebruikt veilige Kassa-delete met receipt identity',
+              'Gearchiveerde herimport toont precies één dialoog en Admin kan herstellen',
+          ]
+          for token in required_lifecycle_ui_test_tokens:
+              assert token in lifecycle_ui_test, f'Release-B Playwrightdekking ontbreekt: {token}'
 
           auto_refresh_start = kassa_ui.index("useEffect(() => {\n    if (isAddReceiptRoute || isUploading) return undefined")
           auto_refresh_end = kassa_ui.index('  }, [householdId, isAddReceiptRoute, isUploading])', auto_refresh_start)
