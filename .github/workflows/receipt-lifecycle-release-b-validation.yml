@@ -152,6 +152,11 @@ jobs:
           assert 'RECEIPT_INBOX_AUTO_REFRESH_MS' not in kassa_ui, 'Periodieke 60-seconden Kassa-refresh is verboden'
           assert 'window.setInterval(refreshKassaInbox' not in auto_refresh_block, 'Periodiek Kassa-pollen is verboden'
 
+          # Lifecycle authority: een inhoudelijk gecontroleerde bon blijft in Kassa
+          # totdat approved_at expliciet bewijst dat de bon naar Uitpakken is gegaan.
+          assert "const isApprovedForUnpacking = Boolean(updated?.approved_at)" in kassa_ui, 'Kassa moet approved_at als lifecycle-authoriteit gebruiken'
+          assert "|| normalizedPoStatusLabel === 'Gecontroleerd'" not in kassa_ui, 'PO-status Gecontroleerd mag een bon niet uit Kassa verwijderen'
+
           forbidden_tables = [
               'receipt_identities',
               'receipt_line_identities',
