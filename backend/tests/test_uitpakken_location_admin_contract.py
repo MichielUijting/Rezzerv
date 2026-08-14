@@ -36,3 +36,12 @@ def test_location_create_routes_remain_server_side_admin_only():
     sub_block = text[sub_start:sub_end]
     assert "require_household_admin_context" in sub_block
     assert 'str(space["household_id"])' in sub_block
+
+def test_uitpakken_receipt_table_opens_picker_and_preserves_b3_location_handling():
+    text = UITPAKKEN.read_text(encoding="utf-8")
+    assert "openLocationPicker(line.id, 'handling')" in text
+    assert "locationPickerSaveMode === 'handling'" in text
+    assert "await handleLocationChoice(pickerEntry, nextLocationId)" in text
+    assert "await handleLocationChoice(pickerEntry, '__standard__')" in text
+    assert "nextOverride: STOCK" in text
+    assert "nextLocationId: ''" in text

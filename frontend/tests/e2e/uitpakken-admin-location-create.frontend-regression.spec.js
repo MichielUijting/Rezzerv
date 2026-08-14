@@ -36,6 +36,7 @@ async function installUitpakkenMocks(page, { role = 'admin' } = {}) {
     createdSpaces: [],
     createdSublocations: [],
     targetLocationWrites: [],
+    handlingOverrideWrites: [],
   };
 
   await page.route('**/api/**', async (route) => {
@@ -125,6 +126,7 @@ async function installUitpakkenMocks(page, { role = 'admin' } = {}) {
     }
     if (path === `/api/households/0/purchase-import-lines/${lineId}/inventory-handling-override` && method === 'PUT') {
       const body = request.postDataJSON();
+      state.handlingOverrideWrites.push(body);
       return json({ inventory_handling_override: body.inventory_handling_override });
     }
     if (path === '/api/article-groups' && method === 'GET') return json({ items: [] });
@@ -144,8 +146,11 @@ test.describe('Uitpakken Admin locatiebeheer regressie', () => {
     await page.goto(`/kassabonnen?batch=${batchId}`);
     const locationButton = page.getByTestId(`receipt-line-location-select-${lineId}`);
     await expect(locationButton).toBeVisible();
+    expect(await locationButton.evaluate((element) => element.tagName)).toBe('BUTTON');
     await locationButton.click();
 
+    await expect(page.getByRole('dialog', { name: 'Locatie / sublocatie kiezen' })).toBeVisible();
+    await expect(page.getByTestId('receipt-location-use-standard')).toBeVisible();
     await expect(page.getByTestId('receipt-location-create-space')).toBeVisible();
     await expect(page.getByTestId('receipt-location-create-sublocation')).toBeVisible();
 
@@ -155,6 +160,7 @@ test.describe('Uitpakken Admin locatiebeheer regressie', () => {
 
     await expect.poll(() => state.createdSpaces.map((item) => item.naam)).toContain('Garage');
     await expect.poll(() => state.targetLocationWrites.map((item) => item.target_location_id)).toContain('space-2');
+    await expect.poll(() => state.handlingOverrideWrites.map((item) => item.inventory_handling_override)).toContain('STOCK');
     await expect(locationButton).toContainText('Garage');
   });
 
@@ -171,6 +177,7 @@ test.describe('Uitpakken Admin locatiebeheer regressie', () => {
 
     await expect.poll(() => state.createdSublocations.map((item) => `${item.space_id}:${item.naam}`)).toContain('space-keuken:Voorraadkast');
     await expect.poll(() => state.targetLocationWrites.map((item) => item.target_location_id)).toContain('sublocation-1');
+    await expect.poll(() => state.handlingOverrideWrites.map((item) => item.inventory_handling_override)).toContain('STOCK');
     await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toContainText('Keuken / Voorraadkast');
   });
 
@@ -179,6 +186,7 @@ test.describe('Uitpakken Admin locatiebeheer regressie', () => {
 
     await page.goto(`/kassabonnen?batch=${batchId}`);
     await page.getByTestId(`receipt-line-location-select-${lineId}`).click();
+    await expect(page.getByRole('dialog', { name: 'Locatie / sublocatie kiezen' })).toBeVisible();
 
     await expect(page.getByTestId('receipt-location-create-space')).toHaveCount(0);
     await expect(page.getByTestId('receipt-location-create-sublocation')).toHaveCount(0);

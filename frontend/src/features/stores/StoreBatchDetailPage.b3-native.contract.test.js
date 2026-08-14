@@ -9,7 +9,9 @@ describe('B3 location-only native contract', () => {
     expect(source).not.toContain('columnKey="verwerking"')
     expect(source).not.toContain('<InventoryHandlingOverrideSelect')
     expect(source).toContain('Standaard gebruiken')
-    expect(source).toContain('handleLocationChoice(entry, event.target.value)')
+    expect(source).toContain("openLocationPicker(line.id, 'handling')")
+    expect(source).toContain("locationPickerSaveMode === 'handling'")
+    expect(source).toContain('handleLocationChoice(pickerEntry, nextLocationId)')
   })
 
   it('maps Direct / Direct and normal locations to the correct temporary handling', () => {

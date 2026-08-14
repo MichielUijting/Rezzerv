@@ -265,6 +265,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [locationPickerLineId, setLocationPickerLineId] = useState('')
   const [locationPickerSearch, setLocationPickerSearch] = useState('')
   const [locationPickerMode, setLocationPickerMode] = useState('single')
+  const [locationPickerSaveMode, setLocationPickerSaveMode] = useState('legacy')
   const [activeLocationSpaceId, setActiveLocationSpaceId] = useState('')
   const [pendingDefaultLocationChoice, setPendingDefaultLocationChoice] = useState(null)
   const [locationCreateMode, setLocationCreateMode] = useState('')
@@ -871,6 +872,17 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const isDirect = Boolean(selectedLocation && directLocationOption([selectedLocation]))
       const nextOverride = isDirect ? DIRECT_CONSUMPTION : STOCK
 
+      if (!nextValue) {
+        await persistLocationHandlingChoice({
+          entry,
+          nextOverride: STOCK,
+          nextLocationId: '',
+          previousOverride,
+          previousLocationId,
+        })
+        return
+      }
+
       if (!isDirect && !selectedLocation) {
         throw new Error('Kies een geldige locatie en sublocatie.')
       }
@@ -910,6 +922,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setLocationPickerLineId('')
     setLocationPickerSearch('')
     setLocationPickerMode('single')
+    setLocationPickerSaveMode('legacy')
     setActiveLocationSpaceId('')
     setLocationCreateMode('')
     setNewLocationName('')
@@ -933,8 +946,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setActiveLocationSpaceId(String(spaceId || ''))
   }
 
-  async function openLocationPicker(lineId) {
+  async function openLocationPicker(lineId, saveMode = 'legacy') {
     setLocationPickerMode('single')
+    setLocationPickerSaveMode(saveMode)
     setLocationPickerLineId(String(lineId))
     setLocationPickerSearch('')
     if (household?.id) {
@@ -1083,6 +1097,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
     const pickerEntry = lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
     if (!pickerEntry) {
+      closeLocationPicker()
+      return
+    }
+
+    if (locationPickerSaveMode === 'handling') {
+      await handleLocationChoice(pickerEntry, nextLocationId)
       closeLocationPicker()
       return
     }
@@ -1932,18 +1952,17 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-                        <select
-                          className="rz-input rz-inline-input"
-                          value={entry.draft.locationId || ''}
+                        <button
+                          type="button"
+                          className="rz-input rz-store-select"
                           disabled={busyLineId === line.id || isProcessingBatch || isViewer}
                           aria-label={`Locatie voor ${line.article_name_raw}`}
                           data-testid={`receipt-line-location-select-${line.id}`}
-                          onChange={(event) => handleLocationChoice(entry, event.target.value)}
+                          onClick={() => openLocationPicker(line.id, 'handling')}
+                          style={{ width: '100%', textAlign: 'left', cursor: busyLineId === line.id || isProcessingBatch || isViewer ? 'not-allowed' : 'pointer' }}
                         >
-                          <option value="">Kies locatie</option>
-                          <option value="__standard__">Standaard gebruiken</option>
-                          {locationOptions.map((location) => <option key={location.id} value={location.id}>{location.label}</option>)}
-                        </select>
+                          {locationLabelForDraft(entry.draft) || 'Kies locatie'}
+                        </button>
                       </td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
               <select
@@ -2380,6 +2399,22 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     </div>
                   ) : null}
                   <div className="rz-modal-actions">
+                    {locationPickerMode === 'single' && locationPickerSaveMode === 'handling' ? (
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        disabled={pickerLineBusy}
+                        onClick={async () => {
+                          const pickerEntry = lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
+                          if (!pickerEntry) return
+                          await handleLocationChoice(pickerEntry, '__standard__')
+                          closeLocationPicker()
+                        }}
+                        data-testid="receipt-location-use-standard"
+                      >
+                        Standaard gebruiken
+                      </Button>
+                    ) : null}
                     {canManageLocations ? (
                       <Button variant="secondary" type="button" disabled={pickerLineBusy} onClick={openLocationManagement}>
                         Beheer locaties
