@@ -11,6 +11,7 @@ on:
       - 'backend/tests/test_receipt_reimport_lineage_service.py'
       - 'backend/tests/test_receipt_lifecycle_foundation.py'
       - 'frontend/src/features/receipts/ReceiptsPage.jsx'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
       - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-B.md'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
   push:
@@ -25,6 +26,7 @@ on:
       - 'backend/tests/test_receipt_reimport_lineage_service.py'
       - 'backend/tests/test_receipt_lifecycle_foundation.py'
       - 'frontend/src/features/receipts/ReceiptsPage.jsx'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
 
 jobs:
@@ -69,6 +71,7 @@ jobs:
           lineage = Path('backend/app/services/receipt_reimport_lineage_service.py').read_text(encoding='utf-8')
           foundation = Path('backend/app/services/receipt_lifecycle_foundation_service.py').read_text(encoding='utf-8')
           receipts_ui = Path('frontend/src/features/receipts/ReceiptsPage.jsx').read_text(encoding='utf-8')
+          kassa_ui = Path('frontend/src/features/receipts/KassaPage.jsx').read_text(encoding='utf-8')
 
           start = main.index('def delete_receipts(payload: ReceiptDeleteRequest')
           end = main.index('@app.post("/api/admin/receipts/purge-archived")', start)
@@ -140,6 +143,12 @@ jobs:
           ]
           for token in required_ui_tokens:
               assert token in receipts_ui, f'Uitpakken delete-UI contract ontbreekt: {token}'
+
+          auto_refresh_start = kassa_ui.index("useEffect(() => {\n    if (isAddReceiptRoute || isUploading) return undefined")
+          auto_refresh_end = kassa_ui.index('  }, [householdId, isAddReceiptRoute, isUploading])', auto_refresh_start)
+          auto_refresh_block = kassa_ui[auto_refresh_start:auto_refresh_end]
+          assert 'refreshKassaInbox()' in auto_refresh_block, 'Kassa voert na reimport/navigatie geen directe inbox-refresh uit'
+          assert auto_refresh_block.index('refreshKassaInbox()') < auto_refresh_block.index('window.setInterval'), 'Directe Kassa-refresh moet voor de intervaltimer plaatsvinden'
 
           forbidden_tables = [
               'receipt_identities',
