@@ -189,7 +189,6 @@ const MAX_CAMERA_DIMENSION = 1800
 // Daardoor blijft het aantal zichtbare regels stabiel, ook wanneer de werkelijke rijhoogte door de styleguide verandert.
 const KASSA_INBOX_VISIBLE_ROW_COUNT = 10
 const KASSA_INBOX_FALLBACK_SCROLL_HEIGHT_PX = 350
-const RECEIPT_INBOX_AUTO_REFRESH_MS = 60000
 const RECEIPT_DETAIL_PANEL_HEIGHT = 560
 const RECEIPT_PREVIEW_ZOOM_MIN = 0.5
 const RECEIPT_PREVIEW_ZOOM_MAX = 3
@@ -2193,11 +2192,9 @@ export default function KassaPage() {
       }
     }
     refreshKassaInbox()
-    const intervalId = window.setInterval(refreshKassaInbox, RECEIPT_INBOX_AUTO_REFRESH_MS)
     window.addEventListener('focus', refreshKassaInbox)
     return () => {
       cancelled = true
-      window.clearInterval(intervalId)
       window.removeEventListener('focus', refreshKassaInbox)
       receiptInboxRefreshInFlightRef.current = false
     }
