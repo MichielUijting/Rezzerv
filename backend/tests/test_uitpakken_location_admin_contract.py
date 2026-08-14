@@ -8,7 +8,8 @@ MAIN = ROOT / "backend/app/main.py"
 def test_uitpakken_uses_canonical_household_admin_authority_for_location_management():
     text = UITPAKKEN.read_text(encoding="utf-8")
     assert "isHouseholdAdminFromContext" in text
-    assert "const canManageLocations = isHouseholdAdminFromContext(household)" in text
+    assert "const canManageLocations = isHouseholdAdminFromContext()" in text
+    assert "const canManageLocations = isHouseholdAdminFromContext(household)" not in text
     assert "const canManageLocations = !isViewer" not in text
 
 

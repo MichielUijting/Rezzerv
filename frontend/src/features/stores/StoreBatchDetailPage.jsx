@@ -978,7 +978,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return sublocationOptionsForSpace(locationOptions, activeLocationSpaceId)
   }
 
-  const canManageLocations = isHouseholdAdminFromContext(household)
+  const canManageLocations = isHouseholdAdminFromContext()
 
   function openLocationManagement() {
     window.location.href = '/instellingen/locaties'
