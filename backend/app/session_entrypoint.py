@@ -8,7 +8,7 @@ existing implementation and order.
 
 from __future__ import annotations
 
-from fastapi import Request
+from fastapi import Body, HTTPException, Request
 from fastapi.routing import APIRoute
 
 import app.main as legacy_main
@@ -23,7 +23,9 @@ from app.services.authorization_ui_fixture_provisioning import (
 )
 from app.services.membership_user_identity_service import backfill_membership_user_ids
 from app.services.receipt_lifecycle_foundation_service import (
+    apply_unpack_receipt_lifecycle_action,
     install_receipt_lifecycle_foundation,
+    resolve_receipt_for_unpack_batch,
 )
 from app.services.session_request_context import (
     authorized_household_id_from_session,
@@ -94,6 +96,41 @@ async def server_session_request_context(request: Request, call_next):
         return await call_next(request)
     finally:
         reset_request_session(token)
+
+
+@app.post("/api/purchase-import-batches/{batch_id}/receipt-lifecycle")
+def apply_unpack_receipt_lifecycle(
+    batch_id: str,
+    payload: dict = Body(default_factory=dict),
+):
+    """Apply the PO-selected disposition for a receipt currently in Uitpakken."""
+    action = str(payload.get("action") or "").strip().lower()
+    if action not in {"return_to_kassa", "archive"}:
+        raise HTTPException(status_code=400, detail="Kies terugzetten naar Kassa of archiveren")
+
+    with legacy_main.engine.begin() as conn:
+        receipt = resolve_receipt_for_unpack_batch(conn, batch_id)
+        if not receipt:
+            raise HTTPException(status_code=404, detail="Geen kassabon gevonden voor deze Uitpakken-batch")
+
+        household_id = str(receipt.get("household_id") or "").strip()
+        context = legacy_main.require_household_context(None, household_id)
+        if str(context.get("display_role") or "").strip().lower() == "viewer":
+            raise HTTPException(status_code=403, detail="Kijkers mogen kassabonnen niet verwijderen of archiveren")
+
+        try:
+            return apply_unpack_receipt_lifecycle_action(
+                conn,
+                batch_id=batch_id,
+                household_id=household_id,
+                action=action,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def activate_server_side_session_routes() -> None:
