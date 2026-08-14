@@ -20,7 +20,7 @@ def test_uitpakken_admin_can_create_space_and_sublocation_inline_and_apply_resul
     assert "await fetchJson('/api/spaces'" in text
     assert "await fetchJson('/api/sublocations'" in text
     assert "const nextOptions = await refreshLocationOptions()" in text
-    assert "await applyPickedLocation(String(created.id))" in text
+    assert "await applyPickedLocation(String(created.id), nextOptions)" in text
 
 
 def test_location_create_routes_remain_server_side_admin_only():
@@ -37,11 +37,15 @@ def test_location_create_routes_remain_server_side_admin_only():
     assert "require_household_admin_context" in sub_block
     assert 'str(space["household_id"])' in sub_block
 
+
 def test_uitpakken_receipt_table_opens_picker_and_preserves_b3_location_handling():
     text = UITPAKKEN.read_text(encoding="utf-8")
     assert "openLocationPicker(line.id, 'handling')" in text
     assert "locationPickerSaveMode === 'handling'" in text
-    assert "await handleLocationChoice(pickerEntry, nextLocationId)" in text
+    assert "await handleLocationChoice(pickerEntry, nextLocationId, locationOptionsOverride || locationOptions)" in text
+    assert "availableLocationOptions = locationOptions" in text
+    assert "directLocationOption(availableLocationOptions)" in text
+    assert "availableLocationOptions.find(" in text
     assert "await handleLocationChoice(pickerEntry, '__standard__')" in text
     assert "nextOverride: STOCK" in text
     assert "nextLocationId: ''" in text
