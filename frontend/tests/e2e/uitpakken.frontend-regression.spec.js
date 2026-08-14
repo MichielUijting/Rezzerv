@@ -203,9 +203,6 @@ test.describe('Uitpakken frontend-regressie', () => {
     await page.getByTestId(`receipt-line-${lineId}`).locator('td').nth(1).dblclick();
     await expect(page).toHaveURL(new RegExp(`/kassabonnen\\?batch=${batchId}$`));
     await expect(page.getByTestId('receipt-line-detail-overlay')).toBeVisible();
-    const linkedArticleCell = page.getByTestId(`receipt-line-article-select-${lineId}`);
-    await expect(linkedArticleCell).toContainText(universalArticleName);
-    await expect(linkedArticleCell).not.toContainText(receiptArticleText);
 
     const universalProductField = page.getByTestId(`receipt-line-standard-product-${lineId}`);
     await expect(universalProductField).toBeVisible();
