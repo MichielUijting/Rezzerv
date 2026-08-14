@@ -13,7 +13,7 @@ on:
       - 'backend/tests/test_receipt_lifecycle_release_b_chain.py'
       - 'frontend/src/features/receipts/ReceiptsPage.jsx'
       - 'frontend/src/features/receipts/KassaPage.jsx'
-      - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.js'
       - 'frontend/tests/e2e/kassa.frontend-regression.spec.js'
       - 'scripts/run-receipt-lifecycle-release-b-premerge.ps1'
       - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-B.md'
@@ -32,7 +32,7 @@ on:
       - 'backend/tests/test_receipt_lifecycle_release_b_chain.py'
       - 'frontend/src/features/receipts/ReceiptsPage.jsx'
       - 'frontend/src/features/receipts/KassaPage.jsx'
-      - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.js'
       - 'frontend/tests/e2e/kassa.frontend-regression.spec.js'
       - 'scripts/run-receipt-lifecycle-release-b-premerge.ps1'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
@@ -81,7 +81,7 @@ jobs:
           foundation = Path('backend/app/services/receipt_lifecycle_foundation_service.py').read_text(encoding='utf-8')
           receipts_ui = Path('frontend/src/features/receipts/ReceiptsPage.jsx').read_text(encoding='utf-8')
           kassa_ui = Path('frontend/src/features/receipts/KassaPage.jsx').read_text(encoding='utf-8')
-          lifecycle_ui_test = Path('frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.spec.js').read_text(encoding='utf-8')
+          lifecycle_ui_test = Path('frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.js').read_text(encoding='utf-8')
 
           start = main.index('def delete_receipts(payload: ReceiptDeleteRequest')
           end = main.index('@app.post("/api/admin/receipts/purge-archived")', start)
