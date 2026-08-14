@@ -6,7 +6,7 @@ on:
       - fix/uitpakken-admin-location-create
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -15,33 +15,46 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: fix/uitpakken-admin-location-create
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Apply proven picker restoration
-        run: python scripts/_temp_restore_uitpakken_location_picker.py
 
       - name: Backend and B3 source contracts
         run: |
           python -m pip install --disable-pip-version-check -q pytest
           python -m pytest -q backend/tests/test_uitpakken_location_admin_contract.py
 
-      - name: Frontend production build
+      - name: Frontend install and production build
         working-directory: frontend
         run: |
           npm ci
           npm run build
 
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare isolated browser state
+        working-directory: frontend
+        run: |
+          mkdir -p playwright/.auth
+          printf '%s\n' '{"cookies":[],"origins":[]}' > playwright/.auth/user.json
+
+      - name: Targeted production-preview regression
+        working-directory: frontend
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 5174 >/tmp/rezzerv-vite-preview.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill $PREVIEW_PID || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5174 >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5174 >/dev/null
+          npx playwright test tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js --project=chromium --no-deps --workers=1
+
       - name: Diff hygiene
         run: git diff --check
-
-      - name: Commit proven restoration
-        run: |
-          git config user.name "Rezzerv CI"
-          git config user.email "actions@rezzerv.local"
-          git add frontend/src/features/stores/StoreBatchDetailPage.jsx frontend/src/features/stores/StoreBatchDetailPage.b3-native.contract.test.js frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js backend/tests/test_uitpakken_location_admin_contract.py
-          git commit -m "fix(uitpakken): restore location picker in receipt table"
-          git push origin HEAD:fix/uitpakken-admin-location-create
