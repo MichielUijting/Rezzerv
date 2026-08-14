@@ -142,9 +142,9 @@ test.describe('Uitpakken Admin locatiebeheer regressie', () => {
 
     await page.goto(`/kassabonnen?batch=${batchId}`);
     await page.getByTestId(`receipt-line-location-select-${lineId}`).click();
-    await page.getByRole('button', { name: 'Keuken', exact: true }).click();
 
     await page.getByTestId('receipt-location-create-sublocation').click();
+    await page.getByTestId('receipt-location-create-parent-space').selectOption('space-keuken');
     await page.getByTestId('receipt-location-create-name').fill('Voorraadkast');
     await page.getByTestId('receipt-location-create-save').click();
 

@@ -986,10 +986,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   function startInlineLocationCreate(mode) {
     if (!canManageLocations) return
-    if (mode === 'sublocation' && !activeLocationSpaceId) {
-      showUitpakkenFeedback('warning', 'Selecteer eerst de locatie waaronder je een sublocatie wilt toevoegen.')
-      return
-    }
     setLocationCreateMode(mode)
     setNewLocationName('')
   }
@@ -2331,7 +2327,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         <Button
                           variant="secondary"
                           type="button"
-                          disabled={pickerLineBusy || isCreatingLocation || !activeLocationSpaceId}
+                          disabled={pickerLineBusy || isCreatingLocation}
                           onClick={() => startInlineLocationCreate('sublocation')}
                           data-testid="receipt-location-create-sublocation"
                         >
@@ -2349,9 +2345,20 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         {locationCreateMode === 'space' ? 'Nieuwe locatie' : 'Nieuwe sublocatie'}
                       </div>
                       {locationCreateMode === 'sublocation' ? (
-                        <div style={{ color: '#5f7a68', fontSize: 13 }}>
-                          Locatie: {spaceLocationOptions(locationOptions).find((option) => String(option.id) === String(activeLocationSpaceId))?.label || '-'}
-                        </div>
+                        <label className="rz-input-field">
+                          <div className="rz-label">Locatie</div>
+                          <select
+                            className="rz-input"
+                            value={activeLocationSpaceId}
+                            onChange={(event) => setActiveLocationSpaceId(event.target.value)}
+                            data-testid="receipt-location-create-parent-space"
+                          >
+                            <option value="">Kies een locatie</option>
+                            {spaceLocationOptions(locationOptions).map((option) => (
+                              <option key={option.id} value={String(option.id)}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
                       ) : null}
                       <input
                         className="rz-input"
