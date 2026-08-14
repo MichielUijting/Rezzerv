@@ -1,4 +1,4 @@
-name: TEMP diagnose Uitpakken admin runtime
+name: TEMP verify Uitpakken admin location runtime
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -26,57 +26,6 @@ jobs:
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
-      - name: Inject runtime diagnostics in runner workspace only
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          product = Path('src/features/stores/StoreBatchDetailPage.jsx')
-          text = product.read_text(encoding='utf-8')
-          old_import = "import { isHouseholdAdminFromContext } from '../../lib/authSession.js'"
-          new_import = "import { isHouseholdAdminFromContext, readStoredAuthContext } from '../../lib/authSession.js'"
-          if text.count(old_import) != 1:
-              raise SystemExit(f'STOP: auth import count={text.count(old_import)}')
-          text = text.replace(old_import, new_import, 1)
-
-          old_auth = "  const canManageLocations = isHouseholdAdminFromContext()"
-          new_auth = "  const locationAuthDiagnostic = readStoredAuthContext()\n  const canManageLocations = isHouseholdAdminFromContext()"
-          if text.count(old_auth) != 1:
-              raise SystemExit(f'STOP: canManageLocations count={text.count(old_auth)}')
-          text = text.replace(old_auth, new_auth, 1)
-
-          old_dialog = '''                  role="dialog"\n                  aria-modal="true"\n                  aria-labelledby="location-picker-title"'''
-          new_dialog = '''                  role="dialog"\n                  aria-modal="true"\n                  aria-labelledby="location-picker-title"\n                  data-testid="receipt-location-picker-diagnostic"\n                  data-diag-email={String(locationAuthDiagnostic?.email || '')}\n                  data-diag-role={String(locationAuthDiagnostic?.display_role || locationAuthDiagnostic?.role || '')}\n                  data-diag-admin-access={String(Boolean(locationAuthDiagnostic?.permissions?.['admin.access']))}\n                  data-diag-helper-result={String(canManageLocations)}'''
-          if text.count(old_dialog) != 1:
-              raise SystemExit(f'STOP: picker dialog anchor count={text.count(old_dialog)}')
-          text = text.replace(old_dialog, new_dialog, 1)
-          product.write_text(text, encoding='utf-8', newline='\n')
-
-          test = Path('tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js')
-          s = test.read_text(encoding='utf-8')
-          anchor = "    await locationButton.click();\n\n    await expect(page.getByTestId('receipt-location-create-space')).toBeVisible();"
-          replacement = """    await locationButton.click();
-
-    const authDiag = page.getByTestId('receipt-location-picker-diagnostic');
-    const diagValues = {
-      email: await authDiag.getAttribute('data-diag-email'),
-      role: await authDiag.getAttribute('data-diag-role'),
-      adminAccess: await authDiag.getAttribute('data-diag-admin-access'),
-      helperResult: await authDiag.getAttribute('data-diag-helper-result'),
-    };
-    console.log('UITPAKKEN_ADMIN_DIAG=' + JSON.stringify(diagValues));
-    await expect(authDiag).toHaveAttribute('data-diag-email', 'admin@rezzerv.test');
-    await expect(authDiag).toHaveAttribute('data-diag-role', 'admin');
-    await expect(authDiag).toHaveAttribute('data-diag-admin-access', 'true');
-    await expect(authDiag).toHaveAttribute('data-diag-helper-result', 'true');
-
-    await expect(page.getByTestId('receipt-location-create-space')).toBeVisible();"""
-          if s.count(anchor) != 1:
-              raise SystemExit(f'STOP: first test diagnostic anchor count={s.count(anchor)}')
-          test.write_text(s.replace(anchor, replacement, 1), encoding='utf-8', newline='\n')
-          print('PASS: picker-local runtime diagnostics injected')
-          PY
 
       - name: Build production frontend
         run: npm run build
@@ -96,7 +45,7 @@ jobs:
           mkdir -p playwright/.auth
           node -e "require('fs').writeFileSync('playwright/.auth/user.json',JSON.stringify({cookies:[],origins:[]}))"
 
-      - name: Run exact Admin location tests with picker-local diagnostics
+      - name: Run exact Admin location regression tests
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
         run: npx playwright test --project=chromium --no-deps --workers=1 tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js
