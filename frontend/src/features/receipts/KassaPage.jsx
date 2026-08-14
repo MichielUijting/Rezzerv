@@ -2274,21 +2274,21 @@ export default function KassaPage() {
     const existingReceiptId = getDuplicateReceiptTableId(result)
     setError('')
     setStatus('')
-    setDuplicateNotice(message)
 
     if (String(result?.duplicate_reason || '').trim().toLowerCase() === 'archived') {
       clearTransientReceiptPreview()
       setOpenedReceiptId('')
       setOpenedReceipt(null)
       setSelectedReceiptIds([])
+      setDuplicateNotice('')
       setArchivedDuplicate({
         receiptTableId: existingReceiptId,
         message,
       })
-      showKassaFeedback('warning', message)
       return
     }
 
+    setDuplicateNotice(message)
     setArchivedDuplicate(null)
     showKassaFeedback('warning', message, {
       title: 'Bon al ingelezen',

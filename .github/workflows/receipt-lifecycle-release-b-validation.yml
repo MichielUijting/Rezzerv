@@ -172,6 +172,9 @@ jobs:
           archived_branch_end = kassa_ui.index('    setArchivedDuplicate(null)', archived_branch_start)
           archived_branch = kassa_ui[archived_branch_start:archived_branch_end]
           assert 'clearTransientReceiptPreview()' in archived_branch, 'Archief-duplicate moet tijdelijke upload-preview opruimen'
+          assert "showKassaFeedback" not in archived_branch, 'Archief-duplicate mag geen tweede generieke feedbackmelding starten'
+          assert "setDuplicateNotice(message)" not in archived_branch, 'Archief-duplicate mag niet ook de generieke duplicateNotice gebruiken'
+          assert "setArchivedDuplicate({" in archived_branch, 'Archief-duplicate moet exact de specifieke archiefdialoog activeren'
           assert "{archivedDuplicate ? (" in kassa_ui, 'Archiefmelding moet voor iedere rol zichtbaar zijn'
           assert "{archivedDuplicate && currentUserDisplayRole === 'admin' ? (" not in kassa_ui, 'Archiefmelding mag niet Admin-only zijn'
           assert "currentUserDisplayRole === 'admin' ? (" in kassa_ui and 'Terugzetten uit Archief' in kassa_ui, 'Alleen Admin krijgt restore-actie uit Archief'
