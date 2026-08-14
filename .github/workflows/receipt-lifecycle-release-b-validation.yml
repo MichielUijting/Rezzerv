@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'backend/app/main.py'
+      - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/receipt_service.py'
       - 'backend/app/services/receipt_reimport_lineage_service.py'
       - 'backend/app/services/receipt_lifecycle_foundation_service.py'
       - 'backend/tests/test_receipt_reimport_lineage_service.py'
       - 'backend/tests/test_receipt_lifecycle_foundation.py'
+      - 'frontend/src/features/receipts/ReceiptsPage.jsx'
       - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-B.md'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
   push:
@@ -16,11 +18,13 @@ on:
       - main
     paths:
       - 'backend/app/main.py'
+      - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/receipt_service.py'
       - 'backend/app/services/receipt_reimport_lineage_service.py'
       - 'backend/app/services/receipt_lifecycle_foundation_service.py'
       - 'backend/tests/test_receipt_reimport_lineage_service.py'
       - 'backend/tests/test_receipt_lifecycle_foundation.py'
+      - 'frontend/src/features/receipts/ReceiptsPage.jsx'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
 
 jobs:
@@ -36,12 +40,13 @@ jobs:
           python-version: '3.11'
 
       - name: Install focused test dependencies
-        run: python -m pip install --disable-pip-version-check pytest sqlalchemy
+        run: python -m pip install --disable-pip-version-check pytest sqlalchemy fastapi
 
       - name: Compile changed Python modules
         run: |
           python -m py_compile \
             backend/app/main.py \
+            backend/app/session_entrypoint.py \
             backend/app/services/receipt_service.py \
             backend/app/services/receipt_reimport_lineage_service.py \
             backend/app/services/receipt_lifecycle_foundation_service.py
@@ -59,9 +64,11 @@ jobs:
           from pathlib import Path
 
           main = Path('backend/app/main.py').read_text(encoding='utf-8')
+          session_entrypoint = Path('backend/app/session_entrypoint.py').read_text(encoding='utf-8')
           service = Path('backend/app/services/receipt_service.py').read_text(encoding='utf-8')
           lineage = Path('backend/app/services/receipt_reimport_lineage_service.py').read_text(encoding='utf-8')
           foundation = Path('backend/app/services/receipt_lifecycle_foundation_service.py').read_text(encoding='utf-8')
+          receipts_ui = Path('frontend/src/features/receipts/ReceiptsPage.jsx').read_text(encoding='utf-8')
 
           start = main.index('def delete_receipts(payload: ReceiptDeleteRequest')
           end = main.index('@app.post("/api/admin/receipts/purge-archived")', start)
@@ -103,6 +110,37 @@ jobs:
           for token in required_lineage_tokens:
               assert token in lineage, f'Lineagecontract ontbreekt: {token}'
 
+          required_unpack_lifecycle_tokens = [
+              'def apply_unpack_receipt_lifecycle_action(',
+              'RETURNED_TO_KASSA',
+              'ARCHIVED',
+              'inventory_events_reversed',
+          ]
+          for token in required_unpack_lifecycle_tokens:
+              assert token in foundation, f'Uitpakken lifecyclecontract ontbreekt: {token}'
+
+          required_route_tokens = [
+              '/api/purchase-import-batches/{batch_id}/receipt-lifecycle',
+              'apply_unpack_receipt_lifecycle_action(',
+              'Kijkers mogen kassabonnen niet verwijderen of archiveren',
+          ]
+          for token in required_route_tokens:
+              assert token in session_entrypoint, f'Uitpakken lifecycle-route ontbreekt: {token}'
+
+          required_ui_tokens = [
+              'Terugzetten naar Kassa',
+              'Archiveren',
+              'Volledig verwijderen',
+              'Annuleren',
+              "applyDeleteChoice('return_to_kassa')",
+              "applyDeleteChoice('archive')",
+              "applyDeleteChoice('remove')",
+              '/api/receipts/delete',
+              '/receipt-lifecycle',
+          ]
+          for token in required_ui_tokens:
+              assert token in receipts_ui, f'Uitpakken delete-UI contract ontbreekt: {token}'
+
           forbidden_tables = [
               'receipt_identities',
               'receipt_line_identities',
@@ -110,7 +148,7 @@ jobs:
               'archived_receipts',
               'receipt_inventory_events',
           ]
-          combined = '\n'.join([main, service, lineage, foundation])
+          combined = '\n'.join([main, session_entrypoint, service, lineage, foundation])
           for table in forbidden_tables:
               create_token = f'CREATE TABLE IF NOT EXISTS {table}'
               assert create_token not in combined, f'Parallelle lifecycle-tabel verboden: {table}'
