@@ -1,3 +1,4 @@
+import './receipt-lifecycle-release-b.frontend-regression.spec.js'
 import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
