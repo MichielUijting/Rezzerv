@@ -1993,6 +1993,46 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
     digest = sha256_hex(file_bytes)
     reimport_lineage = None
     with engine.begin() as conn:
+        archived_duplicate = conn.execute(
+            text(
+                '''
+                SELECT
+                    rr.id AS raw_receipt_id,
+                    rr.raw_status,
+                    rr.original_filename,
+                    rt.id AS receipt_table_id,
+                    rt.store_name,
+                    rt.store_branch,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.parse_status,
+                    rt.line_count,
+                    rt.workflow_state
+                FROM raw_receipts rr
+                JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
+                WHERE rr.household_id = :household_id
+                  AND rr.sha256_hash = :sha256_hash
+                  AND rr.deleted_at IS NULL
+                  AND rt.workflow_state = 'archived'
+                ORDER BY rt.updated_at DESC, rt.id DESC
+                LIMIT 1
+                '''
+            ),
+            {'household_id': household_id, 'sha256_hash': digest},
+        ).mappings().first()
+
+        if archived_duplicate:
+            return {
+                **_build_duplicate_receipt_response(archived_duplicate),
+                'duplicate': True,
+                'duplicate_reason': 'archived',
+                'workflow_state': 'archived',
+                'duplicate_message': (
+                    'Deze kassabon staat in Archief en kan niet opnieuw worden ingelezen. '
+                    'Een beheerder kan de bon terugzetten naar Kassa.'
+                ),
+            }
+
         duplicate = conn.execute(
             text(
                 '''

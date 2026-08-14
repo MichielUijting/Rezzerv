@@ -1906,6 +1906,7 @@ export default function KassaPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [duplicateNotice, setDuplicateNotice] = useState('')
+  const [archivedDuplicate, setArchivedDuplicate] = useState(null)
   const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
   const [openedReceiptId, setOpenedReceiptId] = useState('')
   const [openedReceipt, setOpenedReceipt] = useState(null)
@@ -2274,6 +2275,17 @@ export default function KassaPage() {
     setError('')
     setStatus('')
     setDuplicateNotice(message)
+
+    if (String(result?.duplicate_reason || '').trim().toLowerCase() === 'archived') {
+      setArchivedDuplicate({
+        receiptTableId: existingReceiptId,
+        message,
+      })
+      showKassaFeedback('warning', message)
+      return
+    }
+
+    setArchivedDuplicate(null)
     showKassaFeedback('warning', message, {
       title: 'Bon al ingelezen',
       detail: existingReceiptId ? 'De bestaande kassabon is geopend in Kassa.' : 'Deze upload is niet opnieuw toegevoegd. De bestaande kassabon blijft ongewijzigd in Kassa.',
@@ -2708,6 +2720,30 @@ export default function KassaPage() {
 
   function buildPostImportProgressMessage(kindLabel) {
     return `${kindLabel} wordt gecontroleerd en daarna wordt Kassa opnieuw geladen.`
+  }
+
+  async function restoreArchivedDuplicateToKassa() {
+    const receiptTableId = String(archivedDuplicate?.receiptTableId || '')
+    if (!receiptTableId || currentUserDisplayRole !== 'admin') return
+
+    try {
+      await fetchJson(
+        `/api/admin/receipts/${encodeURIComponent(receiptTableId)}/restore-archived`,
+        { method: 'POST' },
+      )
+
+      setArchivedDuplicate(null)
+      setDuplicateNotice('')
+      await loadReceipts(householdId)
+      setReceiptInboxFocusId(receiptTableId)
+      setStatus('De gearchiveerde kassabon is teruggezet naar Kassa.')
+      showKassaFeedback('success', 'De gearchiveerde kassabon is teruggezet naar Kassa.')
+    } catch (err) {
+      const message = normalizeErrorMessage(err?.message)
+        || 'De kassabon kon niet uit Archief worden teruggezet.'
+      setError(message)
+      showKassaFeedback('error', message)
+    }
   }
 
   function openSourceHub() {
@@ -3358,6 +3394,40 @@ export default function KassaPage() {
           {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} /> : null}
         </div>
       )}
+
+      {archivedDuplicate && currentUserDisplayRole === 'admin' ? (
+        <div className="rz-modal-backdrop" role="presentation">
+          <div
+            className="rz-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="kassa-archived-duplicate-title"
+          >
+            <h3 id="kassa-archived-duplicate-title" className="rz-modal-title">
+              Kassabon staat in Archief
+            </h3>
+            <p className="rz-modal-text">
+              {archivedDuplicate.message}
+            </p>
+            <div className="rz-modal-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setArchivedDuplicate(null)}
+              >
+                Annuleren
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                onClick={restoreArchivedDuplicateToKassa}
+              >
+                Terugzetten uit Archief
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ReceiptUploadProgressOverlay uploadProgress={uploadProgress} />
 
