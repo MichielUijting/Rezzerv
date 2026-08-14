@@ -1,0 +1,33 @@
+name: Uitpakken admin location create validation
+
+on:
+  push:
+    branches:
+      - fix/uitpakken-admin-location-create
+  pull_request:
+    paths:
+      - 'frontend/src/features/stores/StoreBatchDetailPage.jsx'
+      - 'frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js'
+      - 'backend/tests/test_uitpakken_location_admin_contract.py'
+      - 'scripts/run-frontend-regression-report.ps1'
+      - '.github/workflows/uitpakken-admin-location-create-validation.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Backend/source contracts
+        run: |
+          python -m pip install --disable-pip-version-check -q pytest
+          python -m pytest -q backend/tests/test_uitpakken_location_admin_contract.py
+
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Diff hygiene
+        run: git diff --check
