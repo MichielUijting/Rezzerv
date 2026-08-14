@@ -139,7 +139,6 @@ if text.count(actions_anchor) != 1:
 text = text.replace(actions_anchor, actions_repl, 1)
 product.write_text(text, encoding='utf-8', newline='\n')
 
-# Correct the B3 source contract: protect handling semantics without requiring the regressive table <select>.
 b3 = Path('frontend/src/features/stores/StoreBatchDetailPage.b3-native.contract.test.js')
 b3_text = b3.read_text(encoding='utf-8')
 old_b3 = "    expect(source).toContain('handleLocationChoice(entry, event.target.value)')"
@@ -148,7 +147,6 @@ if b3_text.count(old_b3) != 1:
     raise SystemExit(f'STOP: B3 contract anchor count={b3_text.count(old_b3)}')
 b3.write_text(b3_text.replace(old_b3, new_b3, 1), encoding='utf-8', newline='\n')
 
-# Strengthen the executable pytest source contract with the restored table-picker and B3 routing invariants.
 backend_contract = Path('backend/tests/test_uitpakken_location_admin_contract.py')
 contract_text = backend_contract.read_text(encoding='utf-8')
 append_block = '''\n\ndef test_uitpakken_receipt_table_opens_picker_and_preserves_b3_location_handling():
@@ -161,10 +159,8 @@ append_block = '''\n\ndef test_uitpakken_receipt_table_opens_picker_and_preserve
     assert "nextLocationId: ''" in text
 '''
 if 'def test_uitpakken_receipt_table_opens_picker_and_preserves_b3_location_handling' not in contract_text:
-    backend_contract.write_text(contract_text.rstrip() + append_block + '\n', encoding='utf-8', newline='\n')
+    backend_contract.write_text(contract_text.rstrip() + append_block.rstrip() + '\n', encoding='utf-8', newline='\n')
 
-# Runtime regression: prove main table opens the dialog, Admin create applies through STOCK handling,
-# and a member really has the picker open while management controls remain absent.
 test = Path('frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js')
 s = test.read_text(encoding='utf-8')
 test_replacements = [
