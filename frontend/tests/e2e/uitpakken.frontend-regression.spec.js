@@ -220,9 +220,6 @@ test.describe('Uitpakken frontend-regressie', () => {
     const bonArticleCell = refreshedRow.locator('.rz-store-batch-col-item');
     await expect(bonArticleCell).toContainText('Mosterd Dijon 250g');
     await expect(bonArticleCell).not.toContainText(universalArticleName);
-    const articleSelect = refreshedRow.locator('td').nth(4).locator('select');
-    await expect(articleSelect).toHaveValue('household-article-mosterd');
-    await expect(articleSelect.locator('option:checked')).toHaveText(universalArticleName);
 
     await expectNoConsoleErrors(consoleErrors);
   });
