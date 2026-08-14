@@ -109,7 +109,19 @@ Een herkende aankoopregel wordt eerst een importregel in **Uitpakken**. De gebru
 - regels negeren of parkeren;
 - geselecteerde geldige regels verwerken.
 
-Een regel mag pas naar Voorraad wanneer minimaal huishoudartikel, hoeveelheid en geldige doellocatie bekend zijn.
+De locatiebediening in de hoofdtabel opent de searchable **Locatie / sublocatie kiezen**-picker. Bij een gewone voorraadregel blijft de locatiekeuze onderdeel van de bestaande B3-verwerking: Rezzerv bewaakt de samenhang tussen `STOCK`, `DIRECT_CONSUMPTION`, de actie **Standaard gebruiken**, de gekozen locatie en rollback bij een mislukte write.
+
+Een huishoud-Admin kan tijdens deze locatiekeuze, zonder de huidige bonregelcontext te verlaten:
+
+- **+ Nieuwe locatie** kiezen;
+- **+ Nieuwe sublocatie** kiezen, inclusief selectie van de bovenliggende locatie wanneer nog geen sublocatie bestaat;
+- **Beheer locaties** openen voor volledig locatiebeheer.
+
+De create-acties gebruiken de bestaande Admin-only serverroutes voor locaties en sublocaties. Na succesvolle server-side opslag worden de locatieopties direct opnieuw geladen en wordt de nieuw aangemaakte locatie of sublocatie deterministisch op dezelfde bonregel geselecteerd. De save mag daarbij niet afhankelijk zijn van de timing van een latere React-state-render.
+
+Gewone leden en kijkers krijgen geen create- of beheeracties voor locaties; zij kunnen alleen de locatiekeuzes gebruiken die hun bestaande rechten toestaan. De detailpicker en bulkpicker zijn afzonderlijke flows en vallen niet onder deze inline create-regel.
+
+Een regel mag pas naar Voorraad wanneer minimaal huishoudartikel, hoeveelheid en geldige doellocatie bekend zijn, behalve wanneer de geldende B3-regel de aankoop expliciet als `DIRECT_CONSUMPTION` afhandelt en daarmee buiten fysieke voorraad houdt.
 
 ## 9. Inventory event: aankoop
 
@@ -181,6 +193,8 @@ Een toekomstige automatische actie vereist expliciete productregels, toestemming
 8. Bijna op gebruikt de voorraadprojectie en huishoudspecifieke grenzen.
 9. Spaar- en koopzegels gaan naar Spaartegoeden en nooit naar fysieke Voorraad.
 10. Onzekere matches, mappings of voorspellingen blijven zichtbaar reviewbaar en worden niet stil als waarheid verwerkt.
+11. Locatiebeheer vanuit Uitpakken hergebruikt dezelfde locatie-/sublocatiedata en dezelfde Admin-only backendroutes als centraal locatiebeheer; er bestaat geen tweede CRUD-implementatie.
+12. Een nieuw aangemaakte locatie of sublocatie wordt pas als gekozen beschouwd nadat de serveropslag is geslaagd en de actuele opties opnieuw zijn geladen.
 
 ## 15. Ketenacceptatiecriteria
 
@@ -191,7 +205,12 @@ De totale keten is functioneel geborgd wanneer:
 - spaar- en koopzegels uitsluitend in Spaartegoeden terechtkomen;
 - een artikelregel controleerbaar aan een universeel artikel en huishoudartikel kan worden gekoppeld;
 - producttype en Artikelgroep aantoonbaar gescheiden blijven;
-- Uitpakken alleen geldige regels met locatie verwerkt;
+- de hoofdtabel van Uitpakken de searchable locatiepicker opent;
+- een huishoud-Admin vanuit die picker een nieuwe locatie en een eerste/volgende sublocatie kan aanmaken zonder de bonregelcontext te verliezen;
+- de nieuw aangemaakte locatie of sublocatie na serveropslag direct op dezelfde bonregel wordt geselecteerd;
+- een gewoon lid geen locatie-create- of beheeracties krijgt;
+- `STOCK`, `DIRECT_CONSUMPTION`, **Standaard gebruiken** en rollback bij locatiekeuze hun bestaande semantiek behouden;
+- Uitpakken alleen geldige regels met locatie verwerkt, behalve expliciete Direct-consumption-regels die buiten fysieke voorraad vallen;
 - verwerking exact één aankoop-event per importregel schrijft;
 - de voorraadprojectie overeenkomt met de inventory events;
 - Voorraad alleen gegevens van het actieve huishouden toont;
