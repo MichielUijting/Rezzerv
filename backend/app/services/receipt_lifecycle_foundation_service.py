@@ -8,7 +8,8 @@ parallel identity or processing tables. Persisted facts keep one source of truth
 - purchase_import_lines: approval/unpacking work state
 - inventory_events: actual inventory effects
 
-No user-facing delete/reimport behaviour is changed by this module.
+Release B adds explicit disposition actions for receipts that are already in the
+Uitpakken flow. These actions deliberately do not reverse inventory events.
 """
 
 from __future__ import annotations
@@ -21,13 +22,17 @@ from sqlalchemy import text
 
 ACTIVE = "active"
 LEGACY_DELETED = "legacy_deleted"
+RETURNED_TO_KASSA = "returned_to_kassa"
+ARCHIVED = "archived"
+REMOVED_REIMPORT_ALLOWED = "removed_reimport_allowed"
 ALLOWED_WORKFLOW_STATES = {
     ACTIVE,
-    "archived",
-    "returned_to_kassa",
-    "removed_reimport_allowed",
+    ARCHIVED,
+    RETURNED_TO_KASSA,
+    REMOVED_REIMPORT_ALLOWED,
     LEGACY_DELETED,
 }
+UNPACK_LIFECYCLE_ACTIONS = {"return_to_kassa", "archive"}
 
 
 def _columns(conn, table_name: str) -> set[str]:
@@ -185,6 +190,144 @@ def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
         "backfilled_receipts": len(missing_receipts),
         "backfilled_lines": len(missing_lines),
         "workflow_states": sorted(ALLOWED_WORKFLOW_STATES),
+    }
+
+
+def resolve_receipt_for_unpack_batch(conn, batch_id: str) -> dict[str, Any] | None:
+    """Resolve the canonical receipt behind a receipt-backed Uitpakken batch."""
+    batch = conn.execute(
+        text(
+            """
+            SELECT id, household_id, source_type, source_reference, import_status
+            FROM purchase_import_batches
+            WHERE id = :batch_id
+            LIMIT 1
+            """
+        ),
+        {"batch_id": str(batch_id or "").strip()},
+    ).mappings().first()
+    if not batch or str(batch.get("source_type") or "").strip() != "receipt":
+        return None
+
+    source_reference = str(batch.get("source_reference") or "").strip()
+    if not source_reference.startswith("receipt:"):
+        return None
+    receipt_table_id = source_reference.split(":", 1)[1].strip()
+    if not receipt_table_id:
+        return None
+
+    receipt = conn.execute(
+        text(
+            """
+            SELECT id, household_id, raw_receipt_id, approved_at, deleted_at,
+                   COALESCE(workflow_state, 'active') AS workflow_state
+            FROM receipt_tables
+            WHERE id = :receipt_table_id
+            LIMIT 1
+            """
+        ),
+        {"receipt_table_id": receipt_table_id},
+    ).mappings().first()
+    if not receipt:
+        return None
+
+    result = dict(receipt)
+    result["batch_id"] = str(batch["id"])
+    result["batch_household_id"] = str(batch["household_id"])
+    result["import_status"] = str(batch.get("import_status") or "")
+    return result
+
+
+def apply_unpack_receipt_lifecycle_action(
+    conn,
+    *,
+    batch_id: str,
+    household_id: str,
+    action: str,
+) -> dict[str, Any]:
+    """Apply an explicit Uitpakken receipt disposition without inventory reversal."""
+    normalized_action = str(action or "").strip().lower()
+    if normalized_action not in UNPACK_LIFECYCLE_ACTIONS:
+        raise ValueError(f"Onbekende lifecycle-actie: {normalized_action or '-'}")
+
+    receipt = resolve_receipt_for_unpack_batch(conn, batch_id)
+    if not receipt:
+        raise LookupError("Geen kassabon gevonden voor deze Uitpakken-batch")
+
+    expected_household_id = str(household_id or "").strip()
+    receipt_household_id = str(receipt.get("household_id") or "").strip()
+    batch_household_id = str(receipt.get("batch_household_id") or "").strip()
+    if not expected_household_id or receipt_household_id != expected_household_id or batch_household_id != expected_household_id:
+        raise PermissionError("Kassabon hoort niet bij het actieve huishouden")
+
+    receipt_table_id = str(receipt["id"])
+    if normalized_action == "return_to_kassa":
+        conn.execute(
+            text(
+                """
+                UPDATE receipt_tables
+                SET approved_at = NULL,
+                    workflow_state = :workflow_state,
+                    deleted_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :receipt_table_id
+                  AND household_id = :household_id
+                """
+            ),
+            {
+                "workflow_state": RETURNED_TO_KASSA,
+                "receipt_table_id": receipt_table_id,
+                "household_id": expected_household_id,
+            },
+        )
+        return {
+            "status": "ok",
+            "action": normalized_action,
+            "batch_id": str(batch_id),
+            "receipt_table_id": receipt_table_id,
+            "workflow_state": RETURNED_TO_KASSA,
+            "inventory_events_reversed": False,
+        }
+
+    # Archive retains all receipt/import/inventory facts but hides the receipt from
+    # the active Kassa/Uitpakken queries through receipt_tables.deleted_at. Unlike
+    # full removal, raw_receipts stays active so the original source hash remains
+    # reserved and the exact source cannot be reimported as a new active receipt.
+    conn.execute(
+        text(
+            """
+            UPDATE receipt_tables
+            SET workflow_state = :workflow_state,
+                deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :receipt_table_id
+              AND household_id = :household_id
+            """
+        ),
+        {
+            "workflow_state": ARCHIVED,
+            "receipt_table_id": receipt_table_id,
+            "household_id": expected_household_id,
+        },
+    )
+    conn.execute(
+        text(
+            """
+            UPDATE purchase_import_batches
+            SET import_status = 'archived'
+            WHERE id = :batch_id
+              AND household_id = :household_id
+            """
+        ),
+        {"batch_id": str(batch_id), "household_id": expected_household_id},
+    )
+    return {
+        "status": "ok",
+        "action": normalized_action,
+        "batch_id": str(batch_id),
+        "receipt_table_id": receipt_table_id,
+        "workflow_state": ARCHIVED,
+        "inventory_events_reversed": False,
     }
 
 
