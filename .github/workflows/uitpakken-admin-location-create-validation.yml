@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -62,4 +64,6 @@ jobs:
         run: npx playwright test --project=chromium --no-deps --workers=1 tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js
 
       - name: Diff hygiene
-        run: git diff --check origin/main...HEAD
+        run: |
+          git fetch origin main
+          git diff --check origin/main...HEAD
