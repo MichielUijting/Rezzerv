@@ -147,8 +147,10 @@ jobs:
           auto_refresh_start = kassa_ui.index("useEffect(() => {\n    if (isAddReceiptRoute || isUploading) return undefined")
           auto_refresh_end = kassa_ui.index('  }, [householdId, isAddReceiptRoute, isUploading])', auto_refresh_start)
           auto_refresh_block = kassa_ui[auto_refresh_start:auto_refresh_end]
-          assert 'refreshKassaInbox()' in auto_refresh_block, 'Kassa voert na reimport/navigatie geen directe inbox-refresh uit'
-          assert auto_refresh_block.index('refreshKassaInbox()') < auto_refresh_block.index('window.setInterval'), 'Directe Kassa-refresh moet voor de intervaltimer plaatsvinden'
+          assert 'refreshKassaInbox()' in auto_refresh_block, 'Kassa voert na navigatie geen directe inbox-refresh uit'
+          assert "window.addEventListener('focus', refreshKassaInbox)" in auto_refresh_block, 'Kassa mist refresh bij browserfocus'
+          assert 'RECEIPT_INBOX_AUTO_REFRESH_MS' not in kassa_ui, 'Periodieke 60-seconden Kassa-refresh is verboden'
+          assert 'window.setInterval(refreshKassaInbox' not in auto_refresh_block, 'Periodiek Kassa-pollen is verboden'
 
           forbidden_tables = [
               'receipt_identities',
