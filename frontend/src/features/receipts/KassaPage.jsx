@@ -2192,6 +2192,7 @@ export default function KassaPage() {
         receiptInboxRefreshInFlightRef.current = false
       }
     }
+    refreshKassaInbox()
     const intervalId = window.setInterval(refreshKassaInbox, RECEIPT_INBOX_AUTO_REFRESH_MS)
     window.addEventListener('focus', refreshKassaInbox)
     return () => {
