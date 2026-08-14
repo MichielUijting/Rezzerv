@@ -1,0 +1,121 @@
+name: TEMP fix first sublocation create v2
+
+on:
+  push:
+    branches:
+      - fix/uitpakken-admin-location-create
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/uitpakken-admin-location-create
+          fetch-depth: 0
+
+      - name: Patch product and regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          product = Path('frontend/src/features/stores/StoreBatchDetailPage.jsx')
+          text = product.read_text(encoding='utf-8')
+
+          old_start = """  function startInlineLocationCreate(mode) {
+            if (!canManageLocations) return
+            if (mode === 'sublocation' && !activeLocationSpaceId) {
+              showUitpakkenFeedback('warning', 'Selecteer eerst de locatie waaronder je een sublocatie wilt toevoegen.')
+              return
+            }
+            setLocationCreateMode(mode)
+            setNewLocationName('')
+          }
+          """
+          new_start = """  function startInlineLocationCreate(mode) {
+            if (!canManageLocations) return
+            setLocationCreateMode(mode)
+            setNewLocationName('')
+          }
+          """
+          if old_start in text:
+              text = text.replace(old_start, new_start, 1)
+          elif new_start not in text:
+              raise SystemExit('STOP: startInlineLocationCreate anchor not found')
+
+          old_disabled = 'disabled={pickerLineBusy || isCreatingLocation || !activeLocationSpaceId}'
+          new_disabled = 'disabled={pickerLineBusy || isCreatingLocation}'
+          if old_disabled in text:
+              text = text.replace(old_disabled, new_disabled, 1)
+
+          old_parent = """                      {locationCreateMode === 'sublocation' ? (
+            <div style={{ color: '#5f7a68', fontSize: 13 }}>
+              Locatie: {spaceLocationOptions(locationOptions).find((option) => String(option.id) === String(activeLocationSpaceId))?.label || '-'}
+            </div>
+          ) : null}
+          <input
+          """
+          new_parent = """                      {locationCreateMode === 'sublocation' ? (
+            <label className=\"rz-input-field\">
+              <div className=\"rz-label\">Locatie</div>
+              <select
+                className=\"rz-input\"
+                value={activeLocationSpaceId}
+                onChange={(event) => setActiveLocationSpaceId(event.target.value)}
+                data-testid=\"receipt-location-create-parent-space\"
+              >
+                <option value=\"\">Kies een locatie</option>
+                {spaceLocationOptions(locationOptions).map((option) => (
+                  <option key={option.id} value={String(option.id)}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <input
+          """
+          if old_parent in text:
+              text = text.replace(old_parent, new_parent, 1)
+          elif 'receipt-location-create-parent-space' not in text:
+              raise SystemExit('STOP: parent selector anchor not found')
+
+          product.write_text(text, encoding='utf-8', newline='\n')
+
+          test = Path('frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js')
+          t = test.read_text(encoding='utf-8')
+          old_test = """    await page.goto(`/kassabonnen?batch=${batchId}`);
+          await page.getByTestId(`receipt-line-location-select-${lineId}`).click();
+          await page.getByRole('button', { name: 'Keuken', exact: true }).click();
+
+          await page.getByTestId('receipt-location-create-sublocation').click();
+          await page.getByTestId('receipt-location-create-name').fill('Voorraadkast');
+          """
+          new_test = """    await page.goto(`/kassabonnen?batch=${batchId}`);
+          await page.getByTestId(`receipt-line-location-select-${lineId}`).click();
+
+          await page.getByTestId('receipt-location-create-sublocation').click();
+          await page.getByTestId('receipt-location-create-parent-space').selectOption('space-keuken');
+          await page.getByTestId('receipt-location-create-name').fill('Voorraadkast');
+          """
+          if old_test in t:
+              t = t.replace(old_test, new_test, 1)
+          elif "receipt-location-create-parent-space').selectOption('space-keuken')" not in t:
+              raise SystemExit('STOP: regression test anchor not found')
+          test.write_text(t, encoding='utf-8', newline='\n')
+          print('PASS: first sublocation flow patched')
+          PY
+
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/features/stores/StoreBatchDetailPage.jsx frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js
+          git diff --cached --check
+          git commit -m "fix(uitpakken): allow creating first sublocation"
+          git push origin HEAD:fix/uitpakken-admin-location-create
