@@ -1,0 +1,74 @@
+name: TEMP diagnose Uitpakken admin runtime
+
+on:
+  push:
+    branches:
+      - fix/uitpakken-admin-location-create
+    paths:
+      - '.github/workflows/_temp-diagnose-uitpakken-admin-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/uitpakken-admin-location-create
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Inject diagnostic header assertions in runner workspace only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js')
+          s = p.read_text(encoding='utf-8')
+          anchor = "    await page.goto(`/kassabonnen?batch=${batchId}`);\n    const locationButton = page.getByTestId(`receipt-line-location-select-${lineId}`);"
+          replacement = "    await page.goto(`/kassabonnen?batch=${batchId}`);\n    await expect(page.getByText('admin@rezzerv.test', { exact: true })).toBeVisible();\n    const locationButton = page.getByTestId(`receipt-line-location-select-${lineId}`);"
+          if s.count(anchor) != 1:
+              raise SystemExit(f'STOP: first admin-test anchor count={s.count(anchor)}')
+          s = s.replace(anchor, replacement, 1)
+          anchor2 = "    await page.goto(`/kassabonnen?batch=${batchId}`);\n    await page.getByTestId(`receipt-line-location-select-${lineId}`).click();"
+          replacement2 = "    await page.goto(`/kassabonnen?batch=${batchId}`);\n    await expect(page.getByText('admin@rezzerv.test', { exact: true })).toBeVisible();\n    await page.getByTestId(`receipt-line-location-select-${lineId}`).click();"
+          if s.count(anchor2) != 1:
+              raise SystemExit(f'STOP: second admin-test anchor count={s.count(anchor2)}')
+          p.write_text(s.replace(anchor2, replacement2, 1), encoding='utf-8', newline='\n')
+          print('PASS: diagnostic assertions injected')
+          PY
+
+      - name: Build production frontend
+        run: npm run build
+
+      - name: Start production preview
+        run: |
+          nohup npm run preview -- --host 0.0.0.0 --port 5174 > /tmp/rezzerv-vite-preview.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5174 >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/rezzerv-vite-preview.log
+          exit 1
+
+      - name: Create empty Playwright storage state
+        run: |
+          mkdir -p playwright/.auth
+          node -e "require('fs').writeFileSync('playwright/.auth/user.json',JSON.stringify({cookies:[],origins:[]}))"
+
+      - name: Run exact Admin location tests with runtime assertion
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+        run: npx playwright test --project=chromium --no-deps --workers=1 tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js
+
+      - name: Dump preview log
+        if: always()
+        run: cat /tmp/rezzerv-vite-preview.log || true
