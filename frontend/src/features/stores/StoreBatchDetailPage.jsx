@@ -24,6 +24,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
 import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'
+import { isHouseholdAdminFromContext } from '../../lib/authSession.js'
 import {
   DIRECT_CONSUMPTION,
   STOCK,
@@ -266,6 +267,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [locationPickerMode, setLocationPickerMode] = useState('single')
   const [activeLocationSpaceId, setActiveLocationSpaceId] = useState('')
   const [pendingDefaultLocationChoice, setPendingDefaultLocationChoice] = useState(null)
+  const [locationCreateMode, setLocationCreateMode] = useState('')
+  const [newLocationName, setNewLocationName] = useState('')
+  const [isCreatingLocation, setIsCreatingLocation] = useState(false)
   const locationHoverTimerRef = useRef(null)
   const previousReceiptLineIdRef = useRef(receiptLineId || '')
 
@@ -907,6 +911,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setLocationPickerSearch('')
     setLocationPickerMode('single')
     setActiveLocationSpaceId('')
+    setLocationCreateMode('')
+    setNewLocationName('')
   }
 
   function activateLocationSpaceDelayed(spaceId) {
@@ -972,10 +978,87 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return sublocationOptionsForSpace(locationOptions, activeLocationSpaceId)
   }
 
-  const canManageLocations = !isViewer
+  const canManageLocations = isHouseholdAdminFromContext(household)
 
   function openLocationManagement() {
     window.location.href = '/instellingen/locaties'
+  }
+
+  function startInlineLocationCreate(mode) {
+    if (!canManageLocations) return
+    if (mode === 'sublocation' && !activeLocationSpaceId) {
+      showUitpakkenFeedback('warning', 'Selecteer eerst de locatie waaronder je een sublocatie wilt toevoegen.')
+      return
+    }
+    setLocationCreateMode(mode)
+    setNewLocationName('')
+  }
+
+  function cancelInlineLocationCreate() {
+    if (isCreatingLocation) return
+    setLocationCreateMode('')
+    setNewLocationName('')
+  }
+
+  async function saveInlineLocationCreate() {
+    if (!canManageLocations || !locationCreateMode) return
+    const name = String(newLocationName || '').trim()
+    if (!name) {
+      showUitpakkenFeedback('warning', locationCreateMode === 'space' ? 'Locatienaam is verplicht.' : 'Sublocatienaam is verplicht.')
+      return
+    }
+    if (locationCreateMode === 'sublocation' && !activeLocationSpaceId) {
+      showUitpakkenFeedback('warning', 'Selecteer eerst een locatie.')
+      return
+    }
+
+    const mode = locationCreateMode
+    const parentSpaceId = String(activeLocationSpaceId || '')
+    setIsCreatingLocation(true)
+    try {
+      if (mode === 'space') {
+        await fetchJson('/api/spaces', {
+          method: 'POST',
+          body: JSON.stringify({ naam: name, active: true }),
+        })
+      } else {
+        await fetchJson('/api/sublocations', {
+          method: 'POST',
+          body: JSON.stringify({ naam: name, space_id: parentSpaceId, active: true }),
+        })
+      }
+
+      const nextOptions = await refreshLocationOptions()
+      const normalizedName = name.toLocaleLowerCase('nl-NL')
+      const created = nextOptions.find((option) => {
+        if (mode === 'space') {
+          return option?.type === 'space'
+            && String(option?.label || '').trim().toLocaleLowerCase('nl-NL') === normalizedName
+        }
+        return option?.type === 'sublocation'
+          && String(option?.space_id || '') === parentSpaceId
+          && String(option?.sublocation_label || '').trim().toLocaleLowerCase('nl-NL') === normalizedName
+      })
+      if (!created?.id) {
+        throw new Error('De nieuwe locatie is opgeslagen, maar kon niet opnieuw worden geladen.')
+      }
+
+      setLocationCreateMode('')
+      setNewLocationName('')
+      if (mode === 'space') setActiveLocationSpaceId(String(created.space_id || created.id))
+      await applyPickedLocation(String(created.id))
+      showUitpakkenFeedback(
+        'success',
+        mode === 'space' ? `Locatie ${name} is toegevoegd en geselecteerd.` : `Sublocatie ${name} is toegevoegd en geselecteerd.`,
+        { key: `uitpakken-location-created-${mode}-${created.id}` },
+      )
+    } catch (createError) {
+      const message = normalizeErrorMessage(createError?.message || createError)
+        || (mode === 'space' ? 'Locatie toevoegen mislukt.' : 'Sublocatie toevoegen mislukt.')
+      showUitpakkenFeedback('error', message, { key: `uitpakken-location-create-error-${mode}-${Date.now()}` })
+    } finally {
+      setIsCreatingLocation(false)
+    }
   }
 
   async function applyPickedLocation(locationId) {
@@ -2197,6 +2280,17 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           <div style={{ color: '#5f7a68', fontSize: 13, padding: '10px 12px' }}>Geen locatie gevonden.</div>
                         )}
                       </div>
+                      {canManageLocations ? (
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          disabled={pickerLineBusy || isCreatingLocation}
+                          onClick={() => startInlineLocationCreate('space')}
+                          data-testid="receipt-location-create-space"
+                        >
+                          + Nieuwe locatie
+                        </Button>
+                      ) : null}
                     </div>
 
                     <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
@@ -2233,8 +2327,51 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           </button>
                         )) : null}
                       </div>
+                      {canManageLocations ? (
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          disabled={pickerLineBusy || isCreatingLocation || !activeLocationSpaceId}
+                          onClick={() => startInlineLocationCreate('sublocation')}
+                          data-testid="receipt-location-create-sublocation"
+                        >
+                          + Nieuwe sublocatie
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
+                  {canManageLocations && locationCreateMode ? (
+                    <div
+                      data-testid="receipt-location-create-panel"
+                      style={{ marginTop: 14, padding: 12, border: '1px solid #d8e8de', borderRadius: 12, background: '#f8fbf9', display: 'grid', gap: 10 }}
+                    >
+                      <div style={{ color: '#163020', fontWeight: 600 }}>
+                        {locationCreateMode === 'space' ? 'Nieuwe locatie' : 'Nieuwe sublocatie'}
+                      </div>
+                      {locationCreateMode === 'sublocation' ? (
+                        <div style={{ color: '#5f7a68', fontSize: 13 }}>
+                          Locatie: {spaceLocationOptions(locationOptions).find((option) => String(option.id) === String(activeLocationSpaceId))?.label || '-'}
+                        </div>
+                      ) : null}
+                      <input
+                        className="rz-input"
+                        type="text"
+                        autoFocus
+                        value={newLocationName}
+                        onChange={(event) => setNewLocationName(event.target.value)}
+                        placeholder={locationCreateMode === 'space' ? 'Naam nieuwe locatie' : 'Naam nieuwe sublocatie'}
+                        data-testid="receipt-location-create-name"
+                      />
+                      <div className="rz-modal-actions">
+                        <Button variant="secondary" type="button" disabled={isCreatingLocation} onClick={cancelInlineLocationCreate}>
+                          Annuleren
+                        </Button>
+                        <Button type="button" disabled={isCreatingLocation} onClick={saveInlineLocationCreate} data-testid="receipt-location-create-save">
+                          {isCreatingLocation ? 'Opslaan…' : 'Opslaan'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="rz-modal-actions">
                     {canManageLocations ? (
                       <Button variant="secondary" type="button" disabled={pickerLineBusy} onClick={openLocationManagement}>
