@@ -1,4 +1,4 @@
-name: TEMP restore Uitpakken location picker
+name: TEMP apply Uitpakken location option race fix
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  restore:
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,226 +23,27 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Restore picker contract and preserve B3 semantics
-        run: |
-          python - <<'PY'
-          from pathlib import Path
+      - name: Apply scoped race fix
+        run: python scripts/_temp_restore_uitpakken_location_picker.py
 
-          product = Path('frontend/src/features/stores/StoreBatchDetailPage.jsx')
-          text = product.read_text(encoding='utf-8')
-
-          old_table = '''                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-                        <select
-                          className="rz-input rz-inline-input"
-                          value={entry.draft.locationId || ''}
-                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}
-                          aria-label={`Locatie voor ${line.article_name_raw}`}
-                          data-testid={`receipt-line-location-select-${line.id}`}
-                          onChange={(event) => handleLocationChoice(entry, event.target.value)}
-                        >
-                          <option value="">Kies locatie</option>
-                          <option value="__standard__">Standaard gebruiken</option>
-                          {locationOptions.map((location) => <option key={location.id} value={location.id}>{location.label}</option>)}
-                        </select>
-                      </td>'''
-          new_table = '''                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-                        <button
-                          type="button"
-                          className="rz-input rz-store-select"
-                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}
-                          aria-label={`Locatie voor ${line.article_name_raw}`}
-                          data-testid={`receipt-line-location-select-${line.id}`}
-                          onClick={() => openLocationPicker(line.id)}
-                          style={{ width: '100%', textAlign: 'left', cursor: busyLineId === line.id || isProcessingBatch || isViewer ? 'not-allowed' : 'pointer' }}
-                        >
-                          {locationLabelForDraft(entry.draft) || 'Kies locatie'}
-                        </button>
-                      </td>'''
-          if text.count(old_table) != 1:
-              raise SystemExit(f'STOP: table location control count={text.count(old_table)}')
-          text = text.replace(old_table, new_table, 1)
-
-          old_invalid = '''      if (!isDirect && !selectedLocation) {
-        throw new Error('Kies een geldige locatie en sublocatie.')
-      }
-
-      await persistLocationHandlingChoice({
-        entry,
-        nextOverride,
-        nextLocationId: String(nextValue || ''),
-        previousOverride,
-        previousLocationId,
-      })'''
-          new_invalid = '''      if (!nextValue) {
-        await persistLocationHandlingChoice({
-          entry,
-          nextOverride: STOCK,
-          nextLocationId: '',
-          previousOverride,
-          previousLocationId,
-        })
-        return
-      }
-
-      if (!isDirect && !selectedLocation) {
-        throw new Error('Kies een geldige locatie en sublocatie.')
-      }
-
-      await persistLocationHandlingChoice({
-        entry,
-        nextOverride,
-        nextLocationId: String(nextValue || ''),
-        previousOverride,
-        previousLocationId,
-      })'''
-          if text.count(old_invalid) != 1:
-              raise SystemExit(f'STOP: handleLocationChoice anchor count={text.count(old_invalid)}')
-          text = text.replace(old_invalid, new_invalid, 1)
-
-          old_single = '''    const hasArticle = Boolean(String(pickerEntry.draft?.articleId || pickerEntry.line?.matched_household_article_id || '').trim())
-
-    if (hasArticle && nextLocationId) {
-      setPendingDefaultLocationChoice({
-        lineId: pickerEntry.line.id,
-        locationId: nextLocationId,
-      })
-      closeLocationPicker()
-      return
-    }
-
-    await persistLineDraft(
-      pickerEntry.line,
-      { locationId: nextLocationId },
-      { defaultLocationPolicy: 'line_only' }
-    )
-    closeLocationPicker()'''
-          new_single = '''    await handleLocationChoice(pickerEntry, nextLocationId)
-    closeLocationPicker()'''
-          if text.count(old_single) != 1:
-              raise SystemExit(f'STOP: picker single-save anchor count={text.count(old_single)}')
-          text = text.replace(old_single, new_single, 1)
-
-          old_actions = '''                  <div className="rz-modal-actions">
-                    {canManageLocations ? ('''
-          new_actions = '''                  <div className="rz-modal-actions">
-                    {locationPickerMode === 'single' ? (
-                      <Button
-                        variant="secondary"
-                        type="button"
-                        disabled={pickerLineBusy}
-                        onClick={async () => {
-                          const pickerEntry = lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
-                          if (!pickerEntry) return
-                          await handleLocationChoice(pickerEntry, '__standard__')
-                          closeLocationPicker()
-                        }}
-                        data-testid="receipt-location-use-standard"
-                      >
-                        Standaard gebruiken
-                      </Button>
-                    ) : null}
-                    {canManageLocations ? ('''
-          if text.count(old_actions) != 1:
-              raise SystemExit(f'STOP: picker actions anchor count={text.count(old_actions)}')
-          text = text.replace(old_actions, new_actions, 1)
-
-          product.write_text(text, encoding='utf-8', newline='\n')
-
-          test = Path('frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js')
-          s = test.read_text(encoding='utf-8')
-
-          old_state = '''    targetLocationWrites: [],
-  };'''
-          new_state = '''    targetLocationWrites: [],
-    handlingOverrideWrites: [],
-  };'''
-          if s.count(old_state) != 1:
-              raise SystemExit(f'STOP: test state anchor count={s.count(old_state)}')
-          s = s.replace(old_state, new_state, 1)
-
-          old_override = '''    if (path === `/api/households/0/purchase-import-lines/${lineId}/inventory-handling-override` && method === 'PUT') {
-      const body = request.postDataJSON();
-      return json({ inventory_handling_override: body.inventory_handling_override });
-    }'''
-          new_override = '''    if (path === `/api/households/0/purchase-import-lines/${lineId}/inventory-handling-override` && method === 'PUT') {
-      const body = request.postDataJSON();
-      state.handlingOverrideWrites.push(body);
-      return json({ inventory_handling_override: body.inventory_handling_override });
-    }'''
-          if s.count(old_override) != 1:
-              raise SystemExit(f'STOP: override mock anchor count={s.count(old_override)}')
-          s = s.replace(old_override, new_override, 1)
-
-          old_first_click = '''    await expect(locationButton).toBeVisible();
-    await locationButton.click();
-
-    await expect(page.getByTestId('receipt-location-create-space')).toBeVisible();'''
-          new_first_click = '''    await expect(locationButton).toBeVisible();
-    await expect(locationButton).toHaveJSProperty('tagName', 'BUTTON');
-    await locationButton.click();
-
-    await expect(page.getByRole('dialog', { name: 'Locatie / sublocatie kiezen' })).toBeVisible();
-    await expect(page.getByTestId('receipt-location-use-standard')).toBeVisible();
-    await expect(page.getByTestId('receipt-location-create-space')).toBeVisible();'''
-          if s.count(old_first_click) != 1:
-              raise SystemExit(f'STOP: first picker assertion anchor count={s.count(old_first_click)}')
-          s = s.replace(old_first_click, new_first_click, 1)
-
-          old_first_assert = '''    await expect.poll(() => state.targetLocationWrites.map((item) => item.target_location_id)).toContain('space-2');
-    await expect(locationButton).toContainText('Garage');'''
-          new_first_assert = '''    await expect.poll(() => state.targetLocationWrites.map((item) => item.target_location_id)).toContain('space-2');
-    await expect.poll(() => state.handlingOverrideWrites.map((item) => item.inventory_handling_override)).toContain('STOCK');
-    await expect(locationButton).toContainText('Garage');'''
-          if s.count(old_first_assert) != 1:
-              raise SystemExit(f'STOP: first B3 assertion anchor count={s.count(old_first_assert)}')
-          s = s.replace(old_first_assert, new_first_assert, 1)
-
-          old_second_assert = '''    await expect.poll(() => state.targetLocationWrites.map((item) => item.target_location_id)).toContain('sublocation-1');
-    await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toContainText('Keuken / Voorraadkast');'''
-          new_second_assert = '''    await expect.poll(() => state.targetLocationWrites.map((item) => item.target_location_id)).toContain('sublocation-1');
-    await expect.poll(() => state.handlingOverrideWrites.map((item) => item.inventory_handling_override)).toContain('STOCK');
-    await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toContainText('Keuken / Voorraadkast');'''
-          if s.count(old_second_assert) != 1:
-              raise SystemExit(f'STOP: second B3 assertion anchor count={s.count(old_second_assert)}')
-          s = s.replace(old_second_assert, new_second_assert, 1)
-
-          member_anchor = '''    await page.getByTestId(`receipt-line-location-select-${lineId}`).click();
-
-    await expect(page.getByTestId('receipt-location-create-space')).toHaveCount(0);'''
-          member_repl = '''    await page.getByTestId(`receipt-line-location-select-${lineId}`).click();
-    await expect(page.getByRole('dialog', { name: 'Locatie / sublocatie kiezen' })).toBeVisible();
-
-    await expect(page.getByTestId('receipt-location-create-space')).toHaveCount(0);'''
-          if s.count(member_anchor) != 1:
-              raise SystemExit(f'STOP: member picker anchor count={s.count(member_anchor)}')
-          s = s.replace(member_anchor, member_repl, 1)
-
-          test.write_text(s, encoding='utf-8', newline='\n')
-          print('PASS: picker regression restoration applied')
-          PY
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
-
-      - name: Contract and source validation
+      - name: Run source contract
         run: |
           python -m pip install --disable-pip-version-check -q pytest
           python -m pytest -q backend/tests/test_uitpakken_location_admin_contract.py
-          cd frontend
-          npm test -- --run src/features/stores/StoreBatchDetailPage.b3-native.contract.test.js
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
 
       - name: Diff hygiene
         run: git diff --check
 
-      - name: Commit restoration
+      - name: Commit race fix
         run: |
           git config user.name "Rezzerv CI"
           git config user.email "actions@rezzerv.local"
-          git add frontend/src/features/stores/StoreBatchDetailPage.jsx frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js
-          git commit -m "fix(uitpakken): restore location picker in receipt table"
+          git add frontend/src/features/stores/StoreBatchDetailPage.jsx backend/tests/test_uitpakken_location_admin_contract.py
+          git commit -m "fix(uitpakken): use refreshed locations after inline create"
           git push origin HEAD:fix/uitpakken-admin-location-create
