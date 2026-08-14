@@ -169,8 +169,8 @@ jobs:
 
           # Archived duplicate UX: iedereen krijgt de melding, alleen Admin mag herstellen.
           archived_branch_start = kassa_ui.index("if (String(result?.duplicate_reason || '').trim().toLowerCase() === 'archived')")
-          archived_branch_end = kassa_ui.index('    setArchivedDuplicate(null)', archived_branch_start)
-          archived_branch = kassa_ui[archived_branch_start:archived_branch_end]
+          archived_return = kassa_ui.index('      return', archived_branch_start)
+          archived_branch = kassa_ui[archived_branch_start:archived_return]
           assert 'clearTransientReceiptPreview()' in archived_branch, 'Archief-duplicate moet tijdelijke upload-preview opruimen'
           assert "showKassaFeedback" not in archived_branch, 'Archief-duplicate mag geen tweede generieke feedbackmelding starten'
           assert "setDuplicateNotice(message)" not in archived_branch, 'Archief-duplicate mag niet ook de generieke duplicateNotice gebruiken'
