@@ -58,6 +58,8 @@ try {
     Write-Host '[4/6] Release-B gerichte backend regressietests' -ForegroundColor Cyan
     docker compose run --rm --no-deps `
         -e PYTHONPATH=/app `
+        -v "${root}/backend/app:/backend/app:ro" `
+        -v "${root}/frontend/src:/frontend/src:ro" `
         backend sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -q tests/test_receipt_lifecycle_foundation.py tests/test_receipt_reimport_lineage_service.py tests/test_receipt_lifecycle_release_b_chain.py tests/test_unpacking_readiness_article_model_contract.py"
     if ($LASTEXITCODE -ne 0) {
         throw "Release-B backend regressietests zijn rood met exitcode $LASTEXITCODE."
