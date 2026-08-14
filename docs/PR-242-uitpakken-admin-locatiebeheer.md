@@ -1,7 +1,7 @@
 # PR #242 — Uitpakken: Admin locatie/sublocatie toevoegen
 
-**Status:** gemerged in `main`  
-**Mergecommit:** `ca1b765cd04a8002f6ede9b821898191e499dc68`  
+**Status:** gemerged in `main`
+**Mergecommit:** `ca1b765cd04a8002f6ede9b821898191e499dc68`
 **Geteste PR-head:** `6fe7f2406757109ae059247bc638a80dc3a27ec1`
 
 ## Doel
