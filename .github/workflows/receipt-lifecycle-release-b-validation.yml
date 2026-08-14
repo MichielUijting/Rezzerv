@@ -167,6 +167,15 @@ jobs:
           assert "const isApprovedForUnpacking = Boolean(updated?.approved_at)" in kassa_ui, 'Kassa moet approved_at als lifecycle-authoriteit gebruiken'
           assert "|| normalizedPoStatusLabel === 'Gecontroleerd'" not in kassa_ui, 'PO-status Gecontroleerd mag een bon niet uit Kassa verwijderen'
 
+          # Archived duplicate UX: iedereen krijgt de melding, alleen Admin mag herstellen.
+          archived_branch_start = kassa_ui.index("if (String(result?.duplicate_reason || '').trim().toLowerCase() === 'archived')")
+          archived_branch_end = kassa_ui.index('    setArchivedDuplicate(null)', archived_branch_start)
+          archived_branch = kassa_ui[archived_branch_start:archived_branch_end]
+          assert 'clearTransientReceiptPreview()' in archived_branch, 'Archief-duplicate moet tijdelijke upload-preview opruimen'
+          assert "{archivedDuplicate ? (" in kassa_ui, 'Archiefmelding moet voor iedere rol zichtbaar zijn'
+          assert "{archivedDuplicate && currentUserDisplayRole === 'admin' ? (" not in kassa_ui, 'Archiefmelding mag niet Admin-only zijn'
+          assert "currentUserDisplayRole === 'admin' ? (" in kassa_ui and 'Terugzetten uit Archief' in kassa_ui, 'Alleen Admin krijgt restore-actie uit Archief'
+
           forbidden_tables = [
               'receipt_identities',
               'receipt_line_identities',
