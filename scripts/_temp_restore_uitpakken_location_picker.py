@@ -27,17 +27,24 @@ if text.count(old_choice) != 1:
     raise SystemExit(f'STOP: handle signature anchor count={text.count(old_choice)}')
 text = text.replace(old_choice, new_choice, 1)
 
+# Scope option replacements strictly to handleLocationChoice so another directLocationOption(locationOptions)
+# elsewhere in the component remains untouched.
+handle_start = text.index("  async function handleLocationChoice(entry, nextValue, availableLocationOptions = locationOptions) {")
+handle_end = text.index("\n  async function ", handle_start + 10)
+handle_block = text[handle_start:handle_end]
+
 old_direct = "    const directLocation = directLocationOption(locationOptions)"
 new_direct = "    const directLocation = directLocationOption(availableLocationOptions)"
-if text.count(old_direct) != 1:
-    raise SystemExit(f'STOP: direct options anchor count={text.count(old_direct)}')
-text = text.replace(old_direct, new_direct, 1)
+if handle_block.count(old_direct) != 1:
+    raise SystemExit(f'STOP: scoped direct options anchor count={handle_block.count(old_direct)}')
+handle_block = handle_block.replace(old_direct, new_direct, 1)
 
 old_find = "      const selectedLocation = locationOptions.find(\n        (location) => String(location.id) === String(nextValue),\n      ) || null"
 new_find = "      const selectedLocation = availableLocationOptions.find(\n        (location) => String(location.id) === String(nextValue),\n      ) || null"
-if text.count(old_find) != 1:
-    raise SystemExit(f'STOP: selected options anchor count={text.count(old_find)}')
-text = text.replace(old_find, new_find, 1)
+if handle_block.count(old_find) != 1:
+    raise SystemExit(f'STOP: scoped selected options anchor count={handle_block.count(old_find)}')
+handle_block = handle_block.replace(old_find, new_find, 1)
+text = text[:handle_start] + handle_block + text[handle_end:]
 
 product.write_text(text, encoding='utf-8', newline='\n')
 
