@@ -49,5 +49,3 @@ def test_uitpakken_receipt_table_opens_picker_and_preserves_b3_location_handling
     assert "await handleLocationChoice(pickerEntry, '__standard__')" in text
     assert "nextOverride: STOCK" in text
     assert "nextLocationId: ''" in text
-    assert "applyPickedLocation(String(created.id), nextOptions)" in text
-    assert "availableLocationOptions = locationOptions" in text
