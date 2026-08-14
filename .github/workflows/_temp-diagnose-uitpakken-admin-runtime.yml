@@ -40,10 +40,11 @@ jobs:
           s = s.replace(anchor, replacement, 1)
           anchor2 = "    await page.goto(`/kassabonnen?batch=${batchId}`);\n    await page.getByTestId(`receipt-line-location-select-${lineId}`).click();"
           replacement2 = "    await page.goto(`/kassabonnen?batch=${batchId}`);\n    await expect(page.getByText('admin@rezzerv.test', { exact: true })).toBeVisible();\n    await page.getByTestId(`receipt-line-location-select-${lineId}`).click();"
-          if s.count(anchor2) != 1:
-              raise SystemExit(f'STOP: second admin-test anchor count={s.count(anchor2)}')
-          p.write_text(s.replace(anchor2, replacement2, 1), encoding='utf-8', newline='\n')
-          print('PASS: diagnostic assertions injected')
+          if s.count(anchor2) < 1:
+              raise SystemExit('STOP: second admin-test anchor missing')
+          s = s.replace(anchor2, replacement2, 1)
+          p.write_text(s, encoding='utf-8', newline='\n')
+          print('PASS: diagnostic assertions injected into both admin tests only')
           PY
 
       - name: Build production frontend
