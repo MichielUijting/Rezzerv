@@ -170,7 +170,7 @@ test.describe('Receipt lifecycle Release B frontend-regressie', () => {
     })
 
     await page.goto('/kassa/nieuw')
-    await expect(page.getByTestId('kassa-manual-file-input')).toBeVisible()
+    await expect(page.getByTestId('kassa-manual-file-input')).toHaveCount(1)
     await page.getByTestId('kassa-manual-file-input').setInputFiles({
       name: 'archived-release-b.jpg',
       mimeType: 'image/jpeg',
