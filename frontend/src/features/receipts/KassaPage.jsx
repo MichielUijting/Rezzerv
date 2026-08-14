@@ -2442,9 +2442,7 @@ export default function KassaPage() {
     if (!updated) return
 
     const updatedId = String(updated?.receipt_table_id || updated?.id || '')
-    const normalizedPoStatusLabel = String(updated?.po_norm_status_label || '').trim()
     const isApprovedForUnpacking = Boolean(updated?.approved_at)
-      || normalizedPoStatusLabel === 'Gecontroleerd'
 
     if (isApprovedForUnpacking && updatedId) {
       setReceipts((current) => current.filter((item) => {
