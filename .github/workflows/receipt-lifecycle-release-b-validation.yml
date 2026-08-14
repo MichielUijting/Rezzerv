@@ -1,0 +1,221 @@
+name: Receipt lifecycle Release B validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/main.py'
+      - 'backend/app/session_entrypoint.py'
+      - 'backend/app/services/receipt_service.py'
+      - 'backend/app/services/receipt_reimport_lineage_service.py'
+      - 'backend/app/services/receipt_lifecycle_foundation_service.py'
+      - 'backend/tests/test_receipt_reimport_lineage_service.py'
+      - 'backend/tests/test_receipt_lifecycle_foundation.py'
+      - 'backend/tests/test_receipt_lifecycle_release_b_chain.py'
+      - 'frontend/src/features/receipts/ReceiptsPage.jsx'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.js'
+      - 'frontend/tests/e2e/kassa.frontend-regression.spec.js'
+      - 'scripts/run-receipt-lifecycle-release-b-premerge.ps1'
+      - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-B.md'
+      - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/main.py'
+      - 'backend/app/session_entrypoint.py'
+      - 'backend/app/services/receipt_service.py'
+      - 'backend/app/services/receipt_reimport_lineage_service.py'
+      - 'backend/app/services/receipt_lifecycle_foundation_service.py'
+      - 'backend/tests/test_receipt_reimport_lineage_service.py'
+      - 'backend/tests/test_receipt_lifecycle_foundation.py'
+      - 'backend/tests/test_receipt_lifecycle_release_b_chain.py'
+      - 'frontend/src/features/receipts/ReceiptsPage.jsx'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.js'
+      - 'frontend/tests/e2e/kassa.frontend-regression.spec.js'
+      - 'scripts/run-receipt-lifecycle-release-b-premerge.ps1'
+      - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
+
+jobs:
+  release-b-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install focused test dependencies
+        run: python -m pip install --disable-pip-version-check pytest sqlalchemy fastapi
+
+      - name: Compile changed Python modules
+        run: |
+          python -m py_compile \
+            backend/app/main.py \
+            backend/app/session_entrypoint.py \
+            backend/app/services/receipt_service.py \
+            backend/app/services/receipt_reimport_lineage_service.py \
+            backend/app/services/receipt_lifecycle_foundation_service.py
+
+      - name: Run Release A foundation and Release B lineage tests
+        working-directory: backend
+        run: |
+          python -m pytest -q \
+            tests/test_receipt_lifecycle_foundation.py \
+            tests/test_receipt_reimport_lineage_service.py \
+            tests/test_receipt_lifecycle_release_b_chain.py
+
+      - name: Enforce Release B source contract
+        shell: python
+        run: |
+          from pathlib import Path
+
+          main = Path('backend/app/main.py').read_text(encoding='utf-8')
+          session_entrypoint = Path('backend/app/session_entrypoint.py').read_text(encoding='utf-8')
+          service = Path('backend/app/services/receipt_service.py').read_text(encoding='utf-8')
+          lineage = Path('backend/app/services/receipt_reimport_lineage_service.py').read_text(encoding='utf-8')
+          foundation = Path('backend/app/services/receipt_lifecycle_foundation_service.py').read_text(encoding='utf-8')
+          receipts_ui = Path('frontend/src/features/receipts/ReceiptsPage.jsx').read_text(encoding='utf-8')
+          kassa_ui = Path('frontend/src/features/receipts/KassaPage.jsx').read_text(encoding='utf-8')
+          lifecycle_ui_test = Path('frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.js').read_text(encoding='utf-8')
+
+          start = main.index('def delete_receipts(payload: ReceiptDeleteRequest')
+          end = main.index('@app.post("/api/admin/receipts/purge-archived")', start)
+          delete_block = main[start:end]
+
+          required_delete_tokens = [
+              "workflow_state = 'removed_reimport_allowed'",
+              'UPDATE raw_receipts SET deleted_at = CURRENT_TIMESTAMP',
+              "'reimport_allowed': True",
+          ]
+          for token in required_delete_tokens:
+              assert token in delete_block, f'Release B delete contract ontbreekt: {token}'
+
+          forbidden_delete_tokens = [
+              'remove_receipt_inventory_events(',
+              "sha256_hash = sha256_hash || ':deleted:'",
+              'DELETE FROM inventory_events',
+          ]
+          for token in forbidden_delete_tokens:
+              assert token not in delete_block, f'Verboden Kassa-delete gedrag teruggekeerd: {token}'
+
+          required_reimport_tokens = [
+              'load_deleted_reimport_lineage(conn, household_id, digest)',
+              "'logical_receipt_key': (reimport_lineage or {}).get('logical_receipt_key') or uuid.uuid4().hex",
+              'resolve_reimport_logical_line_key(reimport_lineage, index, line)',
+              'was_prior_line_validated(reimport_lineage, index, line)',
+              'get_prior_processed_line_fact(',
+          ]
+          for token in required_reimport_tokens:
+              assert token in service, f'Reimportcontract ontbreekt: {token}'
+
+          required_archive_duplicate_tokens = [
+              "workflow_state = 'archived'",
+              "duplicate_reason': 'archived'",
+              'Deze kassabon staat in Archief',
+          ]
+          for token in required_archive_duplicate_tokens:
+              assert token in service, f'Archief-dedupecontract ontbreekt: {token}'
+          assert "workflow_state = 'removed_reimport_allowed'" not in service[service.index("workflow_state = 'archived'"):service.index("duplicate_reason': 'archived'")], 'Volledig verwijderde bon mag niet door archiefblok worden tegengehouden'
+          assert 'UPDATE raw_receipts' not in foundation[foundation.index('# Archive retains'):foundation.index('return {', foundation.index('# Archive retains'))], 'Archiveren mag raw_receipts niet soft-deleten; hash moet gereserveerd blijven'
+
+          required_lineage_tokens = [
+              "rt.workflow_state = 'removed_reimport_allowed'",
+              'rr.sha256_hash = :sha256_hash',
+              'COALESCE(is_validated, 0) AS is_validated',
+              'purchase_import_lines',
+              'processed_event_id',
+          ]
+          for token in required_lineage_tokens:
+              assert token in lineage, f'Lineagecontract ontbreekt: {token}'
+
+          required_unpack_lifecycle_tokens = [
+              'def apply_unpack_receipt_lifecycle_action(',
+              'RETURNED_TO_KASSA',
+              'ARCHIVED',
+              'inventory_events_reversed',
+          ]
+          for token in required_unpack_lifecycle_tokens:
+              assert token in foundation, f'Uitpakken lifecyclecontract ontbreekt: {token}'
+
+          required_route_tokens = [
+              '/api/purchase-import-batches/{batch_id}/receipt-lifecycle',
+              'apply_unpack_receipt_lifecycle_action(',
+              'Kijkers mogen kassabonnen niet verwijderen of archiveren',
+          ]
+          for token in required_route_tokens:
+              assert token in session_entrypoint, f'Uitpakken lifecycle-route ontbreekt: {token}'
+
+          required_ui_tokens = [
+              'Terugzetten naar Kassa',
+              'Archiveren',
+              'Volledig verwijderen',
+              'Annuleren',
+              "applyDeleteChoice('return_to_kassa')",
+              "applyDeleteChoice('archive')",
+              "applyDeleteChoice('remove')",
+              '/api/receipts/delete',
+              '/receipt-lifecycle',
+          ]
+          for token in required_ui_tokens:
+              assert token in receipts_ui, f'Uitpakken delete-UI contract ontbreekt: {token}'
+
+          required_lifecycle_ui_test_tokens = [
+              'Uitpakken toont exact de drie lifecyclekeuzes plus annuleren',
+              'Terugzetten naar Kassa gebruikt uitsluitend lifecycle action return_to_kassa',
+              'Archiveren gebruikt uitsluitend lifecycle action archive',
+              'Volledig verwijderen gebruikt veilige Kassa-delete met receipt identity',
+              'Gearchiveerde herimport toont precies één dialoog en Admin kan herstellen',
+          ]
+          for token in required_lifecycle_ui_test_tokens:
+              assert token in lifecycle_ui_test, f'Release-B Playwrightdekking ontbreekt: {token}'
+
+          auto_refresh_start = kassa_ui.index("useEffect(() => {\n    if (isAddReceiptRoute || isUploading) return undefined")
+          auto_refresh_end = kassa_ui.index('  }, [householdId, isAddReceiptRoute, isUploading])', auto_refresh_start)
+          auto_refresh_block = kassa_ui[auto_refresh_start:auto_refresh_end]
+          assert 'refreshKassaInbox()' in auto_refresh_block, 'Kassa voert na navigatie geen directe inbox-refresh uit'
+          assert "window.addEventListener('focus', refreshKassaInbox)" in auto_refresh_block, 'Kassa mist refresh bij browserfocus'
+          assert 'RECEIPT_INBOX_AUTO_REFRESH_MS' not in kassa_ui, 'Periodieke 60-seconden Kassa-refresh is verboden'
+          assert 'window.setInterval(refreshKassaInbox' not in auto_refresh_block, 'Periodiek Kassa-pollen is verboden'
+
+          # Lifecycle authority: een inhoudelijk gecontroleerde bon blijft in Kassa
+          # totdat approved_at expliciet bewijst dat de bon naar Uitpakken is gegaan.
+          assert "const isApprovedForUnpacking = Boolean(updated?.approved_at)" in kassa_ui, 'Kassa moet approved_at als lifecycle-authoriteit gebruiken'
+          assert "|| normalizedPoStatusLabel === 'Gecontroleerd'" not in kassa_ui, 'PO-status Gecontroleerd mag een bon niet uit Kassa verwijderen'
+
+          # Archived duplicate UX: iedereen krijgt de melding, alleen Admin mag herstellen.
+          archived_branch_start = kassa_ui.index("if (String(result?.duplicate_reason || '').trim().toLowerCase() === 'archived')")
+          archived_return = kassa_ui.index('      return', archived_branch_start)
+          archived_branch = kassa_ui[archived_branch_start:archived_return]
+          assert 'clearTransientReceiptPreview()' in archived_branch, 'Archief-duplicate moet tijdelijke upload-preview opruimen'
+          assert "showKassaFeedback" not in archived_branch, 'Archief-duplicate mag geen tweede generieke feedbackmelding starten'
+          assert "setDuplicateNotice(message)" not in archived_branch, 'Archief-duplicate mag niet ook de generieke duplicateNotice gebruiken'
+          assert "setArchivedDuplicate({" in archived_branch, 'Archief-duplicate moet exact de specifieke archiefdialoog activeren'
+          assert "{archivedDuplicate ? (" in kassa_ui, 'Archiefmelding moet voor iedere rol zichtbaar zijn'
+          assert "{archivedDuplicate && currentUserDisplayRole === 'admin' ? (" not in kassa_ui, 'Archiefmelding mag niet Admin-only zijn'
+          assert "currentUserDisplayRole === 'admin' ? (" in kassa_ui and 'Terugzetten uit Archief' in kassa_ui, 'Alleen Admin krijgt restore-actie uit Archief'
+
+          forbidden_tables = [
+              'receipt_identities',
+              'receipt_line_identities',
+              'receipt_line_processing',
+              'archived_receipts',
+              'receipt_inventory_events',
+          ]
+          combined = '\n'.join([main, session_entrypoint, service, lineage, foundation])
+          for table in forbidden_tables:
+              create_token = f'CREATE TABLE IF NOT EXISTS {table}'
+              assert create_token not in combined, f'Parallelle lifecycle-tabel verboden: {table}'
+
+          assert "WHERE deleted_at IS NULL" in foundation
+          print('RECEIPT_LIFECYCLE_RELEASE_B_SOURCE_CONTRACT_GREEN')
+
+      - name: Fetch comparison base
+        run: git fetch origin "${{ github.base_ref || 'main' }}:refs/remotes/origin/${{ github.base_ref || 'main' }}"
+
+      - name: No diff whitespace errors
+        run: git diff --check "origin/${{ github.base_ref || 'main' }}...HEAD"

@@ -21,6 +21,8 @@ export default function ReceiptsPage() {
   const [openedBatchId, setOpenedBatchId] = useState(() => (
     new URLSearchParams(window.location.search).get('batch') || ''
   ))
+  const [deleteChoiceOpen, setDeleteChoiceOpen] = useState(false)
+  const [isApplyingDeleteChoice, setIsApplyingDeleteChoice] = useState(false)
   const [tableSort, setTableSort] = useState({ key: 'datum', direction: 'desc' })
   const location = useLocation()
 
@@ -143,12 +145,51 @@ export default function ReceiptsPage() {
 
   function handleDeleteSelected() {
     if (selectedBatchIds.length === 0) return
+    setError('')
+    setDeleteChoiceOpen(true)
+  }
+
+  async function applyDeleteChoice(action) {
+    if (selectedBatchIds.length === 0 || isApplyingDeleteChoice) return
     const selectedSet = new Set(selectedBatchIds)
-    setBatches((current) => current.filter((batch) => !selectedSet.has(batch.batch_id)))
-    if (openedBatchId && selectedSet.has(openedBatchId)) {
-      setOpenedBatchId('')
+    const selectedBatches = listItems.filter((item) => selectedSet.has(item.batch_id))
+    if (!selectedBatches.length) return
+
+    setIsApplyingDeleteChoice(true)
+    setError('')
+    try {
+      if (action === 'remove') {
+        const receiptTableIds = selectedBatches
+          .map((item) => String(item.receipt_table_id || '').trim())
+          .filter(Boolean)
+        if (receiptTableIds.length !== selectedBatches.length) {
+          throw new Error('Niet alle geselecteerde kassabonnen hebben een geldige receipt-identiteit.')
+        }
+        await fetchJson('/api/receipts/delete', {
+          method: 'POST',
+          body: JSON.stringify({ receipt_table_ids: receiptTableIds }),
+        })
+      } else {
+        await Promise.all(selectedBatches.map((item) => fetchJson(
+          `/api/purchase-import-batches/${encodeURIComponent(item.batch_id)}/receipt-lifecycle`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ action }),
+          },
+        )))
+      }
+
+      setBatches((current) => current.filter((batch) => !selectedSet.has(batch.batch_id)))
+      if (openedBatchId && selectedSet.has(openedBatchId)) {
+        setOpenedBatchId('')
+      }
+      setSelectedBatchIds([])
+      setDeleteChoiceOpen(false)
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De gekozen kassabonactie is mislukt.')
+    } finally {
+      setIsApplyingDeleteChoice(false)
     }
-    setSelectedBatchIds([])
   }
 
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedBatchIds.includes(item.batch_id))
@@ -274,6 +315,61 @@ export default function ReceiptsPage() {
 
         {openedBatchId ? <StoreBatchDetailContent batchIdOverride={openedBatchId} embedded /> : null}
       </div>
+
+      {deleteChoiceOpen ? (
+        <div className="rz-modal-backdrop" role="presentation">
+          <div
+            className="rz-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="unpack-delete-choice-title"
+            data-testid="unpack-delete-choice-dialog"
+            style={{ width: 'min(620px, calc(100vw - 32px))' }}
+          >
+            <h2 id="unpack-delete-choice-title" className="rz-modal-title">Wat wil je met de kassabon doen?</h2>
+            <p className="rz-modal-text">
+              Reeds naar Voorraad verwerkte artikelen blijven ongewijzigd. Kies wat er met de kassabon en de resterende artikelen moet gebeuren.
+            </p>
+            <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+              <Button
+                type="button"
+                onClick={() => applyDeleteChoice('return_to_kassa')}
+                disabled={isApplyingDeleteChoice}
+                data-testid="unpack-delete-return-to-kassa"
+              >
+                Terugzetten naar Kassa
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => applyDeleteChoice('archive')}
+                disabled={isApplyingDeleteChoice}
+                data-testid="unpack-delete-archive"
+              >
+                Archiveren
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => applyDeleteChoice('remove')}
+                disabled={isApplyingDeleteChoice}
+                data-testid="unpack-delete-remove"
+              >
+                Volledig verwijderen
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDeleteChoiceOpen(false)}
+                disabled={isApplyingDeleteChoice}
+                data-testid="unpack-delete-cancel"
+              >
+                Annuleren
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   )
 }

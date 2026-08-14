@@ -10,7 +10,9 @@ async function loginAsSuperuser(page) {
   await page.getByLabel('E-mail').fill(SUPERUSER_EMAIL)
   await page.getByLabel('Wachtwoord').fill(SUPERUSER_PASSWORD)
   await page.getByRole('button', { name: 'Inloggen' }).click()
-  await page.waitForURL('**/home')
+  await page.waitForURL((url) => url.pathname !== '/login')
+  await page.goto('/home')
+  await expect(page).toHaveURL(/\/home$/)
 }
 
 test.describe('Meldingen frontend-regressie', () => {

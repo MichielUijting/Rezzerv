@@ -8,7 +8,7 @@ existing implementation and order.
 
 from __future__ import annotations
 
-from fastapi import Request
+from fastapi import Body, HTTPException, Request
 from fastapi.routing import APIRoute
 
 import app.main as legacy_main
@@ -23,7 +23,9 @@ from app.services.authorization_ui_fixture_provisioning import (
 )
 from app.services.membership_user_identity_service import backfill_membership_user_ids
 from app.services.receipt_lifecycle_foundation_service import (
+    apply_unpack_receipt_lifecycle_action,
     install_receipt_lifecycle_foundation,
+    resolve_receipt_for_unpack_batch,
 )
 from app.services.session_request_context import (
     authorized_household_id_from_session,
@@ -94,6 +96,122 @@ async def server_session_request_context(request: Request, call_next):
         return await call_next(request)
     finally:
         reset_request_session(token)
+
+
+@app.post("/api/purchase-import-batches/{batch_id}/receipt-lifecycle")
+def apply_unpack_receipt_lifecycle(
+    batch_id: str,
+    payload: dict = Body(default_factory=dict),
+):
+    """Apply the PO-selected disposition for a receipt currently in Uitpakken."""
+    action = str(payload.get("action") or "").strip().lower()
+    if action not in {"return_to_kassa", "archive"}:
+        raise HTTPException(status_code=400, detail="Kies terugzetten naar Kassa of archiveren")
+
+    with legacy_main.engine.begin() as conn:
+        receipt = resolve_receipt_for_unpack_batch(conn, batch_id)
+        if not receipt:
+            raise HTTPException(status_code=404, detail="Geen kassabon gevonden voor deze Uitpakken-batch")
+
+        household_id = str(receipt.get("household_id") or "").strip()
+        context = legacy_main.require_household_context(None, household_id)
+        if str(context.get("display_role") or "").strip().lower() == "viewer":
+            raise HTTPException(status_code=403, detail="Kijkers mogen kassabonnen niet verwijderen of archiveren")
+
+        try:
+            return apply_unpack_receipt_lifecycle_action(
+                conn,
+                batch_id=batch_id,
+                household_id=household_id,
+                action=action,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+
+@app.post("/api/admin/receipts/{receipt_table_id}/restore-archived")
+def restore_archived_receipt_to_kassa(receipt_table_id: str):
+    """Restore one archived receipt to Kassa. Household admin only."""
+    normalized_receipt_id = str(receipt_table_id or "").strip()
+    if not normalized_receipt_id:
+        raise HTTPException(status_code=400, detail="Kassabon-id ontbreekt")
+
+    with legacy_main.engine.begin() as conn:
+        receipt = conn.execute(
+            legacy_main.text(
+                """
+                SELECT id, household_id, raw_receipt_id,
+                       COALESCE(workflow_state, 'active') AS workflow_state,
+                       deleted_at
+                FROM receipt_tables
+                WHERE id = :receipt_table_id
+                LIMIT 1
+                """
+            ),
+            {"receipt_table_id": normalized_receipt_id},
+        ).mappings().first()
+
+        if not receipt:
+            raise HTTPException(status_code=404, detail="Kassabon niet gevonden")
+
+        household_id = str(receipt.get("household_id") or "").strip()
+        legacy_main.require_household_admin_context(None, household_id)
+
+        if str(receipt.get("workflow_state") or "").strip().lower() != "archived":
+            raise HTTPException(
+                status_code=409,
+                detail="Deze kassabon staat niet in Archief",
+            )
+
+        conn.execute(
+            legacy_main.text(
+                """
+                UPDATE receipt_tables
+                SET deleted_at = NULL,
+                    approved_at = NULL,
+                    workflow_state = 'returned_to_kassa',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :receipt_table_id
+                  AND household_id = :household_id
+                """
+            ),
+            {
+                "receipt_table_id": normalized_receipt_id,
+                "household_id": household_id,
+            },
+        )
+
+        conn.execute(
+            legacy_main.text(
+                """
+                UPDATE purchase_import_batches
+                SET import_status = CASE
+                        WHEN import_status = 'archived' THEN 'in_review'
+                        ELSE import_status
+                    END
+                WHERE household_id = :household_id
+                  AND source_type = 'receipt'
+                  AND source_reference = :source_reference
+                """
+            ),
+            {
+                "household_id": household_id,
+                "source_reference": f"receipt:{normalized_receipt_id}",
+            },
+        )
+
+    return {
+        "status": "ok",
+        "receipt_table_id": normalized_receipt_id,
+        "workflow_state": "returned_to_kassa",
+        "restored_to": "kassa",
+    }
+
 
 
 def activate_server_side_session_routes() -> None:

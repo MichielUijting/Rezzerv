@@ -189,7 +189,6 @@ const MAX_CAMERA_DIMENSION = 1800
 // Daardoor blijft het aantal zichtbare regels stabiel, ook wanneer de werkelijke rijhoogte door de styleguide verandert.
 const KASSA_INBOX_VISIBLE_ROW_COUNT = 10
 const KASSA_INBOX_FALLBACK_SCROLL_HEIGHT_PX = 350
-const RECEIPT_INBOX_AUTO_REFRESH_MS = 60000
 const RECEIPT_DETAIL_PANEL_HEIGHT = 560
 const RECEIPT_PREVIEW_ZOOM_MIN = 0.5
 const RECEIPT_PREVIEW_ZOOM_MAX = 3
@@ -1907,6 +1906,7 @@ export default function KassaPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [duplicateNotice, setDuplicateNotice] = useState('')
+  const [archivedDuplicate, setArchivedDuplicate] = useState(null)
   const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
   const [openedReceiptId, setOpenedReceiptId] = useState('')
   const [openedReceipt, setOpenedReceipt] = useState(null)
@@ -2192,11 +2192,10 @@ export default function KassaPage() {
         receiptInboxRefreshInFlightRef.current = false
       }
     }
-    const intervalId = window.setInterval(refreshKassaInbox, RECEIPT_INBOX_AUTO_REFRESH_MS)
+    refreshKassaInbox()
     window.addEventListener('focus', refreshKassaInbox)
     return () => {
       cancelled = true
-      window.clearInterval(intervalId)
       window.removeEventListener('focus', refreshKassaInbox)
       receiptInboxRefreshInFlightRef.current = false
     }
@@ -2275,7 +2274,22 @@ export default function KassaPage() {
     const existingReceiptId = getDuplicateReceiptTableId(result)
     setError('')
     setStatus('')
+
+    if (String(result?.duplicate_reason || '').trim().toLowerCase() === 'archived') {
+      clearTransientReceiptPreview()
+      setOpenedReceiptId('')
+      setOpenedReceipt(null)
+      setSelectedReceiptIds([])
+      setDuplicateNotice('')
+      setArchivedDuplicate({
+        receiptTableId: existingReceiptId,
+        message,
+      })
+      return
+    }
+
     setDuplicateNotice(message)
+    setArchivedDuplicate(null)
     showKassaFeedback('warning', message, {
       title: 'Bon al ingelezen',
       detail: existingReceiptId ? 'De bestaande kassabon is geopend in Kassa.' : 'Deze upload is niet opnieuw toegevoegd. De bestaande kassabon blijft ongewijzigd in Kassa.',
@@ -2444,9 +2458,7 @@ export default function KassaPage() {
     if (!updated) return
 
     const updatedId = String(updated?.receipt_table_id || updated?.id || '')
-    const normalizedPoStatusLabel = String(updated?.po_norm_status_label || '').trim()
     const isApprovedForUnpacking = Boolean(updated?.approved_at)
-      || normalizedPoStatusLabel === 'Gecontroleerd'
 
     if (isApprovedForUnpacking && updatedId) {
       setReceipts((current) => current.filter((item) => {
@@ -2712,6 +2724,30 @@ export default function KassaPage() {
 
   function buildPostImportProgressMessage(kindLabel) {
     return `${kindLabel} wordt gecontroleerd en daarna wordt Kassa opnieuw geladen.`
+  }
+
+  async function restoreArchivedDuplicateToKassa() {
+    const receiptTableId = String(archivedDuplicate?.receiptTableId || '')
+    if (!receiptTableId || currentUserDisplayRole !== 'admin') return
+
+    try {
+      await fetchJson(
+        `/api/admin/receipts/${encodeURIComponent(receiptTableId)}/restore-archived`,
+        { method: 'POST' },
+      )
+
+      setArchivedDuplicate(null)
+      setDuplicateNotice('')
+      await loadReceipts(householdId)
+      setReceiptInboxFocusId(receiptTableId)
+      setStatus('De gearchiveerde kassabon is teruggezet naar Kassa.')
+      showKassaFeedback('success', 'De gearchiveerde kassabon is teruggezet naar Kassa.')
+    } catch (err) {
+      const message = normalizeErrorMessage(err?.message)
+        || 'De kassabon kon niet uit Archief worden teruggezet.'
+      setError(message)
+      showKassaFeedback('error', message)
+    }
   }
 
   function openSourceHub() {
@@ -3362,6 +3398,42 @@ export default function KassaPage() {
           {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} /> : null}
         </div>
       )}
+
+      {archivedDuplicate ? (
+        <div className="rz-modal-backdrop" role="presentation">
+          <div
+            className="rz-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="kassa-archived-duplicate-title"
+          >
+            <h3 id="kassa-archived-duplicate-title" className="rz-modal-title">
+              Kassabon staat in Archief
+            </h3>
+            <p className="rz-modal-text">
+              {archivedDuplicate.message}
+            </p>
+            <div className="rz-modal-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setArchivedDuplicate(null)}
+              >
+                Sluiten
+              </Button>
+              {currentUserDisplayRole === 'admin' ? (
+                <Button
+                  variant="primary"
+                  type="button"
+                  onClick={restoreArchivedDuplicateToKassa}
+                >
+                  Terugzetten uit Archief
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ReceiptUploadProgressOverlay uploadProgress={uploadProgress} />
 
