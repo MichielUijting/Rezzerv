@@ -50,15 +50,36 @@ async function installUitpakkenMocks(page, { role = 'admin' } = {}) {
       body: JSON.stringify(body),
     });
 
+    const isAdmin = role === 'admin';
+    const permissions = isAdmin
+      ? { 'admin.access': true, 'article.create': true, 'receipts.process': true }
+      : { 'article.create': true, 'receipts.process': true };
+
+    if (path === '/api/session' && method === 'GET') {
+      return json({
+        user_id: `user-${role}`,
+        email: `${role}@rezzerv.test`,
+        active_household_id: '0',
+        active_household_name: 'Regressietest huishouden 0',
+        display_role: role,
+        role,
+        membership_count: 1,
+        can_switch_households: false,
+        memberships: [{ household_id: '0', role }],
+        permissions,
+        is_viewer: false,
+        can_process_receipts: true,
+        is_platform_superuser: false,
+      });
+    }
     if (path === '/api/household' && method === 'GET') {
-      const isAdmin = role === 'admin';
       return json({
         id: '0',
         active_household_id: '0',
         display_role: role,
         role,
-        is_viewer: role === 'viewer',
-        permissions: isAdmin ? { 'admin.access': true, 'article.create': true } : { 'article.create': true },
+        is_viewer: false,
+        permissions,
         store_import_simplification_level: 'gebalanceerd',
       });
     }
