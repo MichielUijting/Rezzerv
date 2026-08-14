@@ -24,20 +24,16 @@ jobs:
       - name: Apply proven picker restoration
         run: python scripts/_temp_restore_uitpakken_location_picker.py
 
-      - name: Backend source contract
+      - name: Backend and B3 source contracts
         run: |
           python -m pip install --disable-pip-version-check -q pytest
           python -m pytest -q backend/tests/test_uitpakken_location_admin_contract.py
 
-      - name: Frontend build
+      - name: Frontend production build
         working-directory: frontend
         run: |
           npm ci
           npm run build
-
-      - name: B3 contract
-        working-directory: frontend
-        run: npm test -- --run src/features/stores/StoreBatchDetailPage.b3-native.contract.test.js
 
       - name: Diff hygiene
         run: git diff --check
@@ -46,6 +42,6 @@ jobs:
         run: |
           git config user.name "Rezzerv CI"
           git config user.email "actions@rezzerv.local"
-          git add frontend/src/features/stores/StoreBatchDetailPage.jsx frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js
+          git add frontend/src/features/stores/StoreBatchDetailPage.jsx frontend/src/features/stores/StoreBatchDetailPage.b3-native.contract.test.js frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js backend/tests/test_uitpakken_location_admin_contract.py
           git commit -m "fix(uitpakken): restore location picker in receipt table"
           git push origin HEAD:fix/uitpakken-admin-location-create
