@@ -832,7 +832,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  async function handleLocationChoice(entry, nextValue) {
+  async function handleLocationChoice(entry, nextValue, availableLocationOptions = locationOptions) {
     const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()
     if (!householdId) {
       showUitpakkenFeedback('error', 'Het actieve huishouden kon niet worden vastgesteld.')
@@ -842,7 +842,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     const lineId = String(entry?.line?.id || '')
     const previousOverride = entry.inventoryHandlingOverride || null
     const previousLocationId = String(entry?.draft?.locationId || '')
-    const directLocation = directLocationOption(locationOptions)
+    const directLocation = directLocationOption(availableLocationOptions)
     setBusyLineId(lineId)
 
     try {
@@ -866,7 +866,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         return
       }
 
-      const selectedLocation = locationOptions.find(
+      const selectedLocation = availableLocationOptions.find(
         (location) => String(location.id) === String(nextValue),
       ) || null
       const isDirect = Boolean(selectedLocation && directLocationOption([selectedLocation]))
@@ -1056,7 +1056,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setLocationCreateMode('')
       setNewLocationName('')
       if (mode === 'space') setActiveLocationSpaceId(String(created.space_id || created.id))
-      await applyPickedLocation(String(created.id))
+      await applyPickedLocation(String(created.id), nextOptions)
       showUitpakkenFeedback(
         'success',
         mode === 'space' ? `Locatie ${name} is toegevoegd en geselecteerd.` : `Sublocatie ${name} is toegevoegd en geselecteerd.`,
@@ -1071,7 +1071,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  async function applyPickedLocation(locationId) {
+  async function applyPickedLocation(locationId, locationOptionsOverride = null) {
     const nextLocationId = String(locationId ?? '')
 
     if (locationPickerMode === 'bulk') {
@@ -1102,7 +1102,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
 
     if (locationPickerSaveMode === 'handling') {
-      await handleLocationChoice(pickerEntry, nextLocationId)
+      await handleLocationChoice(pickerEntry, nextLocationId, locationOptionsOverride || locationOptions)
       closeLocationPicker()
       return
     }
