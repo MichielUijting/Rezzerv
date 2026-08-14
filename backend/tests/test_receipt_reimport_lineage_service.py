@@ -1,5 +1,9 @@
 from sqlalchemy import create_engine, text
 
+from app.services.receipt_lifecycle_foundation_service import (
+    apply_unpack_receipt_lifecycle_action,
+    resolve_receipt_for_unpack_batch,
+)
 from app.services.receipt_reimport_lineage_service import (
     get_prior_processed_line_fact,
     load_deleted_reimport_lineage,
@@ -23,8 +27,10 @@ def _engine():
             CREATE TABLE receipt_tables (
                 id TEXT PRIMARY KEY,
                 raw_receipt_id TEXT NOT NULL,
+                household_id TEXT NOT NULL DEFAULT '0',
                 logical_receipt_key TEXT,
                 workflow_state TEXT NOT NULL DEFAULT 'active',
+                approved_at DATETIME,
                 deleted_at DATETIME,
                 updated_at DATETIME
             )
@@ -48,8 +54,10 @@ def _engine():
         conn.execute(text("""
             CREATE TABLE purchase_import_batches (
                 id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL DEFAULT '0',
                 source_type TEXT,
-                source_reference TEXT
+                source_reference TEXT,
+                import_status TEXT
             )
         """))
         conn.execute(text("""
@@ -63,6 +71,13 @@ def _engine():
                 created_at DATETIME
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE inventory_events (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                source_reference TEXT
+            )
+        """))
     return engine
 
 
@@ -70,9 +85,9 @@ def _seed_deleted_receipt(conn, *, workflow_state="removed_reimport_allowed", is
     conn.execute(text("INSERT INTO raw_receipts VALUES ('raw-old','0','abc',CURRENT_TIMESTAMP)"))
     conn.execute(text("""
         INSERT INTO receipt_tables
-            (id, raw_receipt_id, logical_receipt_key, workflow_state, deleted_at, updated_at)
+            (id, raw_receipt_id, household_id, logical_receipt_key, workflow_state, approved_at, deleted_at, updated_at)
         VALUES
-            ('receipt-old','raw-old','receipt-key',:workflow_state,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+            ('receipt-old','raw-old','0','receipt-key',:workflow_state,NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
     """), {"workflow_state": workflow_state})
     conn.execute(text("""
         INSERT INTO receipt_table_lines
@@ -91,6 +106,29 @@ def _matching_line():
         'unit_price': 1.25,
         'line_total': 1.25,
     }
+
+
+def _seed_active_unpack_receipt(conn):
+    conn.execute(text("INSERT INTO raw_receipts VALUES ('raw-active','0','active-hash',NULL)"))
+    conn.execute(text("""
+        INSERT INTO receipt_tables
+            (id, raw_receipt_id, household_id, logical_receipt_key, workflow_state, approved_at, deleted_at, updated_at)
+        VALUES
+            ('receipt-active','raw-active','0','receipt-active-key','active',CURRENT_TIMESTAMP,NULL,CURRENT_TIMESTAMP)
+    """))
+    conn.execute(text("""
+        INSERT INTO purchase_import_batches
+            (id, household_id, source_type, source_reference, import_status)
+        VALUES
+            ('batch-active','0','receipt','receipt:receipt-active','in_review')
+    """))
+    conn.execute(text("""
+        INSERT INTO purchase_import_lines
+            (id, batch_id, external_line_ref, processing_status, processed_at, processed_event_id, created_at)
+        VALUES
+            ('pil-active','batch-active','receipt-line:line-active','processed',CURRENT_TIMESTAMP,'event-active',CURRENT_TIMESTAMP)
+    """))
+    conn.execute(text("INSERT INTO inventory_events VALUES ('event-active','0','receipt:receipt-active')"))
 
 
 def test_reimport_lineage_reuses_exact_receipt_and_line_keys_only():
@@ -140,7 +178,11 @@ def test_prior_processed_line_fact_uses_existing_unpack_state():
     engine = _engine()
     with engine.begin() as conn:
         _seed_deleted_receipt(conn, is_validated=1)
-        conn.execute(text("INSERT INTO purchase_import_batches VALUES ('batch-old','receipt','receipt:receipt-old')"))
+        conn.execute(text("""
+            INSERT INTO purchase_import_batches
+                (id, household_id, source_type, source_reference, import_status)
+            VALUES ('batch-old','0','receipt','receipt:receipt-old','in_review')
+        """))
         conn.execute(text("""
             INSERT INTO purchase_import_lines
                 (id, batch_id, external_line_ref, processing_status, processed_at, processed_event_id, created_at)
@@ -159,7 +201,11 @@ def test_approved_but_unprocessed_line_remains_pending_for_unpacking():
     engine = _engine()
     with engine.begin() as conn:
         _seed_deleted_receipt(conn, is_validated=1)
-        conn.execute(text("INSERT INTO purchase_import_batches VALUES ('batch-old','receipt','receipt:receipt-old')"))
+        conn.execute(text("""
+            INSERT INTO purchase_import_batches
+                (id, household_id, source_type, source_reference, import_status)
+            VALUES ('batch-old','0','receipt','receipt:receipt-old','in_review')
+        """))
         conn.execute(text("""
             INSERT INTO purchase_import_lines
                 (id, batch_id, external_line_ref, processing_status, processed_at, processed_event_id, created_at)
@@ -171,3 +217,54 @@ def test_approved_but_unprocessed_line_remains_pending_for_unpacking():
 
     assert was_prior_line_validated(lineage, 0, _matching_line()) is True
     assert processed_fact is None
+
+
+def test_return_to_kassa_preserves_processed_line_and_inventory_event():
+    engine = _engine()
+    with engine.begin() as conn:
+        _seed_active_unpack_receipt(conn)
+        resolved = resolve_receipt_for_unpack_batch(conn, 'batch-active')
+        assert resolved['id'] == 'receipt-active'
+
+        result = apply_unpack_receipt_lifecycle_action(
+            conn,
+            batch_id='batch-active',
+            household_id='0',
+            action='return_to_kassa',
+        )
+        receipt = conn.execute(text("SELECT approved_at, workflow_state, deleted_at FROM receipt_tables WHERE id='receipt-active'" )).mappings().one()
+        line = conn.execute(text("SELECT processing_status, processed_event_id FROM purchase_import_lines WHERE id='pil-active'" )).mappings().one()
+        event_count = conn.execute(text("SELECT COUNT(*) FROM inventory_events WHERE id='event-active'" )).scalar_one()
+
+    assert result['workflow_state'] == 'returned_to_kassa'
+    assert result['inventory_events_reversed'] is False
+    assert receipt['approved_at'] is None
+    assert receipt['workflow_state'] == 'returned_to_kassa'
+    assert receipt['deleted_at'] is None
+    assert line['processing_status'] == 'processed'
+    assert line['processed_event_id'] == 'event-active'
+    assert event_count == 1
+
+
+def test_archive_hides_receipt_but_preserves_raw_source_and_inventory_event():
+    engine = _engine()
+    with engine.begin() as conn:
+        _seed_active_unpack_receipt(conn)
+        result = apply_unpack_receipt_lifecycle_action(
+            conn,
+            batch_id='batch-active',
+            household_id='0',
+            action='archive',
+        )
+        receipt = conn.execute(text("SELECT workflow_state, deleted_at FROM receipt_tables WHERE id='receipt-active'" )).mappings().one()
+        raw = conn.execute(text("SELECT deleted_at FROM raw_receipts WHERE id='raw-active'" )).mappings().one()
+        batch = conn.execute(text("SELECT import_status FROM purchase_import_batches WHERE id='batch-active'" )).mappings().one()
+        event_count = conn.execute(text("SELECT COUNT(*) FROM inventory_events WHERE id='event-active'" )).scalar_one()
+
+    assert result['workflow_state'] == 'archived'
+    assert result['inventory_events_reversed'] is False
+    assert receipt['workflow_state'] == 'archived'
+    assert receipt['deleted_at'] is not None
+    assert raw['deleted_at'] is None
+    assert batch['import_status'] == 'archived'
+    assert event_count == 1
