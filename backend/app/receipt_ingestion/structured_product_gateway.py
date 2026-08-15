@@ -5,7 +5,7 @@ Technical Design Reference:
 - Runtime Type: production
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
-- Reads Data: see generated inventory
+- Reads Data: no
 - Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
@@ -51,17 +51,18 @@ def append_structured_product_candidate(
     is_invalid_label: InvalidLabelCheck | None = None,
     confidence_score: float = 0.85,
 ) -> int | None:
-    """Append a product candidate parsed from a structured source."""
+    """Append a product already identified structurally by its source adapter.
+
+    The product label is opaque data. No retailer or label vocabulary may change
+    the semantic role of this structured candidate.
+    """
+    del is_invalid_label  # compatibility-only argument; text vetoes are forbidden here
+
     label_value = clean_label(label)
     label_value, encoding_metadata = normalize_receipt_text_encoding(label_value)
     raw_label_value = label_value
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
-
-    is_picnic_structured_source = str(store_name or '').strip().lower() == 'picnic'
-    if is_invalid_label is not None and not is_picnic_structured_source and is_invalid_label(label_value):
-        return None
-
     if unit_price is None and line_total is None:
         return None
 
@@ -72,7 +73,6 @@ def append_structured_product_candidate(
     )
     label_value, quantity, name_metadata = normalize_product_name_label(label_value, quantity=quantity)
 
-    append_allowed = True
     producer_trace = {
         'filename': filename,
         'store_name': store_name,
@@ -86,8 +86,8 @@ def append_structured_product_candidate(
         'label': label_value,
         'amount': amount_to_float(line_total),
         'classification': 'structured_product_candidate',
-        'classification_allows_append': append_allowed,
-        'append_allowed': append_allowed,
+        'classification_allows_append': True,
+        'append_allowed': True,
         'caller_line_hint': caller_line_hint,
     }
     if encoding_metadata:
@@ -115,6 +115,7 @@ def append_structured_product_candidate(
 
     extracted.append(
         {
+            'line_type': 'product',
             'raw_label': raw_label_value,
             'normalized_label': label_value,
             'quantity': amount_to_float(quantity),
