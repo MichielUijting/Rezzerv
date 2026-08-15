@@ -21,6 +21,7 @@ from app.receipt_ingestion.profiles.aldi import is_aldi_context, is_aldi_non_pro
 from app.receipt_ingestion.spaarzegels_terms import (
     contains_spaarzegels_metadata_token,
     contains_spaarzegels_priced_token,
+    is_spaarzegels_flow_excluded,
     matches_spaarzegels_value_label,
     spaarzegels_metadata_tokens,
 )
@@ -58,8 +59,11 @@ GENERIC_METADATA_TOKENS = (
     'www.', 'http', 'kvk', 'iban', 'tel:', 'telefoon', 'servicebalie', 'klantenservice',
     'bedankt', 'welkom', 'tot ziens', 'bezoek ook', 'voorwaarden',
 )
-GENERIC_DEPOSIT_RETURN_TOKENS = (
+GENERIC_NON_INVENTORY_CHARGE_TOKENS = (
     'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',
+    'statiegeld', 'emballage', 'fust',
+    'verzendkosten', 'verzend kosten', 'bezorgkosten', 'bezorg kosten',
+    'shipping fee', 'delivery fee',
 )
 GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS = (
     'prijs per kg',
@@ -141,7 +145,7 @@ def _priced_article_value_token(lowered: str) -> str | None:
         return None
     if _token_match(lowered, GENERIC_TAX_TOKENS):
         return None
-    if _token_match(lowered, GENERIC_DEPOSIT_RETURN_TOKENS):
+    if _token_match(lowered, GENERIC_NON_INVENTORY_CHARGE_TOKENS):
         return None
     return contains_spaarzegels_priced_token(lowered) or _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
 
@@ -192,7 +196,7 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
     for tokens, classification, rule in (
         (GENERIC_PAYMENT_TOKENS, 'footer_payment_tax', 'GENERIC_PAYMENT_TOKENS'),
         (GENERIC_TAX_TOKENS, 'footer_payment_tax', 'GENERIC_TAX_TOKENS'),
-        (GENERIC_DEPOSIT_RETURN_TOKENS, 'footer_payment_tax', 'GENERIC_DEPOSIT_RETURN_TOKENS'),
+        (GENERIC_NON_INVENTORY_CHARGE_TOKENS, 'footer_payment_tax', 'GENERIC_NON_INVENTORY_CHARGE_TOKENS'),
     ):
         token = _token_match(lowered, tokens)
         if token:
@@ -288,8 +292,8 @@ def _non_article_reason(classification: str | None, line: str) -> str:
             return 'vat_line'
         if any(token in lowered for token in ('betaal', 'bankpas', 'pin', 'terminal', 'transactie', 'maestro', 'visa', 'mastercard', 'contactless', 'contactloos')):
             return 'payment_line'
-        if any(token in lowered for token in ('statiegeld retour', 'retour statiegeld', 'emballage retour')):
-            return 'deposit_return_or_refund_line'
+        if _token_match(lowered, GENERIC_NON_INVENTORY_CHARGE_TOKENS):
+            return 'non_inventory_charge_or_deposit_line'
         if _is_summary_discount_line(lowered) or any(token in lowered for token in ('korting', 'bonus', 'actie', 'prijsvoordeel', 'voordeel', 'coupon')):
             return 'discount_or_promotion_line'
         if re.fullmatch(r'\d{1,4}[.,]\d{2}', normalized):
@@ -431,6 +435,60 @@ def diagnose_article_line_classification(
         'trace': trace,
         'extra_context': dict(extra_context or {}),
     }
+
+
+NON_INVENTORY_PRODUCT_RULES = frozenset({
+    'GENERIC_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE',
+    'PLUS_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE',
+    'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION',
+    'STORE_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION',
+})
+
+
+def receipt_line_is_inventory_eligible(
+    line: dict[str, Any],
+    *,
+    store_name: str | None = None,
+    filename: str | None = None,
+) -> bool:
+    """Return True only for receipt-table rows that may enter Uitpakken/Voorraad."""
+    if not isinstance(line, dict):
+        return False
+    raw_label = str(
+        line.get('corrected_raw_label')
+        or line.get('raw_label')
+        or line.get('normalized_label')
+        or ''
+    ).strip()
+    if not raw_label:
+        return False
+    if is_spaarzegels_flow_excluded({
+        'receipt_line_text': raw_label,
+        'raw_label': raw_label,
+        'normalized_label': line.get('normalized_label'),
+        'quantity_label': line.get('quantity_label'),
+        'quantity': line.get('quantity'),
+        'unit_price': line.get('unit_price'),
+        'line_total': line.get('line_total'),
+        'price': line.get('line_total'),
+    }):
+        return False
+
+    decision = _generic_non_article_trace(raw_label)
+    if decision is None:
+        decision = _store_specific_non_article_trace(
+            raw_label,
+            store_name=store_name,
+            filename=filename,
+        )
+    if decision is None:
+        return True
+
+    classification = str(decision.get('classification') or 'ignore')
+    rule = str(decision.get('rule') or '')
+    if rule in NON_INVENTORY_PRODUCT_RULES:
+        return False
+    return classification == 'product_candidate'
 
 
 def classification_allows_append(classification: str | None) -> bool:

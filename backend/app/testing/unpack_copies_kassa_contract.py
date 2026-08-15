@@ -39,6 +39,14 @@ create_block = route_block('@app.post("/api/purchase-import-lines/{line_id}/crea
 process_block = function_block("def process_purchase_import_batch(")
 
 require(
+    "receipt_line_is_inventory_eligible(" in sync_block,
+    "Uitpakken mist de centrale voorraadgeschiktheidsgate",
+)
+require(
+    "DELETE FROM purchase_import_lines" in sync_block,
+    "Uitpakken ruimt dode, niet-verwerkte purchase-importregels niet op",
+)
+require(
     "matched_global_product_id = (" in sync_block
     and "str(line.get('matched_global_product_id') or '').strip()" in sync_block,
     "Uitpakken kopieert matched_global_product_id niet letterlijk uit Kassa",
