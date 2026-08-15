@@ -2395,6 +2395,8 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                         'article_match_status': 'unmatched',
                         'matched_article_id': None,
                         'confidence_score': line.get('confidence_score'),
+                        'line_role': semantics['line_role'],
+                        'inventory_eligible': 1 if semantics['inventory_eligible'] else 0,
                     },
                 )
         else:
