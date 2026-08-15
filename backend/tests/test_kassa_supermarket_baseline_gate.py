@@ -1,3 +1,5 @@
+from time import perf_counter
+
 from app.api.routes import kassa_regression_routes as regression
 from app.services.receipt_ssot_status import apply_po_norm_status
 
@@ -45,7 +47,13 @@ def test_supermarket_baseline_and_visible_kassa_status_share_one_parser_pass(mon
     original_parse = regression.parse_receipt_content
 
     def capture_parse(payload, filename, mime_type):
-        parsed = original_parse(payload, filename, mime_type)
+        started = perf_counter()
+        print(f'KASSA_BASELINE_START {filename}', flush=True)
+        try:
+            parsed = original_parse(payload, filename, mime_type)
+        finally:
+            elapsed = perf_counter() - started
+            print(f'KASSA_BASELINE_END {filename} seconds={elapsed:.2f}', flush=True)
         parsed_receipts.append((filename, parsed))
         return parsed
 
