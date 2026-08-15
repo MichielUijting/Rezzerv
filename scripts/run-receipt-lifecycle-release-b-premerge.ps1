@@ -10,6 +10,77 @@ Set-StrictMode -Version Latest
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+function Get-RezzervHealth {
+    param(
+        [int]$TimeoutSec = 5
+    )
+
+    foreach ($uri in @('http://localhost:8011/api/health', 'http://127.0.0.1:8011/api/health')) {
+        try {
+            return Invoke-RestMethod -Uri $uri -TimeoutSec $TimeoutSec
+        }
+        catch {
+            continue
+        }
+    }
+    return $null
+}
+
+function Wait-RezzervRuntime {
+    param(
+        [int]$MaxWaitSec = 120,
+        [int]$PollSec = 5
+    )
+
+    $deadline = (Get-Date).AddSeconds($MaxWaitSec)
+    $attempt = 0
+
+    while ((Get-Date) -lt $deadline) {
+        $attempt++
+        $elapsed = $MaxWaitSec - [math]::Max(0, [int]($deadline - (Get-Date)).TotalSeconds)
+        Write-Host ("[WACHT] runtime readiness - poging {0}, verstreken {1}s/{2}s" -f $attempt, $elapsed, $MaxWaitSec) -ForegroundColor Yellow
+
+        $backendRunning = $false
+        $frontendRunning = $false
+        try {
+            $services = docker compose ps --services --filter status=running 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $backendRunning = @($services) -contains 'backend'
+                $frontendRunning = @($services) -contains 'frontend'
+            }
+        }
+        catch {
+            $backendRunning = $false
+            $frontendRunning = $false
+        }
+
+        if ($backendRunning -and $frontendRunning) {
+            $health = Get-RezzervHealth -TimeoutSec 4
+            if ($null -ne $health) {
+                Write-Host '[PASS] backend en frontend draaien; backend-health reageert.' -ForegroundColor Green
+                return $health
+            }
+            Write-Host '[INFO] containers draaien; backend-health is nog niet gereed.' -ForegroundColor DarkYellow
+        }
+        else {
+            Write-Host ("[INFO] containers nog niet volledig running (backend={0}, frontend={1})." -f $backendRunning, $frontendRunning) -ForegroundColor DarkYellow
+        }
+
+        Start-Sleep -Seconds $PollSec
+    }
+
+    Write-Host ''
+    Write-Host '[DIAGNOSE] Runtime werd niet tijdig gereed. Containerstatus:' -ForegroundColor Red
+    docker compose ps
+    Write-Host ''
+    Write-Host '[DIAGNOSE] Backendlog (laatste 200 regels):' -ForegroundColor Red
+    docker compose logs backend --tail=200
+    Write-Host ''
+    Write-Host '[DIAGNOSE] Frontendlog (laatste 100 regels):' -ForegroundColor Red
+    docker compose logs frontend --tail=100
+    throw "Rezzerv-runtime niet gereed binnen $MaxWaitSec seconden."
+}
+
 try {
     Write-Host '==================================================' -ForegroundColor Cyan
     Write-Host ' REZZERV RECEIPT LIFECYCLE - PRE-MERGE ACCEPTATIE' -ForegroundColor Cyan
@@ -44,30 +115,24 @@ try {
     Write-Host "[PASS] head  : $head" -ForegroundColor Green
 
     Write-Host ''
-    Write-Host '[2/8] Docker-runtime volledig opnieuw opbouwen' -ForegroundColor Cyan
+    Write-Host '[2/8] Docker-runtime volledig opnieuw opbouwen en actief op readiness wachten' -ForegroundColor Cyan
     docker compose down
     if ($LASTEXITCODE -ne 0) { throw 'docker compose down mislukt.' }
     docker compose up -d --build
     if ($LASTEXITCODE -ne 0) { throw 'docker compose up -d --build mislukt.' }
-    Start-Sleep -Seconds 90
+    Write-Host '[INFO] Docker build/start gereed; readiness-controle start direct.' -ForegroundColor Cyan
+    $health = Wait-RezzervRuntime -MaxWaitSec 120 -PollSec 5
     docker compose ps
     if ($LASTEXITCODE -ne 0) { throw 'docker compose ps mislukt.' }
-    Write-Host '[PASS] runtime opnieuw opgebouwd' -ForegroundColor Green
+    Write-Host '[PASS] runtime opnieuw opgebouwd en gereed' -ForegroundColor Green
 
     Write-Host ''
-    Write-Host '[3/8] Backend-health controleren' -ForegroundColor Cyan
-    try {
-        $health = Invoke-RestMethod http://localhost:8011/api/health
+    Write-Host '[3/8] Backend-health bevestigen' -ForegroundColor Cyan
+    if ($null -eq $health) {
+        $health = Get-RezzervHealth -TimeoutSec 5
     }
-    catch {
-        Write-Host '[INFO] localhost-health faalde; backendlog wordt gecontroleerd.' -ForegroundColor Yellow
-        docker compose logs backend --tail=200
-        try {
-            $health = Invoke-RestMethod http://127.0.0.1:8011/api/health
-        }
-        catch {
-            throw 'Backend-health faalt via zowel localhost als 127.0.0.1.'
-        }
+    if ($null -eq $health) {
+        throw 'Backend-health reageert niet binnen de ingestelde timeout.'
     }
     Write-Host ("[PASS] backend health: {0}" -f ($health | ConvertTo-Json -Compress)) -ForegroundColor Green
 
@@ -129,9 +194,9 @@ try {
     Write-Host 'Werkmap/fixtures   : CLEAN'
     Write-Host ''
     Write-Host 'PO functionele controle:'
-    Write-Host '  Kassa       : http://localhost:5174/kassa'
-    Write-Host '  Uitpakken   : http://localhost:5174/kassabonnen'
-    Write-Host '  Voorraad    : http://localhost:5174/voorraad'
+    Write-Host '  Kassa        : http://localhost:5174/kassa'
+    Write-Host '  Uitpakken    : http://localhost:5174/kassabonnen'
+    Write-Host '  Voorraad     : http://localhost:5174/voorraad'
     Write-Host '  Spaartegoeden: open via de actiebutton in Rezzerv'
     Write-Host ''
     Write-Host 'Controleer met een echte bon:'
