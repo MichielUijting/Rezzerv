@@ -8,6 +8,7 @@ receipt amounts and isolated OCR/mojibake fragments.
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 LEADING_ITEM_COUNT_RE = re.compile(r'^\s*(?P<count>\d{1,4})\s*[x×]\s+(?P<label>.+)$', re.IGNORECASE)
@@ -25,21 +26,46 @@ def _as_number(value: str) -> int | None:
     return number if number > 0 else None
 
 
+def _as_decimal(value: Any) -> Decimal | None:
+    if value is None or value == '':
+        return None
+    try:
+        return Decimal(str(value).replace(',', '.'))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
 def _has_letters(value: str | None) -> bool:
     return bool(re.search(r'[A-Za-zÀ-ÖØ-öø-ÿ]', str(value or '')))
 
 
-def _transaction_confirms_trailing_count(transaction_text: str | None, count: int) -> bool:
-    """Require an explicit receipt multiplication context before stripping a trailing number.
+def _financials_confirm_trailing_count(unit_price: Any, line_total: Any, count: int) -> bool:
+    unit = _as_decimal(unit_price)
+    total = _as_decimal(line_total)
+    if unit is None or total is None or unit <= 0 or total <= 0:
+        return False
+    expected = (unit * Decimal(count)).quantize(Decimal('0.01'))
+    actual = total.quantize(Decimal('0.01'))
+    return abs(expected - actual) <= Decimal('0.01')
+
+
+def _transaction_confirms_trailing_count(
+    transaction_text: str | None,
+    count: int,
+    *,
+    unit_price: Any = None,
+    line_total: Any = None,
+) -> bool:
+    """Require independent transaction proof before stripping a trailing number.
 
     A bare product label such as ``iPhone 16`` or ``Vitamine B12`` is never
-    changed. The number is only a purchase count when the source transaction
-    also contains ``N x price`` / ``N × price``.
+    changed. Proof can come from an explicit ``N x price`` token in the source
+    line, or from exact financial arithmetic ``unit_price * N == line_total``.
     """
     text = re.sub(r'\s+', ' ', str(transaction_text or '')).strip()
-    if not text:
-        return False
-    return bool(re.search(rf'(?<!\d){count}\s*[x×]\s*\d+[\.,]\d{{2}}(?:\D|$)', text, re.IGNORECASE))
+    if text and re.search(rf'(?<!\d){count}\s*[x×]\s*\d+[\.,]\d{{2}}(?:\D|$)', text, re.IGNORECASE):
+        return True
+    return _financials_confirm_trailing_count(unit_price, line_total, count)
 
 
 def normalize_product_name_label(
@@ -47,13 +73,10 @@ def normalize_product_name_label(
     quantity: Any = None,
     *,
     transaction_text: str | None = None,
+    unit_price: Any = None,
+    line_total: Any = None,
 ) -> tuple[str | None, Any, dict[str, Any] | None]:
-    """Normalize generic receipt artefacts from a product label.
-
-    Explicit purchase-count tokens are authoritative over package content.
-    A trailing count is removed only when the original transaction text proves
-    that it participates in an ``N x price`` expression.
-    """
+    """Normalize generic receipt artefacts from a product label."""
     original = re.sub(r'\s+', ' ', str(label or '')).strip()
     if not original:
         return None, quantity, None
@@ -81,7 +104,12 @@ def normalize_product_name_label(
         if (
             count_value is not None
             and _has_letters(candidate_label)
-            and _transaction_confirms_trailing_count(transaction_text, count_value)
+            and _transaction_confirms_trailing_count(
+                transaction_text,
+                count_value,
+                unit_price=unit_price,
+                line_total=line_total,
+            )
         ):
             normalized = candidate_label
             detected_quantity = count_value
