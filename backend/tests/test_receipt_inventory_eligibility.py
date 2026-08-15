@@ -65,3 +65,13 @@ def test_schema_columns_are_active_and_idempotent():
         ensure_receipt_line_semantics_schema(conn)
         columns = {row['name'] for row in conn.execute(text('PRAGMA table_info(receipt_table_lines)')).mappings()}
     assert {'line_role', 'inventory_eligible'} <= columns
+
+
+def test_receipt_service_persists_semantics_on_both_ingest_paths():
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / 'app/services/receipt_service.py').read_text(encoding='utf-8')
+    assert source.count('INSERT INTO receipt_table_lines') == 2
+    assert source.count('line_role, inventory_eligible') == 2
+    assert source.count('semantics = derive_receipt_line_semantics(line, store_name=parse_result.store_name)') == 2
+    assert source.count('ensure_receipt_line_semantics_schema(conn)') >= 2

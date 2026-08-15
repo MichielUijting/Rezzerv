@@ -2139,7 +2139,9 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                 },
             )
             if parse_result.is_receipt:
+                ensure_receipt_line_semantics_schema(conn)
                 for index, line in enumerate(parse_result.lines):
+                    semantics = derive_receipt_line_semantics(line, store_name=parse_result.store_name)
                     logical_line_key = resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex
                     prior_validated = was_prior_line_validated(reimport_lineage, index, line)
                     prior_processed = get_prior_processed_line_fact(
