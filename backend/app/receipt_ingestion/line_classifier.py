@@ -21,7 +21,6 @@ from app.receipt_ingestion.profiles.aldi import is_aldi_context, is_aldi_non_pro
 from app.receipt_ingestion.spaarzegels_terms import (
     contains_spaarzegels_metadata_token,
     contains_spaarzegels_priced_token,
-    is_spaarzegels_flow_excluded,
     matches_spaarzegels_value_label,
     spaarzegels_metadata_tokens,
 )
