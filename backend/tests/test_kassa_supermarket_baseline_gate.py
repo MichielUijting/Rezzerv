@@ -1,5 +1,4 @@
 from app.api.routes import kassa_regression_routes as regression
-from app.services.receipt_service import detect_mime_type, parse_receipt_content
 from app.services.receipt_ssot_status import apply_po_norm_status
 
 
@@ -10,13 +9,7 @@ def _line_value(line, key):
 
 
 def _line_dict(line):
-    """Preserve parser facts when feeding the production Kassa status SSOT.
-
-    ReceiptParseResult.lines are dictionaries in the active parser contract, but
-    scanner/provider adapters may expose object-like line records. The release
-    gate must preserve the facts in either representation; replacing them with
-    None would test the helper rather than production status behaviour.
-    """
+    """Preserve canonical parser facts for the production Kassa status SSOT."""
     return {
         'raw_label': _line_value(line, 'raw_label'),
         'normalized_label': _line_value(line, 'normalized_label'),
@@ -30,12 +23,39 @@ def _line_dict(line):
     }
 
 
-def test_kassa_supermarket_baseline_v8_is_green():
-    """Permanent release gate for the 18-receipt parser baseline incl. Picnic."""
+def _status_payload(parsed):
+    return {
+        'store_name': parsed.store_name,
+        'total_amount': parsed.total_amount,
+        'discount_total': parsed.discount_total,
+        'line_count': len(parsed.lines or []),
+        'lines': [_line_dict(line) for line in (parsed.lines or [])],
+    }
+
+
+def test_supermarket_baseline_and_visible_kassa_status_share_one_parser_pass(monkeypatch):
+    """Permanent 18-receipt release gate without running expensive OCR twice.
+
+    The existing V8 runner remains the parser baseline authority. This test wraps
+    the exact parse call used by that runner and retains the resulting canonical
+    parser facts. The production Kassa status SSOT is then evaluated from those
+    same facts, so parser/OCR work happens exactly once per receipt.
+    """
+    parsed_receipts = []
+    original_parse = regression.parse_receipt_content
+
+    def capture_parse(payload, filename, mime_type):
+        parsed = original_parse(payload, filename, mime_type)
+        parsed_receipts.append((filename, parsed))
+        return parsed
+
+    monkeypatch.setattr(regression, 'parse_receipt_content', capture_parse)
+
     regression._execute_kassa_regression_job('pytest-supermarket-baseline')
     state = regression._get_job_state()
     report = state.get('report') or {}
-    failures = [
+
+    parser_failures = [
         {
             'case_id': item.get('case_id'),
             'chain': item.get('chain'),
@@ -48,41 +68,25 @@ def test_kassa_supermarket_baseline_v8_is_green():
     assert report.get('status') == 'passed', {
         'summary': report.get('summary'),
         'blocking_issues': report.get('blocking_issues'),
-        'failures': failures,
+        'failures': parser_failures,
     }
     assert (report.get('summary') or {}).get('tested_receipt_count') == 18
+    assert len(parsed_receipts) == 18
+
     picnic = [item for item in report.get('results') or [] if item.get('chain') == 'Picnic']
     assert len(picnic) == 4
     assert all(item.get('status') == 'passed' for item in picnic), picnic
 
-
-def test_all_supermarket_baseline_receipts_reach_controlled_kassa_status():
-    """The release gate must test what the PO sees in Kassa, not parser success only."""
-    manifest, issues = regression._load_manifest()
-    assert manifest is not None, issues
-    assert not regression._validate_manifest_cases(manifest)
-
-    failures = []
-    for case in manifest.get('cases') or []:
-        payload, filename = regression._load_case_payload(case)
-        mime_type = str(case.get('mime_type') or detect_mime_type(filename, payload))
-        parsed = parse_receipt_content(payload, filename, mime_type)
-        receipt_payload = {
-            'store_name': parsed.store_name,
-            'total_amount': parsed.total_amount,
-            'discount_total': parsed.discount_total,
-            'line_count': len(parsed.lines or []),
-            'lines': [_line_dict(line) for line in (parsed.lines or [])],
-        }
-        status = apply_po_norm_status(receipt_payload)
+    status_failures = []
+    for filename, parsed in parsed_receipts:
+        status = apply_po_norm_status(_status_payload(parsed))
         if status.get('po_norm_status_label') != 'Gecontroleerd':
-            failures.append({
-                'case_id': case.get('id'),
-                'chain': case.get('chain'),
+            status_failures.append({
                 'filename': filename,
+                'store_name': parsed.store_name,
                 'status': status.get('po_norm_status_label'),
                 'failed_criteria': status.get('po_norm_failed_criteria'),
                 'reason': status.get('po_norm_reason'),
             })
 
-    assert not failures, failures
+    assert not status_failures, status_failures
