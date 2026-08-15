@@ -27,6 +27,7 @@ _PURCHASE_COMPONENT_ROLES = {
     "shipping",
     "fee",
     "loyalty",
+    "spaarzegels",
 }
 _PRODUCT_ROLES = {"product"}
 
