@@ -72,6 +72,7 @@ from app.services.receipt_inventory_lifecycle_service import (
     retime_receipt_inventory_events,
 )
 from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact
+from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 import tempfile
 import cv2
@@ -8500,6 +8501,8 @@ def ensure_release_941_receipt_edit_schema():
             if column_name not in receipt_columns:
                 conn.execute(text(f"ALTER TABLE receipt_tables ADD COLUMN {column_name} {column_type}"))
         line_additions = {
+            'line_role': 'TEXT',
+            'inventory_eligible': 'INTEGER',
             'corrected_raw_label': 'TEXT',
             'corrected_quantity': 'NUMERIC(12,3)',
             'corrected_unit': 'TEXT',
@@ -9751,21 +9754,30 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         return 0
 
     existing_refs = {
-        str(row[0] or '').strip()
+        str(row.get('external_line_ref') or '').strip(): {
+            'id': str(row.get('id') or '').strip(),
+            'processed_event_id': str(row.get('processed_event_id') or '').strip() or None,
+        }
         for row in conn.execute(
-            text("SELECT external_line_ref FROM purchase_import_lines WHERE batch_id = :batch_id"),
+            text(
+                "SELECT id, external_line_ref, processed_event_id "
+                "FROM purchase_import_lines WHERE batch_id = :batch_id"
+            ),
             {'batch_id': batch_id},
-        ).fetchall()
-        if str(row[0] or '').strip()
+        ).mappings().all()
+        if str(row.get('external_line_ref') or '').strip()
     }
 
     line_rows = conn.execute(
         text("""
         SELECT id, line_index, logical_line_key,
                COALESCE(corrected_raw_label, raw_label) AS raw_label,
+               normalized_label,
                COALESCE(corrected_quantity, quantity) AS quantity,
                COALESCE(corrected_unit, unit) AS unit,
+               COALESCE(corrected_unit_price, unit_price) AS unit_price,
                COALESCE(corrected_line_total, line_total) AS line_total,
+               discount_amount, line_role, inventory_eligible,
                barcode,
                external_article_code,
                matched_global_product_id
@@ -9777,6 +9789,19 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         {'receipt_table_id': receipt_table_id},
     ).mappings().all()
 
+    source_refs = {
+        f"receipt-line:{line.get('id')}"
+        for line in line_rows
+        if str(line.get('id') or '').strip()
+    }
+    for stale_ref, stale in list(existing_refs.items()):
+        if stale_ref.startswith('receipt-line:') and stale_ref not in source_refs and not stale.get('processed_event_id'):
+            conn.execute(
+                text("DELETE FROM purchase_import_lines WHERE id = :id AND batch_id = :batch_id"),
+                {'id': stale.get('id'), 'batch_id': batch_id},
+            )
+            existing_refs.pop(stale_ref, None)
+
     inserted = 0
     household_id = str((receipt or {}).get('household_id') or '').strip()
     for offset, line in enumerate(line_rows, start=1):
@@ -9784,6 +9809,40 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         if not raw_label:
             continue
         external_line_ref = f"receipt-line:{line.get('id') or offset}"
+        existing_line = existing_refs.get(external_line_ref)
+        semantics = derive_receipt_line_semantics(
+            dict(line),
+            store_name=str((receipt or {}).get('store_name') or '').strip() or None,
+        )
+        if line.get('line_role') in (None, '') or line.get('inventory_eligible') is None:
+            conn.execute(
+                text(
+                    "UPDATE receipt_table_lines SET line_role = :line_role, "
+                    "inventory_eligible = :inventory_eligible, updated_at = CURRENT_TIMESTAMP WHERE id = :id"
+                ),
+                {
+                    'id': line.get('id'),
+                    'line_role': semantics['line_role'],
+                    'inventory_eligible': 1 if semantics['inventory_eligible'] else 0,
+                },
+            )
+        if not semantics['inventory_eligible']:
+            if existing_line and not existing_line.get('processed_event_id'):
+                conn.execute(
+                    text("DELETE FROM purchase_import_lines WHERE id = :id AND batch_id = :batch_id"),
+                    {'id': existing_line.get('id'), 'batch_id': batch_id},
+                )
+                existing_refs.pop(external_line_ref, None)
+            elif existing_line:
+                conn.execute(
+                    text(
+                        "UPDATE purchase_import_lines "
+                        "SET review_decision = 'ignored', updated_at = CURRENT_TIMESTAMP "
+                        "WHERE id = :id AND batch_id = :batch_id"
+                    ),
+                    {'id': existing_line.get('id'), 'batch_id': batch_id},
+                )
+            continue
         prior_processed = get_prior_processed_line_fact(
             conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id
         )
@@ -9807,7 +9866,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         # Een household_article wordt pas gevuld door expliciete geheugenmapping of gebruikerskeuze.
         matched_household_article_id = None
 
-        if external_line_ref in existing_refs:
+        if existing_line:
             conn.execute(
                 text("""
                 UPDATE purchase_import_lines
@@ -9886,7 +9945,10 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 'processed_event_id': (prior_processed or {}).get('processed_event_id'),
             },
         )
-        existing_refs.add(external_line_ref)
+        existing_refs[external_line_ref] = {
+            'id': '',
+            'processed_event_id': (prior_processed or {}).get('processed_event_id'),
+        }
         inserted += 1
 
     if inserted and refresh_prefill:

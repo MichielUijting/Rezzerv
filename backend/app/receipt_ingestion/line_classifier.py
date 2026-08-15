@@ -51,6 +51,8 @@ GENERIC_TAX_TOKENS = (
 GENERIC_DISCOUNT_TOKENS = (
     'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
     'lidl plus korting', 'totaal korting', 'coupon', 'voucher', 'gratis',
+    'in prijs verlaagd', 'prijs verlaagd', 'prijsverlaging', 'afgeprijsd',
+    'reduced price', 'price reduction',
 )
 GENERIC_METADATA_TOKENS = (
     'openingstijd', 'openingstijden', 'ma-vr', 'ma tm', 'ma t/m', 'periode',
@@ -58,8 +60,11 @@ GENERIC_METADATA_TOKENS = (
     'www.', 'http', 'kvk', 'iban', 'tel:', 'telefoon', 'servicebalie', 'klantenservice',
     'bedankt', 'welkom', 'tot ziens', 'bezoek ook', 'voorwaarden',
 )
-GENERIC_DEPOSIT_RETURN_TOKENS = (
+GENERIC_NON_INVENTORY_CHARGE_TOKENS = (
     'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',
+    'statiegeld', 'emballage', 'fust',
+    'verzendkosten', 'verzend kosten', 'bezorgkosten', 'bezorg kosten',
+    'shipping fee', 'delivery fee',
 )
 GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS = (
     'prijs per kg',
@@ -141,7 +146,7 @@ def _priced_article_value_token(lowered: str) -> str | None:
         return None
     if _token_match(lowered, GENERIC_TAX_TOKENS):
         return None
-    if _token_match(lowered, GENERIC_DEPOSIT_RETURN_TOKENS):
+    if _token_match(lowered, GENERIC_NON_INVENTORY_CHARGE_TOKENS):
         return None
     return contains_spaarzegels_priced_token(lowered) or _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
 
@@ -192,7 +197,7 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
     for tokens, classification, rule in (
         (GENERIC_PAYMENT_TOKENS, 'footer_payment_tax', 'GENERIC_PAYMENT_TOKENS'),
         (GENERIC_TAX_TOKENS, 'footer_payment_tax', 'GENERIC_TAX_TOKENS'),
-        (GENERIC_DEPOSIT_RETURN_TOKENS, 'footer_payment_tax', 'GENERIC_DEPOSIT_RETURN_TOKENS'),
+        (GENERIC_NON_INVENTORY_CHARGE_TOKENS, 'footer_payment_tax', 'GENERIC_NON_INVENTORY_CHARGE_TOKENS'),
     ):
         token = _token_match(lowered, tokens)
         if token:
@@ -288,8 +293,8 @@ def _non_article_reason(classification: str | None, line: str) -> str:
             return 'vat_line'
         if any(token in lowered for token in ('betaal', 'bankpas', 'pin', 'terminal', 'transactie', 'maestro', 'visa', 'mastercard', 'contactless', 'contactloos')):
             return 'payment_line'
-        if any(token in lowered for token in ('statiegeld retour', 'retour statiegeld', 'emballage retour')):
-            return 'deposit_return_or_refund_line'
+        if _token_match(lowered, GENERIC_NON_INVENTORY_CHARGE_TOKENS):
+            return 'non_inventory_charge_or_deposit_line'
         if _is_summary_discount_line(lowered) or any(token in lowered for token in ('korting', 'bonus', 'actie', 'prijsvoordeel', 'voordeel', 'coupon')):
             return 'discount_or_promotion_line'
         if re.fullmatch(r'\d{1,4}[.,]\d{2}', normalized):

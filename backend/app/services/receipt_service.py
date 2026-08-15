@@ -58,6 +58,7 @@ from typing import Any, Iterable
 from sqlalchemy import bindparam, text
 
 from app.receipt_ingestion.line_classifier import classify_receipt_text_line
+from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 from app.receipt_ingestion.product_candidate_gateway import append_product_candidate
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
@@ -2136,6 +2137,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             )
             if parse_result.is_receipt:
                 for index, line in enumerate(parse_result.lines):
+                    semantics = derive_receipt_line_semantics(line, store_name=parse_result.store_name)
                     logical_line_key = resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex
                     prior_validated = was_prior_line_validated(reimport_lineage, index, line)
                     prior_processed = get_prior_processed_line_fact(
@@ -2145,9 +2147,9 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                         text(
                             '''
                             INSERT INTO receipt_table_lines (
-                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, logical_line_key, is_validated
+                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, logical_line_key, is_validated, line_role, inventory_eligible
                             ) VALUES (
-                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key, :is_validated
+                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key, :is_validated, :line_role, :inventory_eligible
                             )
                             '''
                         ),
@@ -2167,6 +2169,8 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                             'matched_article_id': None,
                             'confidence_score': line.get('confidence_score'),
                             'logical_line_key': logical_line_key,
+                            'line_role': semantics['line_role'],
+                            'inventory_eligible': 1 if semantics['inventory_eligible'] else 0,
                             'is_validated': 1 if (prior_validated or prior_processed) else 0,
                         },
                     )
@@ -2360,13 +2364,14 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                 },
             )
             for index, line in enumerate(parse_result.lines):
+                semantics = derive_receipt_line_semantics(line, store_name=parse_result.store_name)
                 conn.execute(
                     text(
                         '''
                         INSERT INTO receipt_table_lines (
-                            id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score
+                            id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, line_role, inventory_eligible
                         ) VALUES (
-                            :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score
+                            :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :line_role, :inventory_eligible
                         )
                         '''
                     ),
@@ -2385,6 +2390,8 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                         'article_match_status': 'unmatched',
                         'matched_article_id': None,
                         'confidence_score': line.get('confidence_score'),
+                        'line_role': semantics['line_role'],
+                        'inventory_eligible': 1 if semantics['inventory_eligible'] else 0,
                     },
                 )
         else:
