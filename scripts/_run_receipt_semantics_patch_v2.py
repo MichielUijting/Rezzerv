@@ -1,6 +1,7 @@
 from pathlib import Path
 import runpy
 
+# Trigger driver for the corrected semantic persistence patch.
 root = Path(__file__).resolve().parents[1]
 applicator = root / 'scripts' / '_apply_receipt_semantics_patch.py'
 text = applicator.read_text(encoding='utf-8')
