@@ -17,7 +17,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Restore OCR model cache
-        uses: actions/cache@v4
+        id: ocr-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             .ci-cache/u2net
@@ -47,3 +48,12 @@ jobs:
               -v "${{ github.workspace }}/.ci-cache/paddlex:/root/.paddlex" \
               rezzerv-kassa-baseline:latest \
               sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -s -q tests/test_kassa_supermarket_baseline_gate.py"
+
+      - name: Persist OCR model cache even after a red baseline
+        if: always() && steps.ocr-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ci-cache/u2net
+            .ci-cache/paddlex
+          key: kassa-ocr-models-v1
