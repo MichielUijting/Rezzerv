@@ -99,4 +99,6 @@ def apply_package_extraction_to_candidate(
         return package['article_label'], quantity, existing_unit, package
     if existing_unit:
         return package['article_label'], quantity, existing_unit, package
-    return package['article_label'], package['package_quantity'], package['package_unit'], package
+    # A package label describes the content of one purchased sales unit. Do not
+    # overload purchase quantity with 500 g / 1 l / 250 ml.
+    return package['article_label'], 1, 'stuk', package

@@ -73,6 +73,7 @@ from app.services.receipt_inventory_lifecycle_service import (
 )
 from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact
 from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
+from app.receipt_ingestion.package_label_extraction import extract_package_from_label
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 import tempfile
 import cv2
@@ -8503,6 +8504,9 @@ def ensure_release_941_receipt_edit_schema():
         line_additions = {
             'line_role': 'TEXT',
             'inventory_eligible': 'INTEGER',
+            'package_count': 'NUMERIC(12,3)',
+            'content_value': 'NUMERIC(12,3)',
+            'content_unit': 'TEXT',
             'corrected_raw_label': 'TEXT',
             'corrected_quantity': 'NUMERIC(12,3)',
             'corrected_unit': 'TEXT',
@@ -8516,6 +8520,16 @@ def ensure_release_941_receipt_edit_schema():
         for column_name, column_type in line_additions.items():
             if column_name not in line_columns:
                 conn.execute(text(f"ALTER TABLE receipt_table_lines ADD COLUMN {column_name} {column_type}"))
+
+        purchase_line_columns = {row['name'] for row in conn.execute(text('PRAGMA table_info(purchase_import_lines)')).mappings().all()}
+        purchase_line_additions = {
+            'package_count': 'NUMERIC(12,3)',
+            'content_value': 'NUMERIC(12,3)',
+            'content_unit': 'TEXT',
+        }
+        for column_name, column_type in purchase_line_additions.items():
+            if column_name not in purchase_line_columns:
+                conn.execute(text(f"ALTER TABLE purchase_import_lines ADD COLUMN {column_name} {column_type}"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_lines_receipt_active ON receipt_table_lines (receipt_table_id, is_deleted, line_index)"))
 def ensure_receipt_storage_root():
     RECEIPT_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
@@ -9772,7 +9786,9 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         text("""
         SELECT id, line_index, logical_line_key,
                COALESCE(corrected_raw_label, raw_label) AS raw_label,
+               COALESCE(corrected_raw_label, normalized_label, raw_label) AS article_name,
                normalized_label,
+               package_count, content_value, content_unit,
                COALESCE(corrected_quantity, quantity) AS quantity,
                COALESCE(corrected_unit, unit) AS unit,
                COALESCE(corrected_unit_price, unit_price) AS unit_price,
@@ -9806,8 +9822,28 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
     household_id = str((receipt or {}).get('household_id') or '').strip()
     for offset, line in enumerate(line_rows, start=1):
         raw_label = str(line.get('raw_label') or '').strip()
-        if not raw_label:
+        article_name = str(line.get('article_name') or line.get('normalized_label') or raw_label).strip()
+        if not raw_label or not article_name:
             continue
+
+        package_count = line.get('package_count')
+        content_value = line.get('content_value')
+        content_unit = line.get('content_unit')
+        if package_count is None or content_value is None or not content_unit:
+            package = extract_package_from_label(raw_label)
+            if package:
+                package_count = package.get('package_count')
+                content_value = package.get('package_quantity')
+                content_unit = package.get('package_unit')
+                conn.execute(
+                    text("UPDATE receipt_table_lines SET package_count = :package_count, content_value = :content_value, content_unit = :content_unit, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
+                    {
+                        'id': line.get('id'),
+                        'package_count': package_count,
+                        'content_value': content_value,
+                        'content_unit': content_unit,
+                    },
+                )
         external_line_ref = f"receipt-line:{line.get('id') or offset}"
         existing_line = existing_refs.get(external_line_ref)
         semantics = derive_receipt_line_semantics(
@@ -9875,6 +9911,9 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                     brand_raw = :brand_raw,
                     quantity_raw = :quantity_raw,
                     unit_raw = :unit_raw,
+                    package_count = :package_count,
+                    content_value = :content_value,
+                    content_unit = :content_unit,
                     line_price_raw = :line_price_raw,
                     currency_code = :currency_code,
                     matched_global_product_id = :matched_global_product_id,
@@ -9898,10 +9937,13 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                     'batch_id': batch_id,
                     'external_line_ref': external_line_ref,
                     'external_article_code': line.get('barcode'),
-                    'article_name_raw': raw_label,
+                    'article_name_raw': article_name,
                     'brand_raw': (receipt or {}).get('store_name') or '',
                     'quantity_raw': quantity_value,
                     'unit_raw': line.get('unit') or '',
+                    'package_count': package_count,
+                    'content_value': content_value,
+                    'content_unit': content_unit,
                     'line_price_raw': line_price_value,
                     'currency_code': (receipt or {}).get('currency') or 'EUR',
                     'matched_global_product_id': matched_global_product_id,
@@ -9914,12 +9956,12 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
             text("""
             INSERT INTO purchase_import_lines (
                 id, batch_id, external_line_ref, external_article_code, article_name_raw,
-                brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
+                brand_raw, quantity_raw, unit_raw, package_count, content_value, content_unit, line_price_raw, currency_code,
                 match_status, review_decision, ui_sort_order, matched_global_product_id,
                 matched_household_article_id, suggested_household_article_id, processing_status, processed_at, processed_event_id, created_at
             ) VALUES (
                 :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,
-                :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
+                :brand_raw, :quantity_raw, :unit_raw, :package_count, :content_value, :content_unit, :line_price_raw, :currency_code,
                 :match_status, 'selected', :ui_sort_order, :matched_global_product_id,
                 :matched_household_article_id, :suggested_household_article_id, :processing_status, :processed_at, :processed_event_id, CURRENT_TIMESTAMP
             )
@@ -9929,10 +9971,13 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 'batch_id': batch_id,
                 'external_line_ref': external_line_ref,
                 'external_article_code': line.get('barcode'),
-                'article_name_raw': raw_label,
+                'article_name_raw': article_name,
                 'brand_raw': (receipt or {}).get('store_name') or '',
                 'quantity_raw': quantity_value,
                 'unit_raw': line.get('unit') or '',
+                'package_count': package_count,
+                'content_value': content_value,
+                'content_unit': content_unit,
                 'line_price_raw': line_price_value,
                 'currency_code': (receipt or {}).get('currency') or 'EUR',
                 'ui_sort_order': int(line.get('line_index') or offset),

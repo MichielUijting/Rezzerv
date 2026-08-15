@@ -54,6 +54,7 @@ def append_structured_product_candidate(
     """Append a product candidate parsed from a structured source."""
     label_value = clean_label(label)
     label_value, encoding_metadata = normalize_receipt_text_encoding(label_value)
+    raw_label_value = label_value
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
 
@@ -100,6 +101,7 @@ def append_structured_product_candidate(
         producer_trace.update({
             'package_extraction_applied': True,
             'package_text': package_metadata.get('package_text'),
+            'package_count': package_metadata.get('package_count'),
             'package_quantity': package_metadata.get('package_quantity'),
             'package_unit': package_metadata.get('package_unit'),
         })
@@ -113,10 +115,13 @@ def append_structured_product_candidate(
 
     extracted.append(
         {
-            'raw_label': label_value,
+            'raw_label': raw_label_value,
             'normalized_label': label_value,
             'quantity': amount_to_float(quantity),
             'unit': unit,
+            'package_count': amount_to_float((package_metadata or {}).get('package_count')),
+            'content_value': amount_to_float((package_metadata or {}).get('package_quantity')),
+            'content_unit': (package_metadata or {}).get('package_unit'),
             'unit_price': amount_to_float(unit_price),
             'line_total': amount_to_float(line_total),
             'discount_amount': amount_to_float(discount_amount),
