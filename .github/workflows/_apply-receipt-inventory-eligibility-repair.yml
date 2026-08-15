@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   apply-repair:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,179 +21,9 @@ jobs:
           python-version: '3.12'
 
       - name: Apply targeted repair
-        shell: python
-        run: |
-          from pathlib import Path
+        run: python tools/_apply_receipt_inventory_eligibility_repair.py
 
-          classifier_path = Path('backend/app/receipt_ingestion/line_classifier.py')
-          main_path = Path('backend/app/main.py')
-          test_path = Path('backend/tests/test_receipt_inventory_eligibility.py')
-          contract_path = Path('backend/app/testing/unpack_copies_kassa_contract.py')
-          workflow_path = Path('.github/workflows/_apply-receipt-inventory-eligibility-repair.yml')
-
-          classifier = classifier_path.read_text(encoding='utf-8')
-          main = main_path.read_text(encoding='utf-8')
-          contract = contract_path.read_text(encoding='utf-8')
-
-          old_import = '''from app.receipt_ingestion.spaarzegels_terms import (\n    contains_spaarzegels_metadata_token,\n    contains_spaarzegels_priced_token,\n    matches_spaarzegels_value_label,\n    spaarzegels_metadata_tokens,\n)'''
-          new_import = '''from app.receipt_ingestion.spaarzegels_terms import (\n    contains_spaarzegels_metadata_token,\n    contains_spaarzegels_priced_token,\n    is_spaarzegels_flow_excluded,\n    matches_spaarzegels_value_label,\n    spaarzegels_metadata_tokens,\n)'''
-          assert old_import in classifier
-          classifier = classifier.replace(old_import, new_import, 1)
-
-          old_tokens = '''GENERIC_DEPOSIT_RETURN_TOKENS = (\n    'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',\n)'''
-          new_tokens = '''GENERIC_NON_INVENTORY_CHARGE_TOKENS = (\n    'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',\n    'statiegeld', 'emballage', 'fust',\n    'verzendkosten', 'verzend kosten', 'bezorgkosten', 'bezorg kosten',\n    'shipping fee', 'delivery fee',\n)'''
-          assert old_tokens in classifier
-          classifier = classifier.replace(old_tokens, new_tokens, 1)
-          classifier = classifier.replace('GENERIC_DEPOSIT_RETURN_TOKENS', 'GENERIC_NON_INVENTORY_CHARGE_TOKENS')
-          classifier = classifier.replace("'GENERIC_DEPOSIT_RETURN_TOKENS'", "'GENERIC_NON_INVENTORY_CHARGE_TOKENS'")
-
-          old_reason = "if any(token in lowered for token in ('statiegeld retour', 'retour statiegeld', 'emballage retour')):\n            return 'deposit_return_or_refund_line'"
-          new_reason = "if _token_match(lowered, GENERIC_NON_INVENTORY_CHARGE_TOKENS):\n            return 'non_inventory_charge_or_deposit_line'"
-          assert old_reason in classifier
-          classifier = classifier.replace(old_reason, new_reason, 1)
-
-          helper_anchor = '''def classification_allows_append(classification: str | None) -> bool:\n    return str(classification or '') in (ARTICLE_CLASSIFICATIONS | {'continuation'})'''
-          assert helper_anchor in classifier
-          helper = r'''NON_INVENTORY_PRODUCT_RULES = frozenset({
-    'GENERIC_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE',
-    'PLUS_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE',
-    'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION',
-    'STORE_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION',
-})
-
-
-def receipt_line_is_inventory_eligible(
-    line: dict[str, Any],
-    *,
-    store_name: str | None = None,
-    filename: str | None = None,
-) -> bool:
-    """Return True only for receipt-table rows that may enter Uitpakken/Voorraad."""
-    if not isinstance(line, dict):
-        return False
-    raw_label = str(
-        line.get('corrected_raw_label')
-        or line.get('raw_label')
-        or line.get('normalized_label')
-        or ''
-    ).strip()
-    if not raw_label:
-        return False
-    if is_spaarzegels_flow_excluded({
-        'receipt_line_text': raw_label,
-        'raw_label': raw_label,
-        'normalized_label': line.get('normalized_label'),
-        'quantity_label': line.get('quantity_label'),
-        'quantity': line.get('quantity'),
-        'unit_price': line.get('unit_price'),
-        'line_total': line.get('line_total'),
-        'price': line.get('line_total'),
-    }):
-        return False
-
-    decision = _generic_non_article_trace(raw_label)
-    if decision is None:
-        decision = _store_specific_non_article_trace(
-            raw_label,
-            store_name=store_name,
-            filename=filename,
-        )
-    if decision is None:
-        return True
-
-    classification = str(decision.get('classification') or 'ignore')
-    rule = str(decision.get('rule') or '')
-    if rule in NON_INVENTORY_PRODUCT_RULES:
-        return False
-    return classification == 'product_candidate'
-
-
-'''
-          classifier = classifier.replace(helper_anchor, helper + helper_anchor, 1)
-          assert 'GENERIC_DEPOSIT_RETURN_TOKENS' not in classifier
-          classifier_path.write_text(classifier, encoding='utf-8')
-
-          import_anchor = 'from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact\n'
-          new_main_import = 'from app.receipt_ingestion.line_classifier import receipt_line_is_inventory_eligible\n'
-          assert import_anchor in main
-          assert new_main_import not in main
-          main = main.replace(import_anchor, import_anchor + new_main_import, 1)
-
-          old_existing = '''    existing_refs = {\n        str(row[0] or '').strip()\n        for row in conn.execute(\n            text("SELECT external_line_ref FROM purchase_import_lines WHERE batch_id = :batch_id"),\n            {'batch_id': batch_id},\n        ).fetchall()\n        if str(row[0] or '').strip()\n    }'''
-          new_existing = '''    existing_refs = {\n        str(row.get('external_line_ref') or '').strip(): {\n            'id': str(row.get('id') or '').strip(),\n            'processed_event_id': str(row.get('processed_event_id') or '').strip() or None,\n        }\n        for row in conn.execute(\n            text(\n                "SELECT id, external_line_ref, processed_event_id "\n                "FROM purchase_import_lines WHERE batch_id = :batch_id"\n            ),\n            {'batch_id': batch_id},\n        ).mappings().all()\n        if str(row.get('external_line_ref') or '').strip()\n    }'''
-          assert old_existing in main
-          main = main.replace(old_existing, new_existing, 1)
-
-          line_rows_anchor = '''    inserted = 0\n    household_id = str((receipt or {}).get('household_id') or '').strip()\n    for offset, line in enumerate(line_rows, start=1):'''
-          replacement = '''    source_refs = {\n        f"receipt-line:{line.get('id')}"\n        for line in line_rows\n        if str(line.get('id') or '').strip()\n    }\n    for stale_ref, stale in list(existing_refs.items()):\n        if stale_ref.startswith('receipt-line:') and stale_ref not in source_refs and not stale.get('processed_event_id'):\n            conn.execute(\n                text("DELETE FROM purchase_import_lines WHERE id = :id AND batch_id = :batch_id"),\n                {'id': stale.get('id'), 'batch_id': batch_id},\n            )\n            existing_refs.pop(stale_ref, None)\n\n    inserted = 0\n    household_id = str((receipt or {}).get('household_id') or '').strip()\n    for offset, line in enumerate(line_rows, start=1):'''
-          assert line_rows_anchor in main
-          main = main.replace(line_rows_anchor, replacement, 1)
-
-          gate_anchor = '''        external_line_ref = f"receipt-line:{line.get('id') or offset}"\n        prior_processed = get_prior_processed_line_fact(\n            conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id\n        )'''
-          gated = '''        external_line_ref = f"receipt-line:{line.get('id') or offset}"\n        existing_line = existing_refs.get(external_line_ref)\n        inventory_eligible = receipt_line_is_inventory_eligible(\n            dict(line),\n            store_name=str((receipt or {}).get('store_name') or '').strip() or None,\n        )\n        if not inventory_eligible:\n            if existing_line and not existing_line.get('processed_event_id'):\n                conn.execute(\n                    text("DELETE FROM purchase_import_lines WHERE id = :id AND batch_id = :batch_id"),\n                    {'id': existing_line.get('id'), 'batch_id': batch_id},\n                )\n                existing_refs.pop(external_line_ref, None)\n            elif existing_line:\n                conn.execute(\n                    text(\n                        "UPDATE purchase_import_lines "\n                        "SET review_decision = 'ignored', updated_at = CURRENT_TIMESTAMP "\n                        "WHERE id = :id AND batch_id = :batch_id"\n                    ),\n                    {'id': existing_line.get('id'), 'batch_id': batch_id},\n                )\n            continue\n        prior_processed = get_prior_processed_line_fact(\n            conn, line.get('logical_line_key'), current_receipt_table_id=receipt_table_id\n        )'''
-          assert gate_anchor in main
-          main = main.replace(gate_anchor, gated, 1)
-
-          assert 'if external_line_ref in existing_refs:' in main
-          main = main.replace('if external_line_ref in existing_refs:', 'if existing_line:', 1)
-          old_add = '''        existing_refs.add(external_line_ref)\n        inserted += 1'''
-          new_add = '''        existing_refs[external_line_ref] = {\n            'id': '',\n            'processed_event_id': (prior_processed or {}).get('processed_event_id'),\n        }\n        inserted += 1'''
-          assert old_add in main
-          main = main.replace(old_add, new_add, 1)
-          main_path.write_text(main, encoding='utf-8')
-
-          contract_token = '''require(\n    "matched_global_product_id = (" in sync_block\n    and "str(line.get('matched_global_product_id') or '').strip()" in sync_block,\n    "Uitpakken kopieert matched_global_product_id niet letterlijk uit Kassa",\n)'''
-          assert contract_token in contract
-          gate_contract = '''require(\n    "receipt_line_is_inventory_eligible(" in sync_block,\n    "Uitpakken mist de centrale voorraadgeschiktheidsgate",\n)\nrequire(\n    "DELETE FROM purchase_import_lines" in sync_block,\n    "Uitpakken ruimt dode, niet-verwerkte purchase-importregels niet op",\n)\n'''
-          contract = contract.replace(contract_token, gate_contract + contract_token, 1)
-          contract_path.write_text(contract, encoding='utf-8')
-
-          test_path.write_text(r'''from app.receipt_ingestion.line_classifier import receipt_line_is_inventory_eligible
-
-
-def eligible(label: str, **extra) -> bool:
-    row = {'raw_label': label, 'line_total': extra.pop('line_total', None), **extra}
-    return receipt_line_is_inventory_eligible(row, store_name=extra.get('store_name'))
-
-
-def test_physical_articles_remain_inventory_eligible():
-    assert eligible('Halfvolle melk') is True
-    assert eligible('Onbekend fysiek artikel') is True
-    assert eligible('Tempranillo Cabernet Sauvignon') is True
-
-
-def test_savings_stamps_never_enter_unpacking():
-    assert eligible('10 KOOPZEGELS 1,00', line_total=1.00) is False
-    assert eligible('Koopzegels', line_total=0.20, quantity=2, unit_price=0.10) is False
-
-
-def test_non_inventory_charges_never_enter_unpacking():
-    for label in (
-        'Statiegeld 0,25',
-        'Emballage 0,50',
-        'Fust retour -1,00',
-        'Verzendkosten 4,95',
-        'Verzend kosten 4,95',
-        'Bezorgkosten 2,99',
-        'Delivery fee 3,50',
-    ):
-        assert eligible(label) is False, label
-
-
-def test_financial_and_footer_lines_never_enter_unpacking():
-    for label in (
-        'Korting 1,00',
-        'Bonus 0,50',
-        'Totaal 23,45',
-        'Betaald 23,45',
-        'BTW 9% 1,23',
-    ):
-        assert eligible(label) is False, label
-''', encoding='utf-8')
-
-          workflow_path.unlink()
-
-      - name: Validate repair locally in runner
+      - name: Validate repair
         run: |
           export PYTHONPATH=backend
           python -m py_compile backend/app/receipt_ingestion/line_classifier.py backend/app/main.py backend/app/testing/unpack_copies_kassa_contract.py
@@ -203,10 +32,15 @@ def test_financial_and_footer_lines_never_enter_unpacking():
           pytest -q backend/tests/test_receipt_inventory_eligibility.py
           git diff --check
 
+      - name: Remove temporary execution helpers
+        run: |
+          rm tools/_apply_receipt_inventory_eligibility_repair.py
+          rm .github/workflows/_apply-receipt-inventory-eligibility-repair.yml
+
       - name: Commit repaired implementation
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend/app/receipt_ingestion/line_classifier.py backend/app/main.py backend/app/testing/unpack_copies_kassa_contract.py backend/tests/test_receipt_inventory_eligibility.py .github/workflows/_apply-receipt-inventory-eligibility-repair.yml
+          git add -A
           git commit -m 'fix receipts inventory eligibility gate'
           git push origin HEAD:agent/receipt-inventory-eligibility-gate
