@@ -42,20 +42,20 @@ def _assert_sqlite_persistable(line):
         )).mappings().one()
 
 
-def test_legacy_provider_restores_pre_scanner_line_number_contract_and_persists():
+def test_legacy_provider_restores_numeric_contract_adds_role_and_persists():
     legacy = ReceiptParseResult(
         is_receipt=True,
         parse_status="approved",
         confidence_score=0.95,
-        store_name="Lidl",
-        store_branch="Arnhem",
+        store_name="Store-X",
+        store_branch="Branch-Y",
         purchase_at="2026-08-10",
         total_amount=Decimal("8.98"),
         discount_total=Decimal("0.00"),
         currency="EUR",
         lines=[{
-            "raw_label": "2 FAIRTRADE CHENIN BL 8,98",
-            "normalized_label": "Fairtrade Chenin Bl",
+            "raw_label": "ITEM-ALPHA 8,98",
+            "normalized_label": "ITEM-ALPHA",
             "quantity": 2.0,
             "unit": "piece",
             "unit_price": 4.49,
@@ -75,7 +75,8 @@ def test_legacy_provider_restores_pre_scanner_line_number_contract_and_persists(
     )
     normalized = canonical_to_receipt_parse_result(canonical)
     line = normalized.lines[0]
-    assert normalized.lines == legacy.lines
+    assert line["line_type"] == "product"
+    assert {key: value for key, value in line.items() if key != "line_type"} == legacy.lines[0]
     assert all(isinstance(line[key], float) for key in (
         "quantity", "unit_price", "line_total", "discount_amount"
     ))
@@ -93,14 +94,14 @@ def test_external_provider_keeps_decimal_canonical_contract_but_normalizes_for_r
         status="completed",
         document={"sha256": "e" * 64, "mime_type": "image/jpeg", "page_count": 1},
         receipt={
-            "store": {"name": "External Store"},
+            "store": {"name": "Store-X"},
             "transaction": {"purchase_date": "2026-08-10", "currency": "EUR"},
             "totals": {"grand_total": "8.98"},
             "lines": [{
                 "line_number": 1,
                 "line_type": "product",
-                "raw_text": "2 FAIRTRADE CHENIN BL 8,98",
-                "description": "Fairtrade Chenin Bl",
+                "raw_text": "ITEM-BETA 8,98",
+                "description": "ITEM-BETA",
                 "quantity": "2",
                 "unit_price": "4.49",
                 "line_total": "8.98",
@@ -117,6 +118,7 @@ def test_external_provider_keeps_decimal_canonical_contract_but_normalizes_for_r
 
     normalized = canonical_to_receipt_parse_result(canonical)
     line = normalized.lines[0]
+    assert line["line_type"] == "product"
     assert all(isinstance(line[key], float) for key in (
         "quantity", "unit_price", "line_total", "discount_amount"
     ))
