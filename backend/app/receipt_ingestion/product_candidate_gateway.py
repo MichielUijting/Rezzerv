@@ -35,39 +35,18 @@ InvalidLabelCheck = Callable[[str], bool]
 
 
 def _is_validated_savings_action_path(function_name: str, append_branch: str) -> bool:
-    """Return True only for the existing savings/action value-line parser path."""
     return function_name == '_extract_savings_action_lines' and append_branch == 'savings_action_line'
 
 
-def _is_ah_receipt_context(
-    *,
-    store_name: str | None,
-    filename: str | None,
-    raw_line: str | None,
-    normalized_line: str | None,
-    parser_path: str | None,
-) -> bool:
-    haystack = " ".join([
-        str(store_name or ""), str(filename or ""), str(raw_line or ""),
-        str(normalized_line or ""), str(parser_path or ""),
-    ]).lower()
-    return (
-        "albert heijn" in haystack or "ah to go" in haystack or "bonuskaart" in haystack
-        or "jouw voordeel" in haystack or "je voordeel" in haystack or "profiles.ah" in haystack
-    )
+def _is_ah_receipt_context(*, store_name: str | None, filename: str | None, raw_line: str | None, normalized_line: str | None, parser_path: str | None) -> bool:
+    haystack = " ".join([str(store_name or ""), str(filename or ""), str(raw_line or ""), str(normalized_line or ""), str(parser_path or "")]).lower()
+    return "albert heijn" in haystack or "ah to go" in haystack or "bonuskaart" in haystack or "jouw voordeel" in haystack or "je voordeel" in haystack or "profiles.ah" in haystack
 
 
-def _split_ah_leading_quantity_label(
-    label_value: str, *, qty_raw: str | None, store_name: str | None,
-    filename: str | None, raw_line: str | None, normalized_line: str | None,
-    parser_path: str | None,
-) -> tuple[str, int | None, dict[str, Any] | None]:
+def _split_ah_leading_quantity_label(label_value: str, *, qty_raw: str | None, store_name: str | None, filename: str | None, raw_line: str | None, normalized_line: str | None, parser_path: str | None) -> tuple[str, int | None, dict[str, Any] | None]:
     if qty_raw:
         return label_value, None, None
-    if not _is_ah_receipt_context(
-        store_name=store_name, filename=filename, raw_line=raw_line,
-        normalized_line=normalized_line, parser_path=parser_path,
-    ):
+    if not _is_ah_receipt_context(store_name=store_name, filename=filename, raw_line=raw_line, normalized_line=normalized_line, parser_path=parser_path):
         return label_value, None, None
     original_label = str(label_value or "").strip()
     match = re.match(r"^\s*(?P<token>\d{1,2}|[TtIi|Nn])\s+(?P<label>\S.*)$", original_label)
@@ -83,10 +62,7 @@ def _split_ah_leading_quantity_label(
         quantity = 2
     else:
         quantity = int(token)
-    return remaining_label, quantity, {
-        "original_label": original_label, "normalized_label": remaining_label,
-        "quantity": quantity, "token": token,
-    }
+    return remaining_label, quantity, {"original_label": original_label, "normalized_label": remaining_label, "quantity": quantity, "token": token}
 
 
 def _as_float(value: Any) -> float | None:
@@ -109,12 +85,7 @@ def _split_supporting_amount_product_label(label_value: str) -> tuple[str, dict[
         if lowered.startswith(prefix):
             remaining = original_label[len(token):].strip(" :-\t")
             if remaining and any(ch.isalpha() for ch in remaining):
-                return remaining, {
-                    "supporting_amount_prefix_normalization_applied": True,
-                    "supporting_amount_prefix_original_label": original_label,
-                    "supporting_amount_prefix_normalized_label": remaining,
-                    "supporting_amount_prefix_token": token,
-                }
+                return remaining, {"supporting_amount_prefix_normalization_applied": True, "supporting_amount_prefix_original_label": original_label, "supporting_amount_prefix_normalized_label": remaining, "supporting_amount_prefix_token": token}
     return original_label, None
 
 
@@ -146,7 +117,6 @@ def append_product_candidate(
     trace_line: TraceLine | None = None, is_invalid_label: InvalidLabelCheck | None = None,
     confidence_score: float = 0.85,
 ) -> int | None:
-    """Single guarded gateway for appending receipt financial/product lines."""
     label_value = clean_label(label)
     label_value, encoding_metadata = normalize_receipt_text_encoding(label_value)
     label_value, supporting_amount_prefix_metadata = _split_supporting_amount_product_label(label_value)
@@ -155,10 +125,7 @@ def append_product_candidate(
 
     ah_leading_quantity_metadata = None
     ah_leading_quantity = None
-    label_value, ah_leading_quantity, ah_leading_quantity_metadata = _split_ah_leading_quantity_label(
-        label_value, qty_raw=qty_raw, store_name=store_name, filename=filename,
-        raw_line=raw_line, normalized_line=normalized_line, parser_path=parser_path,
-    )
+    label_value, ah_leading_quantity, ah_leading_quantity_metadata = _split_ah_leading_quantity_label(label_value, qty_raw=qty_raw, store_name=store_name, filename=filename, raw_line=raw_line, normalized_line=normalized_line, parser_path=parser_path)
     savings_action_path = _is_validated_savings_action_path(function_name, append_branch)
     if is_invalid_label is not None and is_invalid_label(label_value) and not savings_action_path:
         return None
@@ -183,6 +150,7 @@ def append_product_candidate(
             quantity = None
     except TypeError:
         quantity = None
+
     amount1 = parse_decimal(amount1_raw)
     amount2 = parse_decimal(amount2_raw)
     if amount1 is None and amount2 is None:
@@ -195,18 +163,17 @@ def append_product_candidate(
         line_total = amount1
 
     raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else (ah_leading_quantity_metadata.get('original_label') if ah_leading_quantity_metadata else label_value)
-    label_value, quantity, unit_value, package_metadata = apply_package_extraction_to_candidate(
-        label_value, quantity=quantity, unit='kg' if qty_raw and 'kg' in qty_raw.lower() else None,
-    )
+    label_value, quantity, unit_value, package_metadata = apply_package_extraction_to_candidate(label_value, quantity=quantity, unit='kg' if qty_raw and 'kg' in qty_raw.lower() else None)
     label_value, quantity, name_metadata = normalize_product_name_label(
-        label_value, quantity=quantity, transaction_text=normalized_line or raw_line,
+        label_value,
+        quantity=quantity,
+        transaction_text=normalized_line or raw_line,
+        unit_price=unit_price,
+        line_total=line_total,
     )
     raw_label_value = raw_label_value or label_value
     line_total_float = amount_to_float(line_total)
-    financial_metadata = spaarzegels_financial_metadata(
-        raw_label_value or label_value, label_text=label_value,
-        detail_text=raw_label_value or normalized_line or raw_line,
-    )
+    financial_metadata = spaarzegels_financial_metadata(raw_label_value or label_value, label_text=label_value, detail_text=raw_label_value or normalized_line or raw_line)
     candidate_line = {
         'raw_label': raw_label_value, 'normalized_label': label_value,
         'quantity': amount_to_float(quantity), 'unit': unit_value,
