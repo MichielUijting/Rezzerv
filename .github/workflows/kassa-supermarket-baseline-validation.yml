@@ -13,9 +13,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build production-like backend image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Restore OCR model cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-cache/u2net
+            .ci-cache/paddlex
+          key: kassa-ocr-models-v1
+
+      - name: Build production-like backend image with GHA layer cache
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          load: true
+          tags: rezzerv-kassa-baseline:latest
+          cache-from: type=gha,scope=kassa-supermarket-baseline
+          cache-to: type=gha,mode=max,scope=kassa-supermarket-baseline
+
+      - name: Prepare OCR cache directories
         run: |
-          docker build -t rezzerv-kassa-baseline ./backend
+          mkdir -p .ci-cache/u2net .ci-cache/paddlex
 
       - name: Run 18-receipt supermarket baseline including Picnic 4/4
         run: |
@@ -23,5 +43,7 @@ jobs:
             docker run --rm \
               -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-baseline.db \
               -e SQLITE_RUNTIME_VOLUME=github-actions-temp \
-              rezzerv-kassa-baseline \
-              sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -q tests/test_kassa_supermarket_baseline_gate.py"
+              -v "${{ github.workspace }}/.ci-cache/u2net:/root/.u2net" \
+              -v "${{ github.workspace }}/.ci-cache/paddlex:/root/.paddlex" \
+              rezzerv-kassa-baseline:latest \
+              sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -s -q tests/test_kassa_supermarket_baseline_gate.py"
