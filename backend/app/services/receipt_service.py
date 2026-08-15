@@ -58,10 +58,7 @@ from typing import Any, Iterable
 from sqlalchemy import bindparam, text
 
 from app.receipt_ingestion.line_classifier import classify_receipt_text_line
-from app.receipt_ingestion.receipt_line_semantics import (
-    ensure_receipt_line_semantics_schema,
-    derive_receipt_line_semantics,
-)
+from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 from app.receipt_ingestion.product_candidate_gateway import append_product_candidate
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
@@ -2139,7 +2136,6 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                 },
             )
             if parse_result.is_receipt:
-                ensure_receipt_line_semantics_schema(conn)
                 for index, line in enumerate(parse_result.lines):
                     semantics = derive_receipt_line_semantics(line, store_name=parse_result.store_name)
                     logical_line_key = resolve_reimport_logical_line_key(reimport_lineage, index, line) or uuid.uuid4().hex
@@ -2367,7 +2363,6 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                     'line_count': len(parse_result.lines),
                 },
             )
-            ensure_receipt_line_semantics_schema(conn)
             for index, line in enumerate(parse_result.lines):
                 semantics = derive_receipt_line_semantics(line, store_name=parse_result.store_name)
                 conn.execute(

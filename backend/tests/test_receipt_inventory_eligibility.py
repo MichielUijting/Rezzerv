@@ -1,9 +1,4 @@
-from sqlalchemy import create_engine, text
-
-from app.receipt_ingestion.receipt_line_semantics import (
-    derive_receipt_line_semantics,
-    ensure_receipt_line_semantics_schema,
-)
+from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 
 
 def test_unknown_physical_article_is_inventory_product():
@@ -57,14 +52,14 @@ def test_persisted_semantics_are_not_reclassified_downstream():
     assert result == {'line_role': 'loyalty', 'inventory_eligible': False}
 
 
-def test_schema_columns_are_active_and_idempotent():
-    engine = create_engine('sqlite:///:memory:')
-    with engine.begin() as conn:
-        conn.execute(text('CREATE TABLE receipt_table_lines (id TEXT PRIMARY KEY, raw_label TEXT)'))
-        ensure_receipt_line_semantics_schema(conn)
-        ensure_receipt_line_semantics_schema(conn)
-        columns = {row['name'] for row in conn.execute(text('PRAGMA table_info(receipt_table_lines)')).mappings()}
-    assert {'line_role', 'inventory_eligible'} <= columns
+def test_semantic_columns_live_in_central_receipt_schema_evolution():
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / 'app/main.py').read_text(encoding='utf-8')
+    start = source.index('line_additions = {')
+    block = source[start:start + 1200]
+    assert "'line_role': 'TEXT'" in block
+    assert "'inventory_eligible': 'INTEGER'" in block
 
 
 def test_receipt_service_persists_semantics_on_both_ingest_paths():
@@ -76,4 +71,3 @@ def test_receipt_service_persists_semantics_on_both_ingest_paths():
     assert source.count('semantics = derive_receipt_line_semantics(line, store_name=parse_result.store_name)') == 2
     assert source.count("'line_role': semantics['line_role']") == 2
     assert source.count("'inventory_eligible': 1 if semantics['inventory_eligible'] else 0") == 2
-    assert source.count('ensure_receipt_line_semantics_schema(conn)') >= 2

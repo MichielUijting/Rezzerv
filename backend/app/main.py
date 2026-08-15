@@ -72,10 +72,7 @@ from app.services.receipt_inventory_lifecycle_service import (
     retime_receipt_inventory_events,
 )
 from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact
-from app.receipt_ingestion.receipt_line_semantics import (
-    ensure_receipt_line_semantics_schema,
-    derive_receipt_line_semantics,
-)
+from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 import tempfile
 import cv2
@@ -8504,6 +8501,8 @@ def ensure_release_941_receipt_edit_schema():
             if column_name not in receipt_columns:
                 conn.execute(text(f"ALTER TABLE receipt_tables ADD COLUMN {column_name} {column_type}"))
         line_additions = {
+            'line_role': 'TEXT',
+            'inventory_eligible': 'INTEGER',
             'corrected_raw_label': 'TEXT',
             'corrected_quantity': 'NUMERIC(12,3)',
             'corrected_unit': 'TEXT',
@@ -9753,8 +9752,6 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
     receipt_table_id = str((receipt or {}).get('receipt_table_id') or (receipt or {}).get('id') or '').strip()
     if not batch_id or not receipt_table_id:
         return 0
-
-    ensure_receipt_line_semantics_schema(conn)
 
     existing_refs = {
         str(row.get('external_line_ref') or '').strip(): {

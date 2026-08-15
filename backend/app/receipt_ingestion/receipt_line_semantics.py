@@ -7,8 +7,6 @@ reclassifying a display/raw string.
 from __future__ import annotations
 
 from typing import Any
-from sqlalchemy import text
-
 from app.receipt_ingestion.line_classifier import trace_receipt_text_line_classification
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 
@@ -16,23 +14,6 @@ ROLE_PRODUCT = 'product'
 ROLE_LOYALTY = 'loyalty'
 ROLE_FINANCIAL = 'financial'
 ROLE_METADATA = 'metadata'
-
-
-def ensure_receipt_line_semantics_schema(conn) -> None:
-    """Idempotently add the two active semantic columns to receipt_table_lines."""
-    try:
-        columns = {
-            str(row.get('name') or '')
-            for row in conn.execute(text('PRAGMA table_info(receipt_table_lines)')).mappings().all()
-        }
-    except Exception:
-        columns = set()
-    if not columns:
-        return
-    if 'line_role' not in columns:
-        conn.execute(text('ALTER TABLE receipt_table_lines ADD COLUMN line_role TEXT'))
-    if 'inventory_eligible' not in columns:
-        conn.execute(text('ALTER TABLE receipt_table_lines ADD COLUMN inventory_eligible INTEGER'))
 
 
 def _semantic_text(line: dict[str, Any]) -> str:
