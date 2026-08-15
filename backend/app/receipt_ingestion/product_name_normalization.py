@@ -1,5 +1,4 @@
-"""
-Generic product-name normalization for receipt labels.
+"""Generic product-name normalization for receipt labels.
 
 This module contains no product-name, brand or retailer knowledge. It only
 normalizes generic receipt-label artefacts such as leading item counts,
@@ -33,7 +32,12 @@ def normalize_product_name_label(
     label: str | None,
     quantity: Any = None,
 ) -> tuple[str | None, Any, dict[str, Any] | None]:
-    """Normalize generic receipt artefacts from a product label."""
+    """Normalize generic receipt artefacts from a product label.
+
+    An explicit leading ``N x`` token is a purchase count and is therefore
+    authoritative over a quantity that may previously have been inferred from
+    package content embedded in the same label.
+    """
     original = re.sub(r'\s+', ' ', str(label or '')).strip()
     if not original:
         return None, quantity, None
@@ -41,6 +45,7 @@ def normalize_product_name_label(
     normalized = original
     detected_quantity = quantity
     applied: list[str] = []
+    quantity_from_name_prefix = None
 
     leading_count = LEADING_ITEM_COUNT_RE.match(normalized)
     if leading_count:
@@ -48,8 +53,8 @@ def normalize_product_name_label(
         count_value = _as_number(leading_count.group('count'))
         if count_value is not None and _has_letters(candidate_label):
             normalized = candidate_label
-            if detected_quantity in {None, ''}:
-                detected_quantity = count_value
+            detected_quantity = count_value
+            quantity_from_name_prefix = count_value
             applied.append('leading_item_count_removed')
 
     amount_stripped = TRAILING_AMOUNT_RE.sub('', normalized).strip()
@@ -76,5 +81,5 @@ def normalize_product_name_label(
         'original_label': original,
         'normalized_label': normalized,
         'normalization_rules': applied,
-        'quantity_from_name_prefix': detected_quantity if detected_quantity != quantity else None,
+        'quantity_from_name_prefix': quantity_from_name_prefix,
     }
