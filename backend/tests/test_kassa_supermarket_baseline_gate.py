@@ -4,6 +4,23 @@ from app.api.routes import kassa_regression_routes as regression
 from app.services.receipt_ssot_status import apply_po_norm_status
 
 
+# PR gate: one representative route per supermarket chain plus all four Picnic EMLs.
+# Deliberately excludes the known 60-80s high-resolution photo fixtures. Those remain
+# in the V8 fixture set and can still be exercised through the full regression runner,
+# but they no longer block every pull request.
+PR_GATE_FILENAMES = {
+    'ah_app_1.pdf',
+    'aldi_foto_1.jpg',
+    'jumbo_app_1.png',
+    'lidl_app_4.pdf',
+    'plus_foto_2.jpeg',
+    'picnic_app_1.eml',
+    'picnic_app_2.eml',
+    'picnic_app_3.eml',
+    'picnic_app_4.eml',
+}
+
+
 def _line_value(line, key):
     if isinstance(line, dict):
         return line.get(key)
@@ -11,7 +28,6 @@ def _line_value(line, key):
 
 
 def _line_dict(line):
-    """Preserve canonical parser facts for the production Kassa status SSOT."""
     return {
         'raw_label': _line_value(line, 'raw_label'),
         'normalized_label': _line_value(line, 'normalized_label'),
@@ -35,66 +51,57 @@ def _status_payload(parsed):
     }
 
 
-def test_supermarket_baseline_and_visible_kassa_status_share_one_parser_pass(monkeypatch):
-    """Permanent 18-receipt release gate without running expensive OCR twice.
+def test_fast_supermarket_pr_gate_covers_all_chains_and_visible_kassa_status():
+    manifest, manifest_issues = regression._load_manifest()
+    assert manifest is not None, manifest_issues
+    assert not manifest_issues, manifest_issues
 
-    The existing V8 runner remains the parser baseline authority. This test wraps
-    the exact parse call used by that runner and retains the resulting canonical
-    parser facts. The production Kassa status SSOT is then evaluated from those
-    same facts, so parser/OCR work happens exactly once per receipt.
-    """
-    parsed_receipts = []
-    original_parse = regression.parse_receipt_content
-
-    def capture_parse(payload, filename, mime_type):
-        started = perf_counter()
-        print(f'KASSA_BASELINE_START {filename}', flush=True)
-        try:
-            parsed = original_parse(payload, filename, mime_type)
-        finally:
-            elapsed = perf_counter() - started
-            print(f'KASSA_BASELINE_END {filename} seconds={elapsed:.2f}', flush=True)
-        parsed_receipts.append((filename, parsed))
-        return parsed
-
-    monkeypatch.setattr(regression, 'parse_receipt_content', capture_parse)
-
-    regression._execute_kassa_regression_job('pytest-supermarket-baseline')
-    state = regression._get_job_state()
-    report = state.get('report') or {}
-
-    parser_failures = [
-        {
-            'case_id': item.get('case_id'),
-            'chain': item.get('chain'),
-            'error': item.get('error'),
-            'details': item.get('details'),
-        }
-        for item in (report.get('results') or [])
-        if item.get('status') != 'passed'
+    cases = [
+        case for case in (manifest.get('cases') or [])
+        if str(case.get('filename') or '') in PR_GATE_FILENAMES
     ]
-    assert report.get('status') == 'passed', {
-        'summary': report.get('summary'),
-        'blocking_issues': report.get('blocking_issues'),
-        'failures': parser_failures,
+    selected = {str(case.get('filename') or '') for case in cases}
+    assert selected == PR_GATE_FILENAMES, {
+        'missing': sorted(PR_GATE_FILENAMES - selected),
+        'selected': sorted(selected),
     }
-    assert (report.get('summary') or {}).get('tested_receipt_count') == 18
-    assert len(parsed_receipts) == 18
 
-    picnic = [item for item in report.get('results') or [] if item.get('chain') == 'Picnic']
-    assert len(picnic) == 4
-    assert all(item.get('status') == 'passed' for item in picnic), picnic
+    chains = {regression._canonical_chain(str(case.get('chain') or '')) for case in cases}
+    assert chains == set(regression.REQUIRED_CHAINS)
 
+    parser_failures = []
     status_failures = []
-    for filename, parsed in parsed_receipts:
+
+    for case in cases:
+        payload, filename = regression._load_case_payload(case)
+        mime_type = str(case.get('mime_type') or regression.detect_mime_type(filename, payload))
+        started = perf_counter()
+        print(f'KASSA_PR_GATE_START {filename}', flush=True)
+        parsed = regression.parse_receipt_content(payload, filename, mime_type)
+        elapsed = perf_counter() - started
+        print(f'KASSA_PR_GATE_END {filename} seconds={elapsed:.2f}', flush=True)
+
+        ok, issues = regression._case_expected_ok(
+            case,
+            parsed,
+            {'line_count': len(parsed.lines or [])},
+        )
+        if not ok:
+            parser_failures.append({
+                'filename': filename,
+                'chain': case.get('chain'),
+                'issues': issues,
+            })
+
         status = apply_po_norm_status(_status_payload(parsed))
         if status.get('po_norm_status_label') != 'Gecontroleerd':
             status_failures.append({
                 'filename': filename,
-                'store_name': parsed.store_name,
+                'chain': case.get('chain'),
                 'status': status.get('po_norm_status_label'),
                 'failed_criteria': status.get('po_norm_failed_criteria'),
                 'reason': status.get('po_norm_reason'),
             })
 
+    assert not parser_failures, parser_failures
     assert not status_failures, status_failures
