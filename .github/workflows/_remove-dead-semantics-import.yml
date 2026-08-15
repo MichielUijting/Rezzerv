@@ -1,0 +1,41 @@
+name: Remove dead receipt semantics import
+
+on:
+  push:
+    branches:
+      - agent/receipt-inventory-eligibility-gate
+    paths:
+      - scripts/_remove_dead_semantics_import.py
+      - .github/workflows/_remove-dead-semantics-import.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/receipt-inventory-eligibility-gate
+          fetch-depth: 0
+      - name: Remove dead import
+        run: python scripts/_remove_dead_semantics_import.py
+      - name: Validate no dead symbol remains in classifier
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s = Path('backend/app/receipt_ingestion/line_classifier.py').read_text(encoding='utf-8')
+          assert 'is_spaarzegels_flow_excluded' not in s
+          print('DEAD_IMPORT_AUDIT=PASS')
+          PY
+          python -m py_compile backend/app/receipt_ingestion/line_classifier.py backend/app/receipt_ingestion/receipt_line_semantics.py
+          git diff --check
+      - name: Commit cleanup and remove temporary runner
+        run: |
+          git config user.name "Rezzerv Agent"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f scripts/_remove_dead_semantics_import.py .github/workflows/_remove-dead-semantics-import.yml
+          git add backend/app/receipt_ingestion/line_classifier.py
+          git commit -m "chore(receipts): remove dead semantics import"
+          git push origin HEAD:agent/receipt-inventory-eligibility-gate
