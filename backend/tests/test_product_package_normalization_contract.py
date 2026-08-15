@@ -29,6 +29,27 @@ def test_purchase_count_is_not_overwritten_by_package_content():
     assert package['package_unit'] == 'g'
 
 
+def test_trailing_purchase_count_is_removed_only_with_transaction_proof():
+    label, quantity, metadata = normalize_product_name_label(
+        'Fairtrade Chenin B1 2',
+        transaction_text='Fairtrade Chenin B1 2 x 4,49 8,98 C',
+    )
+    assert label == 'Fairtrade Chenin B1'
+    assert quantity == 2
+    assert 'trailing_transaction_item_count_removed' in metadata['normalization_rules']
+
+
+def test_trailing_product_numbers_are_preserved_without_matching_transaction_multiplier():
+    for label in ('Vitamine B12', 'iPhone 16', 'Product model 2', 'Chenin B1'):
+        normalized, quantity, metadata = normalize_product_name_label(
+            label,
+            transaction_text=f'{label} 4,99',
+        )
+        assert normalized == label
+        assert quantity is None
+        assert metadata is None
+
+
 def test_multipack_is_structured_without_leaking_into_name():
     result = extract_package_from_label('Coca-Cola zero 4 x 1,5 liter')
     assert result['article_label'] == 'Coca-Cola zero'
@@ -54,3 +75,8 @@ def test_kassa_to_unpack_uses_normalized_name_and_persists_package_fields():
     assert "'content_unit': content_unit" in source
     assert "'package_count': 'NUMERIC(12,3)'" in source
     assert 'purchase_line_additions' in source
+
+
+def test_gateway_supplies_transaction_text_to_product_name_normalization():
+    source = Path('backend/app/receipt_ingestion/product_candidate_gateway.py').read_text(encoding='utf-8')
+    assert 'transaction_text=normalized_line or raw_line' in source
