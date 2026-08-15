@@ -175,6 +175,7 @@ def append_product_candidate(
     line_total_float = amount_to_float(line_total)
     financial_metadata = spaarzegels_financial_metadata(raw_label_value or label_value, label_text=label_value, detail_text=raw_label_value or normalized_line or raw_line)
     candidate_line = {
+        'line_type': 'product',
         'raw_label': raw_label_value, 'normalized_label': label_value,
         'quantity': amount_to_float(quantity), 'unit': unit_value,
         'package_count': amount_to_float((package_metadata or {}).get('package_count')),
