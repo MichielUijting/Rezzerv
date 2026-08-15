@@ -17,6 +17,20 @@ from decimal import Decimal
 from typing import Any
 
 
+# Canonical receipt roles that contribute once to the amount paid for the
+# purchase. Roles such as total/payment/tax are summaries or settlement facts
+# and must never be added to article components a second time.
+_PURCHASE_COMPONENT_ROLES = {
+    "product",
+    "discount",
+    "deposit",
+    "shipping",
+    "fee",
+    "loyalty",
+}
+_PRODUCT_ROLES = {"product"}
+
+
 def _safe_decimal(value: Any) -> Decimal | None:
     if value is None or value == "":
         return None
@@ -35,10 +49,6 @@ def _amount_equals(left: Any, right: Any, tolerance: Decimal = Decimal("0.01")) 
 
 
 def _normalize_status_label(label: Any) -> str:
-    """Normalize active Kassa status labels.
-
-    The active Kassa contract exposes only Gecontroleerd or Controle nodig.
-    """
     normalized = str(label or "").strip()
     if normalized == "Gecontroleerd":
         return "Gecontroleerd"
@@ -49,13 +59,33 @@ def _status_code(label: str) -> str:
     return "controlled" if _normalize_status_label(label) == "Gecontroleerd" else "review"
 
 
+def _active_lines(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    lines = payload.get("lines")
+    if not isinstance(lines, list):
+        return []
+    return [
+        line for line in lines
+        if isinstance(line, dict) and int(line.get("is_deleted") or 0) == 0
+    ]
+
+
+def _canonical_role(line: dict[str, Any]) -> str | None:
+    value = line.get("line_type") or line.get("line_role")
+    normalized = str(value or "").strip().lower()
+    return normalized or None
+
+
 def _line_count(payload: dict[str, Any]) -> int:
+    lines = _active_lines(payload)
+    typed_lines = [line for line in lines if _canonical_role(line)]
+    if typed_lines:
+        return sum(1 for line in typed_lines if _canonical_role(line) in _PRODUCT_ROLES)
+
+    # Transitional compatibility for receipts persisted before canonical roles
+    # became authoritative. No text interpretation is performed.
     value = payload.get("line_count")
-    if value is None and isinstance(payload.get("lines"), list):
-        value = len([
-            line for line in payload.get("lines") or []
-            if isinstance(line, dict) and int(line.get("is_deleted") or 0) == 0
-        ])
+    if value is None:
+        value = len(lines)
     try:
         return int(value or 0)
     except Exception:
@@ -63,12 +93,10 @@ def _line_count(payload: dict[str, Any]) -> int:
 
 
 def _line_discount_total(payload: dict[str, Any]) -> Decimal:
-    lines = payload.get("lines")
-    if isinstance(lines, list):
+    lines = _active_lines(payload)
+    if lines:
         total = Decimal("0")
         for line in lines:
-            if not isinstance(line, dict) or int(line.get("is_deleted") or 0):
-                continue
             value = _safe_decimal(line.get("discount_amount"))
             if value is not None:
                 total += value
@@ -84,15 +112,18 @@ def _receipt_discount_total(payload: dict[str, Any]) -> Decimal:
 
 
 def _line_total_from_lines(payload: dict[str, Any]) -> Decimal | None:
-    lines = payload.get("lines")
-    if not isinstance(lines, list):
+    lines = _active_lines(payload)
+    if not lines:
         return None
 
+    has_canonical_roles = any(_canonical_role(line) for line in lines)
     total = Decimal("0")
     seen = False
     for line in lines:
-        if not isinstance(line, dict) or int(line.get("is_deleted") or 0):
+        role = _canonical_role(line)
+        if has_canonical_roles and role not in _PURCHASE_COMPONENT_ROLES:
             continue
+
         value = _safe_decimal(
             line.get("display_line_total")
             if line.get("display_line_total") is not None
@@ -108,30 +139,20 @@ def _line_total_from_lines(payload: dict[str, Any]) -> Decimal | None:
 
 
 def _net_line_total_variants(payload: dict[str, Any]) -> list[Decimal]:
-    """Return candidate functional totals without double-counting discounts.
-
-    Some receipt payloads carry discounts on the lines, others on the receipt
-    header. During migrations/debug output both can be present with the same
-    discount value. Kassa status should approve a receipt when one source-driven
-    financial interpretation closes, but must not add the same discount twice.
-    """
+    """Return source-driven financial totals without semantic double counting."""
     line_total = _line_total_from_lines(payload)
-
     if line_total is None:
         line_total = _safe_decimal(payload.get("line_total_sum"))
 
     variants: list[Decimal] = []
-
     explicit_net = _safe_decimal(payload.get("net_line_total_sum"))
     if explicit_net is not None:
         variants.append(explicit_net)
 
     if line_total is not None:
         variants.append(line_total)
-
         line_discount = _line_discount_total(payload)
         receipt_discount = _receipt_discount_total(payload)
-
         if line_discount:
             variants.append(line_total + line_discount)
         if receipt_discount:
@@ -152,11 +173,7 @@ def _net_line_total(payload: dict[str, Any]) -> Decimal | None:
 
 
 def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
-    """Determine production Kassa status from receipt content only.
-
-    The 14-receipt baseline is regression fixture data. Baseline membership is
-    not a production criterion and must never create NO_BASELINE_MATCH.
-    """
+    """Determine production Kassa status from canonical facts only."""
     failed: list[str] = []
 
     store_name = str(payload.get("store_name") or payload.get("store_branch") or "").strip()
@@ -182,7 +199,7 @@ def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
 
     if not failed:
         reason = (
-            "Gecontroleerd: winkel, totaalbedrag en som van artikelregels "
+            "Gecontroleerd: winkel, totaalbedrag en canonieke aankoopcomponenten "
             "voldoen aan productieve Kassa-statuscriteria."
         )
     else:
@@ -190,8 +207,8 @@ def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
             "STORE_NAME_MISSING": "winkelnaam ontbreekt",
             "TOTAL_AMOUNT_MISSING": "totaalbedrag ontbreekt",
             "NO_ARTICLE_LINES": "geen artikelregels gevonden",
-            "LINE_SUM_MISSING": "som van artikelregels ontbreekt",
-            "LINE_SUM_TOTAL_MISMATCH": "som van artikelregels sluit niet aan op kassabontotaal",
+            "LINE_SUM_MISSING": "som van aankoopcomponenten ontbreekt",
+            "LINE_SUM_TOTAL_MISMATCH": "som van aankoopcomponenten sluit niet aan op kassabontotaal",
         }
         reason = "Controle nodig: " + "; ".join(labels.get(code, code) for code in failed)
 
@@ -204,21 +221,11 @@ def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_po_norm_status_items() -> dict[str, dict[str, Any]]:
-    """Compatibility shim.
-
-    Production status is computed per receipt payload in apply_po_norm_status.
-    The regression baseline is intentionally not loaded here.
-    """
     return {}
 
 
 def apply_po_norm_status(payload: dict[str, Any]) -> dict[str, Any]:
-    """Apply the SSOT status contract to a receipt payload for Kassa.
-
-    Parser status fields may exist in storage as diagnostics, but they are not
-    allowed to drive Kassa categorisation. The 14-receipt regression baseline is
-    also not allowed to drive production categorisation.
-    """
+    """Apply the Kassa status SSOT using canonical facts, never receipt text."""
     if not isinstance(payload, dict):
         return payload
 
