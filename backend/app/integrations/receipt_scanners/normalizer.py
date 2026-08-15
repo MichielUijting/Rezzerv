@@ -18,16 +18,7 @@ def _to_decimal(value: Any) -> Decimal | None:
 
 
 def _to_legacy_line_number(value: Any) -> float | None:
-    """Restore the pre-scanner ReceiptParseResult line-number contract.
-
-    Canonical scanner observations intentionally retain Decimal precision. The
-    existing Rezzerv parser/persistence boundary, however, historically exposes
-    numeric receipt-line fields as ordinary Python floats. Returning Decimal
-    values here breaks the unchanged SQLite text() inserts in receipt_service.
-
-    Keep this conversion at the canonical -> Rezzerv DTO boundary so external
-    scanner providers can continue to use the provider-neutral Decimal contract.
-    """
+    """Restore the pre-scanner ReceiptParseResult numeric boundary."""
     if value is None or value == "":
         return None
     return float(Decimal(str(value)))
@@ -45,7 +36,11 @@ def _purchase_at_from_canonical(value: CanonicalReceiptV1) -> str | None:
 
 
 def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParseResult:
-    """Translate canonical scanner observations into the existing receipt DTO."""
+    """Translate scanner observations without reinterpreting receipt text.
+
+    Canonical ``line_type`` is preserved as structured data. Downstream business
+    routing must consume this field instead of reclassifying raw/description text.
+    """
     if value.status == "failed":
         confidence = getattr(value, "_legacy_confidence_score", None)
         return ReceiptParseResult(
@@ -66,8 +61,6 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
     receipt = value.receipt
     lines: list[dict[str, Any]] = []
     for line in receipt.lines:
-        if line.line_type not in {"product", "deposit", "loyalty", "unknown"}:
-            continue
         line_confidence = None
         if line.confidence is not None:
             line_confidence = line.confidence.line_total if line.confidence.line_total is not None else line.confidence.description
@@ -75,6 +68,7 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
         if line.identifiers is not None:
             barcode = line.identifiers.gtin or line.identifiers.barcode
         lines.append({
+            "line_type": line.line_type,
             "raw_label": line.raw_text,
             "normalized_label": line.description or line.raw_text,
             "quantity": _to_legacy_line_number(line.quantity),
