@@ -8,26 +8,18 @@ on:
 jobs:
   validate-supermarket-baseline:
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: sqlite:////tmp/rezzerv-kassa-baseline.db
-      SQLITE_RUNTIME_VOLUME: github-actions-temp
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install backend dependencies
+      - name: Build production-like backend image
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements.txt
-          python -m pip install pytest
+          docker build -t rezzerv-kassa-baseline ./backend
 
       - name: Run 18-receipt supermarket baseline including Picnic 4/4
-        env:
-          PYTHONPATH: backend
         run: |
-          pytest -q backend/tests/test_kassa_supermarket_baseline_gate.py
+          docker run --rm \
+            -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-baseline.db \
+            -e SQLITE_RUNTIME_VOLUME=github-actions-temp \
+            rezzerv-kassa-baseline \
+            sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -q tests/test_kassa_supermarket_baseline_gate.py"
