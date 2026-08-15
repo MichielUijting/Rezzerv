@@ -3,14 +3,29 @@ from app.services.receipt_service import detect_mime_type, parse_receipt_content
 from app.services.receipt_ssot_status import apply_po_norm_status
 
 
+def _line_value(line, key):
+    if isinstance(line, dict):
+        return line.get(key)
+    return getattr(line, key, None)
+
+
 def _line_dict(line):
+    """Preserve parser facts when feeding the production Kassa status SSOT.
+
+    ReceiptParseResult.lines are dictionaries in the active parser contract, but
+    scanner/provider adapters may expose object-like line records. The release
+    gate must preserve the facts in either representation; replacing them with
+    None would test the helper rather than production status behaviour.
+    """
     return {
-        'raw_label': getattr(line, 'raw_label', None),
-        'quantity': getattr(line, 'quantity', None),
-        'unit': getattr(line, 'unit', None),
-        'unit_price': getattr(line, 'unit_price', None),
-        'line_total': getattr(line, 'line_total', None),
-        'discount_amount': getattr(line, 'discount_amount', None),
+        'raw_label': _line_value(line, 'raw_label'),
+        'normalized_label': _line_value(line, 'normalized_label'),
+        'line_type': _line_value(line, 'line_type'),
+        'quantity': _line_value(line, 'quantity'),
+        'unit': _line_value(line, 'unit'),
+        'unit_price': _line_value(line, 'unit_price'),
+        'line_total': _line_value(line, 'line_total'),
+        'discount_amount': _line_value(line, 'discount_amount'),
         'is_deleted': 0,
     }
 
