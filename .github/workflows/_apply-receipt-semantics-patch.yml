@@ -52,3 +52,4 @@ jobs:
           git add backend/app/main.py backend/app/services/receipt_service.py backend/app/receipt_ingestion/line_classifier.py backend/app/receipt_ingestion/receipt_line_semantics.py backend/app/testing/unpack_copies_kassa_contract.py backend/tests/test_receipt_inventory_eligibility.py
           git commit -m "fix(receipts): persist semantic inventory eligibility"
           git push origin HEAD:agent/receipt-inventory-eligibility-gate
+# rerun after safe unknown-product fallback correction
