@@ -9,7 +9,7 @@ jobs:
   validate-supermarket-baseline:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: sqlite:///${{ runner.temp }}/rezzerv-kassa-baseline.db
+      DATABASE_URL: sqlite:////tmp/rezzerv-kassa-baseline.db
       SQLITE_RUNTIME_VOLUME: github-actions-temp
     steps:
       - name: Checkout
