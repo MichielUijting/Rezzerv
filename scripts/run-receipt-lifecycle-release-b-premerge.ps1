@@ -10,6 +10,55 @@ Set-StrictMode -Version Latest
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+function Invoke-NativeProcessWithTimeout {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$ArgumentList,
+        [Parameter(Mandatory = $true)][int]$TimeoutSec,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    Write-Host ("[BEZIG] {0} (harde timeout: {1}s)" -f $Label, $TimeoutSec) -ForegroundColor Cyan
+    $process = Start-Process `
+        -FilePath $FilePath `
+        -ArgumentList $ArgumentList `
+        -WorkingDirectory $root `
+        -NoNewWindow `
+        -PassThru
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $heartbeatAt = (Get-Date).AddSeconds(10)
+
+    while (-not $process.HasExited) {
+        if ((Get-Date) -ge $deadline) {
+            Write-Host ("[TIMEOUT] {0} heeft de PowerShell-prompt niet binnen {1}s teruggegeven." -f $Label, $TimeoutSec) -ForegroundColor Red
+            try {
+                & taskkill /PID $process.Id /T /F | Out-Null
+            }
+            catch {
+                try { $process.Kill() } catch { }
+            }
+            throw "$Label is afgebroken wegens een proces-timeout."
+        }
+
+        if ((Get-Date) -ge $heartbeatAt) {
+            $remaining = [math]::Max(0, [int]($deadline - (Get-Date)).TotalSeconds)
+            Write-Host ("[WACHT] {0} draait nog; maximaal {1}s resterend." -f $Label, $remaining) -ForegroundColor Yellow
+            $heartbeatAt = (Get-Date).AddSeconds(10)
+        }
+
+        Start-Sleep -Seconds 1
+        $process.Refresh()
+    }
+
+    $exitCode = $process.ExitCode
+    $process.Dispose()
+    if ($exitCode -ne 0) {
+        throw "$Label eindigde met exitcode $exitCode."
+    }
+    Write-Host ("[PASS] {0}" -f $Label) -ForegroundColor Green
+}
+
 function Get-RezzervHealth {
     param(
         [int]$TimeoutSec = 5
@@ -115,13 +164,12 @@ try {
     Write-Host "[PASS] head  : $head" -ForegroundColor Green
 
     Write-Host ''
-    Write-Host '[2/8] Docker-runtime volledig opnieuw opbouwen en actief op readiness wachten' -ForegroundColor Cyan
-    docker compose down
-    if ($LASTEXITCODE -ne 0) { throw 'docker compose down mislukt.' }
-    docker compose up -d --build
-    if ($LASTEXITCODE -ne 0) { throw 'docker compose up -d --build mislukt.' }
-    Write-Host '[INFO] Docker build/start gereed; readiness-controle start direct.' -ForegroundColor Cyan
-    $health = Wait-RezzervRuntime -MaxWaitSec 120 -PollSec 5
+    Write-Host '[2/8] Docker-runtime gecontroleerd opnieuw opbouwen' -ForegroundColor Cyan
+    Invoke-NativeProcessWithTimeout -FilePath 'docker' -ArgumentList @('compose', 'down') -TimeoutSec 120 -Label 'docker compose down'
+    Invoke-NativeProcessWithTimeout -FilePath 'docker' -ArgumentList @('compose', 'build') -TimeoutSec 600 -Label 'docker compose build'
+    Invoke-NativeProcessWithTimeout -FilePath 'docker' -ArgumentList @('compose', 'up', '-d', '--no-build', '--wait', '--wait-timeout', '120') -TimeoutSec 180 -Label 'docker compose up + readiness'
+
+    $health = Wait-RezzervRuntime -MaxWaitSec 60 -PollSec 5
     docker compose ps
     if ($LASTEXITCODE -ne 0) { throw 'docker compose ps mislukt.' }
     Write-Host '[PASS] runtime opnieuw opgebouwd en gereed' -ForegroundColor Green
