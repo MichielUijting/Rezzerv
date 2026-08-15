@@ -72,7 +72,10 @@ from app.services.receipt_inventory_lifecycle_service import (
     retime_receipt_inventory_events,
 )
 from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact
-from app.receipt_ingestion.line_classifier import receipt_line_is_inventory_eligible
+from app.receipt_ingestion.receipt_line_semantics import (
+    ensure_receipt_line_semantics_schema,
+    derive_receipt_line_semantics,
+)
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 import tempfile
 import cv2
@@ -9751,6 +9754,8 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
     if not batch_id or not receipt_table_id:
         return 0
 
+    ensure_receipt_line_semantics_schema(conn)
+
     existing_refs = {
         str(row.get('external_line_ref') or '').strip(): {
             'id': str(row.get('id') or '').strip(),
@@ -9770,9 +9775,12 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         text("""
         SELECT id, line_index, logical_line_key,
                COALESCE(corrected_raw_label, raw_label) AS raw_label,
+               normalized_label,
                COALESCE(corrected_quantity, quantity) AS quantity,
                COALESCE(corrected_unit, unit) AS unit,
+               COALESCE(corrected_unit_price, unit_price) AS unit_price,
                COALESCE(corrected_line_total, line_total) AS line_total,
+               discount_amount, line_role, inventory_eligible,
                barcode,
                external_article_code,
                matched_global_product_id
@@ -9805,11 +9813,23 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
             continue
         external_line_ref = f"receipt-line:{line.get('id') or offset}"
         existing_line = existing_refs.get(external_line_ref)
-        inventory_eligible = receipt_line_is_inventory_eligible(
+        semantics = derive_receipt_line_semantics(
             dict(line),
             store_name=str((receipt or {}).get('store_name') or '').strip() or None,
         )
-        if not inventory_eligible:
+        if line.get('line_role') in (None, '') or line.get('inventory_eligible') is None:
+            conn.execute(
+                text(
+                    "UPDATE receipt_table_lines SET line_role = :line_role, "
+                    "inventory_eligible = :inventory_eligible, updated_at = CURRENT_TIMESTAMP WHERE id = :id"
+                ),
+                {
+                    'id': line.get('id'),
+                    'line_role': semantics['line_role'],
+                    'inventory_eligible': 1 if semantics['inventory_eligible'] else 0,
+                },
+            )
+        if not semantics['inventory_eligible']:
             if existing_line and not existing_line.get('processed_event_id'):
                 conn.execute(
                     text("DELETE FROM purchase_import_lines WHERE id = :id AND batch_id = :batch_id"),

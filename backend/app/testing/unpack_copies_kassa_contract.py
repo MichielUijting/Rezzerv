@@ -39,8 +39,8 @@ create_block = route_block('@app.post("/api/purchase-import-lines/{line_id}/crea
 process_block = function_block("def process_purchase_import_batch(")
 
 require(
-    "receipt_line_is_inventory_eligible(" in sync_block,
-    "Uitpakken mist de centrale voorraadgeschiktheidsgate",
+    "derive_receipt_line_semantics(" in sync_block and "line_role" in sync_block and "inventory_eligible" in sync_block,
+    "Uitpakken mist het persistente receipt-line semantiekcontract",
 )
 require(
     "DELETE FROM purchase_import_lines" in sync_block,

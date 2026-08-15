@@ -52,6 +52,8 @@ GENERIC_TAX_TOKENS = (
 GENERIC_DISCOUNT_TOKENS = (
     'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
     'lidl plus korting', 'totaal korting', 'coupon', 'voucher', 'gratis',
+    'in prijs verlaagd', 'prijs verlaagd', 'prijsverlaging', 'afgeprijsd',
+    'reduced price', 'price reduction',
 )
 GENERIC_METADATA_TOKENS = (
     'openingstijd', 'openingstijden', 'ma-vr', 'ma tm', 'ma t/m', 'periode',
@@ -435,60 +437,6 @@ def diagnose_article_line_classification(
         'trace': trace,
         'extra_context': dict(extra_context or {}),
     }
-
-
-NON_INVENTORY_PRODUCT_RULES = frozenset({
-    'GENERIC_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE',
-    'PLUS_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE',
-    'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION',
-    'STORE_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION',
-})
-
-
-def receipt_line_is_inventory_eligible(
-    line: dict[str, Any],
-    *,
-    store_name: str | None = None,
-    filename: str | None = None,
-) -> bool:
-    """Return True only for receipt-table rows that may enter Uitpakken/Voorraad."""
-    if not isinstance(line, dict):
-        return False
-    raw_label = str(
-        line.get('corrected_raw_label')
-        or line.get('raw_label')
-        or line.get('normalized_label')
-        or ''
-    ).strip()
-    if not raw_label:
-        return False
-    if is_spaarzegels_flow_excluded({
-        'receipt_line_text': raw_label,
-        'raw_label': raw_label,
-        'normalized_label': line.get('normalized_label'),
-        'quantity_label': line.get('quantity_label'),
-        'quantity': line.get('quantity'),
-        'unit_price': line.get('unit_price'),
-        'line_total': line.get('line_total'),
-        'price': line.get('line_total'),
-    }):
-        return False
-
-    decision = _generic_non_article_trace(raw_label)
-    if decision is None:
-        decision = _store_specific_non_article_trace(
-            raw_label,
-            store_name=store_name,
-            filename=filename,
-        )
-    if decision is None:
-        return True
-
-    classification = str(decision.get('classification') or 'ignore')
-    rule = str(decision.get('rule') or '')
-    if rule in NON_INVENTORY_PRODUCT_RULES:
-        return False
-    return classification == 'product_candidate'
 
 
 def classification_allows_append(classification: str | None) -> bool:
