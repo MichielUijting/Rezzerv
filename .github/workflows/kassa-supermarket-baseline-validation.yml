@@ -8,52 +8,20 @@ on:
 jobs:
   validate-supermarket-baseline:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Restore OCR model cache
-        id: ocr-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            .ci-cache/u2net
-            .ci-cache/paddlex
-          key: kassa-ocr-models-v1
-
-      - name: Build production-like backend image with GHA layer cache
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          load: true
-          tags: rezzerv-kassa-baseline:latest
-          cache-from: type=gha,scope=kassa-supermarket-baseline
-          cache-to: type=gha,mode=max,scope=kassa-supermarket-baseline
-
-      - name: Prepare OCR cache directories
+      - name: Build production-like backend image
         run: |
-          mkdir -p .ci-cache/u2net .ci-cache/paddlex
+          docker build -t rezzerv-kassa-pr-gate ./backend
 
-      - name: Run 18-receipt supermarket baseline including Picnic 4/4
+      - name: Run fast representative supermarket PR gate
         run: |
-          timeout --signal=TERM --kill-after=30s 10m \
+          timeout --signal=TERM --kill-after=30s 5m \
             docker run --rm \
-              -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-baseline.db \
+              -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-pr-gate.db \
               -e SQLITE_RUNTIME_VOLUME=github-actions-temp \
-              -v "${{ github.workspace }}/.ci-cache/u2net:/root/.u2net" \
-              -v "${{ github.workspace }}/.ci-cache/paddlex:/root/.paddlex" \
-              rezzerv-kassa-baseline:latest \
+              rezzerv-kassa-pr-gate \
               sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -s -q tests/test_kassa_supermarket_baseline_gate.py"
-
-      - name: Persist OCR model cache even after a red baseline
-        if: always() && steps.ocr-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .ci-cache/u2net
-            .ci-cache/paddlex
-          key: kassa-ocr-models-v1
