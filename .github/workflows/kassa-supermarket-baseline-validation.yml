@@ -8,6 +8,7 @@ on:
 jobs:
   validate-supermarket-baseline:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,8 +19,9 @@ jobs:
 
       - name: Run 18-receipt supermarket baseline including Picnic 4/4
         run: |
-          docker run --rm \
-            -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-baseline.db \
-            -e SQLITE_RUNTIME_VOLUME=github-actions-temp \
-            rezzerv-kassa-baseline \
-            sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -q tests/test_kassa_supermarket_baseline_gate.py"
+          timeout --signal=TERM --kill-after=30s 10m \
+            docker run --rm \
+              -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-baseline.db \
+              -e SQLITE_RUNTIME_VOLUME=github-actions-temp \
+              rezzerv-kassa-baseline \
+              sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -q tests/test_kassa_supermarket_baseline_gate.py"
