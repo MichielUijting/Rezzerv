@@ -1,0 +1,38 @@
+name: Receipt status loyalty local runner validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/run-receipt-status-loyalty-regression.ps1'
+      - '.github/workflows/receipt-status-loyalty-local-runner-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-local-runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PowerShell syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path './scripts/run-receipt-status-loyalty-regression.ps1'),
+            [ref]$null,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+      - name: Build production-like backend image
+        run: docker compose build backend
+
+      - name: Execute official local runner against isolated backend image
+        shell: pwsh
+        run: ./scripts/run-receipt-status-loyalty-regression.ps1 -SkipBackendBuild
