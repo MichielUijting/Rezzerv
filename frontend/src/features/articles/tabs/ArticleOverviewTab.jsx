@@ -18,12 +18,6 @@ const GROUP_LABELS = {
 
 const EDITABLE_FORM_FIELDS = [
   { key: 'custom_name', label: 'Eigen naam', type: 'text', placeholder: 'Bijvoorbeeld: Pasta spaghetti' },
-  { key: 'article_type', label: 'Artikeltype', type: 'text', placeholder: 'Bijvoorbeeld: Voedsel & drank' },
-  { key: 'category', label: 'Categorie', type: 'text', placeholder: 'Bijvoorbeeld: Pasta & rijst' },
-  { key: 'brand_or_maker', label: 'Merk / maker / aanbieder', type: 'text', placeholder: 'Bijvoorbeeld: De Cecco' },
-  { key: 'short_description', label: 'Korte omschrijving', type: 'text', placeholder: 'Korte toelichting' },
-  { key: 'barcode', label: 'Barcode', type: 'text', placeholder: 'Bijvoorbeeld: 8076800195057' },
-  { key: 'article_number', label: 'Extern artikelnummer', type: 'text', placeholder: 'Bijvoorbeeld: BAR-8076800195057' },
 ]
 
 const HOUSEHOLD_SETTINGS_STATUS_OPTIONS = [
@@ -153,6 +147,9 @@ function isConsumable(articleData = {}) {
 }
 
 function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onToggleSection = null }) {
+  const authContext = readStoredAuthContext() || {}
+  const displayRole = String(authContext?.display_role || '').trim().toLowerCase()
+  const canEdit = displayRole === 'admin'
   const articleId = articleData?.id
   const consumable = isConsumable(articleData)
   const [mode, setMode] = useState(AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD)
@@ -185,6 +182,7 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
   }, [])
 
   async function handleChange(event) {
+    if (!canEdit) return
     const nextMode = await saveArticleAutoConsumeMode(articleId, event.target.value)
     setMode(nextMode)
     setSaveMessage('Opgeslagen')
@@ -204,7 +202,7 @@ function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onT
               className="rz-article-automation-select"
               value={mode}
               onChange={handleChange}
-              disabled={!consumable}
+              disabled={!consumable || !canEdit}
             >
               {automationOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -285,8 +283,7 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
   async function persistField(fieldKey) {
     const field = EDITABLE_FORM_FIELDS.find((item) => item.key === fieldKey)
     const resolvedArticleId = articleData?.article_id || articleData?.id
-    const resolvedArticleName = articleData?.article_name || articleData?.name
-    if (!field || !canEdit || (!resolvedArticleId && !resolvedArticleName)) return
+    if (!field || !canEdit || !resolvedArticleId) return
     const nextValue = normalizeFormValue(formState[fieldKey], field)
     const previousValue = currentFieldValue(field)
     if (nextValue === previousValue) return
@@ -297,16 +294,6 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
     try {
       const payload = {
         custom_name: formState.custom_name.trim(),
-        article_type: formState.article_type.trim(),
-        category: formState.category.trim(),
-        brand_or_maker: formState.brand_or_maker.trim(),
-        short_description: formState.short_description.trim(),
-        favorite_store: formState.favorite_store.trim(),
-        notes: formState.notes.trim(),
-        barcode: formState.barcode.trim(),
-        article_number: formState.article_number.trim(),
-        min_stock: formState.min_stock === '' ? null : Number(formState.min_stock),
-        ideal_stock: formState.ideal_stock === '' ? null : Number(formState.ideal_stock),
       }
       const response = await fetchJsonWithAuth(`/api/household-articles/${encodeURIComponent(String(resolvedArticleId))}`, {
         method: 'PATCH',
@@ -618,6 +605,9 @@ function ProductDetailsCard({ articleData = {}, sectionOpen = undefined, onToggl
 
 
 function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen = undefined, onToggleSection = null }) {
+  const authContext = readStoredAuthContext() || {}
+  const displayRole = String(authContext?.display_role || '').trim().toLowerCase()
+  const canEdit = displayRole === 'admin' || displayRole === 'lid'
   const isMobileScanner = useMemo(() => detectMobileScannerSupport(), [])
   const [editMode, setEditMode] = useState(false)
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
@@ -635,6 +625,7 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   } = useBarcodeScanner({
     screenContext: 'Artikeldetail',
     onDetected: async (detected, scannerContext = {}) => {
+      if (!canEdit) return
       const { logEvent } = scannerContext
       logEvent?.('BARCODE_NORMALIZED', { normalizedBarcode: String(detected || '').trim() })
       logEvent?.('BARCODE_FIELD_BEFORE_UPDATE', { value: String(formState.barcode || '') })
@@ -693,7 +684,7 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
 
   async function persistExternalLink(partial = {}, scannerContext = {}) {
     const inventoryId = articleData?.inventory_id || articleData?.article_id || articleData?.id
-    if (!inventoryId) return
+    if (!inventoryId || !canEdit) return
     const nextPayload = {
       barcode: String(partial.barcode ?? formState.barcode ?? '').trim(),
       article_number: String(partial.article_number ?? formState.article_number ?? '').trim(),
@@ -727,6 +718,7 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   }
 
   function handleEnableManualEntry() {
+    if (!canEdit) return
     if (hasExistingValue()) {
       setShowOverwriteConfirm(true)
       return
@@ -736,11 +728,11 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
 
   function confirmOverwrite(allow) {
     setShowOverwriteConfirm(false)
-    if (allow) setEditMode(true)
+    if (allow && canEdit) setEditMode(true)
   }
 
   async function handleFieldBlur(fieldKey) {
-    if (!editMode) return
+    if (!editMode || !canEdit) return
     const currentValue = String(articleData?.[fieldKey] || '').trim()
     const nextValue = String(formState?.[fieldKey] || '').trim()
     if (currentValue === nextValue) return
@@ -748,17 +740,16 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
   }
 
   async function handleOpenScanner() {
-    if (!isMobileScanner) return
+    if (!isMobileScanner || !canEdit) return
     await startScannerWithDevice(cameraMeta.deviceId)
   }
 
-  const actions = (
-
+  const actions = canEdit ? (
     <>
       {isMobileScanner ? <button type="button" className="rz-button-secondary rz-button-small" onClick={handleOpenScanner} data-testid="article-external-link-scan">Barcode scannen</button> : null}
       <button type="button" className="rz-button-secondary rz-button-small" onClick={handleEnableManualEntry} data-testid="article-external-link-edit">Barcode invullen</button>
     </>
-  )
+  ) : null
 
   return (
     <ArticleSectionAccordion title="Externe productkoppeling" testId="article-external-link-section" headerActions={actions} open={sectionOpen} onToggle={onToggleSection} sectionClassName="rz-overview-group rz-article-detail-section" titleClassName="rz-overview-group-title rz-article-detail-section-title" contentClassName="rz-overview-group-body rz-article-detail-section-body">
@@ -799,7 +790,7 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
               value={formState.barcode}
               onChange={(event) => setFormState((current) => ({ ...current, barcode: event.target.value }))}
               onBlur={() => handleFieldBlur('barcode')}
-              disabled={saveState.saving}
+              disabled={!canEdit || saveState.saving}
               data-testid="article-external-link-input-barcode"
             />
           ) : (articleData?.barcode || EMPTY_VALUE)}
@@ -814,7 +805,7 @@ function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen
               value={formState.article_number}
               onChange={(event) => setFormState((current) => ({ ...current, article_number: event.target.value }))}
               onBlur={() => handleFieldBlur('article_number')}
-              disabled={saveState.saving}
+              disabled={!canEdit || saveState.saving}
               data-testid="article-external-link-input-article-number"
             />
           ) : (articleData?.article_number || EMPTY_VALUE)}
