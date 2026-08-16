@@ -1,6 +1,7 @@
 from time import perf_counter
 
 from app.api.routes import kassa_regression_routes as regression
+from app.receipt_ingestion.service_parts.receipt_result_helpers import determine_final_parse_status
 from app.services.receipt_ssot_status import apply_po_norm_status
 
 
@@ -46,6 +47,7 @@ def _status_payload(parsed):
         'store_name': parsed.store_name,
         'total_amount': parsed.total_amount,
         'discount_total': parsed.discount_total,
+        'parse_status': determine_final_parse_status(parsed),
         'line_count': len(parsed.lines or []),
         'lines': [_line_dict(line) for line in (parsed.lines or [])],
     }
