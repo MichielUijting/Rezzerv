@@ -37,26 +37,19 @@ for %%F in (version.json frontend\version.json frontend\public\version.json) do 
   )
 )
 
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$expected='%EXPECTED%'; $path='frontend/package.json'; $match = [regex]::Match($expected, '(\d+)\.(\d+)\.(\d+)$'); if (-not $match.Success) { Write-Host ('[ERROR] Kan packageversie niet afleiden uit ' + $expected); exit 6 }; $expectedPackage = ('{0}.{1}.{2}' -f [int]$match.Groups[1].Value, [int]$match.Groups[2].Value, [int]$match.Groups[3].Value); try { $json = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json -ErrorAction Stop; $actual = [string]$json.version } catch { Write-Host ('[ERROR] Kan versie niet lezen uit ' + $path); exit 6 }; if ($actual -ne $expectedPackage) { Write-Host ('[ERROR] Versiemismatch in ' + $path + '. Gevonden: ' + $actual + ' Verwacht: ' + $expectedPackage); exit 6 }"
+if errorlevel 1 exit /b 6
+
 if exist ".\rezzerv.db" (
   echo [ERROR] Verboden databasebestand gevonden: .\rezzerv.db
-  exit /b 6
+  exit /b 7
 )
 
 if exist ".\backend\rezzerv.db" (
   echo [ERROR] Verboden databasebestand gevonden: .\backend\rezzerv.db
-  exit /b 7
+  exit /b 8
 )
 
 echo [OK] Versiesync gecontroleerd: alle 5 verplichte versiebestanden staan op %EXPECTED% en verboden sqlite-bestanden ontbreken.
 exit /b 0
-for %%F in (frontend\package.json) do (
-  for /f "usebackq tokens=2 delims=:," " %%v in (`findstr /i /c:""version"" "%%~F"`) do (
-    if not "%%~v"=="%EXPECTED%" (
-      echo [ERROR] %%~F bevat %%~v in plaats van %EXPECTED%.
-      set "FAIL=1"
-    ) else (
-      echo [OK] %%~F = %EXPECTED%
-    )
-  )
-)
-
