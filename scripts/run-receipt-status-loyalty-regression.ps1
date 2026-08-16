@@ -31,17 +31,39 @@ function Invoke-DockerCaptured {
     }
 }
 
-function Resolve-BackendImage {
-    $result = Invoke-DockerCaptured @('compose', 'images', '-q', 'backend')
-    if ($result.ExitCode -ne 0) {
-        throw "Backendimage kon niet worden bepaald (exitcode $($result.ExitCode))."
+function Resolve-RunningBackendImage {
+    # The documented main-validation starts Rezzerv with
+    # `docker compose up -d --build` before regression runners execute.
+    # Resolve the exact image from that running backend service instead of
+    # guessing a Compose-generated image name.
+    $containerResult = Invoke-DockerCaptured @('compose', 'ps', '-q', 'backend')
+    if ($containerResult.ExitCode -ne 0) {
+        throw "Draaiende backendcontainer kon niet worden bepaald (exitcode $($containerResult.ExitCode))."
     }
 
-    $image = @($result.Output | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -First 1)
-    if ($image.Count -lt 1) {
-        throw 'Geen gebouwde backendimage gevonden. Draai eerst de gedocumenteerde Docker rebuild of laat -SkipBackendBuild weg.'
+    $containerIds = @(
+        $containerResult.Output |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+    )
+    if ($containerIds.Count -lt 1) {
+        throw 'Geen draaiende Rezzerv-backend gevonden. Voer eerst de gedocumenteerde main Docker rebuild/start uit: docker compose up -d --build.'
     }
-    return ([string]$image[0]).Trim()
+
+    $containerId = ([string]$containerIds[0]).Trim()
+    $inspectResult = Invoke-DockerCaptured @('inspect', '--format', '{{.Image}}', $containerId)
+    if ($inspectResult.ExitCode -ne 0) {
+        throw "Backendimage van container $containerId kon niet worden gelezen (exitcode $($inspectResult.ExitCode))."
+    }
+
+    $imageIds = @(
+        $inspectResult.Output |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+    )
+    if ($imageIds.Count -lt 1) {
+        throw 'Draaiende backend heeft geen controleerbare Docker image-ID.'
+    }
+
+    return ([string]$imageIds[0]).Trim()
 }
 
 function Invoke-DisposableBackend {
@@ -82,15 +104,16 @@ try {
     }
 
     if (-not $SkipBackendBuild) {
-        Write-Host '[BEZIG] Production-like backendimage bouwen'
+        Write-Host '[BEZIG] Backendimage opnieuw bouwen binnen bestaande Rezzerv-teststack'
         docker compose build backend
         if ($LASTEXITCODE -ne 0) {
             throw 'Backendbuild is mislukt.'
         }
+        Write-Host '[INFO] De runner gebruikt daarna de image van de reeds draaiende backendservice.'
     }
 
-    $backendImage = Resolve-BackendImage
-    Write-Host "[OK] Geisoleerde tests gebruiken backendimage $backendImage" -ForegroundColor Green
+    $backendImage = Resolve-RunningBackendImage
+    Write-Host "[OK] Geisoleerde tests gebruiken exact backendimage $backendImage" -ForegroundColor Green
 
     Write-Host '[1/4] AH/Picnic supermarket baseline + status/loyalty-contract'
     $supermarket = Invoke-DisposableBackend @'
