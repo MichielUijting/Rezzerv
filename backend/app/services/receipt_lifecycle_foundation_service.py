@@ -168,11 +168,16 @@ def reconcile_explicit_receipt_approvals(
 
 
 def ensure_explicit_approval_guard_trigger(conn) -> bool:
-    """Prevent technical parse-status refreshes from invalidating user approval.
+    """Enforce the explicit-approval lifecycle boundary in SQLite.
 
-    The trigger only protects receipts that still carry ``approved_at``. A normal
-    ``return_to_kassa`` action clears ``approved_at`` first, so subsequent parser
-    diagnostics remain free to become review/manual for that receipt.
+    Two transitions are protected atomically:
+    - a technical parse-status refresh cannot downgrade a receipt that still has
+      ``approved_at``;
+    - a new explicit approval on ``returned_to_kassa`` makes the workflow active
+      again, because the user's approval ends the return-to-Kassa state.
+
+    The normal ``return_to_kassa`` action clears ``approved_at`` first, so parser
+    diagnostics remain free to become review/manual while the receipt is in Kassa.
     """
     if not _supports_explicit_approval_guard(conn):
         return False
@@ -193,11 +198,14 @@ def ensure_explicit_approval_guard_trigger(conn) -> bool:
         text(
             f"""
             CREATE TRIGGER {APPROVAL_GUARD_TRIGGER}
-            AFTER UPDATE OF parse_status ON receipt_tables
+            AFTER UPDATE OF parse_status, approved_at ON receipt_tables
             WHEN NEW.approved_at IS NOT NULL
              AND NEW.deleted_at IS NULL
-             AND lower(trim(COALESCE(NEW.parse_status, ''))) NOT IN (
-                    'approved', 'approved_override'
+             AND (
+                    lower(trim(COALESCE(NEW.parse_status, ''))) NOT IN (
+                        'approved', 'approved_override'
+                    )
+                    OR lower(trim(COALESCE(NEW.workflow_state, 'active'))) = 'returned_to_kassa'
              )
              AND lower(trim(COALESCE(NEW.workflow_state, 'active'))) NOT IN (
                     'archived', 'removed_reimport_allowed', 'legacy_deleted'
@@ -211,6 +219,11 @@ def ensure_explicit_approval_guard_trigger(conn) -> bool:
             BEGIN
                 UPDATE receipt_tables
                 SET parse_status = {trigger_status_sql},
+                    workflow_state = CASE
+                        WHEN lower(trim(COALESCE(NEW.workflow_state, 'active'))) = 'returned_to_kassa'
+                        THEN 'active'
+                        ELSE NEW.workflow_state
+                    END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = NEW.id;
             END
