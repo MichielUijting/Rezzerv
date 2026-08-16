@@ -21,6 +21,13 @@ PR_GATE_FILENAMES = {
     'picnic_app_4.eml',
 }
 
+PICNIC_V10_PURCHASE_DATES = {
+    'picnic_app_1.eml': '2026-03-22',
+    'picnic_app_2.eml': '2026-04-26',
+    'picnic_app_3.eml': '2026-05-10',
+    'picnic_app_4.eml': '2026-04-19',
+}
+
 
 def _line_value(line, key):
     if isinstance(line, dict):
@@ -88,6 +95,16 @@ def test_fast_supermarket_pr_gate_covers_all_chains_and_visible_kassa_status():
             parsed,
             {'line_count': len(parsed.lines or [])},
         )
+
+        expected_purchase_date = PICNIC_V10_PURCHASE_DATES.get(filename)
+        if expected_purchase_date:
+            found_purchase_date = str(parsed.purchase_at or '')[:10]
+            if found_purchase_date != expected_purchase_date:
+                issues.append(
+                    f'datum verwacht {expected_purchase_date}, gevonden {found_purchase_date or "-"}'
+                )
+                ok = False
+
         if not ok:
             parser_failures.append({
                 'filename': filename,
