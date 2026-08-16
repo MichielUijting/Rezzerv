@@ -73,6 +73,12 @@ function Invoke-DisposableBackend {
         throw 'Backendimage is nog niet vastgesteld.'
     }
 
+    # PowerShell here-strings use the source file's line endings. On Windows
+    # that means CRLF, while the Linux shell continuation contract requires LF.
+    # Normalize every shell command before handing it to /bin/sh so the exact
+    # same official runner behaves identically on Windows and GitHub/Linux.
+    $normalizedShellCommand = $ShellCommand.Replace("`r`n", "`n").Replace("`r", "`n")
+
     # Intentionally use docker run rather than docker compose run. This keeps
     # the normal ./backend/data:/app/data runtime mount completely outside the
     # regression container. It mirrors the existing CI isolation model.
@@ -81,7 +87,7 @@ function Invoke-DisposableBackend {
         '-e', 'PYTHONPATH=/app',
         '-e', 'DATABASE_URL=sqlite:////tmp/rezzerv-receipt-status-loyalty.db',
         '-e', 'SQLITE_RUNTIME_VOLUME=local-regression-temp',
-        $script:backendImage, 'sh', '-lc', $ShellCommand
+        $script:backendImage, 'sh', '-lc', $normalizedShellCommand
     )
 }
 
