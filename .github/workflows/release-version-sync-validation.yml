@@ -23,8 +23,8 @@ jobs:
           $original = Get-Content -Raw -LiteralPath 'backend/VERSION.txt'
           try {
             Set-Content -LiteralPath 'backend/VERSION.txt' -Value 'Rezzerv-MVP-v00.00.00' -NoNewline
-            cmd /c validate-version-sync.bat
-            if ($LASTEXITCODE -eq 0) {
+            $process = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/c','validate-version-sync.bat' -NoNewWindow -Wait -PassThru
+            if ($process.ExitCode -eq 0) {
               throw 'validate-version-sync.bat accepted a backend version mismatch.'
             }
           }
@@ -41,8 +41,8 @@ jobs:
             $json = $original | ConvertFrom-Json
             $json.version = '0.0.0'
             $json | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $path
-            cmd /c validate-version-sync.bat
-            if ($LASTEXITCODE -eq 0) {
+            $process = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/c','validate-version-sync.bat' -NoNewWindow -Wait -PassThru
+            if ($process.ExitCode -eq 0) {
               throw 'validate-version-sync.bat accepted a frontend package version mismatch.'
             }
           }
