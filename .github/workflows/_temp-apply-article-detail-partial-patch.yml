@@ -38,3 +38,5 @@ jobs:
           git add backend/app/main.py
           git commit -m 'fix: preserve omitted article detail PATCH fields'
           git push origin HEAD:fix/article-detail-mutation-contracts
+
+# retry after compile-safe patcher correction
