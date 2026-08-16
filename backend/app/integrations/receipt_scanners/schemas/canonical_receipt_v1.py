@@ -8,7 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator,
 
 SCHEMA_VERSION = "1.0"
 ScannerStatus = Literal["queued", "processing", "completed", "failed", "cancelled", "expired"]
-ReceiptLineType = Literal["product", "discount", "deposit", "subtotal", "total", "tax", "payment", "header", "footer", "loyalty", "unknown", "noise"]
+ReceiptLineType = Literal[
+    "product", "discount", "deposit", "shipping", "fee", "subtotal", "total",
+    "tax", "payment", "header", "footer", "loyalty", "unknown", "noise",
+]
 StandardErrorCode = Literal["UNSUPPORTED_FORMAT", "DOCUMENT_TOO_LARGE", "DOCUMENT_UNREADABLE", "NO_RECEIPT_DETECTED", "MULTIPLE_RECEIPTS_DETECTED", "PROVIDER_TIMEOUT", "PROVIDER_UNAVAILABLE", "INVALID_PROVIDER_RESULT", "CONTRACT_VALIDATION_FAILED", "INTERNAL_MAPPING_ERROR", "DUPLICATE_RESULT"]
 
 

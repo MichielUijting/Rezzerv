@@ -1,0 +1,27 @@
+name: Kassa supermarket baseline validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate-supermarket-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build production-like backend image
+        run: |
+          docker build -t rezzerv-kassa-pr-gate ./backend
+
+      - name: Run fast representative supermarket PR gate
+        run: |
+          timeout --signal=TERM --kill-after=30s 5m \
+            docker run --rm \
+              -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-pr-gate.db \
+              -e SQLITE_RUNTIME_VOLUME=github-actions-temp \
+              rezzerv-kassa-pr-gate \
+              sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -s -q tests/test_kassa_supermarket_baseline_gate.py tests/test_pr245_status_and_loyalty_contract.py"

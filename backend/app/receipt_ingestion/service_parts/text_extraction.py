@@ -143,9 +143,68 @@ def _normalize_store_specific_text(text: str) -> str:
     normalized = normalized.replace('/uni00A02', ' 2 ').replace('/uni00A03', ' 3 ').replace('/uni00A04', ' 4 ')
     normalized = normalized.replace('Â·', ' Â· ')
     normalized = re.sub(r'\s+â‚¬\s*', ' â‚¬ ', normalized)
-    normalized = re.sub(r'[ 	]+', ' ', normalized)
+    normalized = re.sub(r'[ \t]+', ' ', normalized)
     normalized = re.sub(r'\n{3,}', '\n\n', normalized)
     return normalized.strip()
+
+
+def _strip_embedded_email_metadata_blocks(value: str) -> str:
+    """Remove forwarded-message metadata blocks from decoded EML body text.
+
+    The decision is structural: a removable block must contain at least three
+    consecutive ``field: value`` email-metadata rows and at least one e-mail
+    address. Labels, retailer names, receipt wording and example dates are not
+    used. HTML-to-text output where a field value is on the following line is
+    supported as well.
+    """
+    lines = str(value or '').splitlines()
+    if not lines:
+        return ''
+
+    output: list[str] = []
+    index = 0
+    key_pattern = re.compile(r'^\s*[^:\r\n]{1,40}:\s*(.*?)\s*$')
+
+    while index < len(lines):
+        cursor = index
+        field_count = 0
+        email_signal = False
+
+        while cursor < len(lines):
+            current = lines[cursor].strip()
+            if not current:
+                if field_count:
+                    cursor += 1
+                    continue
+                break
+
+            match = key_pattern.match(current)
+            if not match:
+                break
+
+            field_count += 1
+            value_part = match.group(1).strip()
+            cursor += 1
+
+            if not value_part and cursor < len(lines):
+                next_line = lines[cursor].strip()
+                if next_line and not key_pattern.match(next_line):
+                    value_part = next_line
+                    cursor += 1
+
+            if '@' in value_part:
+                email_signal = True
+
+        if field_count >= 3 and email_signal:
+            if output and output[-1].strip():
+                output.append('')
+            index = cursor
+            continue
+
+        output.append(lines[index])
+        index += 1
+
+    return '\n'.join(output)
 
 
 def _extract_text_from_eml(file_bytes: bytes) -> tuple[str, str]:
@@ -169,7 +228,7 @@ def _extract_text_from_eml(file_bytes: bytes) -> tuple[str, str]:
             except Exception:
                 payload = ''
         if content_type == 'text/plain' and payload:
-            text_parts.append(str(payload))
+            text_parts.append(_strip_embedded_email_metadata_blocks(str(payload)))
         elif content_type == 'text/html' and payload:
             html_parts.append(str(payload))
     subject = str(message.get('subject') or '').strip()
@@ -189,6 +248,7 @@ def _extract_text_from_eml(file_bytes: bytes) -> tuple[str, str]:
                 html_text = _html_to_text(html_source)
         else:
             html_text = _html_to_text(html_source)
+        html_text = _strip_embedded_email_metadata_blocks(html_text)
     return _normalize_store_specific_text(plain_text), _normalize_store_specific_text(html_text)
 
 

@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
-from app.receipt_ingestion.service_parts.receipt_result_helpers import ReceiptParseResult, determine_final_parse_status
+from app.receipt_ingestion.service_parts.receipt_result_helpers import ReceiptParseResult
 
 from .errors import ContractValidationError
 from .schemas.canonical_receipt_v1 import CanonicalReceiptV1
@@ -18,16 +18,7 @@ def _to_decimal(value: Any) -> Decimal | None:
 
 
 def _to_legacy_line_number(value: Any) -> float | None:
-    """Restore the pre-scanner ReceiptParseResult line-number contract.
-
-    Canonical scanner observations intentionally retain Decimal precision. The
-    existing Rezzerv parser/persistence boundary, however, historically exposes
-    numeric receipt-line fields as ordinary Python floats. Returning Decimal
-    values here breaks the unchanged SQLite text() inserts in receipt_service.
-
-    Keep this conversion at the canonical -> Rezzerv DTO boundary so external
-    scanner providers can continue to use the provider-neutral Decimal contract.
-    """
+    """Restore the pre-scanner ReceiptParseResult numeric boundary."""
     if value is None or value == "":
         return None
     return float(Decimal(str(value)))
@@ -45,7 +36,12 @@ def _purchase_at_from_canonical(value: CanonicalReceiptV1) -> str | None:
 
 
 def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParseResult:
-    """Translate canonical scanner observations into the existing receipt DTO."""
+    """Translate scanner observations without reinterpreting receipt text.
+
+    Canonical ``line_type`` and scanner quality are preserved as structured
+    facts. Downstream business routing must consume these facts instead of
+    reclassifying raw/description text or reconstructing scanner confidence.
+    """
     if value.status == "failed":
         confidence = getattr(value, "_legacy_confidence_score", None)
         return ReceiptParseResult(
@@ -66,8 +62,6 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
     receipt = value.receipt
     lines: list[dict[str, Any]] = []
     for line in receipt.lines:
-        if line.line_type not in {"product", "deposit", "loyalty", "unknown"}:
-            continue
         line_confidence = None
         if line.confidence is not None:
             line_confidence = line.confidence.line_total if line.confidence.line_total is not None else line.confidence.description
@@ -75,6 +69,7 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
         if line.identifiers is not None:
             barcode = line.identifiers.gtin or line.identifiers.barcode
         lines.append({
+            "line_type": line.line_type,
             "raw_label": line.raw_text,
             "normalized_label": line.description or line.raw_text,
             "quantity": _to_legacy_line_number(line.quantity),
@@ -87,9 +82,13 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
         })
 
     parser_diagnostics = getattr(value, "_legacy_parser_diagnostics", None)
-    parse_result = ReceiptParseResult(
+    canonical_parse_status = "review_needed"
+    if value.quality is not None and value.quality.requires_review is False:
+        canonical_parse_status = "approved"
+
+    return ReceiptParseResult(
         is_receipt=True,
-        parse_status=getattr(value, "_legacy_parse_status", None) or "review_needed",
+        parse_status=canonical_parse_status,
         confidence_score=value.quality.overall_confidence if value.quality else None,
         store_name=receipt.store.name,
         store_branch=receipt.store.branch_name,
@@ -100,6 +99,3 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
         lines=lines,
         parser_diagnostics=parser_diagnostics or summarize_lines_parser_diagnostics(lines),
     )
-    if not getattr(value, "_legacy_parse_status", None):
-        parse_result.parse_status = determine_final_parse_status(parse_result)
-    return parse_result

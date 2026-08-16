@@ -39,6 +39,7 @@ def test_line_sum_mismatch_still_requires_review():
 def test_baseline_loader_is_not_used_for_production_status():
     assert load_po_norm_status_items() == {}
 
+
 def test_line_discounts_are_part_of_functional_net_line_total():
     from decimal import Decimal
 
@@ -75,6 +76,7 @@ def test_line_discounts_are_part_of_functional_net_line_total():
     assert result_from_lines["po_norm_status_label"] == "Gecontroleerd"
     assert result_from_lines["po_norm_failed_criteria"] == []
 
+
 def test_receipt_status_accepts_either_line_or_receipt_discount_without_double_counting():
     payload = {
         "store_name": "Albert Heijn",
@@ -90,3 +92,48 @@ def test_receipt_status_accepts_either_line_or_receipt_discount_without_double_c
     assert result["po_norm_status_label"] == "Gecontroleerd"
     assert result["po_norm_failed_criteria"] == []
 
+
+def test_current_canonical_scanner_approval_can_validate_structured_product_list_without_line_sum_match():
+    payload = {
+        "store_name": "STORE-X",
+        "total_amount": "10.00",
+        "parse_status": "approved",
+        "lines": [
+            {
+                "line_type": "product",
+                "raw_label": "ITEM-Q",
+                "line_total": "8.00",
+                "discount_amount": "0.00",
+                "is_deleted": 0,
+            }
+        ],
+    }
+
+    result = apply_po_norm_status(payload)
+
+    assert result["po_norm_status_label"] == "Gecontroleerd"
+    assert result["po_norm_failed_criteria"] == []
+    assert "parse_status" not in result
+
+
+def test_user_correction_invalidates_prior_scanner_approval_and_restores_line_sum_check():
+    payload = {
+        "store_name": "STORE-X",
+        "total_amount": "10.00",
+        "parse_status": "approved",
+        "lines": [
+            {
+                "line_type": "product",
+                "raw_label": "ITEM-Q",
+                "line_total": "10.00",
+                "corrected_line_total": "8.00",
+                "discount_amount": "0.00",
+                "is_deleted": 0,
+            }
+        ],
+    }
+
+    result = apply_po_norm_status(payload)
+
+    assert result["po_norm_status_label"] == "Controle nodig"
+    assert "LINE_SUM_TOTAL_MISMATCH" in result["po_norm_failed_criteria"]

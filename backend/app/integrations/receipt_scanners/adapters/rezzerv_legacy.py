@@ -15,6 +15,11 @@ from ..schemas.scan_result_v1 import ScanResultV1, ScanSubmissionV1
 
 LegacyParser = Callable[[bytes, str, str], ReceiptParseResult]
 
+_CANONICAL_LINE_TYPES = {
+    "product", "discount", "deposit", "shipping", "fee", "subtotal", "total",
+    "tax", "payment", "header", "footer", "loyalty", "unknown", "noise",
+}
+
 
 def _decimal(value: Any) -> Decimal | None:
     if value is None or value == "":
@@ -42,6 +47,33 @@ def _split_purchase_at(value: str | None) -> tuple[date | None, time | None]:
         return None, None
 
 
+def _canonical_line_type_from_legacy(line: dict[str, Any]) -> str:
+    """Use structured parser facts only; never inspect receipt text."""
+    explicit = str(line.get("line_type") or "").strip().lower()
+    if explicit in _CANONICAL_LINE_TYPES:
+        return explicit
+
+    # Legacy Rezzerv used a dedicated structured ``spaarzegels`` role before
+    # Canonical Receipt V1 existed. Canonical V1 represents the same business
+    # fact as ``loyalty``. Map the role here at the boundary rather than falling
+    # back to ``product``; no retailer name or receipt label is inspected.
+    if explicit == "spaarzegels" or line.get("is_spaarzegels") is True:
+        return "loyalty"
+
+    business_role = str(line.get("line_role") or "").strip().lower()
+    if business_role == "product":
+        return "product"
+    if business_role == "loyalty":
+        return "loyalty"
+    if business_role in {"financial", "metadata", "unknown"}:
+        # The old DTO does not retain a more precise subtype. Do not invent one.
+        return "unknown"
+
+    # Historical ReceiptParseResult.lines is an article-candidate collection.
+    # This compatibility default is based on the DTO contract, not label content.
+    return "product"
+
+
 def _legacy_line_to_canonical(index: int, line: dict[str, Any]) -> ReceiptLineV1:
     raw_text = str(line.get("raw_label") or line.get("normalized_label") or "").strip()
     if not raw_text:
@@ -57,7 +89,7 @@ def _legacy_line_to_canonical(index: int, line: dict[str, Any]) -> ReceiptLineV1
         )
     return ReceiptLineV1(
         line_number=index + 1,
-        line_type="product",
+        line_type=_canonical_line_type_from_legacy(line),
         raw_text=raw_text,
         description=str(line.get("normalized_label") or "").strip() or None,
         quantity=_decimal(line.get("quantity")),
@@ -92,7 +124,7 @@ class RezzervLegacyScannerAdapter:
             max_file_bytes=self._max_file_bytes,
             asynchronous=False,
             supports_cancel=False,
-            features=("raw_text", "legacy_parser_equivalence"),
+            features=("raw_text", "legacy_parser_equivalence", "canonical_line_type"),
         )
 
     def _resolve_parser(self) -> LegacyParser:

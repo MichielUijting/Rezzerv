@@ -147,19 +147,65 @@ def _has_blocking_parser_diagnostic(parse_result: ReceiptParseResult) -> bool:
     return any(bool(diagnostics.get(flag)) for flag in blocking_flags)
 
 
+def _has_complete_structured_product_extraction(parse_result: ReceiptParseResult) -> bool:
+    """Return True when every output line is a structurally accepted product.
+
+    This uses parser provenance only. It does not inspect retailer names, product
+    labels or literal receipt text. A structurally complete product list may be
+    valid even when a document-level total contains financial components that do
+    not belong to inventory product rows.
+    """
+    diagnostics = parse_result.parser_diagnostics or {}
+    if not isinstance(diagnostics, dict):
+        return False
+
+    try:
+        total_candidates = int(diagnostics.get('total_candidates') or 0)
+        appended_candidates = int(diagnostics.get('appended_candidates') or 0)
+        blocked_candidates = int(diagnostics.get('blocked_candidates') or 0)
+    except (TypeError, ValueError):
+        return False
+
+    classifications = diagnostics.get('by_classification') or {}
+    if not isinstance(classifications, dict):
+        return False
+    try:
+        nonzero_classifications = {
+            str(key): int(value or 0)
+            for key, value in classifications.items()
+            if int(value or 0) > 0
+        }
+    except (TypeError, ValueError):
+        return False
+
+    structured_count = nonzero_classifications.get('structured_product_candidate', 0)
+    output_line_count = len(parse_result.lines or [])
+    return (
+        total_candidates > 0
+        and total_candidates == output_line_count
+        and appended_candidates == total_candidates
+        and blocked_candidates == 0
+        and structured_count == total_candidates
+        and set(nonzero_classifications) == {'structured_product_candidate'}
+    )
+
+
 def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
     """Baseline-onafhankelijke eindstatus voor kassabonnen.
 
-    R9-38D1:
     De runtime-status mag niet afhankelijk zijn van de PO-baseline. De baseline
     blijft test- en regressie-orakel. Een bon mag automatisch 'approved' worden
-    wanneer de parseroutput zelf sluitend is:
+    wanneer de parseroutput zelf voldoende betrouwbaar is:
     - bruikbare bon;
     - winkel en totaal aanwezig;
     - minimaal één bonregel;
-    - volledige nettoformule sluit exact aan:
-      sum(line_total) + sum(discount_amount) + discount_total = total_amount;
-    - geen blocking parserdiagnostic.
+    - geen blocking parserdiagnostic;
+    - en óf de financiële regelsom sluit exact aan, óf de bronparser heeft alle
+      productregels structureel en zonder blokkades opgeleverd.
+
+    De tweede route is bron-/provenance-gedreven en gebruikt geen winkel- of
+    artikeltekst. Documenttotalen kunnen immers financiële componenten bevatten
+    die niet als voorraadproductregel thuishoren.
     """
     if not parse_result or not parse_result.is_receipt:
         return 'failed'
@@ -179,8 +225,12 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
 
     total_diff = _receipt_result_total_diff(parse_result)
 
-    # Strong, baseline-independent acceptance.
+    # Strong financial acceptance for ordinary receipt extraction.
     if total_diff is not None and total_diff <= Decimal('0.02') and len(lines) >= 1:
+        return 'approved'
+
+    # Strong provenance acceptance for structurally extracted product lists.
+    if _has_complete_structured_product_extraction(parse_result):
         return 'approved'
 
     # Weak but usable: header is good, but article extraction needs possible review.

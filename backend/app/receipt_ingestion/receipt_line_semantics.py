@@ -1,47 +1,41 @@
-"""Persistent semantic contract for logical receipt lines.
+"""Persistent business semantics for canonical receipt lines.
 
-A receipt line is classified once at ingestion and that classification is stored
-on receipt_table_lines. Downstream flows consume the stored decision instead of
-reclassifying a display/raw string.
+Hard architecture rule: receipt/article/store text is opaque data here. Business
+routing must depend only on the scanner-provided canonical ``line_type`` (or an
+already persisted business role), never on words found in a receipt label.
 """
 from __future__ import annotations
 
 from typing import Any
-from app.receipt_ingestion.line_classifier import trace_receipt_text_line_classification
-from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 
 ROLE_PRODUCT = 'product'
 ROLE_LOYALTY = 'loyalty'
 ROLE_FINANCIAL = 'financial'
 ROLE_METADATA = 'metadata'
+ROLE_UNKNOWN = 'unknown'
+
+_CANONICAL_TO_BUSINESS_ROLE: dict[str, tuple[str, bool]] = {
+    'product': (ROLE_PRODUCT, True),
+    'loyalty': (ROLE_LOYALTY, False),
+    'discount': (ROLE_FINANCIAL, False),
+    'deposit': (ROLE_FINANCIAL, False),
+    'shipping': (ROLE_FINANCIAL, False),
+    'fee': (ROLE_FINANCIAL, False),
+    'subtotal': (ROLE_FINANCIAL, False),
+    'total': (ROLE_FINANCIAL, False),
+    'tax': (ROLE_FINANCIAL, False),
+    'payment': (ROLE_FINANCIAL, False),
+    'header': (ROLE_METADATA, False),
+    'footer': (ROLE_METADATA, False),
+    'noise': (ROLE_METADATA, False),
+    'unknown': (ROLE_UNKNOWN, False),
+}
 
 
-def _semantic_text(line: dict[str, Any]) -> str:
-    return str(
-        line.get('corrected_raw_label')
-        or line.get('normalized_label')
-        or line.get('raw_label')
-        or ''
-    ).strip()
-
-
-def _classification_trace(line: dict[str, Any], *, store_name: str | None = None) -> dict[str, Any]:
-    producer = line.get('producer_trace')
-    if isinstance(producer, dict):
-        nested = producer.get('classification_trace')
-        if isinstance(nested, dict) and nested.get('classification'):
-            return dict(nested)
-        if producer.get('classification'):
-            return {
-                'classification': producer.get('classification'),
-                'rule': producer.get('classification_rule'),
-                'matched': producer.get('classification_matched'),
-                'stage': producer.get('classification_stage') or 'producer_trace',
-            }
-    label = _semantic_text(line)
-    if not label:
-        return {'classification': 'ignore', 'rule': 'EMPTY_OR_WHITESPACE_LINE', 'stage': 'semantic'}
-    return trace_receipt_text_line_classification(label, store_name=store_name)
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+    return bool(value)
 
 
 def derive_receipt_line_semantics(
@@ -49,47 +43,29 @@ def derive_receipt_line_semantics(
     *,
     store_name: str | None = None,
 ) -> dict[str, Any]:
-    """Return the persistent semantic role and inventory eligibility for one logical line."""
-    if not isinstance(line, dict):
-        return {'line_role': ROLE_METADATA, 'inventory_eligible': False}
+    """Map canonical scanner facts to persistent Rezzerv business semantics.
 
-    # Persisted semantics are authoritative once present.
-    persisted_role = str(line.get('line_role') or '').strip()
+    ``store_name`` remains in the call signature for compatibility while callers
+    are migrated; it is deliberately ignored. No receipt text is inspected.
+
+    Unknown/untyped lines fail closed: they remain available for review but can
+    never silently become physical inventory.
+    """
+    del store_name
+    if not isinstance(line, dict):
+        return {'line_role': ROLE_UNKNOWN, 'inventory_eligible': False}
+
+    persisted_role = str(line.get('line_role') or '').strip().lower()
     persisted_eligible = line.get('inventory_eligible')
     if persisted_role and persisted_eligible is not None:
         return {
             'line_role': persisted_role,
-            'inventory_eligible': bool(int(persisted_eligible)) if isinstance(persisted_eligible, (int, str)) else bool(persisted_eligible),
+            'inventory_eligible': _as_bool(persisted_eligible),
         }
 
-    semantic_context = dict(line)
-    semantic_context.setdefault('receipt_line_text', _semantic_text(line))
-    if is_spaarzegels_flow_excluded(semantic_context):
-        return {'line_role': ROLE_LOYALTY, 'inventory_eligible': False}
-
-    trace = _classification_trace(line, store_name=store_name)
-    classification = str(trace.get('classification') or '')
-    rule = str(trace.get('rule') or '')
-
-    if classification == 'product_candidate':
-        # Savings/action value rows may deliberately pass the product-candidate
-        # gateway for financial accounting, but never become physical stock.
-        if rule in {
-            'GENERIC_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE',
-            'PLUS_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE',
-            'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION',
-            'STORE_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION',
-        }:
-            return {'line_role': ROLE_FINANCIAL, 'inventory_eligible': False}
-        return {'line_role': ROLE_PRODUCT, 'inventory_eligible': True}
-
-    if classification == 'footer_payment_tax':
-        return {'line_role': ROLE_FINANCIAL, 'inventory_eligible': False}
-    if classification in {'metadata', 'amount_detail', 'continuation'}:
-        return {'line_role': ROLE_METADATA, 'inventory_eligible': False}
-    if classification == 'ignore' and rule != 'NO_RULE_MATCHED':
-        return {'line_role': ROLE_METADATA, 'inventory_eligible': False}
-    # receipt_table_lines already contains logical parsed receipt candidates.
-    # If no explicit non-inventory rule matched, fail open to a physical product
-    # so unknown/new article wording is never silently lost from Uitpakken.
-    return {'line_role': ROLE_PRODUCT, 'inventory_eligible': True}
+    canonical_type = str(line.get('line_type') or '').strip().lower()
+    role, eligible = _CANONICAL_TO_BUSINESS_ROLE.get(
+        canonical_type,
+        (ROLE_UNKNOWN, False),
+    )
+    return {'line_role': role, 'inventory_eligible': eligible}
