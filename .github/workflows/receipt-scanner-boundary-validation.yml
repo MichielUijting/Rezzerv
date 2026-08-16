@@ -34,7 +34,8 @@ jobs:
         run: |
           pytest -q \
             backend/tests/test_receipt_scanner_release_a.py \
-            backend/tests/test_receipt_scanner_persistence_compat.py
+            backend/tests/test_receipt_scanner_persistence_compat.py \
+            backend/tests/test_pr245_status_and_loyalty_contract.py
 
       - name: Assert no scanner-specific dependency leaks into gateway
         run: |
