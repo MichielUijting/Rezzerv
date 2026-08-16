@@ -115,7 +115,19 @@ def _has_user_corrections(payload: dict[str, Any]) -> bool:
 
 
 def _scanner_approval_is_current(payload: dict[str, Any]) -> bool:
-    """Use scanner approval only while its canonical observations are untouched."""
+    """Use scanner approval while its persisted canonical observation is current.
+
+    Full receipt payloads prove this from canonical line roles. Kassa list/detail
+    summary payloads deliberately omit the line collection and expose only the
+    persisted scanner decision plus ``line_count``. In that summary shape an
+    ``approved`` scanner result with at least one persisted line remains current;
+    a user edit is routed through receipt review recomputation and therefore
+    changes the persisted parse status/correction state before this SSOT is read.
+
+    This keeps one status authority without reintroducing a second financial
+    line-sum decision in summary/detail presentation. No retailer or receipt text
+    is inspected here.
+    """
     if str(payload.get("parse_status") or "").strip().lower() != "approved":
         return False
     if _has_user_corrections(payload):
@@ -123,7 +135,11 @@ def _scanner_approval_is_current(payload: dict[str, Any]) -> bool:
 
     lines = _active_lines(payload)
     if not lines:
-        return False
+        try:
+            return int(payload.get("line_count") or 0) > 0
+        except Exception:
+            return False
+
     roles = [_canonical_role(line) for line in lines]
     return all(role is not None for role in roles) and any(role in _PRODUCT_ROLES for role in roles)
 
