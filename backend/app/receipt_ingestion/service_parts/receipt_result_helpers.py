@@ -148,7 +148,7 @@ def _has_blocking_parser_diagnostic(parse_result: ReceiptParseResult) -> bool:
 
 
 def _has_complete_structured_product_extraction(parse_result: ReceiptParseResult) -> bool:
-    """Return True when the parser structurally accepted every product candidate.
+    """Return True when every output line is a structurally accepted product.
 
     This uses parser provenance only. It does not inspect retailer names, product
     labels or literal receipt text. A structurally complete product list may be
@@ -179,8 +179,10 @@ def _has_complete_structured_product_extraction(parse_result: ReceiptParseResult
         return False
 
     structured_count = nonzero_classifications.get('structured_product_candidate', 0)
+    output_line_count = len(parse_result.lines or [])
     return (
         total_candidates > 0
+        and total_candidates == output_line_count
         and appended_candidates == total_candidates
         and blocked_candidates == 0
         and structured_count == total_candidates
@@ -199,7 +201,7 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
     - minimaal één bonregel;
     - geen blocking parserdiagnostic;
     - en óf de financiële regelsom sluit exact aan, óf de bronparser heeft alle
-      productkandidaten structureel en zonder blokkades opgeleverd.
+      productregels structureel en zonder blokkades opgeleverd.
 
     De tweede route is bron-/provenance-gedreven en gebruikt geen winkel- of
     artikeltekst. Documenttotalen kunnen immers financiële componenten bevatten
