@@ -1,0 +1,56 @@
+name: Temp apply PR251 owner mutation repair
+
+on:
+  push:
+    branches:
+      - fix/article-detail-mutation-contracts
+    paths:
+      - '.github/workflows/_temp-apply-pr251-owner-mutation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-pr251:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/article-detail-mutation-contracts
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply fail-closed role SSOT repair
+        run: python tools/_temp_patch_pr251_owner_mutation.py
+      - name: Validate helper output
+        run: |
+          python -m py_compile backend/tests/test_article_detail_mutation_contract.py
+          python backend/tests/test_article_detail_mutation_contract.py | tee /tmp/pr251-role-contract.log
+          grep -F 'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN' /tmp/pr251-role-contract.log
+          git diff --check
+      - name: Commit repaired product and QA code
+        run: |
+          expected=(
+            frontend/src/features/articles/tabs/ArticleOverviewTab.jsx
+            backend/tests/test_article_detail_mutation_contract.py
+            frontend/tests/e2e/article-detail-owner-mutation.smoke.mjs
+            .github/workflows/article-detail-write-guard.yml
+            VERSION.txt
+            backend/VERSION.txt
+            version.json
+            frontend/version.json
+            frontend/public/version.json
+            frontend/package.json
+          )
+          for path in "${expected[@]}"; do
+            if git diff --quiet -- "$path"; then
+              echo "Expected changed file missing: $path"
+              exit 1
+            fi
+          done
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${expected[@]}"
+          git commit -m 'fix: honor owner role in article detail mutations'
+          git push origin HEAD:fix/article-detail-mutation-contracts
