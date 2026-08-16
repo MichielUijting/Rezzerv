@@ -8,13 +8,13 @@ Set-StrictMode -Version Latest
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+$backendImage = $null
 
 function Invoke-DockerCaptured {
     param([string[]]$DockerArgs)
 
-    # Docker Compose writes normal progress to stderr. Windows PowerShell 5.1
-    # can turn captured native stderr into ErrorRecords, so judge the native
-    # process by its real exit code.
+    # Docker writes normal progress to stderr. Windows PowerShell 5.1 can turn
+    # captured native stderr into ErrorRecords, so judge by the real exit code.
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
@@ -31,15 +31,35 @@ function Invoke-DockerCaptured {
     }
 }
 
+function Resolve-BackendImage {
+    $result = Invoke-DockerCaptured @('compose', 'images', '-q', 'backend')
+    if ($result.ExitCode -ne 0) {
+        throw "Backendimage kon niet worden bepaald (exitcode $($result.ExitCode))."
+    }
+
+    $image = @($result.Output | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -First 1)
+    if ($image.Count -lt 1) {
+        throw 'Geen gebouwde backendimage gevonden. Draai eerst de gedocumenteerde Docker rebuild of laat -SkipBackendBuild weg.'
+    }
+    return ([string]$image[0]).Trim()
+}
+
 function Invoke-DisposableBackend {
     param([Parameter(Mandatory=$true)][string]$ShellCommand)
 
+    if ([string]::IsNullOrWhiteSpace([string]$script:backendImage)) {
+        throw 'Backendimage is nog niet vastgesteld.'
+    }
+
+    # Intentionally use docker run rather than docker compose run. This keeps
+    # the normal ./backend/data:/app/data runtime mount completely outside the
+    # regression container. It mirrors the existing CI isolation model.
     return Invoke-DockerCaptured @(
-        'compose', 'run', '--rm', '--no-deps',
+        'run', '--rm',
         '-e', 'PYTHONPATH=/app',
         '-e', 'DATABASE_URL=sqlite:////tmp/rezzerv-receipt-status-loyalty.db',
         '-e', 'SQLITE_RUNTIME_VOLUME=local-regression-temp',
-        'backend', 'sh', '-lc', $ShellCommand
+        $script:backendImage, 'sh', '-lc', $ShellCommand
     )
 }
 
@@ -48,6 +68,7 @@ try {
     Write-Host '================================================================='
     Write-Host ' REZZERV REGRESSIE: RECEIPT STATUS + LOYALTY + SCANNERBOUNDARY'
     Write-Host ' Geisoleerde testdatabase: /tmp/rezzerv-receipt-status-loyalty.db'
+    Write-Host ' Normale runtime-datamount: NIET AANGEKOPPELD'
     Write-Host '================================================================='
     Write-Host ''
 
@@ -67,6 +88,9 @@ try {
             throw 'Backendbuild is mislukt.'
         }
     }
+
+    $backendImage = Resolve-BackendImage
+    Write-Host "[OK] Geisoleerde tests gebruiken backendimage $backendImage" -ForegroundColor Green
 
     Write-Host '[1/4] AH/Picnic supermarket baseline + status/loyalty-contract'
     $supermarket = Invoke-DisposableBackend @'
