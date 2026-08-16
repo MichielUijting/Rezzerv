@@ -105,3 +105,16 @@ def test_article_metadata_mutation_does_not_write_inventory_quantity_or_events()
     assert "UPDATE inventory" not in mutation
     assert "INSERT INTO inventory_events" not in mutation
     assert "write_inventory_event" not in mutation
+
+
+def run_contract() -> None:
+    test_general_household_editor_owns_only_custom_name()
+    test_household_settings_have_one_dedicated_mutation_owner()
+    test_external_product_identity_uses_dedicated_flow_and_role_gate()
+    test_article_automation_override_matches_admin_only_backend_contract()
+    test_article_metadata_mutation_does_not_write_inventory_quantity_or_events()
+    print("ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN")
+
+
+if __name__ == "__main__":
+    run_contract()
