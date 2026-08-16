@@ -35,7 +35,6 @@ jobs:
             frontend/src/features/articles/tabs/ArticleOverviewTab.jsx
             backend/tests/test_article_detail_mutation_contract.py
             frontend/tests/e2e/article-detail-owner-mutation.smoke.mjs
-            .github/workflows/article-detail-write-guard.yml
             VERSION.txt
             backend/VERSION.txt
             version.json
@@ -53,6 +52,11 @@ jobs:
               exit 1
             fi
           done
+          if [ -z "$(git status --porcelain -- .github/workflows/article-detail-write-guard.yml)" ]; then
+            echo "Expected CI workflow change was not produced"
+            exit 1
+          fi
+          git checkout -- .github/workflows/article-detail-write-guard.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add "${expected[@]}"
