@@ -96,8 +96,13 @@ async function verifyOwner(browser) {
   if (await automation.isDisabled()) throw new Error('owner: Admin/Eigenaar automatisering is ten onrechte disabled')
 
   await ownName.fill('PO OWNER SMOKE')
+  const patchResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === `/api/household-articles/${articleId}` && response.request().method() === 'PATCH'
+  })
   await ownName.blur()
-  await page.getByTestId('article-details-save-success').waitFor({ state: 'visible' })
+  const patchResponse = await patchResponsePromise
+  if (!patchResponse.ok()) throw new Error(`owner: PATCH gaf HTTP ${patchResponse.status()}`)
   if (writes.length !== 1 || writes[0]?.custom_name !== 'PO OWNER SMOKE' || Object.keys(writes[0]).length !== 1) {
     throw new Error(`owner: onjuist PATCH-contract ${JSON.stringify(writes)}`)
   }
