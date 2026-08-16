@@ -54,3 +54,25 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
+
+      - name: Open Artikeldetail echt als Eigenaar en Kijker
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+        run: |
+          npx playwright install --with-deps chromium
+          npm run dev -- --host 127.0.0.1 --port 5174 > /tmp/rezzerv-vite.log 2>&1 &
+          vite_pid=$!
+          trap 'kill $vite_pid 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5174/version.json >/dev/null; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              cat /tmp/rezzerv-vite.log
+              exit 1
+            fi
+            sleep 1
+          done
+          node tests/e2e/article-detail-owner-mutation.smoke.mjs | tee /tmp/article-detail-owner-smoke.log
+          grep -F 'ARTICLE_DETAIL_OWNER_MUTATION_BROWSER_GREEN' /tmp/article-detail-owner-smoke.log
