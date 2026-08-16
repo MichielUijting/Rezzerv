@@ -30,9 +30,26 @@ jobs:
             exit 1
           }
 
+      - name: Create Windows CRLF runner fixture
+        shell: pwsh
+        run: |
+          $sourcePath = './scripts/run-receipt-status-loyalty-regression.ps1'
+          $targetPath = './scripts/run-receipt-status-loyalty-regression.windows-crlf.ps1'
+          $source = Get-Content -LiteralPath $sourcePath -Raw
+          $crlf = $source -replace "`r?`n", "`r`n"
+          [System.IO.File]::WriteAllText(
+            $targetPath,
+            $crlf,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          $roundTrip = [System.IO.File]::ReadAllText($targetPath)
+          if (-not $roundTrip.Contains("`r`n")) {
+            throw 'Windows CRLF runner fixture bevat geen CRLF-regelafbrekingen.'
+          }
+
       - name: Create documented running-backend state
         run: docker compose up -d --build backend
 
-      - name: Execute official local runner against isolated backend image
+      - name: Execute official local runner with Windows CRLF line endings
         shell: pwsh
-        run: ./scripts/run-receipt-status-loyalty-regression.ps1 -SkipBackendBuild
+        run: ./scripts/run-receipt-status-loyalty-regression.windows-crlf.ps1 -SkipBackendBuild
