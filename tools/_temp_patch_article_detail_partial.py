@@ -80,7 +80,7 @@ new = '''def update_household_article_details_by_id(conn, household_id: str, hou
     if source == 'manual' and 'source' not in fields_to_write:
         fields_to_write.append('source')
     if fields_to_write:
-        set_clause = ',\n                '.join(f"{column_by_field[field]} = :{field}" for field in fields_to_write)
+        set_clause = ', '.join(f"{column_by_field[field]} = :{field}" for field in fields_to_write)
         params = {field: value_by_field[field] for field in fields_to_write}
         params.update({
             'household_id': str(household_id),
