@@ -178,6 +178,33 @@ def test_returned_to_kassa_receipt_without_approval_is_not_reapproved_by_trigger
     assert row["workflow_state"] == "returned_to_kassa"
 
 
+def test_new_explicit_approval_reactivates_returned_to_kassa_receipt():
+    engine = _engine()
+    with engine.begin() as conn:
+        _insert_receipt(
+            conn,
+            receipt_id="returned-approved",
+            parse_status="review_needed",
+            approved_at=None,
+            workflow_state="returned_to_kassa",
+        )
+        ensure_receipt_lifecycle_foundation_schema(conn)
+        conn.execute(
+            text("""
+                UPDATE receipt_tables
+                SET parse_status = 'approved',
+                    approved_at = '2026-08-16 12:00:00',
+                    reviewed_at = '2026-08-16 12:00:00'
+                WHERE id = 'returned-approved'
+            """)
+        )
+        row = _row(conn, "returned-approved")
+
+    assert row["parse_status"] == "approved"
+    assert row["approved_at"] == "2026-08-16 12:00:00"
+    assert row["workflow_state"] == "active"
+
+
 def test_deleted_archived_or_removed_receipts_are_not_reactivated():
     engine = _engine()
     with engine.begin() as conn:
