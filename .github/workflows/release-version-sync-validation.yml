@@ -1,0 +1,60 @@
+name: Release version sync validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-release-version-sync:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate synchronized release identity
+        shell: cmd
+        run: validate-version-sync.bat
+
+      - name: Prove backend mismatch fails closed
+        shell: pwsh
+        run: |
+          $original = Get-Content -Raw -LiteralPath 'backend/VERSION.txt'
+          try {
+            Set-Content -LiteralPath 'backend/VERSION.txt' -Value 'Rezzerv-MVP-v00.00.00' -NoNewline
+            cmd /c validate-version-sync.bat
+            if ($LASTEXITCODE -eq 0) {
+              throw 'validate-version-sync.bat accepted a backend version mismatch.'
+            }
+          }
+          finally {
+            Set-Content -LiteralPath 'backend/VERSION.txt' -Value $original -NoNewline
+          }
+
+      - name: Prove package mismatch fails closed
+        shell: pwsh
+        run: |
+          $path = 'frontend/package.json'
+          $original = Get-Content -Raw -LiteralPath $path
+          try {
+            $json = $original | ConvertFrom-Json
+            $json.version = '0.0.0'
+            $json | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $path
+            cmd /c validate-version-sync.bat
+            if ($LASTEXITCODE -eq 0) {
+              throw 'validate-version-sync.bat accepted a frontend package version mismatch.'
+            }
+          }
+          finally {
+            Set-Content -LiteralPath $path -Value $original -NoNewline
+          }
+
+      - name: Verify startup uses fail-fast version gate
+        shell: pwsh
+        run: |
+          $content = Get-Content -Raw -LiteralPath 'start.bat'
+          $pattern = 'call\s+validate-version-sync\.bat\s*\r?\n\s*if\s+errorlevel\s+1\s*\('
+          if ($content -notmatch $pattern) {
+            throw 'start.bat does not fail fast on validate-version-sync.bat errors.'
+          }
