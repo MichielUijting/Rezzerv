@@ -127,7 +127,7 @@ if exist "backend\rezzerv.db" (
 )
 if exist "validate-version-sync.bat" (
   call validate-version-sync.bat
-  if %errorlevel% neq 0 (
+  if errorlevel 1 (
     echo [ERROR] Versiesync-check gefaald. Start wordt afgebroken.
     pause
     exit /b 1
