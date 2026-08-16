@@ -96,6 +96,20 @@ def test_fast_supermarket_pr_gate_covers_all_chains_and_visible_kassa_status():
             {'line_count': len(parsed.lines or [])},
         )
 
+        # AH App 1 contains three physical products plus one paid savings/loyalty
+        # component. The legacy parser is allowed to call that structured role
+        # ``spaarzegels``; the scanner boundary maps it to canonical ``loyalty``.
+        # This assertion is fixture-specific test evidence only and does not add
+        # retailer/product text rules to production runtime code.
+        if filename == 'ah_app_1.pdf':
+            legacy_roles = [str(_line_value(line, 'line_type') or '').strip().lower() for line in (parsed.lines or [])]
+            if len(legacy_roles) != 4 or legacy_roles.count('product') != 3 or legacy_roles.count('spaarzegels') != 1:
+                issues.append(
+                    'AH App 1 verwacht 4 bonregels: 3 product + 1 spaarzegels; '
+                    f'gevonden {legacy_roles}'
+                )
+                ok = False
+
         expected_purchase_date = PICNIC_V10_PURCHASE_DATES.get(filename)
         if expected_purchase_date:
             found_purchase_date = str(parsed.purchase_at or '')[:10]
