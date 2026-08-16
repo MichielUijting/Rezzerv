@@ -10,6 +10,11 @@ parallel identity or processing tables. Persisted facts keep one source of truth
 
 Release B adds explicit disposition actions for receipts that are already in the
 Uitpakken flow. These actions deliberately do not reverse inventory events.
+
+Explicit user approval is a lifecycle fact. Technical parser/status backfills may
+refresh diagnostics, but may not silently invalidate an existing approval. An
+approved active receipt therefore remains approved and visible to Uitpakken until
+a user explicitly returns it to Kassa, archives it, or removes it.
 """
 
 from __future__ import annotations
@@ -33,6 +38,14 @@ ALLOWED_WORKFLOW_STATES = {
     LEGACY_DELETED,
 }
 UNPACK_LIFECYCLE_ACTIONS = {"return_to_kassa", "archive"}
+APPROVED = "approved"
+APPROVED_OVERRIDE = "approved_override"
+NON_ACTIVE_WORKFLOW_STATES = {
+    ARCHIVED,
+    REMOVED_REIMPORT_ALLOWED,
+    LEGACY_DELETED,
+}
+APPROVAL_GUARD_TRIGGER = "trg_receipt_tables_preserve_explicit_approval"
 
 
 def _columns(conn, table_name: str) -> set[str]:
@@ -52,6 +65,159 @@ def _table_exists(conn, table_name: str) -> bool:
             {"name": table_name},
         ).scalar()
     )
+
+
+def _supports_explicit_approval_guard(conn) -> bool:
+    if not _table_exists(conn, "raw_receipts") or not _table_exists(conn, "receipt_tables"):
+        return False
+    receipt_columns = _columns(conn, "receipt_tables")
+    raw_columns = _columns(conn, "raw_receipts")
+    return {
+        "id",
+        "raw_receipt_id",
+        "approved_at",
+        "deleted_at",
+        "parse_status",
+        "workflow_state",
+        "updated_at",
+    }.issubset(receipt_columns) and {"id", "deleted_at"}.issubset(raw_columns)
+
+
+def _approved_parse_status_sql(receipt_columns: set[str]) -> str:
+    if "totals_overridden" in receipt_columns:
+        return (
+            "CASE WHEN COALESCE(totals_overridden, 0) <> 0 "
+            "THEN 'approved_override' ELSE 'approved' END"
+        )
+    return "'approved'"
+
+
+def reconcile_explicit_receipt_approvals(
+    conn,
+    *,
+    receipt_table_id: str | None = None,
+) -> dict[str, Any]:
+    """Restore technical parse status to the persisted user approval decision.
+
+    ``approved_at`` is the lifecycle fact that moves a receipt from Kassa into the
+    approved/Uitpakken flow. Parser diagnostics are allowed to change later, but a
+    background recalculation must never make that explicit approval disappear.
+
+    This reconciliation therefore repairs only active, non-deleted receipts that
+    still have ``approved_at``. It never creates approval, never clears approval,
+    never reactivates archived/removed receipts and never touches inventory facts.
+    """
+    if not _supports_explicit_approval_guard(conn):
+        return {"reconciled_count": 0, "receipt_table_ids": []}
+
+    receipt_columns = _columns(conn, "receipt_tables")
+    status_sql = _approved_parse_status_sql(receipt_columns)
+    params: dict[str, Any] = {
+        "approved": APPROVED,
+        "approved_override": APPROVED_OVERRIDE,
+        "archived": ARCHIVED,
+        "removed": REMOVED_REIMPORT_ALLOWED,
+        "legacy_deleted": LEGACY_DELETED,
+    }
+    id_filter = ""
+    normalized_receipt_id = str(receipt_table_id or "").strip()
+    if normalized_receipt_id:
+        id_filter = " AND rt.id = :receipt_table_id"
+        params["receipt_table_id"] = normalized_receipt_id
+
+    rows = conn.execute(
+        text(
+            f"""
+            SELECT rt.id
+            FROM receipt_tables rt
+            JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+            WHERE rt.approved_at IS NOT NULL
+              AND rt.deleted_at IS NULL
+              AND rr.deleted_at IS NULL
+              AND lower(trim(COALESCE(rt.parse_status, ''))) NOT IN (
+                    :approved, :approved_override
+              )
+              AND lower(trim(COALESCE(rt.workflow_state, 'active'))) NOT IN (
+                    :archived, :removed, :legacy_deleted
+              )
+              {id_filter}
+            ORDER BY rt.id
+            """
+        ),
+        params,
+    ).fetchall()
+    receipt_ids = [str(row[0]) for row in rows]
+
+    for candidate_id in receipt_ids:
+        conn.execute(
+            text(
+                f"""
+                UPDATE receipt_tables
+                SET parse_status = {status_sql},
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :receipt_table_id
+                """
+            ),
+            {"receipt_table_id": candidate_id},
+        )
+
+    return {
+        "reconciled_count": len(receipt_ids),
+        "receipt_table_ids": receipt_ids,
+    }
+
+
+def ensure_explicit_approval_guard_trigger(conn) -> bool:
+    """Prevent technical parse-status refreshes from invalidating user approval.
+
+    The trigger only protects receipts that still carry ``approved_at``. A normal
+    ``return_to_kassa`` action clears ``approved_at`` first, so subsequent parser
+    diagnostics remain free to become review/manual for that receipt.
+    """
+    if not _supports_explicit_approval_guard(conn):
+        return False
+
+    receipt_columns = _columns(conn, "receipt_tables")
+    if "totals_overridden" in receipt_columns:
+        trigger_status_sql = (
+            "CASE WHEN COALESCE(NEW.totals_overridden, 0) <> 0 "
+            "THEN 'approved_override' ELSE 'approved' END"
+        )
+    else:
+        trigger_status_sql = "'approved'"
+
+    conn.execute(text(f"DROP TRIGGER IF EXISTS {APPROVAL_GUARD_TRIGGER}"))
+    # Remove the rejected draft-PR trigger if a local PO test installed it.
+    conn.execute(text("DROP TRIGGER IF EXISTS trg_receipt_tables_review_lifecycle"))
+    conn.execute(
+        text(
+            f"""
+            CREATE TRIGGER {APPROVAL_GUARD_TRIGGER}
+            AFTER UPDATE OF parse_status ON receipt_tables
+            WHEN NEW.approved_at IS NOT NULL
+             AND NEW.deleted_at IS NULL
+             AND lower(trim(COALESCE(NEW.parse_status, ''))) NOT IN (
+                    'approved', 'approved_override'
+             )
+             AND lower(trim(COALESCE(NEW.workflow_state, 'active'))) NOT IN (
+                    'archived', 'removed_reimport_allowed', 'legacy_deleted'
+             )
+             AND EXISTS (
+                    SELECT 1
+                    FROM raw_receipts rr
+                    WHERE rr.id = NEW.raw_receipt_id
+                      AND rr.deleted_at IS NULL
+             )
+            BEGIN
+                UPDATE receipt_tables
+                SET parse_status = {trigger_status_sql},
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+            """
+        )
+    )
+    return True
 
 
 def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
@@ -185,11 +351,16 @@ def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
             )
         )
 
+    approval_guard_installed = ensure_explicit_approval_guard_trigger(conn)
+    approval_reconciliation = reconcile_explicit_receipt_approvals(conn)
+
     return {
         "added_columns": added,
         "backfilled_receipts": len(missing_receipts),
         "backfilled_lines": len(missing_lines),
         "workflow_states": sorted(ALLOWED_WORKFLOW_STATES),
+        "explicit_approval_guard_installed": approval_guard_installed,
+        "reconciled_explicit_approvals": approval_reconciliation["reconciled_count"],
     }
 
 
