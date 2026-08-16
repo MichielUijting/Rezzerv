@@ -18,6 +18,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Installeer minimale backend-afhankelijkheden
         run: |
           python -m pip install --quiet \
@@ -43,3 +48,9 @@ jobs:
         run: |
           python backend/tests/test_article_detail_mutation_contract.py | tee article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN' article-detail-mutation-contract.log
+
+      - name: Bouw gewijzigde frontend
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
