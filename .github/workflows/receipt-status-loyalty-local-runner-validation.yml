@@ -11,7 +11,7 @@ on:
 jobs:
   validate-local-runner:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,8 +30,8 @@ jobs:
             exit 1
           }
 
-      - name: Build production-like backend image
-        run: docker compose build backend
+      - name: Create documented running-backend state
+        run: docker compose up -d --build backend
 
       - name: Execute official local runner against isolated backend image
         shell: pwsh
