@@ -53,6 +53,13 @@ def _canonical_line_type_from_legacy(line: dict[str, Any]) -> str:
     if explicit in _CANONICAL_LINE_TYPES:
         return explicit
 
+    # Legacy Rezzerv used a dedicated structured ``spaarzegels`` role before
+    # Canonical Receipt V1 existed. Canonical V1 represents the same business
+    # fact as ``loyalty``. Map the role here at the boundary rather than falling
+    # back to ``product``; no retailer name or receipt label is inspected.
+    if explicit == "spaarzegels" or line.get("is_spaarzegels") is True:
+        return "loyalty"
+
     business_role = str(line.get("line_role") or "").strip().lower()
     if business_role == "product":
         return "product"
