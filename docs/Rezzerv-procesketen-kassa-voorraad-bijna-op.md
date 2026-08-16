@@ -216,3 +216,54 @@ De totale keten is functioneel geborgd wanneer:
 - Voorraad alleen gegevens van het actieve huishouden toont;
 - Bijna op dezelfde voorraadprojectie en huishoudinstellingen gebruikt;
 - elk signaal doorklikbaar en uitlegbaar blijft tot huishoudartikel, locatie en mutatiebron.
+
+## 16. Technische regressieborging vanaf Rezzerv-MVP-v01.12.94
+
+Deze aanvulling **vervangt de Rezzerv Development Stack niet**. De bestaande Development-Stack-mainvalidatie blijft het startpunt en de volgorde blijft leidend. De nieuwe v01.12.94-contracttests worden uitsluitend als aanvullende officiële Rezzerv-runner in die bestaande flow opgenomen.
+
+De lokale main-validatie voor deze keten is daarom:
+
+1. actuele `main` ophalen en een schone werkmap bevestigen;
+2. `docker compose down`;
+3. `docker compose up -d --build`;
+4. backend-health op `/api/health` bevestigen;
+5. de bestaande centrale frontendregressie uitvoeren:
+   `./scripts/run-frontend-regression-report.ps1 -SkipDockerBuild`;
+6. de aanvullende officiële receipt/status/loyalty/scanner-regressie uitvoeren:
+   `./scripts/run-receipt-status-loyalty-regression.ps1 -SkipBackendBuild`;
+7. de bestaande Kassabon → Voorraad → Bijna-op ketentest V2 uitvoeren:
+   `./scripts/run-receipt-inventory-chain-v2.ps1 -SkipBackendBuild`;
+8. opnieuw bevestigen dat de Git-werkmap schoon is.
+
+### 16.1 Aanvullende v01.12.94 receipt-regressie
+
+`run-receipt-status-loyalty-regression.ps1` borgt dezelfde contracten als de bestaande CI-gates voor:
+
+- de echte AH/Picnic-supermarktfixtures;
+- Kassa-status en summary/detail-SSOT;
+- `spaarzegels -> loyalty`;
+- uitsluiting van loyalty/spaarcomponenten uit fysieke voorraad;
+- scannercontract en persistence-compatibiliteit;
+- scannerdependency- en caller-boundary.
+
+Deze runner gebruikt een disposable backendcontainer met een tijdelijke SQLite-database in `/tmp`. De normale Rezzerv-runtime-database wordt niet als datamount aangekoppeld.
+
+### 16.2 Bestaande ketentest V2
+
+`run-receipt-inventory-chain-v2.ps1` blijft de officiële ketenrunner voor Kassabon → Uitpakken → Voorraad → Bijna op. De onderliggende productieketentest gebruikt een tijdelijke SQLite-runtime en bewijst onder meer:
+
+- idempotente voorraadmutaties;
+- universele productkoppeling;
+- producttypekoppeling;
+- Bijna-op-pad;
+- uitsluiting van koopzegels uit fysieke voorraad.
+
+De ketentest verandert de normale lokale PO-database niet.
+
+### 16.3 Windows/PowerShell-portabiliteit
+
+De receipt/status/loyalty-runner normaliseert PowerShell here-string-regelafbrekingen vóór overdracht aan de Linux-shell van CRLF/CR naar LF. De eigen runner-validatie voert daarom bewust ook een CRLF-bronbestand uit. Hiermee is Windows-regelafbreking onderdeel van het officiële testcontract en geen aparte lokale werkwijze.
+
+### 16.4 Acceptatie
+
+De lokale main-validatie is alleen groen wanneer **alle** bovenstaande bestaande en aanvullende officiële runners groen eindigen en de werkmap schoon blijft. Een rode of onduidelijke stap stopt de validatie; de oorzaak wordt eerst technisch vastgesteld en hersteld voordat de keten opnieuw groen kan worden verklaard.
