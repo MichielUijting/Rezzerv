@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArticleGlobalSectionToggle, ArticleSectionAccordion } from '../components/ArticleSectionControls'
 import useBarcodeScanner from '../../../lib/useBarcodeScanner'
-import { fetchJsonWithAuth, readStoredAuthContext } from '../../../lib/authSession'
+import { fetchJsonWithAuth, isHouseholdAdminFromContext, isHouseholdViewerFromContext, readStoredAuthContext } from '../../../lib/authSession'
 import { getFieldsByTabAndGroup } from '../config/articleFieldHelpers'
 import { ARTICLE_TABS } from '../config/articleFieldConstants'
 import { resolveArticleFieldValue, EMPTY_VALUE } from '../lib/articleFieldValueResolver'
@@ -148,8 +148,7 @@ function isConsumable(articleData = {}) {
 
 function AutomationOverrideCard({ articleData = {}, sectionOpen = undefined, onToggleSection = null }) {
   const authContext = readStoredAuthContext() || {}
-  const displayRole = String(authContext?.display_role || '').trim().toLowerCase()
-  const canEdit = displayRole === 'admin'
+  const canEdit = isHouseholdAdminFromContext(authContext)
   const articleId = articleData?.id
   const consumable = isConsumable(articleData)
   const [mode, setMode] = useState(AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD)
@@ -255,8 +254,7 @@ function EditableHouseholdFieldRow({ field, value, draftValue, onChange, onBlur,
 
 function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, sectionOpen = undefined, onToggleSection = null }) {
   const authContext = readStoredAuthContext() || {}
-  const displayRole = String(authContext?.display_role || '').trim().toLowerCase()
-  const canEdit = displayRole === 'admin' || displayRole === 'lid'
+  const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)
   const [formState, setFormState] = useState(() => buildFormState(articleData))
   const [statusMessage, setStatusMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -375,8 +373,7 @@ function buildHouseholdSettingsFormState(settings = {}) {
 
 function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null, sectionOpen = undefined, onToggleSection = null }) {
   const authContext = readStoredAuthContext() || {}
-  const displayRole = String(authContext?.display_role || '').trim().toLowerCase()
-  const canEdit = displayRole === 'admin' || displayRole === 'lid'
+  const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)
   const resolvedArticleId = String(articleData?.household_article_id || articleData?.article_id || articleData?.id || '').trim()
   const settings = articleData?.settings && typeof articleData.settings === 'object' ? articleData.settings : {}
   const [formState, setFormState] = useState(() => buildHouseholdSettingsFormState(settings))
@@ -606,8 +603,7 @@ function ProductDetailsCard({ articleData = {}, sectionOpen = undefined, onToggl
 
 function ExternalLinkCard({ articleData = {}, onDetailsSaved = null, sectionOpen = undefined, onToggleSection = null }) {
   const authContext = readStoredAuthContext() || {}
-  const displayRole = String(authContext?.display_role || '').trim().toLowerCase()
-  const canEdit = displayRole === 'admin' || displayRole === 'lid'
+  const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)
   const isMobileScanner = useMemo(() => detectMobileScannerSupport(), [])
   const [editMode, setEditMode] = useState(false)
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)

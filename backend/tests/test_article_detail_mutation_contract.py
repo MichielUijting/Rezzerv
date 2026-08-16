@@ -169,11 +169,24 @@ def test_household_settings_have_one_dedicated_mutation_owner():
         assert field in settings
 
 
+def test_household_mutation_cards_use_central_role_ssot_and_fail_closed():
+    source = _read(OVERVIEW_PATH)
+    assert "isHouseholdAdminFromContext" in source
+    assert "isHouseholdViewerFromContext" in source
+
+    general = _between(source, "function ArticleDetailsEditor", "function normalizeSettingsFormValue")
+    settings = _between(source, "function HouseholdArticleSettingsCard", "function ProductDetailsCard")
+    external = _between(source, "function ExternalLinkCard", "export default function ArticleOverviewTab")
+    for section in (general, settings, external):
+        assert "const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)" in section
+        assert "displayRole === 'admin' || displayRole === 'lid'" not in section
+
+
 def test_external_product_identity_uses_dedicated_flow_and_role_gate():
     source = _read(OVERVIEW_PATH)
     external = _between(source, "function ExternalLinkCard", "export default function ArticleOverviewTab")
 
-    assert "displayRole === 'admin' || displayRole === 'lid'" in external
+    assert "const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)" in external
     assert "/external-product-link`" in external
     assert "if (!inventoryId || !canEdit) return" in external
     assert "if (!editMode || !canEdit) return" in external
@@ -185,7 +198,7 @@ def test_article_automation_override_matches_admin_only_backend_contract():
     source = _read(OVERVIEW_PATH)
     automation = _between(source, "function AutomationOverrideCard", "function EditableHouseholdFieldRow")
 
-    assert "const canEdit = displayRole === 'admin'" in automation
+    assert "const canEdit = isHouseholdAdminFromContext(authContext)" in automation
     assert "if (!canEdit) return" in automation
     assert "disabled={!consumable || !canEdit}" in automation
 
@@ -261,6 +274,7 @@ def test_unsupported_product_knowledge_fields_are_not_silently_accepted():
 def run_contract() -> None:
     test_general_household_editor_owns_only_custom_name()
     test_household_settings_have_one_dedicated_mutation_owner()
+    test_household_mutation_cards_use_central_role_ssot_and_fail_closed()
     test_external_product_identity_uses_dedicated_flow_and_role_gate()
     test_article_automation_override_matches_admin_only_backend_contract()
     test_article_metadata_mutation_does_not_write_inventory_quantity_or_events()
