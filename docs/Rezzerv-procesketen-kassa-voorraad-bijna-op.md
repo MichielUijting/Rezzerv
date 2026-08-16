@@ -227,11 +227,11 @@ De lokale main-validatie voor deze keten is daarom:
 2. `docker compose down`;
 3. `docker compose up -d --build`;
 4. backend-health op `/api/health` bevestigen;
-5. de bestaande centrale frontendregressie uitvoeren:  
+5. de bestaande centrale frontendregressie uitvoeren:
    `./scripts/run-frontend-regression-report.ps1 -SkipDockerBuild`;
-6. de aanvullende officiële receipt/status/loyalty/scanner-regressie uitvoeren:  
+6. de aanvullende officiële receipt/status/loyalty/scanner-regressie uitvoeren:
    `./scripts/run-receipt-status-loyalty-regression.ps1 -SkipBackendBuild`;
-7. de bestaande Kassabon → Voorraad → Bijna-op ketentest V2 uitvoeren:  
+7. de bestaande Kassabon → Voorraad → Bijna-op ketentest V2 uitvoeren:
    `./scripts/run-receipt-inventory-chain-v2.ps1 -SkipBackendBuild`;
 8. opnieuw bevestigen dat de Git-werkmap schoon is.
 
