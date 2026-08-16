@@ -44,7 +44,11 @@ jobs:
             frontend/package.json
           )
           for path in "${expected[@]}"; do
-            if git diff --quiet -- "$path"; then
+            if [ ! -e "$path" ]; then
+              echo "Expected file missing: $path"
+              exit 1
+            fi
+            if [ -z "$(git status --porcelain -- "$path")" ]; then
               echo "Expected changed file missing: $path"
               exit 1
             fi
