@@ -30,6 +30,13 @@ _PURCHASE_COMPONENT_ROLES = {
     "spaarzegels",
 }
 _PRODUCT_ROLES = {"product"}
+_USER_CORRECTION_FIELDS = {
+    "corrected_raw_label",
+    "corrected_quantity",
+    "corrected_unit",
+    "corrected_unit_price",
+    "corrected_line_total",
+}
 
 
 def _safe_decimal(value: Any) -> Decimal | None:
@@ -91,6 +98,34 @@ def _line_count(payload: dict[str, Any]) -> int:
         return int(value or 0)
     except Exception:
         return 0
+
+
+def _has_user_corrections(payload: dict[str, Any]) -> bool:
+    try:
+        if int(payload.get("totals_overridden") or 0) != 0:
+            return True
+    except Exception:
+        if bool(payload.get("totals_overridden")):
+            return True
+
+    for line in _active_lines(payload):
+        if any(line.get(field) not in (None, "") for field in _USER_CORRECTION_FIELDS):
+            return True
+    return False
+
+
+def _scanner_approval_is_current(payload: dict[str, Any]) -> bool:
+    """Use scanner approval only while its canonical observations are untouched."""
+    if str(payload.get("parse_status") or "").strip().lower() != "approved":
+        return False
+    if _has_user_corrections(payload):
+        return False
+
+    lines = _active_lines(payload)
+    if not lines:
+        return False
+    roles = [_canonical_role(line) for line in lines]
+    return all(role is not None for role in roles) and any(role in _PRODUCT_ROLES for role in roles)
 
 
 def _line_discount_total(payload: dict[str, Any]) -> Decimal:
@@ -189,8 +224,9 @@ def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
     if line_count <= 0:
         failed.append("NO_ARTICLE_LINES")
 
+    scanner_approved = _scanner_approval_is_current(payload)
     net_line_sums = _net_line_total_variants(payload)
-    if total_amount is not None and line_count > 0:
+    if total_amount is not None and line_count > 0 and not scanner_approved:
         if not net_line_sums:
             failed.append("LINE_SUM_MISSING")
         elif not any(_amount_equals(net_line_sum, total_amount) for net_line_sum in net_line_sums):
@@ -199,10 +235,16 @@ def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
     label = "Gecontroleerd" if not failed else "Controle nodig"
 
     if not failed:
-        reason = (
-            "Gecontroleerd: winkel, totaalbedrag en canonieke aankoopcomponenten "
-            "voldoen aan productieve Kassa-statuscriteria."
-        )
+        if scanner_approved:
+            reason = (
+                "Gecontroleerd: winkel, totaalbedrag, canonieke productregels en "
+                "actuele scannerkwaliteit voldoen aan productieve Kassa-statuscriteria."
+            )
+        else:
+            reason = (
+                "Gecontroleerd: winkel, totaalbedrag en canonieke aankoopcomponenten "
+                "voldoen aan productieve Kassa-statuscriteria."
+            )
     else:
         labels = {
             "STORE_NAME_MISSING": "winkelnaam ontbreekt",
