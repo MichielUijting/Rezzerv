@@ -24,4 +24,4 @@ jobs:
               -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-pr-gate.db \
               -e SQLITE_RUNTIME_VOLUME=github-actions-temp \
               rezzerv-kassa-pr-gate \
-              sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -s -q tests/test_kassa_supermarket_baseline_gate.py"
+              sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -s -q tests/test_kassa_supermarket_baseline_gate.py tests/test_pr245_status_and_loyalty_contract.py"
