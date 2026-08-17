@@ -42,21 +42,18 @@ function classifyOverviewSections(root, readOnly) {
 
   overview.querySelectorAll(':scope > section.rz-article-section-accordion').forEach((section) => {
     const title = section.querySelector('.rz-article-section-title')?.textContent?.trim() || ''
-    const targetKey = SECTION_TO_KEY[title] || 'article'
-    if (section.dataset.articleSubtab !== targetKey) {
-      section.dataset.articleSubtab = targetKey
-    }
+    section.dataset.articleSubtab = SECTION_TO_KEY[title] || 'article'
   })
 
   if (!readOnly) return
 
   overview.querySelectorAll('input, select, textarea').forEach((control) => {
-    if (!control.disabled) control.disabled = true
-    if (control.getAttribute('aria-disabled') !== 'true') control.setAttribute('aria-disabled', 'true')
+    control.disabled = true
+    control.setAttribute('aria-disabled', 'true')
   })
   overview.querySelectorAll('button:not(.rz-article-section-summary)').forEach((button) => {
-    if (!button.disabled) button.disabled = true
-    if (button.getAttribute('aria-disabled') !== 'true') button.setAttribute('aria-disabled', 'true')
+    button.disabled = true
+    button.setAttribute('aria-disabled', 'true')
   })
 }
 
@@ -66,18 +63,11 @@ export default function ArticleOverviewSubtabs(props) {
   const canMutate = isHouseholdAdminFromContext(readStoredAuthContext() || {})
   const readOnly = !canMutate
   const activeKey = SUBTAB_KEY[activeSubtab] || 'article'
+  const articleData = props?.articleData
 
   useLayoutEffect(() => {
-    const root = rootRef.current
-    if (!root) return undefined
-
-    const classify = () => classifyOverviewSections(root, readOnly)
-    classify()
-
-    const observer = new MutationObserver(classify)
-    observer.observe(root, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [readOnly])
+    classifyOverviewSections(rootRef.current, readOnly)
+  }, [readOnly, articleData])
 
   function handleSubtabChange(nextSubtab) {
     setActiveSubtab(nextSubtab)
