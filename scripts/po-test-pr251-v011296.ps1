@@ -35,7 +35,7 @@ function Run([string]$Exe, [string[]]$Args, [string]$Cwd = '') {
     $out = @(& $Exe @Args 2>&1)
     $code = $LASTEXITCODE
     foreach ($line in $out) { Log ([string]$line) }
-    if ($code -ne 0) { throw "Exitcode $code: $Exe $($Args -join ' ')" }
+    if ($code -ne 0) { throw "Exitcode ${code}: $Exe $($Args -join ' ')" }
     return $out
   } finally { if ($Cwd) { Pop-Location } }
 }
@@ -47,7 +47,7 @@ function Capture([string]$Exe, [string[]]$Args, [string]$Cwd = '') {
     $code = $LASTEXITCODE
     if ($code -ne 0) {
       foreach ($line in $out) { Log ([string]$line) }
-      throw "Exitcode $code: $Exe $($Args -join ' ')"
+      throw "Exitcode ${code}: $Exe $($Args -join ' ')"
     }
     return (($out | ForEach-Object { [string]$_ }) -join "`n").Trim()
   } finally { if ($Cwd) { Pop-Location } }
