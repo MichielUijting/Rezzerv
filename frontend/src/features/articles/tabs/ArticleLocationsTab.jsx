@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Button from '../../../ui/Button'
 import Input from '../../../ui/Input'
-import { fetchJsonWithAuth } from '../../../lib/authSession'
+import { fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../../lib/authSession'
 
 function normalizeLocationName(value) {
   return value || 'Onbekende locatie'
@@ -42,8 +42,10 @@ function groupSpacesWithSublocations(spaces = [], sublocations = []) {
 }
 
 export default function ArticleLocationsTab({ articleData = {}, onInventoryChanged = async () => {} }) {
-  const articleName = String(articleData?.name || '').trim()
+  const articleName = String(articleData?.name || articleData?.article_name || '').trim()
+  const householdArticleId = String(articleData?.household_article_id || articleData?.article_id || articleData?.id || '').trim()
   const locations = Array.isArray(articleData.locations) ? articleData.locations : []
+  const canMutate = isHouseholdAdminFromContext(readStoredAuthContext() || {})
   const [spaces, setSpaces] = useState([])
   const [sublocations, setSublocations] = useState([])
   const [locationsLoading, setLocationsLoading] = useState(false)
@@ -112,6 +114,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
   }
 
   function openTransferForm(row) {
+    if (!canMutate || !householdArticleId) return
     resetFeedback()
     setTransferForm({
       inventoryId: String(row?.inventoryId || ''),
@@ -140,11 +143,12 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
 
   async function handleTransferSubmit(event) {
     event.preventDefault()
+    if (!canMutate || !householdArticleId) return
     resetFeedback()
     setTransferBusy(true)
 
     try {
-      const response = await fetchJsonWithAuth('/api/inventory-transfers', {
+      const response = await fetchJsonWithAuth(`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-transfers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -190,10 +194,10 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
         <div className="rz-stock-actions-header">
           <div>
             <h3 className="rz-locations-group-title rz-article-detail-section-title">Alle locaties</h3>
-            <div className="rz-stock-actions-help">Gebruik Verplaatsen om voorraad van de ene sublocatie naar een andere sublocatie te verplaatsen.</div>
+            <div className="rz-stock-actions-help">{canMutate ? 'Gebruik Verplaatsen om voorraad van de ene sublocatie naar een andere sublocatie te verplaatsen.' : 'Je kunt de voorraadlocaties inzien. Alleen een beheerder kan voorraad verplaatsen.'}</div>
           </div>
           <div className="rz-stock-action-buttons" data-testid="article-location-actions">
-            <Button type="button" variant="secondary" disabled={!locationRows.length} onClick={() => openTransferForm(locationRows[0])} data-testid="article-location-action-transfer">Verplaatsen</Button>
+            <Button type="button" variant="secondary" disabled={!canMutate || !householdArticleId || !locationRows.length} onClick={() => openTransferForm(locationRows[0])} data-testid="article-location-action-transfer">Verplaatsen</Button>
           </div>
         </div>
         <div className="rz-locations-group-body rz-article-detail-section-body">
@@ -202,7 +206,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
           {transferError ? <div className="rz-article-detail-alert" data-testid="article-location-transfer-error">{transferError}</div> : null}
           {transferSuccess ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="article-location-transfer-success">{transferSuccess}</div> : null}
 
-          {transferForm.inventoryId ? (
+          {canMutate && transferForm.inventoryId ? (
             <form className="rz-stock-mutation-form" onSubmit={handleTransferSubmit} data-testid="article-location-transfer-form">
               <div className="rz-stock-mutation-title">Actie: Verplaatsen</div>
               {selectedRow ? <div className="rz-stock-selected-row-summary" data-testid="article-location-selected-row">Geselecteerd: {selectedRow.locatie} / {selectedRow.sublocatie} — huidige voorraad {selectedRow.aantal}</div> : null}
@@ -239,8 +243,10 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
               <button
                 key={row.key}
                 type="button"
-                className={`rz-location-row${isSelected ? ' is-selected' : ''}`}
+                className={`rz-location-row${isSelected ? ' is-selected' : ''}${canMutate ? '' : ' is-readonly'}`}
                 onClick={() => openTransferForm(row)}
+                aria-disabled={!canMutate}
+                tabIndex={canMutate ? 0 : -1}
                 data-testid={`article-location-row-${row.inventoryId || row.key}`}
               >
                 <div className="rz-location-row-main">
