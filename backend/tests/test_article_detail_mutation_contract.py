@@ -5,6 +5,13 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 OVERVIEW_PATH = "frontend/src/features/articles/tabs/ArticleOverviewTab.jsx"
+OVERVIEW_WRAPPER_PATH = "frontend/src/features/articles/tabs/ArticleOverviewSubtabs.jsx"
+ANALYSIS_WRAPPER_PATH = "frontend/src/features/articles/tabs/ArticleAnalyticsSubtabs.jsx"
+STOCK_PATH = "frontend/src/features/articles/tabs/ArticleStockTab.jsx"
+LOCATIONS_PATH = "frontend/src/features/articles/tabs/ArticleLocationsTab.jsx"
+TABS_PATH = "frontend/src/ui/Tabs.jsx"
+GATEWAY_PATH = "backend/app/api/article_detail_admin_routes.py"
+PRODUCT_ROUTER_PATH = "backend/app/api/product_inventory_group_routes.py"
 MAIN_PATH = "backend/app/main.py"
 
 
@@ -147,10 +154,107 @@ def test_general_household_editor_owns_only_custom_name():
         assert forbidden not in payload
 
 
+def test_overview_wrapper_makes_member_and_viewer_read_only():
+    source = _read(OVERVIEW_WRAPPER_PATH)
+    assert "isHouseholdAdminFromContext" in source
+    assert "const readOnly = !canMutate" in source
+    assert "control.disabled = true" in source
+    assert "button.disabled = true" in source
+    assert "button:not(.rz-article-section-summary)" in source
+    assert "Alleen-lezen. Alleen een beheerder of eigenaar" in source
+    assert "isHouseholdViewerFromContext" not in source
+
+
+def test_overview_has_compact_functional_subtabs():
+    source = _read(OVERVIEW_WRAPPER_PATH)
+    for label in ("'Artikel'", "'Huishouden'", "'Identiteit'", "'Productdata'"):
+        assert label in source
+    for mapping in (
+        "'Artikelgegevens voor dit huishouden': 'Artikel'",
+        "'Instellingen voor dit huishouden': 'Huishouden'",
+        "'Externe productkoppeling': 'Identiteit'",
+        "Productverrijking: 'Productdata'",
+    ):
+        assert mapping in source
+    assert "className=\"rz-article-subtabs\"" in source
+    assert "ariaLabel=\"Overzicht subtabs\"" in source
+
+
+def test_analysis_has_compact_functional_subtabs():
+    source = _read(ANALYSIS_WRAPPER_PATH)
+    for label in ("'Trends'", "'Prijs'", "'Prognose'", "'Onderbouwing'"):
+        assert label in source
+    for mapping in (
+        "'Aankoop en verbruik in de tijd': 'Trends'",
+        "Prijsinzichten: 'Prijs'",
+        "Voorraadprognose: 'Prognose'",
+        "Aanbeveling: 'Prognose'",
+        "Onderbouwing: 'Onderbouwing'",
+    ):
+        assert mapping in source
+    assert "ariaLabel=\"Analyse subtabs\"" in source
+
+
+def test_shared_tabs_support_nested_accessible_navigation_without_breaking_defaults():
+    source = _read(TABS_PATH)
+    assert "ariaLabel = 'Artikeldetails tabs'" in source
+    assert "rootTestId = 'tabs-root'" in source
+    assert "tablistTestId = 'tabs-tablist'" in source
+    assert "className = ''" in source
+    assert "aria-label={ariaLabel}" in source
+
+
+def test_stock_mutation_is_admin_only_and_uses_article_detail_gateway():
+    source = _read(STOCK_PATH)
+    assert "const canEditInventory = isHouseholdAdminFromContext(authContext)" in source
+    assert "canCurrentUserPerform" not in source
+    assert "inventory.update" not in source
+    assert "/inventory-events`" in source
+    assert "`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`" in source
+    assert "fetchJsonWithAuth('/api/inventory-events'" not in source
+    assert "disabled={!canEditInventory" in source
+
+
+def test_location_mutation_is_admin_only_and_uses_article_detail_gateway():
+    source = _read(LOCATIONS_PATH)
+    assert "const canMutate = isHouseholdAdminFromContext" in source
+    assert "`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-transfers`" in source
+    assert "fetchJsonWithAuth('/api/inventory-transfers'" not in source
+    assert "disabled={!canMutate" in source
+    assert "Alleen een beheerder kan voorraad verplaatsen" in source
+
+
+def test_article_detail_backend_gateway_is_admin_only_and_registered_first():
+    gateway = _read(GATEWAY_PATH)
+    product_router = _read(PRODUCT_ROUTER_PATH)
+    main = _read(MAIN_PATH)
+
+    for route in (
+        "@router.patch('/api/household-articles/{household_article_id}')",
+        "@router.put('/api/household-articles/{household_article_id}/settings')",
+        "@router.post('/api/household-articles/{household_article_id}/inventory-events')",
+        "@router.post('/api/household-articles/{household_article_id}/inventory-transfers')",
+    ):
+        assert route in gateway
+    assert gateway.count("_require_admin(endpoint, authorization)") >= 2
+    assert gateway.count("context = _require_admin(endpoint, authorization)") >= 2
+    assert "_assert_inventory_belongs_to_article" in gateway
+
+    gateway_include = "router.include_router(article_detail_admin_router)"
+    assert gateway_include in product_router
+    assert product_router.index(gateway_include) < product_router.index("router.include_router(authorization_membership_router)")
+
+    early_router = "app.include_router(product_inventory_group_router)"
+    old_patch = '@app.patch("/api/household-articles/{household_article_id}")'
+    old_settings = '@app.put("/api/household-articles/{household_article_id}/settings")'
+    assert early_router in main and old_patch in main and old_settings in main
+    assert main.index(early_router) < main.index(old_patch)
+    assert main.index(early_router) < main.index(old_settings)
+
+
 def test_household_settings_have_one_dedicated_mutation_owner():
     source = _read(OVERVIEW_PATH)
     settings = _between(source, "function HouseholdArticleSettingsCard", "function ProductDetailsCard")
-
     assert "/settings`" in settings
     assert "method: 'PUT'" in settings
     for field in (
@@ -169,35 +273,9 @@ def test_household_settings_have_one_dedicated_mutation_owner():
         assert field in settings
 
 
-def test_household_mutation_cards_use_central_role_ssot_and_fail_closed():
-    source = _read(OVERVIEW_PATH)
-    assert "isHouseholdAdminFromContext" in source
-    assert "isHouseholdViewerFromContext" in source
-
-    general = _between(source, "function ArticleDetailsEditor", "function normalizeSettingsFormValue")
-    settings = _between(source, "function HouseholdArticleSettingsCard", "function ProductDetailsCard")
-    external = _between(source, "function ExternalLinkCard", "export default function ArticleOverviewTab")
-    for section in (general, settings, external):
-        assert "const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)" in section
-        assert "displayRole === 'admin' || displayRole === 'lid'" not in section
-
-
-def test_external_product_identity_uses_dedicated_flow_and_role_gate():
-    source = _read(OVERVIEW_PATH)
-    external = _between(source, "function ExternalLinkCard", "export default function ArticleOverviewTab")
-
-    assert "const canEdit = Boolean(authContext) && !isHouseholdViewerFromContext(authContext)" in external
-    assert "/external-product-link`" in external
-    assert "if (!inventoryId || !canEdit) return" in external
-    assert "if (!editMode || !canEdit) return" in external
-    assert "const actions = canEdit ? (" in external
-    assert "disabled={!canEdit || saveState.saving}" in external
-
-
 def test_article_automation_override_matches_admin_only_backend_contract():
     source = _read(OVERVIEW_PATH)
     automation = _between(source, "function AutomationOverrideCard", "function EditableHouseholdFieldRow")
-
     assert "const canEdit = isHouseholdAdminFromContext(authContext)" in automation
     assert "if (!canEdit) return" in automation
     assert "disabled={!consumable || !canEdit}" in automation
@@ -206,7 +284,6 @@ def test_article_automation_override_matches_admin_only_backend_contract():
 def test_article_metadata_mutation_does_not_write_inventory_quantity_or_events():
     source = _read(MAIN_PATH)
     mutation = _between(source, "def update_household_article_details_by_id", "def update_household_article_details(")
-
     assert "UPDATE household_articles" in mutation
     assert "UPDATE inventory" not in mutation
     assert "INSERT INTO inventory_events" not in mutation
@@ -215,7 +292,6 @@ def test_article_metadata_mutation_does_not_write_inventory_quantity_or_events()
 
 def test_custom_name_patch_preserves_omitted_metadata_and_identity_side_effects():
     function, conn, executions, side_effects, _ = _load_partial_patch_function()
-
     result = function(conn, "household-a", "article-a", _payload(custom_name="PO TEST PR251"))
 
     assert result["id"] == "article-a"
@@ -243,7 +319,6 @@ def test_custom_name_patch_preserves_omitted_metadata_and_identity_side_effects(
 
 def test_single_stock_threshold_patch_validates_against_omitted_existing_threshold():
     function, conn, executions, side_effects, StubHTTPException = _load_partial_patch_function()
-
     try:
         function(conn, "household-a", "article-a", _payload(min_stock=6))
     except StubHTTPException as exc:
@@ -251,14 +326,12 @@ def test_single_stock_threshold_patch_validates_against_omitted_existing_thresho
         assert "Minimumvoorraad" in exc.detail
     else:
         raise AssertionError("min_stock boven bestaande ideal_stock had geweigerd moeten worden")
-
     assert executions == []
     assert side_effects == []
 
 
 def test_unsupported_product_knowledge_fields_are_not_silently_accepted():
     function, conn, executions, side_effects, StubHTTPException = _load_partial_patch_function()
-
     try:
         function(conn, "household-a", "article-a", _payload(category="Nieuwe categorie"))
     except StubHTTPException as exc:
@@ -266,21 +339,27 @@ def test_unsupported_product_knowledge_fields_are_not_silently_accepted():
         assert "category" in exc.detail
     else:
         raise AssertionError("productkennisveld category had geweigerd moeten worden")
-
     assert executions == []
     assert side_effects == []
 
 
 def run_contract() -> None:
     test_general_household_editor_owns_only_custom_name()
+    test_overview_wrapper_makes_member_and_viewer_read_only()
+    test_overview_has_compact_functional_subtabs()
+    test_analysis_has_compact_functional_subtabs()
+    test_shared_tabs_support_nested_accessible_navigation_without_breaking_defaults()
+    test_stock_mutation_is_admin_only_and_uses_article_detail_gateway()
+    test_location_mutation_is_admin_only_and_uses_article_detail_gateway()
+    test_article_detail_backend_gateway_is_admin_only_and_registered_first()
     test_household_settings_have_one_dedicated_mutation_owner()
-    test_household_mutation_cards_use_central_role_ssot_and_fail_closed()
-    test_external_product_identity_uses_dedicated_flow_and_role_gate()
     test_article_automation_override_matches_admin_only_backend_contract()
     test_article_metadata_mutation_does_not_write_inventory_quantity_or_events()
     test_custom_name_patch_preserves_omitted_metadata_and_identity_side_effects()
     test_single_stock_threshold_patch_validates_against_omitted_existing_threshold()
     test_unsupported_product_knowledge_fields_are_not_silently_accepted()
+    print("ARTICLE_DETAIL_MEMBER_READONLY_CONTRACT_GREEN")
+    print("ARTICLE_DETAIL_SUBTABS_CONTRACT_GREEN")
     print("ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN")
 
 
