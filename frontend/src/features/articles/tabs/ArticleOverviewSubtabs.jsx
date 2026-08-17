@@ -51,6 +51,9 @@ function classifyOverviewSections(root, readOnly) {
     const title = section.querySelector('.rz-article-section-title')?.textContent?.trim() || ''
     section.dataset.articleSubtab = SECTION_TO_KEY[title] || 'article'
 
+    const summary = section.querySelector(':scope > .rz-article-section-header .rz-article-section-summary')
+    if (summary?.getAttribute('aria-expanded') === 'false') summary.click()
+
     if (title === 'Basis') {
       section.querySelectorAll('.rz-field-row').forEach((row) => {
         const label = row.querySelector('.rz-field-row-label')?.textContent?.trim() || ''
@@ -118,7 +121,10 @@ export default function ArticleOverviewSubtabs(props) {
         }}
       >
         {() => (
-          <>
+          <div
+            className="rz-article-subtab-frame"
+            data-testid={`article-overview-frame-${activeKey}`}
+          >
             {readOnly ? <div className="rz-article-readonly-note" data-testid="article-detail-readonly-note">Alleen-lezen. Alleen een beheerder of eigenaar kan deze artikelgegevens wijzigen.</div> : null}
             {activeSubtab === 'Artikel' ? (
               <div className="rz-article-subtab-help" data-testid="article-household-name-help">
@@ -133,7 +139,7 @@ export default function ArticleOverviewSubtabs(props) {
             <ArticleOverviewTab {...props} />
             {activeSubtab === 'Identiteit' ? <ArticleIdentitySummary articleData={articleData} /> : null}
             {activeSubtab === 'Productdata' ? <ArticleProductSummary articleData={articleData} /> : null}
-          </>
+          </div>
         )}
       </Tabs>
     </div>
