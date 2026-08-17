@@ -35,6 +35,9 @@ jobs:
             backend/app/services/article_detail_write_guard.py \
             backend/app/services/product_enrichment_write_guard.py \
             backend/app/testing/article_detail_write_guard_contract.py \
+            backend/app/api/article_detail_admin_routes.py \
+            backend/app/api/product_inventory_group_routes.py \
+            backend/tests/test_article_detail_admin_gateway_contract.py \
             backend/tests/test_article_detail_mutation_contract.py
 
       - name: Voer artikeldetail-schrijfcontract uit
@@ -44,10 +47,19 @@ jobs:
           python -m app.testing.article_detail_write_guard_contract | tee article-detail-write-guard.log
           grep -F 'ARTICLE_DETAIL_WRITE_GUARD_GREEN' article-detail-write-guard.log
 
-      - name: Bewaak mutatie-eigenaars en UI-rolgrenzen
+      - name: Bewaak mutatie-eigenaars lid-read-only en subtabs
         run: |
           python backend/tests/test_article_detail_mutation_contract.py | tee article-detail-mutation-contract.log
+          grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_CONTRACT_GREEN' article-detail-mutation-contract.log
+          grep -F 'ARTICLE_DETAIL_SUBTABS_CONTRACT_GREEN' article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN' article-detail-mutation-contract.log
+
+      - name: Bewaak server-side Artikeldetail admin-gateway
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/test_article_detail_admin_gateway_contract.py | tee article-detail-admin-gateway.log
+          grep -F 'ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN' article-detail-admin-gateway.log
 
       - name: Bouw gewijzigde frontend
         working-directory: frontend
@@ -89,7 +101,7 @@ jobs:
           print('ARTICLE_DETAIL_RUNTIME_COMMIT_GREEN')
           PY
 
-      - name: Open Artikeldetail echt als Eigenaar Admin en Kijker
+      - name: Open Artikeldetail echt als Eigenaar Admin Lid en Kijker
         working-directory: frontend
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
@@ -109,4 +121,6 @@ jobs:
             sleep 1
           done
           node tests/e2e/article-detail-owner-mutation.smoke.mjs | tee /tmp/article-detail-owner-smoke.log
+          grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_BROWSER_GREEN' /tmp/article-detail-owner-smoke.log
+          grep -F 'ARTICLE_DETAIL_SUBTABS_BROWSER_GREEN' /tmp/article-detail-owner-smoke.log
           grep -F 'ARTICLE_DETAIL_OWNER_MUTATION_BROWSER_GREEN' /tmp/article-detail-owner-smoke.log
