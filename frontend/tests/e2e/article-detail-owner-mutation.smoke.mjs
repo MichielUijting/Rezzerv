@@ -15,13 +15,14 @@ function sessionPayload(role) {
     display_role: role,
     membership_count: 1,
     can_switch_households: false,
-    permissions: mutable ? { 'admin.access': true } : {},
+    permissions: mutable ? { 'admin.access': true, 'inventory.update': true } : {},
     is_viewer: !mutable,
   }
 }
 
 async function installApiMocks(page, role) {
   let customName = 'Oude naam'
+  let inventoryQuantity = 2
   let settings = {
     min_stock: 1,
     ideal_stock: 2,
@@ -40,6 +41,7 @@ async function installApiMocks(page, role) {
     details: [],
     settings: [],
     automation: [],
+    inventoryEvents: [],
     externalLinks: [],
   }
 
@@ -56,7 +58,7 @@ async function installApiMocks(page, role) {
       return json({ overview: { article_name: true, custom_name: true }, stock: {}, locations: {}, history: {}, analytics: {} })
     }
     if (path === '/api/dev/inventory-preview') {
-      return json({ rows: [{ id: articleId, artikel: articleName, aantal: 1, locatie: 'Voorraadkast', sublocatie: 'Plank 1' }] })
+      return json({ rows: [{ id: articleId, household_article_id: articleId, artikel: articleName, aantal: inventoryQuantity, space_id: 'space-1', sublocation_id: 'sub-1', locatie: 'Voorraadkast', sublocatie: 'Plank 1' }] })
     }
     if (path === `/api/household-articles/${articleId}` && method === 'GET') {
       return json({
@@ -64,9 +66,10 @@ async function installApiMocks(page, role) {
         article_id: articleId,
         household_article_id: articleId,
         article_name: articleName,
+        name: articleName,
         custom_name: customName,
         article_type: 'Voedsel & drank',
-        total_quantity: 1,
+        total_quantity: inventoryQuantity,
         barcode: '8712345678901',
         article_number: 'EXT-123',
         settings,
@@ -76,7 +79,7 @@ async function installApiMocks(page, role) {
       const body = request.postDataJSON()
       writes.details.push(body)
       customName = String(body?.custom_name || '')
-      return json({ details: { article_id: articleId, household_article_id: articleId, article_name: articleName, custom_name: customName, article_type: 'Voedsel & drank', barcode: '8712345678901', article_number: 'EXT-123', settings } })
+      return json({ details: { article_id: articleId, household_article_id: articleId, article_name: articleName, name: articleName, custom_name: customName, article_type: 'Voedsel & drank', barcode: '8712345678901', article_number: 'EXT-123', settings } })
     }
     if (path === `/api/household-articles/${articleId}/settings` && method === 'PUT') {
       const body = request.postDataJSON()
@@ -93,6 +96,13 @@ async function installApiMocks(page, role) {
       writes.automation.push(body)
       automationMode = String(body?.mode || 'follow_household')
       return json({ article_id: articleId, household_article_id: articleId, mode: automationMode, has_explicit_override: true, consumable: true })
+    }
+    if (path === '/api/inventory-events' && method === 'POST') {
+      const body = request.postDataJSON()
+      writes.inventoryEvents.push(body)
+      if (body?.event_type === 'adjustment') inventoryQuantity = Number(body.quantity)
+      if (body?.event_type === 'consume') inventoryQuantity = Math.max(0, inventoryQuantity - Number(body.quantity || 0))
+      return json({ status: 'ok', article_total_quantity: inventoryQuantity, row_new_quantity: inventoryQuantity })
     }
     if (path === '/api/spaces' || path === '/api/sublocations') return json({ items: [] })
     if (path.includes('/external-product-link')) {
@@ -152,6 +162,36 @@ async function verifyMutableRole(browser, role) {
   const automationResponse = await automationResponsePromise
   if (!automationResponse.ok()) throw new Error(`${role}: automation PUT gaf HTTP ${automationResponse.status()}`)
 
+  await page.getByRole('tab', { name: 'Voorraad' }).click()
+  const adjustButton = page.getByTestId(`article-stock-adjust-${articleId}`)
+  const consumeButton = page.getByTestId(`article-stock-consume-${articleId}`)
+  await adjustButton.waitFor({ state: 'visible' })
+  if (await adjustButton.isDisabled()) throw new Error(`${role}: voorraad corrigeren is ten onrechte disabled`)
+  if (await consumeButton.isDisabled()) throw new Error(`${role}: voorraad afboeken is ten onrechte disabled`)
+
+  await adjustButton.click()
+  await page.getByLabel('Nieuwe hoeveelheid').fill('3')
+  await page.getByLabel('Reden / notitie').fill(`Correctie ${role}`)
+  const adjustResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/inventory-events' && response.request().method() === 'POST'
+  })
+  await page.getByTestId('article-stock-mutation-form').getByRole('button', { name: 'Opslaan' }).click()
+  const adjustResponse = await adjustResponsePromise
+  if (!adjustResponse.ok()) throw new Error(`${role}: voorraadcorrectie gaf HTTP ${adjustResponse.status()}`)
+  await page.getByTestId('article-stock-mutation-success').waitFor({ state: 'visible' })
+
+  await consumeButton.click()
+  await page.getByLabel('Aantal afboeken').fill('1')
+  await page.getByLabel('Reden / notitie').fill(`Afboeking ${role}`)
+  const consumeResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/inventory-events' && response.request().method() === 'POST'
+  })
+  await page.getByTestId('article-stock-mutation-form').getByRole('button', { name: 'Opslaan' }).click()
+  const consumeResponse = await consumeResponsePromise
+  if (!consumeResponse.ok()) throw new Error(`${role}: afboeking gaf HTTP ${consumeResponse.status()}`)
+
   if (writes.details.length !== 1 || writes.details[0]?.custom_name !== `PO ${role.toUpperCase()} SMOKE` || Object.keys(writes.details[0]).length !== 1) {
     throw new Error(`${role}: onjuist PATCH-contract ${JSON.stringify(writes.details)}`)
   }
@@ -160,6 +200,16 @@ async function verifyMutableRole(browser, role) {
   }
   if (writes.automation.length !== 1 || writes.automation[0]?.mode !== 'always_on') {
     throw new Error(`${role}: automatisering is niet werkelijk geschreven ${JSON.stringify(writes.automation)}`)
+  }
+  if (writes.inventoryEvents.length !== 2) {
+    throw new Error(`${role}: verwacht twee beheerste voorraadmutaties, gevonden ${JSON.stringify(writes.inventoryEvents)}`)
+  }
+  const [adjustWrite, consumeWrite] = writes.inventoryEvents
+  if (adjustWrite?.event_type !== 'adjustment' || adjustWrite?.inventory_id !== articleId || adjustWrite?.quantity !== 3) {
+    throw new Error(`${role}: onjuiste voorraadcorrectie ${JSON.stringify(adjustWrite)}`)
+  }
+  if (consumeWrite?.event_type !== 'consume' || consumeWrite?.inventory_id !== articleId || consumeWrite?.quantity !== 1) {
+    throw new Error(`${role}: onjuiste afboeking ${JSON.stringify(consumeWrite)}`)
   }
   if (writes.externalLinks.length) {
     throw new Error(`${role}: onverwachte externe-productmutatie ${JSON.stringify(writes.externalLinks)}`)
@@ -179,7 +229,15 @@ async function verifyViewer(browser) {
   if (!(await page.getByTestId('article-household-settings-save').isDisabled())) throw new Error('viewer: huishoudinstellingen moeten disabled zijn')
   if (await page.getByTestId('article-external-link-edit').isVisible()) throw new Error('viewer: barcode/externe-link-mutatie mag niet zichtbaar zijn')
   if (!(await page.locator('.rz-article-automation-select').isDisabled())) throw new Error('viewer: automatisering moet disabled zijn')
-  if (writes.details.length || writes.settings.length || writes.automation.length || writes.externalLinks.length) {
+
+  await page.getByRole('tab', { name: 'Voorraad' }).click()
+  const adjustButton = page.getByTestId(`article-stock-adjust-${articleId}`)
+  const consumeButton = page.getByTestId(`article-stock-consume-${articleId}`)
+  await adjustButton.waitFor({ state: 'visible' })
+  if (!(await adjustButton.isDisabled())) throw new Error('viewer: voorraad corrigeren moet disabled zijn')
+  if (!(await consumeButton.isDisabled())) throw new Error('viewer: voorraad afboeken moet disabled zijn')
+
+  if (writes.details.length || writes.settings.length || writes.automation.length || writes.inventoryEvents.length || writes.externalLinks.length) {
     throw new Error(`viewer: onverwachte write ${JSON.stringify(writes)}`)
   }
   await page.close()
