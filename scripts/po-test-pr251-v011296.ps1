@@ -9,9 +9,8 @@ $ArticleId = '2c93edd7-c65a-46e8-8272-73611c9f5c3b'
 $ExpectedArticleName = '7 Granen Ontbijt'
 $ProjectName = 'rezzerv-pr251-po'
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$Desktop = [Environment]::GetFolderPath('Desktop')
-if ([string]::IsNullOrWhiteSpace($Desktop)) { $Desktop = $env:TEMP }
-$Log = Join-Path $Desktop "Rezzerv-PO-test-PR251-$Stamp.log"
+$LogDir = Join-Path $env:TEMP 'Rezzerv-PO-tests'
+$Log = Join-Path $LogDir "Rezzerv-PO-test-PR251-$Stamp.log"
 $Worktree = Join-Path $env:TEMP "rezzerv-pr251-$Stamp"
 $OriginalContainers = @()
 $OriginalHead = ''
@@ -113,6 +112,7 @@ if ($SelfTest) {
   exit 0
 }
 
+New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 New-Item -ItemType File -Path $Log -Force | Out-Null
 Log 'Release Protocol v1.1 - Compliance Check:'
 Log "PR #251 - $ExpectedVersion"
@@ -143,7 +143,7 @@ try {
   if ($afterProduct) {
     $unexpected = @()
     foreach ($path in ($afterProduct -split "`n")) {
-      if ($path -notmatch '^scripts/po-test-pr251-v011296\.ps1$' -and $path -notmatch '^\.github/workflows/pr251-po-test-script-windows\.yml$') { $unexpected += $path }
+      if ($path -notmatch '^scripts/po-test-pr251-v011296\.ps1$' -and $path -notmatch '^scripts/START-PO-TEST-PR251\.cmd$' -and $path -notmatch '^\.github/workflows/pr251-po-test-script-windows\.yml$') { $unexpected += $path }
     }
     if ($unexpected.Count -gt 0) { throw "Nieuwe productwijzigingen na bewezen commit: $($unexpected -join ', ')" }
     Log 'Latere PR-wijzigingen zijn uitsluitend PO-testvalidatiebestanden.'
