@@ -2,7 +2,17 @@ param([switch]$SelfTest)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'C:\Users\Gebruiker\Rezzerv_Github'
+$RepoCandidates = @(
+  'C:\Users\Gebruiker\Rezzerv_Github',
+  'C:\Users\Gebruiker\OneDrive\Scans\Documenten\GitHub\Rezzerv'
+)
+$Repo = $RepoCandidates[0]
+foreach ($candidate in $RepoCandidates) {
+  if (Test-Path -LiteralPath (Join-Path $candidate '.git')) {
+    $Repo = $candidate
+    break
+  }
+}
 $ProductSha = '9a1944cc760d4d7355b48f8106f620ab0ee351ed'
 $ExpectedVersion = 'Rezzerv-MVP-v01.12.97'
 $ProjectName = 'rezzerv-pr251-v011297-po'
@@ -72,7 +82,7 @@ function Containers-OnPort([int]$Port) {
 if ($SelfTest) {
   if ($ProductSha -notmatch '^[0-9a-f]{40}$') { throw 'SELFTEST: product-SHA ongeldig.' }
   if ($ExpectedVersion -ne 'Rezzerv-MVP-v01.12.97') { throw 'SELFTEST: versie ongeldig.' }
-  if ($Repo -ne 'C:\Users\Gebruiker\Rezzerv_Github') { throw 'SELFTEST: SSOT-pad ongeldig.' }
+  if ($Repo -notin $RepoCandidates) { throw 'SELFTEST: SSOT-pad ongeldig.' }
   if ($ProjectName -match '^rezzerv$') { throw 'SELFTEST: Docker-project moet geisoleerd zijn.' }
   Write-Output 'PO_TEST_V011297_SELFTEST_GREEN'
   exit 0
@@ -90,7 +100,9 @@ try {
   foreach ($cmd in @('git','docker')) {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "Programma ontbreekt: $cmd" }
   }
-  if (-not (Test-Path -LiteralPath (Join-Path $Repo '.git'))) { throw "Git-repository niet gevonden: $Repo" }
+  if (-not (Test-Path -LiteralPath (Join-Path $Repo '.git'))) {
+    throw "Git-repository niet gevonden. Gecontroleerd: $($RepoCandidates -join ' | ')"
+  }
   & docker info *> $null
   if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop is niet beschikbaar.' }
 
