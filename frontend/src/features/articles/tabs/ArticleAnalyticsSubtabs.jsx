@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import Tabs from '../../../ui/Tabs'
 import ArticleAnalyticsTab from './ArticleAnalyticsTab'
 
@@ -23,9 +23,20 @@ function persistSubtab(value) {
   window.sessionStorage.setItem(ANALYSIS_SUBTAB_STORAGE_KEY, value)
 }
 
+function keepAnalysisSectionsOpen(root) {
+  root?.querySelectorAll('.rz-analytics-tab .rz-article-section-summary[aria-expanded="false"]').forEach((summary) => {
+    summary.click()
+  })
+}
+
 export default function ArticleAnalyticsSubtabs(props) {
   const [activeSubtab, setActiveSubtab] = useState(readInitialSubtab)
+  const rootRef = useRef(null)
   const activeKey = SUBTAB_KEY[activeSubtab] || 'trends'
+
+  useLayoutEffect(() => {
+    keepAnalysisSectionsOpen(rootRef.current)
+  }, [activeSubtab, props?.articleData])
 
   function handleSubtabChange(nextSubtab) {
     setActiveSubtab(nextSubtab)
@@ -34,6 +45,7 @@ export default function ArticleAnalyticsSubtabs(props) {
 
   return (
     <div
+      ref={rootRef}
       className="rz-article-subtab-layout rz-article-analysis-subtab-layout"
       data-testid="article-analysis-subtab-layout"
       data-active-subtab={activeKey}
@@ -53,7 +65,14 @@ export default function ArticleAnalyticsSubtabs(props) {
           Onderbouwing: 'article-analysis-subtab-evidence',
         }}
       >
-        {() => <ArticleAnalyticsTab {...props} />}
+        {() => (
+          <div
+            className="rz-article-subtab-frame"
+            data-testid={`article-analysis-frame-${activeKey}`}
+          >
+            <ArticleAnalyticsTab {...props} />
+          </div>
+        )}
       </Tabs>
     </div>
   )
