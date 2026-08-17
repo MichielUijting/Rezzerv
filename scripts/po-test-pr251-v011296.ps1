@@ -6,6 +6,7 @@ $Repo = 'C:\Users\Gebruiker\Rezzerv_Github'
 $ProductSha = '51d20083012f3f094b7407c538741ef329e61d68'
 $ExpectedVersion = 'Rezzerv-MVP-v01.12.96'
 $ArticleId = '2c93edd7-c65a-46e8-8272-73611c9f5c3b'
+$ExpectedArticleName = '7 Granen Ontbijt'
 $ProjectName = 'rezzerv-pr251-po'
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $Desktop = [Environment]::GetFolderPath('Desktop')
@@ -101,6 +102,7 @@ if ($SelfTest) {
   if ($ProductSha -notmatch '^[0-9a-f]{40}$') { throw 'SELFTEST: product-SHA ongeldig.' }
   if ($Repo -ne 'C:\Users\Gebruiker\Rezzerv_Github') { throw 'SELFTEST: SSOT-werkmap ongeldig.' }
   if ($ExpectedVersion -ne 'Rezzerv-MVP-v01.12.96') { throw 'SELFTEST: versie ongeldig.' }
+  if ($ExpectedArticleName -ne '7 Granen Ontbijt') { throw 'SELFTEST: testartikelnaam ongeldig.' }
   if ($ProjectName -in @('rezzerv','rezzerv_github')) { throw 'SELFTEST: project niet geisoleerd.' }
   if ((NormalizeHostPath 'C:/Users/Gebruiker/Rezzerv_Github') -ne (NormalizeHostPath $Repo)) { throw 'SELFTEST: padnormalisatie ongeldig.' }
   Write-Output 'PO_TEST_SCRIPT_SELFTEST_GREEN'
@@ -199,10 +201,10 @@ try {
   if ((($contract | ForEach-Object { [string]$_ }) -join "`n") -notmatch 'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN') { throw 'Artikeldetail-contractrunner gaf geen GREEN-marker.' }
   Log 'Gerichte backend/API-contractvalidatie = GREEN.'
 
-  $fixtureCode = 'import sqlite3,sys; aid="{0}"; c=sqlite3.connect("/app/data/rezzerv.db"); a=c.execute("SELECT naam FROM household_articles WHERE id=? LIMIT 1",(aid,)).fetchone(); n=c.execute("SELECT COUNT(*) FROM inventory WHERE household_article_id=? AND COALESCE(status,?)=?",(aid,"active","active")).fetchone()[0]; print("ARTICLE_FIXTURE_GREEN:" + str(a[0]) + ":" + str(n) if a and int(n or 0)>=1 else "ARTICLE_FIXTURE_MISSING"); c.close(); sys.exit(0 if a and int(n or 0)>=1 else 2)' -f $ArticleId
+  $fixtureCode = 'import sqlite3,sys; aid="{0}"; expected="{1}"; c=sqlite3.connect("/app/data/rezzerv.db"); a=c.execute("SELECT naam FROM household_articles WHERE id=? LIMIT 1",(aid,)).fetchone(); n=c.execute("SELECT COUNT(*) FROM inventory WHERE household_article_id=? AND COALESCE(status,?)=?",(aid,"active","active")).fetchone()[0]; ok=bool(a) and str(a[0]).strip().lower()==expected.strip().lower() and int(n or 0)>=1; print("ARTICLE_FIXTURE_GREEN:" + str(a[0]) + ":" + str(n) if ok else "ARTICLE_FIXTURE_MISSING_OR_WRONG:" + (str(a[0]) if a else "<missing>") + ":" + str(n)); c.close(); sys.exit(0 if ok else 2)' -f $ArticleId,$ExpectedArticleName
   $fixture = Run 'docker' @('compose','-p',$ProjectName,'-f',$compose,'exec','-T','backend','python','-c',$fixtureCode) $Worktree
-  if ((($fixture | ForEach-Object { [string]$_ }) -join "`n") -notmatch 'ARTICLE_FIXTURE_GREEN:') { throw 'Testartikel/actieve voorraadfixture ontbreekt.' }
-  Log 'Testartikel en actieve voorraadregel = GREEN.'
+  if ((($fixture | ForEach-Object { [string]$_ }) -join "`n") -notmatch '^ARTICLE_FIXTURE_GREEN:7 Granen Ontbijt:') { throw 'Exact testartikel 7 Granen Ontbijt en actieve voorraadfixture ontbreken.' }
+  Log 'Exact testartikel 7 Granen Ontbijt en actieve voorraadregel = GREEN.'
 
   Write-Host ''; Write-Host '============================================================'
   Write-Host 'TECHNISCHE PRECHECK = GREEN'
