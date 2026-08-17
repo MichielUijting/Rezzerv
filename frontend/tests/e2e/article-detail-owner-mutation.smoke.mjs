@@ -253,8 +253,11 @@ async function verifyMutableRole(browser, role) {
   await settingsSave.click()
   if (!(await settingsResponsePromise).ok()) throw new Error(`${role}: settings PUT faalde`)
 
-  const householdSubtab = await page.evaluate(() => document.querySelector('[data-testid="article-overview-subtab-household"]')?.getAttribute('aria-selected'))
-  if (householdSubtab !== 'true') throw new Error(`${role}: Huishouden-subtab bleef niet geselecteerd na live refresh`)
+  await page.waitForFunction(() => {
+    const selected = document.querySelector('[data-testid="article-overview-subtab-household"]')?.getAttribute('aria-selected') === 'true'
+    const stored = window.sessionStorage.getItem('rezzerv.article-detail.overview-subtab') === 'Huishouden'
+    return selected && stored
+  })
 
   const automation = page.locator('.rz-article-automation-select')
   await automation.waitFor({ state: 'visible' })
