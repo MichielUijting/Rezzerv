@@ -5,7 +5,18 @@ from typing import Any, get_type_hints
 
 from fastapi import APIRouter, Body, Header, HTTPException, Request
 
+from app.services.household_alias_policy import install_household_alias_policy
+
 router = APIRouter()
+
+
+@router.on_event('startup')
+def install_article_detail_household_alias_policy() -> None:
+    # The router is imported while app.main is still being defined. At startup the
+    # module is complete, so the legacy enrichment helpers can safely be wrapped.
+    import app.main as main_module
+
+    install_household_alias_policy(main_module)
 
 
 def _main_route_endpoint(request: Request, path: str, method: str):
