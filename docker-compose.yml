@@ -38,6 +38,7 @@ services:
       context: ./frontend
       args:
         REZZERV_VERSION: ${REZZERV_VERSION:-Rezzerv-dev}
+        REZZERV_COMMIT: ${REZZERV_COMMIT:-unknown}
     restart: unless-stopped
     ports:
       - "5174:80"
