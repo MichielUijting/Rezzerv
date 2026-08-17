@@ -10,26 +10,24 @@ from app.services.household_alias_policy import install_household_alias_policy
 router = APIRouter()
 
 
-@router.on_event('startup')
-def install_article_detail_household_alias_policy() -> None:
-    # The router is imported while app.main is still being defined. At startup the
-    # module is complete, so the legacy enrichment helpers can safely be wrapped.
-    import app.main as main_module
-
-    install_household_alias_policy(main_module)
-
-
-def _main_route_endpoint(request: Request, path: str, method: str):
+def _main_app_route(app, path: str, method: str):
     wanted_method = str(method or '').upper()
-    for route in request.app.routes:
+    for route in app.routes:
         if getattr(route, 'path', None) != path:
             continue
         if wanted_method not in set(getattr(route, 'methods', set()) or set()):
             continue
         endpoint = getattr(route, 'endpoint', None)
         if endpoint is not None and getattr(endpoint, '__module__', '') == 'app.main':
-            return endpoint
-    raise HTTPException(status_code=500, detail=f'Interne Artikeldetail-route ontbreekt: {method} {path}')
+            return route
+    raise RuntimeError(f'Interne Artikeldetail-route ontbreekt: {method} {path}')
+
+
+def _main_route_endpoint(request: Request, path: str, method: str):
+    try:
+        return _main_app_route(request.app, path, method).endpoint
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _require_admin(endpoint, authorization: str | None) -> dict[str, Any]:
@@ -49,6 +47,15 @@ def _payload_model(endpoint, payload: dict[str, Any]):
     if hasattr(annotation, 'model_validate'):
         return annotation.model_validate(payload)
     return annotation(**payload)
+
+
+def _payload_dict(payload: Any) -> dict[str, Any]:
+    if isinstance(payload, dict):
+        return dict(payload)
+    model_dump = getattr(payload, 'model_dump', None)
+    if callable(model_dump):
+        return dict(model_dump(exclude_unset=True))
+    return {}
 
 
 def _assert_inventory_belongs_to_article(endpoint, context: dict[str, Any], household_article_id: str, inventory_id: str | None) -> None:
@@ -76,13 +83,7 @@ def _assert_inventory_belongs_to_article(endpoint, context: dict[str, Any], hous
 
 
 def _preserve_server_owned_settings(endpoint, context: dict[str, Any], household_article_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Artikeldetail bezit geen afgeleide prijs of nog niet uitgewerkte auto_restock-policy.
-
-    De oudere settings-service schrijft een volledig model terug. Daarom vullen we deze twee
-    niet-gepresenteerde velden met de actuele serverwaarde in plaats van een mogelijk verouderde
-    browserwaarde of model-default. Zo kan een wijziging aan bijvoorbeeld minimumvoorraad nooit
-    de berekende prijs of een bestaande technische vlag onbedoeld wijzigen.
-    """
+    """Keep server-owned settings unchanged during an Artikeldetail update."""
     globals_map = getattr(endpoint, '__globals__', {})
     engine = globals_map.get('engine')
     get_settings = globals_map.get('get_household_article_settings')
@@ -101,7 +102,54 @@ def _preserve_server_owned_settings(endpoint, context: dict[str, Any], household
     return sanitized
 
 
-@router.patch('/api/household-articles/{household_article_id}')
+def _install_admin_guard(main_module, path: str, method: str, *, preserve_server_owned_settings: bool = False) -> None:
+    route = _main_app_route(main_module.app, path, method)
+    original_endpoint = route.endpoint
+    dependant = getattr(route, 'dependant', None)
+    if dependant is None:
+        raise RuntimeError(f'FastAPI dependency ontbreekt voor {method} {path}')
+    if getattr(dependant.call, '_rezzerv_article_detail_admin_guard', False):
+        return
+
+    def guarded_endpoint(**values):
+        authorization = values.get('authorization')
+        context = _require_admin(original_endpoint, authorization)
+        if preserve_server_owned_settings:
+            article_id = str(values.get('household_article_id') or '').strip()
+            sanitized_payload = _preserve_server_owned_settings(
+                original_endpoint,
+                context,
+                article_id,
+                _payload_dict(values.get('payload')),
+            )
+            values['payload'] = _payload_model(original_endpoint, sanitized_payload)
+        return original_endpoint(**values)
+
+    guarded_endpoint._rezzerv_article_detail_admin_guard = True
+    dependant.call = guarded_endpoint
+
+
+@router.on_event('startup')
+def install_article_detail_household_alias_policy() -> None:
+    # app.main is complete at startup. Guard the canonical routes in-place instead
+    # of registering duplicate PATCH/PUT paths; this keeps one route owner while
+    # preserving server-side Admin/Eigenaar authorization for Artikeldetail.
+    import app.main as main_module
+
+    install_household_alias_policy(main_module)
+    _install_admin_guard(
+        main_module,
+        '/api/household-articles/{household_article_id}',
+        'PATCH',
+    )
+    _install_admin_guard(
+        main_module,
+        '/api/household-articles/{household_article_id}/settings',
+        'PUT',
+        preserve_server_owned_settings=True,
+    )
+
+
 def update_article_detail_admin_only(
     household_article_id: str,
     request: Request,
@@ -113,7 +161,6 @@ def update_article_detail_admin_only(
     return endpoint(household_article_id, _payload_model(endpoint, payload), authorization)
 
 
-@router.put('/api/household-articles/{household_article_id}/settings')
 def update_article_detail_settings_admin_only(
     household_article_id: str,
     request: Request,
