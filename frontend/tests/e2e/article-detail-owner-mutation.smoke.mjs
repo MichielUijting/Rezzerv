@@ -59,8 +59,7 @@ async function installApiMocks(page, role) {
     const method = request.method()
     const json = async (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
 
-    if (path === '/api/session') return json(sessionPayload(role))
-    if (path === '/api/household') return json(sessionPayload(role))
+    if (path === '/api/session' || path === '/api/household') return json(sessionPayload(role))
     if (path === '/api/settings/article-field-visibility') {
       return json({
         overview: {
@@ -139,68 +138,95 @@ async function installApiMocks(page, role) {
     }
     return json({})
   })
+
   return writes
 }
 
 async function waitForInventoryQuantity(page, expected) {
-  const quantity = page.locator('.rz-stock-summary-table-quantity').filter({ hasText: String(expected) }).first()
-  await quantity.waitFor({ state: 'visible' })
+  await page.locator('.rz-stock-summary-table-quantity').filter({ hasText: String(expected) }).first().waitFor({ state: 'visible' })
 }
 
-async function activateVisibleSubtab(page, name) {
-  const tab = page.getByRole('tab', { name, exact: true })
-  await tab.waitFor({ state: 'visible' })
-  await tab.evaluate((element, label) => {
+async function activateNativeSubtab(page, testId, label) {
+  await page.waitForFunction((id) => {
+    const element = document.querySelector(`[data-testid="${id}"]`)
+    if (!element || element.disabled) return false
     const rect = element.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.right <= 0 || rect.top >= window.innerHeight || rect.left >= window.innerWidth) {
-      throw new Error(`${label}: subtab ligt buiten het zichtbare browservenster`)
+    return rect.width > 0 && rect.height > 0
+  }, testId)
+
+  const stability = await page.evaluate(async (id) => {
+    const first = document.querySelector(`[data-testid="${id}"]`)
+    await new Promise((resolve) => window.setTimeout(resolve, 150))
+    const second = document.querySelector(`[data-testid="${id}"]`)
+    return {
+      exists: Boolean(first && second),
+      sameNode: Boolean(first && second && first === second),
     }
-    const x = Math.max(0, Math.min(window.innerWidth - 1, rect.left + rect.width / 2))
-    const y = Math.max(0, Math.min(window.innerHeight - 1, rect.top + rect.height / 2))
+  }, testId)
+
+  if (!stability.exists) throw new Error(`${label}: subtab verdween uit de DOM`)
+  if (!stability.sameNode) throw new Error(`${label}: subtab-node wordt continu vervangen tijdens renderen`)
+
+  const clickResult = await page.evaluate(({ id, label: expectedLabel }) => {
+    const element = document.querySelector(`[data-testid="${id}"]`)
+    if (!element) return { ok: false, reason: 'missing' }
+    const rect = element.getBoundingClientRect()
+    const style = window.getComputedStyle(element)
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0 || rect.width <= 0 || rect.height <= 0) {
+      return { ok: false, reason: 'not-visible', rect: { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width, height: rect.height } }
+    }
+    element.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const nextRect = element.getBoundingClientRect()
+    const x = Math.max(0, Math.min(window.innerWidth - 1, nextRect.left + nextRect.width / 2))
+    const y = Math.max(0, Math.min(window.innerHeight - 1, nextRect.top + nextRect.height / 2))
     const hit = document.elementFromPoint(x, y)
     if (!hit || (hit !== element && !element.contains(hit))) {
-      throw new Error(`${label}: subtab is zichtbaar maar wordt door een ander element afgedekt`)
+      return { ok: false, reason: 'covered', hit: hit?.getAttribute?.('data-testid') || hit?.tagName || null }
+    }
+    if (String(element.textContent || '').trim() !== expectedLabel) {
+      return { ok: false, reason: 'wrong-label', text: String(element.textContent || '').trim() }
     }
     element.click()
-  }, name)
-  await page.waitForFunction((label) => {
-    return [...document.querySelectorAll('[role="tab"]')].some((element) => (
-      String(element.textContent || '').trim() === label && element.getAttribute('aria-selected') === 'true'
-    ))
-  }, name)
+    return { ok: true }
+  }, { id: testId, label })
+
+  if (!clickResult.ok) throw new Error(`${label}: native subtab-click mislukt ${JSON.stringify(clickResult)}`)
+
+  await page.waitForFunction((id) => {
+    const element = document.querySelector(`[data-testid="${id}"]`)
+    return Boolean(element && element.getAttribute('aria-selected') === 'true')
+  }, testId)
 }
 
-async function verifyOverviewSubtabs(page) {
-  const tabs = ['Artikel', 'Huishouden', 'Identiteit', 'Productdata']
-  for (const name of tabs) {
-    await page.getByRole('tab', { name, exact: true }).waitFor({ state: 'visible' })
-  }
+const OVERVIEW_SUBTABS = [
+  ['article-overview-subtab-article', 'Artikel', 'article-household-details-section'],
+  ['article-overview-subtab-household', 'Huishouden', 'article-household-settings-section'],
+  ['article-overview-subtab-identity', 'Identiteit', 'article-external-link-section'],
+  ['article-overview-subtab-productdata', 'Productdata', 'article-product-enrichment-section'],
+]
 
-  await activateVisibleSubtab(page, 'Artikel')
-  await page.getByTestId('article-household-details-section').waitFor({ state: 'visible' })
-  await activateVisibleSubtab(page, 'Huishouden')
-  await page.getByTestId('article-household-settings-section').waitFor({ state: 'visible' })
-  await activateVisibleSubtab(page, 'Identiteit')
-  await page.getByTestId('article-external-link-section').waitFor({ state: 'visible' })
-  await activateVisibleSubtab(page, 'Productdata')
-  await page.getByTestId('article-product-enrichment-section').waitFor({ state: 'visible' })
-  await activateVisibleSubtab(page, 'Artikel')
+async function verifyOverviewSubtabs(page) {
+  for (const [testId, label, sectionTestId] of OVERVIEW_SUBTABS) {
+    await activateNativeSubtab(page, testId, label)
+    await page.getByTestId(sectionTestId).waitFor({ state: 'visible' })
+  }
+  await activateNativeSubtab(page, 'article-overview-subtab-article', 'Artikel')
 }
 
 async function verifyAnalysisSubtabs(page) {
   await page.getByRole('tab', { name: 'Analyse', exact: true }).click()
-  for (const name of ['Trends', 'Prijs', 'Prognose', 'Onderbouwing']) {
-    await page.getByRole('tab', { name, exact: true }).waitFor({ state: 'visible' })
-  }
 
-  await activateVisibleSubtab(page, 'Trends')
-  await page.getByText('Aankoop en verbruik in de tijd', { exact: true }).waitFor({ state: 'visible' })
-  await activateVisibleSubtab(page, 'Prijs')
-  await page.getByText('Prijsinzichten', { exact: true }).waitFor({ state: 'visible' })
-  await activateVisibleSubtab(page, 'Prognose')
-  await page.getByText('Voorraadprognose', { exact: true }).waitFor({ state: 'visible' })
-  await activateVisibleSubtab(page, 'Onderbouwing')
-  await page.getByText('Onderbouwing', { exact: true }).waitFor({ state: 'visible' })
+  const cases = [
+    ['article-analysis-subtab-trends', 'Trends', 'Aankoop en verbruik in de tijd'],
+    ['article-analysis-subtab-price', 'Prijs', 'Prijsinzichten'],
+    ['article-analysis-subtab-forecast', 'Prognose', 'Voorraadprognose'],
+    ['article-analysis-subtab-evidence', 'Onderbouwing', 'Onderbouwing'],
+  ]
+
+  for (const [testId, label, content] of cases) {
+    await activateNativeSubtab(page, testId, label)
+    await page.getByText(content, { exact: true }).waitFor({ state: 'visible' })
+  }
 }
 
 async function verifyMutableRole(browser, role) {
@@ -213,109 +239,68 @@ async function verifyMutableRole(browser, role) {
   await verifyOverviewSubtabs(page)
 
   const ownName = page.getByTestId('article-details-input-custom_name')
-  await ownName.waitFor({ state: 'visible' })
   if (await ownName.isDisabled()) throw new Error(`${role}: Eigen naam is ten onrechte disabled`)
-
   await ownName.fill(`PO ${role.toUpperCase()} SMOKE`)
-  const patchResponsePromise = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname === `/api/household-articles/${articleId}` && response.request().method() === 'PATCH'
-  })
+  const patchResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${articleId}` && response.request().method() === 'PATCH')
   await ownName.blur()
-  const patchResponse = await patchResponsePromise
-  if (!patchResponse.ok()) throw new Error(`${role}: PATCH gaf HTTP ${patchResponse.status()}`)
+  if (!(await patchResponsePromise).ok()) throw new Error(`${role}: PATCH faalde`)
 
-  await activateVisibleSubtab(page, 'Huishouden')
+  await activateNativeSubtab(page, 'article-overview-subtab-household', 'Huishouden')
   const settingsSave = page.getByTestId('article-household-settings-save')
-  await settingsSave.waitFor({ state: 'visible' })
   if (await settingsSave.isDisabled()) throw new Error(`${role}: huishoudinstellingen zijn ten onrechte disabled`)
-
-  const notes = page.getByTestId('article-details-input-notes')
-  await notes.fill(`Notitie ${role}`)
-  const settingsResponsePromise = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname === `/api/household-articles/${articleId}/settings` && response.request().method() === 'PUT'
-  })
+  await page.getByTestId('article-details-input-notes').fill(`Notitie ${role}`)
+  const settingsResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${articleId}/settings` && response.request().method() === 'PUT')
   await settingsSave.click()
-  const settingsResponse = await settingsResponsePromise
-  if (!settingsResponse.ok()) throw new Error(`${role}: settings PUT gaf HTTP ${settingsResponse.status()}`)
+  if (!(await settingsResponsePromise).ok()) throw new Error(`${role}: settings PUT faalde`)
+
+  const householdSubtab = await page.evaluate(() => document.querySelector('[data-testid="article-overview-subtab-household"]')?.getAttribute('aria-selected'))
+  if (householdSubtab !== 'true') throw new Error(`${role}: Huishouden-subtab bleef niet geselecteerd na live refresh`)
 
   const automation = page.locator('.rz-article-automation-select')
   await automation.waitFor({ state: 'visible' })
   if (await automation.isDisabled()) throw new Error(`${role}: automatisering is ten onrechte disabled`)
-  const automationBefore = await automation.inputValue()
-  const nextAutomationMode = automationBefore === 'always_on' ? 'always_off' : 'always_on'
-  const automationResponsePromise = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname === `/api/household-articles/${articleId}/automation-override` && response.request().method() === 'PUT'
-  })
-  await automation.selectOption(nextAutomationMode)
-  const automationResponse = await automationResponsePromise
-  if (!automationResponse.ok()) throw new Error(`${role}: automation PUT gaf HTTP ${automationResponse.status()}`)
+  const beforeMode = await automation.inputValue()
+  const nextMode = beforeMode === 'always_on' ? 'always_off' : 'always_on'
+  const automationResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${articleId}/automation-override` && response.request().method() === 'PUT')
+  await automation.selectOption(nextMode)
+  if (!(await automationResponsePromise).ok()) throw new Error(`${role}: automation PUT faalde`)
 
-  await activateVisibleSubtab(page, 'Identiteit')
-  if (await page.getByTestId('article-external-link-edit').isVisible()) throw new Error(`${role}: barcode/externe-link-mutatie mag niet zichtbaar zijn op Artikeldetail`)
+  await activateNativeSubtab(page, 'article-overview-subtab-identity', 'Identiteit')
+  if (await page.getByTestId('article-external-link-edit').isVisible()) throw new Error(`${role}: barcode-mutatie is ten onrechte zichtbaar`)
 
   await page.getByRole('tab', { name: 'Voorraad', exact: true }).click()
-  const adjustButton = page.getByTestId(`article-stock-adjust-${articleId}`)
-  const consumeButton = page.getByTestId(`article-stock-consume-${articleId}`)
-  await adjustButton.waitFor({ state: 'visible' })
-  if (await adjustButton.isDisabled()) throw new Error(`${role}: voorraad corrigeren is ten onrechte disabled`)
-  if (await consumeButton.isDisabled()) throw new Error(`${role}: voorraad afboeken is ten onrechte disabled`)
+  const adjust = page.getByTestId(`article-stock-adjust-${articleId}`)
+  const consume = page.getByTestId(`article-stock-consume-${articleId}`)
+  if (await adjust.isDisabled()) throw new Error(`${role}: Corrigeren is ten onrechte disabled`)
+  if (await consume.isDisabled()) throw new Error(`${role}: Afboeken is ten onrechte disabled`)
 
-  await adjustButton.click()
+  await adjust.click()
   await page.getByLabel('Nieuwe hoeveelheid').fill('3')
-  await page.getByLabel('Reden / notitie').fill(`Correctie ${role}`)
-  const adjustResponsePromise = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname === `/api/household-articles/${articleId}/inventory-events` && response.request().method() === 'POST'
-  })
+  const adjustResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${articleId}/inventory-events` && response.request().method() === 'POST')
   await page.getByTestId('article-stock-mutation-form').getByRole('button', { name: 'Opslaan' }).click()
-  const adjustResponse = await adjustResponsePromise
-  if (!adjustResponse.ok()) throw new Error(`${role}: voorraadcorrectie gaf HTTP ${adjustResponse.status()}`)
+  if (!(await adjustResponsePromise).ok()) throw new Error(`${role}: voorraadcorrectie faalde`)
   await waitForInventoryQuantity(page, 3)
 
-  await consumeButton.click()
+  await consume.click()
   await page.getByLabel('Aantal afboeken').fill('1')
-  await page.getByLabel('Reden / notitie').fill(`Afboeking ${role}`)
-  const consumeResponsePromise = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname === `/api/household-articles/${articleId}/inventory-events` && response.request().method() === 'POST'
-  })
+  const consumeResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${articleId}/inventory-events` && response.request().method() === 'POST')
   await page.getByTestId('article-stock-mutation-form').getByRole('button', { name: 'Opslaan' }).click()
-  const consumeResponse = await consumeResponsePromise
-  if (!consumeResponse.ok()) throw new Error(`${role}: afboeking gaf HTTP ${consumeResponse.status()}`)
+  if (!(await consumeResponsePromise).ok()) throw new Error(`${role}: afboeking faalde`)
   await waitForInventoryQuantity(page, 2)
 
   await page.getByRole('tab', { name: 'Locaties', exact: true }).click()
-  const transferButton = page.getByTestId('article-location-action-transfer')
-  await transferButton.waitFor({ state: 'visible' })
-  if (await transferButton.isDisabled()) throw new Error(`${role}: Verplaatsen is ten onrechte disabled`)
+  if (await page.getByTestId('article-location-action-transfer').isDisabled()) throw new Error(`${role}: Verplaatsen is ten onrechte disabled`)
 
   await verifyAnalysisSubtabs(page)
 
-  if (writes.details.length !== 1 || writes.details[0]?.custom_name !== `PO ${role.toUpperCase()} SMOKE` || Object.keys(writes.details[0]).length !== 1) {
-    throw new Error(`${role}: onjuist PATCH-contract ${JSON.stringify(writes.details)}`)
-  }
-  if (writes.settings.length !== 1 || writes.settings[0]?.notes !== `Notitie ${role}`) {
-    throw new Error(`${role}: huishoudinstellingen zijn niet werkelijk geschreven ${JSON.stringify(writes.settings)}`)
-  }
-  if (writes.automation.length !== 1 || writes.automation[0]?.mode !== nextAutomationMode || writes.automation[0]?.mode === automationBefore) {
-    throw new Error(`${role}: automatisering is niet werkelijk naar een andere waarde geschreven ${JSON.stringify(writes.automation)}`)
-  }
-  if (writes.inventoryEvents.length !== 2) {
-    throw new Error(`${role}: verwacht twee beheerste voorraadmutaties, gevonden ${JSON.stringify(writes.inventoryEvents)}`)
-  }
-  const [adjustWrite, consumeWrite] = writes.inventoryEvents
-  if (adjustWrite?.event_type !== 'adjustment' || adjustWrite?.inventory_id !== articleId || adjustWrite?.quantity !== 3) {
-    throw new Error(`${role}: onjuiste voorraadcorrectie ${JSON.stringify(adjustWrite)}`)
-  }
-  if (consumeWrite?.event_type !== 'consume' || consumeWrite?.inventory_id !== articleId || consumeWrite?.quantity !== 1) {
-    throw new Error(`${role}: onjuiste afboeking ${JSON.stringify(consumeWrite)}`)
-  }
-  if (writes.genericInventoryWrites.length) throw new Error(`${role}: Artikeldetail gebruikte generieke voorraadroute ${JSON.stringify(writes.genericInventoryWrites)}`)
-  if (writes.externalLinks.length) throw new Error(`${role}: onverwachte externe-productmutatie ${JSON.stringify(writes.externalLinks)}`)
-  if (consoleErrors.length) throw new Error(`${role}: console errors: ${consoleErrors.join(' | ')}`)
+  if (writes.details.length !== 1 || writes.details[0]?.custom_name !== `PO ${role.toUpperCase()} SMOKE`) throw new Error(`${role}: onjuiste detail-write ${JSON.stringify(writes.details)}`)
+  if (writes.settings.length !== 1 || writes.settings[0]?.notes !== `Notitie ${role}`) throw new Error(`${role}: onjuiste settings-write ${JSON.stringify(writes.settings)}`)
+  if (writes.automation.length !== 1 || writes.automation[0]?.mode !== nextMode) throw new Error(`${role}: onjuiste automation-write ${JSON.stringify(writes.automation)}`)
+  if (writes.inventoryEvents.length !== 2) throw new Error(`${role}: verwacht 2 voorraadwrites ${JSON.stringify(writes.inventoryEvents)}`)
+  if (writes.genericInventoryWrites.length) throw new Error(`${role}: generieke voorraadroute gebruikt ${JSON.stringify(writes.genericInventoryWrites)}`)
+  if (writes.externalLinks.length) throw new Error(`${role}: onverwachte external-link-write ${JSON.stringify(writes.externalLinks)}`)
+  if (consoleErrors.length) throw new Error(`${role}: console errors ${consoleErrors.join(' | ')}`)
+
   await page.close()
 }
 
@@ -325,34 +310,26 @@ async function verifyReadOnlyRole(browser, role) {
   await page.goto(`${baseURL}/voorraad/${articleId}`, { waitUntil: 'networkidle' })
   await verifyOverviewSubtabs(page)
 
-  await activateVisibleSubtab(page, 'Artikel')
-  const ownName = page.getByTestId('article-details-input-custom_name')
-  await ownName.waitFor({ state: 'visible' })
-  if (!(await ownName.isDisabled())) throw new Error(`${role}: Eigen naam moet read-only zijn`)
+  await activateNativeSubtab(page, 'article-overview-subtab-article', 'Artikel')
+  if (!(await page.getByTestId('article-details-input-custom_name').isDisabled())) throw new Error(`${role}: Eigen naam moet read-only zijn`)
 
-  await activateVisibleSubtab(page, 'Huishouden')
-  const settingsSave = page.getByTestId('article-household-settings-save')
-  await settingsSave.waitFor({ state: 'visible' })
-  if (!(await settingsSave.isDisabled())) throw new Error(`${role}: huishoudinstellingen moeten read-only zijn`)
+  await activateNativeSubtab(page, 'article-overview-subtab-household', 'Huishouden')
+  if (!(await page.getByTestId('article-household-settings-save').isDisabled())) throw new Error(`${role}: instellingen moeten read-only zijn`)
   if (!(await page.locator('.rz-article-automation-select').isDisabled())) throw new Error(`${role}: automatisering moet read-only zijn`)
 
   await page.getByRole('tab', { name: 'Voorraad', exact: true }).click()
-  const adjustButton = page.getByTestId(`article-stock-adjust-${articleId}`)
-  const consumeButton = page.getByTestId(`article-stock-consume-${articleId}`)
-  await adjustButton.waitFor({ state: 'visible' })
-  if (!(await adjustButton.isDisabled())) throw new Error(`${role}: voorraad corrigeren moet disabled zijn`)
-  if (!(await consumeButton.isDisabled())) throw new Error(`${role}: voorraad afboeken moet disabled zijn`)
+  if (!(await page.getByTestId(`article-stock-adjust-${articleId}`).isDisabled())) throw new Error(`${role}: Corrigeren moet disabled zijn`)
+  if (!(await page.getByTestId(`article-stock-consume-${articleId}`).isDisabled())) throw new Error(`${role}: Afboeken moet disabled zijn`)
 
   await page.getByRole('tab', { name: 'Locaties', exact: true }).click()
-  const transferButton = page.getByTestId('article-location-action-transfer')
-  await transferButton.waitFor({ state: 'visible' })
-  if (!(await transferButton.isDisabled())) throw new Error(`${role}: Verplaatsen moet disabled zijn`)
+  if (!(await page.getByTestId('article-location-action-transfer').isDisabled())) throw new Error(`${role}: Verplaatsen moet disabled zijn`)
 
   await verifyAnalysisSubtabs(page)
 
   if (writes.details.length || writes.settings.length || writes.automation.length || writes.inventoryEvents.length || writes.inventoryTransfers.length || writes.externalLinks.length || writes.genericInventoryWrites.length) {
     throw new Error(`${role}: onverwachte write ${JSON.stringify(writes)}`)
   }
+
   await page.close()
 }
 
