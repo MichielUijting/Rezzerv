@@ -41,9 +41,7 @@ function classifyAnalysisSections(root) {
     const title = section.querySelector('.rz-article-section-title')?.textContent?.trim() || ''
     const targetKey = SECTION_TO_KEY[title] || 'trends'
     const wrapper = section.parentElement?.matches('[data-testid^="analysis-row-"]') ? section.parentElement : section
-    if (wrapper.dataset.analysisSubtab !== targetKey) {
-      wrapper.dataset.analysisSubtab = targetKey
-    }
+    wrapper.dataset.analysisSubtab = targetKey
   })
 }
 
@@ -51,16 +49,12 @@ export default function ArticleAnalyticsSubtabs(props) {
   const [activeSubtab, setActiveSubtab] = useState(readInitialSubtab)
   const rootRef = useRef(null)
   const activeKey = SUBTAB_KEY[activeSubtab] || 'trends'
+  const articleData = props?.articleData
+  const automationVersion = props?.automationVersion
 
   useLayoutEffect(() => {
-    const root = rootRef.current
-    if (!root) return undefined
-
-    classifyAnalysisSections(root)
-    const observer = new MutationObserver(() => classifyAnalysisSections(root))
-    observer.observe(root, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [])
+    classifyAnalysisSections(rootRef.current)
+  }, [articleData, automationVersion])
 
   function handleSubtabChange(nextSubtab) {
     setActiveSubtab(nextSubtab)
