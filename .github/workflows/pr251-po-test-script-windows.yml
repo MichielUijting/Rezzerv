@@ -60,6 +60,7 @@ jobs:
           $launcher = Get-Content '.\scripts\START-PO-TEST-PR251.cmd' -Raw
           $required = @(
             'C:\Users\Gebruiker\Rezzerv_Github',
+            "`$LogDir = Join-Path `$env:TEMP 'Rezzerv-PO-tests'",
             '51d20083012f3f094b7407c538741ef329e61d68',
             "worktree','add','--detach'",
             "Copy-Item -LiteralPath `$LiveDb -Destination `$TestDb",
@@ -70,7 +71,8 @@ jobs:
             'Runtime-databron bevestigd',
             'ARTICLE_FIXTURE_GREEN:',
             "`$ExpectedArticleName = '7 Granen Ontbijt'",
-            'PO-testmutaties: uitsluitend op een geisoleerde kopie van rezzerv.db'
+            'PO-testmutaties: uitsluitend op een geisoleerde kopie van rezzerv.db',
+            '^scripts/START-PO-TEST-PR251\.cmd$'
           )
           foreach ($needle in $required) {
             if (-not $text.Contains($needle)) { throw "Verplichte guardrail ontbreekt: $needle" }
@@ -81,10 +83,13 @@ jobs:
           if ($text -match '(?im)Copy-Item[^\r\n]+Destination\s+\$LiveDb') {
             throw 'Runner mag nooit naar de live database terugkopieren.'
           }
+          if ($text -match '(?i)OneDrive|Downloads|GetFolderPath\(''Desktop''\)') {
+            throw 'PO-runner bevat een verboden cloud/download/Desktop-pad-aanname.'
+          }
           if (-not $launcher.Contains('%~dp0po-test-pr251-v011296.ps1')) {
             throw 'Launcher resolveert de PowerShell-runner niet relatief aan zijn eigen locatie.'
           }
-          if ($launcher -match '(?i)\\Users\\Gebruiker\\Downloads') {
-            throw 'Launcher mag geen vaste Downloads-map bevatten.'
+          if ($launcher -match '(?i)OneDrive|Downloads|\\Users\\Gebruiker\\') {
+            throw 'Launcher bevat een verboden vaste gebruikers- of cloudpad-aanname.'
           }
           Write-Host 'PO_TEST_SCRIPT_GUARDRAILS_GREEN'
