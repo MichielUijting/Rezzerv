@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import Tabs from '../../../ui/Tabs'
 import { isHouseholdAdminFromContext, readStoredAuthContext } from '../../../lib/authSession'
+import { ArticleIdentitySummary, ArticleProductSummary } from '../components/ArticleOverviewCuratedSummaries'
 import ArticleOverviewTab from './ArticleOverviewTab'
 
 const OVERVIEW_SUBTABS = ['Artikel', 'Huishouden', 'Identiteit', 'Productdata']
@@ -19,10 +20,10 @@ const SECTION_TO_KEY = {
   'Instellingen voor dit huishouden': 'household',
   Automatisering: 'household',
   Gebruiker: 'household',
-  'Externe productkoppeling': 'identity',
-  Extern: 'identity',
-  Productverrijking: 'productdata',
-  'Voeding & verpakking': 'productdata',
+  'Externe productkoppeling': 'legacy',
+  Extern: 'legacy',
+  Productverrijking: 'legacy',
+  'Voeding & verpakking': 'legacy',
 }
 
 function readInitialSubtab() {
@@ -44,6 +45,9 @@ function classifyOverviewSections(root, readOnly) {
     const title = section.querySelector('.rz-article-section-title')?.textContent?.trim() || ''
     section.dataset.articleSubtab = SECTION_TO_KEY[title] || 'article'
   })
+
+  const householdNameLabel = overview.querySelector('label[for="article-inline-input-custom_name"]')
+  if (householdNameLabel) householdNameLabel.textContent = 'Naam in dit huishouden:'
 
   if (!readOnly) return
 
@@ -67,7 +71,7 @@ export default function ArticleOverviewSubtabs(props) {
 
   useLayoutEffect(() => {
     classifyOverviewSections(rootRef.current, readOnly)
-  }, [readOnly, articleData])
+  }, [readOnly, articleData, activeSubtab])
 
   function handleSubtabChange(nextSubtab) {
     setActiveSubtab(nextSubtab)
@@ -100,7 +104,14 @@ export default function ArticleOverviewSubtabs(props) {
         {() => (
           <>
             {readOnly ? <div className="rz-article-readonly-note" data-testid="article-detail-readonly-note">Alleen-lezen. Alleen een beheerder of eigenaar kan deze artikelgegevens wijzigen.</div> : null}
+            {activeSubtab === 'Huishouden' ? (
+              <div className="rz-article-subtab-help" data-testid="article-household-settings-help">
+                Deze voorkeuren sturen voorraadniveaus, aanvuladvies, voorkeurswinkel, standaardopslag en verpakkingsgrootte voor dit huishouden.
+              </div>
+            ) : null}
             <ArticleOverviewTab {...props} />
+            {activeSubtab === 'Identiteit' ? <ArticleIdentitySummary articleData={articleData} /> : null}
+            {activeSubtab === 'Productdata' ? <ArticleProductSummary articleData={articleData} /> : null}
           </>
         )}
       </Tabs>
