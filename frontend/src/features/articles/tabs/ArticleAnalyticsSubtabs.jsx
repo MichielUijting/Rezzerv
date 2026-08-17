@@ -3,6 +3,7 @@ import Tabs from '../../../ui/Tabs'
 import ArticleAnalyticsTab from './ArticleAnalyticsTab'
 
 const ANALYSIS_SUBTABS = ['Trends', 'Prijs', 'Prognose', 'Onderbouwing']
+const ANALYSIS_SUBTAB_STORAGE_KEY = 'rezzerv.article-detail.analysis-subtab'
 
 const SUBTAB_KEY = {
   Trends: 'trends',
@@ -21,6 +22,17 @@ const SECTION_TO_KEY = {
   Onderbouwing: 'evidence',
 }
 
+function readInitialSubtab() {
+  if (typeof window === 'undefined') return 'Trends'
+  const stored = window.sessionStorage.getItem(ANALYSIS_SUBTAB_STORAGE_KEY)
+  return ANALYSIS_SUBTABS.includes(stored) ? stored : 'Trends'
+}
+
+function persistSubtab(value) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(ANALYSIS_SUBTAB_STORAGE_KEY, value)
+}
+
 function classifyAnalysisSections(root) {
   const analysis = root?.querySelector('.rz-analytics-tab')
   if (!analysis) return
@@ -36,7 +48,7 @@ function classifyAnalysisSections(root) {
 }
 
 export default function ArticleAnalyticsSubtabs(props) {
-  const [activeSubtab, setActiveSubtab] = useState('Trends')
+  const [activeSubtab, setActiveSubtab] = useState(readInitialSubtab)
   const rootRef = useRef(null)
   const activeKey = SUBTAB_KEY[activeSubtab] || 'trends'
 
@@ -50,6 +62,11 @@ export default function ArticleAnalyticsSubtabs(props) {
     return () => observer.disconnect()
   }, [])
 
+  function handleSubtabChange(nextSubtab) {
+    setActiveSubtab(nextSubtab)
+    persistSubtab(nextSubtab)
+  }
+
   return (
     <div
       ref={rootRef}
@@ -60,7 +77,7 @@ export default function ArticleAnalyticsSubtabs(props) {
       <Tabs
         tabs={ANALYSIS_SUBTABS}
         activeTab={activeSubtab}
-        onTabChange={setActiveSubtab}
+        onTabChange={handleSubtabChange}
         className="rz-article-subtabs"
         ariaLabel="Analyse subtabs"
         rootTestId="article-analysis-subtabs"
