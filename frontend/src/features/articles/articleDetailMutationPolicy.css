@@ -48,7 +48,8 @@
 /* Overzicht: de technische/legacy blokken blijven in de code beschikbaar maar horen niet
    meer in de normale gebruikerspresentatie. Identiteit en Productdata krijgen gecureerde
    samenvattingen buiten de legacy-secties. */
-.rz-article-overview-subtab-layout .rz-overview-tab > [data-article-subtab="legacy"] {
+.rz-article-overview-subtab-layout .rz-overview-tab > [data-article-subtab="legacy"],
+.rz-article-overview-subtab-layout .rz-overview-tab [data-curated-hidden="true"] {
   display: none !important;
 }
 
