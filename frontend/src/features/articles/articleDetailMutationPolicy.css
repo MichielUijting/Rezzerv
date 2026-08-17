@@ -35,6 +35,7 @@
   display: none !important;
 }
 
+/* Overzicht: secties zijn eenmaal in React geclassificeerd; de actieve subtab filtert alleen de zichtbaarheid. */
 .rz-article-overview-subtab-layout[data-active-subtab="article"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="article"]),
 .rz-article-overview-subtab-layout[data-active-subtab="household"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="household"]),
 .rz-article-overview-subtab-layout[data-active-subtab="identity"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="identity"]),
@@ -42,11 +43,20 @@
   display: none !important;
 }
 
-.rz-article-analysis-subtab-layout[data-active-subtab="trends"] .rz-analytics-tab > [data-analysis-subtab]:not([data-analysis-subtab="trends"]),
-.rz-article-analysis-subtab-layout[data-active-subtab="price"] .rz-analytics-tab > [data-analysis-subtab]:not([data-analysis-subtab="price"]),
-.rz-article-analysis-subtab-layout[data-active-subtab="forecast"] .rz-analytics-tab > [data-analysis-subtab]:not([data-analysis-subtab="forecast"]),
-.rz-article-analysis-subtab-layout[data-active-subtab="evidence"] .rz-analytics-tab > [data-analysis-subtab]:not([data-analysis-subtab="evidence"]) {
+/* Analyse: rechtstreeks op de vaste React-wrappers filteren; geen DOM-classificatie of observer nodig. */
+.rz-article-analysis-subtab-layout .rz-analytics-tab > section.rz-analytics-accordion,
+.rz-article-analysis-subtab-layout .rz-analytics-tab > [data-testid^="analysis-row-"] {
   display: none !important;
+}
+
+.rz-article-analysis-subtab-layout[data-active-subtab="trends"] .rz-analytics-tab > section.rz-analytics-accordion,
+.rz-article-analysis-subtab-layout[data-active-subtab="trends"] .rz-analytics-tab > [data-testid="analysis-row-consumption"],
+.rz-article-analysis-subtab-layout[data-active-subtab="price"] .rz-analytics-tab > [data-testid="analysis-row-price"],
+.rz-article-analysis-subtab-layout[data-active-subtab="forecast"] .rz-analytics-tab > [data-testid="analysis-row-forecast"],
+.rz-article-analysis-subtab-layout[data-active-subtab="forecast"] .rz-analytics-tab > [data-testid="analysis-row-advice"],
+.rz-article-analysis-subtab-layout[data-active-subtab="evidence"] .rz-analytics-tab > [data-testid="analysis-row-automation"],
+.rz-article-analysis-subtab-layout[data-active-subtab="evidence"] .rz-analytics-tab > [data-testid="analysis-row-quality"] {
+  display: block !important;
 }
 
 .rz-article-readonly-note {
