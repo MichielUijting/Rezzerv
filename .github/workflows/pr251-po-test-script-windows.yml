@@ -51,7 +51,12 @@ jobs:
             "worktree','add','--detach'",
             "Copy-Item -LiteralPath `$LiveDb -Destination `$TestDb",
             "docker start @OriginalContainers",
-            'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN'
+            'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN',
+            'NormalizeHostPath',
+            '/app/data',
+            'Runtime-databron bevestigd',
+            'ARTICLE_FIXTURE_GREEN:',
+            'PO-testmutaties: uitsluitend op een geisoleerde kopie van rezzerv.db'
           )
           foreach ($needle in $required) {
             if (-not $text.Contains($needle)) { throw "Verplichte guardrail ontbreekt: $needle" }
