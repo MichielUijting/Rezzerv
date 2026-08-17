@@ -1,0 +1,6 @@
+/* PR #251: Artikeldetail toont externe productidentiteit alleen ter inzage.
+   Barcode en extern artikelnummer worden elders beheerd; mutatie-acties horen hier niet thuis. */
+.rz-overview-tab [data-testid="article-external-link-edit"],
+.rz-overview-tab [data-testid="article-external-link-scan"] {
+  display: none !important;
+}
