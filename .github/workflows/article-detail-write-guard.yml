@@ -63,6 +63,12 @@ jobs:
           grep -F 'ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN' article-detail-admin-gateway.log
           grep -F 'ARTICLE_DETAIL_HOUSEHOLD_ALIAS_POLICY_GREEN' article-detail-admin-gateway.log
 
+      - name: Bewaak vlakke Artikeldetail subtabs
+        working-directory: frontend
+        run: |
+          node tests/article-detail-flat-subtabs.contract.mjs | tee /tmp/article-detail-flat-subtabs.log
+          grep -F 'ARTICLE_DETAIL_FLAT_SUBTABS_CONTRACT_GREEN' /tmp/article-detail-flat-subtabs.log
+
       - name: Bouw gewijzigde frontend
         working-directory: frontend
         run: |
