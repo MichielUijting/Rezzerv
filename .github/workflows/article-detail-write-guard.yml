@@ -34,6 +34,7 @@ jobs:
           python -m py_compile \
             backend/app/services/article_detail_write_guard.py \
             backend/app/services/product_enrichment_write_guard.py \
+            backend/app/services/household_alias_policy.py \
             backend/app/testing/article_detail_write_guard_contract.py \
             backend/app/api/article_detail_admin_routes.py \
             backend/app/api/product_inventory_group_routes.py \
@@ -60,6 +61,7 @@ jobs:
         run: |
           python backend/tests/test_article_detail_admin_gateway_contract.py | tee article-detail-admin-gateway.log
           grep -F 'ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN' article-detail-admin-gateway.log
+          grep -F 'ARTICLE_DETAIL_HOUSEHOLD_ALIAS_POLICY_GREEN' article-detail-admin-gateway.log
 
       - name: Bouw gewijzigde frontend
         working-directory: frontend
@@ -123,4 +125,5 @@ jobs:
           node tests/e2e/article-detail-role-subtabs.smoke.mjs | tee /tmp/article-detail-role-subtabs.log
           grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
           grep -F 'ARTICLE_DETAIL_SUBTABS_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
+          grep -F 'ARTICLE_DETAIL_CURATED_OVERVIEW_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
           grep -F 'ARTICLE_DETAIL_OWNER_MUTATION_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
