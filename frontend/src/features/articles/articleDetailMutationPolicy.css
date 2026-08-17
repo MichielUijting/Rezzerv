@@ -30,12 +30,53 @@
   min-width: 0;
 }
 
-.rz-article-subtab-help {
-  margin-bottom: 10px;
-  padding: 8px 10px;
+/* Elke actieve subtab heeft precies één visueel frame. De oude accordion-koppen en
+   +/- bediening zijn binnen subtabs volledig overbodig en daarom niet zichtbaar. */
+.rz-article-subtab-frame {
+  min-width: 0;
+  padding: 14px 16px;
   border: 1px solid var(--color-border-default);
-  border-radius: 10px;
-  background: #f8fafc;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.rz-article-subtab-frame .rz-article-global-toggle,
+.rz-article-subtab-frame .rz-article-section-header {
+  display: none !important;
+}
+
+.rz-article-subtab-frame .rz-article-section-accordion,
+.rz-article-subtab-frame .rz-overview-group,
+.rz-article-subtab-frame .rz-analytics-accordion,
+.rz-article-subtab-frame .rz-article-automation-card {
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.rz-article-subtab-frame .rz-overview-tab,
+.rz-article-subtab-frame .rz-analytics-tab {
+  display: grid;
+  gap: 12px;
+}
+
+.rz-article-subtab-frame .rz-article-section-content,
+.rz-article-subtab-frame .rz-overview-group-body,
+.rz-article-subtab-frame .rz-analytics-accordion-content {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.rz-article-subtab-help,
+.rz-article-readonly-note {
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--color-text-primary);
   font-size: 14px;
 }
@@ -102,16 +143,6 @@
   display: block !important;
 }
 
-.rz-article-readonly-note {
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border-default);
-  border-radius: 10px;
-  color: var(--color-text-primary);
-  background: #f8fafc;
-  font-size: 14px;
-}
-
 .rz-location-row.is-readonly {
   cursor: default;
 }
@@ -148,5 +179,9 @@
   .rz-article-subtabs > .rz-tabbar .rz-tab {
     padding: 6px 8px;
     font-size: 13px;
+  }
+
+  .rz-article-subtab-frame {
+    padding: 12px;
   }
 }
