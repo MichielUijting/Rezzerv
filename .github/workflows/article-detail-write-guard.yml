@@ -120,7 +120,7 @@ jobs:
             fi
             sleep 1
           done
-          node tests/e2e/article-detail-owner-mutation.smoke.mjs | tee /tmp/article-detail-owner-smoke.log
-          grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_BROWSER_GREEN' /tmp/article-detail-owner-smoke.log
-          grep -F 'ARTICLE_DETAIL_SUBTABS_BROWSER_GREEN' /tmp/article-detail-owner-smoke.log
-          grep -F 'ARTICLE_DETAIL_OWNER_MUTATION_BROWSER_GREEN' /tmp/article-detail-owner-smoke.log
+          node tests/e2e/article-detail-role-subtabs.smoke.mjs | tee /tmp/article-detail-role-subtabs.log
+          grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
+          grep -F 'ARTICLE_DETAIL_SUBTABS_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
+          grep -F 'ARTICLE_DETAIL_OWNER_MUTATION_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
