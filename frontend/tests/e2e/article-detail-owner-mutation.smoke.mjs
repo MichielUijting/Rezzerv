@@ -114,6 +114,11 @@ async function installApiMocks(page, role) {
   return writes
 }
 
+async function waitForInventoryQuantity(page, expected) {
+  const quantity = page.locator('.rz-stock-summary-table-quantity').filter({ hasText: String(expected) }).first()
+  await quantity.waitFor({ state: 'visible' })
+}
+
 async function verifyMutableRole(browser, role) {
   const page = await browser.newPage()
   const writes = await installApiMocks(page, role)
@@ -179,7 +184,7 @@ async function verifyMutableRole(browser, role) {
   await page.getByTestId('article-stock-mutation-form').getByRole('button', { name: 'Opslaan' }).click()
   const adjustResponse = await adjustResponsePromise
   if (!adjustResponse.ok()) throw new Error(`${role}: voorraadcorrectie gaf HTTP ${adjustResponse.status()}`)
-  await page.getByTestId('article-stock-mutation-success').waitFor({ state: 'visible' })
+  await waitForInventoryQuantity(page, 3)
 
   await consumeButton.click()
   await page.getByLabel('Aantal afboeken').fill('1')
@@ -191,6 +196,7 @@ async function verifyMutableRole(browser, role) {
   await page.getByTestId('article-stock-mutation-form').getByRole('button', { name: 'Opslaan' }).click()
   const consumeResponse = await consumeResponsePromise
   if (!consumeResponse.ok()) throw new Error(`${role}: afboeking gaf HTTP ${consumeResponse.status()}`)
+  await waitForInventoryQuantity(page, 2)
 
   if (writes.details.length !== 1 || writes.details[0]?.custom_name !== `PO ${role.toUpperCase()} SMOKE` || Object.keys(writes.details[0]).length !== 1) {
     throw new Error(`${role}: onjuist PATCH-contract ${JSON.stringify(writes.details)}`)
