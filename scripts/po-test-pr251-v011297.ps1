@@ -121,7 +121,8 @@ try {
     'scripts/po-test-pr251-v011297.ps1',
     'scripts/START-PO-TEST-PR251.cmd',
     '.github/workflows/pr251-po-test-script-windows.yml',
-    '.github/workflows/pr251-v011297-release-package.yml'
+    '.github/workflows/pr251-v011297-release-package.yml',
+    'docs/quality/M2C2N-FINAL-REPORT.md'
   )
   $changedAfterProduct = Capture 'git' @('-C',$Repo,'diff','--name-only',"$ProductSha..$prHead")
   if ($changedAfterProduct) {
