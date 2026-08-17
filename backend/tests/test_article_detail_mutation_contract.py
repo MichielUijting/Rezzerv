@@ -6,9 +6,11 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parents[2]
 OVERVIEW_PATH = "frontend/src/features/articles/tabs/ArticleOverviewTab.jsx"
 OVERVIEW_WRAPPER_PATH = "frontend/src/features/articles/tabs/ArticleOverviewSubtabs.jsx"
+CURATED_SUMMARY_PATH = "frontend/src/features/articles/components/ArticleOverviewCuratedSummaries.jsx"
 ANALYSIS_WRAPPER_PATH = "frontend/src/features/articles/tabs/ArticleAnalyticsSubtabs.jsx"
 ANALYSIS_PATH = "frontend/src/features/articles/tabs/ArticleAnalyticsTab.jsx"
 POLICY_PATH = "frontend/src/features/articles/articleDetailMutationPolicy.css"
+INPUT_CSS_PATH = "frontend/src/ui/components/input.css"
 STOCK_PATH = "frontend/src/features/articles/tabs/ArticleStockTab.jsx"
 LOCATIONS_PATH = "frontend/src/features/articles/tabs/ArticleLocationsTab.jsx"
 TABS_PATH = "frontend/src/ui/Tabs.jsx"
@@ -167,22 +169,68 @@ def test_overview_wrapper_makes_member_and_viewer_read_only():
     assert "isHouseholdViewerFromContext" not in source
 
 
-def test_overview_has_compact_race_free_functional_subtabs():
+def test_overview_has_compact_curated_functional_subtabs():
     source = _read(OVERVIEW_WRAPPER_PATH)
+    summary = _read(CURATED_SUMMARY_PATH)
+    policy = _read(POLICY_PATH)
+
     for label in ("'Artikel'", "'Huishouden'", "'Identiteit'", "'Productdata'"):
         assert label in source
     for mapping in (
         "'Artikelgegevens voor dit huishouden': 'article'",
         "'Instellingen voor dit huishouden': 'household'",
-        "'Externe productkoppeling': 'identity'",
-        "Productverrijking: 'productdata'",
+        "'Externe productkoppeling': 'legacy'",
+        "Productverrijking: 'legacy'",
     ):
         assert mapping in source
+    assert "ArticleIdentitySummary" in source
+    assert "ArticleProductSummary" in source
+    assert "Naam in dit huishouden is een optionele eigen benaming" in source
+    assert "CURATED_BASIS_DUPLICATE_LABELS" in source
     assert "data-active-subtab={activeKey}" in source
     assert "section.dataset.articleSubtab" in source
     assert "section.hidden" not in source
     assert "className=\"rz-article-subtabs\"" in source
     assert "ariaLabel=\"Overzicht subtabs\"" in source
+    assert '[data-article-subtab="legacy"]' in policy
+    assert '[data-curated-hidden="true"]' in policy
+
+    for test_id in ('article-identity-summary', 'article-product-summary'):
+        assert test_id in summary
+    for user_label in (
+        'Barcode',
+        'Extern artikelnummer',
+        'Productnaam',
+        'Merk',
+        'Categorie',
+        'Inhoud',
+        'Ingrediënten',
+        'Allergenen',
+        'Bron',
+    ):
+        assert user_label in summary
+    for technical_ballast in (
+        'Bronketen',
+        'Interne matchstatus',
+        'Centrale product-ID',
+        'Confidence',
+        'Lookup melding',
+        'Recente bronpogingen',
+    ):
+        assert technical_ballast not in summary
+
+
+def test_editable_values_are_black_and_nonfunctional_settings_are_not_presented():
+    policy = _read(POLICY_PATH)
+    input_css = _read(INPUT_CSS_PATH)
+
+    assert 'article-details-input-average_price' in policy
+    assert 'article-household-settings-auto-restock' in policy
+    assert '.rz-article-subtab-layout input:not(:disabled)' in policy
+    assert '.rz-article-subtab-layout select:not(:disabled)' in policy
+    assert '#000000' in policy
+    assert '.rz-input:not(:disabled)' in input_css
+    assert '#000000' in input_css
 
 
 def test_analysis_has_compact_direct_functional_subtabs():
@@ -375,7 +423,8 @@ def test_unsupported_product_knowledge_fields_are_not_silently_accepted():
 def run_contract() -> None:
     test_general_household_editor_owns_only_custom_name()
     test_overview_wrapper_makes_member_and_viewer_read_only()
-    test_overview_has_compact_race_free_functional_subtabs()
+    test_overview_has_compact_curated_functional_subtabs()
+    test_editable_values_are_black_and_nonfunctional_settings_are_not_presented()
     test_analysis_has_compact_direct_functional_subtabs()
     test_shared_tabs_support_nested_accessible_navigation_without_breaking_defaults()
     test_stock_mutation_is_admin_only_and_uses_article_detail_gateway()
