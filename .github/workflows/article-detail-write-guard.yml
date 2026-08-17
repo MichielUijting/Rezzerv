@@ -55,7 +55,41 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
 
-      - name: Open Artikeldetail echt als Eigenaar en Kijker
+      - name: Valideer exacte frontendcommit in Docker-runtime
+        env:
+          EXPECTED_VERSION: Rezzerv-MVP-v01.12.96
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          docker build \
+            --build-arg REZZERV_VERSION="$EXPECTED_VERSION" \
+            --build-arg REZZERV_COMMIT="$EXPECTED_COMMIT" \
+            -t rezzerv-pr251-frontend-marker frontend
+          container_id=$(docker run -d -p 18080:80 rezzerv-pr251-frontend-marker)
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/version.json > /tmp/rezzerv-runtime-version.json; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 1
+          done
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/rezzerv-runtime-version.json').read_text(encoding='utf-8'))
+          expected_version = os.environ['EXPECTED_VERSION']
+          expected_commit = os.environ['EXPECTED_COMMIT']
+          assert payload.get('version') == expected_version, (payload, expected_version)
+          assert payload.get('commit') == expected_commit, (payload, expected_commit)
+          print('ARTICLE_DETAIL_RUNTIME_COMMIT_GREEN')
+          PY
+
+      - name: Open Artikeldetail echt als Eigenaar Admin en Kijker
         working-directory: frontend
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
