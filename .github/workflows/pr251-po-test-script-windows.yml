@@ -56,6 +56,7 @@ jobs:
             '/app/data',
             'Runtime-databron bevestigd',
             'ARTICLE_FIXTURE_GREEN:',
+            "`$ExpectedArticleName = '7 Granen Ontbijt'",
             'PO-testmutaties: uitsluitend op een geisoleerde kopie van rezzerv.db'
           )
           foreach ($needle in $required) {
