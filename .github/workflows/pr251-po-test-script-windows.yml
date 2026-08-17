@@ -6,10 +6,12 @@ on:
       - fix/article-detail-mutation-contracts
     paths:
       - scripts/po-test-pr251-v011296.ps1
+      - scripts/START-PO-TEST-PR251.cmd
       - .github/workflows/pr251-po-test-script-windows.yml
   pull_request:
     paths:
       - scripts/po-test-pr251-v011296.ps1
+      - scripts/START-PO-TEST-PR251.cmd
       - .github/workflows/pr251-po-test-script-windows.yml
 
 jobs:
@@ -41,10 +43,21 @@ jobs:
             throw 'Self-test GREEN marker ontbreekt.'
           }
 
+      - name: Run path-independent launcher self-test
+        shell: cmd
+        run: |
+          call scripts\START-PO-TEST-PR251.cmd -SelfTest > launcher-selftest.log 2>&1
+          set "rc=%errorlevel%"
+          type launcher-selftest.log
+          if not "%rc%"=="0" exit /b %rc%
+          findstr /C:"PO_TEST_SCRIPT_SELFTEST_GREEN" launcher-selftest.log >nul || exit /b 1
+          echo PO_TEST_LAUNCHER_SELFTEST_GREEN
+
       - name: Validate safety guardrails
         shell: powershell
         run: |
           $text = Get-Content '.\scripts\po-test-pr251-v011296.ps1' -Raw
+          $launcher = Get-Content '.\scripts\START-PO-TEST-PR251.cmd' -Raw
           $required = @(
             'C:\Users\Gebruiker\Rezzerv_Github',
             '51d20083012f3f094b7407c538741ef329e61d68',
@@ -67,5 +80,11 @@ jobs:
           }
           if ($text -match '(?im)Copy-Item[^\r\n]+Destination\s+\$LiveDb') {
             throw 'Runner mag nooit naar de live database terugkopieren.'
+          }
+          if (-not $launcher.Contains('%~dp0po-test-pr251-v011296.ps1')) {
+            throw 'Launcher resolveert de PowerShell-runner niet relatief aan zijn eigen locatie.'
+          }
+          if ($launcher -match '(?i)\\Users\\Gebruiker\\Downloads') {
+            throw 'Launcher mag geen vaste Downloads-map bevatten.'
           }
           Write-Host 'PO_TEST_SCRIPT_GUARDRAILS_GREEN'
