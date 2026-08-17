@@ -32,14 +32,14 @@ async function installMocks(page, role) {
   let settings = {
     min_stock: 1,
     ideal_stock: 2,
-    favorite_store: '',
-    average_price: null,
+    favorite_store: 'ALDI',
+    average_price: 2.49,
     status: 'active',
     default_location_id: null,
     default_sublocation_id: null,
     auto_restock: false,
-    packaging_unit: '',
-    packaging_quantity: null,
+    packaging_unit: 'pak',
+    packaging_quantity: 1,
     notes: '',
   }
   const writes = { details: [], settings: [], automation: [], inventory: [], transfer: [], generic: [], external: [] }
@@ -53,7 +53,7 @@ async function installMocks(page, role) {
 
     if (path === '/api/session' || path === '/api/household') return reply(sessionPayload(role))
     if (path === '/api/settings/article-field-visibility') {
-      return reply({ overview: { article_name: true, custom_name: true, article_type: true, barcode: true, article_number: true, notes: true, calories: true }, stock: {}, locations: {}, history: {}, analytics: {} })
+      return reply({ overview: { article_name: true, custom_name: true, article_type: true, category: true, brand_or_maker: true, barcode: true, article_number: true, notes: true, calories: true }, stock: {}, locations: {}, history: {}, analytics: {} })
     }
     if (path === '/api/dev/inventory-preview') {
       return reply({ rows: [{ id: articleId, household_article_id: articleId, artikel: articleName, aantal: inventoryQuantity, space_id: 'space-1', sublocation_id: 'sub-1', locatie: 'Voorraadkast', sublocatie: 'Plank 1' }] })
@@ -67,12 +67,30 @@ async function installMocks(page, role) {
         name: articleName,
         custom_name: customName,
         article_type: 'Voedsel & drank',
+        category: 'Ontbijtgranen',
+        brand_or_maker: 'ALDI',
         total_quantity: inventoryQuantity,
         barcode: '8712345678901',
         article_number: 'EXT-123',
+        source: 'internal_catalog',
         settings,
         locations: [{ id: articleId, space_id: 'space-1', sublocation_id: 'sub-1', locatie: 'Voorraadkast', sublocatie: 'Plank 1', aantal: inventoryQuantity }],
-        product_details: { identity: {}, internal_catalog: {}, source_chain: [] },
+        product_details: {
+          identity: { normalized_barcode: '8712345678901', source: 'internal_catalog', confidence_score: 0.99 },
+          internal_catalog: { global_product_id: 'technical-id-not-for-user', status: 'found' },
+          source_chain: [{ source_name: 'internal_catalog', configured: true, enabled: true }],
+          enrichment_status: { status: 'found', last_lookup_message: 'technical lookup message' },
+          enrichment: {
+            title: '7 Granen Ontbijt',
+            brand: 'ALDI',
+            category: 'Ontbijtgranen',
+            size_value: 500,
+            size_unit: 'g',
+            ingredients: ['haver', 'tarwe'],
+            allergens: ['gluten'],
+            source_name: 'open_food_facts',
+          },
+        },
       })
     }
     if (path === `/api/household-articles/${articleId}` && method === 'PATCH') {
@@ -147,9 +165,27 @@ async function activateSubtab(page, testId, expectedKey, expectedVisibleSelector
 
 async function verifyOverviewSubtabs(page) {
   await activateSubtab(page, 'article-overview-subtab-article', 'article', '[data-testid="article-household-details-section"]')
+  await page.getByTestId('article-household-name-help').waitFor({ state: 'visible' })
+
   await activateSubtab(page, 'article-overview-subtab-household', 'household', '[data-testid="article-household-settings-section"]')
-  await activateSubtab(page, 'article-overview-subtab-identity', 'identity', '[data-testid="article-external-link-section"]')
-  await activateSubtab(page, 'article-overview-subtab-productdata', 'productdata', '[data-testid="article-product-enrichment-section"]')
+  await page.getByTestId('article-household-settings-help').waitFor({ state: 'visible' })
+
+  await activateSubtab(page, 'article-overview-subtab-identity', 'identity', '[data-testid="article-identity-summary"]')
+  const identitySummary = page.getByTestId('article-identity-summary')
+  await identitySummary.getByText('8712345678901', { exact: true }).waitFor({ state: 'visible' })
+  await identitySummary.getByText('EXT-123', { exact: true }).waitFor({ state: 'visible' })
+  if (await page.getByTestId('article-external-link-section').isVisible()) throw new Error('Legacy externe productkoppeling is nog zichtbaar')
+
+  await activateSubtab(page, 'article-overview-subtab-productdata', 'productdata', '[data-testid="article-product-summary"]')
+  const productSummary = page.getByTestId('article-product-summary')
+  for (const text of ['7 Granen Ontbijt', 'ALDI', 'Ontbijtgranen', '500 g', 'haver, tarwe', 'gluten', 'Open Food Facts']) {
+    await productSummary.getByText(text, { exact: true }).waitFor({ state: 'visible' })
+  }
+  if (await page.getByTestId('article-product-enrichment-section').isVisible()) throw new Error('Legacy Productverrijking is nog zichtbaar')
+  for (const technicalText of ['Bronketen', 'Interne matchstatus', 'Centrale product-ID', 'Confidence', 'Lookup melding']) {
+    if (await page.getByText(technicalText, { exact: false }).isVisible()) throw new Error(`Technische ballast is zichtbaar: ${technicalText}`)
+  }
+
   await activateSubtab(page, 'article-overview-subtab-article', 'article', '[data-testid="article-household-details-section"]')
 }
 
@@ -162,6 +198,11 @@ async function verifyAnalysisSubtabs(page) {
   await activateSubtab(page, 'article-analysis-subtab-evidence', 'evidence', '[data-testid="analysis-row-quality"]')
 }
 
+async function assertEditableBlack(page, selector, label) {
+  const color = await page.locator(selector).evaluate((element) => window.getComputedStyle(element).color)
+  if (color !== 'rgb(0, 0, 0)') throw new Error(`${label}: bewerkbare waarde is niet zwart (${color})`)
+}
+
 async function verifyAdminRole(browser, role) {
   const page = await browser.newPage()
   const writes = await installMocks(page, role)
@@ -171,15 +212,19 @@ async function verifyAdminRole(browser, role) {
 
   await verifyOverviewSubtabs(page)
   const ownName = page.getByTestId('article-details-input-custom_name')
-  if (await ownName.isDisabled()) throw new Error(`${role}: Eigen naam is read-only`)
+  if (await ownName.isDisabled()) throw new Error(`${role}: Naam in dit huishouden is read-only`)
+  await assertEditableBlack(page, '[data-testid="article-details-input-custom_name"]', `${role}: Naam in dit huishouden`)
   await ownName.fill(`PO ${role.toUpperCase()} SUBTABS`)
   const patch = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${articleId}` && response.request().method() === 'PATCH')
   await ownName.blur()
-  if (!(await patch).ok()) throw new Error(`${role}: Eigen naam PATCH faalde`)
+  if (!(await patch).ok()) throw new Error(`${role}: huishoudnaam PATCH faalde`)
 
   await activateSubtab(page, 'article-overview-subtab-household', 'household', '[data-testid="article-household-settings-section"]')
   const save = page.getByTestId('article-household-settings-save')
   if (await save.isDisabled()) throw new Error(`${role}: Instellingen zijn read-only`)
+  if (await page.getByTestId('article-details-input-average_price').isVisible()) throw new Error(`${role}: afgeleide Prijsindicatie is nog handmatig zichtbaar`)
+  if (await page.getByTestId('article-household-settings-auto-restock').isVisible()) throw new Error(`${role}: niet-functionele auto_restock is nog zichtbaar`)
+  await assertEditableBlack(page, '[data-testid="article-details-input-notes"]', `${role}: Notities`)
   await page.getByTestId('article-details-input-notes').fill(`Notitie ${role}`)
   const settingsResponse = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${articleId}/settings` && response.request().method() === 'PUT')
   await save.click()
@@ -189,13 +234,14 @@ async function verifyAdminRole(browser, role) {
   const automation = page.locator('.rz-article-automation-select')
   await automation.waitFor({ state: 'visible' })
   if (await automation.isDisabled()) throw new Error(`${role}: Automatisering is read-only`)
+  await assertEditableBlack(page, '.rz-article-automation-select', `${role}: Automatisering`)
   const currentMode = await automation.inputValue()
   const nextMode = currentMode === 'always_on' ? 'always_off' : 'always_on'
   const automationResponse = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${articleId}/automation-override` && response.request().method() === 'PUT')
   await automation.selectOption(nextMode)
   if (!(await automationResponse).ok()) throw new Error(`${role}: automatisering PUT faalde`)
 
-  await activateSubtab(page, 'article-overview-subtab-identity', 'identity', '[data-testid="article-external-link-section"]')
+  await activateSubtab(page, 'article-overview-subtab-identity', 'identity', '[data-testid="article-identity-summary"]')
   if (await page.getByTestId('article-external-link-edit').isVisible()) throw new Error(`${role}: barcode-mutatie is zichtbaar`)
 
   await page.getByRole('tab', { name: 'Voorraad', exact: true }).click()
@@ -226,7 +272,7 @@ async function verifyReadOnlyRole(browser, role) {
 
   await verifyOverviewSubtabs(page)
   await activateSubtab(page, 'article-overview-subtab-article', 'article', '[data-testid="article-household-details-section"]')
-  if (!(await page.getByTestId('article-details-input-custom_name').isDisabled())) throw new Error(`${role}: Eigen naam is muteerbaar`)
+  if (!(await page.getByTestId('article-details-input-custom_name').isDisabled())) throw new Error(`${role}: Naam in dit huishouden is muteerbaar`)
 
   await activateSubtab(page, 'article-overview-subtab-household', 'household', '[data-testid="article-household-settings-section"]')
   if (!(await page.getByTestId('article-household-settings-save').isDisabled())) throw new Error(`${role}: instellingen zijn muteerbaar`)
@@ -255,6 +301,7 @@ try {
   await verifyReadOnlyRole(browser, 'viewer')
   console.log('ARTICLE_DETAIL_MEMBER_READONLY_BROWSER_GREEN')
   console.log('ARTICLE_DETAIL_SUBTABS_BROWSER_GREEN')
+  console.log('ARTICLE_DETAIL_CURATED_OVERVIEW_BROWSER_GREEN')
   console.log('ARTICLE_DETAIL_OWNER_MUTATION_BROWSER_GREEN')
 } finally {
   await browser.close()
