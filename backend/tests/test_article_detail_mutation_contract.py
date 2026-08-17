@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[2]
 OVERVIEW_PATH = "frontend/src/features/articles/tabs/ArticleOverviewTab.jsx"
 OVERVIEW_WRAPPER_PATH = "frontend/src/features/articles/tabs/ArticleOverviewSubtabs.jsx"
 ANALYSIS_WRAPPER_PATH = "frontend/src/features/articles/tabs/ArticleAnalyticsSubtabs.jsx"
+ANALYSIS_PATH = "frontend/src/features/articles/tabs/ArticleAnalyticsTab.jsx"
+POLICY_PATH = "frontend/src/features/articles/articleDetailMutationPolicy.css"
 STOCK_PATH = "frontend/src/features/articles/tabs/ArticleStockTab.jsx"
 LOCATIONS_PATH = "frontend/src/features/articles/tabs/ArticleLocationsTab.jsx"
 TABS_PATH = "frontend/src/ui/Tabs.jsx"
@@ -183,22 +185,43 @@ def test_overview_has_compact_race_free_functional_subtabs():
     assert "ariaLabel=\"Overzicht subtabs\"" in source
 
 
-def test_analysis_has_compact_race_free_functional_subtabs():
-    source = _read(ANALYSIS_WRAPPER_PATH)
+def test_analysis_has_compact_direct_functional_subtabs():
+    wrapper = _read(ANALYSIS_WRAPPER_PATH)
+    analysis = _read(ANALYSIS_PATH)
+    policy = _read(POLICY_PATH)
+
     for label in ("'Trends'", "'Prijs'", "'Prognose'", "'Onderbouwing'"):
-        assert label in source
-    for mapping in (
-        "'Aankoop en verbruik in de tijd': 'trends'",
-        "Prijsinzichten: 'price'",
-        "Voorraadprognose: 'forecast'",
-        "Aanbeveling: 'forecast'",
-        "Onderbouwing: 'evidence'",
+        assert label in wrapper
+    assert "data-active-subtab={activeKey}" in wrapper
+    assert "ariaLabel=\"Analyse subtabs\"" in wrapper
+    assert "useLayoutEffect" not in wrapper
+    assert "MutationObserver" not in wrapper
+    assert "dataset.analysisSubtab" not in wrapper
+
+    for anchor in (
+        'data-testid="analysis-row-automation"',
+        'data-testid="analysis-row-price"',
+        'data-testid="analysis-row-consumption"',
+        'data-testid="analysis-row-forecast"',
+        'data-testid="analysis-row-advice"',
+        'data-testid="analysis-row-quality"',
     ):
-        assert mapping in source
-    assert "data-active-subtab={activeKey}" in source
-    assert "wrapper.dataset.analysisSubtab" in source
-    assert "wrapper.hidden" not in source
-    assert "ariaLabel=\"Analyse subtabs\"" in source
+        assert anchor in analysis
+
+    for selector in (
+        '[data-active-subtab="trends"]',
+        '[data-active-subtab="price"]',
+        '[data-active-subtab="forecast"]',
+        '[data-active-subtab="evidence"]',
+        '[data-testid="analysis-row-consumption"]',
+        '[data-testid="analysis-row-price"]',
+        '[data-testid="analysis-row-forecast"]',
+        '[data-testid="analysis-row-advice"]',
+        '[data-testid="analysis-row-automation"]',
+        '[data-testid="analysis-row-quality"]',
+    ):
+        assert selector in policy
+    assert '[data-analysis-subtab]' not in policy
 
 
 def test_shared_tabs_support_nested_accessible_navigation_without_breaking_defaults():
@@ -353,7 +376,7 @@ def run_contract() -> None:
     test_general_household_editor_owns_only_custom_name()
     test_overview_wrapper_makes_member_and_viewer_read_only()
     test_overview_has_compact_race_free_functional_subtabs()
-    test_analysis_has_compact_race_free_functional_subtabs()
+    test_analysis_has_compact_direct_functional_subtabs()
     test_shared_tabs_support_nested_accessible_navigation_without_breaking_defaults()
     test_stock_mutation_is_admin_only_and_uses_article_detail_gateway()
     test_location_mutation_is_admin_only_and_uses_article_detail_gateway()
