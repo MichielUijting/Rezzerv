@@ -70,6 +70,15 @@ def _build_main_endpoint(name, calls, *, inventory=False):
             namespace,
         )
     elif name == 'settings':
+        namespace.update({
+            'engine': FakeEngine(),
+            'get_household_article_settings': lambda conn, household_id, article_id: {
+                'settings': {
+                    'average_price': 3.45,
+                    'auto_restock': True,
+                }
+            },
+        })
         exec(
             "def endpoint(household_article_id: str, payload: Payload, authorization=None):\n"
             "    calls.append(('settings', household_article_id, payload.data, authorization))\n"
@@ -135,10 +144,18 @@ def test_patch_and_settings_are_admin_only_before_delegation():
     assert calls == []
 
     result = update_article_detail_settings_admin_only(
-        ARTICLE_ID, settings_request, {'notes': 'x'}, 'Bearer owner'
+        ARTICLE_ID,
+        settings_request,
+        {'notes': 'x', 'average_price': 0.01, 'auto_restock': False},
+        'Bearer owner',
     )
     assert result == {'ok': True, 'kind': 'settings'}
-    assert calls == [('settings', ARTICLE_ID, {'notes': 'x'}, 'Bearer owner')]
+    assert calls == [(
+        'settings',
+        ARTICLE_ID,
+        {'notes': 'x', 'average_price': 3.45, 'auto_restock': True},
+        'Bearer owner',
+    )]
 
 
 def test_inventory_and_transfer_are_admin_only_and_article_scoped():
