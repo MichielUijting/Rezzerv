@@ -221,11 +221,13 @@ async function verifyMutableRole(browser, role) {
   const automation = page.locator('.rz-article-automation-select')
   await automation.waitFor({ state: 'visible' })
   if (await automation.isDisabled()) throw new Error(`${role}: automatisering is ten onrechte disabled`)
+  const automationBefore = await automation.inputValue()
+  const nextAutomationMode = automationBefore === 'always_on' ? 'always_off' : 'always_on'
   const automationResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url())
     return url.pathname === `/api/household-articles/${articleId}/automation-override` && response.request().method() === 'PUT'
   })
-  await automation.selectOption('always_on')
+  await automation.selectOption(nextAutomationMode)
   const automationResponse = await automationResponsePromise
   if (!automationResponse.ok()) throw new Error(`${role}: automation PUT gaf HTTP ${automationResponse.status()}`)
 
@@ -276,8 +278,8 @@ async function verifyMutableRole(browser, role) {
   if (writes.settings.length !== 1 || writes.settings[0]?.notes !== `Notitie ${role}`) {
     throw new Error(`${role}: huishoudinstellingen zijn niet werkelijk geschreven ${JSON.stringify(writes.settings)}`)
   }
-  if (writes.automation.length !== 1 || writes.automation[0]?.mode !== 'always_on') {
-    throw new Error(`${role}: automatisering is niet werkelijk geschreven ${JSON.stringify(writes.automation)}`)
+  if (writes.automation.length !== 1 || writes.automation[0]?.mode !== nextAutomationMode || writes.automation[0]?.mode === automationBefore) {
+    throw new Error(`${role}: automatisering is niet werkelijk naar een andere waarde geschreven ${JSON.stringify(writes.automation)}`)
   }
   if (writes.inventoryEvents.length !== 2) {
     throw new Error(`${role}: verwacht twee beheerste voorraadmutaties, gevonden ${JSON.stringify(writes.inventoryEvents)}`)
