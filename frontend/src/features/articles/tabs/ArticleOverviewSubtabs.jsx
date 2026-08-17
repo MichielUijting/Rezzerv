@@ -4,6 +4,7 @@ import { isHouseholdAdminFromContext, readStoredAuthContext } from '../../../lib
 import ArticleOverviewTab from './ArticleOverviewTab'
 
 const OVERVIEW_SUBTABS = ['Artikel', 'Huishouden', 'Identiteit', 'Productdata']
+const OVERVIEW_SUBTAB_STORAGE_KEY = 'rezzerv.article-detail.overview-subtab'
 
 const SUBTAB_KEY = {
   Artikel: 'article',
@@ -22,6 +23,17 @@ const SECTION_TO_KEY = {
   Extern: 'identity',
   Productverrijking: 'productdata',
   'Voeding & verpakking': 'productdata',
+}
+
+function readInitialSubtab() {
+  if (typeof window === 'undefined') return 'Artikel'
+  const stored = window.sessionStorage.getItem(OVERVIEW_SUBTAB_STORAGE_KEY)
+  return OVERVIEW_SUBTABS.includes(stored) ? stored : 'Artikel'
+}
+
+function persistSubtab(value) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(OVERVIEW_SUBTAB_STORAGE_KEY, value)
 }
 
 function classifyOverviewSections(root, readOnly) {
@@ -49,7 +61,7 @@ function classifyOverviewSections(root, readOnly) {
 }
 
 export default function ArticleOverviewSubtabs(props) {
-  const [activeSubtab, setActiveSubtab] = useState('Artikel')
+  const [activeSubtab, setActiveSubtab] = useState(readInitialSubtab)
   const rootRef = useRef(null)
   const canMutate = isHouseholdAdminFromContext(readStoredAuthContext() || {})
   const readOnly = !canMutate
@@ -67,6 +79,11 @@ export default function ArticleOverviewSubtabs(props) {
     return () => observer.disconnect()
   }, [readOnly])
 
+  function handleSubtabChange(nextSubtab) {
+    setActiveSubtab(nextSubtab)
+    persistSubtab(nextSubtab)
+  }
+
   return (
     <div
       ref={rootRef}
@@ -78,7 +95,7 @@ export default function ArticleOverviewSubtabs(props) {
       <Tabs
         tabs={OVERVIEW_SUBTABS}
         activeTab={activeSubtab}
-        onTabChange={setActiveSubtab}
+        onTabChange={handleSubtabChange}
         className="rz-article-subtabs"
         ariaLabel="Overzicht subtabs"
         rootTestId="article-overview-subtabs"
