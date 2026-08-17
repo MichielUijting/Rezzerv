@@ -30,7 +30,22 @@
   min-width: 0;
 }
 
-.rz-article-subtab-layout [hidden] {
+.rz-article-subtab-layout .rz-overview-tab > .rz-article-global-toggle,
+.rz-article-subtab-layout .rz-analytics-tab > .rz-article-global-toggle {
+  display: none !important;
+}
+
+.rz-article-overview-subtab-layout[data-active-subtab="article"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="article"]),
+.rz-article-overview-subtab-layout[data-active-subtab="household"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="household"]),
+.rz-article-overview-subtab-layout[data-active-subtab="identity"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="identity"]),
+.rz-article-overview-subtab-layout[data-active-subtab="productdata"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="productdata"]) {
+  display: none !important;
+}
+
+.rz-article-analysis-subtab-layout[data-active-subtab="trends"] .rz-analytics-tab > [data-analysis-subtab]:not([data-analysis-subtab="trends"]),
+.rz-article-analysis-subtab-layout[data-active-subtab="price"] .rz-analytics-tab > [data-analysis-subtab]:not([data-analysis-subtab="price"]),
+.rz-article-analysis-subtab-layout[data-active-subtab="forecast"] .rz-analytics-tab > [data-analysis-subtab]:not([data-analysis-subtab="forecast"]),
+.rz-article-analysis-subtab-layout[data-active-subtab="evidence"] .rz-analytics-tab > [data-analysis-subtab]:not([data-analysis-subtab="evidence"]) {
   display: none !important;
 }
 
