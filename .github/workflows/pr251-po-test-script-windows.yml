@@ -5,12 +5,12 @@ on:
     branches:
       - fix/article-detail-mutation-contracts
     paths:
-      - scripts/po-test-pr251-v011296.ps1
+      - scripts/po-test-pr251-v011297.ps1
       - scripts/START-PO-TEST-PR251.cmd
       - .github/workflows/pr251-po-test-script-windows.yml
   pull_request:
     paths:
-      - scripts/po-test-pr251-v011296.ps1
+      - scripts/po-test-pr251-v011297.ps1
       - scripts/START-PO-TEST-PR251.cmd
       - .github/workflows/pr251-po-test-script-windows.yml
 
@@ -24,7 +24,7 @@ jobs:
       - name: Parse PowerShell with Windows parser
         shell: powershell
         run: |
-          $path = Resolve-Path '.\scripts\po-test-pr251-v011296.ps1'
+          $path = Resolve-Path '.\scripts\po-test-pr251-v011297.ps1'
           $tokens = $null
           $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
@@ -32,67 +32,57 @@ jobs:
             $errors | ForEach-Object { Write-Error $_.Message }
             exit 1
           }
-          Write-Host 'PO_TEST_SCRIPT_WINDOWS_PARSE_GREEN'
+          Write-Host 'PO_TEST_V011297_WINDOWS_PARSE_GREEN'
 
-      - name: Run canonical PowerShell self-test
+      - name: Run PowerShell self-test
         shell: powershell
         run: |
-          $logDir = Join-Path $env:TEMP 'Rezzerv-PO-tests'
-          New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-          $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\scripts\po-test-pr251-v011296.ps1' -SelfTest
+          $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\scripts\po-test-pr251-v011297.ps1' -SelfTest
           $output | Write-Host
-          if (($output -join "`n") -notmatch 'PO_TEST_SCRIPT_SELFTEST_GREEN') {
-            throw 'Canonical PowerShell self-test GREEN marker ontbreekt.'
+          if (($output -join "`n") -notmatch 'PO_TEST_V011297_SELFTEST_GREEN') {
+            throw 'PO runner self-test GREEN marker ontbreekt.'
           }
 
-      - name: Run standalone launcher from ZIP-like temp location
+      - name: Run launcher self-test
         shell: powershell
         run: |
-          $zipLikeDir = Join-Path $env:TEMP ('e8658047-3693-44b1-a61f-Rezzerv-PO-test.zip.' + (Get-Random))
-          New-Item -ItemType Directory -Path $zipLikeDir -Force | Out-Null
-          $standalone = Join-Path $zipLikeDir 'START-PO-TEST-PR251.cmd'
-          Copy-Item '.\scripts\START-PO-TEST-PR251.cmd' $standalone
-          if (Test-Path (Join-Path $zipLikeDir 'po-test-pr251-v011296.ps1')) {
-            throw 'Isolatietest bevat ten onrechte een los PowerShell-buurbestand.'
-          }
-          $output = & cmd.exe /d /c "`"$standalone`" -SelfTest" 2>&1
+          $output = & cmd.exe /d /c '.\scripts\START-PO-TEST-PR251.cmd -SelfTest' 2>&1
           $rc = $LASTEXITCODE
           $output | Write-Host
-          if ($rc -ne 0) { throw "Standalone launcher self-test gaf exitcode $rc." }
-          if (($output -join "`n") -notmatch 'PO_TEST_SCRIPT_SELFTEST_GREEN') {
-            throw 'Standalone launcher kon ingebouwde PowerShell-runner niet zelfstandig uitvoeren.'
+          if ($rc -ne 0) { throw "Launcher self-test gaf exitcode $rc." }
+          if (($output -join "`n") -notmatch 'PO_TEST_V011297_SELFTEST_GREEN') {
+            throw 'Launcher kon de v01.12.97 PowerShell-runner niet uitvoeren.'
           }
-          Write-Host 'PO_TEST_STANDALONE_ZIP_TEMP_GREEN'
+          Write-Host 'PO_TEST_V011297_LAUNCHER_GREEN'
 
-      - name: Validate standalone safety guardrails
+      - name: Validate PO runner safety guardrails
         shell: powershell
         run: |
+          $runner = Get-Content '.\scripts\po-test-pr251-v011297.ps1' -Raw
           $launcher = Get-Content '.\scripts\START-PO-TEST-PR251.cmd' -Raw
-          $required = @(
-            '::REZZERV_POWERSHELL_PAYLOAD::',
+          $requiredRunner = @(
             'C:\Users\Gebruiker\Rezzerv_Github',
-            "`$LogDir = Join-Path `$env:TEMP 'Rezzerv-PO-tests'",
-            '51d20083012f3f094b7407c538741ef329e61d68',
+            '9a1944cc760d4d7355b48f8106f620ab0ee351ed',
+            'Rezzerv-MVP-v01.12.97',
             "worktree','add','--detach'",
-            "Copy-Item -LiteralPath `$LiveDb -Destination `$TestDb",
-            'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN',
-            'ARTICLE_FIXTURE_GREEN:',
-            'Dit venster sluit pas nadat je een toets indrukt.',
-            'pause'
+            'Copy-Item -LiteralPath $liveDb -Destination $testDb',
+            'tests/run_article_detail_mutation_contract.py',
+            'tests/test_article_detail_admin_gateway_contract.py',
+            'tests/test_article_detail_canonical_route_guard.py',
+            'Naam in dit huishouden komt terug als Voorraadartikel',
+            'Lid kan alles lezen maar niets muteren in Artikeldetail',
+            'Cleanup afgerond.'
           )
-          foreach ($needle in $required) {
-            if (-not $launcher.Contains($needle)) { throw "Verplichte standalone-guardrail ontbreekt: $needle" }
+          foreach ($needle in $requiredRunner) {
+            if (-not $runner.Contains($needle)) { throw "Verplichte PO-runner guardrail ontbreekt: $needle" }
           }
-          if ($launcher -match '(?i)OneDrive|Downloads|GetFolderPath\(''Desktop''\)') {
-            throw 'Standalone PO-runner bevat een verboden cloud/download/Desktop-pad-aanname.'
+          if (-not $launcher.Contains('po-test-pr251-v011297.ps1')) {
+            throw 'Launcher verwijst niet naar de v01.12.97 runner.'
           }
-          if ($launcher -match '(?i)%~dp0po-test-pr251-v011296\.ps1') {
-            throw 'Standalone launcher mag niet afhankelijk zijn van een naastliggend PowerShell-bestand.'
+          if ($runner -match '(?im)\bgit\s+(reset|stash|switch|clean)\b') {
+            throw 'Verboden Git-mutatie gevonden in PO-runner.'
           }
-          if ($launcher -match '(?im)\bgit\s+(reset|stash|switch|clean)\b') {
-            throw 'Verboden Git-mutatie gevonden in ingebouwde PO-runner.'
+          if ($runner -match '(?im)Copy-Item[^\r\n]+Destination\s+\$liveDb') {
+            throw 'PO-runner mag nooit naar de live database terugkopieren.'
           }
-          if ($launcher -match '(?im)Copy-Item[^\r\n]+Destination\s+\$LiveDb') {
-            throw 'Ingebouwde runner mag nooit naar de live database terugkopieren.'
-          }
-          Write-Host 'PO_TEST_STANDALONE_GUARDRAILS_GREEN'
+          Write-Host 'PO_TEST_V011297_GUARDRAILS_GREEN'
