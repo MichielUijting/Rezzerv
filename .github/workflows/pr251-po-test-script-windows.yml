@@ -34,6 +34,13 @@ jobs:
           }
           Write-Host 'PO_TEST_SCRIPT_WINDOWS_PARSE_GREEN'
 
+      - name: Prepare isolated self-test log directory
+        shell: powershell
+        run: |
+          $logDir = Join-Path $env:TEMP 'Rezzerv-PO-tests'
+          New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+          Write-Host "PO_TEST_LOGDIR_GREEN: $logDir"
+
       - name: Run self-test in Windows PowerShell
         shell: powershell
         run: |
