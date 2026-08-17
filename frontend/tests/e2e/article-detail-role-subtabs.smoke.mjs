@@ -143,15 +143,12 @@ async function installMocks(page, role) {
 }
 
 async function activateSubtab(page, testId, expectedKey, expectedVisibleSelector) {
-  await page.waitForFunction((id) => Boolean(document.querySelector(`[data-testid="${id}"]`)), testId)
-  const result = await page.evaluate((id) => {
+  await page.waitForFunction((id) => {
     const element = document.querySelector(`[data-testid="${id}"]`)
-    if (!element) return { ok: false, reason: 'missing' }
-    if (element.disabled) return { ok: false, reason: 'disabled' }
+    if (!element || element.disabled) return false
     element.click()
-    return { ok: true }
+    return true
   }, testId)
-  if (!result.ok) throw new Error(`${testId}: ${result.reason}`)
 
   await page.waitForFunction(({ id, key, selector }) => {
     const tab = document.querySelector(`[data-testid="${id}"]`)
