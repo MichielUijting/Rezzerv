@@ -4,3 +4,25 @@
 .rz-overview-tab [data-testid="article-external-link-scan"] {
   display: none !important;
 }
+
+/* Voorraad op Artikeldetail heeft een expliciete actiekolom voor Corrigeren/Afboeken. */
+.rz-stock-tab .rz-stock-summary-table-header,
+.rz-stock-tab .rz-stock-summary-table-row {
+  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) 100px minmax(190px, auto);
+  cursor: default;
+}
+
+.rz-stock-tab .rz-stock-action-buttons {
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .rz-stock-tab .rz-stock-summary-table-header,
+  .rz-stock-tab .rz-stock-summary-table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .rz-stock-tab .rz-stock-action-buttons {
+    justify-content: flex-start;
+  }
+}
