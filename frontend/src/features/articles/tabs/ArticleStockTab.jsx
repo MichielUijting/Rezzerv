@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import Button from '../../../ui/Button'
 import Input from '../../../ui/Input'
-import { canCurrentUserPerform, fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../../lib/authSession'
+import { fetchJsonWithAuth, isHouseholdAdminFromContext, readStoredAuthContext } from '../../../lib/authSession'
 
 function normalizeLocationName(value) {
   return value || 'Onbekende locatie'
@@ -30,7 +30,8 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
   const sourceArticle = articleData ?? article
   const locations = Array.isArray(sourceArticle.locations) ? sourceArticle.locations : []
   const authContext = readStoredAuthContext() || {}
-  const canEditInventory = isHouseholdAdminFromContext(authContext) || canCurrentUserPerform('inventory.update', authContext)
+  const canEditInventory = isHouseholdAdminFromContext(authContext)
+  const householdArticleId = String(sourceArticle?.household_article_id || sourceArticle?.article_id || sourceArticle?.id || '').trim()
   const [mutationForm, setMutationForm] = useState(() => emptyMutationForm())
   const [mutationBusy, setMutationBusy] = useState(false)
   const [mutationError, setMutationError] = useState('')
@@ -61,7 +62,7 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
   }
 
   function openMutation(row, action) {
-    if (!canEditInventory || !row?.inventoryId) return
+    if (!canEditInventory || !householdArticleId || !row?.inventoryId) return
     resetFeedback()
     setMutationForm({
       inventoryId: row.inventoryId,
@@ -78,7 +79,7 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
 
   async function handleMutationSubmit(event) {
     event.preventDefault()
-    if (!canEditInventory || !selectedRow) return
+    if (!canEditInventory || !householdArticleId || !selectedRow) return
 
     const quantity = Number(mutationForm.quantity)
     if (!Number.isInteger(quantity) || quantity < 0) {
@@ -97,7 +98,7 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
     setMutationBusy(true)
     resetFeedback()
     try {
-      const response = await fetchJsonWithAuth('/api/inventory-events', {
+      const response = await fetchJsonWithAuth(`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`, {
         method: 'POST',
         body: JSON.stringify({
           inventory_id: selectedRow.inventoryId,
@@ -150,8 +151,8 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
                   <span>{row.sublocationName}</span>
                   <span className="rz-stock-summary-table-quantity">{formatQuantity(row.quantity)}</span>
                   <span className="rz-stock-action-buttons">
-                    <Button type="button" variant="secondary" disabled={!canEditInventory || !row.inventoryId} onClick={() => openMutation(row, 'adjustment')} data-testid={`article-stock-adjust-${row.inventoryId || row.rowKey}`}>Corrigeren</Button>
-                    <Button type="button" variant="secondary" disabled={!canEditInventory || !row.inventoryId || row.quantity <= 0} onClick={() => openMutation(row, 'consume')} data-testid={`article-stock-consume-${row.inventoryId || row.rowKey}`}>Afboeken</Button>
+                    <Button type="button" variant="secondary" disabled={!canEditInventory || !householdArticleId || !row.inventoryId} onClick={() => openMutation(row, 'adjustment')} data-testid={`article-stock-adjust-${row.inventoryId || row.rowKey}`}>Corrigeren</Button>
+                    <Button type="button" variant="secondary" disabled={!canEditInventory || !householdArticleId || !row.inventoryId || row.quantity <= 0} onClick={() => openMutation(row, 'consume')} data-testid={`article-stock-consume-${row.inventoryId || row.rowKey}`}>Afboeken</Button>
                   </span>
                 </div>
               ))}
