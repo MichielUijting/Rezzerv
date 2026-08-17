@@ -29,26 +29,26 @@ function Log([string]$Message) {
   Add-Content -LiteralPath $Log -Value $line -Encoding UTF8
 }
 
-function Run([string]$Exe, [string[]]$Args, [string]$Cwd = '') {
+function Run([string]$Exe, [string[]]$Arguments, [string]$Cwd = '') {
   if ($Cwd) { Push-Location $Cwd }
   try {
-    Log ("> {0} {1}" -f $Exe, ($Args -join ' '))
-    $out = @(& $Exe @Args 2>&1)
+    Log ("> {0} {1}" -f $Exe, ($Arguments -join ' '))
+    $out = @(& $Exe @Arguments 2>&1)
     $code = $LASTEXITCODE
     foreach ($line in $out) { Log ([string]$line) }
-    if ($code -ne 0) { throw "Exitcode ${code}: $Exe $($Args -join ' ')" }
+    if ($code -ne 0) { throw "Exitcode ${code}: $Exe $($Arguments -join ' ')" }
     return $out
   } finally { if ($Cwd) { Pop-Location } }
 }
 
-function Capture([string]$Exe, [string[]]$Args, [string]$Cwd = '') {
+function Capture([string]$Exe, [string[]]$Arguments, [string]$Cwd = '') {
   if ($Cwd) { Push-Location $Cwd }
   try {
-    $out = @(& $Exe @Args 2>&1)
+    $out = @(& $Exe @Arguments 2>&1)
     $code = $LASTEXITCODE
     if ($code -ne 0) {
       foreach ($line in $out) { Log ([string]$line) }
-      throw "Exitcode ${code}: $Exe $($Args -join ' ')"
+      throw "Exitcode ${code}: $Exe $($Arguments -join ' ')"
     }
     return (($out | ForEach-Object { [string]$_ }) -join "`n").Trim()
   } finally { if ($Cwd) { Pop-Location } }
@@ -104,6 +104,10 @@ if ($SelfTest) {
   if ($ExpectedVersion -ne 'Rezzerv-MVP-v01.12.96') { throw 'SELFTEST: versie ongeldig.' }
   if ($ExpectedArticleName -ne '7 Granen Ontbijt') { throw 'SELFTEST: testartikelnaam ongeldig.' }
   if ($ProjectName -in @('rezzerv','rezzerv_github')) { throw 'SELFTEST: project niet geisoleerd.' }
+  $gitCaptureProbe = Capture 'git' @('--version')
+  if ($gitCaptureProbe -notmatch '^git version ') { throw 'SELFTEST: Capture-wrapper gaf git-argumenten niet door.' }
+  $gitRunProbe = Run 'git' @('--version')
+  if ((($gitRunProbe | ForEach-Object { [string]$_ }) -join "`n") -notmatch '^git version ') { throw 'SELFTEST: Run-wrapper gaf git-argumenten niet door.' }
   if ((NormalizeHostPath 'C:/Users/Gebruiker/Rezzerv_Github') -ne (NormalizeHostPath $Repo)) { throw 'SELFTEST: padnormalisatie ongeldig.' }
   Write-Output 'PO_TEST_SCRIPT_SELFTEST_GREEN'
   exit 0
