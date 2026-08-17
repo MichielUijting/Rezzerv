@@ -1,0 +1,65 @@
+name: PR251 PO runner Windows validation
+
+on:
+  push:
+    branches:
+      - fix/article-detail-mutation-contracts
+    paths:
+      - scripts/po-test-pr251-v011296.ps1
+      - .github/workflows/pr251-po-test-script-windows.yml
+  pull_request:
+    paths:
+      - scripts/po-test-pr251-v011296.ps1
+      - .github/workflows/pr251-po-test-script-windows.yml
+
+jobs:
+  windows-powershell-validation:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell with Windows parser
+        shell: powershell
+        run: |
+          $path = Resolve-Path '.\scripts\po-test-pr251-v011296.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'PO_TEST_SCRIPT_WINDOWS_PARSE_GREEN'
+
+      - name: Run self-test in Windows PowerShell
+        shell: powershell
+        run: |
+          $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\scripts\po-test-pr251-v011296.ps1' -SelfTest
+          $output | Write-Host
+          if (($output -join "`n") -notmatch 'PO_TEST_SCRIPT_SELFTEST_GREEN') {
+            throw 'Self-test GREEN marker ontbreekt.'
+          }
+
+      - name: Validate safety guardrails
+        shell: powershell
+        run: |
+          $text = Get-Content '.\scripts\po-test-pr251-v011296.ps1' -Raw
+          $required = @(
+            'C:\Users\Gebruiker\Rezzerv_Github',
+            '51d20083012f3f094b7407c538741ef329e61d68',
+            "worktree','add','--detach'",
+            "Copy-Item -LiteralPath `$LiveDb -Destination `$TestDb",
+            "docker start @OriginalContainers",
+            'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN'
+          )
+          foreach ($needle in $required) {
+            if (-not $text.Contains($needle)) { throw "Verplichte guardrail ontbreekt: $needle" }
+          }
+          if ($text -match '(?im)\bgit\s+(reset|stash|switch|clean)\b') {
+            throw 'Verboden Git-mutatie gevonden in PO-runner.'
+          }
+          if ($text -match '(?im)Copy-Item[^\r\n]+Destination\s+\$LiveDb') {
+            throw 'Runner mag nooit naar de live database terugkopieren.'
+          }
+          Write-Host 'PO_TEST_SCRIPT_GUARDRAILS_GREEN'
