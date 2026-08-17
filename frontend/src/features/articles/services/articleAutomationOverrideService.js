@@ -59,7 +59,12 @@ export async function fetchArticleAutoConsumeMode(articleId) {
     const explicit = Boolean(data?.has_explicit_override ?? data?.hasExplicitOverride)
     if (!explicit) {
       const legacyMode = readLegacyOverride(articleId)
-      if (legacyMode !== null) {
+      // follow_household is the server default, not a meaningful legacy override.
+      // Never turn a read/cache of the default into a backend write.
+      if (
+        legacyMode !== null
+        && legacyMode !== AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD
+      ) {
         return saveArticleAutoConsumeMode(articleId, legacyMode)
       }
     }
