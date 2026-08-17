@@ -1,44 +1,50 @@
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import Tabs from '../../../ui/Tabs'
 import { isHouseholdAdminFromContext, readStoredAuthContext } from '../../../lib/authSession'
 import ArticleOverviewTab from './ArticleOverviewTab'
 
 const OVERVIEW_SUBTABS = ['Artikel', 'Huishouden', 'Identiteit', 'Productdata']
 
-const SECTION_TO_SUBTAB = {
-  'Artikelgegevens voor dit huishouden': 'Artikel',
-  Basis: 'Artikel',
-  'Instellingen voor dit huishouden': 'Huishouden',
-  Automatisering: 'Huishouden',
-  Gebruiker: 'Huishouden',
-  'Externe productkoppeling': 'Identiteit',
-  Extern: 'Identiteit',
-  Productverrijking: 'Productdata',
-  'Voeding & verpakking': 'Productdata',
+const SUBTAB_KEY = {
+  Artikel: 'article',
+  Huishouden: 'household',
+  Identiteit: 'identity',
+  Productdata: 'productdata',
 }
 
-function applyOverviewSubtab(root, activeSubtab, readOnly) {
+const SECTION_TO_KEY = {
+  'Artikelgegevens voor dit huishouden': 'article',
+  Basis: 'article',
+  'Instellingen voor dit huishouden': 'household',
+  Automatisering: 'household',
+  Gebruiker: 'household',
+  'Externe productkoppeling': 'identity',
+  Extern: 'identity',
+  Productverrijking: 'productdata',
+  'Voeding & verpakking': 'productdata',
+}
+
+function classifyOverviewSections(root, readOnly) {
   const overview = root?.querySelector('.rz-overview-tab')
   if (!overview) return
 
-  const globalToggle = overview.querySelector(':scope > .rz-article-global-toggle')
-  if (globalToggle) globalToggle.hidden = true
-
   overview.querySelectorAll(':scope > section.rz-article-section-accordion').forEach((section) => {
     const title = section.querySelector('.rz-article-section-title')?.textContent?.trim() || ''
-    const targetSubtab = SECTION_TO_SUBTAB[title] || 'Artikel'
-    section.hidden = targetSubtab !== activeSubtab
+    const targetKey = SECTION_TO_KEY[title] || 'article'
+    if (section.dataset.articleSubtab !== targetKey) {
+      section.dataset.articleSubtab = targetKey
+    }
   })
 
   if (!readOnly) return
 
   overview.querySelectorAll('input, select, textarea').forEach((control) => {
-    control.disabled = true
-    control.setAttribute('aria-disabled', 'true')
+    if (!control.disabled) control.disabled = true
+    if (control.getAttribute('aria-disabled') !== 'true') control.setAttribute('aria-disabled', 'true')
   })
   overview.querySelectorAll('button:not(.rz-article-section-summary)').forEach((button) => {
-    button.disabled = true
-    button.setAttribute('aria-disabled', 'true')
+    if (!button.disabled) button.disabled = true
+    if (button.getAttribute('aria-disabled') !== 'true') button.setAttribute('aria-disabled', 'true')
   })
 }
 
@@ -47,21 +53,28 @@ export default function ArticleOverviewSubtabs(props) {
   const rootRef = useRef(null)
   const canMutate = isHouseholdAdminFromContext(readStoredAuthContext() || {})
   const readOnly = !canMutate
+  const activeKey = SUBTAB_KEY[activeSubtab] || 'article'
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = rootRef.current
     if (!root) return undefined
 
-    const apply = () => applyOverviewSubtab(root, activeSubtab, readOnly)
-    apply()
+    const classify = () => classifyOverviewSections(root, readOnly)
+    classify()
 
-    const observer = new MutationObserver(apply)
+    const observer = new MutationObserver(classify)
     observer.observe(root, { childList: true, subtree: true })
     return () => observer.disconnect()
-  }, [activeSubtab, readOnly])
+  }, [readOnly])
 
   return (
-    <div ref={rootRef} className="rz-article-subtab-layout" data-testid="article-overview-subtab-layout" data-readonly={readOnly ? 'true' : 'false'}>
+    <div
+      ref={rootRef}
+      className="rz-article-subtab-layout rz-article-overview-subtab-layout"
+      data-testid="article-overview-subtab-layout"
+      data-readonly={readOnly ? 'true' : 'false'}
+      data-active-subtab={activeKey}
+    >
       <Tabs
         tabs={OVERVIEW_SUBTABS}
         activeTab={activeSubtab}
