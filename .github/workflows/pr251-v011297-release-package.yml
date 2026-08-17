@@ -6,6 +6,9 @@ on:
       - fix/article-detail-mutation-contracts
     paths:
       - .github/workflows/pr251-v011297-release-package.yml
+  pull_request:
+    paths:
+      - .github/workflows/pr251-v011297-release-package.yml
   workflow_dispatch:
 
 jobs:
