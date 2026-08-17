@@ -66,6 +66,16 @@ function AssertService([string]$Id, [string]$Service) {
   }
 }
 
+function NormalizeHostPath([string]$PathValue) {
+  $p = ([string]$PathValue).Trim()
+  if ($p -match '^/host_mnt/([A-Za-z])/(.*)$') {
+    $p = "$($Matches[1]):\$($Matches[2] -replace '/', '\')"
+  } elseif ($p -match '^/run/desktop/mnt/host/([A-Za-z])/(.*)$') {
+    $p = "$($Matches[1]):\$($Matches[2] -replace '/', '\')"
+  }
+  return ([System.IO.Path]::GetFullPath($p).Replace('/','\')).TrimEnd([char]'\').ToLowerInvariant()
+}
+
 function Ask([string]$Question) {
   while ($true) {
     $a = (Read-Host "$Question [J/N]").Trim().ToUpperInvariant()
@@ -92,6 +102,7 @@ if ($SelfTest) {
   if ($Repo -ne 'C:\Users\Gebruiker\Rezzerv_Github') { throw 'SELFTEST: SSOT-werkmap ongeldig.' }
   if ($ExpectedVersion -ne 'Rezzerv-MVP-v01.12.96') { throw 'SELFTEST: versie ongeldig.' }
   if ($ProjectName -in @('rezzerv','rezzerv_github')) { throw 'SELFTEST: project niet geisoleerd.' }
+  if ((NormalizeHostPath 'C:/Users/Gebruiker/Rezzerv_Github') -ne (NormalizeHostPath $Repo)) { throw 'SELFTEST: padnormalisatie ongeldig.' }
   Write-Output 'PO_TEST_SCRIPT_SELFTEST_GREEN'
   exit 0
 }
@@ -138,12 +149,23 @@ try {
   $version = (Get-Content -LiteralPath (Join-Path $Worktree 'VERSION.txt') -Raw).Trim()
   if ($version -ne $ExpectedVersion) { throw "VERSION.txt is '$version', verwacht '$ExpectedVersion'." }
 
-  $LiveDb = Join-Path $Repo 'backend\data\rezzerv.db'
+  $ExpectedDataDir = Join-Path $Repo 'backend\data'
+  $LiveDb = Join-Path $ExpectedDataDir 'rezzerv.db'
   if (-not (Test-Path -LiteralPath $LiveDb)) { throw "Vaste runtime-database niet gevonden: $LiveDb" }
   $back = @(PortContainers 8011); $front = @(PortContainers 5174)
   if ($back.Count -gt 1 -or $front.Count -gt 1) { throw 'Meer dan een container gebruikt een vaste Rezzerv-poort.' }
   foreach ($id in $back) { AssertService $id 'backend' }
   foreach ($id in $front) { AssertService $id 'frontend' }
+  if ($back.Count -eq 1) {
+    $mountedData = (& docker inspect --format '{{ range .Mounts }}{{ if eq .Destination "/app/data" }}{{ .Source }}{{ end }}{{ end }}' $back[0] 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($mountedData)) { throw 'Draaiende backend heeft geen aantoonbare /app/data-bindmount.' }
+    if ((NormalizeHostPath $mountedData) -ne (NormalizeHostPath $ExpectedDataDir)) {
+      throw "Draaiende backend gebruikt onverwachte /app/data-bron: $mountedData"
+    }
+    Log "Runtime-databron bevestigd: $mountedData -> /app/data"
+  } else {
+    Log "Geen draaiende backend op 8011; SSOT-databron voor de geisoleerde test: $ExpectedDataDir"
+  }
   $OriginalContainers = @($back + $front | Select-Object -Unique)
   if ($OriginalContainers.Count -gt 0) {
     Log "Bestaande Rezzerv-containers tijdelijk stoppen: $($OriginalContainers -join ', ')"
@@ -154,6 +176,8 @@ try {
   New-Item -ItemType Directory -Path $testData -Force | Out-Null
   $TestDb = Join-Path $testData 'rezzerv.db'
   Copy-Item -LiteralPath $LiveDb -Destination $TestDb -Force
+  $LiveWal = "$LiveDb-wal"
+  if (Test-Path -LiteralPath $LiveWal) { Copy-Item -LiteralPath $LiveWal -Destination "$TestDb-wal" -Force }
   if (-not (Test-Path -LiteralPath $TestDb)) { throw 'Testdatabase kon niet worden gemaakt.' }
   Log "Geisoleerde testdatabase: $TestDb"
 
@@ -175,18 +199,24 @@ try {
   if ((($contract | ForEach-Object { [string]$_ }) -join "`n") -notmatch 'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN') { throw 'Artikeldetail-contractrunner gaf geen GREEN-marker.' }
   Log 'Gerichte backend/API-contractvalidatie = GREEN.'
 
+  $fixtureCode = 'import sqlite3,sys; aid="{0}"; c=sqlite3.connect("/app/data/rezzerv.db"); a=c.execute("SELECT naam FROM household_articles WHERE id=? LIMIT 1",(aid,)).fetchone(); n=c.execute("SELECT COUNT(*) FROM inventory WHERE household_article_id=? AND COALESCE(status,?)=?",(aid,"active","active")).fetchone()[0]; print("ARTICLE_FIXTURE_GREEN:" + str(a[0]) + ":" + str(n) if a and int(n or 0)>=1 else "ARTICLE_FIXTURE_MISSING"); c.close(); sys.exit(0 if a and int(n or 0)>=1 else 2)' -f $ArticleId
+  $fixture = Run 'docker' @('compose','-p',$ProjectName,'-f',$compose,'exec','-T','backend','python','-c',$fixtureCode) $Worktree
+  if ((($fixture | ForEach-Object { [string]$_ }) -join "`n") -notmatch 'ARTICLE_FIXTURE_GREEN:') { throw 'Testartikel/actieve voorraadfixture ontbreekt.' }
+  Log 'Testartikel en actieve voorraadregel = GREEN.'
+
   Write-Host ''; Write-Host '============================================================'
   Write-Host 'TECHNISCHE PRECHECK = GREEN'
   Write-Host "Versie: $ExpectedVersion"
   Write-Host "Productcommit: $ProductSha"
   Write-Host 'Lokale werkmap: niet gewijzigd en niet als buildbron gebruikt'
-  Write-Host 'Database: geisoleerde kopie; echte runtime-data wordt niet gemuteerd'
+  Write-Host 'PO-testmutaties: uitsluitend op een geisoleerde kopie van rezzerv.db'
   Write-Host '============================================================'; Write-Host ''
 
   $url = "http://localhost:5174/voorraad/$ArticleId"
   Write-Host 'FUNCTIONELE PO-TEST - 7 Granen Ontbijt'
   Write-Host "Browser: $url"
   Write-Host 'Als login verschijnt: log normaal in als Eigenaar/Admin en open daarna dezelfde artikel-URL.'
+  Write-Host 'Laat dit PowerShell-venster open totdat TESTRESULTAAT en Cleanup afgerond zijn getoond.'
   Start-Process $url
 
   Write-Host ''; Write-Host 'TEST 1 - Overzicht'
@@ -253,5 +283,5 @@ finally {
 Write-Host ''; Write-Host '============================================================'
 if ($CleanupFailed) { Write-Host 'TESTRESULTAAT = TECHNISCHE NO-GO (cleanup/herstel)'; Write-Host "Log: $Log"; Write-Host 'Geen handmatige Git- of databaseherstelacties uitvoeren.'; exit 30 }
 if ($TechnicalFailure) { Write-Host 'TESTRESULTAAT = TECHNISCHE NO-GO'; Write-Host "Reden: $TechnicalFailure"; Write-Host "Log: $Log"; Write-Host 'De app-code is hiermee niet functioneel afgekeurd.'; exit 10 }
-if ($FunctionalNoGo) { Write-Host 'TESTRESULTAAT = FUNCTIONELE NO-GO'; Write-Host "Log: $Log"; Write-Host 'De echte runtime-data is niet gewijzigd.'; exit 20 }
-Write-Host 'TESTRESULTAAT = FUNCTIONELE GO'; Write-Host "Log: $Log"; Write-Host 'De echte runtime-data is niet gewijzigd.'; Write-Host '============================================================'; exit 0
+if ($FunctionalNoGo) { Write-Host 'TESTRESULTAAT = FUNCTIONELE NO-GO'; Write-Host "Log: $Log"; Write-Host 'De PO-testmutaties zijn alleen op de geisoleerde databasekopie uitgevoerd.'; exit 20 }
+Write-Host 'TESTRESULTAAT = FUNCTIONELE GO'; Write-Host "Log: $Log"; Write-Host 'De PO-testmutaties zijn alleen op de geisoleerde databasekopie uitgevoerd.'; Write-Host '============================================================'; exit 0
