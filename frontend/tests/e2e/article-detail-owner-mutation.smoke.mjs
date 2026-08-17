@@ -147,22 +147,44 @@ async function waitForInventoryQuantity(page, expected) {
   await quantity.waitFor({ state: 'visible' })
 }
 
+async function activateVisibleSubtab(page, name) {
+  const tab = page.getByRole('tab', { name, exact: true })
+  await tab.waitFor({ state: 'visible' })
+  await tab.evaluate((element, label) => {
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.right <= 0 || rect.top >= window.innerHeight || rect.left >= window.innerWidth) {
+      throw new Error(`${label}: subtab ligt buiten het zichtbare browservenster`)
+    }
+    const x = Math.max(0, Math.min(window.innerWidth - 1, rect.left + rect.width / 2))
+    const y = Math.max(0, Math.min(window.innerHeight - 1, rect.top + rect.height / 2))
+    const hit = document.elementFromPoint(x, y)
+    if (!hit || (hit !== element && !element.contains(hit))) {
+      throw new Error(`${label}: subtab is zichtbaar maar wordt door een ander element afgedekt`)
+    }
+    element.click()
+  }, name)
+  await page.waitForFunction((label) => {
+    return [...document.querySelectorAll('[role="tab"]')].some((element) => (
+      String(element.textContent || '').trim() === label && element.getAttribute('aria-selected') === 'true'
+    ))
+  }, name)
+}
+
 async function verifyOverviewSubtabs(page) {
   const tabs = ['Artikel', 'Huishouden', 'Identiteit', 'Productdata']
   for (const name of tabs) {
-    const tab = page.getByRole('tab', { name, exact: true })
-    await tab.waitFor({ state: 'visible' })
+    await page.getByRole('tab', { name, exact: true }).waitFor({ state: 'visible' })
   }
 
-  await page.getByRole('tab', { name: 'Artikel', exact: true }).click()
+  await activateVisibleSubtab(page, 'Artikel')
   await page.getByTestId('article-household-details-section').waitFor({ state: 'visible' })
-  await page.getByRole('tab', { name: 'Huishouden', exact: true }).click()
+  await activateVisibleSubtab(page, 'Huishouden')
   await page.getByTestId('article-household-settings-section').waitFor({ state: 'visible' })
-  await page.getByRole('tab', { name: 'Identiteit', exact: true }).click()
+  await activateVisibleSubtab(page, 'Identiteit')
   await page.getByTestId('article-external-link-section').waitFor({ state: 'visible' })
-  await page.getByRole('tab', { name: 'Productdata', exact: true }).click()
+  await activateVisibleSubtab(page, 'Productdata')
   await page.getByTestId('article-product-enrichment-section').waitFor({ state: 'visible' })
-  await page.getByRole('tab', { name: 'Artikel', exact: true }).click()
+  await activateVisibleSubtab(page, 'Artikel')
 }
 
 async function verifyAnalysisSubtabs(page) {
@@ -171,13 +193,13 @@ async function verifyAnalysisSubtabs(page) {
     await page.getByRole('tab', { name, exact: true }).waitFor({ state: 'visible' })
   }
 
-  await page.getByRole('tab', { name: 'Trends', exact: true }).click()
+  await activateVisibleSubtab(page, 'Trends')
   await page.getByText('Aankoop en verbruik in de tijd', { exact: true }).waitFor({ state: 'visible' })
-  await page.getByRole('tab', { name: 'Prijs', exact: true }).click()
+  await activateVisibleSubtab(page, 'Prijs')
   await page.getByText('Prijsinzichten', { exact: true }).waitFor({ state: 'visible' })
-  await page.getByRole('tab', { name: 'Prognose', exact: true }).click()
+  await activateVisibleSubtab(page, 'Prognose')
   await page.getByText('Voorraadprognose', { exact: true }).waitFor({ state: 'visible' })
-  await page.getByRole('tab', { name: 'Onderbouwing', exact: true }).click()
+  await activateVisibleSubtab(page, 'Onderbouwing')
   await page.getByText('Onderbouwing', { exact: true }).waitFor({ state: 'visible' })
 }
 
@@ -203,7 +225,7 @@ async function verifyMutableRole(browser, role) {
   const patchResponse = await patchResponsePromise
   if (!patchResponse.ok()) throw new Error(`${role}: PATCH gaf HTTP ${patchResponse.status()}`)
 
-  await page.getByRole('tab', { name: 'Huishouden', exact: true }).click()
+  await activateVisibleSubtab(page, 'Huishouden')
   const settingsSave = page.getByTestId('article-household-settings-save')
   await settingsSave.waitFor({ state: 'visible' })
   if (await settingsSave.isDisabled()) throw new Error(`${role}: huishoudinstellingen zijn ten onrechte disabled`)
@@ -231,7 +253,7 @@ async function verifyMutableRole(browser, role) {
   const automationResponse = await automationResponsePromise
   if (!automationResponse.ok()) throw new Error(`${role}: automation PUT gaf HTTP ${automationResponse.status()}`)
 
-  await page.getByRole('tab', { name: 'Identiteit', exact: true }).click()
+  await activateVisibleSubtab(page, 'Identiteit')
   if (await page.getByTestId('article-external-link-edit').isVisible()) throw new Error(`${role}: barcode/externe-link-mutatie mag niet zichtbaar zijn op Artikeldetail`)
 
   await page.getByRole('tab', { name: 'Voorraad', exact: true }).click()
@@ -303,12 +325,12 @@ async function verifyReadOnlyRole(browser, role) {
   await page.goto(`${baseURL}/voorraad/${articleId}`, { waitUntil: 'networkidle' })
   await verifyOverviewSubtabs(page)
 
-  await page.getByRole('tab', { name: 'Artikel', exact: true }).click()
+  await activateVisibleSubtab(page, 'Artikel')
   const ownName = page.getByTestId('article-details-input-custom_name')
   await ownName.waitFor({ state: 'visible' })
   if (!(await ownName.isDisabled())) throw new Error(`${role}: Eigen naam moet read-only zijn`)
 
-  await page.getByRole('tab', { name: 'Huishouden', exact: true }).click()
+  await activateVisibleSubtab(page, 'Huishouden')
   const settingsSave = page.getByTestId('article-household-settings-save')
   await settingsSave.waitFor({ state: 'visible' })
   if (!(await settingsSave.isDisabled())) throw new Error(`${role}: huishoudinstellingen moeten read-only zijn`)
