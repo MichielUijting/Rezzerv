@@ -30,17 +30,59 @@
   min-width: 0;
 }
 
+.rz-article-subtab-help {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+
 .rz-article-subtab-layout .rz-overview-tab > .rz-article-global-toggle,
 .rz-article-subtab-layout .rz-analytics-tab > .rz-article-global-toggle {
   display: none !important;
 }
 
-/* Overzicht: secties zijn eenmaal in React geclassificeerd; de actieve subtab filtert alleen de zichtbaarheid. */
+/* Overzicht: de technische/legacy blokken blijven in de code beschikbaar maar horen niet
+   meer in de normale gebruikerspresentatie. Identiteit en Productdata krijgen gecureerde
+   samenvattingen buiten de legacy-secties. */
+.rz-article-overview-subtab-layout .rz-overview-tab > [data-article-subtab="legacy"] {
+  display: none !important;
+}
+
 .rz-article-overview-subtab-layout[data-active-subtab="article"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="article"]),
 .rz-article-overview-subtab-layout[data-active-subtab="household"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="household"]),
 .rz-article-overview-subtab-layout[data-active-subtab="identity"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="identity"]),
 .rz-article-overview-subtab-layout[data-active-subtab="productdata"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="productdata"]) {
   display: none !important;
+}
+
+/* Afgeleide of nog niet functioneel gebruikte waarden worden niet als handmatige
+   huishoudinstelling aangeboden. average_price wordt uit prijshistorie berekend;
+   auto_restock heeft in deze release geen eigen uitvoeringscontract. */
+.rz-overview-tab .rz-field-row:has([data-testid="article-details-input-average_price"]),
+.rz-overview-tab .rz-field-row:has([data-testid="article-household-settings-auto-restock"]) {
+  display: none !important;
+}
+
+/* Een bewerkbaar veld toont zowel bestaande/defaultwaarde als gebruikersinvoer zwart.
+   Disabled/read-only blijft bewust visueel gedempt via de standaardcomponenten. */
+.rz-article-subtab-layout input:not(:disabled),
+.rz-article-subtab-layout textarea:not(:disabled),
+.rz-article-subtab-layout select:not(:disabled),
+.rz-article-subtab-layout select:not(:disabled) option,
+.rz-article-automation-select:not(:disabled) {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000;
+  opacity: 1;
+}
+
+.rz-article-subtab-layout input:not(:disabled)::placeholder,
+.rz-article-subtab-layout textarea:not(:disabled)::placeholder {
+  color: #000000 !important;
+  opacity: 1;
 }
 
 /* Analyse: rechtstreeks op de vaste React-wrappers filteren; geen DOM-classificatie of observer nodig. */
