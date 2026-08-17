@@ -39,7 +39,8 @@ jobs:
             backend/app/api/article_detail_admin_routes.py \
             backend/app/api/product_inventory_group_routes.py \
             backend/tests/test_article_detail_admin_gateway_contract.py \
-            backend/tests/test_article_detail_mutation_contract.py
+            backend/tests/test_article_detail_mutation_contract.py \
+            backend/tests/run_article_detail_mutation_contract.py
 
       - name: Voer artikeldetail-schrijfcontract uit
         env:
@@ -50,7 +51,7 @@ jobs:
 
       - name: Bewaak mutatie-eigenaars lid-read-only en subtabs
         run: |
-          python backend/tests/test_article_detail_mutation_contract.py | tee article-detail-mutation-contract.log
+          python backend/tests/run_article_detail_mutation_contract.py | tee article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_CONTRACT_GREEN' article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_SUBTABS_CONTRACT_GREEN' article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN' article-detail-mutation-contract.log
