@@ -60,6 +60,17 @@ jobs:
           findstr /C:"PO_TEST_SCRIPT_SELFTEST_GREEN" launcher-selftest.log >nul || exit /b 1
           echo PO_TEST_LAUNCHER_SELFTEST_GREEN
 
+      - name: Run normal hold-path probe through cmd /k
+        shell: cmd
+        run: |
+          call scripts\START-PO-TEST-PR251.cmd -HoldProbe > launcher-hold-probe.log 2>&1
+          set "rc=%errorlevel%"
+          type launcher-hold-probe.log
+          if not "%rc%"=="0" exit /b %rc%
+          findstr /C:"PO_TEST_SCRIPT_SELFTEST_GREEN" launcher-hold-probe.log >nul || exit /b 1
+          findstr /C:"PO_TEST_LAUNCHER_HOLD_PATH_GREEN" launcher-hold-probe.log >nul || exit /b 1
+          echo PO_TEST_LAUNCHER_NORMAL_PATH_GREEN
+
       - name: Validate safety guardrails
         shell: powershell
         run: |
@@ -95,6 +106,9 @@ jobs:
           }
           if (-not $launcher.Contains('%~dp0po-test-pr251-v011296.ps1')) {
             throw 'Launcher resolveert de PowerShell-runner niet relatief aan zijn eigen locatie.'
+          }
+          if (-not $launcher.Contains('%ComSpec% /d /k')) {
+            throw 'Normale launcherroute houdt het consolevenster niet hard open via cmd /k.'
           }
           if ($launcher -match '(?i)OneDrive|Downloads|\\Users\\Gebruiker\\') {
             throw 'Launcher bevat een verboden vaste gebruikers- of cloudpad-aanname.'
