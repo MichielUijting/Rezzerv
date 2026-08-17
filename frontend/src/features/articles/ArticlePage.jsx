@@ -5,11 +5,11 @@ import ScreenCard from '../../ui/ScreenCard'
 import Tabs from '../../ui/Tabs'
 import demoData from '../../demo-articles.json'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility'
-import ArticleOverviewTab from './tabs/ArticleOverviewTab'
+import ArticleOverviewSubtabs from './tabs/ArticleOverviewSubtabs'
 import ArticleStockTab from './tabs/ArticleStockTab'
 import ArticleLocationsTab from './tabs/ArticleLocationsTab'
 import ArticleHistoryTab from './tabs/ArticleHistoryTab'
-import ArticleAnalyticsTab from './tabs/ArticleAnalyticsTab'
+import ArticleAnalyticsSubtabs from './tabs/ArticleAnalyticsSubtabs'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
 const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
@@ -357,7 +357,6 @@ export default function ArticlePage() {
   const isPureDemoArticle = resolution.isPureDemoArticle
   const resolvedArticleName = resolution.articleName
 
-
   useEffect(() => {
     let cancelled = false
     setHistoryLoadError('')
@@ -400,7 +399,6 @@ export default function ArticlePage() {
       cancelled = true
     }
   }, [articleId, householdDetails?.article_id, householdDetails?.article_name, resolvedArticleName, hasLiveInventoryMatch, inventoryRefreshVersion])
-
 
   useEffect(() => {
     let cancelled = false
@@ -459,11 +457,11 @@ export default function ArticlePage() {
   }, [searchParams])
 
   const tabContent = {
-    Overzicht: articleData ? <ArticleOverviewTab articleData={articleData} visibilityMap={visibilityMap} visibilityLoading={visibilityLoading} visibilityError={visibilityError} onDetailsSaved={(details) => { setHouseholdDetails((current) => ({ ...(current || {}), ...(details || {}) })); refreshArticleLiveData() }} /> : null,
+    Overzicht: articleData ? <ArticleOverviewSubtabs articleData={articleData} visibilityMap={visibilityMap} visibilityLoading={visibilityLoading} visibilityError={visibilityError} onDetailsSaved={(details) => { setHouseholdDetails((current) => ({ ...(current || {}), ...(details || {}) })); refreshArticleLiveData() }} /> : null,
     Voorraad: articleData ? <ArticleStockTab articleData={articleData} onInventoryChanged={refreshArticleLiveData} /> : null,
     Locaties: articleData ? <ArticleLocationsTab articleData={articleData} onInventoryChanged={refreshArticleLiveData} /> : null,
     Historie: articleData ? <ArticleHistoryTab articleData={articleData} isLoading={historyLoading} loadError={historyLoadError} /> : null,
-    Analyse: articleData ? <ArticleAnalyticsTab articleData={articleData} automationVersion={automationVersion} /> : null,
+    Analyse: articleData ? <ArticleAnalyticsSubtabs articleData={articleData} automationVersion={automationVersion} /> : null,
   }
 
   const hasBlockingState = !householdDetails && (resolution.status === 'missing-identifier' || resolution.status === 'not-found')
@@ -490,8 +488,8 @@ export default function ArticlePage() {
             />
           ) : articleData ? (
             <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} tabTestIdMap={{ Historie: "article-history-tab", Analyse: "article-analysis-tab" }}>
-              {(activeTab) => {
-                const content = tabContent[activeTab]
+              {(currentTab) => {
+                const content = tabContent[currentTab]
                 return content || <PlaceholderTab text="Deze tab volgt later." />
               }}
             </Tabs>
