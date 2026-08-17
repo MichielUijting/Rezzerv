@@ -165,33 +165,39 @@ def test_overview_wrapper_makes_member_and_viewer_read_only():
     assert "isHouseholdViewerFromContext" not in source
 
 
-def test_overview_has_compact_functional_subtabs():
+def test_overview_has_compact_race_free_functional_subtabs():
     source = _read(OVERVIEW_WRAPPER_PATH)
     for label in ("'Artikel'", "'Huishouden'", "'Identiteit'", "'Productdata'"):
         assert label in source
     for mapping in (
-        "'Artikelgegevens voor dit huishouden': 'Artikel'",
-        "'Instellingen voor dit huishouden': 'Huishouden'",
-        "'Externe productkoppeling': 'Identiteit'",
-        "Productverrijking: 'Productdata'",
+        "'Artikelgegevens voor dit huishouden': 'article'",
+        "'Instellingen voor dit huishouden': 'household'",
+        "'Externe productkoppeling': 'identity'",
+        "Productverrijking: 'productdata'",
     ):
         assert mapping in source
+    assert "data-active-subtab={activeKey}" in source
+    assert "section.dataset.articleSubtab" in source
+    assert "section.hidden" not in source
     assert "className=\"rz-article-subtabs\"" in source
     assert "ariaLabel=\"Overzicht subtabs\"" in source
 
 
-def test_analysis_has_compact_functional_subtabs():
+def test_analysis_has_compact_race_free_functional_subtabs():
     source = _read(ANALYSIS_WRAPPER_PATH)
     for label in ("'Trends'", "'Prijs'", "'Prognose'", "'Onderbouwing'"):
         assert label in source
     for mapping in (
-        "'Aankoop en verbruik in de tijd': 'Trends'",
-        "Prijsinzichten: 'Prijs'",
-        "Voorraadprognose: 'Prognose'",
-        "Aanbeveling: 'Prognose'",
-        "Onderbouwing: 'Onderbouwing'",
+        "'Aankoop en verbruik in de tijd': 'trends'",
+        "Prijsinzichten: 'price'",
+        "Voorraadprognose: 'forecast'",
+        "Aanbeveling: 'forecast'",
+        "Onderbouwing: 'evidence'",
     ):
         assert mapping in source
+    assert "data-active-subtab={activeKey}" in source
+    assert "wrapper.dataset.analysisSubtab" in source
+    assert "wrapper.hidden" not in source
     assert "ariaLabel=\"Analyse subtabs\"" in source
 
 
@@ -346,8 +352,8 @@ def test_unsupported_product_knowledge_fields_are_not_silently_accepted():
 def run_contract() -> None:
     test_general_household_editor_owns_only_custom_name()
     test_overview_wrapper_makes_member_and_viewer_read_only()
-    test_overview_has_compact_functional_subtabs()
-    test_analysis_has_compact_functional_subtabs()
+    test_overview_has_compact_race_free_functional_subtabs()
+    test_analysis_has_compact_race_free_functional_subtabs()
     test_shared_tabs_support_nested_accessible_navigation_without_breaking_defaults()
     test_stock_mutation_is_admin_only_and_uses_article_detail_gateway()
     test_location_mutation_is_admin_only_and_uses_article_detail_gateway()
