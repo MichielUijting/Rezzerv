@@ -63,7 +63,7 @@ function Wait-BackendHealth([int]$Seconds = 150) {
   throw "Backend-health werd niet groen binnen $Seconds seconden."
 }
 
-function Containers-On-Port([int]$Port) {
+function Containers-OnPort([int]$Port) {
   $ids = @(& docker ps --filter "publish=$Port" --format '{{.ID}}' 2>$null)
   if ($LASTEXITCODE -ne 0) { throw "Docker kon poort $Port niet inspecteren." }
   return @($ids | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
