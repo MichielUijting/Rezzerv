@@ -6,10 +6,12 @@ from types import SimpleNamespace
 from fastapi import HTTPException
 
 from app.api.article_detail_admin_routes import (
+    install_article_detail_household_alias_policy,
+    mutate_article_detail_inventory_admin_only,
+    router,
     transfer_article_detail_inventory_admin_only,
     update_article_detail_admin_only,
     update_article_detail_settings_admin_only,
-    mutate_article_detail_inventory_admin_only,
 )
 from app.services.household_alias_policy import install_household_alias_policy
 
@@ -220,6 +222,8 @@ def test_inventory_and_transfer_are_admin_only_and_article_scoped():
 
 
 def test_product_enrichment_cannot_own_household_alias():
+    assert install_article_detail_household_alias_policy in router.on_startup
+
     def text(value):
         return value
 
