@@ -11,6 +11,7 @@ from app.api.article_detail_admin_routes import (
     update_article_detail_settings_admin_only,
     mutate_article_detail_inventory_admin_only,
 )
+from app.services.household_alias_policy import install_household_alias_policy
 
 
 ARTICLE_ID = 'article-a'
@@ -34,6 +35,32 @@ class FakeEngine:
     @contextmanager
     def begin(self):
         yield FakeConnection()
+
+
+class AliasResult:
+    def __init__(self, row=None):
+        self.row = row
+
+    def mappings(self):
+        return self
+
+    def first(self):
+        return self.row
+
+
+class AliasConnection:
+    def __init__(self, custom_name):
+        self.custom_name = custom_name
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        params = dict(params or {})
+        if sql.startswith('SELECT custom_name FROM household_articles'):
+            return AliasResult({'custom_name': self.custom_name})
+        if sql.startswith('UPDATE household_articles SET custom_name = :custom_name'):
+            self.custom_name = params.get('custom_name')
+            return AliasResult()
+        raise AssertionError(f'Onverwachte alias-SQL: {sql}')
 
 
 def _build_main_endpoint(name, calls, *, inventory=False):
@@ -192,10 +219,63 @@ def test_inventory_and_transfer_are_admin_only_and_article_scoped():
     assert calls == [('transfer', transfer_payload, 'Bearer owner')]
 
 
+def test_product_enrichment_cannot_own_household_alias():
+    def text(value):
+        return value
+
+    def legacy_apply(conn, household_article_id, enrichment):
+        conn.custom_name = (enrichment or {}).get('title')
+
+    def legacy_merge(row, product_details):
+        enrichment = (product_details or {}).get('enrichment') or {}
+        merged = dict(row or {})
+        if enrichment.get('title'):
+            merged['custom_name'] = enrichment['title']
+        return merged
+
+    main_module = SimpleNamespace(
+        apply_household_article_defaults_from_enrichment=legacy_apply,
+        merge_household_article_details_with_product_defaults=legacy_merge,
+        text=text,
+    )
+    install_household_alias_policy(main_module)
+    install_household_alias_policy(main_module)
+
+    conn = AliasConnection('Keesje')
+    main_module.apply_household_article_defaults_from_enrichment(
+        conn,
+        ARTICLE_ID,
+        {'title': '7 Granen Ontbijt'},
+    )
+    assert conn.custom_name == 'Keesje'
+
+    merged = main_module.merge_household_article_details_with_product_defaults(
+        {'custom_name': 'Keesje', 'naam': '7 Granen Ontbijt'},
+        {'enrichment': {'title': '7 Granen Ontbijt'}},
+    )
+    assert merged['custom_name'] == 'Keesje'
+
+    empty_conn = AliasConnection(None)
+    main_module.apply_household_article_defaults_from_enrichment(
+        empty_conn,
+        ARTICLE_ID,
+        {'title': '7 Granen Ontbijt'},
+    )
+    assert empty_conn.custom_name is None
+
+    empty_merged = main_module.merge_household_article_details_with_product_defaults(
+        {'custom_name': None, 'naam': '7 Granen Ontbijt'},
+        {'enrichment': {'title': '7 Granen Ontbijt'}},
+    )
+    assert empty_merged['custom_name'] is None
+
+
 def run_contract() -> None:
     test_patch_and_settings_are_admin_only_before_delegation()
     test_inventory_and_transfer_are_admin_only_and_article_scoped()
+    test_product_enrichment_cannot_own_household_alias()
     print('ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN')
+    print('ARTICLE_DETAIL_HOUSEHOLD_ALIAS_POLICY_GREEN')
 
 
 if __name__ == '__main__':
