@@ -39,6 +39,7 @@ jobs:
             backend/app/api/article_detail_admin_routes.py \
             backend/app/api/product_inventory_group_routes.py \
             backend/tests/test_article_detail_admin_gateway_contract.py \
+            backend/tests/test_article_detail_canonical_route_guard.py \
             backend/tests/test_article_detail_mutation_contract.py \
             backend/tests/run_article_detail_mutation_contract.py
 
@@ -55,6 +56,7 @@ jobs:
           grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_CONTRACT_GREEN' article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_SUBTABS_CONTRACT_GREEN' article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN' article-detail-mutation-contract.log
+          grep -F 'ARTICLE_DETAIL_ROUTE_OWNERSHIP_GREEN' article-detail-mutation-contract.log
 
       - name: Bewaak server-side Artikeldetail admin-gateway
         env:
@@ -63,6 +65,13 @@ jobs:
           python backend/tests/test_article_detail_admin_gateway_contract.py | tee article-detail-admin-gateway.log
           grep -F 'ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN' article-detail-admin-gateway.log
           grep -F 'ARTICLE_DETAIL_HOUSEHOLD_ALIAS_POLICY_GREEN' article-detail-admin-gateway.log
+
+      - name: Bewaak canonieke PATCH-route zonder duplicaat
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/test_article_detail_canonical_route_guard.py | tee article-detail-canonical-route.log
+          grep -F 'ARTICLE_DETAIL_CANONICAL_ROUTE_GUARD_GREEN' article-detail-canonical-route.log
 
       - name: Bewaak vlakke Artikeldetail subtabs
         working-directory: frontend
@@ -78,7 +87,7 @@ jobs:
 
       - name: Valideer exacte frontendcommit in Docker-runtime
         env:
-          EXPECTED_VERSION: Rezzerv-MVP-v01.12.96
+          EXPECTED_VERSION: Rezzerv-MVP-v01.12.97
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           docker build \
