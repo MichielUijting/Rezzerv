@@ -26,6 +26,12 @@ const SECTION_TO_KEY = {
   'Voeding & verpakking': 'legacy',
 }
 
+const CURATED_BASIS_DUPLICATE_LABELS = new Set([
+  'Eigen naam:',
+  'Categorie:',
+  'Merk / maker / aanbieder:',
+])
+
 function readInitialSubtab() {
   if (typeof window === 'undefined') return 'Artikel'
   const stored = window.sessionStorage.getItem(OVERVIEW_SUBTAB_STORAGE_KEY)
@@ -44,6 +50,15 @@ function classifyOverviewSections(root, readOnly) {
   overview.querySelectorAll(':scope > section.rz-article-section-accordion').forEach((section) => {
     const title = section.querySelector('.rz-article-section-title')?.textContent?.trim() || ''
     section.dataset.articleSubtab = SECTION_TO_KEY[title] || 'article'
+
+    if (title === 'Basis') {
+      section.querySelectorAll('.rz-field-row').forEach((row) => {
+        const label = row.querySelector('.rz-field-row-label')?.textContent?.trim() || ''
+        if (CURATED_BASIS_DUPLICATE_LABELS.has(label)) {
+          row.dataset.curatedHidden = 'true'
+        }
+      })
+    }
   })
 
   const householdNameLabel = overview.querySelector('label[for="article-inline-input-custom_name"]')
@@ -104,6 +119,11 @@ export default function ArticleOverviewSubtabs(props) {
         {() => (
           <>
             {readOnly ? <div className="rz-article-readonly-note" data-testid="article-detail-readonly-note">Alleen-lezen. Alleen een beheerder of eigenaar kan deze artikelgegevens wijzigen.</div> : null}
+            {activeSubtab === 'Artikel' ? (
+              <div className="rz-article-subtab-help" data-testid="article-household-name-help">
+                Naam in dit huishouden is een optionele eigen benaming voor dit artikel. Laat het veld leeg om de gewone artikelnaam te gebruiken.
+              </div>
+            ) : null}
             {activeSubtab === 'Huishouden' ? (
               <div className="rz-article-subtab-help" data-testid="article-household-settings-help">
                 Deze voorkeuren sturen voorraadniveaus, aanvuladvies, voorkeurswinkel, standaardopslag en verpakkingsgrootte voor dit huishouden.
