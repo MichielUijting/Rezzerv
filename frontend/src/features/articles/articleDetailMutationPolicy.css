@@ -5,6 +5,55 @@
   display: none !important;
 }
 
+/* Compacte tweede navigatielaag binnen Overzicht en Analyse. */
+.rz-article-subtabs {
+  margin-top: 0;
+}
+
+.rz-article-subtabs > .rz-tabbar {
+  gap: 6px;
+  margin-top: 0;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.rz-article-subtabs > .rz-tabbar .rz-tab {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.rz-article-subtabs > .rz-tabcontent {
+  min-width: 0;
+}
+
+.rz-article-subtab-layout [hidden] {
+  display: none !important;
+}
+
+.rz-article-readonly-note {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+  font-size: 14px;
+}
+
+.rz-location-row.is-readonly {
+  cursor: default;
+}
+
+.rz-location-row.is-readonly:hover,
+.rz-location-row.is-readonly:focus-visible {
+  background: #fff;
+  outline: none;
+}
+
 /* Voorraad op Artikeldetail heeft een expliciete actiekolom voor Corrigeren/Afboeken. */
 .rz-stock-tab .rz-stock-summary-table-header,
 .rz-stock-tab .rz-stock-summary-table-row {
@@ -24,5 +73,12 @@
 
   .rz-stock-tab .rz-stock-action-buttons {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .rz-article-subtabs > .rz-tabbar .rz-tab {
+    padding: 6px 8px;
+    font-size: 13px;
   }
 }
