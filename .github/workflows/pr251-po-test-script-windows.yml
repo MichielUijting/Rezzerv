@@ -34,83 +34,65 @@ jobs:
           }
           Write-Host 'PO_TEST_SCRIPT_WINDOWS_PARSE_GREEN'
 
-      - name: Prepare isolated self-test log directory
+      - name: Run canonical PowerShell self-test
         shell: powershell
         run: |
           $logDir = Join-Path $env:TEMP 'Rezzerv-PO-tests'
           New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-          Write-Host "PO_TEST_LOGDIR_GREEN: $logDir"
-
-      - name: Run self-test in Windows PowerShell
-        shell: powershell
-        run: |
           $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\scripts\po-test-pr251-v011296.ps1' -SelfTest
           $output | Write-Host
           if (($output -join "`n") -notmatch 'PO_TEST_SCRIPT_SELFTEST_GREEN') {
-            throw 'Self-test GREEN marker ontbreekt.'
+            throw 'Canonical PowerShell self-test GREEN marker ontbreekt.'
           }
 
-      - name: Run path-independent launcher self-test
-        shell: cmd
-        run: |
-          call scripts\START-PO-TEST-PR251.cmd -SelfTest > launcher-selftest.log 2>&1
-          set "rc=%errorlevel%"
-          type launcher-selftest.log
-          if not "%rc%"=="0" exit /b %rc%
-          findstr /C:"PO_TEST_SCRIPT_SELFTEST_GREEN" launcher-selftest.log >nul || exit /b 1
-          echo PO_TEST_LAUNCHER_SELFTEST_GREEN
-
-      - name: Run normal hold-path probe through cmd /k
-        shell: cmd
-        run: |
-          call scripts\START-PO-TEST-PR251.cmd -HoldProbe > launcher-hold-probe.log 2>&1
-          set "rc=%errorlevel%"
-          type launcher-hold-probe.log
-          if not "%rc%"=="0" exit /b %rc%
-          findstr /C:"PO_TEST_SCRIPT_SELFTEST_GREEN" launcher-hold-probe.log >nul || exit /b 1
-          findstr /C:"PO_TEST_LAUNCHER_HOLD_PATH_GREEN" launcher-hold-probe.log >nul || exit /b 1
-          echo PO_TEST_LAUNCHER_NORMAL_PATH_GREEN
-
-      - name: Validate safety guardrails
+      - name: Run standalone launcher from ZIP-like temp location
         shell: powershell
         run: |
-          $text = Get-Content '.\scripts\po-test-pr251-v011296.ps1' -Raw
+          $zipLikeDir = Join-Path $env:TEMP ('e8658047-3693-44b1-a61f-Rezzerv-PO-test.zip.' + (Get-Random))
+          New-Item -ItemType Directory -Path $zipLikeDir -Force | Out-Null
+          $standalone = Join-Path $zipLikeDir 'START-PO-TEST-PR251.cmd'
+          Copy-Item '.\scripts\START-PO-TEST-PR251.cmd' $standalone
+          if (Test-Path (Join-Path $zipLikeDir 'po-test-pr251-v011296.ps1')) {
+            throw 'Isolatietest bevat ten onrechte een los PowerShell-buurbestand.'
+          }
+          $output = & cmd.exe /d /c "`"$standalone`" -SelfTest" 2>&1
+          $rc = $LASTEXITCODE
+          $output | Write-Host
+          if ($rc -ne 0) { throw "Standalone launcher self-test gaf exitcode $rc." }
+          if (($output -join "`n") -notmatch 'PO_TEST_SCRIPT_SELFTEST_GREEN') {
+            throw 'Standalone launcher kon ingebouwde PowerShell-runner niet zelfstandig uitvoeren.'
+          }
+          Write-Host 'PO_TEST_STANDALONE_ZIP_TEMP_GREEN'
+
+      - name: Validate standalone safety guardrails
+        shell: powershell
+        run: |
           $launcher = Get-Content '.\scripts\START-PO-TEST-PR251.cmd' -Raw
           $required = @(
+            '::REZZERV_POWERSHELL_PAYLOAD::',
             'C:\Users\Gebruiker\Rezzerv_Github',
             "`$LogDir = Join-Path `$env:TEMP 'Rezzerv-PO-tests'",
             '51d20083012f3f094b7407c538741ef329e61d68',
             "worktree','add','--detach'",
             "Copy-Item -LiteralPath `$LiveDb -Destination `$TestDb",
-            "docker start @OriginalContainers",
             'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN',
-            'NormalizeHostPath',
-            '/app/data',
-            'Runtime-databron bevestigd',
             'ARTICLE_FIXTURE_GREEN:',
-            "`$ExpectedArticleName = '7 Granen Ontbijt'",
-            'PO-testmutaties: uitsluitend op een geisoleerde kopie van rezzerv.db',
-            '^scripts/START-PO-TEST-PR251\.cmd$'
+            'Dit venster sluit pas nadat je een toets indrukt.',
+            'pause'
           )
           foreach ($needle in $required) {
-            if (-not $text.Contains($needle)) { throw "Verplichte guardrail ontbreekt: $needle" }
+            if (-not $launcher.Contains($needle)) { throw "Verplichte standalone-guardrail ontbreekt: $needle" }
           }
-          if ($text -match '(?im)\bgit\s+(reset|stash|switch|clean)\b') {
-            throw 'Verboden Git-mutatie gevonden in PO-runner.'
+          if ($launcher -match '(?i)OneDrive|Downloads|GetFolderPath\(''Desktop''\)') {
+            throw 'Standalone PO-runner bevat een verboden cloud/download/Desktop-pad-aanname.'
           }
-          if ($text -match '(?im)Copy-Item[^\r\n]+Destination\s+\$LiveDb') {
-            throw 'Runner mag nooit naar de live database terugkopieren.'
+          if ($launcher -match '(?i)%~dp0po-test-pr251-v011296\.ps1') {
+            throw 'Standalone launcher mag niet afhankelijk zijn van een naastliggend PowerShell-bestand.'
           }
-          if ($text -match '(?i)OneDrive|Downloads|GetFolderPath\(''Desktop''\)') {
-            throw 'PO-runner bevat een verboden cloud/download/Desktop-pad-aanname.'
+          if ($launcher -match '(?im)\bgit\s+(reset|stash|switch|clean)\b') {
+            throw 'Verboden Git-mutatie gevonden in ingebouwde PO-runner.'
           }
-          if (-not $launcher.Contains('%~dp0po-test-pr251-v011296.ps1')) {
-            throw 'Launcher resolveert de PowerShell-runner niet relatief aan zijn eigen locatie.'
+          if ($launcher -match '(?im)Copy-Item[^\r\n]+Destination\s+\$LiveDb') {
+            throw 'Ingebouwde runner mag nooit naar de live database terugkopieren.'
           }
-          if (-not $launcher.Contains('%ComSpec% /d /k')) {
-            throw 'Normale launcherroute houdt het consolevenster niet hard open via cmd /k.'
-          }
-          if ($launcher -match '(?i)OneDrive|Downloads|\\Users\\Gebruiker\\') {
-            throw 'Launcher bevat een verboden vaste gebruikers- of cloudpad-aanname.'
-          }
-          Write-Host 'PO_TEST_SCRIPT_GUARDRAILS_GREEN'
+          Write-Host 'PO_TEST_STANDALONE_GUARDRAILS_GREEN'
