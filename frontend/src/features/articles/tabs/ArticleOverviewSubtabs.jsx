@@ -61,7 +61,8 @@ function classifyOverviewSections(root, readOnly) {
     }
   })
 
-  const householdNameLabel = overview.querySelector('label[for="article-inline-input-custom_name"]')
+  const householdNameInput = overview.querySelector('[data-testid="article-details-input-custom_name"]')
+  const householdNameLabel = householdNameInput?.closest('.rz-field-row')?.querySelector('label')
   if (householdNameLabel) householdNameLabel.textContent = 'Naam in dit huishouden:'
 
   if (!readOnly) return
