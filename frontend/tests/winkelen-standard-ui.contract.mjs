@@ -21,6 +21,9 @@ includes(shopping, "testId: 'shopping-complete-confirmation'", 'Standaard afrond
 excludes(shopping, 'window.confirm', 'Native browser-confirm is niet toegestaan')
 excludes(shopping, '<Table ', 'Winkelen bouwt nog een eigen low-level tabel')
 excludes(shopping, '<tr className="rz-input">', 'Winkelen gebruikt nog een niet-standaard titelrij')
+excludes(shopping, 'FILTER_CONTROL_STYLE', 'Winkelen definieert nog een lokale filterstyle')
+excludes(shopping, 'minHeight: 38', 'Winkelen forceert nog een niet-standaard filterhoogte')
+excludes(shopping, 'style={FILTER_CONTROL_STYLE}', 'Winkelen past nog een lokale filterstyle toe')
 
 includes(dataTable, 'className="rz-table-header"', 'DataTable standaard titelrij ontbreekt')
 includes(dataTable, "typeof column.renderFilter === 'function'", 'DataTable ondersteunt geen standaard custom filtercontrol')
