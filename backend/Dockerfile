@@ -33,6 +33,11 @@ COPY tests ./tests
 COPY sitecustomize.py ./sitecustomize.py
 COPY VERSION.txt ./VERSION.txt
 
+# Een eerste kassabonupload mag geen modeldownload betalen. De preflight warmt
+# rembg op voordat Uvicorn/health groen kan worden; REZZERV_RECEIPT_STARTUP_REMBG_WARMUP
+# kan voor een expliciete diagnose nog worden overschreven.
+ENV REZZERV_RECEIPT_STARTUP_REMBG_WARMUP=true
+
 EXPOSE 8000
 
-CMD ["uvicorn", "app.session_entrypoint:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-lc", "python -m app.runtime_preflight && exec uvicorn app.session_entrypoint:app --host 0.0.0.0 --port 8000"]
