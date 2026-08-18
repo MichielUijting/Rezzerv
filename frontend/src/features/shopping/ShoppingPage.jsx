@@ -18,19 +18,6 @@ const SOURCE_GROUPS = [
   ['article_group', 'Artikelgroepen'],
 ]
 
-const FILTER_CONTROL_STYLE = {
-  width: '100%',
-  minWidth: 0,
-  minHeight: 38,
-  boxSizing: 'border-box',
-  paddingTop: 8,
-  paddingBottom: 8,
-  lineHeight: '20px',
-  color: '#1f2937',
-  backgroundColor: '#ffffff',
-  WebkitTextFillColor: '#1f2937',
-}
-
 const CHECKBOX_STYLE = {
   accentColor: '#1A3E2B',
   width: 18,
@@ -397,7 +384,6 @@ export default function ShoppingPage() {
       renderFilter: ({ value, onChange }) => (
         <select
           className="rz-input rz-inline-input"
-          style={FILTER_CONTROL_STYLE}
           value={value || ''}
           onChange={(event) => onChange(event.target.value)}
           aria-label="Filter producttype"
