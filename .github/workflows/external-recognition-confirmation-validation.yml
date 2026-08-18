@@ -116,6 +116,16 @@ jobs:
           )
           PY
 
+      - name: Provision and validate temporary test admin
+        run: |
+          docker compose exec -T \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
+            -e REZZERV_TEST_SUPERUSER_EMAIL="$REZZERV_TEST_SUPERUSER_EMAIL" \
+            -e REZZERV_TEST_SUPERUSER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
+            -e REZZERV_TEST_ADMIN_EMAIL="$REZZERV_TEST_ADMIN_EMAIL" \
+            -e REZZERV_TEST_ADMIN_PASSWORD="$REZZERV_TEST_ADMIN_PASSWORD" \
+            backend python /app/tests/authorization_role_matrix_selftest.py
+
       - name: Run targeted recognition Playwright test
         shell: bash
         run: |
