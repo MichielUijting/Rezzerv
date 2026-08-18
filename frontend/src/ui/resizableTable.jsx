@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
+const MIN_RESIZABLE_COLUMN_WIDTH = 56
+
 export function useResizableColumnWidths(defaultWidths) {
   const defaultWidthsSignature = Object.entries(defaultWidths || {})
     .map(([key, value]) => `${key}:${Number(value || 0)}`)
@@ -15,6 +17,14 @@ export function useResizableColumnWidths(defaultWidths) {
     setWidths({ ...defaultWidths })
   }, [defaultWidthsSignature])
 
+  function setColumnWidth(columnKey, nextWidth) {
+    const normalizedWidth = Math.max(
+      MIN_RESIZABLE_COLUMN_WIDTH,
+      Math.round(Number(nextWidth) || MIN_RESIZABLE_COLUMN_WIDTH),
+    )
+    setWidths((current) => ({ ...current, [columnKey]: normalizedWidth }))
+  }
+
   function startResize(columnKey, event) {
     event.preventDefault()
     event.stopPropagation()
@@ -23,8 +33,7 @@ export function useResizableColumnWidths(defaultWidths) {
 
     function handleMouseMove(moveEvent) {
       const delta = moveEvent.clientX - startX
-      const nextWidth = Math.max(56, Math.round(startWidth + delta))
-      setWidths((current) => ({ ...current, [columnKey]: nextWidth }))
+      setColumnWidth(columnKey, startWidth + delta)
     }
 
     function handleMouseUp() {
@@ -36,7 +45,7 @@ export function useResizableColumnWidths(defaultWidths) {
     window.addEventListener('mouseup', handleMouseUp)
   }
 
-  return { widths, startResize }
+  return { widths, startResize, setColumnWidth }
 }
 
 export function ResizableHeaderCell({
@@ -80,16 +89,16 @@ export function ResizableHeaderCell({
         role="separator"
         aria-orientation="vertical"
         aria-label="Kolom breedte aanpassen"
-        onMouseDown={(event) => onStartResize(columnKey, event)}
         style={{
           position: 'absolute',
           top: 0,
-          right: 0,
+          right: '-4px',
           width: '12px',
           height: '100%',
           cursor: 'col-resize',
           userSelect: 'none',
           touchAction: 'none',
+          pointerEvents: 'none',
           zIndex: 4,
         }}
       />

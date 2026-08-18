@@ -5,6 +5,7 @@ on:
     paths:
       - 'frontend/src/features/shopping/**'
       - 'frontend/src/ui/DataTable.jsx'
+      - 'frontend/src/ui/Table.jsx'
       - 'frontend/src/ui/resizableTable.jsx'
       - 'frontend/src/ui/components/table.css'
       - 'frontend/tests/winkelen-standard-ui.contract.mjs'

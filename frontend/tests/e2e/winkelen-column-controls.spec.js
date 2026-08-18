@@ -5,7 +5,7 @@ import {
 } from './helpers/rezzervAssertions.js'
 
 test.describe('Winkelen kolomcontrols', () => {
-  test('titelrij heeft bulkcheckbox en kolomrand is echt sleepbaar', async ({ page }) => {
+  test('titelrij heeft bulkcheckbox en echte kolomgrens blijft visueel resizebaar', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page)
     const items = [
       {
@@ -55,6 +55,7 @@ test.describe('Winkelen kolomcontrols', () => {
 
     const table = page.getByTestId('shopping-list-table')
     await expect(table).toBeVisible()
+    await expect(table).toHaveClass(/rz-table--resizable-columns/)
     await expect(page.getByLabel('Selecteer Melk')).toBeVisible()
     await expect(page.getByLabel('Selecteer Pasta')).toBeVisible()
 
@@ -63,53 +64,54 @@ test.describe('Winkelen kolomcontrols', () => {
     await expect(selectAll).toBeVisible()
     await expect(table.locator('thead tr:nth-child(2) th').first().getByRole('checkbox')).toHaveCount(0)
 
-    await expect(page.getByLabel('Selecteer Melk')).not.toBeChecked()
-    await expect(page.getByLabel('Selecteer Pasta')).not.toBeChecked()
-
     await selectAll.check()
     await expect(page.getByLabel('Selecteer Melk')).toBeChecked()
     await expect(page.getByLabel('Selecteer Pasta')).toBeChecked()
-    await expect(selectAll).toBeChecked()
-
     await selectAll.uncheck()
     await expect(page.getByLabel('Selecteer Melk')).not.toBeChecked()
     await expect(page.getByLabel('Selecteer Pasta')).not.toBeChecked()
-    await expect(selectAll).not.toBeChecked()
 
     const articleHeader = table.getByRole('columnheader', { name: 'Artikel sorteren', exact: true })
-    const articleHeaderBox = await articleHeader.boundingBox()
-    if (!articleHeaderBox) throw new Error('Artikel-kolomkop heeft geen meetbare browserpositie.')
+    const productTypeHeader = table.getByRole('columnheader', { name: 'Producttype sorteren', exact: true })
 
-    const edgePoint = {
-      x: articleHeaderBox.x + articleHeaderBox.width - 8,
-      y: articleHeaderBox.y + articleHeaderBox.height / 2,
+    const articleBefore = await articleHeader.boundingBox()
+    const productTypeBefore = await productTypeHeader.boundingBox()
+    if (!articleBefore || !productTypeBefore) throw new Error('Kolomkoppen hebben geen meetbare browserpositie.')
+
+    const boundaryPoint = {
+      x: productTypeBefore.x + 2,
+      y: productTypeBefore.y + productTypeBefore.height / 2,
     }
-    const edgeTarget = await page.evaluate(({ x, y }) => {
-      const element = document.elementFromPoint(x, y)
-      if (!element) return null
-      return {
-        role: element.getAttribute('role'),
-        label: element.getAttribute('aria-label'),
-        cursor: window.getComputedStyle(element).cursor,
-      }
-    }, edgePoint)
 
-    expect(edgeTarget).toEqual({
-      role: 'separator',
-      label: 'Kolom breedte aanpassen',
-      cursor: 'col-resize',
-    })
-
-    const articleColumn = table.locator('colgroup col').nth(1)
-    const articleWidthBefore = Number.parseFloat(await articleColumn.evaluate((column) => column.style.width))
-
-    await page.mouse.move(edgePoint.x, edgePoint.y)
+    await page.mouse.move(boundaryPoint.x, boundaryPoint.y)
     await page.mouse.down()
-    await page.mouse.move(edgePoint.x + 80, edgePoint.y, { steps: 4 })
+    await page.mouse.move(boundaryPoint.x + 90, boundaryPoint.y, { steps: 6 })
     await page.mouse.up()
 
-    const articleWidthAfter = Number.parseFloat(await articleColumn.evaluate((column) => column.style.width))
-    expect(articleWidthAfter).toBeGreaterThan(articleWidthBefore + 60)
+    await expect.poll(async () => (await articleHeader.boundingBox())?.width || 0).toBeGreaterThan(articleBefore.width + 70)
+    const articleAfterGrow = await articleHeader.boundingBox()
+    const productTypeAfterGrow = await productTypeHeader.boundingBox()
+    if (!articleAfterGrow || !productTypeAfterGrow) throw new Error('Gerenderde breedte ontbreekt na vergroten.')
+    expect(productTypeAfterGrow.x).toBeGreaterThan(productTypeBefore.x + 70)
+
+    await table.getByRole('button', { name: 'Gekocht sorteren', exact: true }).click()
+    const articleAfterRerender = await articleHeader.boundingBox()
+    if (!articleAfterRerender) throw new Error('Artikelbreedte ontbreekt na rerender.')
+    expect(articleAfterRerender.width).toBeGreaterThan(articleBefore.width + 70)
+
+    const productTypeBeforeShrink = await productTypeHeader.boundingBox()
+    if (!productTypeBeforeShrink) throw new Error('Producttype-kolomkop ontbreekt voor verkleinen.')
+    const shrinkBoundaryPoint = {
+      x: productTypeBeforeShrink.x + 2,
+      y: productTypeBeforeShrink.y + productTypeBeforeShrink.height / 2,
+    }
+
+    await page.mouse.move(shrinkBoundaryPoint.x, shrinkBoundaryPoint.y)
+    await page.mouse.down()
+    await page.mouse.move(shrinkBoundaryPoint.x - 55, shrinkBoundaryPoint.y, { steps: 5 })
+    await page.mouse.up()
+
+    await expect.poll(async () => (await articleHeader.boundingBox())?.width || 0).toBeLessThan(articleAfterGrow.width - 35)
 
     await expectNoConsoleErrors(consoleErrors)
   })

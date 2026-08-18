@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 
 const shopping = readFileSync(new URL('../src/features/shopping/ShoppingPage.jsx', import.meta.url), 'utf8')
 const dataTable = readFileSync(new URL('../src/ui/DataTable.jsx', import.meta.url), 'utf8')
+const table = readFileSync(new URL('../src/ui/Table.jsx', import.meta.url), 'utf8')
 const resizable = readFileSync(new URL('../src/ui/resizableTable.jsx', import.meta.url), 'utf8')
 const tableCss = readFileSync(new URL('../src/ui/components/table.css', import.meta.url), 'utf8')
 
@@ -33,11 +34,15 @@ includes(dataTable, "placement: 'header'", 'Bulkselectie wordt niet in de titelr
 includes(dataTable, 'isSelectionHeaderColumn(column) ? null', 'Bulkselectie staat nog in de filterrij')
 includes(dataTable, "typeof column.renderFilter === 'function'", 'DataTable ondersteunt geen standaard custom filtercontrol')
 includes(dataTable, "typeof column.filterPredicate === 'function'", 'DataTable ondersteunt geen exacte filtersemantiek')
-includes(resizable, 'role="separator"', 'DataTable kolomresize-handle ontbreekt')
-includes(resizable, "right: 0", 'Resize-handle ligt niet op de echte rechter kolomrand')
-includes(resizable, "width: '12px'", 'Resize-hit-zone is niet breed genoeg voor betrouwbaar slepen')
+includes(dataTable, 'resizableColumns', 'DataTable activeert het standaard resizecontract niet')
+includes(dataTable, 'onColumnResize={handleColumnResize}', 'DataTable synchroniseert zichtbare resize niet terug naar React-state')
+includes(table, 'const nearLeftEdge', 'Tabelgrens is niet aan de linkerzijde van de volgende kolom pakbaar')
+includes(table, 'const nearRightEdge', 'Tabelgrens is niet aan de rechterzijde van de huidige kolom pakbaar')
+includes(table, 'onColumnResize?.(activeResize.columnIndex, nextWidth)', 'Tabelresizer rapporteert de werkelijke breedte niet terug')
+includes(resizable, 'setColumnWidth', 'React-kolombreedte kan niet vanuit het standaard resizecontract worden bijgewerkt')
+includes(resizable, 'role="separator"', 'DataTable kolomresize-indicator ontbreekt')
+includes(resizable, "pointerEvents: 'none'", 'Losse resize-indicator onderschept nog muisevents in plaats van het standaard Table-contract')
 includes(resizable, 'aria-sort=', 'Standaard sorteerheader exposeert aria-sort niet')
-includes(tableCss, '.rz-resizable-header-cell', 'Resize-header heeft geen positioneringsanker')
-includes(tableCss, 'position: relative', 'Resize-header positioneringsanker ontbreekt')
+includes(tableCss, '.rz-table--resizable-columns', 'Standaard resize-CSS ontbreekt')
 
 console.log('WINKELEN_STANDARD_UI_CONTRACT_GREEN')
