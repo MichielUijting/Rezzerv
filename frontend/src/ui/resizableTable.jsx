@@ -52,10 +52,12 @@ export function ResizableHeaderCell({
   onSort = null,
 }) {
   const headerClassName = ['rz-resizable-header-cell', className].filter(Boolean).join(' ')
+  const accessibleLabel = typeof children === 'string' ? children : 'Kolom'
 
   return (
     <th
       className={headerClassName}
+      aria-label={sortable ? `${accessibleLabel} sorteren` : accessibleLabel}
       aria-sort={sortable ? (isSorted ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none') : undefined}
       style={{ ...style, width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}
     >
@@ -65,7 +67,7 @@ export function ResizableHeaderCell({
           className="rz-sort-button"
           onClick={() => onSort?.(columnKey)}
           aria-pressed={isSorted}
-          aria-label={`${typeof children === 'string' ? children : 'Kolom'} sorteren`}
+          aria-label={`${accessibleLabel} sorteren`}
         >
           <span>{children}</span>
           <span className={`rz-sort-indicator${isSorted ? ' is-active' : ''}`} data-direction={isSorted ? sortDirection : 'desc'} aria-hidden="true" />
