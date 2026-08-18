@@ -73,9 +73,10 @@ export function ResizableHeaderCell({
           <span className={`rz-sort-indicator${isSorted ? ' is-active' : ''}`} data-direction={isSorted ? sortDirection : 'desc'} aria-hidden="true" />
         </button>
       ) : (
-        <div style={{ paddingRight: '10px' }}>{children}</div>
+        <div style={{ paddingRight: '14px', textAlign: style?.textAlign || undefined }}>{children}</div>
       )}
       <div
+        className="rz-column-resize-handle"
         role="separator"
         aria-orientation="vertical"
         aria-label="Kolom breedte aanpassen"
@@ -83,13 +84,13 @@ export function ResizableHeaderCell({
         style={{
           position: 'absolute',
           top: 0,
-          right: '-3px',
-          width: '8px',
+          right: 0,
+          width: '12px',
           height: '100%',
           cursor: 'col-resize',
           userSelect: 'none',
           touchAction: 'none',
-          zIndex: 2,
+          zIndex: 4,
         }}
       />
     </th>
