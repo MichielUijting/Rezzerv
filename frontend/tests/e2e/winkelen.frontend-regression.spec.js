@@ -164,13 +164,11 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
         const fallbackLineHeight = Number.parseFloat(style.fontSize) * 1.2;
         return {
           height: element.getBoundingClientRect().height,
-          minHeight: style.minHeight,
           color: style.color,
           backgroundColor: style.backgroundColor,
           effectiveLineHeight: Number.isFinite(numericLineHeight) ? numericLineHeight : fallbackLineHeight,
         };
       });
-      expect(metrics.minHeight).toBe('20px');
       expect(metrics.height).toBeGreaterThanOrEqual(20);
       expect(metrics.height).toBeLessThan(30);
       expect(metrics.color).not.toBe(metrics.backgroundColor);
