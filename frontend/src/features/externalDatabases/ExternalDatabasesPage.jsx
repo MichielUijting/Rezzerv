@@ -4,6 +4,7 @@ import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
+import RecognitionConfirmationPanel from './RecognitionConfirmationPanel'
 import ReceiptItemsOverview from './ReceiptItemsOverview'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './externalDatabases.css'
@@ -151,6 +152,7 @@ export default function ExternalDatabasesPage() {
     if (tab === TAB_LABELS.overzicht) {
       return (
         <div className="rz-external-databases-overview">
+          <RecognitionConfirmationPanel onError={setError} onMessage={setError} />
           <ReceiptItemsOverview onError={setError} onMessage={setError} />
         </div>
       )
@@ -196,8 +198,7 @@ export default function ExternalDatabasesPage() {
           ) : null}
           {offQueryTerms.length ? (
             <div className="rz-external-databases-off-terms" data-testid="external-database-off-query-terms">
-              <strong>OFF-zoektermen:</strong> {offQueryTerms.join(', ')}
-            </div>
+              <strong>OFF-zoektermen:</strong> {offQueryTerms.join(', ')}</div>
           ) : null}
           {saveResult ? <div className="rz-inline-feedback rz-inline-feedback--success">Kandidaten opgeslagen: {saveResult.saved_count ?? 0} nieuw, {saveResult.updated_count ?? 0} bijgewerkt, {saveResult.skipped_count ?? 0} overgeslagen.</div> : null}
           {matchResult ? (
