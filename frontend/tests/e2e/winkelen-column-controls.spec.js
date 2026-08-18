@@ -85,7 +85,26 @@ test.describe('Winkelen kolomcontrols', () => {
 
     await page.mouse.move(boundaryPoint.x, boundaryPoint.y)
     await page.mouse.down()
+    await expect.poll(() => page.evaluate(() => document.body.classList.contains('rz-table-column-resizing'))).toBe(true)
     await page.mouse.move(boundaryPoint.x + 90, boundaryPoint.y, { steps: 6 })
+
+    const duringResize = await page.evaluate(() => {
+      const tableElement = document.querySelector('[data-testid="shopping-list-table"]')
+      const article = tableElement?.querySelector('thead tr:first-child th:nth-child(2)')
+      const productType = tableElement?.querySelector('thead tr:first-child th:nth-child(3)')
+      const articleCol = tableElement?.querySelector('colgroup col:nth-child(2)')
+      return {
+        bodyResizing: document.body.classList.contains('rz-table-column-resizing'),
+        articleColStyleWidth: articleCol?.style.width || '',
+        tableStyleWidth: tableElement?.style.width || '',
+        articleRenderedWidth: article?.getBoundingClientRect().width || 0,
+        productTypeRenderedX: productType?.getBoundingClientRect().x || 0,
+      }
+    })
+    console.log(`WINKELEN_RESIZE_DIAGNOSTIC ${JSON.stringify(duringResize)}`)
+    expect(duringResize.bodyResizing).toBe(true)
+    expect(Number.parseFloat(duringResize.articleColStyleWidth)).toBeGreaterThan(articleBefore.width + 70)
+
     await page.mouse.up()
 
     await expect.poll(async () => (await articleHeader.boundingBox())?.width || 0).toBeGreaterThan(articleBefore.width + 70)
