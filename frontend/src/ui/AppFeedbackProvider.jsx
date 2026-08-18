@@ -91,9 +91,10 @@ export function AppFeedbackProvider({ children }) {
     const normalized = normalizeFeedback(nextFeedback)
     if (!normalized) return
 
+    const hasExplicitAction = Boolean(normalized.onPrimaryAction || normalized.onSecondaryAction)
     const dedupeMs = Number.isFinite(Number(nextFeedback?.dedupeMs))
       ? Number(nextFeedback.dedupeMs)
-      : 1500
+      : (hasExplicitAction ? 0 : 1500)
     const signature = String(
       nextFeedback?.key
       || [
