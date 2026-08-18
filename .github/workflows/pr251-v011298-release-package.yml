@@ -1,23 +1,23 @@
-name: PR251 v01.12.97 release package
+name: PR251 v01.12.98 release package
 
 on:
   push:
     branches:
       - fix/article-detail-mutation-contracts
     paths:
-      - .github/workflows/pr251-v011297-release-package.yml
+      - .github/workflows/pr251-v011298-release-package.yml
   pull_request:
     paths:
-      - .github/workflows/pr251-v011297-release-package.yml
+      - .github/workflows/pr251-v011298-release-package.yml
   workflow_dispatch:
 
 jobs:
-  package-v011297:
+  package-v011298:
     runs-on: ubuntu-latest
     env:
-      PRODUCT_SHA: 9a1944cc760d4d7355b48f8106f620ab0ee351ed
-      EXPECTED_VERSION: Rezzerv-MVP-v01.12.97
-      PACKAGE_NAME: Rezzerv-v01.12.97
+      PRODUCT_SHA: 81e193b511dbfe986ad5cd99d8239e5cca1eb5c2
+      EXPECTED_VERSION: Rezzerv-MVP-v01.12.98
+      PACKAGE_NAME: Rezzerv-v01.12.98
     steps:
       - name: Checkout bewezen productcommit
         uses: actions/checkout@v4
@@ -46,11 +46,11 @@ jobs:
               with open(path, encoding='utf-8') as handle:
                   assert json.load(handle)['version'] == expected, path
           with open('frontend/package.json', encoding='utf-8') as handle:
-              assert json.load(handle)['version'] == '1.12.97'
+              assert json.load(handle)['version'] == '1.12.98'
           print('PACKAGE_VERSION_SYNC_GREEN')
           PY
 
-      - name: Controleer gevraagde Artikeldetail UI-contracten
+      - name: Controleer Artikeldetail en huishoudnaam-contracten
         shell: bash
         run: |
           set -euo pipefail
@@ -60,6 +60,8 @@ jobs:
           grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_CONTRACT_GREEN' /tmp/article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_SUBTABS_CONTRACT_GREEN' /tmp/article-detail-mutation-contract.log
           grep -F 'ARTICLE_DETAIL_ROUTE_OWNERSHIP_GREEN' /tmp/article-detail-mutation-contract.log
+          PYTHONPATH=backend python backend/tests/test_household_alias_inventory_projection.py | tee /tmp/household-alias-inventory.log
+          grep -F 'HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN' /tmp/household-alias-inventory.log
 
       - name: Bouw frontend productie-output
         working-directory: frontend
@@ -142,16 +144,15 @@ jobs:
           test -f "$package_root/VERSION.txt"
           test -f "$package_root/docker-compose.yml"
           test -f "$package_root/frontend/src/features/articles/tabs/ArticleOverviewSubtabs.jsx"
-          test -f "$package_root/frontend/src/features/articles/articleDetailMutationPolicy.css"
-          test -f "$package_root/backend/app/api/article_detail_admin_routes.py"
-          test -f "$package_root/docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json"
+          test -f "$package_root/backend/app/services/household_alias_policy.py"
+          test -f "$package_root/backend/tests/test_household_alias_inventory_projection.py"
           test "$(tr -d '\r\n' < "$package_root/VERSION.txt")" = "$EXPECTED_VERSION"
           echo "PACKAGE_ZIP_GREEN=$RUNNER_TEMP/$PACKAGE_NAME.zip"
 
       - name: Upload volledige releasezip
         uses: actions/upload-artifact@v4
         with:
-          name: Rezzerv-v01.12.97
-          path: ${{ runner.temp }}/Rezzerv-v01.12.97.zip
+          name: Rezzerv-v01.12.98
+          path: ${{ runner.temp }}/Rezzerv-v01.12.98.zip
           if-no-files-found: error
           retention-days: 30
