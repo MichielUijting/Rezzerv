@@ -1,0 +1,54 @@
+name: PR252 PO test script Windows
+
+on:
+  pull_request:
+    paths:
+      - 'backend/tests/po_external_recognition_fixture.py'
+      - 'scripts/po-test-pr252-v0112105.ps1'
+      - 'scripts/START-PO-TEST-PR252.cmd'
+      - '.github/workflows/pr252-po-test-script-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-po-test-runner:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell runner
+        shell: powershell
+        run: |
+          $errors = $null
+          $tokens = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/po-test-pr252-v0112105.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'PO_TEST_V0112105_PARSE_GREEN'
+
+      - name: Run self-test
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/po-test-pr252-v0112105.ps1 -SelfTest
+
+      - name: Compile deterministic fixture
+        shell: powershell
+        run: python -m py_compile backend/tests/po_external_recognition_fixture.py
+
+      - name: Validate launcher target
+        shell: powershell
+        run: |
+          $launcher = Get-Content 'scripts/START-PO-TEST-PR252.cmd' -Raw
+          if ($launcher -notmatch 'po-test-pr252-v0112105\.ps1') {
+            throw 'Launcher verwijst niet naar het v01.12.105 PowerShell-script.'
+          }
+          Write-Host 'PO_TEST_V0112105_LAUNCHER_GREEN'
