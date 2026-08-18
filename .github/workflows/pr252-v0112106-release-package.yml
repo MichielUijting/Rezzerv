@@ -1,27 +1,27 @@
-name: PR252 v01.12.105 release package
+name: PR252 v01.12.106 release package
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/pr252-v0112105-release-package.yml'
+      - '.github/workflows/pr252-v0112106-release-package.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr252-v0112105-package-${{ github.event.pull_request.number || github.ref }}
+  group: pr252-v0112106-package-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  package-v0112105:
-    name: Build runtime and package v01.12.105
+  package-v0112106:
+    name: Build runtime and package v01.12.106
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_VERSION: Rezzerv-MVP-v01.12.105
-      EXPECTED_PACKAGE_VERSION: 1.12.105
-      PACKAGE_NAME: Rezzerv-v01.12.105
+      EXPECTED_VERSION: Rezzerv-MVP-v01.12.106
+      EXPECTED_PACKAGE_VERSION: 1.12.106
+      PACKAGE_NAME: Rezzerv-MVP-v01.12.106
       PRODUCT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
@@ -31,13 +31,13 @@ jobs:
           ref: ${{ env.PRODUCT_SHA }}
           fetch-depth: 0
 
-      - name: Prove exact product commit
+      - name: Prove exact release commit
         shell: bash
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$PRODUCT_SHA"
-          echo "PACKAGE_PRODUCT_SHA_GREEN=$actual"
+          echo "PACKAGE_RELEASE_SHA_GREEN=$actual"
 
       - name: Validate release identity
         shell: bash
@@ -211,6 +211,7 @@ jobs:
           unzip -t "$archive" | tail -n 2
           test -f "$package_root/VERSION.txt"
           test -f "$package_root/docker-compose.yml"
+          test -f "$package_root/start.bat"
           test -f "$package_root/backend/app/services/external_recognition_confirmation.py"
           test -f "$package_root/frontend/src/features/externalDatabases/RecognitionConfirmationPanel.jsx"
           test -f "$package_root/backend/tests/test_external_recognition_confirmation.py"
@@ -221,7 +222,7 @@ jobs:
       - name: Upload full release zip
         uses: actions/upload-artifact@v4
         with:
-          name: Rezzerv-v01.12.105
-          path: ${{ runner.temp }}/Rezzerv-v01.12.105.zip
+          name: Rezzerv-MVP-v01.12.106
+          path: ${{ runner.temp }}/Rezzerv-MVP-v01.12.106.zip
           if-no-files-found: error
           retention-days: 30
