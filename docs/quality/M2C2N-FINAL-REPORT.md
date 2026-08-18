@@ -1,6 +1,6 @@
 # M2C2n eindrapport
 
-Statusdatum: 2026-08-18  
+Statusdatum: 2026-08-18
 Basis voor eindcontrole: actuele PR-head met de gecontroleerde runtime-routebaseline.
 
 ## Eindadvies
