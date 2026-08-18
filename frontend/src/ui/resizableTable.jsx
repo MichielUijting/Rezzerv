@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
 export function useResizableColumnWidths(defaultWidths) {
+  const defaultWidthsSignature = Object.entries(defaultWidths || {})
+    .map(([key, value]) => `${key}:${Number(value || 0)}`)
+    .join('|')
   const [widths, setWidths] = useState(() => ({ ...defaultWidths }))
   const widthsRef = useRef(widths)
 
@@ -10,7 +13,7 @@ export function useResizableColumnWidths(defaultWidths) {
 
   useEffect(() => {
     setWidths({ ...defaultWidths })
-  }, [defaultWidths])
+  }, [defaultWidthsSignature])
 
   function startResize(columnKey, event) {
     event.preventDefault()
@@ -51,7 +54,11 @@ export function ResizableHeaderCell({
   const headerClassName = ['rz-resizable-header-cell', className].filter(Boolean).join(' ')
 
   return (
-    <th className={headerClassName} style={{ ...style, width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}>
+    <th
+      className={headerClassName}
+      aria-sort={sortable ? (isSorted ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none') : undefined}
+      style={{ ...style, width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}
+    >
       {sortable ? (
         <button
           type="button"

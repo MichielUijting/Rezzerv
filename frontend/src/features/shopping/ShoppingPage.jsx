@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
-import Table from '../../ui/Table.jsx'
+import DataTable from '../../ui/DataTable.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
 const SOURCE_LABELS = {
@@ -37,14 +38,6 @@ const CHECKBOX_STYLE = {
   margin: 0,
 }
 
-const SORT_FIELDS = {
-  article: (item) => String(item.article_name || ''),
-  productType: (item) => String(item.product_type_name || ''),
-  size: (item) => String(item.size || ''),
-  note: (item) => String(item.note || ''),
-  checked: (item) => (item.checked ? 1 : 0),
-}
-
 async function requestJson(url, options = {}) {
   const response = await fetchJsonWithAuth(url, options)
   if (response.status === 204) return null
@@ -65,53 +58,15 @@ function csvValue(value) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`
 }
 
-function SortableHeader({ field, label, sort, onSort }) {
-  const active = sort.field === field
-  const indicator = active ? (sort.direction === 'asc' ? '^' : 'v') : ''
-  return (
-    <th aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
-      <button
-        type="button"
-        onClick={() => onSort(field)}
-        aria-label={`Sorteer op ${label}`}
-        style={{
-          appearance: 'none',
-          border: 0,
-          background: 'transparent',
-          color: 'inherit',
-          font: 'inherit',
-          fontWeight: 'inherit',
-          padding: 0,
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          textAlign: 'left',
-          cursor: 'pointer',
-        }}
-      >
-        <span>{label}</span>
-        {indicator ? (
-          <span
-            aria-hidden="true"
-            data-testid={`sort-indicator-${field}`}
-            style={{ marginLeft: 'auto', paddingRight: 8 }}
-          >
-            {indicator}
-          </span>
-        ) : null}
-      </button>
-    </th>
-  )
-}
-
 export default function ShoppingPage() {
+  const { showFeedback } = useAppFeedback()
   const [list, setList] = useState({ items: [], item_count: 0 })
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
   const [selectedResultId, setSelectedResultId] = useState('')
   const [selectedItemIds, setSelectedItemIds] = useState([])
   const [filters, setFilters] = useState({ checked: 'all', article: '', productType: '' })
-  const [sort, setSort] = useState({ field: 'article', direction: 'asc' })
+  const [sort, setSort] = useState({ key: 'article', direction: 'asc' })
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -180,28 +135,12 @@ export default function ShoppingPage() {
 
   const productTypeOptions = useMemo(() => filterOptions(list.items, 'product_type_name'), [list.items])
 
-  const visibleItems = useMemo(() => {
-    const filtered = (list.items || []).filter((item) => {
-      if (filters.checked === 'checked' && !item.checked) return false
-      if (filters.article && !String(item.article_name || '').toLowerCase().includes(filters.article.toLowerCase())) return false
-      if (filters.productType && String(item.product_type_name || '') !== filters.productType) return false
-      return true
-    })
-
-    const selector = SORT_FIELDS[sort.field] || SORT_FIELDS.article
-    const direction = sort.direction === 'desc' ? -1 : 1
-    return [...filtered].sort((left, right) => {
-      const leftValue = selector(left)
-      const rightValue = selector(right)
-      if (typeof leftValue === 'number' && typeof rightValue === 'number') {
-        return (leftValue - rightValue) * direction
-      }
-      return String(leftValue).localeCompare(String(rightValue), 'nl', {
-        numeric: true,
-        sensitivity: 'base',
-      }) * direction
-    })
-  }, [list.items, filters, sort])
+  const visibleItems = useMemo(() => (list.items || []).filter((item) => {
+    if (filters.checked === 'checked' && !item.checked) return false
+    if (filters.article && !String(item.article_name || '').toLowerCase().includes(filters.article.toLowerCase())) return false
+    if (filters.productType && String(item.product_type_name || '') !== filters.productType) return false
+    return true
+  }), [list.items, filters])
 
   const selectedItems = useMemo(
     () => (list.items || []).filter((item) => selectedItemIds.includes(item.id)),
@@ -210,13 +149,6 @@ export default function ShoppingPage() {
 
   const allVisibleSelected = visibleItems.length > 0
     && visibleItems.every((item) => selectedItemIds.includes(item.id))
-
-  function changeSort(field) {
-    setSort((current) => ({
-      field,
-      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
-    }))
-  }
 
   function toggleSelectedItem(itemId, selected) {
     setSelectedItemIds((current) => selected
@@ -333,23 +265,34 @@ export default function ShoppingPage() {
     void nextChain.catch(() => undefined)
   }
 
-  async function deleteSelectedItems() {
+  function deleteSelectedItems() {
     if (selectedItems.length === 0) return
-    if (!window.confirm(`${selectedItems.length} geselecteerde rij(en) verwijderen?`)) return
-    setSaving(true)
-    setError('')
-    setMessage('')
-    try {
-      await Promise.all(selectedItems.map((item) => requestJson(`/api/shopping-list/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' })))
-      setSelectedItemIds([])
-      setMessage(`${selectedItems.length} rij(en) verwijderd.`)
-      await loadList()
-    } catch (deleteError) {
-      setError(deleteError?.message || 'De geselecteerde rijen konden niet worden verwijderd.')
-      await loadList()
-    } finally {
-      setSaving(false)
-    }
+    const count = selectedItems.length
+    showFeedback({
+      variant: 'warning',
+      title: count === 1 ? 'Rij verwijderen' : 'Rijen verwijderen',
+      message: count === 1 ? '1 geselecteerde rij verwijderen?' : `${count} geselecteerde rijen verwijderen?`,
+      detail: 'De geselecteerde regels verdwijnen uit de actuele winkellijst.',
+      testId: 'shopping-delete-confirmation',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        setSaving(true)
+        setError('')
+        setMessage('')
+        try {
+          await Promise.all(selectedItems.map((item) => requestJson(`/api/shopping-list/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' })))
+          setSelectedItemIds([])
+          setMessage(count === 1 ? '1 rij verwijderd.' : `${count} rijen verwijderd.`)
+          await loadList()
+        } catch (deleteError) {
+          await loadList()
+          throw new Error(deleteError?.message || 'De geselecteerde rijen konden niet worden verwijderd.')
+        } finally {
+          setSaving(false)
+        }
+      },
+    })
   }
 
   function exportSelectedItems() {
@@ -370,25 +313,179 @@ export default function ShoppingPage() {
     URL.revokeObjectURL(url)
   }
 
-  async function completeShopping() {
-    if (!window.confirm('De actuele winkellijst wordt leeggemaakt. Voorraad en bronlijsten blijven ongewijzigd.')) return
-    setSaving(true)
-    setError('')
-    setMessage('')
-    try {
-      await requestJson('/api/shopping-list/complete', { method: 'POST' })
-      setSelectedItemIds([])
-      setMessage('Winkelen is afgerond. De winkellijst is leeggemaakt.')
-      await loadList()
-    } catch (completeError) {
-      setError(completeError?.message || 'Winkelen kon niet worden afgerond.')
-    } finally {
-      setSaving(false)
-    }
+  function completeShopping() {
+    showFeedback({
+      variant: 'warning',
+      title: 'Winkelen afronden',
+      message: 'De actuele winkellijst wordt leeggemaakt.',
+      detail: 'Voorraad en bronlijsten blijven ongewijzigd.',
+      testId: 'shopping-complete-confirmation',
+      primaryActionLabel: 'Afronden',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        setSaving(true)
+        setError('')
+        setMessage('')
+        try {
+          await requestJson('/api/shopping-list/complete', { method: 'POST' })
+          setSelectedItemIds([])
+          setMessage('Winkelen is afgerond. De winkellijst is leeggemaakt.')
+          await loadList()
+        } catch (completeError) {
+          throw new Error(completeError?.message || 'Winkelen kon niet worden afgerond.')
+        } finally {
+          setSaving(false)
+        }
+      },
+    })
   }
 
   const inlineInputStyle = { width: '100%', minWidth: 0, boxSizing: 'border-box' }
-  const tableStyle = { tableLayout: 'fixed', width: '1120px', minWidth: '1120px' }
+  const dataTableFilters = {
+    article: filters.article,
+    productType: filters.productType,
+    checked: filters.checked === 'checked' ? 'checked' : '',
+  }
+  const shoppingColumns = useMemo(() => [
+    {
+      key: 'select',
+      header: <span aria-label="Bulkselectie">&nbsp;</span>,
+      width: 60,
+      headerStyle: { textAlign: 'center' },
+      renderFilter: () => (
+        <input
+          type="checkbox"
+          checked={allVisibleSelected}
+          onChange={(event) => toggleAllVisible(event.target.checked)}
+          aria-label="Selecteer alle zichtbare rijen"
+          style={CHECKBOX_STYLE}
+        />
+      ),
+      renderCell: (item) => (
+        <div style={{ textAlign: 'center' }}>
+          <input
+            type="checkbox"
+            checked={selectedItemIds.includes(item.id)}
+            onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
+            aria-label={`Selecteer ${item.article_name}`}
+            style={CHECKBOX_STYLE}
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'article',
+      label: 'Artikel',
+      width: 330,
+      sortable: true,
+      filterable: true,
+      filterPlaceholder: 'Zoeken',
+      filterLabel: 'Zoeken in winkellijst',
+      getFilterValue: (item) => item.article_name || '',
+      getSortValue: (item) => item.article_name || '',
+      renderCell: (item) => <span title={item.article_name}>{item.article_name}</span>,
+    },
+    {
+      key: 'productType',
+      label: 'Producttype',
+      width: 300,
+      sortable: true,
+      filterable: true,
+      getFilterValue: (item) => item.product_type_name || '',
+      filterPredicate: (item, value) => !value || String(item.product_type_name || '') === String(value),
+      getSortValue: (item) => item.product_type_name || '',
+      renderFilter: ({ value, onChange }) => (
+        <select
+          className="rz-input rz-inline-input"
+          style={FILTER_CONTROL_STYLE}
+          value={value || ''}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label="Filter producttype"
+        >
+          <option value="">Filter</option>
+          {productTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      ),
+      renderCell: (item) => <span title={item.product_type_name}>{item.product_type_name}</span>,
+    },
+    {
+      key: 'size',
+      label: 'Omvang',
+      width: 120,
+      sortable: true,
+      getSortValue: (item) => item.size || '',
+      renderCell: (item) => (
+        <input
+          className="rz-input"
+          style={inlineInputStyle}
+          defaultValue={item.size || ''}
+          aria-label={`Omvang ${item.article_name}`}
+          onBlur={(event) => updateItem(item, { size: event.target.value })}
+        />
+      ),
+    },
+    {
+      key: 'note',
+      label: 'Opmerking',
+      width: 220,
+      sortable: true,
+      getSortValue: (item) => item.note || '',
+      renderCell: (item) => (
+        <input
+          className="rz-input"
+          style={inlineInputStyle}
+          defaultValue={item.note || ''}
+          aria-label={`Opmerking ${item.article_name}`}
+          onBlur={(event) => updateItem(item, { note: event.target.value })}
+        />
+      ),
+    },
+    {
+      key: 'checked',
+      label: 'Gekocht',
+      width: 90,
+      sortable: true,
+      filterable: true,
+      headerStyle: { textAlign: 'center' },
+      getFilterValue: (item) => item.checked ? 'checked' : 'unchecked',
+      filterPredicate: (item, value) => !value || (value === 'checked' ? Boolean(item.checked) : !item.checked),
+      getSortValue: (item) => Boolean(item.checked),
+      renderFilter: ({ value, onChange }) => (
+        <input
+          type="checkbox"
+          checked={value === 'checked'}
+          onChange={(event) => onChange(event.target.checked ? 'checked' : '')}
+          aria-label="Filter gekocht"
+          style={CHECKBOX_STYLE}
+        />
+      ),
+      renderCell: (item) => (
+        <div style={{ textAlign: 'center' }}>
+          <input
+            type="checkbox"
+            checked={Boolean(item.checked)}
+            onChange={(event) => updateChecked(item, event.target.checked)}
+            aria-label={`Gekocht ${item.article_name}`}
+            style={CHECKBOX_STYLE}
+          />
+        </div>
+      ),
+    },
+  ], [allVisibleSelected, productTypeOptions, selectedItemIds])
+
+  function handleDataTableFilterChange(key, value) {
+    if (key === 'article') {
+      setFilters((current) => ({ ...current, article: value }))
+      return
+    }
+    if (key === 'productType') {
+      setFilters((current) => ({ ...current, productType: value }))
+      return
+    }
+    if (key === 'checked') {
+      setFilters((current) => ({ ...current, checked: value === 'checked' ? 'checked' : 'all' }))
+    }
+  }
 
   return (
     <AppShell title="Winkelen" showExit={false}>
@@ -399,13 +496,13 @@ export default function ShoppingPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(280px, 1fr) auto', gap: 12, alignItems: 'stretch' }}>
               <label className="rz-input-field">
-                <span className="rz-label">Artikel zoeken</span>
+                <span className="rz-label">Artikel toevoegen</span>
                 <input
                   className="rz-input"
                   value={catalogQuery}
                   onChange={(event) => setCatalogQuery(event.target.value)}
                   placeholder="Zoek artikel, producttype of artikelgroep"
-                  aria-label="Artikel zoeken"
+                  aria-label="Artikel toevoegen"
                 />
               </label>
 
@@ -449,125 +546,19 @@ export default function ShoppingPage() {
             {error ? <div role="alert" style={{ color: '#9b1c1c' }}>{error}</div> : null}
             {message ? <div role="status" style={{ color: '#1A3E2B' }}>{message}</div> : null}
 
-            <Table dataTestId="shopping-list-table" resizableColumns tableStyle={tableStyle}>
-              <colgroup>
-                <col style={{ width: 60 }} />
-                <col style={{ width: 330 }} />
-                <col style={{ width: 300 }} />
-                <col style={{ width: 120 }} />
-                <col style={{ width: 220 }} />
-                <col style={{ width: 90 }} />
-              </colgroup>
-              <thead>
-                <tr className="rz-input">
-                  <th aria-label="Bulkselectie">&nbsp;</th>
-                  <SortableHeader field="article" label="Artikel" sort={sort} onSort={changeSort} />
-                  <SortableHeader field="productType" label="Producttype" sort={sort} onSort={changeSort} />
-                  <SortableHeader field="size" label="Omvang" sort={sort} onSort={changeSort} />
-                  <SortableHeader field="note" label="Opmerking" sort={sort} onSort={changeSort} />
-                  <SortableHeader field="checked" label="Gekocht" sort={sort} onSort={changeSort} />
-                </tr>
-                <tr>
-                  <th style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                    <input
-                      type="checkbox"
-                      checked={allVisibleSelected}
-                      onChange={(event) => toggleAllVisible(event.target.checked)}
-                      aria-label="Selecteer alle zichtbare rijen"
-                      style={CHECKBOX_STYLE}
-                    />
-                  </th>
-                  <th>
-                    <input
-                      className="rz-input"
-                      style={FILTER_CONTROL_STYLE}
-                      value={filters.article}
-                      onChange={(event) => setFilters((current) => ({ ...current, article: event.target.value }))}
-                      placeholder="Zoeken"
-                      aria-label="Zoeken in winkellijst"
-                    />
-                  </th>
-                  <th>
-                    <select
-                      className="rz-input"
-                      style={FILTER_CONTROL_STYLE}
-                      value={filters.productType}
-                      onChange={(event) => setFilters((current) => ({ ...current, productType: event.target.value }))}
-                      aria-label="Filter producttype"
-                    >
-                      <option value="">Filter</option>
-                      {productTypeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                    </select>
-                  </th>
-                  <th>&nbsp;</th>
-                  <th>&nbsp;</th>
-                  <th style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                    <input
-                      type="checkbox"
-                      checked={filters.checked === 'checked'}
-                      onChange={(event) => setFilters((current) => ({
-                        ...current,
-                        checked: event.target.checked ? 'checked' : 'all',
-                      }))}
-                      aria-label="Filter gekocht"
-                      style={CHECKBOX_STYLE}
-                    />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={6}>Winkellijst laden…</td></tr>
-                ) : visibleItems.length === 0 ? (
-                  <>
-                    <tr><td colSpan={6}>Nog geen artikelen op de winkellijst.</td></tr>
-                    <tr><td colSpan={6}>&nbsp;</td></tr>
-                    <tr><td colSpan={6}>&nbsp;</td></tr>
-                  </>
-                ) : visibleItems.map((item) => (
-                  <tr key={item.id}>
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedItemIds.includes(item.id)}
-                        onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
-                        aria-label={`Selecteer ${item.article_name}`}
-                        style={CHECKBOX_STYLE}
-                      />
-                    </td>
-                    <td title={item.article_name}>{item.article_name}</td>
-                    <td title={item.product_type_name}>{item.product_type_name}</td>
-                    <td>
-                      <input
-                        className="rz-input"
-                        style={inlineInputStyle}
-                        defaultValue={item.size || ''}
-                        aria-label={`Omvang ${item.article_name}`}
-                        onBlur={(event) => updateItem(item, { size: event.target.value })}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="rz-input"
-                        style={inlineInputStyle}
-                        defaultValue={item.note || ''}
-                        aria-label={`Opmerking ${item.article_name}`}
-                        onBlur={(event) => updateItem(item, { note: event.target.value })}
-                      />
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(item.checked)}
-                        onChange={(event) => updateChecked(item, event.target.checked)}
-                        aria-label={`Gekocht ${item.article_name}`}
-                        style={CHECKBOX_STYLE}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            <DataTable
+              columns={shoppingColumns}
+              data={list.items || []}
+              dataTestId="shopping-list-table"
+              getRowKey={(item) => item.id}
+              emptyMessage={loading ? 'Winkellijst laden…' : 'Nog geen artikelen op de winkellijst.'}
+              filterState={dataTableFilters}
+              onFilterChange={handleDataTableFilterChange}
+              sortState={sort}
+              onSortChange={setSort}
+              stickyHeader
+              stickyFilters
+            />
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <Button

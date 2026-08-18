@@ -82,7 +82,7 @@ export default function DataTable({
   const [page, setPage] = useState(1)
   const activeFilters = filterState || internalFilters
   const activeSort = sortState || internalSort
-  const hasFilters = visibleColumns.some((column) => column.filterable)
+  const hasFilters = visibleColumns.some((column) => column.filterable || typeof column.renderFilter === 'function')
 
   function handleFilterChange(key, value) {
     if (typeof onFilterChange === 'function') return onFilterChange(key, value)
@@ -98,8 +98,12 @@ export default function DataTable({
 
   const filteredData = useMemo(() => data.filter((row) => visibleColumns.every((column) => {
     if (!column.filterable) return true
-    const filterValue = normalizeText(activeFilters[column.key])
+    const activeFilterValue = activeFilters[column.key]
+    const filterValue = normalizeText(activeFilterValue)
     if (!filterValue) return true
+    if (typeof column.filterPredicate === 'function') {
+      return Boolean(column.filterPredicate(row, activeFilterValue))
+    }
     const rawValue = typeof column.getFilterValue === 'function'
       ? column.getFilterValue(row)
       : typeof column.getValue === 'function'
@@ -173,7 +177,13 @@ export default function DataTable({
             <tr className="rz-table-filters">
               {visibleColumns.map((column) => (
                 <th key={column.key} className={column.align === 'right' ? 'rz-num' : column.className || ''}>
-                  {column.filterable ? (
+                  {typeof column.renderFilter === 'function' ? (
+                    column.renderFilter({
+                      value: activeFilters[column.key] || '',
+                      onChange: (value) => handleFilterChange(column.key, value),
+                      column,
+                    })
+                  ) : column.filterable ? (
                     <input
                       className="rz-input rz-inline-input"
                       value={activeFilters[column.key] || ''}
