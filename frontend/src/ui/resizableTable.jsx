@@ -108,5 +108,5 @@ export function ResizableHeaderCell({
 
 export function buildTableWidth(widths, fallbackWidth = '100%') {
   const total = Object.values(widths || {}).reduce((sum, value) => sum + Number(value || 0), 0)
-  return total > 0 ? `max(${total}px, ${fallbackWidth})` : fallbackWidth
+  return total > 0 ? `${total}px` : fallbackWidth
 }
