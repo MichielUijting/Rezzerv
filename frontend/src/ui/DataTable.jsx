@@ -27,6 +27,15 @@ function buildSortDefaults(columns, fallbackSort = null) {
   return defaults
 }
 
+function isSelectionHeaderColumn(column) {
+  return Boolean(
+    column
+    && column.key === 'select'
+    && !column.filterable
+    && typeof column.renderFilter === 'function'
+  )
+}
+
 export default function DataTable({
   columns = [],
   data = [],
@@ -52,7 +61,7 @@ export default function DataTable({
 }) {
   const visibleColumns = useMemo(() => columns.filter((column) => column && column.hidden !== true), [columns])
   const defaultWidths = useMemo(() => buildDefaultWidths(visibleColumns), [visibleColumns])
-  const { widths, startResize } = useResizableColumnWidths(defaultWidths)
+  const { widths, setColumnWidth } = useResizableColumnWidths(defaultWidths)
   const headerRowRef = useRef(null)
   const [stickyHeaderOffset, setStickyHeaderOffset] = useState(42)
 
@@ -82,7 +91,10 @@ export default function DataTable({
   const [page, setPage] = useState(1)
   const activeFilters = filterState || internalFilters
   const activeSort = sortState || internalSort
-  const hasFilters = visibleColumns.some((column) => column.filterable)
+  const hasFilters = visibleColumns.some((column) => (
+    !isSelectionHeaderColumn(column)
+    && (column.filterable || typeof column.renderFilter === 'function')
+  ))
 
   function handleFilterChange(key, value) {
     if (typeof onFilterChange === 'function') return onFilterChange(key, value)
@@ -96,10 +108,20 @@ export default function DataTable({
     setInternalSort(next)
   }
 
+  function handleColumnResize(columnIndex, nextWidth) {
+    const column = visibleColumns[columnIndex]
+    if (!column?.key) return
+    setColumnWidth(column.key, nextWidth)
+  }
+
   const filteredData = useMemo(() => data.filter((row) => visibleColumns.every((column) => {
     if (!column.filterable) return true
-    const filterValue = normalizeText(activeFilters[column.key])
+    const activeFilterValue = activeFilters[column.key]
+    const filterValue = normalizeText(activeFilterValue)
     if (!filterValue) return true
+    if (typeof column.filterPredicate === 'function') {
+      return Boolean(column.filterPredicate(row, activeFilterValue))
+    }
     const rawValue = typeof column.getFilterValue === 'function'
       ? column.getFilterValue(row)
       : typeof column.getValue === 'function'
@@ -146,7 +168,14 @@ export default function DataTable({
 
   return (
     <div className="rz-data-table-shell">
-      <Table wrapperClassName={wrapperClasses} tableClassName={tableClasses} tableStyle={mergedTableStyle} dataTestId={dataTestId}>
+      <Table
+        wrapperClassName={wrapperClasses}
+        tableClassName={tableClasses}
+        tableStyle={mergedTableStyle}
+        dataTestId={dataTestId}
+        resizableColumns
+        onColumnResize={handleColumnResize}
+      >
         <colgroup>
           {visibleColumns.map((column) => <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />)}
         </colgroup>
@@ -157,7 +186,6 @@ export default function DataTable({
                 key={column.key}
                 columnKey={column.key}
                 widths={widths}
-                onStartResize={startResize}
                 className={column.align === 'right' ? 'rz-num' : column.className || ''}
                 sortable={Boolean(column.sortable)}
                 isSorted={activeSort?.key === column.key}
@@ -165,7 +193,16 @@ export default function DataTable({
                 onSort={column.sortable ? handleSort : null}
                 style={column.headerStyle || {}}
               >
-                {column.header ?? column.label ?? column.key}
+                {isSelectionHeaderColumn(column) ? (
+                  column.renderFilter({
+                    value: activeFilters[column.key] || '',
+                    onChange: (value) => handleFilterChange(column.key, value),
+                    column,
+                    placement: 'header',
+                  })
+                ) : (
+                  column.header ?? column.label ?? column.key
+                )}
               </ResizableHeaderCell>
             ))}
           </tr>
@@ -173,7 +210,14 @@ export default function DataTable({
             <tr className="rz-table-filters">
               {visibleColumns.map((column) => (
                 <th key={column.key} className={column.align === 'right' ? 'rz-num' : column.className || ''}>
-                  {column.filterable ? (
+                  {isSelectionHeaderColumn(column) ? null : typeof column.renderFilter === 'function' ? (
+                    column.renderFilter({
+                      value: activeFilters[column.key] || '',
+                      onChange: (value) => handleFilterChange(column.key, value),
+                      column,
+                      placement: 'filter',
+                    })
+                  ) : column.filterable ? (
                     <input
                       className="rz-input rz-inline-input"
                       value={activeFilters[column.key] || ''}

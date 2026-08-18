@@ -1,0 +1,88 @@
+name: PR251 PO runner Windows validation
+
+on:
+  push:
+    branches:
+      - fix/article-detail-mutation-contracts
+    paths:
+      - scripts/po-test-pr251-v011297.ps1
+      - scripts/START-PO-TEST-PR251.cmd
+      - .github/workflows/pr251-po-test-script-windows.yml
+  pull_request:
+    paths:
+      - scripts/po-test-pr251-v011297.ps1
+      - scripts/START-PO-TEST-PR251.cmd
+      - .github/workflows/pr251-po-test-script-windows.yml
+
+jobs:
+  windows-powershell-validation:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell with Windows parser
+        shell: powershell
+        run: |
+          $path = Resolve-Path '.\scripts\po-test-pr251-v011297.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'PO_TEST_V011297_WINDOWS_PARSE_GREEN'
+
+      - name: Run PowerShell self-test
+        shell: powershell
+        run: |
+          $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\scripts\po-test-pr251-v011297.ps1' -SelfTest
+          $output | Write-Host
+          if (($output -join "`n") -notmatch 'PO_TEST_V011297_SELFTEST_GREEN') {
+            throw 'PO runner self-test GREEN marker ontbreekt.'
+          }
+
+      - name: Run launcher self-test
+        shell: powershell
+        run: |
+          $output = & cmd.exe /d /c '.\scripts\START-PO-TEST-PR251.cmd -SelfTest' 2>&1
+          $rc = $LASTEXITCODE
+          $output | Write-Host
+          if ($rc -ne 0) { throw "Launcher self-test gaf exitcode $rc." }
+          if (($output -join "`n") -notmatch 'PO_TEST_V011297_SELFTEST_GREEN') {
+            throw 'Launcher kon de v01.12.97 PowerShell-runner niet uitvoeren.'
+          }
+          Write-Host 'PO_TEST_V011297_LAUNCHER_GREEN'
+
+      - name: Validate PO runner safety guardrails
+        shell: powershell
+        run: |
+          $runner = Get-Content '.\scripts\po-test-pr251-v011297.ps1' -Raw
+          $launcher = Get-Content '.\scripts\START-PO-TEST-PR251.cmd' -Raw
+          $requiredRunner = @(
+            'C:\Users\Gebruiker\Rezzerv_Github',
+            '9a1944cc760d4d7355b48f8106f620ab0ee351ed',
+            'Rezzerv-MVP-v01.12.97',
+            "worktree','add','--detach'",
+            'Copy-Item -LiteralPath $liveDb -Destination $testDb',
+            'tests/run_article_detail_mutation_contract.py',
+            'tests/test_article_detail_admin_gateway_contract.py',
+            'tests/test_article_detail_canonical_route_guard.py',
+            'Naam in dit huishouden komt terug als Voorraadartikel',
+            'Lid kan alles lezen maar niets muteren in Artikeldetail',
+            'Cleanup afgerond.'
+          )
+          foreach ($needle in $requiredRunner) {
+            if (-not $runner.Contains($needle)) { throw "Verplichte PO-runner guardrail ontbreekt: $needle" }
+          }
+          if (-not $launcher.Contains('po-test-pr251-v011297.ps1')) {
+            throw 'Launcher verwijst niet naar de v01.12.97 runner.'
+          }
+          if ($runner -match '(?im)\bgit\s+(reset|stash|switch|clean)\b') {
+            throw 'Verboden Git-mutatie gevonden in PO-runner.'
+          }
+          if ($runner -match '(?im)Copy-Item[^\r\n]+Destination\s+\$liveDb') {
+            throw 'PO-runner mag nooit naar de live database terugkopieren.'
+          }
+          Write-Host 'PO_TEST_V011297_GUARDRAILS_GREEN'

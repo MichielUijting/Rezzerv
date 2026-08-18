@@ -11,7 +11,7 @@ services:
       REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: "true"
       REZZERV_SUPERGEBRUIKER_PASSWORD: ${REZZERV_SUPERGEBRUIKER_PASSWORD:-RezzervSuper123!}
       REZZERV_RECEIPT_STARTUP_OCR_WARMUP: "false"
-      REZZERV_RECEIPT_STARTUP_REMBG_WARMUP: "false"
+      REZZERV_RECEIPT_STARTUP_REMBG_WARMUP: "true"
       REZZERV_OFF_SEARCH_PROVIDER: ${REZZERV_OFF_SEARCH_PROVIDER:-search_a_licious}
       REZZERV_OFF_SEARCH_A_LICIOUS_BASE_URL: ${REZZERV_OFF_SEARCH_A_LICIOUS_BASE_URL:-https://search.openfoodfacts.org/search}
       REZZERV_OFF_SEARCH_BASE_URL: ${REZZERV_OFF_SEARCH_BASE_URL:-https://world.openfoodfacts.org/cgi/search.pl}
@@ -38,6 +38,7 @@ services:
       context: ./frontend
       args:
         REZZERV_VERSION: ${REZZERV_VERSION:-Rezzerv-dev}
+        REZZERV_COMMIT: ${REZZERV_COMMIT:-unknown}
     restart: unless-stopped
     ports:
       - "5174:80"

@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Header, HTTPException, Query
 
+from app.api.article_detail_admin_routes import router as article_detail_admin_router
 from app.api.authorization_membership_routes import router as authorization_membership_router
 from app.api.household_article_option_routes import router as household_article_option_router
 from app.api.shopping_list_routes import router as shopping_list_router
@@ -16,6 +17,7 @@ from app.services.product_inventory_group_projection_service import list_invento
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
 
 router = APIRouter()
+router.include_router(article_detail_admin_router)
 router.include_router(authorization_membership_router)
 router.include_router(household_article_option_router)
 router.include_router(shopping_list_router)

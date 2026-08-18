@@ -12,7 +12,7 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
 
     await page.goto('/winkelen');
     await expect(page).toHaveURL(/\/winkelen$/);
-    await page.getByLabel('Artikel zoeken').fill('Regressie-artikel');
+    await page.getByLabel('Artikel toevoegen').fill('Regressie-artikel');
 
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByLabel('Zoekresultaat')).toContainText('Regressie-artikel');
@@ -123,40 +123,35 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
 
     await expect(shoppingPage).toBeVisible();
     await expect(shoppingPage.getByRole('heading', { name: 'Winkelen — 0 artikelen' })).toBeVisible();
+    await expect(page.getByText('Artikel toevoegen', { exact: true })).toBeVisible();
     await expect(page.getByText('Zoek tegelijk in Huishoudartikelen')).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: /Artikelgroep/ })).toHaveCount(0);
-    await expect(page.getByRole('columnheader', { name: 'Bulkselectie' })).toBeVisible();
+    await expect(table.locator('thead tr:first-child th').first()).toBeVisible();
 
     const headerLabels = await table.locator('thead tr:first-child th').allTextContents();
     expect(headerLabels.map((value) => value.replace(/\s*[\^v]\s*$/, '').trim())).toEqual(['', 'Artikel', 'Producttype', 'Omvang', 'Opmerking', 'Gekocht']);
 
-    const sortableHeaders = [
-      ['article', 'Artikel'],
-      ['productType', 'Producttype'],
-      ['size', 'Omvang'],
-      ['note', 'Opmerking'],
-      ['checked', 'Gekocht'],
-    ].map(([field, label]) => ({
-      field,
-      header: page.getByRole('columnheader', { name: `Sorteer op ${label}`, exact: true }),
+    await expect(table.locator('thead tr:first-child')).toHaveClass(/rz-table-header/);
+    const headerColor = await table.getByRole('button', { name: 'Artikel sorteren', exact: true }).evaluate(
+      (element) => window.getComputedStyle(element).color,
+    );
+    expect(headerColor).toBe('rgb(255, 255, 255)');
+
+    const sortableHeaders = ['Artikel', 'Producttype', 'Omvang', 'Opmerking', 'Gekocht'].map((label) => ({
+      label,
+      button: table.getByRole('button', { name: `${label} sorteren`, exact: true }),
+      header: table.getByRole('columnheader', { name: `${label} sorteren`, exact: true }),
     }));
 
     await expect(sortableHeaders[0].header).toHaveAttribute('aria-sort', 'ascending');
-    await expect(page.getByTestId('sort-indicator-article')).toHaveText('^');
-    for (const { field, header } of sortableHeaders.slice(1)) {
+    for (const { header } of sortableHeaders.slice(1)) {
       await expect(header).toHaveAttribute('aria-sort', 'none');
-      await expect(page.getByTestId(`sort-indicator-${field}`)).toHaveCount(0);
     }
 
-    for (const { field, header } of sortableHeaders.slice(1)) {
-      await header.click();
+    for (const { button, header } of sortableHeaders.slice(1)) {
+      await button.click();
       await expect(header).toHaveAttribute('aria-sort', 'ascending');
-      const indicator = page.getByTestId(`sort-indicator-${field}`);
-      await expect(indicator).toHaveText('^');
-      const paddingRight = await indicator.evaluate(
-        (element) => window.getComputedStyle(element).paddingRight,
-      );
-      expect(paddingRight).toBe('8px');
+      await expect(header.locator('.rz-sort-indicator')).toHaveClass(/is-active/);
     }
 
     await expect(page.getByLabel('Filter gekocht')).toHaveAttribute('type', 'checkbox');
@@ -174,21 +169,39 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
           effectiveLineHeight: Number.isFinite(numericLineHeight) ? numericLineHeight : fallbackLineHeight,
         };
       });
-      expect(metrics.height).toBeGreaterThanOrEqual(38);
+      expect(metrics.height).toBeGreaterThanOrEqual(20);
+      expect(metrics.height).toBeLessThan(30);
       expect(metrics.color).not.toBe(metrics.backgroundColor);
       expect(metrics.effectiveLineHeight).toBeLessThan(metrics.height);
     }
+    const configuredFilterRowHeight = await page.evaluate(() =>
+      window.getComputedStyle(document.documentElement).getPropertyValue('--rz-table-filter-row-height').trim(),
+    );
+    expect(configuredFilterRowHeight).toBe('34px');
 
     const columnWidths = await table.locator('colgroup col').evaluateAll((columns) => columns.map((column) => Number.parseFloat(column.style.width)));
     expect(columnWidths).toEqual([60, 330, 300, 120, 220, 90]);
 
-    const articleSearchBox = await page.getByLabel('Artikel zoeken').boundingBox();
+    const resizeHandles = table.getByRole('separator', { name: 'Kolom breedte aanpassen' });
+    await expect(resizeHandles).toHaveCount(6);
+    const articleResizeHandle = resizeHandles.nth(1);
+    const resizeBox = await articleResizeHandle.boundingBox();
+    if (!resizeBox) throw new Error('Resize-handle voor Artikel ontbreekt.');
+    const articleWidthBefore = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 60, resizeBox.y + resizeBox.height / 2);
+    await page.mouse.up();
+    const articleWidthAfter = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
+    expect(articleWidthAfter).toBeGreaterThan(articleWidthBefore + 40);
+
+    const articleSearchBox = await page.getByLabel('Artikel toevoegen').boundingBox();
     const resultBox = await page.getByLabel('Zoekresultaat').boundingBox();
     const addButtonBox = await page.getByRole('button', { name: 'Toevoegen' }).boundingBox();
     expect(Math.abs((articleSearchBox.y + articleSearchBox.height) - (addButtonBox.y + addButtonBox.height))).toBeLessThanOrEqual(2);
     expect(Math.abs((resultBox.y + resultBox.height) - (addButtonBox.y + addButtonBox.height))).toBeLessThanOrEqual(2);
 
-    await page.getByLabel('Artikel zoeken').fill('melk');
+    await page.getByLabel('Artikel toevoegen').fill('melk');
     await page.getByLabel('Zoekresultaat').selectOption('household_article:household-article-melk');
     await page.getByRole('button', { name: 'Toevoegen' }).click();
     await expect(page.getByRole('heading', { name: 'Winkelen — 1 artikelen' })).toBeVisible();
@@ -224,18 +237,35 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     expect(exportedCsv).toContain('"Artikel";"Producttype";"Omvang";"Opmerking";"Gekocht"');
     expect(exportedCsv).toContain('"Melk";"Halfvolle melk";"2 × 1,5 liter";"Halfvol";"Ja"');
 
-    page.once('dialog', (dialog) => dialog.accept());
+    const nativeDialogs = [];
+    page.on('dialog', async (dialog) => {
+      nativeDialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
+
     await shoppingPage.getByRole('button', { name: 'Verwijderen' }).click();
+    const deleteDialog = page.getByTestId('shopping-delete-confirmation');
+    await expect(deleteDialog).toBeVisible();
+    await expect(deleteDialog.getByText('1 geselecteerde rij verwijderen?', { exact: true })).toBeVisible();
+    await page.getByTestId('shopping-delete-confirmation-secondary-button').click();
+    await expect(page.getByLabel('Selecteer Melk')).toBeChecked();
+
+    await shoppingPage.getByRole('button', { name: 'Verwijderen' }).click();
+    await page.getByTestId('shopping-delete-confirmation-primary-button').click();
     await expect(page.getByRole('heading', { name: 'Winkelen — 0 artikelen' })).toBeVisible();
     await expect(page.getByLabel('Selecteer Melk')).toHaveCount(0);
 
-    await page.getByLabel('Artikel zoeken').fill('pasta');
+    await page.getByLabel('Artikel toevoegen').fill('pasta');
     await page.getByLabel('Zoekresultaat').selectOption('product_type:product-type-pasta');
     await page.getByRole('button', { name: 'Toevoegen' }).click();
 
-    page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Winkelen afgerond' }).click();
+    const completeDialog = page.getByTestId('shopping-complete-confirmation');
+    await expect(completeDialog).toBeVisible();
+    await expect(completeDialog.getByText('Voorraad en bronlijsten blijven ongewijzigd.', { exact: true })).toBeVisible();
+    await page.getByTestId('shopping-complete-confirmation-primary-button').click();
     await expect(page.getByText('Winkelen is afgerond. De winkellijst is leeggemaakt.')).toBeVisible();
+    expect(nativeDialogs).toEqual([]);
     await expect(page.getByText('Nog geen artikelen op de winkellijst.')).toBeVisible();
 
     await expectNoConsoleErrors(consoleErrors);

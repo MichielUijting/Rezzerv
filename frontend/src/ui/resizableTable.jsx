@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
+const MIN_RESIZABLE_COLUMN_WIDTH = 56
+
 export function useResizableColumnWidths(defaultWidths) {
+  const defaultWidthsSignature = Object.entries(defaultWidths || {})
+    .map(([key, value]) => `${key}:${Number(value || 0)}`)
+    .join('|')
   const [widths, setWidths] = useState(() => ({ ...defaultWidths }))
   const widthsRef = useRef(widths)
 
@@ -10,7 +15,15 @@ export function useResizableColumnWidths(defaultWidths) {
 
   useEffect(() => {
     setWidths({ ...defaultWidths })
-  }, [defaultWidths])
+  }, [defaultWidthsSignature])
+
+  function setColumnWidth(columnKey, nextWidth) {
+    const normalizedWidth = Math.max(
+      MIN_RESIZABLE_COLUMN_WIDTH,
+      Math.round(Number(nextWidth) || MIN_RESIZABLE_COLUMN_WIDTH),
+    )
+    setWidths((current) => ({ ...current, [columnKey]: normalizedWidth }))
+  }
 
   function startResize(columnKey, event) {
     event.preventDefault()
@@ -20,8 +33,7 @@ export function useResizableColumnWidths(defaultWidths) {
 
     function handleMouseMove(moveEvent) {
       const delta = moveEvent.clientX - startX
-      const nextWidth = Math.max(56, Math.round(startWidth + delta))
-      setWidths((current) => ({ ...current, [columnKey]: nextWidth }))
+      setColumnWidth(columnKey, startWidth + delta)
     }
 
     function handleMouseUp() {
@@ -33,7 +45,7 @@ export function useResizableColumnWidths(defaultWidths) {
     window.addEventListener('mouseup', handleMouseUp)
   }
 
-  return { widths, startResize }
+  return { widths, startResize, setColumnWidth }
 }
 
 export function ResizableHeaderCell({
@@ -49,38 +61,45 @@ export function ResizableHeaderCell({
   onSort = null,
 }) {
   const headerClassName = ['rz-resizable-header-cell', className].filter(Boolean).join(' ')
+  const accessibleLabel = typeof children === 'string' ? children : 'Kolom'
 
   return (
-    <th className={headerClassName} style={{ ...style, width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}>
+    <th
+      className={headerClassName}
+      aria-label={sortable ? `${accessibleLabel} sorteren` : accessibleLabel}
+      aria-sort={sortable ? (isSorted ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none') : undefined}
+      style={style}
+    >
       {sortable ? (
         <button
           type="button"
           className="rz-sort-button"
           onClick={() => onSort?.(columnKey)}
           aria-pressed={isSorted}
-          aria-label={`${typeof children === 'string' ? children : 'Kolom'} sorteren`}
+          aria-label={`${accessibleLabel} sorteren`}
         >
           <span>{children}</span>
           <span className={`rz-sort-indicator${isSorted ? ' is-active' : ''}`} data-direction={isSorted ? sortDirection : 'desc'} aria-hidden="true" />
         </button>
       ) : (
-        <div style={{ paddingRight: '10px' }}>{children}</div>
+        <div style={{ paddingRight: '14px', textAlign: style?.textAlign || undefined }}>{children}</div>
       )}
       <div
+        className="rz-column-resize-handle"
         role="separator"
         aria-orientation="vertical"
         aria-label="Kolom breedte aanpassen"
-        onMouseDown={(event) => onStartResize(columnKey, event)}
         style={{
           position: 'absolute',
           top: 0,
-          right: '-3px',
-          width: '8px',
+          right: '-4px',
+          width: '12px',
           height: '100%',
           cursor: 'col-resize',
           userSelect: 'none',
           touchAction: 'none',
-          zIndex: 2,
+          pointerEvents: 'none',
+          zIndex: 4,
         }}
       />
     </th>
@@ -89,5 +108,5 @@ export function ResizableHeaderCell({
 
 export function buildTableWidth(widths, fallbackWidth = '100%') {
   const total = Object.values(widths || {}).reduce((sum, value) => sum + Number(value || 0), 0)
-  return total > 0 ? `max(${total}px, ${fallbackWidth})` : fallbackWidth
+  return total > 0 ? `${total}px` : fallbackWidth
 }

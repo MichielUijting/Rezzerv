@@ -1,0 +1,169 @@
+name: PR251 v01.12.101 release package
+
+on:
+  push:
+    branches:
+      - fix/article-detail-mutation-contracts
+    paths:
+      - .github/workflows/pr251-v0112101-release-package.yml
+  pull_request:
+    paths:
+      - .github/workflows/pr251-v0112101-release-package.yml
+  workflow_dispatch:
+
+jobs:
+  package-v0112101:
+    runs-on: ubuntu-latest
+    env:
+      PRODUCT_SHA: 08f719cffc00e014968c8a551747b8deb5cc4960
+      EXPECTED_VERSION: Rezzerv-MVP-v01.12.101
+      PACKAGE_NAME: Rezzerv-v01.12.101
+    steps:
+      - name: Checkout bewezen productcommit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 0
+
+      - name: Controleer exacte productcommit
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(git rev-parse HEAD)
+          test "$actual" = "$PRODUCT_SHA"
+          echo "PACKAGE_PRODUCT_SHA_GREEN=$actual"
+
+      - name: Controleer versieconsistentie
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < VERSION.txt)" = "$EXPECTED_VERSION"
+          test "$(tr -d '\r\n' < backend/VERSION.txt)" = "$EXPECTED_VERSION"
+          python - <<'PY'
+          import json, os
+          expected = os.environ['EXPECTED_VERSION']
+          for path in ('version.json', 'frontend/version.json', 'frontend/public/version.json'):
+              with open(path, encoding='utf-8') as handle:
+                  assert json.load(handle)['version'] == expected, path
+          with open('frontend/package.json', encoding='utf-8') as handle:
+              assert json.load(handle)['version'] == '1.12.101'
+          print('PACKAGE_VERSION_SYNC_GREEN')
+          PY
+
+      - name: Controleer Winkelen standaard-UI-contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node frontend/tests/winkelen-standard-ui.contract.mjs | tee /tmp/winkelen-standard-ui.log
+          grep -F 'WINKELEN_STANDARD_UI_CONTRACT_GREEN' /tmp/winkelen-standard-ui.log
+          grep -F 'DataTable' frontend/src/features/shopping/ShoppingPage.jsx
+          grep -F 'Artikel toevoegen' frontend/src/features/shopping/ShoppingPage.jsx
+          grep -F 'Selecteer alle zichtbare rijen' frontend/src/features/shopping/ShoppingPage.jsx
+          if grep -F 'window.confirm' frontend/src/features/shopping/ShoppingPage.jsx; then
+            echo 'Native browser confirm is niet toegestaan in Winkelen.' >&2
+            exit 1
+          fi
+
+      - name: Controleer huishoudnaamregressie
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=backend python backend/tests/test_household_alias_inventory_projection.py | tee /tmp/household-alias-inventory.log
+          grep -F 'HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN' /tmp/household-alias-inventory.log
+
+      - name: Bouw frontend productie-output
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Bouw volledige Docker stack zonder cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          REZZERV_VERSION="$EXPECTED_VERSION" docker compose build --no-cache
+
+      - name: Start volledige Docker stack en valideer runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            REZZERV_VERSION="$EXPECTED_VERSION" docker compose down --volumes --remove-orphans || true
+          }
+          trap cleanup EXIT
+          REZZERV_VERSION="$EXPECTED_VERSION" docker compose up -d
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8011/api/health > /tmp/health.json; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then
+              docker compose ps
+              docker compose logs --no-color
+              exit 1
+            fi
+            sleep 2
+          done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/health.json').read_text(encoding='utf-8'))
+          assert payload.get('status') == 'ok', payload
+          print('PACKAGE_BACKEND_HEALTH_GREEN')
+          PY
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5174/version.json > /tmp/frontend-version.json; then
+              break
+            fi
+            if [ "$attempt" = 30 ]; then
+              docker compose ps
+              docker compose logs --no-color frontend
+              exit 1
+            fi
+            sleep 2
+          done
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/frontend-version.json').read_text(encoding='utf-8'))
+          assert payload.get('version') == os.environ['EXPECTED_VERSION'], payload
+          print('PACKAGE_FRONTEND_VERSION_GREEN')
+          PY
+          cleanup
+          trap - EXIT
+
+      - name: Maak volledige zelfstandige zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$RUNNER_TEMP/$PACKAGE_NAME"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='frontend/node_modules/' \
+            --exclude='frontend/dist/' \
+            --exclude='backend/.venv/' \
+            --exclude='**/__pycache__/' \
+            ./ "$package_root/"
+          (cd "$RUNNER_TEMP" && zip -qr "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
+          unzip -t "$RUNNER_TEMP/$PACKAGE_NAME.zip" | tail -n 2
+          test -f "$package_root/VERSION.txt"
+          test -f "$package_root/docker-compose.yml"
+          test -f "$package_root/frontend/src/features/shopping/ShoppingPage.jsx"
+          test -f "$package_root/frontend/src/ui/DataTable.jsx"
+          test -f "$package_root/frontend/src/ui/resizableTable.jsx"
+          test -f "$package_root/frontend/src/ui/components/table.css"
+          test -f "$package_root/frontend/tests/winkelen-standard-ui.contract.mjs"
+          test -f "$package_root/frontend/tests/e2e/winkelen-column-controls.spec.js"
+          test "$(tr -d '\r\n' < "$package_root/VERSION.txt")" = "$EXPECTED_VERSION"
+          echo "PACKAGE_ZIP_GREEN=$RUNNER_TEMP/$PACKAGE_NAME.zip"
+
+      - name: Upload volledige releasezip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rezzerv-v01.12.101
+          path: ${{ runner.temp }}/Rezzerv-v01.12.101.zip
+          if-no-files-found: error
+          retention-days: 30

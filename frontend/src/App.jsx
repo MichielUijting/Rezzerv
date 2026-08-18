@@ -3,6 +3,13 @@ import AppRouter from "./app/router/AppRouter.jsx";
 import { AppFeedbackProvider } from "./ui/AppFeedbackProvider.jsx";
 import { getRezzervVersionTag } from "./ui/version";
 
+function formatBuildLabel(buildTag) {
+  const normalized = String(buildTag || '').trim();
+  if (!normalized) return 'Rezzerv';
+  if (/^rezzerv(?:-|\s)/i.test(normalized)) return normalized;
+  return `Rezzerv v${normalized}`;
+}
+
 export default function App() {
   const [buildTag, setBuildTag] = useState(getRezzervVersionTag());
 
@@ -15,7 +22,7 @@ export default function App() {
   return (
     <AppFeedbackProvider>
       <AppRouter />
-      <div className="rz-buildtag" aria-hidden="true" data-testid="build-tag">Rezzerv v{buildTag}</div>
+      <div className="rz-buildtag" aria-hidden="true" data-testid="build-tag">{formatBuildLabel(buildTag)}</div>
     </AppFeedbackProvider>
   );
 }

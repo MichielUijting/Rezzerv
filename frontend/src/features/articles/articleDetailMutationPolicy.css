@@ -1,0 +1,187 @@
+/* PR #251: Artikeldetail toont externe productidentiteit alleen ter inzage.
+   Barcode en extern artikelnummer worden elders beheerd; mutatie-acties horen hier niet thuis. */
+.rz-overview-tab [data-testid="article-external-link-edit"],
+.rz-overview-tab [data-testid="article-external-link-scan"] {
+  display: none !important;
+}
+
+/* Compacte tweede navigatielaag binnen Overzicht en Analyse. */
+.rz-article-subtabs {
+  margin-top: 0;
+}
+
+.rz-article-subtabs > .rz-tabbar {
+  gap: 6px;
+  margin-top: 0;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.rz-article-subtabs > .rz-tabbar .rz-tab {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.rz-article-subtabs > .rz-tabcontent {
+  min-width: 0;
+}
+
+/* Elke actieve subtab heeft precies één visueel frame. De oude accordion-koppen en
+   +/- bediening zijn binnen subtabs volledig overbodig en daarom niet zichtbaar. */
+.rz-article-subtab-frame {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.rz-article-subtab-frame .rz-article-global-toggle,
+.rz-article-subtab-frame .rz-article-section-header {
+  display: none !important;
+}
+
+.rz-article-subtab-frame .rz-article-section-accordion,
+.rz-article-subtab-frame .rz-overview-group,
+.rz-article-subtab-frame .rz-analytics-accordion,
+.rz-article-subtab-frame .rz-article-automation-card {
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.rz-article-subtab-frame .rz-overview-tab,
+.rz-article-subtab-frame .rz-analytics-tab {
+  display: grid;
+  gap: 12px;
+}
+
+.rz-article-subtab-frame .rz-article-section-content,
+.rz-article-subtab-frame .rz-overview-group-body,
+.rz-article-subtab-frame .rz-analytics-accordion-content {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.rz-article-subtab-help,
+.rz-article-readonly-note {
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+
+.rz-article-subtab-layout .rz-overview-tab > .rz-article-global-toggle,
+.rz-article-subtab-layout .rz-analytics-tab > .rz-article-global-toggle {
+  display: none !important;
+}
+
+/* Overzicht: de technische/legacy blokken blijven in de code beschikbaar maar horen niet
+   meer in de normale gebruikerspresentatie. Identiteit en Productdata krijgen gecureerde
+   samenvattingen buiten de legacy-secties. */
+.rz-article-overview-subtab-layout .rz-overview-tab > [data-article-subtab="legacy"],
+.rz-article-overview-subtab-layout .rz-overview-tab [data-curated-hidden="true"] {
+  display: none !important;
+}
+
+.rz-article-overview-subtab-layout[data-active-subtab="article"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="article"]),
+.rz-article-overview-subtab-layout[data-active-subtab="household"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="household"]),
+.rz-article-overview-subtab-layout[data-active-subtab="identity"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="identity"]),
+.rz-article-overview-subtab-layout[data-active-subtab="productdata"] .rz-overview-tab > [data-article-subtab]:not([data-article-subtab="productdata"]) {
+  display: none !important;
+}
+
+/* Afgeleide of nog niet functioneel gebruikte waarden worden niet als handmatige
+   huishoudinstelling aangeboden. average_price wordt uit prijshistorie berekend;
+   auto_restock heeft in deze release geen eigen uitvoeringscontract. */
+.rz-overview-tab .rz-field-row:has([data-testid="article-details-input-average_price"]),
+.rz-overview-tab .rz-field-row:has([data-testid="article-household-settings-auto-restock"]) {
+  display: none !important;
+}
+
+/* Een bewerkbaar veld toont zowel bestaande/defaultwaarde als gebruikersinvoer zwart.
+   Disabled/read-only blijft bewust visueel gedempt via de standaardcomponenten. */
+.rz-article-subtab-layout input:not(:disabled),
+.rz-article-subtab-layout textarea:not(:disabled),
+.rz-article-subtab-layout select:not(:disabled),
+.rz-article-subtab-layout select:not(:disabled) option,
+.rz-article-automation-select:not(:disabled) {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000;
+  opacity: 1;
+}
+
+.rz-article-subtab-layout input:not(:disabled)::placeholder,
+.rz-article-subtab-layout textarea:not(:disabled)::placeholder {
+  color: #000000 !important;
+  opacity: 1;
+}
+
+/* Analyse: rechtstreeks op de vaste React-wrappers filteren; geen DOM-classificatie of observer nodig. */
+.rz-article-analysis-subtab-layout .rz-analytics-tab > section.rz-analytics-accordion,
+.rz-article-analysis-subtab-layout .rz-analytics-tab > [data-testid^="analysis-row-"] {
+  display: none !important;
+}
+
+.rz-article-analysis-subtab-layout[data-active-subtab="trends"] .rz-analytics-tab > section.rz-analytics-accordion,
+.rz-article-analysis-subtab-layout[data-active-subtab="trends"] .rz-analytics-tab > [data-testid="analysis-row-consumption"],
+.rz-article-analysis-subtab-layout[data-active-subtab="price"] .rz-analytics-tab > [data-testid="analysis-row-price"],
+.rz-article-analysis-subtab-layout[data-active-subtab="forecast"] .rz-analytics-tab > [data-testid="analysis-row-forecast"],
+.rz-article-analysis-subtab-layout[data-active-subtab="forecast"] .rz-analytics-tab > [data-testid="analysis-row-advice"],
+.rz-article-analysis-subtab-layout[data-active-subtab="evidence"] .rz-analytics-tab > [data-testid="analysis-row-automation"],
+.rz-article-analysis-subtab-layout[data-active-subtab="evidence"] .rz-analytics-tab > [data-testid="analysis-row-quality"] {
+  display: block !important;
+}
+
+.rz-location-row.is-readonly {
+  cursor: default;
+}
+
+.rz-location-row.is-readonly:hover,
+.rz-location-row.is-readonly:focus-visible {
+  background: #fff;
+  outline: none;
+}
+
+/* Voorraad op Artikeldetail heeft een expliciete actiekolom voor Corrigeren/Afboeken. */
+.rz-stock-tab .rz-stock-summary-table-header,
+.rz-stock-tab .rz-stock-summary-table-row {
+  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) 100px minmax(190px, auto);
+  cursor: default;
+}
+
+.rz-stock-tab .rz-stock-action-buttons {
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .rz-stock-tab .rz-stock-summary-table-header,
+  .rz-stock-tab .rz-stock-summary-table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .rz-stock-tab .rz-stock-action-buttons {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .rz-article-subtabs > .rz-tabbar .rz-tab {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  .rz-article-subtab-frame {
+    padding: 12px;
+  }
+}

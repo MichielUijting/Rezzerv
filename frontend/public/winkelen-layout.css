@@ -1,9 +1,10 @@
 /*
- * Winkelen Release 1 — vaste tabel binnen het frame.
+ * Winkelen Release 1 — resizable standaardtabel.
  *
  * Doel:
- * - alle zes kolommen blijven tegelijk zichtbaar binnen de card;
- * - geen horizontale scrollbar op het Winkelen-scherm;
+ * - DataTable/colgroup is de enige bron voor kolombreedtes;
+ * - kolommen zijn zichtbaar met de ingestelde pixelbreedte en resizebaar;
+ * - horizontaal scrollen blijft beschikbaar wanneer de tabel breder is dan de card;
  * - lange tekst verandert de tabelgeometrie niet;
  * - filter- en rijcheckboxen hebben exact dezelfde afmetingen.
  *
@@ -12,34 +13,7 @@
  */
 
 [data-testid="shopping-list-table"] {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
   table-layout: fixed !important;
-}
-
-[data-testid="shopping-list-table"] col:nth-child(1) {
-  width: 5.5% !important;
-}
-
-[data-testid="shopping-list-table"] col:nth-child(2) {
-  width: 27.5% !important;
-}
-
-[data-testid="shopping-list-table"] col:nth-child(3) {
-  width: 24% !important;
-}
-
-[data-testid="shopping-list-table"] col:nth-child(4) {
-  width: 12% !important;
-}
-
-[data-testid="shopping-list-table"] col:nth-child(5) {
-  width: 22% !important;
-}
-
-[data-testid="shopping-list-table"] col:nth-child(6) {
-  width: 9% !important;
 }
 
 [data-testid="shopping-list-table"] th,
@@ -99,12 +73,6 @@
   :is(td, th)
   > :is(input, select, button, span) {
   min-width: 0;
-}
-
-.rz-table-wrapper:has(> [data-testid="shopping-list-table"]) {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden !important;
 }
 
 @media (max-width: 1100px) {

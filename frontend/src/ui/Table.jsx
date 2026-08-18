@@ -48,6 +48,7 @@ export default function Table({
   keyboardStep = DEFAULT_KEYBOARD_STEP,
   pageStep = DEFAULT_PAGE_STEP,
   resizableColumns = false,
+  onColumnResize = null,
   children,
 }) {
   const resizeRef = useRef(null)
@@ -92,17 +93,19 @@ export default function Table({
 
     const delta = event.clientX - activeResize.startX
     const nextWidths = [...activeResize.widths]
-    nextWidths[activeResize.columnIndex] = Math.max(
+    const nextWidth = Math.max(
       MIN_RESIZABLE_COLUMN_WIDTH,
-      activeResize.startWidth + delta,
+      Math.round(activeResize.startWidth + delta),
     )
+    nextWidths[activeResize.columnIndex] = nextWidth
 
     activeResize.widths = nextWidths
     const col = activeResize.colgroup.children[activeResize.columnIndex]
-    if (col) col.style.width = `${nextWidths[activeResize.columnIndex]}px`
+    if (col) col.style.width = `${nextWidth}px`
     setTablePixelWidth(activeResize.table, nextWidths)
+    onColumnResize?.(activeResize.columnIndex, nextWidth)
     event.preventDefault()
-  }, [])
+  }, [onColumnResize])
 
   const handleResizeEnd = useCallback(() => {
     if (!resizeRef.current) return
@@ -120,11 +123,18 @@ export default function Table({
     if (!th || !table.contains(th)) return
 
     const rect = th.getBoundingClientRect()
-    const nearRightEdge = event.clientX >= rect.right - RESIZE_HIT_ZONE_PX
-    if (!nearRightEdge) return
+    const headerColumnIndex = columnIndexForHeader(th)
+    if (headerColumnIndex < 0) return
 
-    const columnIndex = columnIndexForHeader(th)
-    if (columnIndex < 0) return
+    const nearLeftEdge = event.clientX <= rect.left + RESIZE_HIT_ZONE_PX
+    const nearRightEdge = event.clientX >= rect.right - RESIZE_HIT_ZONE_PX
+    let columnIndex = headerColumnIndex
+
+    if (nearLeftEdge && headerColumnIndex > 0) {
+      columnIndex = headerColumnIndex - 1
+    } else if (!nearRightEdge) {
+      return
+    }
 
     const widths = tableColumnWidths(table)
     const colgroup = ensureResizableColgroup(table, widths)

@@ -18,6 +18,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Installeer minimale backend-afhankelijkheden
         run: |
           python -m pip install --quiet \
@@ -29,7 +34,15 @@ jobs:
           python -m py_compile \
             backend/app/services/article_detail_write_guard.py \
             backend/app/services/product_enrichment_write_guard.py \
-            backend/app/testing/article_detail_write_guard_contract.py
+            backend/app/services/household_alias_policy.py \
+            backend/app/testing/article_detail_write_guard_contract.py \
+            backend/app/api/article_detail_admin_routes.py \
+            backend/app/api/product_inventory_group_routes.py \
+            backend/tests/test_article_detail_admin_gateway_contract.py \
+            backend/tests/test_article_detail_canonical_route_guard.py \
+            backend/tests/test_article_detail_mutation_contract.py \
+            backend/tests/test_household_alias_inventory_projection.py \
+            backend/tests/run_article_detail_mutation_contract.py
 
       - name: Voer artikeldetail-schrijfcontract uit
         env:
@@ -37,3 +50,104 @@ jobs:
         run: |
           python -m app.testing.article_detail_write_guard_contract | tee article-detail-write-guard.log
           grep -F 'ARTICLE_DETAIL_WRITE_GUARD_GREEN' article-detail-write-guard.log
+
+      - name: Bewaak mutatie-eigenaars lid-read-only en subtabs
+        run: |
+          python backend/tests/run_article_detail_mutation_contract.py | tee article-detail-mutation-contract.log
+          grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_CONTRACT_GREEN' article-detail-mutation-contract.log
+          grep -F 'ARTICLE_DETAIL_SUBTABS_CONTRACT_GREEN' article-detail-mutation-contract.log
+          grep -F 'ARTICLE_DETAIL_MUTATION_CONTRACT_GREEN' article-detail-mutation-contract.log
+          grep -F 'ARTICLE_DETAIL_ROUTE_OWNERSHIP_GREEN' article-detail-mutation-contract.log
+
+      - name: Bewaak server-side Artikeldetail admin-gateway
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/test_article_detail_admin_gateway_contract.py | tee article-detail-admin-gateway.log
+          grep -F 'ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN' article-detail-admin-gateway.log
+          grep -F 'ARTICLE_DETAIL_HOUSEHOLD_ALIAS_POLICY_GREEN' article-detail-admin-gateway.log
+
+      - name: Bewaak huishoudnaamprojectie in Voorraad
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/test_household_alias_inventory_projection.py | tee household-alias-inventory-projection.log
+          grep -F 'HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN' household-alias-inventory-projection.log
+
+      - name: Bewaak canonieke PATCH-route zonder duplicaat
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/test_article_detail_canonical_route_guard.py | tee article-detail-canonical-route.log
+          grep -F 'ARTICLE_DETAIL_CANONICAL_ROUTE_GUARD_GREEN' article-detail-canonical-route.log
+
+      - name: Bewaak vlakke Artikeldetail subtabs
+        working-directory: frontend
+        run: |
+          node tests/article-detail-flat-subtabs.contract.mjs | tee /tmp/article-detail-flat-subtabs.log
+          grep -F 'ARTICLE_DETAIL_FLAT_SUBTABS_CONTRACT_GREEN' /tmp/article-detail-flat-subtabs.log
+
+      - name: Bouw gewijzigde frontend
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Valideer exacte frontendcommit in Docker-runtime
+        env:
+          EXPECTED_VERSION: Rezzerv-MVP-v01.12.98
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          docker build \
+            --build-arg REZZERV_VERSION="$EXPECTED_VERSION" \
+            --build-arg REZZERV_COMMIT="$EXPECTED_COMMIT" \
+            -t rezzerv-pr251-frontend-marker frontend
+          container_id=$(docker run -d -p 18080:80 rezzerv-pr251-frontend-marker)
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/version.json > /tmp/rezzerv-runtime-version.json; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 1
+          done
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/rezzerv-runtime-version.json').read_text(encoding='utf-8'))
+          expected_version = os.environ['EXPECTED_VERSION']
+          expected_commit = os.environ['EXPECTED_COMMIT']
+          assert payload.get('version') == expected_version, (payload, expected_version)
+          assert payload.get('commit') == expected_commit, (payload, expected_commit)
+          print('ARTICLE_DETAIL_RUNTIME_COMMIT_GREEN')
+          PY
+
+      - name: Open Artikeldetail echt als Eigenaar Admin Lid en Kijker
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+        run: |
+          npx playwright install --with-deps chromium
+          npm run dev -- --host 127.0.0.1 --port 5174 > /tmp/rezzerv-vite.log 2>&1 &
+          vite_pid=$!
+          trap 'kill $vite_pid 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5174/version.json >/dev/null; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              cat /tmp/rezzerv-vite.log
+              exit 1
+            fi
+            sleep 1
+          done
+          node tests/e2e/article-detail-role-subtabs.smoke.mjs | tee /tmp/article-detail-role-subtabs.log
+          grep -F 'ARTICLE_DETAIL_MEMBER_READONLY_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
+          grep -F 'ARTICLE_DETAIL_SUBTABS_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
+          grep -F 'ARTICLE_DETAIL_CURATED_OVERVIEW_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log
+          grep -F 'ARTICLE_DETAIL_OWNER_MUTATION_BROWSER_GREEN' /tmp/article-detail-role-subtabs.log

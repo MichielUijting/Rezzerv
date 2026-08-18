@@ -1,6 +1,18 @@
 import { useEffect, useState } from "react";
 
-export default function Tabs({ tabs, defaultTab, activeTab = null, onTabChange = null, children, tabTestIdMap = {}, activeColor = null }) {
+export default function Tabs({
+  tabs,
+  defaultTab,
+  activeTab = null,
+  onTabChange = null,
+  children,
+  tabTestIdMap = {},
+  activeColor = null,
+  className = '',
+  ariaLabel = 'Artikeldetails tabs',
+  rootTestId = 'tabs-root',
+  tablistTestId = 'tabs-tablist',
+}) {
   const initialTab = activeTab ?? defaultTab ?? tabs[0];
   const [active, setActive] = useState(initialTab);
 
@@ -18,10 +30,11 @@ export default function Tabs({ tabs, defaultTab, activeTab = null, onTabChange =
   }
 
   const currentActive = activeTab ?? active;
+  const rootClassName = ['rz-tabs', className].filter(Boolean).join(' ');
 
   return (
-    <div className="rz-tabs" data-testid="tabs-root">
-      <div className="rz-tabbar" role="tablist" aria-label="Artikeldetails tabs" data-testid="tabs-tablist">
+    <div className={rootClassName} data-testid={rootTestId}>
+      <div className="rz-tabbar" role="tablist" aria-label={ariaLabel} data-testid={tablistTestId}>
         {tabs.map((t) => {
           const isActive = currentActive === t;
           return (

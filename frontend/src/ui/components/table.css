@@ -184,6 +184,23 @@ table.rz-table{
   outline: 2px solid var(--color-brand-primary);
 }
 
+/* DataTable resize anchor + usable hit zone. Sticky headers remain sticky via the more specific sticky-header rule. */
+.rz-resizable-header-cell{
+  position: relative;
+}
+
+.rz-data-table--sticky-header thead tr.rz-table-header th.rz-resizable-header-cell{
+  position: sticky;
+}
+
+.rz-column-resize-handle{
+  transition: background-color 120ms ease;
+}
+
+.rz-column-resize-handle:hover{
+  background: rgba(255, 255, 255, 0.24);
+}
+
 .rz-table--resizable-columns thead tr:first-child th{
   position: relative;
 }
