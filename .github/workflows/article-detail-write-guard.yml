@@ -41,6 +41,7 @@ jobs:
             backend/tests/test_article_detail_admin_gateway_contract.py \
             backend/tests/test_article_detail_canonical_route_guard.py \
             backend/tests/test_article_detail_mutation_contract.py \
+            backend/tests/test_household_alias_inventory_projection.py \
             backend/tests/run_article_detail_mutation_contract.py
 
       - name: Voer artikeldetail-schrijfcontract uit
@@ -66,6 +67,13 @@ jobs:
           grep -F 'ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN' article-detail-admin-gateway.log
           grep -F 'ARTICLE_DETAIL_HOUSEHOLD_ALIAS_POLICY_GREEN' article-detail-admin-gateway.log
 
+      - name: Bewaak huishoudnaamprojectie in Voorraad
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/test_household_alias_inventory_projection.py | tee household-alias-inventory-projection.log
+          grep -F 'HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN' household-alias-inventory-projection.log
+
       - name: Bewaak canonieke PATCH-route zonder duplicaat
         env:
           PYTHONPATH: backend
@@ -87,7 +95,7 @@ jobs:
 
       - name: Valideer exacte frontendcommit in Docker-runtime
         env:
-          EXPECTED_VERSION: Rezzerv-MVP-v01.12.97
+          EXPECTED_VERSION: Rezzerv-MVP-v01.12.98
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           docker build \
