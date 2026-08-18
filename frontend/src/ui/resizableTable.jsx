@@ -68,7 +68,7 @@ export function ResizableHeaderCell({
       className={headerClassName}
       aria-label={sortable ? `${accessibleLabel} sorteren` : accessibleLabel}
       aria-sort={sortable ? (isSorted ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none') : undefined}
-      style={{ ...style, width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}
+      style={style}
     >
       {sortable ? (
         <button

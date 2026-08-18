@@ -43,6 +43,8 @@ includes(resizable, 'setColumnWidth', 'React-kolombreedte kan niet vanuit het st
 includes(resizable, 'role="separator"', 'DataTable kolomresize-indicator ontbreekt')
 includes(resizable, "pointerEvents: 'none'", 'Losse resize-indicator onderschept nog muisevents in plaats van het standaard Table-contract')
 includes(resizable, 'aria-sort=', 'Standaard sorteerheader exposeert aria-sort niet')
+includes(resizable, 'style={style}', 'Kolombreedte moet uitsluitend via colgroup worden gestuurd')
+excludes(resizable, 'style={{ ...style, width:', 'Headercel mag geen tweede concurrerende kolombreedtebron zijn')
 includes(tableCss, '.rz-table--resizable-columns', 'Standaard resize-CSS ontbreekt')
 
 console.log('WINKELEN_STANDARD_UI_CONTRACT_GREEN')
