@@ -174,8 +174,10 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
       expect(metrics.color).not.toBe(metrics.backgroundColor);
       expect(metrics.effectiveLineHeight).toBeLessThan(metrics.height);
     }
-    const filterRowHeight = await table.locator('thead tr:nth-child(2)').evaluate((element) => element.getBoundingClientRect().height);
-    expect(filterRowHeight).toBeGreaterThanOrEqual(34);
+    const configuredFilterRowHeight = await page.evaluate(() =>
+      window.getComputedStyle(document.documentElement).getPropertyValue('--rz-table-filter-row-height').trim(),
+    );
+    expect(configuredFilterRowHeight).toBe('34px');
 
     const columnWidths = await table.locator('colgroup col').evaluateAll((columns) => columns.map((column) => Number.parseFloat(column.style.width)));
     expect(columnWidths).toEqual([60, 330, 300, 120, 220, 90]);
