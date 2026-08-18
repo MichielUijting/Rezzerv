@@ -15,7 +15,7 @@ jobs:
   package-v011299:
     runs-on: ubuntu-latest
     env:
-      PRODUCT_SHA: 8a5c2fca6c5113a401bce4e0411f5b8b03b7e6f6
+      PRODUCT_SHA: b5707fd4b8f40ac8109d522ad85d55d4b2e4095d
       EXPECTED_VERSION: Rezzerv-MVP-v01.12.99
       PACKAGE_NAME: Rezzerv-v01.12.99
     steps:
