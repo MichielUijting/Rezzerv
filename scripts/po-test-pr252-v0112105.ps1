@@ -44,15 +44,30 @@ function Log([string]$Message) {
 
 function Run([string]$Exe, [string[]]$Arguments, [string]$Cwd = '') {
   if ($Cwd) { Push-Location $Cwd }
+  $previousErrorActionPreference = $ErrorActionPreference
   try {
     Log ("> {0} {1}" -f $Exe, ($Arguments -join ' '))
-    $out = @(& $Exe @Arguments 2>&1)
-    $rc = $LASTEXITCODE
+
+    # Windows PowerShell 5.1 materialiseert stderr van native programma's bij 2>&1
+    # als ErrorRecord. Met de globale ErrorActionPreference=Stop kan zelfs een
+    # succesvol commando (bijv. git fetch: "From https://...") daardoor terminaal
+    # worden. Tijdens uitsluitend de native procesaanroep gebruiken we Continue;
+    # de echte processtatus wordt daarna uitsluitend via $LASTEXITCODE beoordeeld.
+    $ErrorActionPreference = 'Continue'
+    try {
+      $out = @(& $Exe @Arguments 2>&1)
+      $rc = $LASTEXITCODE
+    }
+    finally {
+      $ErrorActionPreference = $previousErrorActionPreference
+    }
+
     foreach ($line in $out) { Log ([string]$line) }
     if ($rc -ne 0) { throw "Exitcode ${rc}: $Exe $($Arguments -join ' ')" }
     return $out
   }
   finally {
+    $ErrorActionPreference = $previousErrorActionPreference
     if ($Cwd) { Pop-Location }
   }
 }
@@ -110,6 +125,16 @@ if ($SelfTest) {
   if ($PrNumber -ne '252') { throw 'SELFTEST: PR-nummer ongeldig.' }
   if ($ProjectName -match '^rezzerv$') { throw 'SELFTEST: Docker-project moet geisoleerd zijn.' }
   if ($FixtureName -notmatch 'v01\.12\.105') { throw 'SELFTEST: fixtureversie ongeldig.' }
+
+  # Regressietest voor Windows PowerShell 5.1: een native commando dat naar stderr
+  # schrijft maar exitcode 0 teruggeeft mag Run/Capture niet laten falen.
+  New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+  New-Item -ItemType File -Path $Log -Force | Out-Null
+  $nativeStderr = Capture 'cmd.exe' @('/d', '/c', 'echo NATIVE_STDERR_OK 1>&2 & exit /b 0')
+  if ($nativeStderr -notmatch 'NATIVE_STDERR_OK') {
+    throw 'SELFTEST: succesvolle native stderr-uitvoer werd niet correct verwerkt.'
+  }
+  Write-Output 'PO_TEST_NATIVE_STDERR_GREEN'
   Write-Output 'PO_TEST_V0112105_SELFTEST_GREEN'
   exit 0
 }
