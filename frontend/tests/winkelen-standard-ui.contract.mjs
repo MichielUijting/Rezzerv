@@ -5,6 +5,7 @@ const dataTable = readFileSync(new URL('../src/ui/DataTable.jsx', import.meta.ur
 const table = readFileSync(new URL('../src/ui/Table.jsx', import.meta.url), 'utf8')
 const resizable = readFileSync(new URL('../src/ui/resizableTable.jsx', import.meta.url), 'utf8')
 const tableCss = readFileSync(new URL('../src/ui/components/table.css', import.meta.url), 'utf8')
+const winkelenLayout = readFileSync(new URL('../public/winkelen-layout.css', import.meta.url), 'utf8')
 
 function includes(source, needle, label) {
   if (!source.includes(needle)) throw new Error(`${label}: ontbreekt: ${needle}`)
@@ -46,5 +47,10 @@ includes(resizable, 'aria-sort=', 'Standaard sorteerheader exposeert aria-sort n
 includes(resizable, 'style={style}', 'Kolombreedte moet uitsluitend via colgroup worden gestuurd')
 excludes(resizable, 'style={{ ...style, width:', 'Headercel mag geen tweede concurrerende kolombreedtebron zijn')
 includes(tableCss, '.rz-table--resizable-columns', 'Standaard resize-CSS ontbreekt')
+
+includes(winkelenLayout, 'DataTable/colgroup is de enige bron voor kolombreedtes', 'Winkelen-layout documenteert colgroup niet als breedtebron')
+excludes(winkelenLayout, 'col:nth-child', 'Winkelen-layout forceert nog vaste procentuele kolombreedtes')
+excludes(winkelenLayout, 'overflow-x: hidden !important', 'Winkelen-layout blokkeert nog horizontale overflow na resize')
+excludes(winkelenLayout, '[data-testid="shopping-list-table"] {\n  width: 100% !important;', 'Winkelen-layout forceert nog de tabel terug naar framebreedte')
 
 console.log('WINKELEN_STANDARD_UI_CONTRACT_GREEN')
