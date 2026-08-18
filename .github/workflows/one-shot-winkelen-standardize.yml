@@ -1,0 +1,119 @@
+name: One-shot Winkelen standard table correction
+
+on:
+  push:
+    branches:
+      - fix/article-detail-mutation-contracts
+    paths:
+      - .github/workflows/one-shot-winkelen-standardize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-correction:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/article-detail-mutation-contracts
+          fetch-depth: 0
+
+      - name: Apply standard-component correction
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          shopping_path = Path('frontend/src/features/shopping/ShoppingPage.jsx')
+          shopping = shopping_path.read_text(encoding='utf-8')
+          style_block = """const FILTER_CONTROL_STYLE = {
+            width: '100%',
+            minWidth: 0,
+            minHeight: 38,
+            boxSizing: 'border-box',
+            paddingTop: 8,
+            paddingBottom: 8,
+            lineHeight: '20px',
+            color: '#1f2937',
+            backgroundColor: '#ffffff',
+            WebkitTextFillColor: '#1f2937',
+          }
+
+          """
+          if shopping.count(style_block) != 1:
+              raise SystemExit('FILTER_CONTROL_STYLE blok niet exact eenmaal gevonden')
+          shopping = shopping.replace(style_block, '')
+          style_line = '          style={FILTER_CONTROL_STYLE}\n'
+          if shopping.count(style_line) != 1:
+              raise SystemExit('FILTER_CONTROL_STYLE toepassing niet exact eenmaal gevonden')
+          shopping = shopping.replace(style_line, '')
+          shopping_path.write_text(shopping, encoding='utf-8')
+
+          test_path = Path('frontend/tests/e2e/winkelen.frontend-regression.spec.js')
+          test = test_path.read_text(encoding='utf-8')
+          old_metrics = """        return {
+          height: element.getBoundingClientRect().height,
+          color: style.color,
+          backgroundColor: style.backgroundColor,
+          effectiveLineHeight: Number.isFinite(numericLineHeight) ? numericLineHeight : fallbackLineHeight,
+        };
+      });
+      expect(metrics.height).toBeGreaterThanOrEqual(38);
+      expect(metrics.color).not.toBe(metrics.backgroundColor);
+      expect(metrics.effectiveLineHeight).toBeLessThan(metrics.height);
+    }
+"""
+          new_metrics = """        return {
+          height: element.getBoundingClientRect().height,
+          minHeight: style.minHeight,
+          color: style.color,
+          backgroundColor: style.backgroundColor,
+          effectiveLineHeight: Number.isFinite(numericLineHeight) ? numericLineHeight : fallbackLineHeight,
+        };
+      });
+      expect(metrics.minHeight).toBe('20px');
+      expect(metrics.height).toBeGreaterThanOrEqual(20);
+      expect(metrics.height).toBeLessThan(30);
+      expect(metrics.color).not.toBe(metrics.backgroundColor);
+      expect(metrics.effectiveLineHeight).toBeLessThan(metrics.height);
+    }
+    const filterRowHeight = await table.locator('thead tr:nth-child(2)').evaluate((element) => element.getBoundingClientRect().height);
+    expect(filterRowHeight).toBeGreaterThanOrEqual(34);
+"""
+          if test.count(old_metrics) != 1:
+              raise SystemExit('Verouderde 38px regressieassertie niet exact eenmaal gevonden')
+          test = test.replace(old_metrics, new_metrics)
+          test_path.write_text(test, encoding='utf-8')
+
+          contract_path = Path('frontend/tests/winkelen-standard-ui.contract.mjs')
+          contract = contract_path.read_text(encoding='utf-8')
+          anchor = "excludes(shopping, '<tr className=\"rz-input\">', 'Winkelen gebruikt nog een niet-standaard titelrij')\n"
+          addition = """excludes(shopping, 'FILTER_CONTROL_STYLE', 'Winkelen definieert nog een lokale filterstyle')
+          excludes(shopping, 'minHeight: 38', 'Winkelen forceert nog een niet-standaard filterhoogte')
+          excludes(shopping, 'style={FILTER_CONTROL_STYLE}', 'Winkelen past nog een lokale filterstyle toe')
+          """
+          if contract.count(anchor) != 1:
+              raise SystemExit('Contractanker niet exact eenmaal gevonden')
+          contract = contract.replace(anchor, anchor + addition)
+          contract_path.write_text(contract, encoding='utf-8')
+
+          workflow = Path('.github/workflows/one-shot-winkelen-standardize.yml')
+          workflow.unlink()
+          PY
+
+      - name: Validate standard UI contract
+        run: node frontend/tests/winkelen-standard-ui.contract.mjs
+
+      - name: Commit correction and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/features/shopping/ShoppingPage.jsx \
+                  frontend/tests/e2e/winkelen.frontend-regression.spec.js \
+                  frontend/tests/winkelen-standard-ui.contract.mjs \
+                  .github/workflows/one-shot-winkelen-standardize.yml
+          git commit -m 'Align Winkelen filters with standard table component'
+          git push origin HEAD:fix/article-detail-mutation-contracts
