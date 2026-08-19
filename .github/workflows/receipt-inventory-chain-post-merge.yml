@@ -29,6 +29,10 @@ on:
       - '.github/workflows/receipt-inventory-chain-post-merge.yml'
   workflow_dispatch:
 
+concurrency:
+  group: receipt-inventory-chain-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-chain-after-merge:
     name: Verplichte kassabonketentest
