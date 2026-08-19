@@ -127,7 +127,10 @@ def _marker_paths(receipt_storage_root: Path) -> tuple[Path, Path]:
 def _write_report(path: Path, report: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
     tmp_path.replace(path)
 
 
