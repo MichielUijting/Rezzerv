@@ -1,5 +1,11 @@
 # Changelog
 
+## Rezzerv-MVP-v01.12.109 - 2026-08-19
+- Kassa-regressie hersteld: geprijsd statiegeld/emballage, verzend-/bezorgkosten en expliciete prijsverlagingen blijven financiële bonregels en tellen mee in de boncontrole, maar blijven uitgesloten van voorraad.
+- Eerste-upload OCR geborgd: backend startup wordt fail-closed wanneer de primaire PaddleOCR-runtime niet gereed is, zodat een koude runtime niet stil naar een zwakkere OCR-uitkomst terugvalt.
+- Scannerboundary borgt line-count-equivalentie tussen parser, canonical receipt en teruggenormaliseerde bonregels.
+- Historisch bewezen Externe-databasesherstel en generieke sticky-headercorrectie uit v01.12.108 blijven behouden.
+
 ## Rezzerv-MVP-v01.12.108 - 2026-08-19
 - QA-herstel: resizable kolomkoppen behouden nu generiek hun sticky-positionering wanneer sticky headers actief zijn.
 - De gerichte regressie blijft het echte scrollgedrag van kolomkop en filterrij controleren.
