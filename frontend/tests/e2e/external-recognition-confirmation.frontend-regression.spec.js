@@ -114,12 +114,10 @@ test.describe('Externe herkenning bevestigen geïntegreerde regressie', () => {
 
     await page.goto('/externe-databases')
 
-    // Eén hoofdlijst: de volwassen bonartikelentabel. De regressieve tweede lijst mag niet terugkomen.
     await expect(page.getByTestId('external-recognition-items-table')).toHaveCount(0)
     const table = page.getByTestId('external-receipt-items-table')
     await expect(table).toBeVisible()
 
-    // Het bestaande generieke sticky-tabelpatroon borgt kop + filterrij.
     await expect(table).toHaveClass(/rz-data-table--sticky-header/)
     await expect(table).toHaveClass(/rz-data-table--sticky-filters/)
     const headerCell = table.locator('thead tr.rz-table-header th').first()
@@ -127,21 +125,31 @@ test.describe('Externe herkenning bevestigen geïntegreerde regressie', () => {
     await expect(headerCell).toHaveCSS('position', 'sticky')
     await expect(filterCell).toHaveCSS('position', 'sticky')
 
-    // Meer dan tien regels moet de bestaande paginering activeren.
+    // Forceer in de regressie een kleinere viewport en bewijs dat beide rijen echt blijven staan tijdens scroll.
+    const scrollRegion = table.locator('xpath=..')
+    await scrollRegion.evaluate((element) => { element.style.maxHeight = '160px' })
+    const headerBefore = await headerCell.boundingBox()
+    const filterBefore = await filterCell.boundingBox()
+    await scrollRegion.evaluate((element) => { element.scrollTop = 100 })
+    await expect.poll(() => scrollRegion.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    const headerAfter = await headerCell.boundingBox()
+    const filterAfter = await filterCell.boundingBox()
+    expect(Math.abs((headerAfter?.y || 0) - (headerBefore?.y || 0))).toBeLessThan(2)
+    expect(Math.abs((filterAfter?.y || 0) - (filterBefore?.y || 0))).toBeLessThan(2)
+    await scrollRegion.evaluate((element) => { element.scrollTop = 0 })
+
     await expect(page.getByText('Pagina 1 van 2')).toBeVisible()
     await page.getByRole('button', { name: 'Volgende', exact: true }).click()
     await expect(page.getByText('Pagina 2 van 2')).toBeVisible()
     await page.getByRole('button', { name: 'Eerste', exact: true }).click()
     await expect(page.getByText('Pagina 1 van 2')).toBeVisible()
 
-    // Bestaande filters blijven werken.
     const receiptFilter = table.getByRole('textbox', { name: 'Filter op Bonartikel' })
     await receiptFilter.fill('Veldsla')
     await expect(table.locator('tbody tr', { hasText: 'Veldsla herkenning regressietest' })).toBeVisible()
     await expect(table.locator('tbody tr', { hasText: 'Z testregel 01' })).toHaveCount(0)
     await receiptFilter.fill('')
 
-    // Het bestaande detail blijft de plek voor alle vervolgacties.
     const receiptRow = table.locator('tbody tr', { hasText: 'Veldsla herkenning regressietest' })
     await receiptRow.dblclick()
     await expect(page.getByLabel('OFF zoektekst')).toBeVisible()
@@ -165,7 +173,6 @@ test.describe('Externe herkenning bevestigen geïntegreerde regressie', () => {
     await expect(recognitionDetail).toContainText('lidl_catalog_enrichment')
     await expect(recognitionDetail).toContainText('lidl:groente.veldsla')
 
-    // Bevestigen blijft los van Catalogus/Producttype.
     expect(confirmationPayload).not.toHaveProperty('global_product_id')
     await expectNoConsoleErrors(consoleErrors)
   })
