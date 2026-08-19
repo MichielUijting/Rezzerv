@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 
 const DEFAULT_KEYBOARD_STEP = 28
 const DEFAULT_PAGE_STEP = DEFAULT_KEYBOARD_STEP * 10
@@ -52,6 +52,25 @@ export default function Table({
   children,
 }) {
   const resizeRef = useRef(null)
+  const wrapperRef = useRef(null)
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    const table = wrapper?.querySelector('table')
+    const headerRow = table?.querySelector('thead tr.rz-table-header')
+    if (!table || !headerRow || !table.classList.contains('rz-data-table--sticky-filters')) return undefined
+
+    const syncHeaderOffset = () => {
+      const height = Math.round(headerRow.getBoundingClientRect().height)
+      if (height > 0) table.style.setProperty('--rz-sticky-header-offset', `${height}px`)
+    }
+
+    syncHeaderOffset()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(syncHeaderOffset)
+    observer.observe(headerRow)
+    return () => observer.disconnect()
+  }, [children, tableClassName])
 
   const handleKeyDown = useCallback((event) => {
     const element = event.currentTarget
@@ -165,6 +184,7 @@ export default function Table({
 
   return (
     <div
+      ref={wrapperRef}
       className={wrapperClasses}
       tabIndex={0}
       role="region"
