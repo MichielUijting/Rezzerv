@@ -1,13 +1,5 @@
 # Changelog
 
-## Rezzerv-MVP-v01.12.110 - 2026-08-19
-- Bestaande, onaangeraakte Kassa-bonnen met een oude `review_needed` parseruitkomst worden éénmalig veilig opnieuw geparsed uit hun opgeslagen ruwe bron.
-- Fail-closed herstelgrens: bonnen met gebruikerscorrecties, validatie, artikel-/productkoppelingen, Uitpakken-batches, voorraad-events of verwijder-/archiefstatus worden niet automatisch gewijzigd.
-- Herstel is generiek en bron-/statusgedreven; er zijn geen winkelnamen, bonnamen, hashes of productteksten hard-coded in de migratielogica.
-- De éénmalige herstelrun wordt geaudit in de vaste `/app/data` runtime-opslag en draait buiten de requestflow, zodat API-start niet afhankelijk wordt van lange OCR-runs.
-- CI borgt dat alleen onaangeraakte `review_needed` bonnen kandidaat zijn en dat de herstelrun éénmalig is.
-- Parser-, OCR-, scannerboundary- en Externe-databasesherstel uit v01.12.109 blijven inhoudelijk behouden.
-
 ## Rezzerv-MVP-v01.12.109 - 2026-08-19
 - Kassa-regressie hersteld: geprijsd statiegeld/emballage, verzend-/bezorgkosten en expliciete prijsverlagingen blijven financiële bonregels en tellen mee in de boncontrole, maar blijven uitgesloten van voorraad.
 - Eerste-upload OCR geborgd: backend startup wordt fail-closed wanneer de primaire PaddleOCR-runtime niet gereed is, zodat een koude runtime niet stil naar een zwakkere OCR-uitkomst terugvalt.

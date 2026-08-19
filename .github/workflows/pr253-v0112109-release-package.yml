@@ -1,9 +1,9 @@
-name: PR253 v01.12.110 release package
+name: PR253 v01.12.109 release package
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/pr253-v0112110-release-package.yml'
+      - '.github/workflows/pr253-v0112109-release-package.yml'
       - 'VERSION.txt'
       - 'backend/VERSION.txt'
       - 'version.json'
@@ -11,15 +11,11 @@ on:
       - 'frontend/public/version.json'
       - 'frontend/package.json'
       - 'frontend/tests/e2e/**'
-      - 'backend/app/api/router.py'
       - 'backend/app/receipt_ingestion/**'
       - 'backend/app/runtime_preflight.py'
-      - 'backend/app/services/receipt_parser_quality_patch.py'
-      - 'backend/app/services/receipt_stale_recovery_service.py'
       - 'backend/tests/test_receipt_financial_components_regression.py'
       - 'backend/tests/test_receipt_runtime_preflight.py'
       - 'backend/tests/test_receipt_scanner_line_count_equivalence.py'
-      - 'backend/tests/test_receipt_stale_recovery.py'
       - 'frontend/src/features/externalDatabases/**'
       - 'frontend/src/ui/Table.jsx'
       - 'frontend/src/ui/components/table.css'
@@ -29,18 +25,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr253-v0112110-package-${{ github.event.pull_request.number || github.ref }}
+  group: pr253-v0112109-package-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  package-v0112110:
-    name: Build runtime and package v01.12.110
+  package-v0112109:
+    name: Build runtime and package v01.12.109
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_VERSION: Rezzerv-MVP-v01.12.110
-      EXPECTED_PACKAGE_VERSION: 1.12.110
-      PACKAGE_NAME: Rezzerv-MVP-v01.12.110
+      EXPECTED_VERSION: Rezzerv-MVP-v01.12.109
+      EXPECTED_PACKAGE_VERSION: 1.12.109
+      PACKAGE_NAME: Rezzerv-MVP-v01.12.109
       PRODUCT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       REZZERV_FRONTEND_PORT: '5147'
       REZZERV_APP_BASE_URL: http://127.0.0.1:5147
@@ -167,18 +163,6 @@ jobs:
           print('PACKAGE_RUNTIME_DB_GREEN=/app/data/rezzerv.db')
           PY
 
-          docker compose exec -T backend python - <<'PY'
-          import json
-          from pathlib import Path
-          marker = Path('/app/data/.rezzerv-migrations/v01.12.110-safe-stale-receipt-recovery.done.json')
-          assert marker.exists(), marker
-          payload = json.loads(marker.read_text(encoding='utf-8'))
-          assert payload.get('migration_id') == 'v01.12.110-safe-stale-receipt-recovery', payload
-          assert payload.get('status') in {'completed', 'completed_with_errors'}, payload
-          assert int(payload.get('error_count') or 0) == 0, payload
-          print('PACKAGE_STALE_RECOVERY_STARTUP_GREEN')
-          PY
-
           docker inspect "$(docker compose ps -q backend)" > /tmp/backend-inspect.json
           python - <<'PY'
           import json
@@ -232,11 +216,6 @@ jobs:
             --exclude='frontend/node_modules/' \
             --exclude='frontend/dist/' \
             --exclude='backend/.venv/' \
-            --exclude='backend/data/*.db' \
-            --exclude='backend/data/*.sqlite*' \
-            --exclude='backend/data/.rezzerv-migrations/' \
-            --exclude='backend/data/receipts/raw/' \
-            --exclude='backend/data/receipts/inbound/' \
             --exclude='**/__pycache__/' \
             --exclude='**/.pytest_cache/' \
             ./ "$package_root/"
@@ -245,23 +224,18 @@ jobs:
           test -f "$package_root/VERSION.txt"
           test -f "$package_root/docker-compose.yml"
           test -f "$package_root/backend/app/services/external_recognition_confirmation.py"
-          test -f "$package_root/backend/app/services/receipt_stale_recovery_service.py"
           test -f "$package_root/backend/app/receipt_ingestion/line_classifier.py"
           test -f "$package_root/backend/app/runtime_preflight.py"
           test -f "$package_root/backend/tests/test_receipt_financial_components_regression.py"
           test -f "$package_root/backend/tests/test_receipt_scanner_line_count_equivalence.py"
-          test -f "$package_root/backend/tests/test_receipt_stale_recovery.py"
           test -f "$package_root/frontend/src/features/externalDatabases/RecognitionConfirmationDetail.jsx"
           test "$(tr -d '\r\n' < "$package_root/VERSION.txt")" = "$EXPECTED_VERSION"
-          test ! -f "$package_root/backend/data/rezzerv.db"
-          test ! -d "$package_root/backend/data/.rezzerv-migrations"
-          echo 'PACKAGE_RUNTIME_DATA_EXCLUDED_GREEN'
           echo "PACKAGE_ZIP_GREEN=$archive"
 
       - name: Upload full release zip
         uses: actions/upload-artifact@v4
         with:
-          name: Rezzerv-MVP-v01.12.110
-          path: ${{ runner.temp }}/Rezzerv-MVP-v01.12.110.zip
+          name: Rezzerv-MVP-v01.12.109
+          path: ${{ runner.temp }}/Rezzerv-MVP-v01.12.109.zip
           if-no-files-found: error
           retention-days: 30
