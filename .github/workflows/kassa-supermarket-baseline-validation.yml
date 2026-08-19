@@ -5,9 +5,15 @@ on:
     branches: [main]
     paths:
       - 'backend/app/services/receipt_*'
+      - 'backend/app/receipt_ingestion/**'
       - 'backend/app/integrations/receipt_scanners/**'
+      - 'backend/app/runtime_preflight.py'
       - 'backend/app/api/**/*receipt*'
       - 'backend/tests/test_kassa_*'
+      - 'backend/tests/test_receipt_financial_components_regression.py'
+      - 'backend/tests/test_receipt_inventory_eligibility.py'
+      - 'backend/tests/test_receipt_runtime_preflight.py'
+      - 'backend/tests/test_receipt_semantic_text_independence.py'
       - 'backend/tests/test_pr245_status_and_loyalty_contract.py'
       - 'backend/Dockerfile'
       - 'backend/requirements.txt'
@@ -37,4 +43,4 @@ jobs:
               -e DATABASE_URL=sqlite:////tmp/rezzerv-kassa-pr-gate.db \
               -e SQLITE_RUNTIME_VOLUME=github-actions-temp \
               rezzerv-kassa-pr-gate \
-              sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -s -q tests/test_kassa_supermarket_baseline_gate.py tests/test_pr245_status_and_loyalty_contract.py"
+              sh -lc "python -m pip install --disable-pip-version-check -q pytest && python -m pytest -s -q tests/test_kassa_supermarket_baseline_gate.py tests/test_pr245_status_and_loyalty_contract.py tests/test_receipt_financial_components_regression.py tests/test_receipt_inventory_eligibility.py tests/test_receipt_runtime_preflight.py tests/test_receipt_semantic_text_independence.py"
