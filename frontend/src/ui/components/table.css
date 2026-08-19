@@ -205,6 +205,11 @@ table.rz-table{
   position: relative;
 }
 
+/* A sticky resizable header remains sticky; sticky itself is a positioning context for the resize hit zone. */
+.rz-table--resizable-columns.rz-data-table--sticky-header thead tr:first-child th{
+  position: sticky;
+}
+
 .rz-table--resizable-columns thead tr:first-child th::after{
   content: "";
   position: absolute;
