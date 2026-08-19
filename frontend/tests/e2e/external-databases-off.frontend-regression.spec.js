@@ -184,6 +184,9 @@ test.describe('Externe databases OFF candidate flow', () => {
     await page.route('**/api/external-products/off/search', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...automaticSearchResponse(), results: [{ gtin: '8718265184886', product_name: 'Bananen', brand: 'De Groot', score: 0.99 }] }) });
     });
+    await page.route('**/api/catalog?query=8718265184886&limit=20', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) });
+    });
     await page.route('**/api/external-products/gpc/classify', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'classified', classification_source: 'gpc_taxonomy_name_match', confidence: 1, product_type_id: 'gpc:10005897', gpc_brick_code: '10005897', gpc_brick_name: 'Bananen', gpc_brick_name_en: 'Bananas', source: 'gs1_gpc_2026_05_en', source_version: '2026-05-20' }) });
     });
