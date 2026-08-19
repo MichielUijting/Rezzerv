@@ -82,6 +82,39 @@ def _columns(conn, table_name: str) -> set[str]:
     }
 
 
+def _require_safety_schema(conn) -> None:
+    required_tables = {"receipt_tables", "raw_receipts", "receipt_table_lines"}
+    missing_tables = sorted(
+        table_name for table_name in required_tables if not _table_exists(conn, table_name)
+    )
+    if missing_tables:
+        raise RuntimeError(
+            "Stale receipt recovery blocked: required tables missing: "
+            + ", ".join(missing_tables)
+        )
+
+    requirements = {
+        "receipt_tables": _REQUIRED_RECEIPT_COLUMNS,
+        "raw_receipts": _REQUIRED_RAW_COLUMNS,
+        "receipt_table_lines": _REQUIRED_LINE_COLUMNS,
+    }
+    missing_columns = {
+        table_name: sorted(required - _columns(conn, table_name))
+        for table_name, required in requirements.items()
+    }
+    missing_columns = {
+        table_name: names for table_name, names in missing_columns.items() if names
+    }
+    if missing_columns:
+        detail = "; ".join(
+            f"{table_name}: {', '.join(names)}"
+            for table_name, names in sorted(missing_columns.items())
+        )
+        raise RuntimeError(
+            "Stale receipt recovery blocked: safety schema incomplete: " + detail
+        )
+
+
 def _marker_paths(receipt_storage_root: Path) -> tuple[Path, Path]:
     data_root = Path(receipt_storage_root).resolve().parent.parent
     marker_dir = data_root / ".rezzerv-migrations"
@@ -160,23 +193,11 @@ def list_safe_stale_receipt_candidates(engine, *, limit: int = 1000) -> list[dic
 
     ``reparse_receipt`` replaces receipt line rows. Therefore a candidate is
     eligible only when every safety column is available and no user/business
-    state refers to those rows. Missing safety schema means no candidates.
+    state refers to those rows. Missing safety schema blocks the migration.
     """
     safe_limit = max(1, min(int(limit or 1000), 1000))
     with engine.begin() as conn:
-        required_tables = {"receipt_tables", "raw_receipts", "receipt_table_lines"}
-        if not all(_table_exists(conn, table_name) for table_name in required_tables):
-            return []
-
-        rt_columns = _columns(conn, "receipt_tables")
-        rr_columns = _columns(conn, "raw_receipts")
-        rtl_columns = _columns(conn, "receipt_table_lines")
-        if not _REQUIRED_RECEIPT_COLUMNS.issubset(rt_columns):
-            return []
-        if not _REQUIRED_RAW_COLUMNS.issubset(rr_columns):
-            return []
-        if not _REQUIRED_LINE_COLUMNS.issubset(rtl_columns):
-            return []
+        _require_safety_schema(conn)
 
         line_blockers = [
             "rtl.corrected_raw_label IS NOT NULL",
