@@ -1,7 +1,6 @@
 name: Household article identity Slice 2B4
 
 on:
-  pull_request:
   workflow_dispatch:
 
 jobs:
