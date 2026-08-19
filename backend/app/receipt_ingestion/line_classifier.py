@@ -48,24 +48,29 @@ GENERIC_TAX_TOKENS = (
     'btw', 'vat', 'biw', 'bedrag excl', 'bedr.excl', 'btw-bedrag',
     'netto', 'bruto', 'excl.', 'excl ', 'incl.', 'incl ',
 )
-GENERIC_DISCOUNT_TOKENS = (
-    'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
-    'lidl plus korting', 'totaal korting', 'coupon', 'voucher', 'gratis',
+GENERIC_PRICE_REDUCTION_TOKENS = (
     'in prijs verlaagd', 'prijs verlaagd', 'prijsverlaging', 'afgeprijsd',
     'reduced price', 'price reduction',
 )
+GENERIC_DISCOUNT_TOKENS = (
+    'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
+    'lidl plus korting', 'totaal korting', 'coupon', 'voucher', 'gratis',
+) + GENERIC_PRICE_REDUCTION_TOKENS
 GENERIC_METADATA_TOKENS = (
     'openingstijd', 'openingstijden', 'ma-vr', 'ma tm', 'ma t/m', 'periode',
     'filiaal', 'kassa', 'kassabon', 'bonnr', 'bon nr', 'bonnummer', 'referentie',
     'www.', 'http', 'kvk', 'iban', 'tel:', 'telefoon', 'servicebalie', 'klantenservice',
     'bedankt', 'welkom', 'tot ziens', 'bezoek ook', 'voorwaarden',
 )
-GENERIC_NON_INVENTORY_CHARGE_TOKENS = (
+GENERIC_DEPOSIT_TOKENS = (
     'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',
     'statiegeld', 'emballage', 'fust',
+)
+GENERIC_SHIPPING_TOKENS = (
     'verzendkosten', 'verzend kosten', 'bezorgkosten', 'bezorg kosten',
     'shipping fee', 'delivery fee',
 )
+GENERIC_NON_INVENTORY_CHARGE_TOKENS = GENERIC_DEPOSIT_TOKENS + GENERIC_SHIPPING_TOKENS
 GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS = (
     'prijs per kg',
     'prijs/kg',
@@ -135,6 +140,35 @@ def _token_match(lowered: str, tokens: tuple[str, ...]) -> str | None:
     return None
 
 
+def receipt_financial_candidate_line_type(
+    line: str,
+    *,
+    has_amount: bool = True,
+) -> str | None:
+    """Return the canonical type for a priced non-inventory receipt component.
+
+    This function belongs to the ingestion classifier layer: receipt text may be
+    inspected here, but downstream business semantics must consume only the
+    canonical ``line_type`` produced from this decision.
+
+    A label without a parsed amount is never promoted to a financial candidate;
+    this keeps headers, explanatory text, totals and payment metadata out of the
+    persisted logical receipt lines.
+    """
+    if not has_amount:
+        return None
+    lowered = re.sub(r'\s+', ' ', str(line or '')).strip().lower()
+    if not lowered:
+        return None
+    if _token_match(lowered, GENERIC_DEPOSIT_TOKENS):
+        return 'deposit'
+    if _token_match(lowered, GENERIC_SHIPPING_TOKENS):
+        return 'shipping'
+    if _token_match(lowered, GENERIC_PRICE_REDUCTION_TOKENS):
+        return 'discount'
+    return None
+
+
 def _priced_article_value_token(lowered: str) -> str | None:
     if not _has_amount(lowered):
         return None
@@ -167,6 +201,22 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
         return _decision('ignore', 'EMPTY_OR_WHITESPACE_LINE')
     lowered = normalized.lower()
     upper = normalized.upper().replace(',', '.')
+    financial_line_type = receipt_financial_candidate_line_type(
+        normalized,
+        has_amount=_has_amount(lowered),
+    )
+    if financial_line_type is not None:
+        if financial_line_type == 'deposit':
+            matched = _token_match(lowered, GENERIC_DEPOSIT_TOKENS)
+        elif financial_line_type == 'shipping':
+            matched = _token_match(lowered, GENERIC_SHIPPING_TOKENS)
+        else:
+            matched = _token_match(lowered, GENERIC_PRICE_REDUCTION_TOKENS)
+        return _decision(
+            'product_candidate',
+            'GENERIC_PRICED_FINANCIAL_COMPONENT',
+            matched,
+        )
     supporting_amount_token = _token_match(lowered, GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS)
     if supporting_amount_token:
         suffix = lowered.split(supporting_amount_token, 1)[1].strip(" :-\t")
