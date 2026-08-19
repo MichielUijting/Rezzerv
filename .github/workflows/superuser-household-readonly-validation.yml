@@ -18,6 +18,10 @@ on:
       - '.github/workflows/superuser-household-readonly-validation.yml'
   workflow_dispatch:
 
+concurrency:
+  group: superuser-household-readonly-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-superuser-household-readonly:
     runs-on: ubuntu-24.04
