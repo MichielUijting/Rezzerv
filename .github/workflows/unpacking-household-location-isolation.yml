@@ -12,6 +12,10 @@ on:
       - '.github/workflows/unpacking-household-location-isolation.yml'
   workflow_dispatch:
 
+concurrency:
+  group: unpacking-household-location-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-unpacking-household-location-isolation:
     runs-on: ubuntu-latest
