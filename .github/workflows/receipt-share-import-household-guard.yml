@@ -15,6 +15,10 @@ on:
       - '.github/workflows/receipt-share-import-household-guard.yml'
   workflow_dispatch:
 
+concurrency:
+  group: receipt-share-loyalty-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-receipt-share-import-household-guard:
     runs-on: ubuntu-latest
