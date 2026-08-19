@@ -4,8 +4,15 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
+      - '!frontend/version.json'
+      - '!frontend/public/version.json'
+      - '!frontend/package.json'
       - '.github/workflows/frontend-cookie-session.yml'
   workflow_dispatch:
+
+concurrency:
+  group: frontend-cookie-session-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   frontend-cookie-session:
