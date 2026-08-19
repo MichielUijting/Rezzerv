@@ -4,9 +4,29 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'backend/app/testing/receipt_inventory_**'
+      - 'backend/app/services/**receipt**'
+      - 'backend/app/services/**inventory**'
+      - 'backend/app/api/**receipt**'
+      - 'backend/app/api/**inventory**'
+      - 'backend/tests/**receipt**'
+      - 'backend/tests/**inventory**'
+      - 'scripts/run-receipt-inventory-chain.ps1'
+      - '.github/workflows/receipt-inventory-chain-post-merge.yml'
   push:
     branches:
       - main
+    paths:
+      - 'backend/app/testing/receipt_inventory_**'
+      - 'backend/app/services/**receipt**'
+      - 'backend/app/services/**inventory**'
+      - 'backend/app/api/**receipt**'
+      - 'backend/app/api/**inventory**'
+      - 'backend/tests/**receipt**'
+      - 'backend/tests/**inventory**'
+      - 'scripts/run-receipt-inventory-chain.ps1'
+      - '.github/workflows/receipt-inventory-chain-post-merge.yml'
   workflow_dispatch:
 
 jobs:
