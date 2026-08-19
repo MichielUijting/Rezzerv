@@ -1,0 +1,62 @@
+name: Apply Kassa financial regression recovery
+
+on:
+  push:
+    branches:
+      - fix/kassa-photo-regression-recovery-20260819
+    paths:
+      - scripts/_apply_kassa_financial_regression_recovery.py
+      - .github/workflows/_apply-kassa-financial-regression-recovery.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-kassa-financial-regression-recovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/kassa-photo-regression-recovery-20260819
+          fetch-depth: 0
+
+      - name: Apply deterministic recovery patch
+        run: python scripts/_apply_kassa_financial_regression_recovery.py
+
+      - name: Compile changed receipt modules
+        run: |
+          python -m py_compile \
+            backend/app/receipt_ingestion/line_classifier.py \
+            backend/app/receipt_ingestion/product_candidate_gateway.py \
+            backend/tests/test_receipt_inventory_eligibility.py \
+            backend/tests/test_receipt_financial_components_regression.py
+
+      - name: Run targeted receipt regression contracts
+        run: |
+          python -m pip install -q pytest
+          PYTHONPATH=backend python -m pytest -q \
+            backend/tests/test_receipt_financial_components_regression.py \
+            backend/tests/test_receipt_inventory_eligibility.py \
+            backend/tests/test_receipt_semantic_text_independence.py
+
+      - name: Diff hygiene
+        run: git diff --check
+
+      - name: Commit verified recovery and remove applicator
+        run: |
+          git config user.name "Rezzerv Agent"
+          git config user.email "actions@users.noreply.github.com"
+          git rm \
+            scripts/_apply_kassa_financial_regression_recovery.py \
+            .github/workflows/_apply-kassa-financial-regression-recovery.yml
+          git add \
+            backend/app/receipt_ingestion/line_classifier.py \
+            backend/app/receipt_ingestion/product_candidate_gateway.py \
+            backend/tests/test_receipt_inventory_eligibility.py \
+            backend/tests/test_receipt_financial_components_regression.py
+          git commit -m "fix(receipts): preserve financial receipt components"
+          git push origin HEAD:fix/kassa-photo-regression-recovery-20260819
