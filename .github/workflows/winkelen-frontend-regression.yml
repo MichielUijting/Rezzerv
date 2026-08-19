@@ -14,7 +14,6 @@ on:
       - 'frontend/tests/e2e/auth.setup.js'
       - 'frontend/tests/e2e/helpers/**'
       - 'frontend/playwright.config.js'
-      - 'frontend/package.json'
       - 'frontend/package-lock.json'
       - 'backend/app/api/shopping_list_routes.py'
       - 'backend/app/services/shopping_list_service.py'
