@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine, text
 
 from app.services import receipt_stale_recovery_service as recovery
@@ -175,7 +176,8 @@ def test_candidate_selection_fails_closed_when_safety_schema_is_missing():
         conn.execute(text("CREATE TABLE receipt_tables (id TEXT PRIMARY KEY, raw_receipt_id TEXT, parse_status TEXT, deleted_at DATETIME)"))
         conn.execute(text("CREATE TABLE receipt_table_lines (id TEXT PRIMARY KEY, receipt_table_id TEXT)"))
 
-    assert recovery.list_safe_stale_receipt_candidates(engine) == []
+    with pytest.raises(RuntimeError, match="safety schema incomplete"):
+        recovery.list_safe_stale_receipt_candidates(engine)
 
 
 def test_recovery_replaces_only_when_preview_is_controlled(tmp_path, monkeypatch):
