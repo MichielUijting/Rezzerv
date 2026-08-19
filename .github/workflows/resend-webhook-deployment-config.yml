@@ -8,6 +8,10 @@ on:
       - '.github/workflows/resend-webhook-deployment-config.yml'
   workflow_dispatch:
 
+concurrency:
+  group: resend-webhook-deployment-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-resend-webhook-deployment-config:
     runs-on: ubuntu-latest
