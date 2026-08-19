@@ -2,8 +2,9 @@
 
 This migration is deliberately conservative. It reparses only active receipts
 that are still ``review_needed`` and have no evidence of user review, matching,
-unpacking or inventory effects. The existing raw source remains authoritative;
-no receipt names, hashes, stores or product text are hard-coded here.
+unpacking or inventory effects. Before any stored lines are replaced, the raw
+source is parsed read-only and must improve to the production Kassa status
+``Gecontroleerd``. No receipt names, hashes, stores or product text are hard-coded.
 """
 
 from __future__ import annotations
@@ -16,7 +17,15 @@ from typing import Any
 
 from sqlalchemy import text
 
-from app.services.receipt_service import reparse_receipt
+from app.integrations.receipt_scanners.runtime import scan_receipt_content_via_gateway
+from app.receipt_ingestion.service_parts.receipt_result_helpers import (
+    determine_final_parse_status,
+)
+from app.services.receipt_service import (
+    _resolve_reparse_source_payload,
+    reparse_receipt,
+)
+from app.services.receipt_ssot_status import apply_po_norm_status
 
 
 MIGRATION_ID = "v01.12.110-safe-stale-receipt-recovery"
@@ -28,7 +37,7 @@ _REQUIRED_RECEIPT_COLUMNS = {
     "corrected_by_user_email",
     "totals_overridden",
 }
-_REQUIRED_RAW_COLUMNS = {"deleted_at", "storage_path"}
+_REQUIRED_RAW_COLUMNS = {"deleted_at", "storage_path", "mime_type"}
 _REQUIRED_LINE_COLUMNS = {
     "corrected_raw_label",
     "corrected_quantity",
@@ -87,6 +96,63 @@ def _write_report(path: Path, report: dict[str, Any]) -> None:
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     tmp_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp_path.replace(path)
+
+
+def _line_value(line: Any, key: str) -> Any:
+    if isinstance(line, dict):
+        return line.get(key)
+    return getattr(line, key, None)
+
+
+def _status_payload(parsed: Any, final_parse_status: str) -> dict[str, Any]:
+    lines = []
+    for line in list(getattr(parsed, "lines", None) or []):
+        lines.append(
+            {
+                "raw_label": _line_value(line, "raw_label"),
+                "normalized_label": _line_value(line, "normalized_label"),
+                "line_type": _line_value(line, "line_type"),
+                "line_role": _line_value(line, "line_role"),
+                "quantity": _line_value(line, "quantity"),
+                "unit": _line_value(line, "unit"),
+                "unit_price": _line_value(line, "unit_price"),
+                "line_total": _line_value(line, "line_total"),
+                "discount_amount": _line_value(line, "discount_amount"),
+                "is_deleted": 0,
+            }
+        )
+    return {
+        "store_name": getattr(parsed, "store_name", None),
+        "total_amount": getattr(parsed, "total_amount", None),
+        "discount_total": getattr(parsed, "discount_total", None),
+        "parse_status": final_parse_status,
+        "line_count": len(lines),
+        "lines": lines,
+    }
+
+
+def _preview_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    storage_path = Path(str(candidate.get("storage_path") or ""))
+    file_bytes = storage_path.read_bytes()
+    parse_bytes, parse_filename, parse_mime_type = _resolve_reparse_source_payload(
+        candidate,
+        file_bytes,
+    )
+    parsed = scan_receipt_content_via_gateway(
+        parse_bytes,
+        parse_filename,
+        parse_mime_type,
+    )
+    final_parse_status = determine_final_parse_status(parsed)
+    status = apply_po_norm_status(_status_payload(parsed, final_parse_status))
+    return {
+        "is_receipt": bool(getattr(parsed, "is_receipt", False)),
+        "parse_status": final_parse_status,
+        "kassa_status": status.get("po_norm_status_label"),
+        "failed_criteria": status.get("po_norm_failed_criteria") or [],
+        "line_count": len(list(getattr(parsed, "lines", None) or [])),
+        "total_amount": getattr(parsed, "total_amount", None),
+    }
 
 
 def list_safe_stale_receipt_candidates(engine, *, limit: int = 1000) -> list[dict[str, Any]]:
@@ -150,6 +216,18 @@ def list_safe_stale_receipt_candidates(engine, *, limit: int = 1000) -> list[dic
                 "WHERE ie.source_reference = ('receipt:' || rt.id))"
             )
 
+        has_email_messages = _table_exists(conn, "receipt_email_messages")
+        email_join = (
+            "LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id"
+            if has_email_messages
+            else ""
+        )
+        email_columns = (
+            "rem.body_html, rem.body_text, rem.selected_part_type"
+            if has_email_messages
+            else "NULL AS body_html, NULL AS body_text, NULL AS selected_part_type"
+        )
+
         rows = conn.execute(
             text(
                 f"""
@@ -158,10 +236,13 @@ def list_safe_stale_receipt_candidates(engine, *, limit: int = 1000) -> list[dic
                        rt.parse_status,
                        rt.line_count AS previous_line_count,
                        rr.original_filename,
+                       rr.mime_type,
                        rr.storage_path,
-                       rr.sha256_hash
+                       rr.sha256_hash,
+                       {email_columns}
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                {email_join}
                 WHERE {' AND '.join(receipt_guards)}
                 ORDER BY datetime(COALESCE(rt.updated_at, rt.created_at)) ASC, rt.id ASC
                 LIMIT :limit
@@ -191,6 +272,7 @@ def run_safe_stale_receipt_recovery(
     started_at = _utc_now()
     candidates = list_safe_stale_receipt_candidates(engine, limit=limit)
     results: list[dict[str, Any]] = []
+    skipped_not_improved: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
 
     for candidate in candidates:
@@ -209,14 +291,35 @@ def run_safe_stale_receipt_recovery(
             )
             continue
         try:
+            preview = _preview_candidate(candidate)
+            if not (
+                preview.get("is_receipt")
+                and str(preview.get("parse_status") or "").lower() == "approved"
+                and preview.get("kassa_status") == "Gecontroleerd"
+            ):
+                skipped_not_improved.append(
+                    {
+                        "receipt_table_id": receipt_table_id,
+                        "original_filename": candidate.get("original_filename"),
+                        "previous_line_count": candidate.get("previous_line_count"),
+                        "preview": preview,
+                    }
+                )
+                continue
+
+            # Startup recovery runs before user requests are accepted, so no user
+            # edit can occur between this read-only proof and the actual replace.
+            # reparse_receipt deliberately remains the single persistence path.
             result = reparse_receipt(engine, receipt_storage_root, receipt_table_id) or {}
             results.append(
                 {
                     "receipt_table_id": receipt_table_id,
                     "original_filename": candidate.get("original_filename"),
                     "previous_line_count": candidate.get("previous_line_count"),
+                    "preview_line_count": preview.get("line_count"),
                     "parse_status": result.get("parse_status"),
                     "line_count": result.get("line_count"),
+                    "kassa_status_before_replace": preview.get("kassa_status"),
                 }
             )
         except Exception as exc:
@@ -239,13 +342,10 @@ def run_safe_stale_receipt_recovery(
         "approved_count": sum(
             1 for item in results if str(item.get("parse_status") or "").lower() == "approved"
         ),
-        "still_review_needed_count": sum(
-            1
-            for item in results
-            if str(item.get("parse_status") or "").lower() == "review_needed"
-        ),
+        "skipped_not_improved_count": len(skipped_not_improved),
         "error_count": len(errors),
         "results": results,
+        "skipped_not_improved": skipped_not_improved,
         "errors": errors,
     }
     _write_report(last_path, report)
