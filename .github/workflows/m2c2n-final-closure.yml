@@ -1,9 +1,6 @@
 name: M2C2n final closure
 
 on:
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:

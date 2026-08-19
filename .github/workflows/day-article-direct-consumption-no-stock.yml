@@ -1,7 +1,6 @@
 name: Day article Direct consumption no stock
 
 on:
-  pull_request:
   workflow_dispatch:
 
 jobs:

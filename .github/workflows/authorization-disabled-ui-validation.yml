@@ -10,6 +10,10 @@ on:
       - '.github/workflows/authorization-disabled-ui-validation.yml'
       - 'docker-compose.yml'
 
+concurrency:
+  group: authorization-disabled-ui-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   authorization-disabled-ui:
     runs-on: ubuntu-latest

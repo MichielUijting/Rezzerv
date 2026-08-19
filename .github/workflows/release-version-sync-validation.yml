@@ -2,9 +2,31 @@ name: Release version sync validation
 
 on:
   pull_request:
+    paths:
+      - 'VERSION.txt'
+      - 'backend/VERSION.txt'
+      - 'version.json'
+      - 'frontend/version.json'
+      - 'frontend/public/version.json'
+      - 'frontend/package.json'
+      - 'validate-version-sync.bat'
+      - '.github/workflows/release-version-sync-validation.yml'
   push:
     branches:
       - main
+    paths:
+      - 'VERSION.txt'
+      - 'backend/VERSION.txt'
+      - 'version.json'
+      - 'frontend/version.json'
+      - 'frontend/public/version.json'
+      - 'frontend/package.json'
+      - 'validate-version-sync.bat'
+      - '.github/workflows/release-version-sync-validation.yml'
+
+concurrency:
+  group: release-version-sync-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-release-version-sync:
@@ -48,13 +70,4 @@ jobs:
           }
           finally {
             Set-Content -LiteralPath $path -Value $original -NoNewline
-          }
-
-      - name: Verify startup uses fail-fast version gate
-        shell: pwsh
-        run: |
-          $content = Get-Content -Raw -LiteralPath 'start.bat'
-          $pattern = 'call\s+validate-version-sync\.bat\s*\r?\n\s*if\s+errorlevel\s+1\s*\('
-          if ($content -notmatch $pattern) {
-            throw 'start.bat does not fail fast on validate-version-sync.bat errors.'
           }

@@ -4,9 +4,23 @@ on:
   push:
     branches:
       - fix/uitpakken-admin-location-create
+    paths:
+      - 'backend/tests/test_uitpakken_location_admin_contract.py'
+      - 'frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js'
+      - 'frontend/src/features/**unpack**'
+      - '.github/workflows/uitpakken-admin-location-create-validation.yml'
   pull_request:
     branches:
       - main
+    paths:
+      - 'backend/tests/test_uitpakken_location_admin_contract.py'
+      - 'frontend/tests/e2e/uitpakken-admin-location-create.frontend-regression.spec.js'
+      - 'frontend/src/features/**unpack**'
+      - '.github/workflows/uitpakken-admin-location-create-validation.yml'
+
+concurrency:
+  group: uitpakken-admin-location-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

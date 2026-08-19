@@ -3,7 +3,20 @@ name: Kassa supermarket baseline validation
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'backend/app/services/receipt_*'
+      - 'backend/app/integrations/receipt_scanners/**'
+      - 'backend/app/api/**/*receipt*'
+      - 'backend/tests/test_kassa_*'
+      - 'backend/tests/test_pr245_status_and_loyalty_contract.py'
+      - 'backend/Dockerfile'
+      - 'backend/requirements.txt'
+      - '.github/workflows/kassa-supermarket-baseline-validation.yml'
   workflow_dispatch:
+
+concurrency:
+  group: kassa-supermarket-baseline-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-supermarket-baseline:

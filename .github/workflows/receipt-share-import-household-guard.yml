@@ -4,7 +4,20 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'backend/app/services/receipt_share_import_household_guard.py'
+      - 'backend/app/testing/receipt_share_import_household_guard_contract.py'
+      - 'backend/app/services/loyalty_stamp_read_service.py'
+      - 'backend/app/api/loyalty_stamp_routes.py'
+      - 'backend/tests/test_loyalty_stamp_read_service.py'
+      - 'backend/app/api/**/*receipt*'
+      - 'backend/tests/**/*receipt*share*'
+      - '.github/workflows/receipt-share-import-household-guard.yml'
   workflow_dispatch:
+
+concurrency:
+  group: receipt-share-loyalty-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-receipt-share-import-household-guard:
