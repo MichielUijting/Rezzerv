@@ -8,7 +8,6 @@ from app.services import receipt_stale_recovery_service as recovery
 def _engine():
     engine = create_engine("sqlite://", future=True)
     with engine.begin() as conn:
-        conn.executescript if False else None
         conn.execute(text("""
             CREATE TABLE raw_receipts (
                 id TEXT PRIMARY KEY,
@@ -25,6 +24,7 @@ def _engine():
                 raw_receipt_id TEXT NOT NULL,
                 household_id TEXT,
                 parse_status TEXT,
+                line_count INTEGER DEFAULT 0,
                 approved_at DATETIME,
                 reviewed_at DATETIME,
                 corrected_by_user_email TEXT,
@@ -89,11 +89,11 @@ def _insert_receipt(engine, tmp_path: Path, receipt_id: str, **flags):
         conn.execute(
             text("""
                 INSERT INTO receipt_tables (
-                    id, raw_receipt_id, household_id, parse_status,
+                    id, raw_receipt_id, household_id, parse_status, line_count,
                     approved_at, reviewed_at, corrected_by_user_email,
                     totals_overridden, deleted_at
                 ) VALUES (
-                    :id, :raw_id, '1', :parse_status,
+                    :id, :raw_id, '1', :parse_status, 1,
                     :approved_at, :reviewed_at, :corrected_by_user_email,
                     :totals_overridden, :deleted_at
                 )
@@ -161,6 +161,17 @@ def test_candidate_selection_is_fail_closed_for_user_and_business_state(tmp_path
 
     candidates = recovery.list_safe_stale_receipt_candidates(engine)
     assert [item["receipt_table_id"] for item in candidates] == ["safe"]
+    assert candidates[0]["previous_line_count"] == 1
+
+
+def test_candidate_selection_fails_closed_when_safety_schema_is_missing():
+    engine = create_engine("sqlite://", future=True)
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE raw_receipts (id TEXT PRIMARY KEY, storage_path TEXT, deleted_at DATETIME)"))
+        conn.execute(text("CREATE TABLE receipt_tables (id TEXT PRIMARY KEY, raw_receipt_id TEXT, parse_status TEXT, deleted_at DATETIME)"))
+        conn.execute(text("CREATE TABLE receipt_table_lines (id TEXT PRIMARY KEY, receipt_table_id TEXT)"))
+
+    assert recovery.list_safe_stale_receipt_candidates(engine) == []
 
 
 def test_recovery_reparses_only_safe_candidates_and_is_one_time(tmp_path, monkeypatch):
@@ -191,6 +202,7 @@ def test_recovery_reparses_only_safe_candidates_and_is_one_time(tmp_path, monkey
     assert report["candidate_count"] == 1
     assert report["reparsed_count"] == 1
     assert report["approved_count"] == 1
+    assert report["results"][0]["previous_line_count"] == 1
     assert calls == ["safe"]
 
     second = recovery.run_safe_stale_receipt_recovery(engine, receipt_storage_root)
