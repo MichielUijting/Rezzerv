@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import Table from '../../ui/Table'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import './externalDatabasesRecovery.css'
 
 const DETAIL_TABLE_STYLE = { width: '980px', minWidth: '980px' }
 const FALLBACK_MARKERS = ['fallback', 'unresolved', 'no_external_match', 'receipt_product_intent_fallback']
