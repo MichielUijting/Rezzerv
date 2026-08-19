@@ -18,7 +18,10 @@ from typing import Any
 import re
 
 from app.receipt_ingestion.duplicate_lines import is_near_duplicate_of_previous
-from app.receipt_ingestion.line_classifier import classification_allows_append
+from app.receipt_ingestion.line_classifier import (
+    classification_allows_append,
+    receipt_financial_candidate_line_type,
+)
 from app.receipt_ingestion.package_label_extraction import apply_package_extraction_to_candidate
 from app.receipt_ingestion.product_name_normalization import normalize_product_name_label
 from app.receipt_ingestion.spaarzegels_terms import spaarzegels_financial_metadata
@@ -123,11 +126,21 @@ def append_product_candidate(
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
 
+    financial_line_type = receipt_financial_candidate_line_type(
+        label_value,
+        has_amount=(amount1_raw is not None or amount2_raw is not None),
+    )
+
     ah_leading_quantity_metadata = None
     ah_leading_quantity = None
     label_value, ah_leading_quantity, ah_leading_quantity_metadata = _split_ah_leading_quantity_label(label_value, qty_raw=qty_raw, store_name=store_name, filename=filename, raw_line=raw_line, normalized_line=normalized_line, parser_path=parser_path)
     savings_action_path = _is_validated_savings_action_path(function_name, append_branch)
-    if is_invalid_label is not None and is_invalid_label(label_value) and not savings_action_path:
+    if (
+        is_invalid_label is not None
+        and is_invalid_label(label_value)
+        and not savings_action_path
+        and financial_line_type is None
+    ):
         return None
     classification_trace = trace_line(label_value) if trace_line is not None else None
     classification = str((classification_trace or {}).get('classification') or classify_line(label_value))
@@ -136,7 +149,7 @@ def append_product_candidate(
         classification = 'product_candidate'
         classification_allowed = True
         classification_trace = {'classification': classification, 'stage': 'runtime_gateway', 'rule': 'SUPPORTING_AMOUNT_PREFIX_PRODUCT_LABEL', 'matched': label_value}
-    append_allowed = classification_allowed or savings_action_path
+    append_allowed = classification_allowed or savings_action_path or financial_line_type is not None
     if not append_allowed:
         return None
     if not classification_trace:
@@ -163,19 +176,27 @@ def append_product_candidate(
         line_total = amount1
 
     raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else (ah_leading_quantity_metadata.get('original_label') if ah_leading_quantity_metadata else label_value)
-    label_value, quantity, unit_value, package_metadata = apply_package_extraction_to_candidate(label_value, quantity=quantity, unit='kg' if qty_raw and 'kg' in qty_raw.lower() else None)
-    label_value, quantity, name_metadata = normalize_product_name_label(
-        label_value,
-        quantity=quantity,
-        transaction_text=normalized_line or raw_line,
-        unit_price=unit_price,
-        line_total=line_total,
-    )
+    package_metadata = None
+    name_metadata = None
+    unit_value = 'kg' if qty_raw and 'kg' in qty_raw.lower() else None
+    if financial_line_type is None:
+        label_value, quantity, unit_value, package_metadata = apply_package_extraction_to_candidate(
+            label_value,
+            quantity=quantity,
+            unit=unit_value,
+        )
+        label_value, quantity, name_metadata = normalize_product_name_label(
+            label_value,
+            quantity=quantity,
+            transaction_text=normalized_line or raw_line,
+            unit_price=unit_price,
+            line_total=line_total,
+        )
     raw_label_value = raw_label_value or label_value
     line_total_float = amount_to_float(line_total)
     financial_metadata = spaarzegels_financial_metadata(raw_label_value or label_value, label_text=label_value, detail_text=raw_label_value or normalized_line or raw_line)
     candidate_line = {
-        'line_type': 'product',
+        'line_type': financial_line_type or 'product',
         'raw_label': raw_label_value, 'normalized_label': label_value,
         'quantity': amount_to_float(quantity), 'unit': unit_value,
         'package_count': amount_to_float((package_metadata or {}).get('package_count')),
@@ -201,6 +222,14 @@ def append_product_candidate(
         'classification_stage': classification_trace.get('stage'), 'classification_matched': classification_trace.get('matched'),
         'classification_trace': classification_trace, 'validated_savings_action_path': savings_action_path,
     }
+    if financial_line_type is not None:
+        producer_trace.update({
+            'line_type': financial_line_type,
+            'financial_candidate': True,
+            'include_in_receipt_total': True,
+            'exclude_from_inventory': True,
+            'external_matching_allowed': False,
+        })
     if encoding_metadata:
         producer_trace.update({'encoding_normalization_applied': True, 'encoding_original_text': encoding_metadata.get('original_text'), 'encoding_normalized_text': encoding_metadata.get('normalized_text'), 'encoding_replacements': encoding_metadata.get('encoding_replacements')})
     if supporting_amount_prefix_metadata:
