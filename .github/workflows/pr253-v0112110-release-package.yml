@@ -11,6 +11,7 @@ on:
       - 'frontend/public/version.json'
       - 'frontend/package.json'
       - 'frontend/tests/e2e/**'
+      - 'backend/app/api/router.py'
       - 'backend/app/receipt_ingestion/**'
       - 'backend/app/runtime_preflight.py'
       - 'backend/app/services/receipt_parser_quality_patch.py'
@@ -164,6 +165,18 @@ jobs:
           payload = json.dumps(info, sort_keys=True, default=str)
           assert '/app/data/rezzerv.db' in payload, payload
           print('PACKAGE_RUNTIME_DB_GREEN=/app/data/rezzerv.db')
+          PY
+
+          docker compose exec -T backend python - <<'PY'
+          import json
+          from pathlib import Path
+          marker = Path('/app/data/.rezzerv-migrations/v01.12.110-safe-stale-receipt-recovery.done.json')
+          assert marker.exists(), marker
+          payload = json.loads(marker.read_text(encoding='utf-8'))
+          assert payload.get('migration_id') == 'v01.12.110-safe-stale-receipt-recovery', payload
+          assert payload.get('status') in {'completed', 'completed_with_errors'}, payload
+          assert int(payload.get('error_count') or 0) == 0, payload
+          print('PACKAGE_STALE_RECOVERY_STARTUP_GREEN')
           PY
 
           docker inspect "$(docker compose ps -q backend)" > /tmp/backend-inspect.json
