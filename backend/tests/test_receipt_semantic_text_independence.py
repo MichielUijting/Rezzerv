@@ -56,7 +56,8 @@ def test_untyped_line_fails_closed_independent_of_text():
 
 
 def test_semantic_core_has_no_receipt_text_classifier_dependency():
-    source = Path('backend/app/receipt_ingestion/receipt_line_semantics.py').read_text(encoding='utf-8')
+    source_path = Path(__file__).resolve().parents[1] / 'app/receipt_ingestion/receipt_line_semantics.py'
+    source = source_path.read_text(encoding='utf-8')
     forbidden = (
         'line_classifier',
         'spaarzegels_terms',
