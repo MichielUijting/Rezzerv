@@ -13,6 +13,10 @@ on:
       - '.github/workflows/receipt-admin-household-guard.yml'
   workflow_dispatch:
 
+concurrency:
+  group: platform-admin-route-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-platform-admin-route-guard:
     runs-on: ubuntu-latest
