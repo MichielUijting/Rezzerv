@@ -4,7 +4,6 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'backend/VERSION.txt'
       - 'backend/app/api/superuser_household_routes.py'
       - 'backend/app/services/actor_attribution_service.py'
       - 'backend/app/services/membership_user_identity_service.py'
@@ -15,7 +14,6 @@ on:
       - 'backend/tests/test_household_zero_superuser_user_filter_regression.py'
       - 'backend/tests/test_superuser_canonical_actor_identity.py'
       - 'frontend/nginx.conf'
-      - 'frontend/public/version.json'
       - 'frontend/src/features/superuser/SuperuserDashboardPage.jsx'
       - '.github/workflows/superuser-household-readonly-validation.yml'
   workflow_dispatch:
