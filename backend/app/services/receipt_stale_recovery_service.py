@@ -21,6 +21,25 @@ from app.services.receipt_service import reparse_receipt
 
 MIGRATION_ID = "v01.12.110-safe-stale-receipt-recovery"
 _TRUE_VALUES = {"1", "true", "yes", "on"}
+_REQUIRED_RECEIPT_COLUMNS = {
+    "deleted_at",
+    "approved_at",
+    "reviewed_at",
+    "corrected_by_user_email",
+    "totals_overridden",
+}
+_REQUIRED_RAW_COLUMNS = {"deleted_at", "storage_path"}
+_REQUIRED_LINE_COLUMNS = {
+    "corrected_raw_label",
+    "corrected_quantity",
+    "corrected_unit",
+    "corrected_unit_price",
+    "corrected_line_total",
+    "matched_article_id",
+    "matched_global_product_id",
+    "is_deleted",
+    "is_validated",
+}
 
 
 def _utc_now() -> str:
@@ -70,58 +89,53 @@ def _write_report(path: Path, report: dict[str, Any]) -> None:
     tmp_path.replace(path)
 
 
-def list_safe_stale_receipt_candidates(engine, *, limit: int = 100) -> list[dict[str, Any]]:
+def list_safe_stale_receipt_candidates(engine, *, limit: int = 1000) -> list[dict[str, Any]]:
     """Return only stale receipts for which destructive reparse is state-safe.
 
     ``reparse_receipt`` replaces receipt line rows. Therefore a candidate is
-    eligible only when no user/business state refers to those rows.
+    eligible only when every safety column is available and no user/business
+    state refers to those rows. Missing safety schema means no candidates.
     """
-    safe_limit = max(1, min(int(limit or 100), 1000))
+    safe_limit = max(1, min(int(limit or 1000), 1000))
     with engine.begin() as conn:
-        if not (_table_exists(conn, "receipt_tables") and _table_exists(conn, "raw_receipts")):
+        required_tables = {"receipt_tables", "raw_receipts", "receipt_table_lines"}
+        if not all(_table_exists(conn, table_name) for table_name in required_tables):
             return []
 
         rt_columns = _columns(conn, "receipt_tables")
+        rr_columns = _columns(conn, "raw_receipts")
         rtl_columns = _columns(conn, "receipt_table_lines")
+        if not _REQUIRED_RECEIPT_COLUMNS.issubset(rt_columns):
+            return []
+        if not _REQUIRED_RAW_COLUMNS.issubset(rr_columns):
+            return []
+        if not _REQUIRED_LINE_COLUMNS.issubset(rtl_columns):
+            return []
 
+        line_blockers = [
+            "rtl.corrected_raw_label IS NOT NULL",
+            "rtl.corrected_quantity IS NOT NULL",
+            "rtl.corrected_unit IS NOT NULL",
+            "rtl.corrected_unit_price IS NOT NULL",
+            "rtl.corrected_line_total IS NOT NULL",
+            "rtl.matched_article_id IS NOT NULL",
+            "rtl.matched_global_product_id IS NOT NULL",
+            "COALESCE(rtl.is_deleted, 0) <> 0",
+            "COALESCE(rtl.is_validated, 0) <> 0",
+        ]
         receipt_guards = [
             "lower(trim(COALESCE(rt.parse_status, ''))) = 'review_needed'",
-            "rt.deleted_at IS NULL" if "deleted_at" in rt_columns else "1 = 1",
-            "rr.deleted_at IS NULL" if "deleted_at" in _columns(conn, "raw_receipts") else "1 = 1",
+            "rt.deleted_at IS NULL",
+            "rr.deleted_at IS NULL",
+            "rt.approved_at IS NULL",
+            "rt.reviewed_at IS NULL",
+            "COALESCE(TRIM(rt.corrected_by_user_email), '') = ''",
+            "COALESCE(rt.totals_overridden, 0) = 0",
+            "NOT EXISTS (SELECT 1 FROM receipt_table_lines rtl "
+            "WHERE rtl.receipt_table_id = rt.id AND ("
+            + " OR ".join(line_blockers)
+            + "))",
         ]
-        if "approved_at" in rt_columns:
-            receipt_guards.append("rt.approved_at IS NULL")
-        if "reviewed_at" in rt_columns:
-            receipt_guards.append("rt.reviewed_at IS NULL")
-        if "corrected_by_user_email" in rt_columns:
-            receipt_guards.append("COALESCE(TRIM(rt.corrected_by_user_email), '') = ''")
-        if "totals_overridden" in rt_columns:
-            receipt_guards.append("COALESCE(rt.totals_overridden, 0) = 0")
-
-        line_blockers: list[str] = []
-        for column_name in (
-            "corrected_raw_label",
-            "corrected_quantity",
-            "corrected_unit",
-            "corrected_unit_price",
-            "corrected_line_total",
-            "matched_article_id",
-            "matched_global_product_id",
-        ):
-            if column_name in rtl_columns:
-                line_blockers.append(f"rtl.{column_name} IS NOT NULL")
-        if "is_deleted" in rtl_columns:
-            line_blockers.append("COALESCE(rtl.is_deleted, 0) <> 0")
-        if "is_validated" in rtl_columns:
-            line_blockers.append("COALESCE(rtl.is_validated, 0) <> 0")
-
-        if line_blockers:
-            receipt_guards.append(
-                "NOT EXISTS (SELECT 1 FROM receipt_table_lines rtl "
-                "WHERE rtl.receipt_table_id = rt.id AND ("
-                + " OR ".join(line_blockers)
-                + "))"
-            )
 
         if _table_exists(conn, "purchase_import_batches"):
             receipt_guards.append(
@@ -142,6 +156,7 @@ def list_safe_stale_receipt_candidates(engine, *, limit: int = 100) -> list[dict
                 SELECT rt.id AS receipt_table_id,
                        rt.household_id,
                        rt.parse_status,
+                       rt.line_count AS previous_line_count,
                        rr.original_filename,
                        rr.storage_path,
                        rr.sha256_hash
@@ -161,7 +176,7 @@ def run_safe_stale_receipt_recovery(
     engine,
     receipt_storage_root: Path,
     *,
-    limit: int = 100,
+    limit: int = 1000,
 ) -> dict[str, Any]:
     """Run the versioned recovery once and persist an audit report next to the DB."""
     done_path, last_path = _marker_paths(receipt_storage_root)
@@ -188,6 +203,7 @@ def run_safe_stale_receipt_recovery(
                 {
                     "receipt_table_id": receipt_table_id,
                     "original_filename": candidate.get("original_filename"),
+                    "previous_line_count": candidate.get("previous_line_count"),
                     "error": f"raw source missing: {storage_path}",
                 }
             )
@@ -198,6 +214,7 @@ def run_safe_stale_receipt_recovery(
                 {
                     "receipt_table_id": receipt_table_id,
                     "original_filename": candidate.get("original_filename"),
+                    "previous_line_count": candidate.get("previous_line_count"),
                     "parse_status": result.get("parse_status"),
                     "line_count": result.get("line_count"),
                 }
@@ -207,6 +224,7 @@ def run_safe_stale_receipt_recovery(
                 {
                     "receipt_table_id": receipt_table_id,
                     "original_filename": candidate.get("original_filename"),
+                    "previous_line_count": candidate.get("previous_line_count"),
                     "error": str(exc),
                 }
             )
