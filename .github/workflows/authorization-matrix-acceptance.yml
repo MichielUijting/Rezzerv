@@ -2,7 +2,21 @@ name: Authorization matrix acceptance
 
 on:
   pull_request:
+    paths:
+      - 'backend/app/api/**'
+      - 'backend/app/services/**authorization**'
+      - 'backend/app/services/**session**'
+      - 'backend/app/testing/authorization_matrix_acceptance.py'
+      - 'backend/tests/**authorization**'
+      - 'docs/security/**'
+      - 'docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md'
+      - 'RUN_AUTORISATIEMATRIX_TEST.bat'
+      - '.github/workflows/authorization-matrix-acceptance.yml'
   workflow_dispatch:
+
+concurrency:
+  group: authorization-matrix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   authorization-matrix:

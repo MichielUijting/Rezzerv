@@ -4,7 +4,17 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'backend/app/services/inventory_location_household_patch.py'
+      - 'backend/app/testing/inventory_location_household_isolation_contract.py'
+      - 'backend/app/api/**/*inventory*'
+      - 'backend/tests/**/*inventory*'
+      - '.github/workflows/inventory-location-household-isolation.yml'
   workflow_dispatch:
+
+concurrency:
+  group: inventory-location-household-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-inventory-location-household-isolation:

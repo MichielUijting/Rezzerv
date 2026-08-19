@@ -1,9 +1,6 @@
 name: Article detail write guard
 
 on:
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -96,7 +93,7 @@ jobs:
       - name: Valideer exacte frontendcommit in Docker-runtime
         env:
           EXPECTED_VERSION: Rezzerv-MVP-v01.12.98
-          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_COMMIT: ${{ github.sha }}
         run: |
           docker build \
             --build-arg REZZERV_VERSION="$EXPECTED_VERSION" \

@@ -4,7 +4,19 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'backend/app/services/product_enrichment_write_guard.py'
+      - 'backend/app/testing/product_enrichment_write_guard_contract.py'
+      - 'backend/app/services/**/*enrich*'
+      - 'backend/app/api/**/*product*'
+      - 'backend/tests/**/*enrich*'
+      - 'frontend/src/features/**/*product*'
+      - '.github/workflows/product-enrichment-write-guard.yml'
   workflow_dispatch:
+
+concurrency:
+  group: product-enrichment-write-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-product-enrichment-write-guard:
