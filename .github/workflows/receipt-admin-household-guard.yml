@@ -4,6 +4,13 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'backend/app/services/platform_admin_route_guard.py'
+      - 'backend/app/services/receipt_admin_household_guard.py'
+      - 'backend/app/testing/receipt_admin_household_guard_contract.py'
+      - 'backend/app/api/**admin**'
+      - 'backend/tests/**admin**'
+      - '.github/workflows/receipt-admin-household-guard.yml'
   workflow_dispatch:
 
 jobs:
