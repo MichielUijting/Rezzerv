@@ -1,27 +1,27 @@
-name: PR253 v01.12.107 release package
+name: PR253 v01.12.108 release package
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/pr253-v0112107-release-package.yml'
+      - '.github/workflows/pr253-v0112108-release-package.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr253-v0112107-package-${{ github.event.pull_request.number || github.ref }}
+  group: pr253-v0112108-package-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  package-v0112107:
-    name: Build runtime and package v01.12.107
+  package-v0112108:
+    name: Build runtime and package v01.12.108
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_VERSION: Rezzerv-MVP-v01.12.107
-      EXPECTED_PACKAGE_VERSION: 1.12.107
-      PACKAGE_NAME: Rezzerv-MVP-v01.12.107
+      EXPECTED_VERSION: Rezzerv-MVP-v01.12.108
+      EXPECTED_PACKAGE_VERSION: 1.12.108
+      PACKAGE_NAME: Rezzerv-MVP-v01.12.108
       PRODUCT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       REZZERV_FRONTEND_PORT: '5147'
       REZZERV_APP_BASE_URL: http://127.0.0.1:5147
@@ -229,7 +229,7 @@ jobs:
       - name: Upload full release zip
         uses: actions/upload-artifact@v4
         with:
-          name: Rezzerv-MVP-v01.12.107
-          path: ${{ runner.temp }}/Rezzerv-MVP-v01.12.107.zip
+          name: Rezzerv-MVP-v01.12.108
+          path: ${{ runner.temp }}/Rezzerv-MVP-v01.12.108.zip
           if-no-files-found: error
           retention-days: 30

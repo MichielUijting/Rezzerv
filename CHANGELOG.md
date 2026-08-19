@@ -1,5 +1,10 @@
 # Changelog
 
+## Rezzerv-MVP-v01.12.108 - 2026-08-19
+- QA-herstel: resizable kolomkoppen behouden nu generiek hun sticky-positionering wanneer sticky headers actief zijn.
+- De gerichte regressie blijft het echte scrollgedrag van kolomkop en filterrij controleren.
+- Functionele scope van v01.12.107 blijft ongewijzigd.
+
 ## Rezzerv-MVP-v01.12.107 - 2026-08-19
 - Externe databases hersteld op de betrouwbare v01.12.104-overzichtsflow.
 - Bestaande filters, paginering, selectie/export, dubbelklikdetail en OFF zoektekst / Zelf zoeken behouden.
