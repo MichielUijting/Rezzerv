@@ -14,6 +14,10 @@ on:
       - '.github/workflows/kassa-supermarket-baseline-validation.yml'
   workflow_dispatch:
 
+concurrency:
+  group: kassa-supermarket-baseline-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-supermarket-baseline:
     runs-on: ubuntu-latest
