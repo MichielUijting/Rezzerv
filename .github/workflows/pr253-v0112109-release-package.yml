@@ -10,6 +10,7 @@ on:
       - 'frontend/version.json'
       - 'frontend/public/version.json'
       - 'frontend/package.json'
+      - 'frontend/tests/e2e/**'
       - 'backend/app/receipt_ingestion/**'
       - 'backend/app/runtime_preflight.py'
       - 'backend/tests/test_receipt_financial_components_regression.py'
