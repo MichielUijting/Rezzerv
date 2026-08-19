@@ -1,9 +1,6 @@
 name: M2C2n forecast and purchase route audit
 
 on:
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
