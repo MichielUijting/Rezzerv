@@ -10,6 +10,7 @@ from app.receipt_ingestion.service_parts.receipt_result_helpers import (
     ReceiptParseResult,
     determine_final_parse_status,
 )
+from app.services.receipt_service import _extract_receipt_lines
 
 
 def _parse_decimal(value):
@@ -67,6 +68,13 @@ def _result(total: str, lines: list[dict]) -> ReceiptParseResult:
     )
 
 
+def _line_sum(lines: list[dict]) -> Decimal:
+    return sum(
+        (Decimal(str(line.get('line_total') or 0)) for line in lines),
+        Decimal('0.00'),
+    ).quantize(Decimal('0.01'))
+
+
 def test_pr244_regression_boundary_keeps_priced_financial_components_parseable():
     assert classify_receipt_text_line('Statiegeld 0,25') == 'product_candidate'
     assert classify_receipt_text_line('Emballage 0,50') == 'product_candidate'
@@ -116,3 +124,56 @@ def test_lidl_deposits_and_price_reductions_reconcile_exactly():
         _append_financial('In prijs verlaagd', '-0,10'),
     ]
     assert determine_final_parse_status(_result('69.33', lines)) == 'approved'
+
+
+def test_actual_receipt_line_extractor_keeps_ah_deposit_in_financial_sum():
+    lines = _extract_receipt_lines(
+        [
+            'PRODUCT ALPHA 3,05',
+            '+STATIEGELD 0,25',
+            'PRODUCT BETA 1,29',
+            'PRODUCT GAMMA 7,65',
+            'Totaal 12,24',
+            'VISA 12,24',
+        ],
+        store_name='Albert Heijn',
+        filename='synthetic-ah.jpeg',
+    )
+
+    assert _line_sum(lines) == Decimal('12.24')
+    deposits = [line for line in lines if line.get('line_type') == 'deposit']
+    assert len(deposits) == 1
+    assert Decimal(str(deposits[0]['line_total'])) == Decimal('0.25')
+    assert derive_receipt_line_semantics(deposits[0]) == {
+        'line_role': 'financial',
+        'inventory_eligible': False,
+    }
+
+
+def test_actual_receipt_line_extractor_keeps_lidl_deposits_and_price_reductions():
+    lines = _extract_receipt_lines(
+        [
+            'PRODUCT AGGREGATE 67,83',
+            '6pak Ger. statiegeld 0,60 A',
+            'Blik 8-pack statiegeld 1,20 A',
+            'In prijs verlaagd -0,20 B',
+            'In prijs verlaagd -0,10 B',
+            'Totaal 69,33',
+            'Bankpas 69,33',
+        ],
+        store_name='Lidl',
+        filename='synthetic-lidl.jpeg',
+    )
+
+    assert _line_sum(lines) == Decimal('69.33')
+    assert [line.get('line_type') for line in lines].count('deposit') == 2
+    discounts = [line for line in lines if line.get('line_type') == 'discount']
+    assert sum(
+        (Decimal(str(line['line_total'])) for line in discounts),
+        Decimal('0.00'),
+    ) == Decimal('-0.30')
+    assert all(
+        derive_receipt_line_semantics(line)['inventory_eligible'] is False
+        for line in lines
+        if line.get('line_type') in {'deposit', 'discount'}
+    )
