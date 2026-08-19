@@ -18,6 +18,10 @@ on:
       - 'frontend/src/features/**unpack**'
       - '.github/workflows/uitpakken-admin-location-create-validation.yml'
 
+concurrency:
+  group: uitpakken-admin-location-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
