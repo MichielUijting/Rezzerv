@@ -42,7 +42,7 @@ def _run_stale_receipt_recovery_when_ready(module: Any) -> None:
                 report = run_safe_stale_receipt_recovery(
                     module.engine,
                     module.RECEIPT_STORAGE_ROOT,
-                    limit=100,
+                    limit=1000,
                 )
                 print(f"Safe stale receipt recovery: {report}", flush=True)
             except Exception as exc:
