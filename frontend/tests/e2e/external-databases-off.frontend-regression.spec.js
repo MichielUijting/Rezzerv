@@ -194,7 +194,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await candidateRow.getByRole('radio').check();
     await expect(page.getByLabel('Producttype')).toHaveValue('gpc:10005897');
     await expect(page.getByLabel('Producttype').locator('option:checked')).toContainText('Bananen — GPC 10005897');
-    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Producttype bepaald via expliciete GPC Brickcode.');
+    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Automatisch bepaald met zekerheid 1,000.');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
   });
 
