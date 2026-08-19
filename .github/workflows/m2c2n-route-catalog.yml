@@ -1,9 +1,6 @@
 name: M2C2n route catalog
 
 on:
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
