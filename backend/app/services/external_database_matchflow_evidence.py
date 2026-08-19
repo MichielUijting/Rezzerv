@@ -12,6 +12,7 @@ from app.services.external_database_matchers import (
 from app.services.external_database_off_index_matchers import (
     match_retailer_receipt_line as _base_match_retailer_receipt_line,
 )
+from app.services.external_recognition_confirmation import is_external_recognition_resolved_item
 from app.services.product_evidence_packet import apply_product_evidence_to_candidates, build_product_evidence_packet_dict
 from app.services.product_intent_classifier import classify_product_intent
 from app.services.product_taxonomy_store import normalize_taxonomy_text
@@ -49,6 +50,16 @@ def _item_has_known_gtin(item: dict[str, Any]) -> bool:
             "external_article_code",
         )
     )
+
+
+def _item_has_confirmed_external_recognition(item: dict[str, Any]) -> bool:
+    try:
+        return is_external_recognition_resolved_item(item)
+    except Exception:
+        # Kandidaatdekking mag niet stuklopen als de recognition-state tijdens
+        # startup/migratie tijdelijk niet leesbaar is. In dat geval zoeken we
+        # conservatief opnieuw in plaats van de bonregel ten onrechte te blokkeren.
+        return False
 
 
 def _candidate_source_code(candidate: dict[str, Any]) -> str:
@@ -212,7 +223,11 @@ def _external_matching_blocked_result(retailer_code: str, receipt_line_text: str
 
 
 def _item_allows_external_matching(item: dict[str, Any]) -> bool:
-    return not is_spaarzegels_flow_excluded(item) and not _item_has_known_gtin(item)
+    return (
+        not is_spaarzegels_flow_excluded(item)
+        and not _item_has_known_gtin(item)
+        and not _item_has_confirmed_external_recognition(item)
+    )
 
 
 def _filter_external_matching_items(items: Any) -> list[dict[str, Any]]:
@@ -265,10 +280,20 @@ def ensure_external_receipt_item_candidates(*args: Any, **kwargs: Any) -> dict[s
                     item for item in original_items
                     if isinstance(item, dict) and _item_has_known_gtin(item)
                 ])
+                external_resolved_count = len([
+                    item for item in original_items
+                    if isinstance(item, dict) and _item_has_confirmed_external_recognition(item)
+                ])
                 result["spaarzegels_excluded_count"] = spaarzegels_count
                 result["known_gtin_excluded_count"] = known_gtin_count
+                result["external_resolved_excluded_count"] = external_resolved_count
                 result["external_matching_excluded_count"] = excluded_count
-                result["external_matching_guardrail"] = "spaarzegels_and_known_gtin_rows_excluded"
+                result["external_matching_guardrail"] = (
+                    "spaarzegels_known_gtin_and_confirmed_recognition_rows_excluded"
+                )
+                result["creates_global_product"] = False
+                result["creates_household_article"] = False
+                result["creates_inventory_event"] = False
             return result
         return candidate_store.ensure_external_receipt_item_candidates(*args, **kwargs)
     finally:

@@ -23,6 +23,7 @@ from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 from app.services.external_candidate_diagnostics import diagnose_real_candidate_coverage
+from app.services.external_recognition_confirmation import confirm_external_recognition
 from app.services.external_database_matchers import (
     get_external_database_summary,
     list_external_database_retailers,
@@ -233,6 +234,19 @@ def external_databases_promote_selected_candidate(payload: dict[str, Any] = Body
     )
 
 
+@router.post('/api/external-databases/candidates/confirm-external')
+def external_databases_confirm_external_recognition(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Bevestig alleen de externe herkenning van een bonartikel.
+
+    Dit is nadrukkelijk geen Cataloguskoppeling: de route maakt geen global_product,
+    product_identity, Mijn artikel of voorraadmutatie aan.
+    """
+    return confirm_external_recognition(
+        candidate_id=str(payload.get('candidate_id') or ''),
+        force_overwrite=bool(payload.get('force_overwrite', False)),
+    )
+
+
 @router.get('/api/external-databases/summary')
 def external_databases_summary():
     return get_external_database_summary()
@@ -432,6 +446,6 @@ def warm_receipt_runtime_at_startup():
         from app.services.receipt_service import warm_receipt_ocr_runtime
         preprocessing_result = warm_receipt_image_preprocessing()
         ocr_result = warm_receipt_ocr_runtime()
-        logger.info('Receipt runtime warmup voltooid: preprocessing=%s ocr=%s', preprocessing_result)
+        logger.info('Receipt runtime warmup voltooid: preprocessing=%s ocr=%s', preprocessing_result, ocr_result)
     except Exception as exc:
         logger.warning('Receipt runtime warmup mislukt; upload fallback blijft actief: %s', exc)
