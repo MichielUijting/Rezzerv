@@ -193,7 +193,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     const candidateRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: '8718265184886' });
     await candidateRow.getByRole('radio').check();
     await expect(page.getByLabel('Producttype')).toHaveValue('gpc:10005897');
-    await expect(page.getByLabel('Producttype').locator('option:checked')).toContainText('Bananen (Cavendish) — GPC 10005897');
+    await expect(page.getByLabel('Producttype').locator('option:checked')).toContainText('Bananen — GPC 10005897');
     await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Producttype bepaald via expliciete GPC Brickcode.');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
   });
