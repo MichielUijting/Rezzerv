@@ -1,0 +1,153 @@
+name: PR253 full frontend regression
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/tests/e2e/**'
+      - 'frontend/playwright.config.js'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'backend/app/api/**'
+      - 'backend/app/services/**'
+      - 'backend/tests/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/pr253-full-frontend-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr253-full-frontend-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-frontend-regression:
+    name: Full frontend regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_API_URL: http://host.docker.internal:8011
+      PLAYWRIGHT_TEST_ADMIN_EMAIL: test-admin@rezzerv.local
+      PLAYWRIGHT_HOUSEHOLD_ID: '0'
+      REZZERV_TEST_SUPERUSER_EMAIL: supergebruiker@rezzerv.local
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Generate temporary test credentials
+        shell: bash
+        run: |
+          admin_password="Rt$(python - <<'PY'
+          import secrets
+          print(secrets.token_hex(24))
+          PY
+          )"
+          superuser_password="Rs$(python - <<'PY'
+          import secrets
+          print(secrets.token_hex(24))
+          PY
+          )"
+          echo "PLAYWRIGHT_TEST_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+          echo "REZZERV_TEST_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+          echo "REZZERV_TEST_ADMIN_EMAIL=test-admin@rezzerv.local" >> "$GITHUB_ENV"
+          echo "REZZERV_TEST_SUPERUSER_PASSWORD=$superuser_password" >> "$GITHUB_ENV"
+          echo "::add-mask::$admin_password"
+          echo "::add-mask::$superuser_password"
+
+      - name: Build and start Rezzerv
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=80 backend
+            fi
+            sleep 2
+          done
+          echo "Backend werd niet gezond binnen 360 seconden."
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Provision temporary system superuser
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e REZZERV_SUPERGEBRUIKER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
+            backend python - <<'PY'
+          from app.db import engine
+          from app.services.system_superuser_session_provisioning import ensure_system_superuser_for_session_runtime
+
+          with engine.begin() as conn:
+              result = ensure_system_superuser_for_session_runtime(conn)
+
+          print(
+              "system_superuser_fixture: PASS; "
+              f"email={result.email}; household={result.household_id}; "
+              f"membership={result.membership_id}"
+          )
+          PY
+
+      - name: Validate authorization matrix and provision test admin
+        run: |
+          docker compose exec -T \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
+            -e REZZERV_TEST_SUPERUSER_EMAIL="$REZZERV_TEST_SUPERUSER_EMAIL" \
+            -e REZZERV_TEST_SUPERUSER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
+            -e REZZERV_TEST_ADMIN_EMAIL="$REZZERV_TEST_ADMIN_EMAIL" \
+            -e REZZERV_TEST_ADMIN_PASSWORD="$REZZERV_TEST_ADMIN_PASSWORD" \
+            backend python /app/tests/authorization_role_matrix_selftest.py
+
+      - name: Prepare household-zero fixtures
+        run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py prepare
+
+      - name: Run complete frontend regression set
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_API_URL="$PLAYWRIGHT_API_URL" \
+            -e PLAYWRIGHT_TEST_ADMIN_EMAIL="$PLAYWRIGHT_TEST_ADMIN_EMAIL" \
+            -e PLAYWRIGHT_TEST_ADMIN_PASSWORD="$PLAYWRIGHT_TEST_ADMIN_PASSWORD" \
+            -e PLAYWRIGHT_HOUSEHOLD_ID="$PLAYWRIGHT_HOUSEHOLD_ID" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "npm ci && npm run test:e2e:frontend-regression"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr253-full-frontend-playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup household-zero fixtures
+        if: always()
+        run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py cleanup || true
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color backend frontend
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down --volumes
