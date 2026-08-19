@@ -13,6 +13,7 @@ def _engine():
                 id TEXT PRIMARY KEY,
                 household_id TEXT,
                 original_filename TEXT,
+                mime_type TEXT,
                 storage_path TEXT,
                 sha256_hash TEXT,
                 deleted_at DATETIME
@@ -73,9 +74,11 @@ def _insert_receipt(engine, tmp_path: Path, receipt_id: str, **flags):
         conn.execute(
             text("""
                 INSERT INTO raw_receipts (
-                    id, household_id, original_filename, storage_path, sha256_hash, deleted_at
+                    id, household_id, original_filename, mime_type,
+                    storage_path, sha256_hash, deleted_at
                 ) VALUES (
-                    :id, '1', :filename, :storage_path, :sha, :deleted_at
+                    :id, '1', :filename, 'image/jpeg',
+                    :storage_path, :sha, :deleted_at
                 )
             """),
             {
@@ -162,6 +165,7 @@ def test_candidate_selection_is_fail_closed_for_user_and_business_state(tmp_path
     candidates = recovery.list_safe_stale_receipt_candidates(engine)
     assert [item["receipt_table_id"] for item in candidates] == ["safe"]
     assert candidates[0]["previous_line_count"] == 1
+    assert candidates[0]["mime_type"] == "image/jpeg"
 
 
 def test_candidate_selection_fails_closed_when_safety_schema_is_missing():
@@ -174,12 +178,23 @@ def test_candidate_selection_fails_closed_when_safety_schema_is_missing():
     assert recovery.list_safe_stale_receipt_candidates(engine) == []
 
 
-def test_recovery_reparses_only_safe_candidates_and_is_one_time(tmp_path, monkeypatch):
+def test_recovery_replaces_only_when_preview_is_controlled(tmp_path, monkeypatch):
     engine = _engine()
     _insert_receipt(engine, tmp_path, "safe")
     _insert_receipt(engine, tmp_path, "touched", is_validated=1)
 
     calls = []
+
+    def fake_preview(candidate):
+        assert candidate["receipt_table_id"] == "safe"
+        return {
+            "is_receipt": True,
+            "parse_status": "approved",
+            "kassa_status": "Gecontroleerd",
+            "failed_criteria": [],
+            "line_count": 4,
+            "total_amount": 12.24,
+        }
 
     def fake_reparse(_engine, _storage_root, receipt_table_id):
         calls.append(receipt_table_id)
@@ -190,21 +205,54 @@ def test_recovery_reparses_only_safe_candidates_and_is_one_time(tmp_path, monkey
             "deleted": False,
         }
 
+    monkeypatch.setattr(recovery, "_preview_candidate", fake_preview)
     monkeypatch.setattr(recovery, "reparse_receipt", fake_reparse)
     receipt_storage_root = tmp_path / "data" / "receipts" / "raw"
     receipt_storage_root.mkdir(parents=True)
 
-    report = recovery.run_safe_stale_receipt_recovery(
-        engine,
-        receipt_storage_root,
-    )
+    report = recovery.run_safe_stale_receipt_recovery(engine, receipt_storage_root)
     assert report["status"] == "completed"
     assert report["candidate_count"] == 1
     assert report["reparsed_count"] == 1
     assert report["approved_count"] == 1
+    assert report["skipped_not_improved_count"] == 0
     assert report["results"][0]["previous_line_count"] == 1
+    assert report["results"][0]["preview_line_count"] == 4
     assert calls == ["safe"]
 
     second = recovery.run_safe_stale_receipt_recovery(engine, receipt_storage_root)
     assert second["migration_id"] == recovery.MIGRATION_ID
     assert calls == ["safe"]
+
+
+def test_recovery_does_not_replace_when_preview_still_needs_review(tmp_path, monkeypatch):
+    engine = _engine()
+    _insert_receipt(engine, tmp_path, "still-review")
+    calls = []
+
+    monkeypatch.setattr(
+        recovery,
+        "_preview_candidate",
+        lambda _candidate: {
+            "is_receipt": True,
+            "parse_status": "review_needed",
+            "kassa_status": "Controle nodig",
+            "failed_criteria": ["LINE_SUM_TOTAL_MISMATCH"],
+            "line_count": 3,
+            "total_amount": 12.24,
+        },
+    )
+    monkeypatch.setattr(
+        recovery,
+        "reparse_receipt",
+        lambda *_args, **_kwargs: calls.append("unexpected"),
+    )
+    receipt_storage_root = tmp_path / "data" / "receipts" / "raw"
+    receipt_storage_root.mkdir(parents=True)
+
+    report = recovery.run_safe_stale_receipt_recovery(engine, receipt_storage_root)
+    assert report["candidate_count"] == 1
+    assert report["reparsed_count"] == 0
+    assert report["skipped_not_improved_count"] == 1
+    assert report["skipped_not_improved"][0]["receipt_table_id"] == "still-review"
+    assert calls == []
