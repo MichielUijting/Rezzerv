@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectNoConsoleErrors,
@@ -186,6 +186,21 @@ test.describe('Externe databases OFF candidate flow', () => {
     });
     await page.route('**/api/external-products/gpc/classify', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'classified', classification_source: 'gpc_taxonomy_name_match', confidence: 1, product_type_id: 'gpc:10005897', gpc_brick_code: '10005897', gpc_brick_name: 'Bananen', gpc_brick_name_en: 'Bananas', source: 'gs1_gpc_2026_05_en', source_version: '2026-05-20' }) });
+    });
+    await page.route('**/api/inventory/groups', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          group_options: [{
+            inventory_group_key: 'gpc:10005897',
+            display_name: 'Bananen',
+            default_base_unit: 'stuk',
+            gpc_brick_code: '10005897',
+            source: 'gs1_gpc_2026_05_en',
+          }],
+        }),
+      });
     });
     await page.goto('/externe-databases');
     const receiptRow = page.getByTestId('external-receipt-items-table').locator('tbody tr', { hasText: 'halfvolle melk' });
