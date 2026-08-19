@@ -219,6 +219,11 @@ jobs:
             --exclude='frontend/node_modules/' \
             --exclude='frontend/dist/' \
             --exclude='backend/.venv/' \
+            --exclude='backend/data/*.db' \
+            --exclude='backend/data/*.sqlite*' \
+            --exclude='backend/data/.rezzerv-migrations/' \
+            --exclude='backend/data/receipts/raw/' \
+            --exclude='backend/data/receipts/inbound/' \
             --exclude='**/__pycache__/' \
             --exclude='**/.pytest_cache/' \
             ./ "$package_root/"
@@ -235,6 +240,9 @@ jobs:
           test -f "$package_root/backend/tests/test_receipt_stale_recovery.py"
           test -f "$package_root/frontend/src/features/externalDatabases/RecognitionConfirmationDetail.jsx"
           test "$(tr -d '\r\n' < "$package_root/VERSION.txt")" = "$EXPECTED_VERSION"
+          test ! -f "$package_root/backend/data/rezzerv.db"
+          test ! -d "$package_root/backend/data/.rezzerv-migrations"
+          echo 'PACKAGE_RUNTIME_DATA_EXCLUDED_GREEN'
           echo "PACKAGE_ZIP_GREEN=$archive"
 
       - name: Upload full release zip
