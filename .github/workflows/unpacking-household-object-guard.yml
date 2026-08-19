@@ -12,6 +12,10 @@ on:
       - '.github/workflows/unpacking-household-object-guard.yml'
   workflow_dispatch:
 
+concurrency:
+  group: unpacking-household-object-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-unpacking-household-object-guard:
     runs-on: ubuntu-latest
