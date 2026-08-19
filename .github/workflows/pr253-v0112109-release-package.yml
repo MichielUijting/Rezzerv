@@ -219,10 +219,20 @@ jobs:
             --exclude='**/__pycache__/' \
             --exclude='**/.pytest_cache/' \
             ./ "$package_root/"
+
+          # Runtime data belongs to the target installation, never to a release package.
+          rm -rf "$package_root/backend/data"
+          mkdir -p "$package_root/backend/data"
+          touch "$package_root/backend/data/.gitkeep"
+
+          # Legacy file is not part of the canonical frontend release identity.
+          rm -f "$package_root/frontend/VERSION.txt"
+
           (cd "$RUNNER_TEMP" && zip -qr "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
           unzip -t "$archive" | tail -n 2
           test -f "$package_root/VERSION.txt"
           test -f "$package_root/docker-compose.yml"
+          test -f "$package_root/backend/data/.gitkeep"
           test -f "$package_root/backend/app/services/external_recognition_confirmation.py"
           test -f "$package_root/backend/app/receipt_ingestion/line_classifier.py"
           test -f "$package_root/backend/app/runtime_preflight.py"
@@ -230,6 +240,34 @@ jobs:
           test -f "$package_root/backend/tests/test_receipt_scanner_line_count_equivalence.py"
           test -f "$package_root/frontend/src/features/externalDatabases/RecognitionConfirmationDetail.jsx"
           test "$(tr -d '\r\n' < "$package_root/VERSION.txt")" = "$EXPECTED_VERSION"
+          test ! -e "$package_root/frontend/VERSION.txt"
+
+          python - "$archive" <<'PY'
+          import sys, zipfile
+          archive = sys.argv[1]
+          with zipfile.ZipFile(archive) as zf:
+              names = zf.namelist()
+          lower_names = [name.lower() for name in names]
+          db_files = [
+              name for name in names
+              if name.lower().endswith(('.db', '.sqlite', '.sqlite3'))
+          ]
+          runtime_data = [
+              name for name in names
+              if '/backend/data/' in name.lower()
+              and not name.endswith('/backend/data/')
+              and not name.endswith('/backend/data/.gitkeep')
+          ]
+          legacy_frontend_version = [
+              name for name in names
+              if name.lower().endswith('/frontend/version.txt')
+          ]
+          assert not db_files, db_files
+          assert not runtime_data, runtime_data
+          assert not legacy_frontend_version, legacy_frontend_version
+          print('PACKAGE_ARCHIVE_RUNTIME_DATA_FREE_GREEN')
+          PY
+
           echo "PACKAGE_ZIP_GREEN=$archive"
 
       - name: Upload full release zip
