@@ -11,6 +11,7 @@ from app.receipt_ingestion.service_parts.receipt_result_helpers import (
     determine_final_parse_status,
 )
 from app.services.receipt_service import _extract_receipt_lines
+from app.services.receipt_ssot_status import apply_po_norm_status
 
 
 def _parse_decimal(value):
@@ -75,6 +76,15 @@ def _line_sum(lines: list[dict]) -> Decimal:
     ).quantize(Decimal('0.01'))
 
 
+def _ssot_payload(total: str, lines: list[dict]) -> dict:
+    return {
+        'store_name': 'opaque',
+        'total_amount': Decimal(total),
+        'line_count': sum(1 for line in lines if line.get('line_type') == 'product'),
+        'lines': lines,
+    }
+
+
 def test_pr244_regression_boundary_keeps_priced_financial_components_parseable():
     assert classify_receipt_text_line('Statiegeld 0,25') == 'product_candidate'
     assert classify_receipt_text_line('Emballage 0,50') == 'product_candidate'
@@ -102,7 +112,7 @@ def test_financial_candidate_subtypes_are_canonical_and_non_inventory():
         assert semantics == {'line_role': 'financial', 'inventory_eligible': False}
 
 
-def test_ah_statiegeld_reconciliation_returns_to_approved():
+def test_ah_statiegeld_reconciliation_returns_to_approved_and_controlled():
     lines = [
         {'line_type': 'product', 'raw_label': 'P1', 'line_total': 3.05},
         {'line_type': 'product', 'raw_label': 'P2', 'line_total': 1.29},
@@ -110,9 +120,12 @@ def test_ah_statiegeld_reconciliation_returns_to_approved():
         _append_financial('Statiegeld', '0,25'),
     ]
     assert determine_final_parse_status(_result('12.24', lines)) == 'approved'
+    status = apply_po_norm_status(_ssot_payload('12.24', lines))
+    assert status['po_norm_status_label'] == 'Gecontroleerd'
+    assert status['po_norm_failed_criteria'] == []
 
 
-def test_lidl_deposits_and_price_reductions_reconcile_exactly():
+def test_lidl_deposits_and_price_reductions_reconcile_and_control_exactly():
     # Observed regression: physical product rows totalled 67.83 while the receipt
     # total was 69.33. Two deposits (+1.80) and two price reductions (-0.30)
     # are financial, non-inventory components and close the receipt exactly.
@@ -124,6 +137,9 @@ def test_lidl_deposits_and_price_reductions_reconcile_exactly():
         _append_financial('In prijs verlaagd', '-0,10'),
     ]
     assert determine_final_parse_status(_result('69.33', lines)) == 'approved'
+    status = apply_po_norm_status(_ssot_payload('69.33', lines))
+    assert status['po_norm_status_label'] == 'Gecontroleerd'
+    assert status['po_norm_failed_criteria'] == []
 
 
 def test_actual_receipt_line_extractor_keeps_ah_deposit_in_financial_sum():
@@ -148,6 +164,8 @@ def test_actual_receipt_line_extractor_keeps_ah_deposit_in_financial_sum():
         'line_role': 'financial',
         'inventory_eligible': False,
     }
+    status = apply_po_norm_status(_ssot_payload('12.24', lines))
+    assert status['po_norm_status_label'] == 'Gecontroleerd'
 
 
 def test_actual_receipt_line_extractor_keeps_lidl_deposits_and_price_reductions():
@@ -177,3 +195,5 @@ def test_actual_receipt_line_extractor_keeps_lidl_deposits_and_price_reductions(
         for line in lines
         if line.get('line_type') in {'deposit', 'discount'}
     )
+    status = apply_po_norm_status(_ssot_payload('69.33', lines))
+    assert status['po_norm_status_label'] == 'Gecontroleerd'
