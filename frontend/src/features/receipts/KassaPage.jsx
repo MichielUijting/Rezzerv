@@ -754,7 +754,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start', gap: '8px' }}>
                 {previewState.status === 'ready' && previewState.isImage ? (
                   <div className="rz-kassa-preview-zoom-controls" aria-label="Zoom kassabonfoto">
-                    <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(-RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom <= RECEIPT_PREVIEW_ZOOM_MIN} data-testid="receipt-preview-zoom-out">âˆ’</Button>
+                    <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(-RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom <= RECEIPT_PREVIEW_ZOOM_MIN} data-testid="receipt-preview-zoom-out">−</Button>
                     <span className="rz-kassa-preview-zoom-label" data-testid="receipt-preview-zoom-level">{imageZoomPercent}%</span>
                     <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom >= RECEIPT_PREVIEW_ZOOM_MAX} data-testid="receipt-preview-zoom-in">+</Button>
                   </div>
@@ -912,7 +912,7 @@ function ReceiptUploadProgressOverlay({ uploadProgress }) {
                     fontWeight: 800,
                   }}
                 >
-                  {isComplete ? 'âœ“' : index + 1}
+                  {isComplete ? '✓' : index + 1}
                 </span>
                 <span>{step.label}</span>
                 {isCurrent ? <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#166534' }}>Bezig</span> : null}
@@ -1453,12 +1453,12 @@ async function saveLine(lineId, overrides = null) {
                   <DetailInfoRow label="Plaats" value={branchParts.city} />
                   <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
-                  <DetailInfoRow label="GeÃ¯mporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="Geïmporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
                   <DetailInfoRow label="Aangemaakt op" value={formatDateTime(receipt?.created_at)} />
                   <DetailInfoRow label="Bijgewerkt op" value={formatDateTime(receipt?.updated_at)} />
                   <DetailInfoRow label="Goedgekeurd op" value={formatDateTime(receipt?.approved_at)} />
                   <DetailInfoRow label="Goedgekeurd door" value={receipt?.approved_by_user_email} />
-                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` Â· ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` Â· ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
+                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` · ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` · ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
                 </div>
               )
             }
@@ -1760,11 +1760,11 @@ function ReceiptSourceHubContent({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '18px', fontWeight: 700 }}>Importuitleg</div>
-              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op Ã©Ã©n centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
+              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op één centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
               <div style={{ color: '#344054', fontSize: '14px', display: 'grid', gap: '6px' }}>
                 <div><strong>.eml</strong> blijft via de bestaande e-mailimport lopen.</div>
                 <div><strong>.pdf</strong>, <strong>.zip</strong> en ondersteunde afbeeldingsbestanden lopen via de bestaande bonbestand-import.</div>
-                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in Ã©Ã©n centrale landingsroute.</div>
+                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in één centrale landingsroute.</div>
               </div>
             </div>
           </ScreenCard>
@@ -1796,10 +1796,10 @@ function ReceiptSourceHubContent({
                 onClick={onCopyEmailRoute}
                 disabled
                 aria-disabled="true"
-                title="Adres kopiÃƒÂ«ren wordt later weer geactiveerd."
+                title="Adres kopiëren wordt later weer geactiveerd."
                 style={{ width: 'fit-content', minWidth: '180px', opacity: 0.55, cursor: 'not-allowed' }}
               >
-                Adres kopiÃƒÂ«ren
+                Adres kopiëren
               </Button>
             </div>
           </ScreenCard>

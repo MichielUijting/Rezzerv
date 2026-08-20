@@ -84,7 +84,7 @@ def _status_explanation(result: Any, net_line_sum: Decimal | None, chosen_total:
             reasons.append(f"Totaalbedrag wijkt af van netto som artikelregels met {diff}.")
 
     if not reasons:
-        reasons.append("EssentiÃ«le bongegevens zijn aanwezig en artikelregels zijn bruikbaar voor controle.")
+        reasons.append("Essentiële bongegevens zijn aanwezig en artikelregels zijn bruikbaar voor controle.")
 
     return {
         "technical_parse_status": parse_status or None,
