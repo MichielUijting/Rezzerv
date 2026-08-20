@@ -24,7 +24,7 @@ services:
       REZZERV_RESEND_WEBHOOK_SECRET: ${REZZERV_RESEND_WEBHOOK_SECRET:-}
       REZZERV_NOTIFICATION_FROM_EMAIL: ""
       REZZERV_NOTIFICATION_FROM_NAME: Rezzerv
-      REZZERV_APP_BASE_URL: http://localhost:5174
+      REZZERV_APP_BASE_URL: ${REZZERV_APP_BASE_URL:-http://localhost:5174}
       REZZERV_GS1_MPM_SHARE_BASE_URL: ${REZZERV_GS1_MPM_SHARE_BASE_URL:-}
       REZZERV_GS1_MPM_SHARE_API_KEY: ${REZZERV_GS1_MPM_SHARE_API_KEY:-}
     volumes:
@@ -41,7 +41,7 @@ services:
         REZZERV_COMMIT: ${REZZERV_COMMIT:-unknown}
     restart: unless-stopped
     ports:
-      - "5174:80"
+      - "${REZZERV_FRONTEND_PORT:-5174}:80"
     depends_on:
       - backend
 

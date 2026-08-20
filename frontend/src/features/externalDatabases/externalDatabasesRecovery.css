@@ -1,0 +1,20 @@
+.rz-external-databases .rz-data-table-wrapper {
+  max-height: 323px;
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-gutter: stable both-edges;
+}
+
+.rz-external-recognition-detail {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-table-border, #6bbf7a);
+  border-bottom: 1px solid var(--color-table-border, #6bbf7a);
+}
+
+.rz-external-recognition-detail h4 {
+  margin: 0;
+  color: var(--color-brand-primary);
+}

@@ -188,6 +188,9 @@ test.describe('Receipt lifecycle Release B frontend-regressie', () => {
 
     await dialog.getByRole('button', { name: 'Terugzetten uit Archief', exact: true }).click()
     await expect.poll(() => restoreCalls).toBe(1)
-    await expect(dialogs).toHaveCount(0)
+    await expect(dialogs).toHaveCount(1)
+    const successDialog = dialogs.first()
+    await expect(successDialog.getByText('Gelukt', { exact: true })).toBeVisible()
+    await expect(successDialog.getByText('De gearchiveerde kassabon is teruggezet naar Kassa.', { exact: true })).toBeVisible()
   })
 })
