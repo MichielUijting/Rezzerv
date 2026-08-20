@@ -17,6 +17,12 @@
 
 ## PO-vinklijst
 
+De rollen- en accountcriteria hieronder beschrijven het functionele doelcontract
+uit `docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`. Tot implementatiestap 9.1 is
+afgerond, blijven autorisatiematrix v1.1 en de 190-check regressie de technische
+acceptatiebasis voor de huidige runtime. Een verschil daartussen is een bekende
+overgang en mag niet stilzwijgend worden opgelost.
+
 ### Begrijpelijkheid
 
 - Is duidelijk wat de gebruiker kan doen?
@@ -25,11 +31,31 @@
 
 ### Rechten en huishoudscheiding
 
+- Krijgt een normale nieuwe registratie een nieuw regulier huishouden en wordt
+  de gebruiker daarvan automatisch Beheerder?
+- Wordt een normale huishoudinvite zonder rolkeuze als Lid aangemaakt?
 - Kan een Lid alleen de reguliere huishoudfuncties uit de canonieke matrix gebruiken?
 - Kan alleen een Beheerder huishoudinstellingen en huishoudrollen beheren?
 - Biedt de gewone huishoudrolkeuze uitsluitend Lid en Beheerder aan?
+- Blijft altijd minimaal één Beheerder in ieder regulier huishouden over?
 - Blijven bestaande viewer-/advanced_member-rollen zichtbaar als legacyrol zonder opnieuw toewijsbaar te zijn?
-- Zijn Superuser en Frontteamlid zichtbaar als canonieke profielen, maar niet via gewoon huishoudbeheer toewijsbaar?
+- Heeft een Frontteamlid een eigen regulier huishouden als Beheerder, met alleen
+  de afzonderlijk toegekende Frontteamfuncties en zonder toegang tot andere
+  reguliere huishoudens?
+- Heeft een Superuser geen regulier huishouden, maar wel rolgebaseerde toegang
+  tot het gedeelde systeemhuishouden 0 en functioneel platformbeheer?
+- Heeft een Platformbeheerder geen regulier huishouden, geen automatische
+  toegang tot huishouden 0 en geen automatische functionele Superuserrechten?
+- Worden Frontteamlid, Superuser en Platformbeheerder uitsluitend volgens de
+  beschermde toewijzingsregels beheerd en nooit via gewoon huishoudbeheer?
+- Wordt de IP-eigenaar zichtbaar als hoogste beschermde bevoegdheid, met
+  functionele en technische bevoegdheden en toegang tot huishouden 0?
+- Kan uitsluitend de IP-eigenaar Frontteamleden, Superusers en
+  Platformbeheerders aanstellen of hun speciale bevoegdheid intrekken?
+- Kan de IP-eigenaar niet via normale rollenadministratie worden verwijderd of
+  gedegradeerd?
+- Blijft huishouden 0 herkenbaar als gedeelde systeemcontext voor tests,
+  diagnose en foutanalyse, en niet als regulier of privéhuishouden?
 - Zie ik uitsluitend gegevens uit het actieve huishouden?
 - Verandert een huishoudwissel alle relevante schermgegevens?
 

@@ -2,6 +2,14 @@
 
 Status: **canonieke functionele en technische basis voor PR #216**
 
+Overgangsstatus: dit document en de uitvoerbare 190-check matrix blijven
+tijdelijk de beschrijving en regressiebaseline van de huidige runtime. Het
+PO-goedgekeurde functionele doelcontract staat vanaf v2.0 in
+`docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`. Implementatiestap 9.1 moet de
+runtime en regressies bewust met dat doelcontract in overeenstemming brengen;
+een verschil tussen v1.1 en v2.0 mag tot die tijd niet stilzwijgend worden
+opgelost.
+
 ## 1. Doel
 
 Deze documentatie legt vast:

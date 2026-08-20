@@ -2,6 +2,11 @@
 
 Status: **verplicht regressieonderdeel**
 
+Overgangsstatus: dit protocol valideert tijdelijk de huidige runtime volgens
+autorisatiematrix v1.1. Het PO-goedgekeurde functionele doelcontract staat in
+`docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`. De matrix en dit protocol worden
+pas in de afzonderlijke implementatiestap 9.1 aangepast aan v2.0.
+
 ## Doel
 
 Dit protocol voorkomt dat wijzigingen aan login, sessies, rollen, schermen of routes ongemerkt autorisaties verruimen of beperken.

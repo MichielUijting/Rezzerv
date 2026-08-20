@@ -4,6 +4,12 @@ Status: implementatie in uitvoering — NO-GO voor release
 
 Gerelateerd: issue #215 en draft PR #216
 
+Dit document beschrijft de bestaande sessie- en autorisatieruntime rond v1.1.
+Het PO-goedgekeurde functionele doelcontract voor het nieuwe rollen- en
+accountmodel staat in `docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`. De
+afzonderlijke implementatiestap 9.1 moet beide bewust in overeenstemming
+brengen; deze documentatietaak verandert de runtime niet.
+
 ## Bindende architectuur
 
 De browser is geen bron van waarheid voor gebruiker, actief huishouden, rollen of rechten. Browseropslag (`localStorage` en `sessionStorage`) mag geen authenticatie- of autorisatiecontext bevatten.
