@@ -51,10 +51,10 @@ function authorizationPayload() {
       { membership_id: 'membership-member', email: 'lid@rezzerv.local', role_key: 'household.member' },
     ] },
     roles: { household_id: HOUSEHOLD_ID, items: [
-      { role_key: 'household.viewer', name: 'Kijker' },
       { role_key: 'household.member', name: 'Lid' },
-      { role_key: 'household.advanced_member', name: 'Geavanceerd lid' },
       { role_key: 'household.admin', name: 'Beheerder' },
+      { role_key: 'household.owner', name: 'Superuser' },
+      { role_key: 'household.frontteam', name: 'Frontteamlid' },
     ] },
     permissions: { household_id: HOUSEHOLD_ID, items: [] },
   }
@@ -145,7 +145,7 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await expect.poll(() => calls.name).toBe(1)
     await dismissSuccessFeedback(page)
 
-    await page.getByTestId('household-role-select-lid@rezzerv.local').selectOption('household.advanced_member')
+    await page.getByTestId('household-role-select-lid@rezzerv.local').selectOption('household.admin')
     await expect.poll(() => calls.role).toBe(1)
     await dismissSuccessFeedback(page)
 

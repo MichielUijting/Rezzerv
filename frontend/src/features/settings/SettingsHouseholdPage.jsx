@@ -19,11 +19,15 @@ import './settingsHousehold.css'
 const initialForm = { email: '', password: '' }
 
 const ROLE_LABELS = {
-  'household.viewer': 'Kijker',
+  'household.viewer': 'Kijker (bestaande rol)',
   'household.member': 'Lid',
-  'household.advanced_member': 'Geavanceerd lid',
+  'household.advanced_member': 'Geavanceerd lid (bestaande rol)',
   'household.admin': 'Beheerder',
+  'household.owner': 'Superuser',
+  'household.frontteam': 'Frontteamlid',
 }
+
+const ASSIGNABLE_ROLE_KEYS = new Set(['household.member', 'household.admin'])
 
 function ConfirmRemoveModal({ member, onConfirm, onCancel, busy }) {
   if (!member) return null
@@ -196,6 +200,13 @@ export default function SettingsHouseholdPage() {
                   <div className="rz-household-members-list">
                     {(data?.members || []).map((member) => {
                       const linkedAuthorization = authorizationByEmail.get(String(member.email || '').toLowerCase())
+                      const currentRoleKey = linkedAuthorization?.role_key || ''
+                      const assignableRoles = authorization.roles.filter((role) => ASSIGNABLE_ROLE_KEYS.has(role.role_key))
+                      const currentRole = authorization.roles.find((role) => role.role_key === currentRoleKey)
+                        || (currentRoleKey ? { role_key: currentRoleKey, name: currentRoleKey } : null)
+                      const roleOptions = currentRole && !ASSIGNABLE_ROLE_KEYS.has(currentRole.role_key)
+                        ? [currentRole, ...assignableRoles]
+                        : assignableRoles
                       return (
                         <div key={member.email} data-testid={`household-member-${member.email}`} className="rz-household-member-card">
                           <div className="rz-household-member-content">
@@ -207,13 +218,13 @@ export default function SettingsHouseholdPage() {
                               <span className="rz-label">Rol</span>
                               <select
                                 className="rz-input rz-household-select"
-                                value={linkedAuthorization?.role_key || ''}
+                                value={currentRoleKey}
                                 onChange={(event) => handleRoleChange(member, event.target.value)}
                                 disabled={!isAdmin || isSaving || !linkedAuthorization}
                                 data-testid={`household-role-select-${member.email}`}
                                 aria-label={`Rol ${member.email}`}
                               >
-                                {authorization.roles.map((role) => <option key={role.role_key} value={role.role_key}>{ROLE_LABELS[role.role_key] || role.name}</option>)}
+                                {roleOptions.map((role) => <option key={role.role_key} value={role.role_key}>{ROLE_LABELS[role.role_key] || role.name}</option>)}
                               </select>
                             </label>
                             {isAdmin ? <Button variant="secondary" onClick={() => setMemberToRemove(member)} disabled={isSaving || !member.can_remove} data-testid={`household-remove-${member.email}`}>Ontkoppelen</Button> : null}

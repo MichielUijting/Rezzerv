@@ -2,17 +2,32 @@ import { test, expect } from '@playwright/test'
 import { attachConsoleErrorCollector, expectNoConsoleErrors } from './helpers/rezzervAssertions.js'
 
 async function seedAdminSession(page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('rezzerv_token', 'rezzerv-dev-token')
-    localStorage.setItem('rezzerv_auth_context', JSON.stringify({
-      active_household_id: '1',
-      display_role: 'admin',
-      permissions: {
-        'members.manage': true,
-        'permissions.view': true,
-      },
-    }))
-    sessionStorage.setItem('rezzerv_auth_checked_token', 'rezzerv-dev-token')
+  const permissions = {
+    'household_settings.manage': true,
+    'members.manage': true,
+    'permissions.view': true,
+  }
+  await page.route('**/api/session', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: { id: 'settings-authorization-admin', email: 'admin@rezzerv.local' },
+        user_id: 'settings-authorization-admin',
+        email: 'admin@rezzerv.local',
+        active_household_id: '1',
+        active_household_name: 'Testhuishouden',
+        role: 'admin',
+        display_role: 'admin',
+        permissions,
+        supported_permissions: Object.keys(permissions),
+        can_manage_member_permissions: false,
+        can_manage_members: true,
+        is_viewer: false,
+        is_platform_superuser: false,
+        is_frontteam: false,
+      }),
+    })
   })
 }
 
@@ -24,10 +39,10 @@ function authorizationPayload(roleKey = 'household.member') {
       { membership_id: 'member-lid', email: 'lid@rezzerv.local', role_key: roleKey, role_name: 'Lid', permission_overrides: [] },
     ],
     roles: [
-      { role_key: 'household.viewer', name: 'Viewer', permission_keys: ['inventory.view', 'members.view'] },
       { role_key: 'household.member', name: 'Lid', permission_keys: ['inventory.view', 'inventory.update', 'members.view'] },
-      { role_key: 'household.advanced_member', name: 'Gevorderd lid', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view'] },
       { role_key: 'household.admin', name: 'Beheerder', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
+      { role_key: 'household.owner', name: 'Superuser', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
+      { role_key: 'household.frontteam', name: 'Frontteamlid', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
     ],
     permissions: [
       { permission_key: 'inventory.view', description: 'inventory.view' },
@@ -71,13 +86,11 @@ test.describe('Autorisaties frontend-regressie', () => {
     await expect(authorizationPage).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Autorisaties', exact: true })).toBeVisible()
     await expect(page.getByTestId('authorization-role-matrix')).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Kijker', exact: true })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Lid', exact: true })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Geavanceerd lid', exact: true })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Beheerder', exact: true })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Superuser', exact: true })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Frontteamlid', exact: true })).toBeVisible()
     await expect(page.getByRole('rowheader', { name: 'Voorraad bekijken', exact: true })).toBeVisible()
-    await expect(page.getByLabel('Voorraad bekijken voor Kijker: toegestaan')).toBeChecked()
-    await expect(page.getByLabel('Voorraad wijzigen voor Kijker: niet toegestaan')).not.toBeChecked()
     await expect(page.getByLabel('Voorraad wijzigen voor Lid: toegestaan')).toBeChecked()
     await expect(authorizationPage.getByText('admin@rezzerv.local')).toHaveCount(0)
     await expect(authorizationPage.getByText('inventory.view')).toHaveCount(0)
@@ -89,7 +102,7 @@ test.describe('Autorisaties frontend-regressie', () => {
     const consoleErrors = attachConsoleErrorCollector(page)
     await seedAdminSession(page)
 
-    let roleKey = 'household.member'
+    let roleKey = 'household.advanced_member'
     let householdName = 'Molenstraat 19 Driel'
     const householdPayload = () => ({
       household_name: householdName,
@@ -114,13 +127,18 @@ test.describe('Autorisaties frontend-regressie', () => {
     await page.goto('/instellingen/huishouden')
     await expect(page.getByTestId('household-settings-page')).toBeVisible()
     await expect(page.getByText('Rechten voor leden')).toHaveCount(0)
-    await expect(page.getByLabel('Rol lid@rezzerv.local')).toHaveValue('household.member')
-
-    await page.getByLabel('Rol lid@rezzerv.local').selectOption('household.advanced_member')
-    const roleFeedback = page.getByTestId('app-feedback-success')
-    await expect(roleFeedback).toContainText('De rol van lid@rezzerv.local is gewijzigd naar Geavanceerd lid.')
-    await roleFeedback.getByRole('button', { name: 'OK' }).click()
     await expect(page.getByLabel('Rol lid@rezzerv.local')).toHaveValue('household.advanced_member')
+    await expect(page.getByLabel('Rol lid@rezzerv.local').locator('option')).toHaveText([
+      'Geavanceerd lid (bestaande rol)',
+      'Lid',
+      'Beheerder',
+    ])
+
+    await page.getByLabel('Rol lid@rezzerv.local').selectOption('household.member')
+    const roleFeedback = page.getByTestId('app-feedback-success')
+    await expect(roleFeedback).toContainText('De rol van lid@rezzerv.local is gewijzigd naar Lid.')
+    await roleFeedback.getByRole('button', { name: 'OK' }).click()
+    await expect(page.getByLabel('Rol lid@rezzerv.local')).toHaveValue('household.member')
 
     await page.getByTestId('household-name-input').fill('Molenstraat 19 Driel bijgewerkt')
     await page.getByTestId('household-name-save').click()

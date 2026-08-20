@@ -193,14 +193,27 @@ def list_authorization_roles(
         context = _actor_context(conn, household_id)
         _require(conn, context, "permissions.view")
         rows = conn.execute(text("""
-            SELECT role_key, name
+            SELECT role_key,
+                   CASE role_key
+                       WHEN 'household.member' THEN 'Lid'
+                       WHEN 'household.admin' THEN 'Beheerder'
+                       WHEN 'household.owner' THEN 'Superuser'
+                       WHEN 'household.frontteam' THEN 'Frontteamlid'
+                   END AS name
             FROM auth_roles
-            WHERE scope = 'household' AND active = 1
+            WHERE scope = 'household'
+              AND active = 1
+              AND role_key IN (
+                  'household.member',
+                  'household.admin',
+                  'household.owner',
+                  'household.frontteam'
+              )
             ORDER BY CASE role_key
-                WHEN 'household.viewer' THEN 1
-                WHEN 'household.member' THEN 2
-                WHEN 'household.advanced_member' THEN 3
-                WHEN 'household.admin' THEN 4
+                WHEN 'household.member' THEN 1
+                WHEN 'household.admin' THEN 2
+                WHEN 'household.owner' THEN 3
+                WHEN 'household.frontteam' THEN 4
                 ELSE 99 END
         """)).mappings().all()
         items = []

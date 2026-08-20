@@ -155,9 +155,7 @@ def set_household_membership_role(
         permission_key="members.manage",
     )
     allowed_roles = {
-        "household.viewer",
         "household.member",
-        "household.advanced_member",
         "household.admin",
     }
     if role_key not in allowed_roles:

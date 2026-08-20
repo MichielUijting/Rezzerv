@@ -7,10 +7,16 @@ Een gebruiker mag alleen gegevens lezen of wijzigen waarvoor hij binnen het juis
 ## Rollen
 
 - niet ingelogd: geen afgeschermde huishoudgegevens;
-- kijker: uitsluitend toegestane reads;
-- gebruiker met schrijfrecht: huishoudelijke voorraadmutaties;
-- huishoudbeheerder: huishoudinstellingen en koppelingen;
-- platformbeheerder: centrale catalogus-, diagnose-, test- en onderhoudsmutaties.
+- Lid (`household.member`): reguliere huishoudfuncties volgens de canonieke autorisatiematrix;
+- Beheerder (`household.admin`): aanvullende huishoudbeheerrechten, zonder impliciete catalogus- of platformrechten;
+- Superuser (`household.owner`): speciaal systeemprofiel met de vastgelegde platformrechten;
+- Frontteamlid (`household.frontteam`): speciaal organisatieprofiel volgens de frontteammatrix.
+
+Een huishoudbeheerder kan via de gewone rolkeuze uitsluitend Lid en Beheerder
+toewijzen. `household.viewer` en `household.advanced_member` blijven alleen
+ondersteund voor backwards compatibility met bestaande gegevens en zijn geen
+nieuwe gebruikersrollen. Superuser en Frontteamlid zijn evenmin via gewoon
+huishoudbeheer toewijsbaar.
 
 ## Server-side objectbinding
 

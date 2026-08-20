@@ -28,7 +28,7 @@ def _assign(conn, household_id, membership_id, role_key):
     })
 
 
-def test_legacy_memberships_migrate_admin_member_and_viewer():
+def test_legacy_memberships_migrate_admin_member_viewer_and_advanced_member():
     conn = _connection()
     conn.execute(text("""
         CREATE TABLE household_memberships (
@@ -43,6 +43,7 @@ def test_legacy_memberships_migrate_admin_member_and_viewer():
         INSERT INTO household_memberships(id, household_id, user_id, role, status)
         VALUES
           ('m-admin', 'h1', 'u1', 'beheerder', 'active'),
+          ('m-advanced', 'h1', 'u4', 'advanced_member', 'active'),
           ('m-member', 'h1', 'u2', 'member', 'active'),
           ('m-viewer', 'h1', 'u3', 'viewer', 'active')
     """))
@@ -53,9 +54,10 @@ def test_legacy_memberships_migrate_admin_member_and_viewer():
         ORDER BY membership_id
     """)).all())
 
-    assert result.scanned == 3
-    assert result.created == 3
+    assert result.scanned == 4
+    assert result.created == 4
     assert roles == {
+        "m-advanced": "household.advanced_member",
         "m-admin": "household.admin",
         "m-member": "household.member",
         "m-viewer": "household.viewer",
@@ -120,17 +122,44 @@ def test_role_change_requires_permission_and_writes_audit():
         actor_membership_id='admin',
         actor_user_id='u-admin',
         target_membership_id='target',
-        role_key='household.advanced_member',
-        reason='Meer beheermogelijkheden nodig',
+        role_key='household.admin',
+        reason='Huishoudbeheer nodig',
     )
 
     assert conn.execute(text("""
         SELECT role_key FROM auth_membership_roles
         WHERE household_id = 'h1' AND membership_id = 'target'
-    """)).scalar() == 'household.advanced_member'
+    """)).scalar() == 'household.admin'
     assert conn.execute(text("""
         SELECT action FROM auth_audit_log WHERE object_id = 'target'
     """)).scalar() == 'authorization.membership_role.updated'
+
+
+@pytest.mark.parametrize('role_key', (
+    'household.viewer',
+    'household.advanced_member',
+    'household.owner',
+    'household.frontteam',
+))
+def test_household_management_cannot_assign_legacy_or_special_roles(role_key):
+    conn = _connection()
+    _assign(conn, 'h1', 'admin', 'household.admin')
+    _assign(conn, 'h1', 'target', 'household.viewer')
+
+    with pytest.raises(ValueError, match='Unknown or non-household role'):
+        set_household_membership_role(
+            conn,
+            household_id='h1',
+            actor_membership_id='admin',
+            actor_user_id='u-admin',
+            target_membership_id='target',
+            role_key=role_key,
+        )
+
+    assert conn.execute(text("""
+        SELECT role_key FROM auth_membership_roles
+        WHERE household_id = 'h1' AND membership_id = 'target'
+    """)).scalar() == 'household.viewer'
 
 
 def test_last_admin_cannot_be_demoted():

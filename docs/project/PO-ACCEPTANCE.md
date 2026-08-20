@@ -25,9 +25,11 @@
 
 ### Rechten en huishoudscheiding
 
-- Kan een kijker alleen lezen?
-- Kan een bevoegde gebruiker wijzigen?
-- Kan alleen een beheerder instellingen beheren?
+- Kan een Lid alleen de reguliere huishoudfuncties uit de canonieke matrix gebruiken?
+- Kan alleen een Beheerder huishoudinstellingen en huishoudrollen beheren?
+- Biedt de gewone huishoudrolkeuze uitsluitend Lid en Beheerder aan?
+- Blijven bestaande viewer-/advanced_member-rollen zichtbaar als legacyrol zonder opnieuw toewijsbaar te zijn?
+- Zijn Superuser en Frontteamlid zichtbaar als canonieke profielen, maar niet via gewoon huishoudbeheer toewijsbaar?
 - Zie ik uitsluitend gegevens uit het actieve huishouden?
 - Verandert een huishoudwissel alle relevante schermgegevens?
 
