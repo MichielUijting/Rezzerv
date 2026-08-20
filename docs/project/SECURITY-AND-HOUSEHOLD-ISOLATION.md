@@ -6,17 +6,40 @@ Een gebruiker mag alleen gegevens lezen of wijzigen waarvoor hij binnen het juis
 
 ## Rollen
 
-- niet ingelogd: geen afgeschermde huishoudgegevens;
-- Lid (`household.member`): reguliere huishoudfuncties volgens de canonieke autorisatiematrix;
-- Beheerder (`household.admin`): aanvullende huishoudbeheerrechten, zonder impliciete catalogus- of platformrechten;
-- Superuser (`household.owner`): speciaal systeemprofiel met de vastgelegde platformrechten;
-- Frontteamlid (`household.frontteam`): speciaal organisatieprofiel volgens de frontteammatrix.
+- Het functionele doelcontract voor rollen, accounttypen, huishoudrelatie,
+  systeemhuishouden 0 en toewijzingsregels staat in
+  `docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`.
+- Niet ingelogd: geen afgeschermde huishoudgegevens.
+- Lid en Beheerder zijn de gewone rollen binnen een regulier huishouden.
+- Frontteamlid is een aanvullende functionele rol boven op Beheerder van een
+  eigen regulier huishouden.
+- Superuser is functioneel platformbeheer met toegang tot het gedeelde
+  systeemhuishouden 0, maar zonder regulier huishouden.
+- Platformbeheerder is technisch platformbeheer, zonder regulier huishouden en
+  zonder automatische toegang tot huishouden 0.
+- IP-eigenaar is de hoogste beschermde functionele en technische bevoegdheid,
+  zonder regulier huishouden en met toegang tot huishouden 0.
 
 Een huishoudbeheerder kan via de gewone rolkeuze uitsluitend Lid en Beheerder
 toewijzen. `household.viewer` en `household.advanced_member` blijven alleen
 ondersteund voor backwards compatibility met bestaande gegevens en zijn geen
 nieuwe gebruikersrollen. Superuser en Frontteamlid zijn evenmin via gewoon
 huishoudbeheer toewijsbaar.
+
+Huishouden 0 is geen regulier gebruikershuishouden, maar een herkenbare gedeelde
+systeemcontext voor bevoegde Superusers, voornamelijk voor tests, diagnose en
+foutanalyse. In het doelmodel is toegang rol- of bevoegdheidsgebaseerd en nooit
+afhankelijk van één persoonlijk hardgecodeerd e-mailadres. De isolatie tussen
+reguliere huishoudens blijft onverkort gelden.
+
+## Overgang naar rollen- en accountmodel v2.0
+
+`docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md` en de uitvoerbare
+190-check matrix beschrijven en bewaken tijdelijk nog de huidige runtime.
+Implementatiestap 9.1 moet runtime, permissies, sessie, rollen en regressietests
+bewust met het functionele doelcontract v2.0 in overeenstemming brengen. Tot die
+implementatie is afgerond, mag een verschil tussen beide contracten niet
+stilzwijgend als fout in één van de documenten worden opgelost.
 
 ## Server-side objectbinding
 

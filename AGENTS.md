@@ -30,6 +30,10 @@ Aanvullende harde bronnen:
 - kassabonketen:
   `docs/Rezzerv-procesketen-kassa-voorraad-bijna-op.md`
 - security en rollen:
+  `docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md` als PO-goedgekeurde functionele
+  SSOT voor rollen, accounttypen, huishoudrelatie, systeemhuishouden 0 en
+  toewijzingsregels;
+- huidige autorisatieruntime:
   `docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md`
 - autorisatieregressie:
   `docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md`
@@ -39,6 +43,12 @@ Aanvullende harde bronnen:
 Gebruik historische release-, PR-, analyse- en consolidatiedocumenten alleen als
 context. Een roadmap of doelarchitectuur is geen automatische opdracht tot
 refactoring.
+
+Tijdens de overgang naar het rollen- en accountmodel v2.0 blijven
+`AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md` en de uitvoerbare 190-check matrix de
+beschrijving en regressiebaseline van de huidige runtime. Implementatiestap 9.1
+moet runtime en regressies bewust met v2.0 in overeenstemming brengen. Los een
+conflict tussen runtime-v1.1 en functioneel-v2.0 nooit stilzwijgend op.
 
 De actuele expliciete opdracht bepaalt de scope. Bij tegenspraak geldt normaal
 het meest specifieke en recentste bindende contract. Voor technische
