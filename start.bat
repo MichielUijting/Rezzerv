@@ -78,7 +78,9 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo [5/6] Waiting for backend and frontend...
+echo [5/6] Wachten 90 seconden zodat backend volledig kan opstarten...
+timeout /t 90 /nobreak >nul
+echo     Waiting for backend and frontend...
 call :WaitForBackendHealth || exit /b 1
 call :VerifyRuntimeDatabase || exit /b 1
 call :WaitForFrontend %FRONTEND_URL% || exit /b 1
