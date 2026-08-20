@@ -6,11 +6,18 @@ import { fetchAuthorizationOverview } from './services/authorizationMembershipSe
 import './settingsAuthorization.css'
 
 const ROLE_LABELS = {
-  'household.viewer': 'Kijker',
   'household.member': 'Lid',
-  'household.advanced_member': 'Geavanceerd lid',
   'household.admin': 'Beheerder',
+  'household.owner': 'Superuser',
+  'household.frontteam': 'Frontteamlid',
 }
+
+const AUTHORIZATION_ROLE_KEYS = new Set([
+  'household.member',
+  'household.admin',
+  'household.owner',
+  'household.frontteam',
+])
 
 const AUTHORIZATION_ROWS = [
   ['dashboard.view', 'Startscherm bekijken'],
@@ -89,7 +96,7 @@ export default function SettingsAuthorizationPage() {
   }, [showFeedback])
 
   const roleColumns = useMemo(
-    () => overview.roles.map((role) => ({
+    () => overview.roles.filter((role) => AUTHORIZATION_ROLE_KEYS.has(role.role_key)).map((role) => ({
       ...role,
       label: ROLE_LABELS[role.role_key] || role.name,
       granted: new Set(role.permission_keys || []),

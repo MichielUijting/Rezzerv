@@ -41,13 +41,13 @@ export default function SettingsPage() {
             <div><div style={{ fontWeight: 600 }}>Privacy &amp; Datadeling</div><div style={{ color: '#667085', fontSize: '14px' }}>Persoonlijke toestemming per gebruiker · standaard alles uit</div></div><div aria-hidden="true">→</div>
           </Link>
           <ProtectedTile permission="locations.manage" to="/instellingen/locaties" title="Locaties" description="Beheer locaties en sublocaties voor Voorraad, Kassa en Incidentele aankoop" />
-          <ProtectedTile permission="catalog.manage" to="/instellingen/winkelimport" title="Winkelimport" description="Vereenvoudigingsniveau voor het huishouden" />
+          <ProtectedTile permission="household_settings.manage" to="/instellingen/winkelimport" title="Winkelimport" description="Vereenvoudigingsniveau voor het huishouden" />
           <ProtectedTile permission="household_settings.manage" to="/instellingen/huishouden" title="Huishouden" description="Naam, leden en rollen beheren" />
           <Link to="/instellingen/huishouden/autorisaties" style={getTileStyle(false)} data-testid="authorization-settings-link">
             <div><div style={{ fontWeight: 600 }}>Autorisaties</div><div style={{ color: '#667085', fontSize: '14px' }}>Bekijk welke mogelijkheden bij elke rol horen</div></div><div aria-hidden="true">→</div>
           </Link>
           <ProtectedTile permission="household_settings.manage" to="/instellingen/huishoudautomatisering" title="Huishoudautomatisering" description="Slim afboeken bij herhaalaankoop" />
-          <ProtectedTile permission="almost_out.update" to="/instellingen/bijna-op-voorspelling" title="Bijna op voorspelling" description="Huishoudbrede bijna-op voorspelling en regelprioriteit" />
+          <ProtectedTile permission="household_settings.manage" to="/instellingen/bijna-op-voorspelling" title="Bijna op voorspelling" description="Huishoudbrede bijna-op voorspelling en regelprioriteit" />
         </div>
       </Card>
     </AppShell>
