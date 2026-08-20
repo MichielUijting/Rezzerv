@@ -245,7 +245,7 @@ export function deriveBatchUiState(batch) {
   const openCount = Math.max(visibleLines.length - readyLines.length, 0)
   const isProcessed = (batch?.import_status || '') === 'processed'
   const canResume = !isProcessed
-  const countsReason = `${readyLines.length} klaar Â· ${openCount} open Â· ${blockedLines} geblokkeerd Â· ${processedCount} verwerkt`
+  const countsReason = `${readyLines.length} klaar · ${openCount} open · ${blockedLines} geblokkeerd · ${processedCount} verwerkt`
 
   if (isProcessed) {
     return {
