@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api import authorization_membership_routes as routes
 from app.services.authorization_foundation_service import ensure_authorization_foundation
+from app.services.authorization_membership_service import migrate_legacy_household_memberships
 from app.services.server_session_service import ServerSessionContext
 
 
@@ -67,6 +68,7 @@ def _client(email: str = 'admin@example.test', household_id: str = 'h1', *, auth
               ('m-outsider', 'h2', 'outsider@example.test', 'owner', 'active')
         """))
         ensure_authorization_foundation(conn)
+        migrate_legacy_household_memberships(conn)
     routes.engine = engine
     if authenticated:
         context = _session_context(email, household_id)
@@ -176,20 +178,16 @@ def test_admin_can_change_member_role_and_audit_is_written():
             SELECT action FROM auth_audit_log
             WHERE object_id = 'm-member'
         """)).scalar()
+        legacy_role = conn.execute(text("""
+            SELECT role FROM household_memberships WHERE id = 'm-member'
+        """)).scalar()
     assert role == 'household.admin'
+    assert legacy_role == 'admin'
     assert action == 'authorization.membership_role.updated'
 
 
 def test_admin_cannot_assign_legacy_or_special_role():
     client, engine = _client()
-    with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO auth_membership_roles(
-                household_id, membership_id, role_key, active
-            ) VALUES (
-                'h1', 'm-member', 'household.member', 1
-            )
-        """))
     for role_key in (
         'household.viewer',
         'household.advanced_member',

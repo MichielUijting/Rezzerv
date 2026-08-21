@@ -88,6 +88,15 @@ from app.services.external_article_product_link_service import (
     ensure_external_article_product_link_schema,
     get_confirmed_external_article_product_link,
 )
+from app.services.authorization_foundation_service import assert_last_household_admin_remains
+from app.services.authorization_membership_service import (
+    AuthorizationDeniedError,
+    canonical_role_to_runtime_role,
+    create_canonical_membership_role,
+    migrate_legacy_household_memberships,
+    resolve_effective_household_role,
+    set_household_membership_role,
+)
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -507,12 +516,10 @@ class HouseholdMemberCreateRequest(BaseModel):
     def validate_role(cls, value):
         normalized = str(value or "member").strip().lower()
         if normalized in {"admin", "owner"}:
-            return "owner"
+            return "admin"
         if normalized in {"lid", "member"}:
             return "member"
-        if normalized in {"viewer", "gast", "read_only", "read-only"}:
-            return "viewer"
-        raise ValueError("Rol moet admin, lid of kijker zijn")
+        raise ValueError("Rol moet admin of lid zijn")
 
 
 class HouseholdMemberUpdateRequest(BaseModel):
@@ -523,12 +530,10 @@ class HouseholdMemberUpdateRequest(BaseModel):
     def validate_role(cls, value):
         normalized = str(value or "").strip().lower()
         if normalized in {"admin", "owner"}:
-            return "owner"
+            return "admin"
         if normalized in {"lid", "member"}:
             return "member"
-        if normalized in {"viewer", "gast", "read_only", "read-only"}:
-            return "viewer"
-        raise ValueError("Rol moet admin, lid of kijker zijn")
+        raise ValueError("Rol moet admin of lid zijn")
 
 
 class HouseholdNameUpdateRequest(BaseModel):
@@ -7227,18 +7232,36 @@ def refresh_runtime_users_from_db():
         membership_rows = conn.execute(
             text(
                 '''
-                SELECT au.email,
-                       au.password,
-                       hm.household_id,
-                       hm.role,
+                 SELECT au.email,
+                        au.password,
+                        hm.id AS membership_id,
+                        hm.household_id,
+                        hm.role,
                        hr.naam AS household_name
                 FROM app_users au
                 LEFT JOIN household_memberships hm ON hm.user_email = au.email
                 LEFT JOIN household_registry hr ON hr.id = hm.household_id
-                ORDER BY au.email ASC, CASE WHEN hm.role = 'owner' THEN 0 ELSE 1 END ASC, hm.created_at ASC
+                ORDER BY au.email ASC, hm.created_at ASC
                 '''
             )
         ).mappings().all()
+        membership_rows = [
+            {
+                **dict(row),
+                'effective_role_key': resolve_effective_household_role(
+                    conn,
+                    household_id=str(row.get('household_id') or ''),
+                    membership_id=str(row.get('membership_id') or ''),
+                    legacy_role=row.get('role'),
+                ),
+            }
+            for row in membership_rows
+        ]
+        membership_rows.sort(key=lambda row: (
+            str(row.get('email') or '').strip().lower(),
+            0 if canonical_role_to_runtime_role(row.get('effective_role_key') or '') in {'admin', 'owner'} else 1,
+            str(row.get('household_id') or ''),
+        ))
 
     for row in membership_rows:
         email = str(row.get('email') or '').strip().lower()
@@ -7246,9 +7269,14 @@ def refresh_runtime_users_from_db():
             continue
         household_id = str(row.get('household_id') or DEFAULT_AUTH_USERS.get(email, {}).get('household_id') or '1')
         household_name = row.get('household_name') or DEFAULT_AUTH_USERS.get(email, {}).get('household_name') or 'Mijn huishouden'
+        effective_runtime_role = canonical_role_to_runtime_role(
+            row.get('effective_role_key') or ''
+        )
+        if not effective_runtime_role:
+            continue
         runtime_users[email] = {
             'password': row.get('password') or DEFAULT_AUTH_USERS.get(email, {}).get('password') or 'Rezzerv123',
-            'role': 'admin' if str(row.get('role') or '').strip().lower() == 'owner' else 'member',
+            'role': 'admin' if effective_runtime_role in {'admin', 'owner'} else 'member',
             'household_key': household_id,
             'household_id': household_id,
             'household_name': household_name,
@@ -7280,35 +7308,51 @@ def list_household_members(conn, household_id: str) -> list[dict]:
     rows = conn.execute(
         text(
             '''
-            SELECT hm.user_email AS email,
+            SELECT hm.id AS membership_id,
+                   hm.user_email AS email,
                    hm.role,
                    au.created_at AS user_created_at,
                    hm.created_at AS membership_created_at
             FROM household_memberships hm
             JOIN app_users au ON au.email = hm.user_email
             WHERE hm.household_id = :household_id
-            ORDER BY CASE WHEN hm.role = 'owner' THEN 0 ELSE 1 END ASC,
-                     lower(hm.user_email) ASC
+            ORDER BY lower(hm.user_email) ASC
             '''
         ),
         {'household_id': str(household_id)},
     ).mappings().all()
-    return [
-        {
-            'email': str(row.get('email') or '').strip().lower(),
-            'role': str(row.get('role') or 'member'),
-            'display_role': map_membership_role_to_display_role(row.get('role')),
+    members = []
+    for row in rows:
+        email = str(row.get('email') or '').strip().lower()
+        if not email:
+            continue
+        effective_role_key = resolve_effective_household_role(
+            conn,
+            household_id=str(household_id),
+            membership_id=str(row.get('membership_id') or ''),
+            legacy_role=row.get('role'),
+        )
+        effective_role = canonical_role_to_runtime_role(effective_role_key or '')
+        if not effective_role:
+            continue
+        members.append({
+            'email': email,
+            'role': effective_role,
+            'display_role': map_membership_role_to_display_role(effective_role),
             'user_created_at': row.get('user_created_at'),
             'membership_created_at': row.get('membership_created_at'),
-        }
-        for row in rows
-        if str(row.get('email') or '').strip()
-    ]
+        })
+    return members
 
 
 def count_household_admins(conn, household_id: str) -> int:
     row = conn.execute(
-        text("SELECT COUNT(*) AS total FROM household_memberships WHERE household_id = :household_id AND role = 'owner'"),
+        text("""
+            SELECT COUNT(*) AS total FROM auth_membership_roles
+            WHERE household_id = :household_id
+              AND role_key = 'household.admin'
+              AND active = 1
+        """),
         {'household_id': str(household_id)},
     ).mappings().first()
     return int(row.get('total') or 0) if row else 0
@@ -7395,7 +7439,7 @@ def map_user_role_to_membership_role(user_role: str | None) -> str:
 
 def map_membership_role_to_display_role(membership_role: str | None) -> str:
     normalized = str(membership_role or '').strip().lower()
-    if normalized == 'owner':
+    if normalized in {'admin', 'owner'}:
         return 'admin'
     if normalized == 'viewer':
         return 'viewer'
@@ -7411,19 +7455,35 @@ def resolve_user_household_memberships(user: dict) -> list[dict]:
                 text(
                     '''
                     SELECT hm.household_id,
+                           hm.id AS membership_id,
                            hm.role,
                            hr.naam AS household_name,
                            hr.created_at AS household_created_at
                     FROM household_memberships hm
                     LEFT JOIN household_registry hr ON hr.id = hm.household_id
                     WHERE hm.user_email = :email
-                    ORDER BY CASE WHEN hm.role = 'owner' THEN 0 ELSE 1 END ASC,
-                             hm.created_at ASC,
+                    ORDER BY hm.created_at ASC,
                              hm.household_id ASC
                     '''
                 ),
                 {'email': email},
             ).mappings().all()
+            rows = [
+                {
+                    **dict(row),
+                    'effective_role_key': resolve_effective_household_role(
+                        conn,
+                        household_id=str(row.get('household_id') or ''),
+                        membership_id=str(row.get('membership_id') or ''),
+                        legacy_role=row.get('role'),
+                    ),
+                }
+                for row in rows
+            ]
+            rows.sort(key=lambda row: (
+                0 if canonical_role_to_runtime_role(row.get('effective_role_key') or '') in {'admin', 'owner'} else 1,
+                str(row.get('household_id') or ''),
+            ))
     except Exception:
         rows = []
 
@@ -7431,7 +7491,11 @@ def resolve_user_household_memberships(user: dict) -> list[dict]:
         household_id = str(row.get('household_id') or '').strip()
         if not household_id:
             continue
-        membership_role = str(row.get('role') or 'member').strip().lower() or 'member'
+        membership_role = canonical_role_to_runtime_role(
+            row.get('effective_role_key') or ''
+        )
+        if not membership_role:
+            continue
         memberships.append(
             {
                 'household_id': household_id,
@@ -7445,21 +7509,7 @@ def resolve_user_household_memberships(user: dict) -> list[dict]:
 
     if memberships:
         return memberships
-
-    household = ensure_household(user['email'])
-    membership_role = map_user_role_to_membership_role(user.get('role'))
-    household_id = str(household.get('id') or user.get('household_id') or '1')
-    household_name = str(household.get('naam') or user.get('household_name') or 'Mijn huishouden')
-    return [
-        {
-            'household_id': household_id,
-            'household_name': household_name,
-            'household_created_at': household.get('created_at'),
-            'role': membership_role,
-            'display_role': map_membership_role_to_display_role(membership_role),
-            'is_default': True,
-        }
-    ]
+    return []
 
 
 def resolve_household_context_for_user(user: dict, requested_household_id: str | None = None) -> dict:
@@ -12122,6 +12172,8 @@ async def import_receipt(
                 'status': batch.get('status') or 'queued',
             }
             return JSONResponse(status_code=202, content=response_payload)
+        except AuthorizationDeniedError as exc:
+            raise HTTPException(status_code=403, detail='Geen bevoegdheid om huishoudrollen te wijzigen') from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         except Exception as exc:
@@ -13609,6 +13661,7 @@ def create_household_member(payload: HouseholdMemberCreateRequest, authorization
                 {'id': str(uuid.uuid4()), 'email': normalized_email, 'password': password_value},
             )
 
+        membership_id = str(uuid.uuid4())
         conn.execute(
             text(
                 '''
@@ -13617,11 +13670,17 @@ def create_household_member(payload: HouseholdMemberCreateRequest, authorization
                 '''
             ),
             {
-                'id': str(uuid.uuid4()),
+                'id': membership_id,
                 'household_id': household_id,
                 'user_email': normalized_email,
                 'role': payload.role,
             },
+        )
+        create_canonical_membership_role(
+            conn,
+            household_id=household_id,
+            membership_id=membership_id,
+            legacy_role=payload.role,
         )
         log_household_role_change(conn, household_id, normalized_email, None, payload.role, str(context.get('email') or '').strip().lower(), action_type='member_added')
         payload_result = build_household_members_payload(conn, household_id, str(context.get('email') or '').strip().lower())
@@ -13631,7 +13690,7 @@ def create_household_member(payload: HouseholdMemberCreateRequest, authorization
         invite_result = send_household_invitation_email(
             normalized_email,
             household_name,
-            'admin' if payload.role == 'owner' else 'lid',
+            'admin' if payload.role == 'admin' else 'lid',
             password_value if not existing_user else None,
         )
     except HTTPException as exc:
@@ -13668,13 +13727,37 @@ def update_household_member(member_email: str, payload: HouseholdMemberUpdateReq
         ).mappings().first()
         if not existing:
             raise HTTPException(status_code=404, detail='Gebruiker is niet gekoppeld aan dit huishouden')
-        current_role = str(existing.get('role') or 'member')
-        if current_role == 'owner' and payload.role != 'owner' and count_household_admins(conn, household_id) <= 1:
-            raise HTTPException(status_code=409, detail='Er moet minimaal één admin in het huishouden overblijven')
-        conn.execute(
-            text("UPDATE household_memberships SET role = :role, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
-            {'id': existing['id'], 'role': payload.role},
+        current_role_key = resolve_effective_household_role(
+            conn,
+            household_id=household_id,
+            membership_id=str(existing['id']),
+            legacy_role=existing.get('role'),
         )
+        if not current_role_key:
+            raise HTTPException(status_code=403, detail='Bevoegdheid ontbreekt')
+        actor = conn.execute(text("""
+            SELECT id FROM household_memberships
+            WHERE household_id = :household_id AND lower(user_email) = lower(:email)
+            LIMIT 1
+        """), {
+            'household_id': household_id,
+            'email': str(context.get('email') or ''),
+        }).mappings().first()
+        if not actor:
+            raise HTTPException(status_code=403, detail='Geen toegang tot dit huishouden')
+        target_role_key = 'household.admin' if payload.role == 'admin' else 'household.member'
+        try:
+            set_household_membership_role(
+                conn,
+                household_id=household_id,
+                actor_membership_id=str(actor['id']),
+                actor_user_id=str(context.get('user_id') or context.get('email') or ''),
+                target_membership_id=str(existing['id']),
+                role_key=target_role_key,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        current_role = canonical_role_to_runtime_role(current_role_key) or 'member'
         log_household_role_change(conn, household_id, normalized_email, current_role, payload.role, str(context.get('email') or '').strip().lower(), action_type='role_changed')
         payload_result = build_household_members_payload(conn, household_id, str(context.get('email') or '').strip().lower())
         capability_payload = build_capabilities_payload(conn, context)
@@ -13701,8 +13784,31 @@ def delete_household_member(member_email: str, authorization: Optional[str] = He
         ).mappings().first()
         if not existing:
             raise HTTPException(status_code=404, detail='Gebruiker is niet gekoppeld aan dit huishouden')
-        if str(existing.get('role') or 'member') == 'owner' and count_household_admins(conn, household_id) <= 1:
-            raise HTTPException(status_code=409, detail='De laatste admin van het huishouden kan niet worden verwijderd')
+        current_role_key = resolve_effective_household_role(
+            conn,
+            household_id=household_id,
+            membership_id=str(existing['id']),
+            legacy_role=existing.get('role'),
+        )
+        if not current_role_key:
+            raise HTTPException(status_code=403, detail='Bevoegdheid ontbreekt')
+        if current_role_key == 'household.admin':
+            try:
+                assert_last_household_admin_remains(
+                    conn,
+                    household_id=household_id,
+                    membership_id_to_remove=str(existing['id']),
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail='De laatste admin van het huishouden kan niet worden verwijderd') from exc
+        conn.execute(text("""
+            DELETE FROM auth_membership_permission_overrides
+            WHERE household_id = :household_id AND membership_id = :membership_id
+        """), {'household_id': household_id, 'membership_id': str(existing['id'])})
+        conn.execute(text("""
+            DELETE FROM auth_membership_roles
+            WHERE household_id = :household_id AND membership_id = :membership_id
+        """), {'household_id': household_id, 'membership_id': str(existing['id'])})
         conn.execute(text("DELETE FROM household_memberships WHERE id = :id"), {'id': existing['id']})
         log_household_role_change(conn, household_id, normalized_email, str(existing.get('role') or 'member'), None, str(context.get('email') or '').strip().lower(), action_type='member_removed')
         payload_result = build_household_members_payload(conn, household_id, str(context.get('email') or '').strip().lower())
@@ -14289,6 +14395,8 @@ logger.info(
 )
 
 bootstrap_auth_registry()
+with engine.begin() as authorization_membership_backfill_conn:
+    migrate_legacy_household_memberships(authorization_membership_backfill_conn)
 refresh_runtime_users_from_db()
 ensure_receipt_storage_root()
 seed_store_providers()

@@ -19,6 +19,10 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 from app.services.authorization_foundation_service import permissions_for_session_role
+from app.services.authorization_membership_service import (
+    canonical_role_to_runtime_role,
+    resolve_effective_household_role,
+)
 from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
     SUPERGEBRUIKER_HUISHOUDEN_ID,
@@ -89,6 +93,18 @@ def membership_active_condition(
     if "status" in columns:
         return f"lower(trim(COALESCE({membership_alias}.status, 'active'))) = 'active'"
     return "1 = 1"
+
+
+def membership_id_expression(
+    conn: Connection,
+    *,
+    membership_alias: str = "hm",
+) -> str:
+    columns = _membership_columns(conn)
+    for column in ("id", "membership_id", "user_id", "user_email"):
+        if column in columns:
+            return f"CAST({membership_alias}.{column} AS TEXT)"
+    raise RuntimeError("household_memberships mist een bruikbare lidmaatschapsidentiteit")
 
 
 def _test_household_zero_enabled() -> bool:
@@ -166,8 +182,10 @@ def create_server_session(
 
     join_condition = membership_user_join_condition(conn)
     active_condition = membership_active_condition(conn)
+    membership_id_sql = membership_id_expression(conn)
     membership = conn.execute(text(f"""
-        SELECT u.id AS user_id, u.email, hm.role
+        SELECT u.id AS user_id, u.email, hm.role,
+               {membership_id_sql} AS membership_id
         FROM app_users u
         JOIN household_memberships hm ON {join_condition}
         WHERE u.id = :user_id
@@ -179,7 +197,15 @@ def create_server_session(
         raise HTTPException(status_code=403, detail="Geen toegang tot dit huishouden")
 
     membership_email = str(membership.get("email") or "")
-    membership_role = str(membership.get("role") or "").strip().lower()
+    effective_role_key = resolve_effective_household_role(
+        conn,
+        household_id=household_id,
+        membership_id=str(membership.get("membership_id") or ""),
+        legacy_role=membership.get("role"),
+    )
+    membership_role = canonical_role_to_runtime_role(effective_role_key or "") or ""
+    if not membership_role:
+        raise HTTPException(status_code=403, detail="Bevoegdheid ontbreekt")
     if not _household_zero_allowed(
         household_id=household_id,
         email=membership_email,
@@ -243,6 +269,7 @@ def resolve_server_session(
     current_time = (now or utc_now()).astimezone(timezone.utc)
     join_condition = membership_user_join_condition(conn)
     active_condition = membership_active_condition(conn)
+    membership_id_sql = membership_id_expression(conn)
     row = conn.execute(text(f"""
         SELECT
             s.id AS session_id,
@@ -250,6 +277,7 @@ def resolve_server_session(
             u.email,
             s.active_household_id,
             hm.role,
+            {membership_id_sql} AS membership_id,
             s.session_version,
             s.issued_at,
             s.expires_at,
@@ -276,7 +304,13 @@ def resolve_server_session(
 
     household_id = str(row.get("active_household_id") or "").strip()
     email = str(row.get("email") or "")
-    role = str(row.get("role") or "").strip().lower()
+    effective_role_key = resolve_effective_household_role(
+        conn,
+        household_id=household_id,
+        membership_id=str(row.get("membership_id") or ""),
+        legacy_role=row.get("role"),
+    )
+    role = canonical_role_to_runtime_role(effective_role_key or "") or ""
     if not household_id:
         raise HTTPException(status_code=403, detail="Actief huishouden ontbreekt")
     if not role:

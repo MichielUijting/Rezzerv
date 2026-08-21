@@ -12,6 +12,7 @@ import tempfile
 from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 
+from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.server_session_service import (
     create_server_session,
     resolve_server_session,
@@ -55,6 +56,14 @@ def _prepare_database(engine) -> None:
             "('user-b', '2', 'member'), "
             "('system-superuser', '0', 'owner')"
         ))
+        ensure_authorization_foundation(conn)
+        conn.execute(text(
+            "INSERT INTO auth_membership_roles "
+            "(household_id, membership_id, role_key, active) VALUES "
+            "('1', 'user-a', 'household.admin', 1), "
+            "('2', 'user-b', 'household.member', 1), "
+            "('0', 'system-superuser', 'household.admin', 1)"
+        ))
 
 
 def run() -> int:
@@ -78,14 +87,14 @@ def run() -> int:
             assert raw_session
             assert context.user_id == "user-a"
             assert context.active_household_id == "1"
-            assert context.role == "owner"
+            assert context.role == "admin"
         checks.append("valid_session_created")
 
         with engine.begin() as conn:
             resolved = resolve_server_session(conn, raw_session)
             assert resolved.email == "a@rezzerv.local"
             assert resolved.active_household_id == "1"
-            assert resolved.role == "owner"
+            assert resolved.role == "admin"
         checks.append("valid_session_resolved")
 
         with engine.begin() as conn:
@@ -95,8 +104,18 @@ def run() -> int:
             ))
         with engine.begin() as conn:
             resolved = resolve_server_session(conn, raw_session)
+            assert resolved.role == "admin"
+        checks.append("stale_legacy_role_ignored")
+
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE auth_membership_roles SET role_key = 'household.viewer' "
+                "WHERE household_id = '1' AND membership_id = 'user-a'"
+            ))
+        with engine.begin() as conn:
+            resolved = resolve_server_session(conn, raw_session)
             assert resolved.role == "viewer"
-        checks.append("role_refreshed_server_side")
+        checks.append("canonical_role_refreshed_server_side")
 
         with engine.begin() as conn:
             superuser_session, superuser_context = create_server_session(

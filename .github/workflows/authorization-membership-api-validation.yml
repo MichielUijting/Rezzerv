@@ -4,12 +4,17 @@ on:
   pull_request:
     paths:
       - 'backend/app/api/authorization_membership_routes.py'
+      - 'backend/app/api/server_session_routes.py'
       - 'backend/app/api/product_inventory_group_routes.py'
       - 'backend/tests/test_authorization_membership_routes.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/authorization_membership_service.py'
       - 'backend/app/services/roles_v2_schema_foundation.py'
+      - 'backend/app/services/server_session_service.py'
       - 'backend/tests/test_roles_v2_foundation_contract.py'
+      - 'backend/tests/test_server_session_service.py'
+      - 'backend/tests/test_server_session_routes.py'
+      - 'backend/tests/test_server_session_runtime_membership_schema.py'
       - 'backend/app/main.py'
       - '.github/workflows/authorization-membership-api-validation.yml'
 
@@ -38,4 +43,7 @@ jobs:
             tests/test_authorization_foundation_contract.py \
             tests/test_roles_v2_foundation_contract.py \
             tests/test_authorization_membership_service.py \
-            tests/test_authorization_membership_routes.py
+            tests/test_authorization_membership_routes.py \
+            tests/test_server_session_service.py \
+            tests/test_server_session_routes.py \
+            tests/test_server_session_runtime_membership_schema.py

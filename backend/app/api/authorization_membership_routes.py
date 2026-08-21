@@ -8,12 +8,10 @@ from sqlalchemy import inspect, text
 from app.db import engine
 from app.services.authorization_foundation_service import (
     HOUSEHOLD_PERMISSIONS,
-    ensure_authorization_foundation,
     write_authorization_audit,
 )
 from app.services.authorization_membership_service import (
     AuthorizationDeniedError,
-    migrate_legacy_household_memberships,
     require_household_permission,
     set_household_membership_role,
     set_household_permission_override,
@@ -89,8 +87,6 @@ def _actor_context(conn, household_id: str) -> dict[str, str]:
     if not membership:
         raise HTTPException(status_code=403, detail="Geen toegang tot het gevraagde huishouden")
 
-    ensure_authorization_foundation(conn)
-    migrate_legacy_household_memberships(conn)
     return {
         "email": str(user["email"]),
         "user_id": str(user["user_id"]),

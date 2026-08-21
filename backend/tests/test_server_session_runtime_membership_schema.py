@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
+from app.services.authorization_membership_service import migrate_legacy_household_memberships
 from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
@@ -44,6 +45,7 @@ def _runtime_schema_client():
                 ('m-inactive', '0', 'admin@rezzerv.local', 'owner', 'inactive'),
                 ('m-active', '1', 'ADMIN@REZZERV.LOCAL', 'owner', 'active')
         """))
+        migrate_legacy_household_memberships(conn)
 
     app = FastAPI()
     app.include_router(
@@ -66,7 +68,7 @@ def test_login_and_session_resolve_with_user_email_membership_schema():
     assert login.status_code == 200
     assert login.json()["user"]["id"] == "u-admin"
     assert login.json()["active_household_id"] == "1"
-    assert login.json()["role"] == "owner"
+    assert login.json()["role"] == "admin"
     assert client.get("/api/session").status_code == 200
 
 
