@@ -7161,6 +7161,11 @@ def ensure_release_965_schema():
         )
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_household_memberships_household ON household_memberships (household_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_household_memberships_email ON household_memberships (user_email)"))
+        from app.services.roles_v2_schema_foundation import (
+            ensure_roles_v2_account_and_household_foundation,
+        )
+
+        ensure_roles_v2_account_and_household_foundation(conn)
 
 
 def bootstrap_auth_registry():
