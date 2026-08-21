@@ -71,6 +71,35 @@ PLATFORM_PERMISSIONS = (
     "platform.feature_flags.manage",
 )
 
+V2_PLATFORM_PERMISSIONS = (
+    "platform.system_household.access",
+    "platform.special_roles.manage",
+    "platform.frontteam_messages.create",
+    "platform.frontteam_messages.read",
+    "platform.frontteam_messages.reply",
+    "platform.frontteam_polls.respond",
+    "platform.frontteam_messages.manage",
+    "platform.frontteam_polls.manage",
+    "platform.frontteam_polls.results.view",
+    "platform.external_products.view",
+    "platform.external_products.search",
+    "platform.external_products.link_existing",
+    "platform.catalog.view",
+    "platform.catalog.update",
+    "platform.catalog.manage",
+    "platform.gpc.view",
+    "platform.gpc.update",
+    "platform.gpc.manage",
+    "platform.external_sources.view",
+    "platform.external_sources.manage",
+    "platform.diagnostics.view",
+    "platform.logs.view",
+    "platform.integrations.manage",
+    "platform.background_jobs.manage",
+    "platform.recovery.manage",
+    "platform.technical_configuration.manage",
+)
+
 MEMBER_PERMISSIONS = {
     "dashboard.view", "notifications.update",
     "inventory.view", "inventory.update", "inventory.correct",
@@ -101,6 +130,66 @@ ADMIN_PERMISSIONS = MEMBER_PERMISSIONS | {
 FRONTTEAM_PERMISSIONS = set(HOUSEHOLD_PERMISSIONS)
 SUPERUSER_HOUSEHOLD_PERMISSIONS = set(HOUSEHOLD_PERMISSIONS)
 
+FRONTTEAM_PLATFORM_PERMISSIONS = {
+    "platform.frontteam_messages.create",
+    "platform.frontteam_messages.read",
+    "platform.frontteam_messages.reply",
+    "platform.frontteam_polls.respond",
+    "platform.external_products.view",
+    "platform.external_products.search",
+    "platform.external_products.link_existing",
+}
+
+ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS = set(PLATFORM_PERMISSIONS)
+
+# Target-only until the controlled v2 runtime cutover. Existing Superusers keep
+# the exact v1.1 grants and public session payload throughout foundation slice 9.1.1.
+V2_SUPERUSER_TARGET_PERMISSIONS = {
+    "platform.households.search",
+    "platform.households.view_metadata",
+    "platform.support_access.request",
+    "platform.support_access.activate",
+    "platform.support_access.read",
+    "platform.support_access.mutate",
+    "platform.system_household.access",
+    "platform.frontteam_messages.read",
+    "platform.frontteam_messages.reply",
+    "platform.frontteam_messages.manage",
+    "platform.frontteam_polls.manage",
+    "platform.frontteam_polls.results.view",
+    "platform.external_products.view",
+    "platform.external_products.search",
+    "platform.external_products.link_existing",
+    "platform.catalog.view",
+    "platform.catalog.update",
+    "platform.catalog.manage",
+    "platform.gpc.view",
+    "platform.gpc.update",
+    "platform.gpc.manage",
+    "platform.external_sources.view",
+    "platform.external_sources.manage",
+}
+
+PLATFORM_ADMIN_PERMISSIONS = {
+    "platform.diagnostics.view",
+    "platform.logs.view",
+    "platform.audit.view",
+    "platform.integrations.manage",
+    "platform.background_jobs.manage",
+    "platform.recovery.manage",
+    "platform.technical_configuration.manage",
+    "platform.sessions.revoke",
+    "platform.users.suspend",
+    "platform.permissions.manage",
+    "platform.feature_flags.manage",
+}
+
+IP_OWNER_PERMISSIONS = (
+    V2_SUPERUSER_TARGET_PERMISSIONS
+    | PLATFORM_ADMIN_PERMISSIONS
+    | {"platform.special_roles.manage"}
+)
+
 ROLE_PERMISSIONS = {
     "household.viewer": {key for key in HOUSEHOLD_PERMISSIONS if key.endswith(".view")},
     "household.member": set(MEMBER_PERMISSIONS),
@@ -113,10 +202,15 @@ ROLE_PERMISSIONS = {
         "platform.support_access.request", "platform.support_access.activate",
         "platform.support_access.read", "platform.audit.view",
     },
-    "platform.superuser": set(PLATFORM_PERMISSIONS),
+    "platform.frontteam": set(FRONTTEAM_PLATFORM_PERMISSIONS),
+    "platform.superuser": set(ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS),
+    "platform.platform_admin": set(PLATFORM_ADMIN_PERMISSIONS),
+    "platform.ip_owner": set(IP_OWNER_PERMISSIONS),
 }
 
-KNOWN_PERMISSIONS = frozenset(HOUSEHOLD_PERMISSIONS + PLATFORM_PERMISSIONS)
+KNOWN_PERMISSIONS = frozenset(
+    HOUSEHOLD_PERMISSIONS + PLATFORM_PERMISSIONS + V2_PLATFORM_PERMISSIONS
+)
 
 
 @dataclass(frozen=True)
@@ -241,6 +335,11 @@ def ensure_authorization_foundation(conn) -> None:
     )
     for statement in statements:
         conn.execute(text(statement))
+    conn.execute(text("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_single_active_ip_owner
+        ON auth_platform_user_roles(role_key)
+        WHERE role_key = 'platform.ip_owner' AND active = 1
+    """))
     _seed_registry(conn)
 
 
@@ -251,7 +350,7 @@ def _seed_registry(conn) -> None:
             VALUES (:key, 'household', :description)
             ON CONFLICT(permission_key) DO UPDATE SET active = 1
         """), {"key": key, "description": key})
-    for key in PLATFORM_PERMISSIONS:
+    for key in PLATFORM_PERMISSIONS + V2_PLATFORM_PERMISSIONS:
         conn.execute(text("""
             INSERT INTO auth_permissions(permission_key, scope, description)
             VALUES (:key, 'platform', :description)
@@ -265,7 +364,10 @@ def _seed_registry(conn) -> None:
         "household.owner": "Superuser-huishoudrol",
         "household.frontteam": "Frontteamlid",
         "platform.support_read": "Supportmedewerker lezen",
+        "platform.frontteam": "Frontteamlid",
         "platform.superuser": "Platform-superuser",
+        "platform.platform_admin": "Platformbeheerder",
+        "platform.ip_owner": "IP-eigenaar",
     }
     for role_key, permissions in ROLE_PERMISSIONS.items():
         scope = role_key.split(".", 1)[0]

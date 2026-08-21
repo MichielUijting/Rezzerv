@@ -8,6 +8,7 @@ from app.services.authorization_foundation_service import (
     HOUSEHOLD_PERMISSIONS,
     PLATFORM_PERMISSIONS,
     ROLE_PERMISSIONS,
+    V2_PLATFORM_PERMISSIONS,
     assert_last_household_admin_remains,
     ensure_authorization_foundation,
     evaluate_household_permission,
@@ -27,7 +28,11 @@ def test_registry_and_system_roles_are_seeded_idempotently():
         ensure_authorization_foundation(conn)
         permission_count = conn.execute(text("SELECT COUNT(*) FROM auth_permissions")).scalar_one()
         role_count = conn.execute(text("SELECT COUNT(*) FROM auth_roles")).scalar_one()
-    assert permission_count == len(HOUSEHOLD_PERMISSIONS) + len(PLATFORM_PERMISSIONS)
+    assert permission_count == (
+        len(HOUSEHOLD_PERMISSIONS)
+        + len(PLATFORM_PERMISSIONS)
+        + len(V2_PLATFORM_PERMISSIONS)
+    )
     assert role_count == len(ROLE_PERMISSIONS)
 
 
