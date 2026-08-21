@@ -64,34 +64,58 @@ def test_legacy_user_payload_comes_only_from_server_session(monkeypatch):
     }
 
 
-def test_requested_household_must_equal_active_server_household(monkeypatch):
+@pytest.mark.parametrize(
+    ("household_id", "context_type", "requested_household_id"),
+    [
+        ("household-1", "regular", "household-2"),
+        ("0", "system", "household-1"),
+    ],
+)
+def test_requested_household_must_equal_active_server_household(
+    monkeypatch,
+    household_id,
+    context_type,
+    requested_household_id,
+):
     monkeypatch.setattr(
         request_context,
         "resolve_current_server_session",
-        lambda: _context(household_id="household-1"),
+        lambda: _context(household_id=household_id, context_type=context_type),
     )
 
     with pytest.raises(HTTPException) as exc:
         request_context.household_context_from_session(
             "Bearer ignored",
-            requested_household_id="household-2",
+            requested_household_id=requested_household_id,
         )
 
     assert exc.value.status_code == 403
 
 
-def test_matching_household_context_is_returned(monkeypatch):
+@pytest.mark.parametrize(
+    ("household_id", "context_type"),
+    [("household-1", "regular"), ("0", "system")],
+)
+def test_matching_household_context_is_returned(
+    monkeypatch,
+    household_id,
+    context_type,
+):
     monkeypatch.setattr(
         request_context,
         "resolve_current_server_session",
-        lambda: _context(household_id="household-1", role="member"),
+        lambda: _context(
+            household_id=household_id,
+            role="member",
+            context_type=context_type,
+        ),
     )
 
     payload = request_context.household_context_from_session(
-        requested_household_id="household-1"
+        requested_household_id=household_id
     )
 
-    assert payload["active_household_id"] == "household-1"
+    assert payload["active_household_id"] == household_id
     assert payload["user_id"] == "user-1"
     assert payload["role"] == "member"
     assert payload["display_role"] == "lid"
@@ -109,6 +133,21 @@ def test_none_session_is_rejected_by_household_context_bridge(monkeypatch):
 
     assert exc.value.status_code == 403
     assert exc.value.detail == "Geen actieve huishoudcontext beschikbaar"
+
+
+def test_fallback_arguments_cannot_override_server_household(monkeypatch):
+    monkeypatch.setattr(
+        request_context,
+        "resolve_current_server_session",
+        lambda: _context(household_id="household-1", context_type="regular"),
+    )
+
+    assert request_context.authorized_household_id_from_session(
+        fallback="demo-household",
+    ) == "household-1"
+    assert request_context.request_household_id_from_session(
+        fallback="demo-household",
+    ) == "household-1"
 
 
 def test_legacy_household_endpoint_cannot_reconstruct_membership_for_none_session(
