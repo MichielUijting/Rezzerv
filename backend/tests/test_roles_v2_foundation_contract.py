@@ -19,6 +19,7 @@ from app.services.authorization_foundation_service import (
     ensure_authorization_foundation,
     evaluate_platform_permission,
     permissions_for_session_role,
+    resolve_active_platform_role_keys,
 )
 from app.services.roles_v2_schema_foundation import (
     ACCOUNT_STATUSES,
@@ -106,6 +107,31 @@ def test_only_one_active_ip_owner_can_exist():
                 INSERT INTO auth_platform_user_roles(user_id, role_key)
                 VALUES ('owner-2', 'platform.ip_owner')
             """))
+
+
+def test_active_platform_role_resolution_uses_only_registered_active_platform_roles():
+    engine = make_engine()
+    with engine.begin() as conn:
+        ensure_authorization_foundation(conn)
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES
+              ('platform-user', 'platform.platform_admin', 1),
+              ('platform-user', 'platform.frontteam', 0),
+              ('platform-user', 'household.admin', 1)
+        """))
+        conn.execute(text("""
+            UPDATE auth_roles SET active = 0
+            WHERE role_key = 'platform.support_read'
+        """))
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES ('platform-user', 'platform.support_read', 1)
+        """))
+
+        roles = resolve_active_platform_role_keys(conn, 'platform-user')
+
+    assert roles == frozenset({'platform.platform_admin'})
 
 
 def test_v2_platform_role_permission_boundaries():

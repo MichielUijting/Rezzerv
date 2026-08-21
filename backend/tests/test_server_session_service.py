@@ -11,6 +11,7 @@ from app.services.authorization_foundation_service import (
     ensure_authorization_foundation,
 )
 from app.services.server_session_service import (
+    create_none_server_session,
     create_server_session,
     ensure_server_session_schema,
     hash_session_id,
@@ -135,6 +136,89 @@ def test_missing_session_fails_closed(connection):
     with pytest.raises(HTTPException) as exc:
         resolve_server_session(connection, None)
     assert_http_status(exc, 401)
+
+
+def test_platform_admin_none_session_is_sql_null_and_resolves_without_membership(connection):
+    connection.execute(text(
+        "INSERT INTO app_users(id, email) VALUES ('platform-admin', 'platform@example.test')"
+    ))
+    connection.execute(text("""
+        INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+        VALUES ('platform-admin', 'platform.platform_admin', 1)
+    """))
+
+    raw_session_id, created = create_none_server_session(
+        connection,
+        user_id='platform-admin',
+    )
+    resolved = resolve_server_session(connection, raw_session_id)
+    stored_household_id = connection.execute(text("""
+        SELECT active_household_id FROM server_sessions
+        WHERE user_id = 'platform-admin'
+    """)).scalar_one()
+
+    assert stored_household_id is None
+    assert created.active_household_id is resolved.active_household_id is None
+    assert created.context_type == resolved.context_type == 'none'
+    assert created.role is resolved.role is None
+    assert public_session_payload(resolved) == {
+        'user': {'id': 'platform-admin', 'email': 'platform@example.test'},
+        'user_id': 'platform-admin',
+        'email': 'platform@example.test',
+        'active_household_id': None,
+        'active_household_name': '',
+        'role': None,
+        'display_role': None,
+        'permissions': {},
+        'supported_permissions': [],
+        'can_manage_member_permissions': False,
+        'can_manage_members': False,
+        'is_viewer': False,
+        'is_platform_superuser': False,
+        'is_frontteam': False,
+        'session_version': 1,
+        'expires_at': resolved.expires_at.isoformat(),
+    }
+
+
+def test_none_session_fails_closed_when_platform_admin_role_is_deactivated(connection):
+    connection.execute(text(
+        "INSERT INTO app_users(id, email) VALUES ('platform-admin', 'platform@example.test')"
+    ))
+    connection.execute(text("""
+        INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+        VALUES ('platform-admin', 'platform.platform_admin', 1)
+    """))
+    raw_session_id, _ = create_none_server_session(connection, user_id='platform-admin')
+    connection.execute(text("""
+        UPDATE auth_platform_user_roles SET active = 0
+        WHERE user_id = 'platform-admin' AND role_key = 'platform.platform_admin'
+    """))
+
+    with pytest.raises(HTTPException) as exc:
+        resolve_server_session(connection, raw_session_id)
+
+    assert_http_status(exc, 403)
+
+
+def test_none_session_creation_rejects_platform_admin_superuser_conflict(connection):
+    connection.execute(text(
+        "INSERT INTO app_users(id, email) VALUES ('platform-admin', 'platform@example.test')"
+    ))
+    connection.execute(text("""
+        INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+        VALUES
+          ('platform-admin', 'platform.platform_admin', 1),
+          ('platform-admin', 'platform.superuser', 1)
+    """))
+
+    with pytest.raises(HTTPException) as exc:
+        create_none_server_session(connection, user_id='platform-admin')
+
+    assert_http_status(exc, 403)
+    assert connection.execute(text(
+        "SELECT COUNT(*) FROM server_sessions WHERE user_id = 'platform-admin'"
+    )).scalar_one() == 0
 
 
 def test_session_belongs_to_exactly_one_user_and_household(connection):

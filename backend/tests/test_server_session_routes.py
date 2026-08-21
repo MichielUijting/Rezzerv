@@ -8,6 +8,8 @@ from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
 )
+from app.services.server_session_service import resolve_server_session
+from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 
 
 def build_client():
@@ -45,7 +47,9 @@ def build_client():
               ('1', 'u1', 'household.admin'),
               ('2', 'u1', 'household.member'),
               ('2', 'u2', 'household.member'),
-              ('0', 'u3', 'household.owner')
+              ('1', 'u-platform', 'household.member'),
+              ('0', 'u3', 'household.owner'),
+              ('0', 'u-super', 'household.owner')
         """))
         conn.execute(
             text(
@@ -66,9 +70,16 @@ def build_client():
                 INSERT INTO app_users (id, email, password)
                 VALUES ('u1', 'admin@rezzerv.local', 'Rezzerv123'),
                        ('u2', 'lid@rezzerv.local', 'Rezzerv123'),
-                       ('u3', 'zero@rezzerv.local', 'Rezzerv123')
+                       ('u3', 'zero@rezzerv.local', 'Rezzerv123'),
+                       ('u-super', :superuser_email, 'Rezzerv123'),
+                       ('u-platform', 'platform@example.test', 'Rezzerv123'),
+                       ('u-none', 'none@example.test', 'Rezzerv123'),
+                       ('u-frontteam', 'frontteam@example.test', 'Rezzerv123'),
+                       ('u-ip-owner', 'ip-owner@example.test', 'Rezzerv123'),
+                       ('u-inactive-platform', 'inactive-platform@example.test', 'Rezzerv123')
                 """
-            )
+            ),
+            {'superuser_email': SUPERGEBRUIKER_EMAIL},
         )
         conn.execute(
             text(
@@ -77,10 +88,21 @@ def build_client():
                 VALUES ('u1', '1', 'owner'),
                        ('u1', '2', 'member'),
                        ('u2', '2', 'member'),
-                       ('u3', '0', 'owner')
+                       ('u-platform', '1', 'member'),
+                       ('u3', '0', 'owner'),
+                       ('u-super', '0', 'owner')
                 """
             )
         )
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES
+              ('u-super', 'platform.superuser', 1),
+              ('u-platform', 'platform.platform_admin', 1),
+              ('u-frontteam', 'platform.frontteam', 1),
+              ('u-ip-owner', 'platform.ip_owner', 1),
+              ('u-inactive-platform', 'platform.platform_admin', 0)
+        """))
 
     app = FastAPI()
     app.include_router(
@@ -121,6 +143,193 @@ def test_invalid_login_returns_401_without_cookie():
 
     assert response.status_code == 401
     assert "rezzerv_session=" not in response.headers.get("set-cookie", "").lower()
+
+
+def test_unknown_account_returns_401_without_cookie():
+    client, _ = build_client()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "unknown@example.test", "password": "Rezzerv123"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Ongeldige inloggegevens"
+
+
+def test_ambiguous_normalized_email_fails_closed_without_session():
+    client, engine = build_client()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO app_users(id, email, password)
+            VALUES
+              ('u-ambiguous-1', 'Case@Example.test', 'Rezzerv123'),
+              ('u-ambiguous-2', ' case@example.test ', 'Rezzerv123')
+        """))
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "case@example.test", "password": "Rezzerv123"},
+    )
+    with engine.begin() as conn:
+        session_count = conn.execute(text("""
+            SELECT COUNT(*) FROM server_sessions
+            WHERE user_id IN ('u-ambiguous-1', 'u-ambiguous-2')
+        """)).scalar_one()
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Ongeldige inloggegevens"
+    assert session_count == 0
+
+
+def test_member_login_keeps_regular_household_context():
+    client, engine = build_client()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "lid@rezzerv.local", "password": "Rezzerv123"},
+    )
+    raw_session_id = response.cookies.get("rezzerv_session")
+    with engine.begin() as conn:
+        context = resolve_server_session(conn, raw_session_id)
+
+    assert response.status_code == 200
+    assert context.context_type == "regular"
+    assert context.active_household_id == "2"
+    assert context.role == "member"
+
+
+def test_superuser_login_keeps_system_household_zero_compatibility():
+    client, engine = build_client()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": SUPERGEBRUIKER_EMAIL, "password": "Rezzerv123"},
+    )
+    raw_session_id = response.cookies.get("rezzerv_session")
+    with engine.begin() as conn:
+        context = resolve_server_session(conn, raw_session_id)
+
+    assert response.status_code == 200
+    assert context.context_type == "system"
+    assert context.active_household_id == "0"
+    assert context.role == "owner"
+
+
+def test_platform_admin_only_login_creates_resolvable_none_session():
+    client, engine = build_client()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "platform@example.test", "password": "Rezzerv123"},
+    )
+    raw_session_id = response.cookies.get("rezzerv_session")
+    with engine.begin() as conn:
+        stored_household_id = conn.execute(text("""
+            SELECT active_household_id FROM server_sessions
+            WHERE user_id = 'u-platform' AND revoked_at IS NULL
+        """)).scalar_one()
+        context = resolve_server_session(conn, raw_session_id)
+
+    assert response.status_code == 200
+    assert stored_household_id is None
+    assert context.context_type == "none"
+    assert context.active_household_id is None
+    assert context.role is None
+    assert response.json()["active_household_id"] is None
+    assert response.json()["active_household_name"] == ""
+    assert response.json()["role"] is None
+    assert response.json()["display_role"] is None
+    assert response.json()["permissions"] == {}
+    assert response.json()["supported_permissions"] == []
+    assert "context_type" not in response.json()
+
+
+@pytest.mark.parametrize(
+    "email",
+    [
+        "none@example.test",
+        "frontteam@example.test",
+        "ip-owner@example.test",
+        "inactive-platform@example.test",
+    ],
+)
+def test_valid_credentials_without_allowed_context_return_403(email):
+    client, engine = build_client()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "Rezzerv123"},
+    )
+    with engine.begin() as conn:
+        session_count = conn.execute(text("""
+            SELECT COUNT(*) FROM server_sessions s
+            JOIN app_users u ON u.id = s.user_id
+            WHERE u.email = :email
+        """), {"email": email}).scalar_one()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+    assert session_count == 0
+
+
+def test_superuser_platform_admin_conflict_preserves_existing_session():
+    client, engine = build_client()
+    first_login = client.post(
+        "/api/auth/login",
+        json={"email": "platform@example.test", "password": "Rezzerv123"},
+    )
+    assert first_login.status_code == 200
+    with engine.begin() as conn:
+        session_id, revoked_at = conn.execute(text("""
+            SELECT id, revoked_at FROM server_sessions
+            WHERE user_id = 'u-platform'
+        """)).one()
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES ('u-platform', 'platform.superuser', 1)
+        """))
+
+    conflict = client.post(
+        "/api/auth/login",
+        json={"email": "platform@example.test", "password": "Rezzerv123"},
+    )
+    with engine.begin() as conn:
+        sessions = conn.execute(text("""
+            SELECT id, revoked_at FROM server_sessions
+            WHERE user_id = 'u-platform'
+        """)).all()
+
+    assert revoked_at is None
+    assert conflict.status_code == 403
+    assert conflict.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+    assert sessions == [(session_id, None)]
+
+
+def test_fixed_superuser_identity_platform_admin_conflict_creates_no_session():
+    client, engine = build_client()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE auth_platform_user_roles SET active = 0
+            WHERE user_id = 'u-super' AND role_key = 'platform.superuser'
+        """))
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES ('u-super', 'platform.platform_admin', 1)
+        """))
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": SUPERGEBRUIKER_EMAIL, "password": "Rezzerv123"},
+    )
+    with engine.begin() as conn:
+        session_count = conn.execute(text("""
+            SELECT COUNT(*) FROM server_sessions WHERE user_id = 'u-super'
+        """)).scalar_one()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+    assert session_count == 0
 
 
 def test_session_endpoint_without_cookie_returns_401():

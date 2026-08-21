@@ -32,6 +32,7 @@ from app.services.session_request_context import (
     bind_current_actor_from_request_session_if_available,
     bind_request_session,
     household_context_from_session,
+    legacy_household_context_from_session,
     legacy_user_payload_from_session,
     request_household_id_from_session,
     require_household_admin_from_session,
@@ -69,6 +70,7 @@ def activate_server_side_route_context() -> None:
     """Make the server session the sole authority for existing route guards."""
 
     legacy_main.get_current_user_from_authorization = legacy_user_payload_from_session
+    legacy_main.resolve_household_context_for_user = legacy_household_context_from_session
     legacy_main.require_household_context = household_context_from_session
     legacy_main.require_household_admin_context = require_household_admin_from_session
     legacy_main.resolve_authorized_household_id = authorized_household_id_from_session

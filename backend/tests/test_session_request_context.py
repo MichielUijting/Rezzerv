@@ -9,14 +9,19 @@ from app.services import session_request_context as request_context
 from app.services.server_session_service import ServerSessionContext
 
 
-def _context(*, household_id: str = "household-1", role: str = "member"):
+def _context(
+    *,
+    household_id: str | None = "household-1",
+    role: str | None = "member",
+    context_type: str = "regular",
+):
     now = datetime.now(timezone.utc)
     return ServerSessionContext(
         session_id="record-1",
         user_id="user-1",
         email="member@example.test",
         active_household_id=household_id,
-        context_type="regular",
+        context_type=context_type,
         role=role,
         session_version=1,
         issued_at=now,
@@ -88,6 +93,68 @@ def test_matching_household_context_is_returned(monkeypatch):
     assert payload["user_id"] == "user-1"
     assert payload["role"] == "member"
     assert payload["display_role"] == "lid"
+
+
+def test_none_session_is_rejected_by_household_context_bridge(monkeypatch):
+    monkeypatch.setattr(
+        request_context,
+        "resolve_current_server_session",
+        lambda: _context(household_id=None, role=None, context_type="none"),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        request_context.household_context_from_session()
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Geen actieve huishoudcontext beschikbaar"
+
+
+def test_legacy_household_endpoint_cannot_reconstruct_membership_for_none_session(
+    monkeypatch,
+):
+    import app.session_entrypoint  # noqa: F401
+
+    monkeypatch.setattr(
+        request_context,
+        "resolve_current_server_session",
+        lambda: _context(household_id=None, role=None, context_type="none"),
+    )
+    monkeypatch.setattr(
+        legacy_main,
+        "get_current_user_from_authorization",
+        lambda _authorization=None: {
+            "id": "user-1",
+            "user_id": "user-1",
+            "email": "platform@example.test",
+            "role": None,
+            "household_id": None,
+            "active_household_id": None,
+            "memberships": [{"household_id": "household-1", "role": "member"}],
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        legacy_main.get_household()
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Geen actieve huishoudcontext beschikbaar"
+
+
+def test_legacy_household_wrapper_uses_regular_server_session_not_user_membership(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        request_context,
+        "resolve_current_server_session",
+        lambda: _context(household_id="household-1", role="member"),
+    )
+
+    payload = request_context.legacy_household_context_from_session(
+        {"memberships": [{"household_id": "household-2", "role": "owner"}]},
+    )
+
+    assert payload["active_household_id"] == "household-1"
+    assert payload["role"] == "member"
 
 
 @pytest.mark.parametrize(
@@ -174,4 +241,5 @@ def test_entrypoint_replaces_central_legacy_guards():
     import app.session_entrypoint  # noqa: F401
 
     assert legacy_main.get_current_user_from_authorization is request_context.legacy_user_payload_from_session
+    assert legacy_main.resolve_household_context_for_user is request_context.legacy_household_context_from_session
     assert legacy_main.require_household_context is request_context.household_context_from_session

@@ -110,6 +110,11 @@ def household_context_from_session(
     requested_household_id: str | None = None,
 ) -> dict[str, Any]:
     context = resolve_current_server_session()
+    if context.context_type == "none" or context.active_household_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen actieve huishoudcontext beschikbaar",
+        )
     requested = str(requested_household_id or "").strip()
     if requested and requested != context.active_household_id:
         raise HTTPException(
@@ -126,6 +131,18 @@ def household_context_from_session(
         "membership_count": 1,
         "can_switch_households": False,
     }
+
+
+def legacy_household_context_from_session(
+    _user: dict[str, Any] | None = None,
+    requested_household_id: str | None = None,
+) -> dict[str, Any]:
+    """Keep legacy household callers bound to the authoritative server session."""
+
+    return household_context_from_session(
+        None,
+        requested_household_id=requested_household_id,
+    )
 
 
 def require_household_admin_from_session(
