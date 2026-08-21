@@ -9,7 +9,10 @@ from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
 )
-from app.services.server_session_service import resolve_server_session
+from app.services.server_session_service import (
+    ensure_server_session_schema,
+    resolve_server_session,
+)
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 
 
@@ -104,6 +107,7 @@ def build_client():
               ('u-ip-owner', 'platform.ip_owner', 1),
               ('u-inactive-platform', 'platform.platform_admin', 0)
         """))
+        ensure_server_session_schema(conn)
 
     app = FastAPI()
     app.include_router(
