@@ -97,6 +97,7 @@ from app.services.authorization_membership_service import (
     resolve_effective_household_role,
     set_household_membership_role,
 )
+from app.services.article_group_store import ensure_article_group_schema
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -14358,6 +14359,7 @@ ensure_user_settings_schema()
 ensure_household_permission_policies_schema()
 ensure_household_role_change_audit_schema()
 ensure_household_articles_schema()
+ensure_article_group_schema()
 ensure_product_enrichment_schema()
 ensure_global_product_catalog_schema()
 ensure_external_product_candidates_schema()
