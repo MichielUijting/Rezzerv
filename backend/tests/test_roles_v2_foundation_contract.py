@@ -282,6 +282,7 @@ def test_active_v1_1_superuser_permissions_and_public_payload_remain_exact():
         user_id="superuser-id",
         email=SUPERGEBRUIKER_EMAIL,
         active_household_id="0",
+        context_type="system",
         role="owner",
         session_version=1,
         issued_at=now,

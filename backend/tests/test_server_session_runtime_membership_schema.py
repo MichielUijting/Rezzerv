@@ -18,6 +18,16 @@ def _runtime_schema_client():
     )
     with engine.begin() as conn:
         conn.execute(text("""
+            CREATE TABLE household_registry (
+                id TEXT PRIMARY KEY,
+                context_type TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_registry(id, context_type)
+            VALUES ('0', 'system'), ('1', 'regular')
+        """))
+        conn.execute(text("""
             CREATE TABLE app_users (
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,

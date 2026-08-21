@@ -15,6 +15,7 @@ on:
       - 'backend/tests/test_server_session_service.py'
       - 'backend/tests/test_server_session_routes.py'
       - 'backend/tests/test_server_session_runtime_membership_schema.py'
+      - 'backend/tests/test_session_request_context.py'
       - 'backend/app/main.py'
       - '.github/workflows/authorization-membership-api-validation.yml'
 
@@ -24,6 +25,8 @@ jobs:
     env:
       DATABASE_URL: sqlite:///./authorization-membership-api-ci.db
       SQLITE_RUNTIME_VOLUME: github_actions_workspace
+      RECEIPT_STORAGE_ROOT: /tmp/rezzerv-authorization-membership-receipts/raw
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
     defaults:
       run:
         working-directory: backend
@@ -46,4 +49,5 @@ jobs:
             tests/test_authorization_membership_routes.py \
             tests/test_server_session_service.py \
             tests/test_server_session_routes.py \
-            tests/test_server_session_runtime_membership_schema.py
+            tests/test_server_session_runtime_membership_schema.py \
+            tests/test_session_request_context.py

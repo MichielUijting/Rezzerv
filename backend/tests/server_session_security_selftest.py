@@ -38,6 +38,14 @@ def _expect_http_status(expected_status: int, fn) -> None:
 
 def _prepare_database(engine) -> None:
     with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE household_registry ("
+            "id TEXT PRIMARY KEY, context_type TEXT NOT NULL)"
+        ))
+        conn.execute(text(
+            "INSERT INTO household_registry(id, context_type) VALUES "
+            "('0', 'system'), ('1', 'regular'), ('2', 'regular')"
+        ))
         conn.execute(text("CREATE TABLE app_users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE)"))
         conn.execute(text(
             "CREATE TABLE household_memberships ("
@@ -87,6 +95,7 @@ def run() -> int:
             assert raw_session
             assert context.user_id == "user-a"
             assert context.active_household_id == "1"
+            assert context.context_type == "regular"
             assert context.role == "admin"
         checks.append("valid_session_created")
 
@@ -126,6 +135,7 @@ def run() -> int:
             assert superuser_session
             assert superuser_context.email == SUPERGEBRUIKER_EMAIL
             assert superuser_context.active_household_id == SUPERGEBRUIKER_HUISHOUDEN_ID
+            assert superuser_context.context_type == "system"
             assert superuser_context.role == "owner"
         with engine.begin() as conn:
             resolved_superuser = resolve_server_session(conn, superuser_session)
