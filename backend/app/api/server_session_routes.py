@@ -14,6 +14,7 @@ from sqlalchemy.engine import Engine
 from app.services.server_session_service import (
     DEFAULT_SESSION_TTL,
     SESSION_COOKIE_NAME,
+    create_none_server_session,
     create_server_session,
     membership_active_condition,
     membership_id_expression,
@@ -21,6 +22,9 @@ from app.services.server_session_service import (
     public_session_payload,
     resolve_server_session,
     revoke_server_session,
+)
+from app.services.authorization_foundation_service import (
+    resolve_active_platform_role_keys,
 )
 from app.services.authorization_membership_service import (
     canonical_role_to_runtime_role,
@@ -108,7 +112,40 @@ def _verify_password(stored_password: Any, supplied_password: str) -> bool:
     return bool(stored) and hmac.compare_digest(stored, supplied)
 
 
-def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
+def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
+    accounts = conn.execute(text("""
+        SELECT id AS user_id, email, password
+        FROM app_users
+        WHERE lower(trim(email)) = :email
+        LIMIT 2
+    """), {"email": email}).mappings().all()
+    if len(accounts) != 1:
+        raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
+    account = accounts[0]
+    if not _verify_password(account.get("password"), password):
+        raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
+
+    user_id = str(account.get("user_id") or "")
+    resolved_email = str(account.get("email") or "").strip().lower()
+    platform_roles = resolve_active_platform_role_keys(conn, user_id)
+    is_platform_admin = "platform.platform_admin" in platform_roles
+    has_superuser_context = (
+        "platform.superuser" in platform_roles
+        or resolved_email == SUPERGEBRUIKER_EMAIL
+    )
+    if is_platform_admin and has_superuser_context:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+    if is_platform_admin:
+        return {
+            "user_id": user_id,
+            "email": str(account.get("email") or ""),
+            "active_household_id": None,
+            "role": None,
+        }
+
     join_condition = membership_user_join_condition(conn)
     active_condition = membership_active_condition(conn)
     membership_id_sql = membership_id_expression(conn)
@@ -118,22 +155,18 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
             SELECT
                 u.id AS user_id,
                 u.email,
-                u.password,
                 {membership_id_sql} AS membership_id,
                 hm.household_id,
                 hm.role
             FROM app_users u
             JOIN household_memberships hm ON {join_condition}
-            WHERE lower(trim(u.email)) = :email
+            WHERE u.id = :user_id
               AND {active_condition}
             ORDER BY hm.household_id ASC
             """
         ),
-        {"email": email},
+        {"user_id": user_id},
     ).mappings().all()
-
-    if not rows:
-        raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
     resolved_rows = []
     for row in rows:
         role_key = resolve_effective_household_role(
@@ -146,7 +179,10 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
         if runtime_role:
             resolved_rows.append({**dict(row), "effective_role": runtime_role})
     if not resolved_rows:
-        raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
     resolved_rows.sort(
         key=lambda row: (
             0 if row["effective_role"] in {"admin", "owner"} else 1,
@@ -154,14 +190,14 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
         )
     )
     first = resolved_rows[0]
-    if not _verify_password(first.get("password"), password):
-        raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
-
     household_id = str(first.get("household_id") or "").strip()
     resolved_email = str(first.get("email") or "").strip().lower()
     role = str(first.get("effective_role") or "").strip().lower()
     if not household_id:
-        raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
 
     is_system_superuser = (
         resolved_email == SUPERGEBRUIKER_EMAIL and role == "owner"
@@ -174,7 +210,10 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
     if household_id == SUPERGEBRUIKER_HUISHOUDEN_ID and not (
         is_system_superuser or is_regression_test_admin
     ):
-        raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
 
     return {
         "user_id": str(first.get("user_id") or ""),
@@ -195,12 +234,19 @@ def create_server_session_router(
     def login(payload: SessionLoginRequest, response: Response):
         with engine.begin() as conn:
             identity = _resolve_login_identity(conn, payload.email, payload.password)
-            raw_session_id, context = create_server_session(
-                conn,
-                user_id=identity["user_id"],
-                active_household_id=identity["active_household_id"],
-                replace_existing=True,
-            )
+            if identity["active_household_id"] is None:
+                raw_session_id, context = create_none_server_session(
+                    conn,
+                    user_id=identity["user_id"],
+                    replace_existing=True,
+                )
+            else:
+                raw_session_id, context = create_server_session(
+                    conn,
+                    user_id=identity["user_id"],
+                    active_household_id=identity["active_household_id"],
+                    replace_existing=True,
+                )
         _set_session_cookie(response, raw_session_id, configuration)
         return public_session_payload(context)
 

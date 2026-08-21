@@ -239,6 +239,25 @@ def permissions_for_session_role(role: str, *, platform_superuser: bool = False)
     return permissions
 
 
+def resolve_active_platform_role_keys(conn, user_id: str) -> frozenset[str]:
+    """Return only active, registered platform roles for one server-side user."""
+
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        return frozenset()
+    rows = conn.execute(text("""
+        SELECT ur.role_key
+        FROM auth_platform_user_roles ur
+        JOIN auth_roles r ON r.role_key = ur.role_key
+        WHERE ur.user_id = :user_id
+          AND ur.active = 1
+          AND r.active = 1
+          AND r.scope = 'platform'
+        ORDER BY ur.role_key
+    """), {"user_id": normalized_user_id}).scalars().all()
+    return frozenset(str(role_key) for role_key in rows)
+
+
 def ensure_authorization_foundation(conn) -> None:
     statements = (
         """

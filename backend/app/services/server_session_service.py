@@ -18,7 +18,10 @@ from fastapi import HTTPException
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
-from app.services.authorization_foundation_service import permissions_for_session_role
+from app.services.authorization_foundation_service import (
+    permissions_for_session_role,
+    resolve_active_platform_role_keys,
+)
 from app.services.authorization_membership_service import (
     canonical_role_to_runtime_role,
     resolve_effective_household_role,
@@ -89,7 +92,7 @@ class ServerSessionContext:
     email: str
     active_household_id: str | None
     context_type: SessionContextType
-    role: str
+    role: str | None
     session_version: int
     issued_at: datetime
     expires_at: datetime
@@ -442,8 +445,6 @@ def create_server_session(
     now: datetime | None = None,
 ) -> tuple[str, ServerSessionContext]:
     ensure_server_session_schema(conn)
-    issued_at = (now or utc_now()).astimezone(timezone.utc)
-    expires_at = issued_at + ttl
     user_id = str(user_id or "").strip()
     household_id = str(active_household_id or "").strip()
     if not user_id:
@@ -485,6 +486,33 @@ def create_server_session(
         raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
     context_type = resolve_session_context_type(conn, household_id)
 
+    return _insert_server_session(
+        conn,
+        user_id=user_id,
+        email=membership_email,
+        active_household_id=household_id,
+        context_type=context_type,
+        role=membership_role,
+        ttl=ttl,
+        replace_existing=replace_existing,
+        now=now,
+    )
+
+
+def _insert_server_session(
+    conn: Connection,
+    *,
+    user_id: str,
+    email: str,
+    active_household_id: str | None,
+    context_type: SessionContextType,
+    role: str | None,
+    ttl: timedelta,
+    replace_existing: bool,
+    now: datetime | None,
+) -> tuple[str, ServerSessionContext]:
+    issued_at = (now or utc_now()).astimezone(timezone.utc)
+    expires_at = issued_at + ttl
     raw_session_id = new_opaque_session_id()
     token_hash = hash_session_id(raw_session_id)
     record_id = secrets.token_hex(32)
@@ -512,7 +540,7 @@ def create_server_session(
         "id": record_id,
         "token_hash": token_hash,
         "user_id": user_id,
-        "household_id": household_id,
+        "household_id": active_household_id,
         "issued_at": issued_at,
         "expires_at": expires_at,
     })
@@ -520,13 +548,71 @@ def create_server_session(
     return raw_session_id, ServerSessionContext(
         session_id=record_id,
         user_id=user_id,
-        email=membership_email,
-        active_household_id=household_id,
+        email=email,
+        active_household_id=active_household_id,
         context_type=context_type,
-        role=membership_role,
+        role=role,
         session_version=1,
         issued_at=issued_at,
         expires_at=expires_at,
+    )
+
+
+def _require_platform_admin_none_context(
+    conn: Connection,
+    *,
+    user_id: str,
+    email: str,
+) -> None:
+    platform_roles = resolve_active_platform_role_keys(conn, user_id)
+    is_platform_admin = "platform.platform_admin" in platform_roles
+    has_superuser_context = (
+        "platform.superuser" in platform_roles
+        or str(email or "").strip().lower() == SUPERGEBRUIKER_EMAIL
+    )
+    if not is_platform_admin or has_superuser_context:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
+
+def create_none_server_session(
+    conn: Connection,
+    *,
+    user_id: str,
+    ttl: timedelta = DEFAULT_SESSION_TTL,
+    replace_existing: bool = True,
+    now: datetime | None = None,
+) -> tuple[str, ServerSessionContext]:
+    ensure_server_session_schema(conn)
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        raise HTTPException(status_code=401, detail="Gebruiker ontbreekt")
+    user = conn.execute(text("""
+        SELECT id AS user_id, email
+        FROM app_users
+        WHERE id = :user_id
+        LIMIT 1
+    """), {"user_id": normalized_user_id}).mappings().first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Gebruiker ontbreekt")
+    email = str(user.get("email") or "")
+    _require_platform_admin_none_context(
+        conn,
+        user_id=normalized_user_id,
+        email=email,
+    )
+    return _insert_server_session(
+        conn,
+        user_id=normalized_user_id,
+        email=email,
+        active_household_id=None,
+        context_type="none",
+        role=None,
+        ttl=ttl,
+        replace_existing=replace_existing,
+        now=now,
     )
 
 
@@ -540,27 +626,18 @@ def resolve_server_session(
         raise HTTPException(status_code=401, detail="Geen geldige sessie")
     ensure_server_session_schema(conn)
     current_time = (now or utc_now()).astimezone(timezone.utc)
-    join_condition = membership_user_join_condition(conn)
-    active_condition = membership_active_condition(conn)
-    membership_id_sql = membership_id_expression(conn)
-    row = conn.execute(text(f"""
+    row = conn.execute(text("""
         SELECT
             s.id AS session_id,
             s.user_id,
             u.email,
             s.active_household_id,
-            hm.role,
-            {membership_id_sql} AS membership_id,
             s.session_version,
             s.issued_at,
             s.expires_at,
             s.revoked_at
         FROM server_sessions s
         JOIN app_users u ON u.id = s.user_id
-        JOIN household_memberships hm
-          ON {join_condition}
-         AND hm.household_id = s.active_household_id
-         AND {active_condition}
         WHERE s.session_token_hash = :token_hash
         LIMIT 1
     """), {"token_hash": hash_session_id(raw_session_id)}).mappings().first()
@@ -575,13 +652,49 @@ def resolve_server_session(
         )
         raise HTTPException(status_code=401, detail="Sessie is verlopen")
 
-    household_id = str(row.get("active_household_id") or "").strip()
     email = str(row.get("email") or "")
+    raw_household_id = row.get("active_household_id")
+    if raw_household_id is None:
+        _require_platform_admin_none_context(
+            conn,
+            user_id=str(row.get("user_id") or ""),
+            email=email,
+        )
+        return ServerSessionContext(
+            session_id=str(row.get("session_id")),
+            user_id=str(row.get("user_id")),
+            email=email,
+            active_household_id=None,
+            context_type="none",
+            role=None,
+            session_version=int(row.get("session_version") or 1),
+            issued_at=_normalize_database_datetime(row.get("issued_at")),
+            expires_at=expires_at,
+        )
+
+    household_id = str(raw_household_id).strip()
+    join_condition = membership_user_join_condition(conn)
+    active_condition = membership_active_condition(conn)
+    membership_id_sql = membership_id_expression(conn)
+    membership = conn.execute(text(f"""
+        SELECT hm.role, {membership_id_sql} AS membership_id
+        FROM household_memberships hm
+        JOIN app_users u ON {join_condition}
+        WHERE u.id = :user_id
+          AND hm.household_id = :household_id
+          AND {active_condition}
+        LIMIT 1
+    """), {
+        "user_id": str(row.get("user_id") or ""),
+        "household_id": household_id,
+    }).mappings().first()
+    if not membership:
+        raise HTTPException(status_code=401, detail="Sessie is ongeldig")
     effective_role_key = resolve_effective_household_role(
         conn,
         household_id=household_id,
-        membership_id=str(row.get("membership_id") or ""),
-        legacy_role=row.get("role"),
+        membership_id=str(membership.get("membership_id") or ""),
+        legacy_role=membership.get("role"),
     )
     role = canonical_role_to_runtime_role(effective_role_key or "") or ""
     if not household_id:
@@ -652,6 +765,25 @@ def rotate_active_household(
 
 
 def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
+    if context.context_type == "none":
+        return {
+            "user": {"id": context.user_id, "email": context.email},
+            "user_id": context.user_id,
+            "email": context.email,
+            "active_household_id": None,
+            "active_household_name": "",
+            "role": None,
+            "display_role": None,
+            "permissions": {},
+            "supported_permissions": [],
+            "can_manage_member_permissions": False,
+            "can_manage_members": False,
+            "is_viewer": False,
+            "is_platform_superuser": False,
+            "is_frontteam": False,
+            "session_version": context.session_version,
+            "expires_at": context.expires_at.isoformat(),
+        }
     normalized_email = str(context.email or "").strip().lower()
     platform_superuser = normalized_email == SUPERGEBRUIKER_EMAIL
     granted_permissions = permissions_for_session_role(

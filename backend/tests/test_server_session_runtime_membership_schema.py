@@ -92,4 +92,5 @@ def test_inactive_runtime_membership_is_not_accepted():
         json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."

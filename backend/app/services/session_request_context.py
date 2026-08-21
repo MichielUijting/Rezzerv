@@ -12,6 +12,7 @@ from contextvars import ContextVar, Token
 from typing import Any
 
 from fastapi import HTTPException, Request
+from sqlalchemy import text
 
 from app.db import engine
 from app.services.actor_attribution_service import bind_current_actor, clear_current_actor
@@ -110,6 +111,11 @@ def household_context_from_session(
     requested_household_id: str | None = None,
 ) -> dict[str, Any]:
     context = resolve_current_server_session()
+    if context.context_type == "none" or context.active_household_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen actieve huishoudcontext beschikbaar",
+        )
     requested = str(requested_household_id or "").strip()
     if requested and requested != context.active_household_id:
         raise HTTPException(
@@ -123,6 +129,50 @@ def household_context_from_session(
         "display_role": legacy_display_role_from_canonical_role(context.role),
         "household_id": context.active_household_id,
         "active_household_id": context.active_household_id,
+        "membership_count": 1,
+        "can_switch_households": False,
+    }
+
+
+def legacy_household_context_from_session(
+    _user: dict[str, Any] | None = None,
+    requested_household_id: str | None = None,
+) -> dict[str, Any]:
+    """Keep legacy household callers bound to the authoritative server session."""
+
+    context = household_context_from_session(
+        None,
+        requested_household_id=requested_household_id,
+    )
+    household_id = str(context["active_household_id"])
+    with engine.begin() as conn:
+        household = conn.execute(
+            text("""
+                SELECT naam, created_at
+                FROM household_registry
+                WHERE id = :household_id
+                LIMIT 1
+            """),
+            {"household_id": household_id},
+        ).mappings().first()
+    if not household:
+        raise HTTPException(status_code=403, detail="Actieve huishoudcontext is ongeldig")
+
+    household_name = household.get("naam")
+    household_created_at = household.get("created_at")
+    membership = {
+        "household_id": household_id,
+        "household_name": household_name,
+        "household_created_at": household_created_at,
+        "role": context["role"],
+        "display_role": context["display_role"],
+        "is_default": True,
+    }
+    return {
+        **context,
+        "active_household_name": household_name,
+        "active_household_created_at": household_created_at,
+        "memberships": [membership],
         "membership_count": 1,
         "can_switch_households": False,
     }
