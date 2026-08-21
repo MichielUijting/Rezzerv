@@ -81,6 +81,9 @@ jobs:
           docker compose logs --no-color --tail=500 backend
           exit 1
 
+      - name: Validate fresh article-groups startup schema
+        run: docker compose exec -T backend python /app/tests/test_article_group_startup_schema.py
+
       - name: Provision temporary system superuser
         shell: bash
         run: |
