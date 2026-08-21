@@ -3,6 +3,8 @@ from unittest.mock import Mock
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.pool import StaticPool
 
 import app.main as legacy_main
 from app.services import session_request_context as request_context
@@ -143,18 +145,80 @@ def test_legacy_household_endpoint_cannot_reconstruct_membership_for_none_sessio
 def test_legacy_household_wrapper_uses_regular_server_session_not_user_membership(
     monkeypatch,
 ):
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE household_registry (
+                id TEXT PRIMARY KEY,
+                naam TEXT NOT NULL,
+                created_at TIMESTAMP
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_registry (id, naam, created_at)
+            VALUES
+              ('household-1', 'Huishouden A', '2026-08-21 12:00:00'),
+              ('household-2', 'Huishouden B', '2026-08-21 12:00:00')
+        """))
+        conn.execute(text("""
+            CREATE TABLE household_memberships (
+                user_id TEXT NOT NULL,
+                household_id TEXT NOT NULL,
+                role TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_memberships (user_id, household_id, role)
+            VALUES ('user-1', 'household-2', 'owner')
+        """))
+
+    statements = []
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def record_statement(_conn, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement)
+
     monkeypatch.setattr(
         request_context,
         "resolve_current_server_session",
         lambda: _context(household_id="household-1", role="member"),
     )
-
-    payload = request_context.legacy_household_context_from_session(
-        {"memberships": [{"household_id": "household-2", "role": "owner"}]},
+    monkeypatch.setattr(request_context, "engine", engine)
+    monkeypatch.setattr(legacy_main, "engine", engine)
+    monkeypatch.setattr(
+        legacy_main,
+        "build_capabilities_payload",
+        lambda _conn, _context: {
+            "permissions": {},
+            "member_permission_policies": {},
+            "supported_permissions": [],
+            "can_manage_member_permissions": False,
+        },
+    )
+    monkeypatch.setattr(
+        legacy_main,
+        "get_household_store_import_simplification_level",
+        lambda _conn, _household_id: "default",
     )
 
+    import app.session_entrypoint as session_entrypoint
+
+    session_entrypoint.activate_server_side_route_context()
+    payload = legacy_main.get_household()
+
     assert payload["active_household_id"] == "household-1"
+    assert payload["active_household_name"] == "Huishouden A"
     assert payload["role"] == "member"
+    assert payload["membership_count"] == 1
+    assert payload["can_switch_households"] is False
+    assert len(payload["memberships"]) == 1
+    assert payload["memberships"][0]["household_id"] == "household-1"
+    assert "household-2" not in str(payload)
+    assert not any("household_memberships" in statement for statement in statements)
 
 
 @pytest.mark.parametrize(
