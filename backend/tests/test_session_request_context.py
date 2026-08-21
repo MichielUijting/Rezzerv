@@ -15,6 +15,7 @@ def _context(*, household_id: str = "household-1", role: str = "member"):
         user_id="user-1",
         email="member@example.test",
         active_household_id=household_id,
+        context_type="regular",
         role=role,
         session_version=1,
         issued_at=now,

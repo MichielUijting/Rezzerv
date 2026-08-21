@@ -17,6 +17,16 @@ def build_client():
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE household_registry (
+                id VARCHAR(64) PRIMARY KEY,
+                context_type TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_registry(id, context_type)
+            VALUES ('0', 'system'), ('1', 'regular'), ('2', 'regular')
+        """))
         conn.execute(
             text(
                 """
@@ -230,6 +240,16 @@ def test_secure_cookie_can_be_enabled_for_non_local_runtime():
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE household_registry (
+                id TEXT PRIMARY KEY,
+                context_type TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_registry(id, context_type)
+            VALUES ('1', 'regular')
+        """))
         conn.execute(text("CREATE TABLE app_users (id TEXT PRIMARY KEY, email TEXT, password TEXT)"))
         conn.execute(text("CREATE TABLE household_memberships (user_id TEXT, household_id TEXT, role TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
         conn.execute(text("INSERT INTO app_users VALUES ('u1', 'admin@rezzerv.local', 'Rezzerv123')"))

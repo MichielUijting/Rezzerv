@@ -25,6 +25,7 @@ def _session_context(email: str, household_id: str) -> ServerSessionContext:
         user_id=USER_IDS[email],
         email=email,
         active_household_id=household_id,
+        context_type='regular',
         role='owner' if email != 'member@example.test' else 'member',
         session_version=1,
         issued_at=now,

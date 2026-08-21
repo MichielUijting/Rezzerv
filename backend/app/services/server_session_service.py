@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import os
 import secrets
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping, cast
 
 from fastapi import HTTPException
 from sqlalchemy import inspect, text
@@ -31,6 +31,55 @@ from app.services.system_superuser_session_provisioning import (
 SESSION_COOKIE_NAME = "rezzerv_session"
 DEFAULT_SESSION_TTL = timedelta(hours=12)
 REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
+SESSION_CONTEXT_TYPES = frozenset({"none", "regular", "system"})
+SessionContextType = Literal["none", "regular", "system"]
+
+_SERVER_SESSION_COLUMNS = (
+    "id",
+    "session_token_hash",
+    "user_id",
+    "active_household_id",
+    "issued_at",
+    "expires_at",
+    "session_version",
+    "revoked_at",
+    "replaced_by_session_id",
+    "created_at",
+    "updated_at",
+)
+_SERVER_SESSION_COLUMN_CONTRACT = (
+    ("id", "VARCHAR(64)", False, None, 1),
+    ("session_token_hash", "VARCHAR(64)", True, None, 0),
+    ("user_id", "VARCHAR(64)", True, None, 0),
+    ("active_household_id", "VARCHAR(64)", None, None, 0),
+    ("issued_at", "TIMESTAMP", True, None, 0),
+    ("expires_at", "TIMESTAMP", True, None, 0),
+    ("session_version", "INTEGER", True, "1", 0),
+    ("revoked_at", "TIMESTAMP", False, None, 0),
+    ("replaced_by_session_id", "VARCHAR(64)", False, None, 0),
+    ("created_at", "TIMESTAMP", True, "CURRENT_TIMESTAMP", 0),
+    ("updated_at", "TIMESTAMP", True, "CURRENT_TIMESTAMP", 0),
+)
+_SERVER_SESSION_ACTIVE_INDEX_COLUMNS = (
+    "user_id",
+    "revoked_at",
+    "expires_at",
+)
+_SERVER_SESSION_TABLE_SQL = """
+    CREATE TABLE {table_name} (
+        id VARCHAR(64) PRIMARY KEY,
+        session_token_hash VARCHAR(64) NOT NULL UNIQUE,
+        user_id VARCHAR(64) NOT NULL,
+        active_household_id VARCHAR(64) NULL,
+        issued_at TIMESTAMP NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        session_version INTEGER NOT NULL DEFAULT 1,
+        revoked_at TIMESTAMP NULL,
+        replaced_by_session_id VARCHAR(64) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+"""
 
 
 @dataclass(frozen=True)
@@ -38,7 +87,8 @@ class ServerSessionContext:
     session_id: str
     user_id: str
     email: str
-    active_household_id: str
+    active_household_id: str | None
+    context_type: SessionContextType
     role: str
     session_version: int
     issued_at: datetime
@@ -129,26 +179,247 @@ def _household_zero_allowed(*, household_id: str, email: str, role: str) -> bool
     )
 
 
-def ensure_server_session_schema(conn: Connection) -> None:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS server_sessions (
-            id VARCHAR(64) PRIMARY KEY,
-            session_token_hash VARCHAR(64) NOT NULL UNIQUE,
-            user_id VARCHAR(64) NOT NULL,
-            active_household_id VARCHAR(64) NOT NULL,
-            issued_at TIMESTAMP NOT NULL,
-            expires_at TIMESTAMP NOT NULL,
-            session_version INTEGER NOT NULL DEFAULT 1,
-            revoked_at TIMESTAMP NULL,
-            replaced_by_session_id VARCHAR(64) NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+def _sqlite_schema_objects(conn: Connection, object_type: str) -> list[Mapping[str, Any]]:
+    return list(conn.execute(text("""
+        SELECT name, sql
+        FROM sqlite_master
+        WHERE type = :object_type AND tbl_name = 'server_sessions'
+          AND sql IS NOT NULL
+        ORDER BY name
+    """), {"object_type": object_type}).mappings())
+
+
+def _sqlite_incoming_server_session_foreign_keys(conn: Connection) -> list[str]:
+    incoming: list[str] = []
+    table_names = conn.execute(text("""
+        SELECT name FROM sqlite_master
+        WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+    """)).scalars()
+    for table_name in table_names:
+        escaped_name = str(table_name).replace('"', '""')
+        foreign_keys = conn.exec_driver_sql(
+            f'PRAGMA foreign_key_list("{escaped_name}")'
+        ).mappings()
+        if any(str(item.get("table") or "").lower() == "server_sessions" for item in foreign_keys):
+            incoming.append(str(table_name))
+    return incoming
+
+
+def _sqlite_pragma_rows(
+    conn: Connection,
+    pragma_name: str,
+    object_name: str,
+) -> list[Mapping[str, Any]]:
+    escaped_name = str(object_name).replace('"', '""')
+    return list(conn.exec_driver_sql(
+        f'PRAGMA {pragma_name}("{escaped_name}")'
+    ).mappings())
+
+
+def _validate_server_session_columns(conn: Connection, *, nullable_household: bool) -> None:
+    actual_columns = _sqlite_pragma_rows(conn, "table_info", "server_sessions")
+    expected_columns = []
+    for name, declared_type, not_null, default, primary_key_position in (
+        _SERVER_SESSION_COLUMN_CONTRACT
+    ):
+        expected_not_null = (
+            not nullable_household if name == "active_household_id" else not_null
         )
-    """))
-    conn.execute(text("""
-        CREATE INDEX IF NOT EXISTS idx_server_sessions_user_active
-        ON server_sessions(user_id, revoked_at, expires_at)
-    """))
+        expected_columns.append((
+            name,
+            declared_type,
+            bool(expected_not_null),
+            default,
+            primary_key_position,
+        ))
+    actual_contract = [
+        (
+            str(column.get("name") or ""),
+            str(column.get("type") or "").upper(),
+            bool(column.get("notnull")),
+            None if column.get("dflt_value") is None else str(column["dflt_value"]),
+            int(column.get("pk") or 0),
+        )
+        for column in actual_columns
+    ]
+    if actual_contract != expected_columns:
+        raise RuntimeError("Onverwacht server_sessions-kolomcontract")
+
+
+def _validate_server_session_unique_contract(conn: Connection) -> None:
+    indexes = _sqlite_pragma_rows(conn, "index_list", "server_sessions")
+    unique_contracts = []
+    for index in indexes:
+        if not bool(index.get("unique")):
+            continue
+        index_name = str(index.get("name") or "")
+        columns = tuple(
+            str(column.get("name") or "")
+            for column in _sqlite_pragma_rows(conn, "index_info", index_name)
+        )
+        unique_contracts.append((str(index.get("origin") or ""), columns))
+    if sorted(unique_contracts) != sorted((
+        ("pk", ("id",)),
+        ("u", ("session_token_hash",)),
+    )):
+        raise RuntimeError("Onverwacht server_sessions-UNIQUE/PK-contract")
+
+
+def _validate_server_session_active_index(conn: Connection) -> None:
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in _sqlite_pragma_rows(conn, "index_list", "server_sessions")
+    }
+    index = indexes.get("idx_server_sessions_user_active")
+    if not index or bool(index.get("unique")) or bool(index.get("partial")):
+        raise RuntimeError("Ongeldige idx_server_sessions_user_active")
+    columns = tuple(
+        str(column.get("name") or "")
+        for column in _sqlite_pragma_rows(
+            conn,
+            "index_info",
+            "idx_server_sessions_user_active",
+        )
+    )
+    if columns != _SERVER_SESSION_ACTIVE_INDEX_COLUMNS:
+        raise RuntimeError("Ongeldige idx_server_sessions_user_active-kolommen")
+
+
+def _validate_server_session_schema(conn: Connection, *, nullable_household: bool) -> None:
+    _validate_server_session_columns(
+        conn,
+        nullable_household=nullable_household,
+    )
+    _validate_server_session_unique_contract(conn)
+    _validate_server_session_active_index(conn)
+
+
+def _upgrade_server_sessions_active_household_nullable(conn: Connection) -> None:
+    if conn.dialect.name != "sqlite":
+        raise RuntimeError(
+            "Nullable active_household_id-upgrade is alleen voor SQLite geïmplementeerd"
+        )
+    _validate_server_session_schema(conn, nullable_household=False)
+    if inspect(conn).get_foreign_keys("server_sessions"):
+        raise RuntimeError("server_sessions bevat onverwachte foreign keys")
+    incoming_foreign_keys = _sqlite_incoming_server_session_foreign_keys(conn)
+    if incoming_foreign_keys:
+        raise RuntimeError(
+            "Onverwachte inkomende server_sessions-foreign keys: "
+            + ", ".join(sorted(incoming_foreign_keys))
+        )
+    if _sqlite_schema_objects(conn, "trigger"):
+        raise RuntimeError("server_sessions bevat onverwachte triggers")
+    dependent_views = conn.execute(text("""
+        SELECT name FROM sqlite_master
+        WHERE type = 'view' AND lower(sql) LIKE '%server_sessions%'
+    """)).scalars().all()
+    if dependent_views:
+        raise RuntimeError(
+            "Onverwachte server_sessions-views: " + ", ".join(sorted(dependent_views))
+        )
+
+    user_indexes = _sqlite_schema_objects(conn, "index")
+    expected_index_names = {"idx_server_sessions_user_active"}
+    unexpected_indexes = {
+        str(item["name"]) for item in user_indexes
+    } - expected_index_names
+    if unexpected_indexes:
+        raise RuntimeError(
+            "Onverwachte server_sessions-indexen: "
+            + ", ".join(sorted(unexpected_indexes))
+        )
+
+    temporary_table = "server_sessions__context_foundation"
+    if inspect(conn).has_table(temporary_table):
+        raise RuntimeError(
+            "Tijdelijke server_sessions-contextfoundationtabel bestaat al"
+        )
+    column_list = ", ".join(_SERVER_SESSION_COLUMNS)
+    with conn.begin_nested():
+        conn.execute(text(_SERVER_SESSION_TABLE_SQL.format(table_name=temporary_table)))
+        before_count = int(conn.execute(text(
+            "SELECT COUNT(*) FROM server_sessions"
+        )).scalar_one())
+        conn.execute(text(f"""
+            INSERT INTO {temporary_table} ({column_list})
+            SELECT {column_list} FROM server_sessions
+        """))
+        copied_count = int(conn.execute(text(
+            f"SELECT COUNT(*) FROM {temporary_table}"
+        )).scalar_one())
+        if copied_count != before_count:
+            raise RuntimeError("server_sessions-rowcount wijkt af tijdens schema-upgrade")
+        differences = int(conn.execute(text(f"""
+            SELECT COUNT(*) FROM (
+                SELECT {column_list} FROM server_sessions
+                EXCEPT
+                SELECT {column_list} FROM {temporary_table}
+            )
+        """)).scalar_one())
+        if differences:
+            raise RuntimeError("server_sessions-data wijkt af tijdens schema-upgrade")
+
+        conn.execute(text("DROP TABLE server_sessions"))
+        conn.execute(text(
+            f"ALTER TABLE {temporary_table} RENAME TO server_sessions"
+        ))
+        conn.execute(text("""
+            CREATE INDEX idx_server_sessions_user_active
+            ON server_sessions(user_id, revoked_at, expires_at)
+        """))
+        _validate_server_session_schema(conn, nullable_household=True)
+        after_count = int(conn.execute(text(
+            "SELECT COUNT(*) FROM server_sessions"
+        )).scalar_one())
+        if after_count != before_count:
+            raise RuntimeError("server_sessions-rowcount wijkt af na schema-upgrade")
+
+
+def ensure_server_session_schema(conn: Connection) -> None:
+    table_existed = inspect(conn).has_table("server_sessions")
+    conn.execute(text(_SERVER_SESSION_TABLE_SQL.format(
+        table_name="IF NOT EXISTS server_sessions"
+    )))
+    if not table_existed:
+        conn.execute(text("""
+            CREATE INDEX idx_server_sessions_user_active
+            ON server_sessions(user_id, revoked_at, expires_at)
+        """))
+    household_column = next(
+        column
+        for column in _sqlite_pragma_rows(conn, "table_info", "server_sessions")
+        if column["name"] == "active_household_id"
+    )
+    nullable_household = not bool(household_column.get("notnull"))
+    _validate_server_session_schema(
+        conn,
+        nullable_household=nullable_household,
+    )
+    if not nullable_household:
+        _upgrade_server_sessions_active_household_nullable(conn)
+
+
+def resolve_session_context_type(
+    conn: Connection,
+    active_household_id: str | None,
+) -> SessionContextType:
+    if active_household_id is None:
+        return "none"
+    household_id = str(active_household_id).strip()
+    if not household_id:
+        raise HTTPException(status_code=403, detail="Actieve context ontbreekt")
+    if not inspect(conn).has_table("household_registry"):
+        raise HTTPException(status_code=403, detail="Actieve context is ongeldig")
+    context_type = conn.execute(text("""
+        SELECT context_type FROM household_registry
+        WHERE id = :household_id
+        LIMIT 1
+    """), {"household_id": household_id}).scalar()
+    normalized = str(context_type or "").strip().lower()
+    if normalized not in {"regular", "system"}:
+        raise HTTPException(status_code=403, detail="Actieve context is ongeldig")
+    return cast(SessionContextType, normalized)
 
 
 def _normalize_database_datetime(value: Any) -> datetime:
@@ -212,6 +483,7 @@ def create_server_session(
         role=membership_role,
     ):
         raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
+    context_type = resolve_session_context_type(conn, household_id)
 
     raw_session_id = new_opaque_session_id()
     token_hash = hash_session_id(raw_session_id)
@@ -250,6 +522,7 @@ def create_server_session(
         user_id=user_id,
         email=membership_email,
         active_household_id=household_id,
+        context_type=context_type,
         role=membership_role,
         session_version=1,
         issued_at=issued_at,
@@ -317,12 +590,14 @@ def resolve_server_session(
         raise HTTPException(status_code=403, detail="Bevoegdheid ontbreekt")
     if not _household_zero_allowed(household_id=household_id, email=email, role=role):
         raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
+    context_type = resolve_session_context_type(conn, household_id)
 
     return ServerSessionContext(
         session_id=str(row.get("session_id")),
         user_id=str(row.get("user_id")),
         email=email,
         active_household_id=household_id,
+        context_type=context_type,
         role=role,
         session_version=int(row.get("session_version") or 1),
         issued_at=_normalize_database_datetime(row.get("issued_at")),
