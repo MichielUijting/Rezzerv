@@ -167,6 +167,7 @@ def test_platform_admin_none_session_is_sql_null_and_resolves_without_membership
         'email': 'platform@example.test',
         'active_household_id': None,
         'active_household_name': '',
+        'context_type': 'none',
         'role': None,
         'display_role': None,
         'permissions': {},
@@ -179,6 +180,7 @@ def test_platform_admin_none_session_is_sql_null_and_resolves_without_membership
         'session_version': 1,
         'expires_at': resolved.expires_at.isoformat(),
     }
+    assert 'platform_roles' not in public_session_payload(resolved)
 
 
 def test_none_session_fails_closed_when_platform_admin_role_is_deactivated(connection):
@@ -234,6 +236,7 @@ def test_session_belongs_to_exactly_one_user_and_household(connection):
     assert resolved.active_household_id == "1"
     assert resolved.role == "admin"
     assert resolved.context_type == "regular"
+    assert public_session_payload(resolved)["context_type"] == "regular"
     assert context.session_id == resolved.session_id
 
 
@@ -308,6 +311,7 @@ def test_household_zero_keeps_temporary_v1_1_owner_session_compatibility(connect
     assert created.role == 'owner'
     assert resolved.role == 'owner'
     assert created.context_type == resolved.context_type == 'system'
+    assert payload['context_type'] == 'system'
     assert connection.execute(text("""
         SELECT role_key FROM auth_membership_roles
         WHERE household_id = '0' AND membership_id = 'system-superuser'

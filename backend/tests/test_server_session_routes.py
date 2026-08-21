@@ -200,6 +200,7 @@ def test_member_login_keeps_regular_household_context():
 
     assert response.status_code == 200
     assert context.context_type == "regular"
+    assert response.json()["context_type"] == "regular"
     assert context.active_household_id == "2"
     assert context.role == "member"
 
@@ -217,6 +218,7 @@ def test_superuser_login_keeps_system_household_zero_compatibility():
 
     assert response.status_code == 200
     assert context.context_type == "system"
+    assert response.json()["context_type"] == "system"
     assert context.active_household_id == "0"
     assert context.role == "owner"
 
@@ -247,7 +249,8 @@ def test_platform_admin_only_login_creates_resolvable_none_session():
     assert response.json()["display_role"] is None
     assert response.json()["permissions"] == {}
     assert response.json()["supported_permissions"] == []
-    assert "context_type" not in response.json()
+    assert response.json()["context_type"] == "none"
+    assert "platform_roles" not in response.json()
 
 
 @pytest.mark.parametrize(
@@ -368,6 +371,7 @@ def test_session_endpoint_resolves_context_from_server():
 
     assert response.status_code == 200
     assert response.json()["role"] == "admin"
+    assert response.json()["context_type"] == "regular"
 
 
 def test_session_endpoint_reflects_canonical_role_update():
