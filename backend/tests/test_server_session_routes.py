@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
+from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
@@ -27,6 +28,15 @@ def build_client():
                 """
             )
         )
+        ensure_authorization_foundation(conn)
+        conn.execute(text("""
+            INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
+            VALUES
+              ('1', 'u1', 'household.admin'),
+              ('2', 'u1', 'household.member'),
+              ('2', 'u2', 'household.member'),
+              ('0', 'u3', 'household.owner')
+        """))
         conn.execute(
             text(
                 """
@@ -133,6 +143,27 @@ def test_session_endpoint_resolves_context_from_server():
     response = client.get("/api/session")
 
     assert response.status_code == 200
+    assert response.json()["role"] == "admin"
+
+
+def test_session_endpoint_reflects_canonical_role_update():
+    client, engine = build_client()
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
+    )
+    assert login.status_code == 200
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE auth_membership_roles
+            SET role_key = 'household.member'
+            WHERE household_id = '1' AND membership_id = 'u1'
+        """))
+
+    response = client.get("/api/session")
+
+    assert response.status_code == 200
     assert response.json()["role"] == "member"
 
 
@@ -203,6 +234,11 @@ def test_secure_cookie_can_be_enabled_for_non_local_runtime():
         conn.execute(text("CREATE TABLE household_memberships (user_id TEXT, household_id TEXT, role TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
         conn.execute(text("INSERT INTO app_users VALUES ('u1', 'admin@rezzerv.local', 'Rezzerv123')"))
         conn.execute(text("INSERT INTO household_memberships (user_id, household_id, role) VALUES ('u1', '1', 'owner')"))
+        ensure_authorization_foundation(conn)
+        conn.execute(text("""
+            INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
+            VALUES ('1', 'u1', 'household.admin')
+        """))
     app = FastAPI()
     app.include_router(
         create_server_session_router(

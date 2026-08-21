@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import inspect, text
 
 from app.services.authorization_foundation_service import ensure_authorization_foundation
+from app.services.authorization_membership_service import create_canonical_membership_role
 
 SUPERGEBRUIKER_EMAIL = "supergebruiker@rezzerv.local"
 SUPERGEBRUIKER_HUISHOUDEN_ID = "0"
@@ -218,6 +219,13 @@ def ensure_system_superuser_for_session_runtime(conn) -> SystemSuperuserSessionP
             ),
             insert_params,
         )
+
+    create_canonical_membership_role(
+        conn,
+        household_id=SUPERGEBRUIKER_HUISHOUDEN_ID,
+        membership_id=membership_id,
+        legacy_role="owner",
+    )
 
     return SystemSuperuserSessionProvisioningResult(
         email=SUPERGEBRUIKER_EMAIL,

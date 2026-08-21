@@ -4,8 +4,14 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 
+from app.services.authorization_foundation_service import (
+    ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS,
+    V2_SUPERUSER_TARGET_PERMISSIONS,
+    ensure_authorization_foundation,
+)
 from app.services.server_session_service import (
     create_server_session,
+    public_session_payload,
     resolve_server_session,
     revoke_server_session,
     rotate_active_household,
@@ -38,6 +44,14 @@ def connection():
                 """
             )
         )
+        ensure_authorization_foundation(conn)
+        conn.execute(text("""
+            INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
+            VALUES
+              ('1', 'u1', 'household.admin'),
+              ('2', 'u1', 'household.member'),
+              ('2', 'u2', 'household.member')
+        """))
         yield conn
 
 
@@ -62,7 +76,7 @@ def test_session_belongs_to_exactly_one_user_and_household(connection):
 
     assert resolved.user_id == "u1"
     assert resolved.active_household_id == "1"
-    assert resolved.role == "owner"
+    assert resolved.role == "admin"
     assert context.session_id == resolved.session_id
 
 
@@ -78,11 +92,23 @@ def test_non_member_cannot_select_household(connection):
     assert_http_status(exc, 403)
 
 
-def test_role_is_resolved_from_database_for_every_request(connection):
+def test_stale_legacy_role_does_not_change_canonical_session_role(connection):
     raw_id, _ = create_server_session(connection, user_id="u1", active_household_id="1")
     connection.execute(
         text("UPDATE household_memberships SET role = 'member' WHERE user_id = 'u1' AND household_id = '1'")
     )
+
+    resolved = resolve_server_session(connection, raw_id)
+
+    assert resolved.role == "admin"
+
+
+def test_canonical_role_update_changes_session_role(connection):
+    raw_id, _ = create_server_session(connection, user_id="u1", active_household_id="1")
+    connection.execute(text("""
+        UPDATE auth_membership_roles SET role_key = 'household.member'
+        WHERE household_id = '1' AND membership_id = 'u1'
+    """))
 
     resolved = resolve_server_session(connection, raw_id)
 
@@ -92,12 +118,49 @@ def test_role_is_resolved_from_database_for_every_request(connection):
 def test_missing_role_never_escalates_to_superuser(connection):
     raw_id, _ = create_server_session(connection, user_id="u1", active_household_id="1")
     connection.execute(
-        text("UPDATE household_memberships SET role = '' WHERE user_id = 'u1' AND household_id = '1'")
+        text("UPDATE auth_membership_roles SET active = 0 WHERE household_id = '1' AND membership_id = 'u1'")
     )
 
     with pytest.raises(HTTPException) as exc:
         resolve_server_session(connection, raw_id)
     assert_http_status(exc, 403)
+
+
+def test_household_zero_keeps_temporary_v1_1_owner_session_compatibility(connection):
+    connection.execute(text("""
+        INSERT INTO app_users (id, email)
+        VALUES ('system-superuser', 'supergebruiker@rezzerv.local')
+    """))
+    connection.execute(text("""
+        INSERT INTO household_memberships (user_id, household_id, role)
+        VALUES ('system-superuser', '0', 'owner')
+    """))
+    connection.execute(text("""
+        INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
+        VALUES ('0', 'system-superuser', 'household.admin')
+    """))
+
+    raw_id, created = create_server_session(
+        connection,
+        user_id='system-superuser',
+        active_household_id='0',
+    )
+    resolved = resolve_server_session(connection, raw_id)
+    payload = public_session_payload(resolved)
+
+    assert created.role == 'owner'
+    assert resolved.role == 'owner'
+    assert connection.execute(text("""
+        SELECT role_key FROM auth_membership_roles
+        WHERE household_id = '0' AND membership_id = 'system-superuser'
+    """)).scalar_one() == 'household.admin'
+    assert connection.execute(text("""
+        SELECT role FROM household_memberships
+        WHERE household_id = '0' AND user_id = 'system-superuser'
+    """)).scalar_one() == 'owner'
+    granted = {key for key, allowed in payload['permissions'].items() if allowed}
+    assert ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS <= granted
+    assert not (V2_SUPERUSER_TARGET_PERMISSIONS - ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS) & granted
 
 
 def test_revoked_session_returns_401(connection):

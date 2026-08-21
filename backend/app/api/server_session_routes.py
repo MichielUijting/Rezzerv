@@ -16,10 +16,15 @@ from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
     create_server_session,
     membership_active_condition,
+    membership_id_expression,
     membership_user_join_condition,
     public_session_payload,
     resolve_server_session,
     revoke_server_session,
+)
+from app.services.authorization_membership_service import (
+    canonical_role_to_runtime_role,
+    resolve_effective_household_role,
 )
 from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
@@ -106,6 +111,7 @@ def _verify_password(stored_password: Any, supplied_password: str) -> bool:
 def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
     join_condition = membership_user_join_condition(conn)
     active_condition = membership_active_condition(conn)
+    membership_id_sql = membership_id_expression(conn)
     rows = conn.execute(
         text(
             f"""
@@ -113,15 +119,14 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
                 u.id AS user_id,
                 u.email,
                 u.password,
+                {membership_id_sql} AS membership_id,
                 hm.household_id,
                 hm.role
             FROM app_users u
             JOIN household_memberships hm ON {join_condition}
             WHERE lower(trim(u.email)) = :email
               AND {active_condition}
-            ORDER BY
-                CASE WHEN lower(trim(hm.role)) = 'owner' THEN 0 ELSE 1 END,
-                hm.household_id ASC
+            ORDER BY hm.household_id ASC
             """
         ),
         {"email": email},
@@ -129,13 +134,32 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
 
     if not rows:
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
-    first = rows[0]
+    resolved_rows = []
+    for row in rows:
+        role_key = resolve_effective_household_role(
+            conn,
+            household_id=str(row.get("household_id") or ""),
+            membership_id=str(row.get("membership_id") or ""),
+            legacy_role=row.get("role"),
+        )
+        runtime_role = canonical_role_to_runtime_role(role_key or "")
+        if runtime_role:
+            resolved_rows.append({**dict(row), "effective_role": runtime_role})
+    if not resolved_rows:
+        raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
+    resolved_rows.sort(
+        key=lambda row: (
+            0 if row["effective_role"] in {"admin", "owner"} else 1,
+            str(row.get("household_id") or ""),
+        )
+    )
+    first = resolved_rows[0]
     if not _verify_password(first.get("password"), password):
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
 
     household_id = str(first.get("household_id") or "").strip()
     resolved_email = str(first.get("email") or "").strip().lower()
-    role = str(first.get("role") or "").strip().lower()
+    role = str(first.get("effective_role") or "").strip().lower()
     if not household_id:
         raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
 

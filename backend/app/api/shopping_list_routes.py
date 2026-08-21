@@ -10,10 +10,8 @@ from app.services.article_group_secure_store import (
     list_article_groups,
     list_household_articles_for_grouping,
 )
-from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.authorization_membership_service import (
     AuthorizationDeniedError,
-    migrate_legacy_household_memberships,
     require_household_permission,
 )
 from app.services.server_session_service import SESSION_COOKIE_NAME, resolve_server_session
@@ -71,8 +69,6 @@ def _membership_id(conn, *, household_id: str, user_id: str, email: str) -> str:
 def _authorized_context(conn, request: Request, required_permission: str):
     raw_session_id = request.cookies.get(SESSION_COOKIE_NAME)
     context = resolve_server_session(conn, raw_session_id)
-    ensure_authorization_foundation(conn)
-    migrate_legacy_household_memberships(conn)
     membership_id = _membership_id(
         conn,
         household_id=context.active_household_id,

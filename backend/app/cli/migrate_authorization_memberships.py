@@ -10,7 +10,8 @@ def main() -> None:
         f"scanned={result.scanned} "
         f"created={result.created} "
         f"preserved={result.preserved} "
-        f"skipped={result.skipped}"
+        f"skipped={result.skipped} "
+        f"invalid={result.invalid}"
     )
 
 
