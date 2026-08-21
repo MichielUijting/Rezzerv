@@ -26,6 +26,7 @@ jobs:
       DATABASE_URL: sqlite:///./authorization-membership-api-ci.db
       SQLITE_RUNTIME_VOLUME: github_actions_workspace
       RECEIPT_STORAGE_ROOT: /tmp/rezzerv-authorization-membership-receipts/raw
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
     defaults:
       run:
         working-directory: backend

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock
 
 import pytest
 from fastapi import HTTPException
@@ -133,7 +134,12 @@ def test_owner_session_passes_legacy_receipt_write_guard(monkeypatch):
         request_context.household_context_from_session,
     )
 
-    context = legacy_main.require_receipt_write_context()
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.first.return_value = {
+        "household_id": "household-1"
+    }
+
+    context = legacy_main.require_receipt_write_context(conn, "receipt-1", None)
 
     assert context["role"] == "owner"
     assert context["display_role"] == "admin"
@@ -152,8 +158,13 @@ def test_viewer_session_remains_blocked_by_legacy_receipt_write_guard(monkeypatc
         request_context.household_context_from_session,
     )
 
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.first.return_value = {
+        "household_id": "household-1"
+    }
+
     with pytest.raises(HTTPException) as exc:
-        legacy_main.require_receipt_write_context()
+        legacy_main.require_receipt_write_context(conn, "receipt-1", None)
 
     assert exc.value.status_code == 403
     assert exc.value.detail == "Alleen admin en lid mogen kassabonnen aanpassen"
