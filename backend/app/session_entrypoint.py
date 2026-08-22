@@ -34,6 +34,9 @@ from app.services.frontteam_household_provisioning import (
 from app.services.hybrid_regression_route_authorization import (
     required_hybrid_regression_permissions,
 )
+from app.services.kassa_diagnostic_route_authorization import (
+    required_kassa_diagnostic_permission,
+)
 from app.services.membership_user_identity_service import backfill_membership_user_ids
 from app.services.receipt_export_fixture_route_authorization import (
     required_receipt_export_fixture_permission,
@@ -137,6 +140,16 @@ async def server_session_request_context(request: Request, call_next):
         if hybrid_regression_permissions:
             require_platform_permissions_from_session(
                 hybrid_regression_permissions,
+                request.headers.get("authorization"),
+            )
+
+        kassa_permission = required_kassa_diagnostic_permission(
+            request.method,
+            request.url.path,
+        )
+        if kassa_permission is not None:
+            require_platform_permission_from_session(
+                kassa_permission,
                 request.headers.get("authorization"),
             )
 
