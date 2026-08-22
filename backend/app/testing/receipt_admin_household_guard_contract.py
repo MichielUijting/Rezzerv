@@ -7,7 +7,10 @@ from fastapi.testclient import TestClient
 
 from app.services.platform_admin_route_guard import (
     PROTECTED_MUTATIONS,
+    RECEIPT_EXPORT_FIXTURE_PERMISSION,
+    RECEIPT_EXPORT_FIXTURE_ROUTES,
     authorize_platform_admin_request,
+    authorize_receipt_export_fixture_request,
     deduplicate_receipt_parser_diagnosis_routes,
     install_platform_admin_route_guard,
 )
@@ -17,7 +20,6 @@ EXPECTED_PROTECTED_MUTATIONS = {
     ("POST", "/api/testing/fixtures/browser-regression/reset"),
     ("POST", "/api/testing/fixtures/cleanup"),
     ("POST", "/api/testing/fixtures/inventory/ensure"),
-    ("POST", "/api/testing/fixtures/receipt-export/generate"),
     ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
     ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
     ("POST", "/api/testing/regression/almost-out-prediction"),
@@ -33,11 +35,63 @@ EXPECTED_PROTECTED_MUTATIONS = {
     ("POST", "/api/admin/validate-receipt-status-baseline"),
 }
 
+EXPECTED_RECEIPT_EXPORT_FIXTURE_ROUTES = {
+    ("POST", "/api/testing/fixtures/receipt-export/generate"),
+    ("GET", "/api/testing/fixtures/receipt-export/download"),
+}
+
 
 def run_contract() -> None:
     assert PROTECTED_MUTATIONS == EXPECTED_PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 18
+    assert len(PROTECTED_MUTATIONS) == 17
     assert ("POST", "/api/admin/inventory/groups/ensure-schema") not in PROTECTED_MUTATIONS
+    assert ("POST", "/api/testing/fixtures/receipt-export/generate") not in PROTECTED_MUTATIONS
+    assert RECEIPT_EXPORT_FIXTURE_ROUTES == EXPECTED_RECEIPT_EXPORT_FIXTURE_ROUTES
+    assert RECEIPT_EXPORT_FIXTURE_PERMISSION == "platform.test_fixtures.manage"
+
+    permission_calls: list[tuple[str, str | None]] = []
+
+    def require_platform_permission(permission_key: str, authorization: str | None):
+        permission_calls.append((permission_key, authorization))
+        if authorization != "Bearer fixture-admin":
+            raise HTTPException(status_code=403, detail="Fixturebeheer vereist")
+        return {"permission": permission_key}
+
+    for method, path in sorted(RECEIPT_EXPORT_FIXTURE_ROUTES):
+        permission_calls.clear()
+        try:
+            authorize_receipt_export_fixture_request(
+                method,
+                path,
+                "Bearer household-user",
+                require_platform_permission,
+            )
+        except HTTPException as exc:
+            assert exc.status_code == 403
+        else:
+            raise AssertionError(f"{method} {path} had moeten worden geweigerd")
+        assert permission_calls == [
+            (RECEIPT_EXPORT_FIXTURE_PERMISSION, "Bearer household-user")
+        ]
+
+        permission_calls.clear()
+        allowed = authorize_receipt_export_fixture_request(
+            method,
+            path,
+            "Bearer fixture-admin",
+            require_platform_permission,
+        )
+        assert allowed == {"permission": RECEIPT_EXPORT_FIXTURE_PERMISSION}
+        assert permission_calls == [
+            (RECEIPT_EXPORT_FIXTURE_PERMISSION, "Bearer fixture-admin")
+        ]
+
+    assert authorize_receipt_export_fixture_request(
+        "GET",
+        "/api/testing/reports/complete",
+        None,
+        require_platform_permission,
+    ) is None
 
     app = FastAPI()
     calls: list[str] = []
