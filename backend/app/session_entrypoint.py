@@ -25,6 +25,9 @@ from app.services.external_database_route_authorization import (
     authorize_external_database_request,
     required_external_database_permission,
 )
+from app.services.fixture_lifecycle_route_authorization import (
+    required_fixture_lifecycle_permission,
+)
 from app.services.frontteam_household_provisioning import (
     ensure_frontteam_household_for_session_runtime,
 )
@@ -39,6 +42,7 @@ from app.services.receipt_lifecycle_foundation_service import (
 )
 from app.services.session_request_context import (
     authorized_household_id_from_session,
+    bind_canonical_platform_permission_grant,
     bind_current_actor_from_request_session_if_available,
     bind_request_session,
     household_context_from_session,
@@ -48,6 +52,7 @@ from app.services.session_request_context import (
     require_household_admin_from_session,
     require_platform_admin_from_session,
     require_platform_permission_from_session,
+    reset_canonical_platform_permission_grant,
     reset_request_session,
     resolve_current_server_session,
 )
@@ -96,19 +101,29 @@ def activate_server_side_route_context() -> None:
 @app.middleware("http")
 async def server_session_request_context(request: Request, call_next):
     token = bind_request_session(request)
+    canonical_permission_grant_token = None
     try:
         # Bind the canonical actor before any route/service can write domain data.
         # Public requests without a valid server session remain unattributed.
         current_context = bind_current_actor_from_request_session_if_available()
 
-        fixture_permission = required_receipt_export_fixture_permission(
-            request.method,
-            request.url.path,
+        fixture_permission = (
+            required_receipt_export_fixture_permission(
+                request.method,
+                request.url.path,
+            )
+            or required_fixture_lifecycle_permission(
+                request.method,
+                request.url.path,
+            )
         )
         if fixture_permission is not None:
             require_platform_permission_from_session(
                 fixture_permission,
                 request.headers.get("authorization"),
+            )
+            canonical_permission_grant_token = bind_canonical_platform_permission_grant(
+                fixture_permission
             )
 
         # External database routes used to rely only on frontend navigation.
@@ -135,6 +150,10 @@ async def server_session_request_context(request: Request, call_next):
             headers=exc.headers,
         )
     finally:
+        if canonical_permission_grant_token is not None:
+            reset_canonical_platform_permission_grant(
+                canonical_permission_grant_token
+            )
         reset_request_session(token)
 
 
@@ -221,8 +240,9 @@ def restore_archived_receipt_to_kassa(receipt_table_id: str):
                 """
             ),
             {
-                "receipt_table_id": normalized_receipt_id,
+                "id": normalized_receipt_id,
                 "household_id": household_id,
+                "receipt_table_id": normalized_receipt_id,
             },
         )
 
