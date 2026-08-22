@@ -7,6 +7,7 @@ on:
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/platform_admin_route_guard.py'
+      - 'backend/app/services/receipt_export_fixture_route_authorization.py'
       - 'backend/app/services/session_request_context.py'
       - 'backend/app/testing/receipt_admin_household_guard_contract.py'
       - 'backend/tests/server_session_route_guard_audit.py'
@@ -41,6 +42,7 @@ jobs:
             app/session_entrypoint.py \
             app/services/authorization_foundation_service.py \
             app/services/platform_admin_route_guard.py \
+            app/services/receipt_export_fixture_route_authorization.py \
             tests/server_session_route_guard_audit.py \
             tests/test_receipt_export_fixture_platform_authorization.py \
             tests/test_test_orchestration_platform_route_authorization.py
