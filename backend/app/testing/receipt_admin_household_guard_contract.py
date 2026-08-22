@@ -13,11 +13,9 @@ from app.services.platform_admin_route_guard import (
 )
 
 EXPECTED_PROTECTED_MUTATIONS = {
-    ("POST", "/api/admin/diagnose-receipt-status-baseline"),
     ("POST", "/api/admin/external-relations/batch/decision"),
     ("POST", "/api/admin/product-groups/import-gpc-nl"),
     ("POST", "/api/admin/receipts/purge-archived"),
-    ("POST", "/api/admin/validate-receipt-status-baseline"),
 }
 
 MIGRATED_TEST_MUTATIONS = {
@@ -42,14 +40,20 @@ MIGRATED_MAINTENANCE_RECOMPUTE_MUTATIONS = {
     ("POST", "/api/admin/recompute-receipt-statuses"),
 }
 
+MIGRATED_RECEIPT_STATUS_BASELINE_MUTATIONS = {
+    ("POST", "/api/admin/diagnose-receipt-status-baseline"),
+    ("POST", "/api/admin/validate-receipt-status-baseline"),
+}
+
 
 def run_contract() -> None:
     assert PROTECTED_MUTATIONS == EXPECTED_PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 5
+    assert len(PROTECTED_MUTATIONS) == 3
     assert ("POST", "/api/admin/inventory/groups/ensure-schema") not in PROTECTED_MUTATIONS
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_TEST_MUTATIONS)
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_KASSA_DIAGNOSTIC_MUTATIONS)
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_MAINTENANCE_RECOMPUTE_MUTATIONS)
+    assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_RECEIPT_STATUS_BASELINE_MUTATIONS)
 
     app = FastAPI()
     calls: list[str] = []
