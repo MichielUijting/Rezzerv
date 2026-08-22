@@ -21,6 +21,13 @@ from app.services.actor_attribution_service import install_actor_attribution_tra
 from app.services.authorization_ui_fixture_provisioning import (
     ensure_authorization_ui_fixture_member,
 )
+from app.services.external_database_route_authorization import (
+    authorize_external_database_request,
+    required_external_database_permission,
+)
+from app.services.frontteam_household_provisioning import (
+    ensure_frontteam_household_for_session_runtime,
+)
 from app.services.membership_user_identity_service import backfill_membership_user_ids
 from app.services.receipt_lifecycle_foundation_service import (
     apply_unpack_receipt_lifecycle_action,
@@ -38,6 +45,7 @@ from app.services.session_request_context import (
     require_household_admin_from_session,
     require_platform_admin_from_session,
     reset_request_session,
+    resolve_current_server_session,
 )
 from app.services.support_message_session_adapter import household_support_actor
 from app.services.system_superuser_session_provisioning import (
@@ -91,10 +99,27 @@ async def server_session_request_context(request: Request, call_next):
     try:
         # Bind the canonical actor before any route/service can write domain data.
         # Public requests without a valid server session remain unattributed.
-        bind_current_actor_from_request_session_if_available()
+        current_context = bind_current_actor_from_request_session_if_available()
         route_key = (request.url.path, request.method.upper())
         if route_key in ADMIN_ONLY_RUNTIME_PATHS:
             require_platform_admin_from_session(None)
+
+        # External database routes used to rely only on frontend navigation.
+        # Enforce the platform permission matrix server-side for every request.
+        required_permission = required_external_database_permission(
+            request.method,
+            request.url.path,
+        )
+        if required_permission is not None:
+            context = current_context or resolve_current_server_session()
+            with legacy_main.engine.begin() as conn:
+                authorize_external_database_request(
+                    conn,
+                    user_id=context.user_id,
+                    method=request.method,
+                    path=request.url.path,
+                )
+
         return await call_next(request)
     finally:
         reset_request_session(token)
@@ -262,6 +287,7 @@ install_receipt_lifecycle_foundation(app, legacy_main.engine)
 
 with legacy_main.engine.begin() as provisioning_conn:
     ensure_system_superuser_for_session_runtime(provisioning_conn)
+    ensure_frontteam_household_for_session_runtime(provisioning_conn)
     ensure_authorization_ui_fixture_member(provisioning_conn)
     backfill_membership_user_ids(provisioning_conn)
 

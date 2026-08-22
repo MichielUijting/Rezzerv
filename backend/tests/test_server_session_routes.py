@@ -9,6 +9,7 @@ from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
 )
+from app.services.frontteam_household_provisioning import FRONTTEAM_HOUSEHOLD_ID
 from app.services.server_session_service import (
     ensure_server_session_schema,
     resolve_server_session,
@@ -255,6 +256,112 @@ def test_ip_owner_login_uses_system_context_without_household_membership():
     assert "platform_roles" not in response.json()
 
 
+def test_frontteam_login_uses_dedicated_regular_admin_household():
+    client, engine = build_client()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "frontteam@example.test", "password": "Rezzerv123"},
+    )
+    raw_session_id = response.cookies.get("rezzerv_session")
+    with engine.begin() as conn:
+        context = resolve_server_session(conn, raw_session_id)
+        membership = conn.execute(text("""
+            SELECT hm.role, mr.role_key
+            FROM household_memberships hm
+            JOIN auth_membership_roles mr
+              ON mr.household_id = hm.household_id
+             AND mr.membership_id = hm.user_id
+            WHERE hm.user_id = 'u-frontteam'
+              AND hm.household_id = :household_id
+        """), {"household_id": FRONTTEAM_HOUSEHOLD_ID}).mappings().one()
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert context.context_type == "regular"
+    assert context.active_household_id == FRONTTEAM_HOUSEHOLD_ID
+    assert context.role == "admin"
+    assert context.is_frontteam is True
+    assert membership["role"] == "admin"
+    assert membership["role_key"] == "household.admin"
+    assert payload["active_household_id"] == FRONTTEAM_HOUSEHOLD_ID
+    assert payload["active_household_name"] == "Frontteam"
+    assert payload["context_type"] == "regular"
+    assert payload["role"] == "admin"
+    assert payload["is_frontteam"] is True
+    for permission in (
+        "platform.external_products.view",
+        "platform.external_products.search",
+        "platform.external_products.link_existing",
+    ):
+        assert payload["permissions"][permission] is True
+    assert "platform_roles" not in payload
+
+
+def test_frontteam_other_admin_membership_does_not_override_reserved_household():
+    client, engine = build_client()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO household_memberships(user_id, household_id, role)
+            VALUES ('u-frontteam', '1', 'admin')
+        """))
+        conn.execute(text("""
+            INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
+            VALUES ('1', 'u-frontteam', 'household.admin')
+        """))
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "frontteam@example.test", "password": "Rezzerv123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["active_household_id"] == FRONTTEAM_HOUSEHOLD_ID
+    assert response.json()["context_type"] == "regular"
+    assert response.json()["is_frontteam"] is True
+
+
+def test_frontteam_platform_admin_conflict_creates_no_session():
+    client, engine = build_client()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES ('u-frontteam', 'platform.platform_admin', 1)
+        """))
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "frontteam@example.test", "password": "Rezzerv123"},
+    )
+    with engine.begin() as conn:
+        session_count = conn.execute(text("""
+            SELECT COUNT(*) FROM server_sessions WHERE user_id = 'u-frontteam'
+        """)).scalar_one()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+    assert session_count == 0
+
+
+def test_frontteam_role_revocation_invalidates_existing_session():
+    client, engine = build_client()
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "frontteam@example.test", "password": "Rezzerv123"},
+    )
+    assert login.status_code == 200
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE auth_platform_user_roles SET active = 0
+            WHERE user_id = 'u-frontteam' AND role_key = 'platform.frontteam'
+        """))
+
+    response = client.get("/api/session")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+
+
 def test_platform_admin_only_login_creates_resolvable_none_session():
     client, engine = build_client()
 
@@ -289,7 +396,6 @@ def test_platform_admin_only_login_creates_resolvable_none_session():
     "email",
     [
         "none@example.test",
-        "frontteam@example.test",
         "inactive-platform@example.test",
     ],
 )

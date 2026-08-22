@@ -31,6 +31,11 @@ from app.services.authorization_membership_service import (
     canonical_role_to_runtime_role,
     resolve_effective_household_role,
 )
+from app.services.frontteam_household_provisioning import (
+    FRONTTEAM_HOUSEHOLD_ID,
+    FRONTTEAM_PLATFORM_ROLE,
+    ensure_frontteam_household_for_session_runtime,
+)
 from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
     SUPERGEBRUIKER_HUISHOUDEN_ID,
@@ -127,11 +132,17 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
     if not _verify_password(account.get("password"), password):
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
 
+    # Keep the dedicated Frontteam household projection idempotently in sync.
+    # This never grants the platform role; it only projects roles that are
+    # already active in the server-side authorization registry.
+    ensure_frontteam_household_for_session_runtime(conn)
+
     user_id = str(account.get("user_id") or "")
     resolved_email = str(account.get("email") or "").strip().lower()
     platform_roles = resolve_active_platform_role_keys(conn, user_id)
     system_roles = frozenset(platform_roles & SYSTEM_PLATFORM_ROLES)
     is_platform_admin = "platform.platform_admin" in platform_roles
+    is_frontteam = FRONTTEAM_PLATFORM_ROLE in platform_roles
 
     # The historical e-mail address identifies the reserved Superuser account,
     # but only the active server-side role grants its system context.
@@ -143,7 +154,7 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
-    if is_platform_admin and system_roles:
+    if is_platform_admin and (system_roles or is_frontteam):
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
@@ -156,6 +167,56 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             "role": "owner",
             "platform_system_context": True,
         }
+
+    join_condition = membership_user_join_condition(conn)
+    active_condition = membership_active_condition(conn)
+    membership_id_sql = membership_id_expression(conn)
+
+    if is_frontteam:
+        frontteam_membership = conn.execute(
+            text(
+                f"""
+                SELECT
+                    u.id AS user_id,
+                    u.email,
+                    {membership_id_sql} AS membership_id,
+                    hm.household_id,
+                    hm.role
+                FROM app_users u
+                JOIN household_memberships hm ON {join_condition}
+                WHERE u.id = :user_id
+                  AND hm.household_id = :household_id
+                  AND {active_condition}
+                LIMIT 1
+                """
+            ),
+            {"user_id": user_id, "household_id": FRONTTEAM_HOUSEHOLD_ID},
+        ).mappings().first()
+        if not frontteam_membership:
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
+        role_key = resolve_effective_household_role(
+            conn,
+            household_id=FRONTTEAM_HOUSEHOLD_ID,
+            membership_id=str(frontteam_membership.get("membership_id") or ""),
+            legacy_role=frontteam_membership.get("role"),
+        )
+        runtime_role = canonical_role_to_runtime_role(role_key or "")
+        if runtime_role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
+        return {
+            "user_id": user_id,
+            "email": str(account.get("email") or ""),
+            "active_household_id": FRONTTEAM_HOUSEHOLD_ID,
+            "role": "admin",
+            "platform_system_context": False,
+        }
+
     if is_platform_admin:
         return {
             "user_id": user_id,
@@ -165,9 +226,6 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             "platform_system_context": False,
         }
 
-    join_condition = membership_user_join_condition(conn)
-    active_condition = membership_active_condition(conn)
-    membership_id_sql = membership_id_expression(conn)
     rows = conn.execute(
         text(
             f"""
@@ -180,11 +238,12 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             FROM app_users u
             JOIN household_memberships hm ON {join_condition}
             WHERE u.id = :user_id
+              AND hm.household_id <> :frontteam_household_id
               AND {active_condition}
             ORDER BY hm.household_id ASC
             """
         ),
-        {"user_id": user_id},
+        {"user_id": user_id, "frontteam_household_id": FRONTTEAM_HOUSEHOLD_ID},
     ).mappings().all()
     resolved_rows = []
     for row in rows:
