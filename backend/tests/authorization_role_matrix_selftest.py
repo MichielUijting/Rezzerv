@@ -214,6 +214,13 @@ def main() -> int:
     )
     assert test_admin_platform.status == 403, test_admin_platform
 
+    test_admin_external_databases = request_json(
+        test_admin_client,
+        "GET",
+        "/api/external-databases/summary",
+    )
+    assert test_admin_external_databases.status == 403, test_admin_external_databases
+
     print("authorization_role_matrix: PASS")
     print(f"superuser={SUPERUSER_EMAIL}; household=0; role=owner; platform=200")
     print(f"test_admin={TEST_ADMIN_EMAIL}; household=0; role=owner; platform=403")

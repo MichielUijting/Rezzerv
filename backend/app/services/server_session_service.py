@@ -19,12 +19,18 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 from app.services.authorization_foundation_service import (
+    ROLE_PERMISSIONS,
     permissions_for_session_role,
     resolve_active_platform_role_keys,
 )
 from app.services.authorization_membership_service import (
     canonical_role_to_runtime_role,
     resolve_effective_household_role,
+)
+from app.services.frontteam_household_provisioning import (
+    FRONTTEAM_HOUSEHOLD_ID,
+    FRONTTEAM_HOUSEHOLD_NAME,
+    FRONTTEAM_PLATFORM_ROLE,
 )
 from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
@@ -98,6 +104,7 @@ class ServerSessionContext:
     issued_at: datetime
     expires_at: datetime
     is_platform_superuser: bool = False
+    is_frontteam: bool = False
 
 
 def utc_now() -> datetime:
@@ -202,7 +209,16 @@ def _resolve_platform_context_roles(
             detail="Geen geldige accountcontext beschikbaar.",
         )
 
-    if "platform.platform_admin" in platform_roles and system_roles:
+    if system_roles and FRONTTEAM_PLATFORM_ROLE in platform_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
+    if (
+        "platform.platform_admin" in platform_roles
+        and (system_roles or FRONTTEAM_PLATFORM_ROLE in platform_roles)
+    ):
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
@@ -507,6 +523,12 @@ def create_server_session(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    is_frontteam = FRONTTEAM_PLATFORM_ROLE in platform_roles
+    if is_frontteam != (household_id == FRONTTEAM_HOUSEHOLD_ID):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
 
     effective_role_key = resolve_effective_household_role(
         conn,
@@ -524,6 +546,15 @@ def create_server_session(
     ):
         raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
     context_type = resolve_session_context_type(conn, household_id)
+    if is_frontteam and (
+        context_type != "regular"
+        or household_id != FRONTTEAM_HOUSEHOLD_ID
+        or membership_role != "admin"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
 
     return _insert_server_session(
         conn,
@@ -535,6 +566,7 @@ def create_server_session(
         ttl=ttl,
         replace_existing=replace_existing,
         now=now,
+        is_frontteam=is_frontteam,
     )
 
 
@@ -550,6 +582,7 @@ def _insert_server_session(
     replace_existing: bool,
     now: datetime | None,
     is_platform_superuser: bool = False,
+    is_frontteam: bool = False,
 ) -> tuple[str, ServerSessionContext]:
     issued_at = (now or utc_now()).astimezone(timezone.utc)
     expires_at = issued_at + ttl
@@ -596,6 +629,7 @@ def _insert_server_session(
         issued_at=issued_at,
         expires_at=expires_at,
         is_platform_superuser=is_platform_superuser,
+        is_frontteam=is_frontteam,
     )
 
 
@@ -803,6 +837,12 @@ def resolve_server_session(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    is_frontteam = FRONTTEAM_PLATFORM_ROLE in platform_roles
+    if is_frontteam != (household_id == FRONTTEAM_HOUSEHOLD_ID):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
 
     join_condition = membership_user_join_condition(conn)
     active_condition = membership_active_condition(conn)
@@ -838,6 +878,15 @@ def resolve_server_session(
     if not _household_zero_allowed(household_id=household_id, email=email, role=role):
         raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
     context_type = resolve_session_context_type(conn, household_id)
+    if is_frontteam and (
+        context_type != "regular"
+        or household_id != FRONTTEAM_HOUSEHOLD_ID
+        or role != "admin"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
 
     return ServerSessionContext(
         session_id=str(row.get("session_id")),
@@ -849,6 +898,7 @@ def resolve_server_session(
         session_version=int(row.get("session_version") or 1),
         issued_at=_normalize_database_datetime(row.get("issued_at")),
         expires_at=expires_at,
+        is_frontteam=is_frontteam,
     )
 
 
@@ -920,18 +970,27 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
             "expires_at": context.expires_at.isoformat(),
         }
     platform_superuser = bool(context.is_platform_superuser)
+    platform_frontteam = bool(context.is_frontteam)
     granted_permissions = permissions_for_session_role(
         context.role,
         platform_superuser=platform_superuser,
     )
+    if platform_frontteam:
+        granted_permissions.update(ROLE_PERMISSIONS[FRONTTEAM_PLATFORM_ROLE])
     permissions = {key: True for key in sorted(granted_permissions)}
     role = str(context.role or "").strip().lower()
+    if context.active_household_id == SUPERGEBRUIKER_HUISHOUDEN_ID:
+        active_household_name = "Systeemhuishouden"
+    elif context.active_household_id == FRONTTEAM_HOUSEHOLD_ID:
+        active_household_name = FRONTTEAM_HOUSEHOLD_NAME
+    else:
+        active_household_name = ""
     return {
         "user": {"id": context.user_id, "email": context.email},
         "user_id": context.user_id,
         "email": context.email,
         "active_household_id": context.active_household_id,
-        "active_household_name": "Systeemhuishouden" if context.active_household_id == "0" else "",
+        "active_household_name": active_household_name,
         "context_type": context.context_type,
         "role": role,
         "display_role": role,
@@ -941,7 +1000,7 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
         "can_manage_members": bool(permissions.get("members.manage")),
         "is_viewer": role == "viewer",
         "is_platform_superuser": platform_superuser,
-        "is_frontteam": role in {"frontteam", "frontteamlid"},
+        "is_frontteam": platform_frontteam,
         "session_version": context.session_version,
         "expires_at": context.expires_at.isoformat(),
     }

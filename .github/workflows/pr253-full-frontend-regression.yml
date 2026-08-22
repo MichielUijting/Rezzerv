@@ -114,6 +114,57 @@ jobs:
             -e REZZERV_TEST_ADMIN_PASSWORD="$REZZERV_TEST_ADMIN_PASSWORD" \
             backend python /app/tests/authorization_role_matrix_selftest.py
 
+      - name: Grant temporary IP-owner role to frontend test admin
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e REZZERV_TEST_ADMIN_EMAIL="$REZZERV_TEST_ADMIN_EMAIL" \
+            backend python - <<'PY'
+          import os
+
+          from sqlalchemy import text
+
+          from app.db import engine
+          from app.services.authorization_foundation_service import ensure_authorization_foundation
+
+          user_id = os.environ["REZZERV_TEST_ADMIN_EMAIL"]
+
+          with engine.begin() as conn:
+              ensure_authorization_foundation(conn)
+
+              existing_ip_owner = conn.execute(
+                  text("""
+                      SELECT user_id
+                      FROM auth_platform_user_roles
+                      WHERE role_key = 'platform.ip_owner'
+                        AND active = 1
+                        AND user_id <> :user_id
+                      LIMIT 1
+                  """),
+                  {"user_id": user_id},
+              ).scalar()
+
+              if existing_ip_owner:
+                  raise RuntimeError(
+                      f"Onverwachte actieve IP-owner in regressieomgeving: {existing_ip_owner}"
+                  )
+
+              conn.execute(
+                  text("""
+                      INSERT INTO auth_platform_user_roles
+                          (user_id, role_key, active, created_at, updated_at)
+                      VALUES
+                          (:user_id, 'platform.ip_owner', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                      ON CONFLICT(user_id, role_key) DO UPDATE SET
+                          active = 1,
+                          updated_at = CURRENT_TIMESTAMP
+                  """),
+                  {"user_id": user_id},
+              )
+
+          print(f"frontend_test_admin_ip_owner: PASS; user_id={user_id}")
+          PY
+
       - name: Prepare household-zero fixtures
         run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py prepare
 
