@@ -29,6 +29,9 @@ from app.services.frontteam_household_provisioning import (
     ensure_frontteam_household_for_session_runtime,
 )
 from app.services.membership_user_identity_service import backfill_membership_user_ids
+from app.services.receipt_export_fixture_route_authorization import (
+    required_receipt_export_fixture_permission,
+)
 from app.services.receipt_lifecycle_foundation_service import (
     apply_unpack_receipt_lifecycle_action,
     install_receipt_lifecycle_foundation,
@@ -44,6 +47,7 @@ from app.services.session_request_context import (
     request_household_id_from_session,
     require_household_admin_from_session,
     require_platform_admin_from_session,
+    require_platform_permission_from_session,
     reset_request_session,
     resolve_current_server_session,
 )
@@ -96,6 +100,16 @@ async def server_session_request_context(request: Request, call_next):
         # Bind the canonical actor before any route/service can write domain data.
         # Public requests without a valid server session remain unattributed.
         current_context = bind_current_actor_from_request_session_if_available()
+
+        fixture_permission = required_receipt_export_fixture_permission(
+            request.method,
+            request.url.path,
+        )
+        if fixture_permission is not None:
+            require_platform_permission_from_session(
+                fixture_permission,
+                request.headers.get("authorization"),
+            )
 
         # External database routes used to rely only on frontend navigation.
         # Enforce the platform permission matrix server-side for every request.
