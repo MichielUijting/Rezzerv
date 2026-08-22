@@ -5,7 +5,8 @@ parameter delegate through a proven server-side guard chain and do not parse
 or trust the header directly. Runtime-replaced legacy helpers are accepted only
 when their replacement assignment is present in ``session_entrypoint.py``.
 Receipt-export fixture generation is accepted only when its dedicated canonical
-platform-permission boundary is present in ``platform_admin_route_guard.py``.
+platform-permission boundary is classified centrally and enforced by the bound
+server-session middleware before route dispatch.
 """
 
 from __future__ import annotations
@@ -17,7 +18,9 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MAIN_PATH = BACKEND_ROOT / "app" / "main.py"
 ENTRYPOINT_PATH = BACKEND_ROOT / "app" / "session_entrypoint.py"
-PLATFORM_GUARD_PATH = BACKEND_ROOT / "app" / "services" / "platform_admin_route_guard.py"
+FIXTURE_ROUTE_AUTH_PATH = (
+    BACKEND_ROOT / "app" / "services" / "receipt_export_fixture_route_authorization.py"
+)
 ROOT_GUARDS = {
     "get_current_user_from_authorization",
     "require_household_context",
@@ -107,20 +110,32 @@ def _verify_runtime_replacements(entrypoint_source: str) -> set[str]:
         assert assignment in entrypoint_source, f"runtimevervanging ontbreekt: {assignment}"
         trusted.add(legacy_name)
 
+    assert "ADMIN_ONLY_RUNTIME_PATHS" not in entrypoint_source, (
+        "legacy admin-only runtime pre-gate bestaat nog"
+    )
     assert "/api/testing/fixtures/receipt-export/generate" not in entrypoint_source, (
-        "receipt-export fixture gebruikt nog een legacy Superuser pre-gate in session_entrypoint.py"
+        "receipt-export fixture gebruikt nog een hardcoded runtime Superuser-pad"
     )
     return trusted
 
 
-def _verify_receipt_export_fixture_permission_boundary(platform_guard_source: str) -> None:
-    assert f'RECEIPT_EXPORT_FIXTURE_PERMISSION = "{RECEIPT_EXPORT_FIXTURE_PERMISSION}"' in platform_guard_source
-    assert 'from app.services.session_request_context import require_platform_permission_from_session' in platform_guard_source
-    assert 'authorize_receipt_export_fixture_request(' in platform_guard_source
+def _verify_receipt_export_fixture_permission_boundary(
+    entrypoint_source: str,
+    fixture_route_auth_source: str,
+) -> None:
+    assert (
+        f'RECEIPT_EXPORT_FIXTURE_PERMISSION = "{RECEIPT_EXPORT_FIXTURE_PERMISSION}"'
+        in fixture_route_auth_source
+    )
+    assert "def required_receipt_export_fixture_permission(" in fixture_route_auth_source
     for path, method in CANONICAL_FIXTURE_PERMISSION_ROUTES | {RECEIPT_EXPORT_DOWNLOAD_ROUTE}:
-        assert f'("{method}", "{path}")' in platform_guard_source, (
-            f"canonieke receipt-export guard ontbreekt voor {method} {path}"
+        assert f'("{method}", "{path}")' in fixture_route_auth_source, (
+            f"canonieke receipt-export routeclassificatie ontbreekt voor {method} {path}"
         )
+
+    assert "required_receipt_export_fixture_permission(" in entrypoint_source
+    assert "require_platform_permission_from_session(" in entrypoint_source
+    assert "fixture_permission" in entrypoint_source
 
 
 def _derive_trusted_guards(
@@ -144,9 +159,12 @@ def _derive_trusted_guards(
 def run() -> int:
     source = MAIN_PATH.read_text(encoding="utf-8")
     entrypoint_source = ENTRYPOINT_PATH.read_text(encoding="utf-8")
-    platform_guard_source = PLATFORM_GUARD_PATH.read_text(encoding="utf-8")
+    fixture_route_auth_source = FIXTURE_ROUTE_AUTH_PATH.read_text(encoding="utf-8")
     runtime_guards = _verify_runtime_replacements(entrypoint_source)
-    _verify_receipt_export_fixture_permission_boundary(platform_guard_source)
+    _verify_receipt_export_fixture_permission_boundary(
+        entrypoint_source,
+        fixture_route_auth_source,
+    )
     tree = ast.parse(source, filename=str(MAIN_PATH))
     functions = {
         node.name: node
