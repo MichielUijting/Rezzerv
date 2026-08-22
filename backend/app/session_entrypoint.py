@@ -178,8 +178,9 @@ def restore_archived_receipt_to_kassa(receipt_table_id: str):
                 WHERE id = :receipt_table_id
                 LIMIT 1
                 """
-            )
-        , {"receipt_table_id": normalized_receipt_id}).mappings().first()
+            ),
+            {"receipt_table_id": normalized_receipt_id},
+        ).mappings().first()
 
         if not receipt:
             raise HTTPException(status_code=404, detail="Kassabon niet gevonden")
