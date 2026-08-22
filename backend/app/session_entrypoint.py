@@ -37,6 +37,9 @@ from app.services.hybrid_regression_route_authorization import (
 from app.services.kassa_diagnostic_route_authorization import (
     required_kassa_diagnostic_permission,
 )
+from app.services.maintenance_recompute_route_authorization import (
+    required_maintenance_recompute_permission,
+)
 from app.services.membership_user_identity_service import backfill_membership_user_ids
 from app.services.receipt_export_fixture_route_authorization import (
     required_receipt_export_fixture_permission,
@@ -150,6 +153,16 @@ async def server_session_request_context(request: Request, call_next):
         if kassa_permission is not None:
             require_platform_permission_from_session(
                 kassa_permission,
+                request.headers.get("authorization"),
+            )
+
+        maintenance_recompute_permission = required_maintenance_recompute_permission(
+            request.method,
+            request.url.path,
+        )
+        if maintenance_recompute_permission is not None:
+            require_platform_permission_from_session(
+                maintenance_recompute_permission,
                 request.headers.get("authorization"),
             )
 
