@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - 'backend/app/main.py'
+      - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/platform_admin_route_guard.py'
       - 'backend/app/services/session_request_context.py'
       - 'backend/app/testing/receipt_admin_household_guard_contract.py'
+      - 'backend/tests/server_session_route_guard_audit.py'
       - 'backend/tests/test_receipt_export_fixture_platform_authorization.py'
       - 'backend/tests/test_test_orchestration_platform_route_authorization.py'
       - 'backend/tests/test_authorization_foundation_contract.py'
@@ -36,8 +38,10 @@ jobs:
       - name: Compile authorization guard and focused tests
         run: |
           python -m py_compile \
+            app/session_entrypoint.py \
             app/services/authorization_foundation_service.py \
             app/services/platform_admin_route_guard.py \
+            tests/server_session_route_guard_audit.py \
             tests/test_receipt_export_fixture_platform_authorization.py \
             tests/test_test_orchestration_platform_route_authorization.py
 
@@ -50,6 +54,12 @@ jobs:
             tests/test_receipt_export_fixture_platform_authorization.py \
             tests/test_test_orchestration_platform_route_authorization.py \
             tests/test_authorization_foundation_contract.py
+
+      - name: Run server session route guard audit
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: python tests/server_session_route_guard_audit.py
 
       - name: Run legacy platform guard contract
         env:
