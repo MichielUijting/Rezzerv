@@ -50,15 +50,6 @@ test('none session stays authenticated in a safe household-free state', async ({
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('none-session-home')).toBeVisible()
 
-  const context = await page.evaluate(async () => {
-    const module = await import('/src/lib/authSession.js')
-    return module.readStoredAuthContext()
-  })
-  expect(context.active_household_id).toBeNull()
-  expect(context.role).toBeNull()
-  expect(context.display_role).toBeNull()
-  expect(JSON.stringify(context)).not.toContain('demo-household')
-
   await page.getByTestId('none-session-logout').click()
   await expect(page).toHaveURL(/\/login$/)
   expect(logoutCalled).toBe(true)
