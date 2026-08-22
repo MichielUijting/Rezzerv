@@ -5,14 +5,6 @@ from collections.abc import Callable
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-from app.services.session_request_context import require_platform_permission_from_session
-
-RECEIPT_EXPORT_FIXTURE_PERMISSION = "platform.test_fixtures.manage"
-RECEIPT_EXPORT_FIXTURE_ROUTES = {
-    ("POST", "/api/testing/fixtures/receipt-export/generate"),
-    ("GET", "/api/testing/fixtures/receipt-export/download"),
-}
-
 PROTECTED_MUTATIONS = {
     ("POST", "/api/testing/diagnostics/store-location-options"),
     ("POST", "/api/testing/fixtures/browser-regression/reset"),
@@ -38,18 +30,6 @@ _DIAGNOSIS_DUPLICATE_PATHS = {
     "/api/testing/receipt-parser-diagnosis/download",
 }
 _PREFERRED_DIAGNOSIS_MODULE = "app.api.receipt_diagnosis_routes"
-
-
-def authorize_receipt_export_fixture_request(
-    method: str,
-    path: str,
-    authorization: str | None,
-    require_platform_permission: Callable[[str, str | None], object] = require_platform_permission_from_session,
-) -> object | None:
-    request_key = (str(method or "").upper(), str(path or ""))
-    if request_key not in RECEIPT_EXPORT_FIXTURE_ROUTES:
-        return None
-    return require_platform_permission(RECEIPT_EXPORT_FIXTURE_PERMISSION, authorization)
 
 
 def authorize_platform_admin_request(
@@ -101,11 +81,6 @@ def install_platform_admin_route_guard(main_module) -> None:
     @app.middleware("http")
     async def platform_admin_route_guard(request, call_next):
         try:
-            authorize_receipt_export_fixture_request(
-                request.method,
-                request.url.path,
-                request.headers.get("authorization"),
-            )
             authorize_platform_admin_request(
                 request.method,
                 request.url.path,
