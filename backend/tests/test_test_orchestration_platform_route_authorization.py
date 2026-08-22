@@ -30,12 +30,6 @@ MIGRATED_POST_ROUTES = {
 }
 LATEST_REPORT_ROUTE = "/api/testing/reports/latest"
 EXCLUDED_LEGACY_MUTATIONS = {
-    "/api/testing/diagnostics/store-location-options",
-    "/api/testing/fixtures/browser-regression/reset",
-    "/api/testing/fixtures/cleanup",
-    "/api/testing/fixtures/inventory/ensure",
-    "/api/testing/fixtures/receipt-layer1/generate",
-    "/api/testing/fixtures/receipts/seed-kassa",
     "/api/testing/regression/almost-out-prediction",
     "/api/testing/regression/almost-out-self-test",
 }
@@ -309,6 +303,6 @@ def test_migrated_post_routes_are_not_still_pre_gated_by_legacy_superuser_middle
         assert ("POST", path) not in PROTECTED_MUTATIONS
 
 
-def test_fixture_and_data_mutation_routes_remain_on_legacy_guard_in_this_slice():
+def test_hybrid_fixture_regressions_remain_on_legacy_guard_in_this_slice():
     for path in EXCLUDED_LEGACY_MUTATIONS:
         assert ("POST", path) in PROTECTED_MUTATIONS
