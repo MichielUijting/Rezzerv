@@ -6,12 +6,10 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 PROTECTED_MUTATIONS = {
-    ("POST", "/api/admin/backfill-purchase-import-live-aliases"),
     ("POST", "/api/admin/diagnose-receipt-status-baseline"),
     ("POST", "/api/admin/external-relations/batch/decision"),
     ("POST", "/api/admin/product-groups/import-gpc-nl"),
     ("POST", "/api/admin/receipts/purge-archived"),
-    ("POST", "/api/admin/recompute-receipt-statuses"),
     ("POST", "/api/admin/validate-receipt-status-baseline"),
 }
 
