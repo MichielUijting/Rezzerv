@@ -15,6 +15,7 @@ from app.services.off_product_link_service import link_off_product_with_product_
 from app.services.product_group_crud_store import create_product_group, delete_product_group, list_product_groups, update_product_group
 from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
+from app.services.session_request_context import require_platform_permission_from_session
 
 router = APIRouter()
 router.include_router(article_detail_admin_router)
@@ -113,7 +114,11 @@ def external_off_product_type_link(payload: dict[str, Any] = Body(default_factor
 
 
 @router.post('/api/admin/inventory/groups/ensure-schema')
-def inventory_groups_ensure_schema():
+def inventory_groups_ensure_schema(authorization: str | None = Header(default=None)):
+    require_platform_permission_from_session(
+        'platform.technical_configuration.manage',
+        authorization,
+    )
     ensure_product_inventory_group_schema()
     return {'ok': True, 'schema': 'product_inventory_groups', 'seed': 'm2c2i30a_seed', 'mutates_inventory': False}
 
