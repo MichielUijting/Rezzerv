@@ -59,10 +59,6 @@ SESSION_ROUTE_METHODS = {
     ("/api/session", "GET"),
 }
 
-ADMIN_ONLY_RUNTIME_PATHS = {
-    ("/api/testing/fixtures/receipt-export/generate", "POST"),
-}
-
 
 def _is_replaced_session_route(route) -> bool:
     if not isinstance(route, APIRoute):
@@ -100,9 +96,6 @@ async def server_session_request_context(request: Request, call_next):
         # Bind the canonical actor before any route/service can write domain data.
         # Public requests without a valid server session remain unattributed.
         current_context = bind_current_actor_from_request_session_if_available()
-        route_key = (request.url.path, request.method.upper())
-        if route_key in ADMIN_ONLY_RUNTIME_PATHS:
-            require_platform_admin_from_session(None)
 
         # External database routes used to rely only on frontend navigation.
         # Enforce the platform permission matrix server-side for every request.
@@ -185,9 +178,8 @@ def restore_archived_receipt_to_kassa(receipt_table_id: str):
                 WHERE id = :receipt_table_id
                 LIMIT 1
                 """
-            ),
-            {"receipt_table_id": normalized_receipt_id},
-        ).mappings().first()
+            )
+        , {"receipt_table_id": normalized_receipt_id}).mappings().first()
 
         if not receipt:
             raise HTTPException(status_code=404, detail="Kassabon niet gevonden")
