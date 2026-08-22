@@ -6,8 +6,8 @@ from fastapi import APIRouter, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.services.authorization_foundation_service import evaluate_platform_permission
 from app.services.household_context_adapter import household_context_from_runtime_context
+from app.services.session_request_context import require_platform_permission_from_session
 from app.services.support_message_service import (
     RECIPIENT_ALL_ADMINS,
     RECIPIENT_SINGLE_ADMIN,
@@ -85,19 +85,11 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
 
 
 def _platform_actor(authorization: str | None, permission_key: str) -> dict[str, Any]:
-    main_module = _main_module()
-    actor = _mapping(main_module.require_platform_admin_user(authorization))
-    user_id = str(actor.get("user_id") or actor.get("id") or actor.get("email") or "").strip()
-    if not user_id:
-        raise HTTPException(status_code=403, detail="Platformgebruiker heeft geen bruikbaar gebruikers-ID")
-    with main_module.engine.begin() as conn:
-        decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
-    if not decision.allowed:
-        raise HTTPException(status_code=403, detail=f"Ontbrekende platformpermissie: {permission_key}")
+    context = require_platform_permission_from_session(permission_key, authorization)
     return {
-        "user_id": user_id,
-        "name": str(actor.get("name") or actor.get("display_name") or actor.get("email") or "Platform-superuser"),
-        "role": str(actor.get("role") or "platform.superuser"),
+        "user_id": context.user_id,
+        "name": context.email or "Platformgebruiker",
+        "role": str(context.role or "platform.user"),
     }
 
 

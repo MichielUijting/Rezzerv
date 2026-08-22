@@ -4,10 +4,13 @@ on:
   pull_request:
     paths:
       - 'backend/app/api/support_message_routes.py'
+      - 'backend/app/api/support_broadcast_routes.py'
       - 'backend/app/api/router.py'
       - 'backend/app/services/support_message_service.py'
       - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/session_request_context.py'
       - 'backend/tests/test_support_message_api_contract.py'
+      - 'backend/tests/test_support_platform_route_authorization.py'
       - '.github/workflows/support-message-api-validation.yml'
 
 jobs:
@@ -33,4 +36,5 @@ jobs:
       - name: Run support message API contract tests
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_support_message_api_contract.py tests/test_support_message_service.py
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: pytest -q tests/test_support_message_api_contract.py tests/test_support_message_service.py tests/test_support_platform_route_authorization.py

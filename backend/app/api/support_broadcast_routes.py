@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect, text
 
-from app.services.authorization_foundation_service import evaluate_platform_permission
+from app.services.session_request_context import require_platform_permission_from_session
 from app.services.support_message_service import (
     RECIPIENT_SINGLE_ADMIN,
     SupportMessageError,
@@ -24,44 +22,21 @@ class PlatformBroadcastRequest(BaseModel):
     app_version: str | None = None
 
 
-def _mapping(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return value
-    if hasattr(value, "items"):
-        return dict(value.items())
-    return {
-        "user_id": getattr(value, "user_id", None),
-        "email": getattr(value, "email", None),
-        "name": getattr(value, "name", None),
-        "role": getattr(value, "role", None),
-    }
-
-
 def _main_module():
     from app import main as main_module
     return main_module
 
 
 def _platform_actor(authorization: str | None) -> dict[str, str]:
-    main_module = _main_module()
-    actor = _mapping(main_module.require_platform_admin_user(authorization))
-    user_id = str(actor.get("user_id") or actor.get("id") or actor.get("email") or "").strip()
-    email = str(actor.get("email") or "").strip().lower()
-    if not user_id:
-        raise HTTPException(status_code=403, detail="Platformgebruiker heeft geen bruikbaar gebruikers-ID")
-    with main_module.engine.begin() as conn:
-        decision = evaluate_platform_permission(
-            conn,
-            user_id=user_id,
-            permission_key="platform.support_access.mutate",
-        )
-    if not decision.allowed:
-        raise HTTPException(status_code=403, detail="Alleen de superuser mag een melding aan alle leden sturen")
+    context = require_platform_permission_from_session(
+        "platform.support_access.mutate",
+        authorization,
+    )
     return {
-        "user_id": user_id,
-        "email": email,
-        "name": str(actor.get("name") or actor.get("display_name") or actor.get("email") or "Platform-superuser"),
-        "role": str(actor.get("role") or "platform.superuser"),
+        "user_id": context.user_id,
+        "email": str(context.email or "").strip().lower(),
+        "name": context.email or "Platformgebruiker",
+        "role": str(context.role or "platform.user"),
     }
 
 
