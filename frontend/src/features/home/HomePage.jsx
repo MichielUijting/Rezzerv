@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
+import Button from '../../ui/Button.jsx'
 import {
   fetchAuthContext,
   isFrontteamMemberFromContext,
   isHouseholdAdminFromContext,
   isPlatformSuperuserFromContext,
+  logoutServerSession,
   readStoredAuthContext,
 } from '../../lib/authSession.js'
 
@@ -42,21 +44,44 @@ function visibilityFromContext(context) {
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const [visibility, setVisibility] = useState(() =>
-    visibilityFromContext(readStoredAuthContext()),
-  )
+  const [context, setContext] = useState(() => readStoredAuthContext())
+  const visibility = visibilityFromContext(context)
 
   useEffect(() => {
     let cancelled = false
     fetchAuthContext()
-      .then((context) => {
-        if (!cancelled) setVisibility(visibilityFromContext(context))
+      .then((nextContext) => {
+        if (!cancelled) setContext(nextContext)
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [])
+
+  async function logout() {
+    await logoutServerSession()
+    navigate('/login', { replace: true })
+  }
+
+  if (context?.context_type === 'none') {
+    return (
+      <div className="rz-screen" data-testid="none-session-home">
+        <Header title="Platformbeheerder" />
+        <div className="rz-content">
+          <div className="rz-content-inner">
+            <Card className="rz-card-home">
+              <h2>Platformbeheerder</h2>
+              <p>Er is geen huishoudcontext actief.</p>
+              <Button type="button" variant="secondary" onClick={logout} data-testid="none-session-logout">
+                Uitloggen
+              </Button>
+            </Card>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   function openTile(key) {
     if (key === 'meldingen') navigate('/meldingen')

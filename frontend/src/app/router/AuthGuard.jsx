@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { clearAuthSession, fetchAuthContext, readStoredAuthContext } from '../../lib/authSession'
 
 export default function AuthGuard({ children }) {
+  const location = useLocation()
   const [status, setStatus] = useState(() => readStoredAuthContext() ? 'ready' : 'checking')
 
   useEffect(() => {
@@ -26,5 +27,8 @@ export default function AuthGuard({ children }) {
 
   if (status === 'invalid') return <Navigate to="/login" replace />
   if (status !== 'ready') return <div className="rz-screen"><div className="rz-content"><div className="rz-content-inner">Sessie controleren…</div></div></div>
+  if (readStoredAuthContext()?.context_type === 'none' && location.pathname !== '/home') {
+    return <Navigate to="/home" replace />
+  }
   return children
 }
