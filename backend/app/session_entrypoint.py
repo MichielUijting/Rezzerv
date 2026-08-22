@@ -31,6 +31,9 @@ from app.services.fixture_lifecycle_route_authorization import (
 from app.services.frontteam_household_provisioning import (
     ensure_frontteam_household_for_session_runtime,
 )
+from app.services.hybrid_regression_route_authorization import (
+    required_hybrid_regression_permissions,
+)
 from app.services.membership_user_identity_service import backfill_membership_user_ids
 from app.services.receipt_export_fixture_route_authorization import (
     required_receipt_export_fixture_permission,
@@ -52,6 +55,7 @@ from app.services.session_request_context import (
     require_household_admin_from_session,
     require_platform_admin_from_session,
     require_platform_permission_from_session,
+    require_platform_permissions_from_session,
     reset_canonical_platform_permission_grant,
     reset_request_session,
     resolve_current_server_session,
@@ -124,6 +128,16 @@ async def server_session_request_context(request: Request, call_next):
             )
             canonical_permission_grant_token = bind_canonical_platform_permission_grant(
                 fixture_permission
+            )
+
+        hybrid_regression_permissions = required_hybrid_regression_permissions(
+            request.method,
+            request.url.path,
+        )
+        if hybrid_regression_permissions:
+            require_platform_permissions_from_session(
+                hybrid_regression_permissions,
+                request.headers.get("authorization"),
             )
 
         # External database routes used to rely only on frontend navigation.
