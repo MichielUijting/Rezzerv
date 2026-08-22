@@ -20,16 +20,8 @@ EXPECTED_PROTECTED_MUTATIONS = {
     ("POST", "/api/testing/fixtures/receipt-export/generate"),
     ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
     ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
-    ("POST", "/api/testing/regression/all/run"),
     ("POST", "/api/testing/regression/almost-out-prediction"),
     ("POST", "/api/testing/regression/almost-out-self-test"),
-    ("POST", "/api/testing/regression/layer1/run"),
-    ("POST", "/api/testing/regression/layer2/run"),
-    ("POST", "/api/testing/regression/layer3/run"),
-    ("POST", "/api/testing/regression/parsing-fixtures/run"),
-    ("POST", "/api/testing/regression/parsing-raw/run"),
-    ("POST", "/api/testing/regression/smoke/run"),
-    ("POST", "/api/testing/reports/complete"),
     ("POST", "/api/admin/backfill-purchase-import-live-aliases"),
     ("POST", "/api/admin/diagnose-receipt-status-baseline"),
     ("POST", "/api/admin/external-relations/batch/decision"),
@@ -44,7 +36,7 @@ EXPECTED_PROTECTED_MUTATIONS = {
 
 def run_contract() -> None:
     assert PROTECTED_MUTATIONS == EXPECTED_PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 26
+    assert len(PROTECTED_MUTATIONS) == 18
     assert ("POST", "/api/admin/inventory/groups/ensure-schema") not in PROTECTED_MUTATIONS
 
     app = FastAPI()

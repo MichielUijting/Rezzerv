@@ -18,6 +18,11 @@ from typing import Callable, Optional
 from fastapi import APIRouter, Header, HTTPException
 
 from app.schemas.testing import TestCompleteRequest, TestReportResponse, TestStartResponse, TestStatusResponse
+from app.services.session_request_context import require_platform_permission_from_session
+
+
+BACKGROUND_JOB_PERMISSION = "platform.background_jobs.manage"
+DIAGNOSTICS_VIEW_PERMISSION = "platform.diagnostics.view"
 
 
 def create_dev_test_router(
@@ -26,36 +31,40 @@ def create_dev_test_router(
     testing_service,
     run_receipt_parsing_baseline_suite: Callable[[str], list],
 ) -> APIRouter:
+    # Compatibility-only injection for the legacy app assembly. The migrated
+    # routes below authorize exclusively through canonical server-session
+    # platform permissions.
+    _ = require_platform_admin_user
     router = APIRouter()
 
     @router.post('/api/testing/regression/smoke/run', response_model=TestStartResponse)
     def run_smoke_tests(authorization: Optional[str] = Header(None)):
-        require_platform_admin_user(authorization)
+        require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
         return testing_service.start_external_test('smoke')
 
     @router.post('/api/testing/regression/all/run', response_model=TestStartResponse)
     def run_regression_tests(authorization: Optional[str] = Header(None)):
-        require_platform_admin_user(authorization)
+        require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
         return testing_service.start_external_test('regression')
 
     @router.post('/api/testing/regression/layer1/run', response_model=TestStartResponse)
     def run_layer1_tests(authorization: Optional[str] = Header(None)):
-        require_platform_admin_user(authorization)
+        require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
         return testing_service.start_external_test('layer1')
 
     @router.post('/api/testing/regression/layer2/run', response_model=TestStartResponse)
     def run_layer2_tests(authorization: Optional[str] = Header(None)):
-        require_platform_admin_user(authorization)
+        require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
         return testing_service.start_external_test('layer2')
 
     @router.post('/api/testing/regression/layer3/run', response_model=TestStartResponse)
     def run_layer3_tests(authorization: Optional[str] = Header(None)):
-        require_platform_admin_user(authorization)
+        require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
         return testing_service.start_external_test('layer3')
 
     @router.post('/api/testing/regression/parsing-fixtures/run')
     def run_parsing_fixture_tests(authorization: Optional[str] = Header(None)):
-        require_platform_admin_user(authorization)
+        require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
         started = testing_service.start_external_test('parsing_fixture')
         if not started.get('started'):
             raise HTTPException(status_code=409, detail='Er loopt al een andere test')
@@ -65,7 +74,7 @@ def create_dev_test_router(
 
     @router.post('/api/testing/regression/parsing-raw/run')
     def run_parsing_raw_tests(authorization: Optional[str] = Header(None)):
-        require_platform_admin_user(authorization)
+        require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
         started = testing_service.start_external_test('parsing_raw')
         if not started.get('started'):
             raise HTTPException(status_code=409, detail='Er loopt al een andere test')
@@ -74,7 +83,11 @@ def create_dev_test_router(
         return testing_service.get_report()
 
     @router.post('/api/testing/reports/complete', response_model=TestStatusResponse)
-    def complete_test_report(payload: TestCompleteRequest):
+    def complete_test_report(
+        payload: TestCompleteRequest,
+        authorization: Optional[str] = Header(None),
+    ):
+        require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
         results = [item.model_dump() for item in payload.results]
         return testing_service.complete_external_test(payload.test_type, results)
 
@@ -82,7 +95,8 @@ def create_dev_test_router(
         return testing_service.get_status()
 
     @router.get('/api/testing/reports/latest', response_model=TestReportResponse)
-    def get_latest_test_report():
+    def get_latest_test_report(authorization: Optional[str] = Header(None)):
+        require_platform_permission_from_session(DIAGNOSTICS_VIEW_PERMISSION, authorization)
         return testing_service.get_report()
 
     return router
