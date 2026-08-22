@@ -16,6 +16,7 @@ from sqlalchemy import text
 
 from app.db import engine
 from app.services.actor_attribution_service import bind_current_actor, clear_current_actor
+from app.services.authorization_foundation_service import evaluate_platform_permission
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
     ServerSessionContext,
@@ -44,6 +45,32 @@ def resolve_current_server_session() -> ServerSessionContext:
     with engine.begin() as conn:
         context = resolve_server_session(conn, raw_session_id)
     bind_current_actor(context.user_id, context.active_household_id)
+    return context
+
+
+def require_platform_permission_from_session(
+    permission_key: str,
+    _authorization: str | None = None,
+) -> ServerSessionContext:
+    """Require one canonical platform permission for the current server session.
+
+    The opaque server session is the sole identity source. Platform role names,
+    legacy bearer values and reserved account e-mail addresses do not take part
+    in the decision; the permission registry is evaluated live for the
+    canonical ``app_users.id`` on every request.
+    """
+    context = resolve_current_server_session()
+    with engine.begin() as conn:
+        decision = evaluate_platform_permission(
+            conn,
+            user_id=context.user_id,
+            permission_key=permission_key,
+        )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Ontbrekende platformpermissie: {permission_key}",
+        )
     return context
 
 
