@@ -11,6 +11,10 @@ on:
       - 'backend/app/services/authorization_membership_service.py'
       - 'backend/app/services/roles_v2_schema_foundation.py'
       - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/frontteam_household_provisioning.py'
+      - 'backend/app/services/external_database_route_authorization.py'
+      - 'backend/tests/test_frontteam_household_provisioning.py'
+      - 'backend/tests/test_external_database_route_authorization.py'
       - 'backend/tests/test_roles_v2_foundation_contract.py'
       - 'backend/tests/test_server_session_service.py'
       - 'backend/tests/test_server_session_routes.py'
@@ -49,5 +53,7 @@ jobs:
             tests/test_authorization_membership_routes.py \
             tests/test_server_session_service.py \
             tests/test_server_session_routes.py \
+            tests/test_frontteam_household_provisioning.py \
+            tests/test_external_database_route_authorization.py \
             tests/test_server_session_runtime_membership_schema.py \
             tests/test_session_request_context.py

@@ -343,6 +343,35 @@ def test_frontteam_platform_admin_conflict_creates_no_session():
     assert session_count == 0
 
 
+@pytest.mark.parametrize(
+    ("user_id", "email"),
+    [
+        ("u-super", SUPERGEBRUIKER_EMAIL),
+        ("u-ip-owner", "ip-owner@example.test"),
+    ],
+)
+def test_frontteam_system_context_conflicts_create_no_session(user_id, email):
+    client, engine = build_client()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES (:user_id, 'platform.frontteam', 1)
+        """), {"user_id": user_id})
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "Rezzerv123"},
+    )
+    with engine.begin() as conn:
+        session_count = conn.execute(text("""
+            SELECT COUNT(*) FROM server_sessions WHERE user_id = :user_id
+        """), {"user_id": user_id}).scalar_one()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+    assert session_count == 0
+
+
 def test_frontteam_role_revocation_invalidates_existing_session():
     client, engine = build_client()
     login = client.post(

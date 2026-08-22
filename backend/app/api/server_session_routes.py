@@ -154,6 +154,11 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    if system_roles and is_frontteam:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
     if is_platform_admin and (system_roles or is_frontteam):
         raise HTTPException(
             status_code=403,
