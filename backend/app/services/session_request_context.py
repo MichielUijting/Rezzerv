@@ -27,6 +27,9 @@ from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EM
 _raw_session_cookie: ContextVar[str | None] = ContextVar(
     "rezzerv_raw_session_cookie", default=None
 )
+_canonical_platform_permission_grant: ContextVar[str | None] = ContextVar(
+    "rezzerv_canonical_platform_permission_grant", default=None
+)
 
 
 def bind_request_session(request: Request) -> Token:
@@ -38,6 +41,26 @@ def bind_request_session(request: Request) -> Token:
 def reset_request_session(token: Token) -> None:
     clear_current_actor()
     _raw_session_cookie.reset(token)
+
+
+def bind_canonical_platform_permission_grant(permission_key: str) -> Token:
+    """Bind one already-authorized canonical platform permission for this request.
+
+    A handful of legacy handlers still call ``require_platform_admin_user`` after
+    a newer route-level permission boundary has already admitted the request.
+    Binding the exact permission lets that compatibility call re-evaluate the
+    same canonical permission instead of re-imposing the historical Superuser
+    identity rule. The grant is request-scoped and must always be reset.
+    """
+
+    normalized_permission = str(permission_key or "").strip()
+    if not normalized_permission:
+        raise ValueError("platformpermissie ontbreekt")
+    return _canonical_platform_permission_grant.set(normalized_permission)
+
+
+def reset_canonical_platform_permission_grant(token: Token) -> None:
+    _canonical_platform_permission_grant.reset(token)
 
 
 def resolve_current_server_session() -> ServerSessionContext:
@@ -121,8 +144,7 @@ def legacy_display_role_from_canonical_role(role: str | None) -> str:
     return normalized_role
 
 
-def legacy_user_payload_from_session(_authorization: str | None = None) -> dict[str, Any]:
-    context = resolve_current_server_session()
+def _legacy_user_payload_from_context(context: ServerSessionContext) -> dict[str, Any]:
     return {
         "id": context.user_id,
         "user_id": context.user_id,
@@ -131,6 +153,10 @@ def legacy_user_payload_from_session(_authorization: str | None = None) -> dict[
         "household_id": context.active_household_id,
         "active_household_id": context.active_household_id,
     }
+
+
+def legacy_user_payload_from_session(_authorization: str | None = None) -> dict[str, Any]:
+    return _legacy_user_payload_from_context(resolve_current_server_session())
 
 
 def household_context_from_session(
@@ -253,6 +279,11 @@ def is_platform_superuser(user: dict[str, Any]) -> bool:
 def require_platform_admin_from_session(
     _authorization: str | None = None,
 ) -> dict[str, Any]:
+    canonical_permission = _canonical_platform_permission_grant.get()
+    if canonical_permission:
+        context = require_platform_permission_from_session(canonical_permission, None)
+        return _legacy_user_payload_from_context(context)
+
     user = legacy_user_payload_from_session(None)
     if not is_platform_superuser(user):
         raise HTTPException(

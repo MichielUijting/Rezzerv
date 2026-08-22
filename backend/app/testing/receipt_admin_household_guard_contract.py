@@ -13,12 +13,6 @@ from app.services.platform_admin_route_guard import (
 )
 
 EXPECTED_PROTECTED_MUTATIONS = {
-    ("POST", "/api/testing/diagnostics/store-location-options"),
-    ("POST", "/api/testing/fixtures/browser-regression/reset"),
-    ("POST", "/api/testing/fixtures/cleanup"),
-    ("POST", "/api/testing/fixtures/inventory/ensure"),
-    ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
-    ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
     ("POST", "/api/testing/regression/almost-out-prediction"),
     ("POST", "/api/testing/regression/almost-out-self-test"),
     ("POST", "/api/admin/backfill-purchase-import-live-aliases"),
@@ -32,12 +26,22 @@ EXPECTED_PROTECTED_MUTATIONS = {
     ("POST", "/api/admin/validate-receipt-status-baseline"),
 }
 
+MIGRATED_FIXTURE_MUTATIONS = {
+    ("POST", "/api/testing/diagnostics/store-location-options"),
+    ("POST", "/api/testing/fixtures/browser-regression/reset"),
+    ("POST", "/api/testing/fixtures/cleanup"),
+    ("POST", "/api/testing/fixtures/inventory/ensure"),
+    ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
+    ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
+}
+
 
 def run_contract() -> None:
     assert PROTECTED_MUTATIONS == EXPECTED_PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 17
+    assert len(PROTECTED_MUTATIONS) == 11
     assert ("POST", "/api/admin/inventory/groups/ensure-schema") not in PROTECTED_MUTATIONS
     assert ("POST", "/api/testing/fixtures/receipt-export/generate") not in PROTECTED_MUTATIONS
+    assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_FIXTURE_MUTATIONS)
 
     app = FastAPI()
     calls: list[str] = []
