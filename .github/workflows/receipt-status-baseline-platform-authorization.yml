@@ -42,7 +42,7 @@ jobs:
             tests/test_receipt_status_baseline_platform_authorization.py \
             tests/test_hybrid_regression_platform_authorization.py \
             tests/test_maintenance_recompute_platform_authorization.py \
-            tests/test_technical_schema_platform_authorization.py
+            tests/test_technical_schema_platform_route_authorization.py
 
       - name: Run receipt baseline permission cutover tests
         env:
@@ -53,7 +53,7 @@ jobs:
             tests/test_receipt_status_baseline_platform_authorization.py \
             tests/test_hybrid_regression_platform_authorization.py \
             tests/test_maintenance_recompute_platform_authorization.py \
-            tests/test_technical_schema_platform_authorization.py
+            tests/test_technical_schema_platform_route_authorization.py
 
       - name: Run server session route guard audit
         env:
