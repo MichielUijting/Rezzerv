@@ -98,6 +98,7 @@ V2_PLATFORM_PERMISSIONS = (
     "platform.background_jobs.manage",
     "platform.recovery.manage",
     "platform.technical_configuration.manage",
+    "platform.test_fixtures.manage",
 )
 
 MEMBER_PERMISSIONS = {
@@ -178,6 +179,7 @@ PLATFORM_ADMIN_PERMISSIONS = {
     "platform.background_jobs.manage",
     "platform.recovery.manage",
     "platform.technical_configuration.manage",
+    "platform.test_fixtures.manage",
     "platform.sessions.revoke",
     "platform.users.suspend",
     "platform.permissions.manage",

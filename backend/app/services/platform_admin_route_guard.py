@@ -10,7 +10,6 @@ PROTECTED_MUTATIONS = {
     ("POST", "/api/testing/fixtures/browser-regression/reset"),
     ("POST", "/api/testing/fixtures/cleanup"),
     ("POST", "/api/testing/fixtures/inventory/ensure"),
-    ("POST", "/api/testing/fixtures/receipt-export/generate"),
     ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
     ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
     ("POST", "/api/testing/regression/almost-out-prediction"),

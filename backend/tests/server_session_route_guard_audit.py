@@ -3,8 +3,10 @@
 This self-contained runner verifies that routes exposing an Authorization
 parameter delegate through a proven server-side guard chain and do not parse
 or trust the header directly. Runtime-replaced legacy helpers are accepted only
-when the replacement assignment and the required admin-only middleware path are
-present in ``session_entrypoint.py``.
+when their replacement assignment is present in ``session_entrypoint.py``.
+Receipt-export fixture generation is accepted only when its dedicated canonical
+platform-permission boundary is classified centrally and enforced by the bound
+server-session middleware before route dispatch.
 """
 
 from __future__ import annotations
@@ -16,6 +18,9 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MAIN_PATH = BACKEND_ROOT / "app" / "main.py"
 ENTRYPOINT_PATH = BACKEND_ROOT / "app" / "session_entrypoint.py"
+FIXTURE_ROUTE_AUTH_PATH = (
+    BACKEND_ROOT / "app" / "services" / "receipt_export_fixture_route_authorization.py"
+)
 ROOT_GUARDS = {
     "get_current_user_from_authorization",
     "require_household_context",
@@ -29,10 +34,14 @@ RUNTIME_REPLACED_GUARDS = {
     "get_request_household_id": "request_household_id_from_session",
     "require_platform_admin_user": "require_platform_admin_from_session",
 }
-ADMIN_ONLY_RUNTIME_ROUTE = (
-    "/api/testing/fixtures/receipt-export/generate",
-    "POST",
+CANONICAL_FIXTURE_PERMISSION_ROUTES = {
+    ("/api/testing/fixtures/receipt-export/generate", "POST"),
+}
+RECEIPT_EXPORT_DOWNLOAD_ROUTE = (
+    "/api/testing/fixtures/receipt-export/download",
+    "GET",
 )
+RECEIPT_EXPORT_FIXTURE_PERMISSION = "platform.test_fixtures.manage"
 
 
 def _decorated_route(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -101,14 +110,32 @@ def _verify_runtime_replacements(entrypoint_source: str) -> set[str]:
         assert assignment in entrypoint_source, f"runtimevervanging ontbreekt: {assignment}"
         trusted.add(legacy_name)
 
-    path_literal = repr(ADMIN_ONLY_RUNTIME_ROUTE[0])
-    double_path_literal = f'"{ADMIN_ONLY_RUNTIME_ROUTE[0]}"'
-    assert path_literal in entrypoint_source or double_path_literal in entrypoint_source, (
-        "admin-only fixturepad ontbreekt in runtime-entrypoint"
+    assert "ADMIN_ONLY_RUNTIME_PATHS" not in entrypoint_source, (
+        "legacy admin-only runtime pre-gate bestaat nog"
     )
-    assert f'"{ADMIN_ONLY_RUNTIME_ROUTE[1]}"' in entrypoint_source or repr(ADMIN_ONLY_RUNTIME_ROUTE[1]) in entrypoint_source
-    assert "require_platform_admin_from_session(None)" in entrypoint_source
+    assert "/api/testing/fixtures/receipt-export/generate" not in entrypoint_source, (
+        "receipt-export fixture gebruikt nog een hardcoded runtime Superuser-pad"
+    )
     return trusted
+
+
+def _verify_receipt_export_fixture_permission_boundary(
+    entrypoint_source: str,
+    fixture_route_auth_source: str,
+) -> None:
+    assert (
+        f'RECEIPT_EXPORT_FIXTURE_PERMISSION = "{RECEIPT_EXPORT_FIXTURE_PERMISSION}"'
+        in fixture_route_auth_source
+    )
+    assert "def required_receipt_export_fixture_permission(" in fixture_route_auth_source
+    for path, method in CANONICAL_FIXTURE_PERMISSION_ROUTES | {RECEIPT_EXPORT_DOWNLOAD_ROUTE}:
+        assert f'("{method}", "{path}")' in fixture_route_auth_source, (
+            f"canonieke receipt-export routeclassificatie ontbreekt voor {method} {path}"
+        )
+
+    assert "required_receipt_export_fixture_permission(" in entrypoint_source
+    assert "require_platform_permission_from_session(" in entrypoint_source
+    assert "fixture_permission" in entrypoint_source
 
 
 def _derive_trusted_guards(
@@ -132,7 +159,12 @@ def _derive_trusted_guards(
 def run() -> int:
     source = MAIN_PATH.read_text(encoding="utf-8")
     entrypoint_source = ENTRYPOINT_PATH.read_text(encoding="utf-8")
+    fixture_route_auth_source = FIXTURE_ROUTE_AUTH_PATH.read_text(encoding="utf-8")
     runtime_guards = _verify_runtime_replacements(entrypoint_source)
+    _verify_receipt_export_fixture_permission_boundary(
+        entrypoint_source,
+        fixture_route_auth_source,
+    )
     tree = ast.parse(source, filename=str(MAIN_PATH))
     functions = {
         node.name: node
@@ -147,7 +179,7 @@ def run() -> int:
         if not _decorated_route(node) or not _has_authorization_arg(node):
             continue
 
-        if _route_key(node) == ADMIN_ONLY_RUNTIME_ROUTE:
+        if _route_key(node) in CANONICAL_FIXTURE_PERMISSION_ROUTES:
             guarded_routes += 1
             continue
 
@@ -173,7 +205,8 @@ def run() -> int:
     print(f"PASS {guarded_routes} Authorization-routes gebruiken uitsluitend een bewezen guardketen")
     print(f"PASS {len(runtime_guards)} legacy helpers aantoonbaar runtime-vervangen")
     print(f"PASS {len(derived_wrappers)} centrale guardwrappers transitief gevalideerd")
-    print("PASS receipt-export fixture is vóór uitvoering admin-only afgeschermd")
+    print("PASS receipt-export POST en GET-fallback delen de canonieke test-fixture permissiegrens")
+    print("PASS receipt-export fixture gebruikt geen legacy Superuser pre-gate meer")
     print("PASS Bearer/headerinhoud wordt nergens rechtstreeks door routehandlers vertrouwd")
     print("SERVER_SESSION_ROUTE_GUARD_AUDIT_GREEN")
     return 0

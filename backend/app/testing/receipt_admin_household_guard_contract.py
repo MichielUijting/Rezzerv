@@ -17,7 +17,6 @@ EXPECTED_PROTECTED_MUTATIONS = {
     ("POST", "/api/testing/fixtures/browser-regression/reset"),
     ("POST", "/api/testing/fixtures/cleanup"),
     ("POST", "/api/testing/fixtures/inventory/ensure"),
-    ("POST", "/api/testing/fixtures/receipt-export/generate"),
     ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
     ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
     ("POST", "/api/testing/regression/almost-out-prediction"),
@@ -36,8 +35,9 @@ EXPECTED_PROTECTED_MUTATIONS = {
 
 def run_contract() -> None:
     assert PROTECTED_MUTATIONS == EXPECTED_PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 18
+    assert len(PROTECTED_MUTATIONS) == 17
     assert ("POST", "/api/admin/inventory/groups/ensure-schema") not in PROTECTED_MUTATIONS
+    assert ("POST", "/api/testing/fixtures/receipt-export/generate") not in PROTECTED_MUTATIONS
 
     app = FastAPI()
     calls: list[str] = []

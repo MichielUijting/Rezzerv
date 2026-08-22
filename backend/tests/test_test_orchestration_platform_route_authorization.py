@@ -34,7 +34,6 @@ EXCLUDED_LEGACY_MUTATIONS = {
     "/api/testing/fixtures/browser-regression/reset",
     "/api/testing/fixtures/cleanup",
     "/api/testing/fixtures/inventory/ensure",
-    "/api/testing/fixtures/receipt-export/generate",
     "/api/testing/fixtures/receipt-layer1/generate",
     "/api/testing/fixtures/receipts/seed-kassa",
     "/api/testing/regression/almost-out-prediction",
