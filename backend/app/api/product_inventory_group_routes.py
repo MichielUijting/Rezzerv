@@ -135,11 +135,12 @@ def admin_product_groups_import_gpc_en_bundled(x_rezzerv_admin_key: str | None =
 
 
 @router.post('/api/admin/product-groups/import-gpc-nl')
-def admin_product_groups_import_gpc_nl(x_rezzerv_admin_key: str | None = Header(default=None)):
+def admin_product_groups_import_gpc_nl(authorization: str | None = Header(default=None)):
+    require_platform_permission_from_session(
+        'platform.technical_configuration.manage',
+        authorization,
+    )
     try:
-        require_admin_key(x_rezzerv_admin_key)
         return import_gs1_gpc_nl()
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f'GS1 GPC NL-import is mislukt: {exc}') from exc
