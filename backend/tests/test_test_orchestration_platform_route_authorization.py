@@ -210,10 +210,13 @@ def test_platform_admin_revocation_is_effective_on_next_permission_check(
     assert exc.value.status_code == 403
 
 
+def _route_tree() -> ast.Module:
+    return ast.parse(ROUTE_SOURCE_PATH.read_text(encoding="utf-8"))
+
+
 def _route_nodes() -> dict[tuple[str, str], ast.FunctionDef]:
-    tree = ast.parse(ROUTE_SOURCE_PATH.read_text(encoding="utf-8"))
     routes: dict[tuple[str, str], ast.FunctionDef] = {}
-    for node in ast.walk(tree):
+    for node in ast.walk(_route_tree()):
         if not isinstance(node, ast.FunctionDef):
             continue
         for decorator in node.decorator_list:
@@ -252,6 +255,19 @@ def _assert_first_statement_is_permission_check(node: ast.FunctionDef, constant_
     assert not legacy_calls, f"{node.name} gebruikt nog de legacy platform-admin helper"
 
 
+def test_route_permission_constants_match_canonical_permission_keys():
+    assignments: dict[str, str] = {}
+    for node in _route_tree().body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if isinstance(target, ast.Name) and isinstance(node.value, ast.Constant):
+            assignments[target.id] = str(node.value.value)
+
+    assert assignments["BACKGROUND_JOB_PERMISSION"] == BACKGROUND_JOB_PERMISSION
+    assert assignments["DIAGNOSTICS_VIEW_PERMISSION"] == DIAGNOSTICS_VIEW_PERMISSION
+
+
 def test_migrated_post_routes_check_background_job_permission_before_work():
     routes = _route_nodes()
     assert MIGRATED_POST_ROUTES == {
@@ -270,6 +286,23 @@ def test_latest_report_route_checks_diagnostics_view_permission_before_read():
         routes[("GET", LATEST_REPORT_ROUTE)],
         "DIAGNOSTICS_VIEW_PERMISSION",
     )
+
+
+def test_legacy_platform_admin_injection_is_never_called_by_migrated_router():
+    router_functions = [
+        node
+        for node in _route_tree().body
+        if isinstance(node, ast.FunctionDef) and node.name == "create_dev_test_router"
+    ]
+    assert len(router_functions) == 1
+    legacy_calls = [
+        item
+        for item in ast.walk(router_functions[0])
+        if isinstance(item, ast.Call)
+        and isinstance(item.func, ast.Name)
+        and item.func.id == "require_platform_admin_user"
+    ]
+    assert not legacy_calls
 
 
 def test_migrated_post_routes_are_not_still_pre_gated_by_legacy_superuser_middleware():
