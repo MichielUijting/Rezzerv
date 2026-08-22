@@ -36,4 +36,5 @@ jobs:
       - name: Run support message API contract tests
         env:
           PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
         run: pytest -q tests/test_support_message_api_contract.py tests/test_support_message_service.py tests/test_support_platform_route_authorization.py
