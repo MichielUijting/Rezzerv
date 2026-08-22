@@ -12,6 +12,11 @@ function normalizeRoleValue(value) {
   return String(value || '').trim().toLowerCase()
 }
 
+function normalizeContextType(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return ['regular', 'system', 'none'].includes(normalized) ? normalized : ''
+}
+
 const NON_VIEWER_HOUSEHOLD_ROLES = new Set([
   'admin',
   'owner',
@@ -45,13 +50,16 @@ export function normalizeHouseholdAccessContext(context) {
 function normalizeSessionContext(context) {
   if (!context || typeof context !== 'object') return null
   const normalizedHouseholdContext = normalizeHouseholdAccessContext(context)
+  const contextType = normalizeContextType(normalizedHouseholdContext.context_type)
+  const hasNoHouseholdContext = contextType === 'none'
   return {
     user_id: normalizedHouseholdContext.user_id || normalizedHouseholdContext.user?.id || '',
     email: normalizedHouseholdContext.email || normalizedHouseholdContext.user?.email || '',
-    active_household_id: normalizedHouseholdContext.active_household_id ?? '',
+    active_household_id: hasNoHouseholdContext ? null : normalizedHouseholdContext.active_household_id ?? '',
     active_household_name: normalizedHouseholdContext.active_household_name || '',
-    role: normalizedHouseholdContext.role || '',
-    display_role: normalizedHouseholdContext.display_role || normalizedHouseholdContext.role || '',
+    context_type: contextType,
+    role: hasNoHouseholdContext ? null : normalizedHouseholdContext.role || '',
+    display_role: hasNoHouseholdContext ? null : normalizedHouseholdContext.display_role || normalizedHouseholdContext.role || '',
     membership_count: Number(normalizedHouseholdContext.membership_count || 0),
     can_switch_households: Boolean(normalizedHouseholdContext.can_switch_households),
     memberships: Array.isArray(normalizedHouseholdContext.memberships) ? normalizedHouseholdContext.memberships : [],
