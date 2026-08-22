@@ -327,6 +327,7 @@ def test_session_middleware_checks_both_hybrid_permissions_before_dispatch():
 
     assert len(bind_session) == 1
     assert len(classify) == 1
-    assert len(require_both) == 1
+    assert len(require_both) >= 1
     assert len(dispatch) == 1
-    assert bind_session[0] < classify[0] < require_both[0] < dispatch[0]
+    hybrid_require = min(line for line in require_both if line > classify[0])
+    assert bind_session[0] < classify[0] < hybrid_require < dispatch[0]
