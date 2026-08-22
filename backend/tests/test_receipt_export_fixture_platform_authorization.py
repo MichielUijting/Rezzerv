@@ -15,11 +15,11 @@ from app.services.authorization_foundation_service import (
     V2_SUPERUSER_TARGET_PERMISSIONS,
     ensure_authorization_foundation,
 )
-from app.services.platform_admin_route_guard import (
-    PROTECTED_MUTATIONS,
+from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
+from app.services.receipt_export_fixture_route_authorization import (
     RECEIPT_EXPORT_FIXTURE_PERMISSION,
     RECEIPT_EXPORT_FIXTURE_ROUTES,
-    authorize_receipt_export_fixture_request,
+    required_receipt_export_fixture_permission,
 )
 from app.services.server_session_service import ServerSessionContext
 
@@ -29,7 +29,7 @@ POST_ROUTE = ("POST", "/api/testing/fixtures/receipt-export/generate")
 DOWNLOAD_ROUTE = ("GET", "/api/testing/fixtures/receipt-export/download")
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MAIN_SOURCE_PATH = BACKEND_ROOT / "app" / "main.py"
-GUARD_SOURCE_PATH = BACKEND_ROOT / "app" / "services" / "platform_admin_route_guard.py"
+SESSION_ENTRYPOINT_SOURCE_PATH = BACKEND_ROOT / "app" / "session_entrypoint.py"
 
 OTHER_LEGACY_FIXTURE_MUTATIONS = {
     ("POST", "/api/testing/diagnostics/store-location-options"),
@@ -205,33 +205,17 @@ def test_platform_admin_revocation_is_effective_on_next_permission_check(
     assert exc.value.status_code == 403
 
 
-def test_receipt_export_http_entrypoints_share_one_canonical_permission_boundary(
-    monkeypatch,
-    auth_engine,
-):
-    assert RECEIPT_EXPORT_FIXTURE_ROUTES == {POST_ROUTE, DOWNLOAD_ROUTE}
-    _bind_context(monkeypatch, auth_engine, "platform-admin")
-
+def test_receipt_export_http_entrypoints_share_one_canonical_permission_boundary():
+    assert RECEIPT_EXPORT_FIXTURE_ROUTES == frozenset({POST_ROUTE, DOWNLOAD_ROUTE})
     for method, path in RECEIPT_EXPORT_FIXTURE_ROUTES:
-        context = authorize_receipt_export_fixture_request(
-            method,
-            path,
-            "Bearer forged-legacy-token",
+        assert required_receipt_export_fixture_permission(method, path) == PERMISSION
+    assert (
+        required_receipt_export_fixture_permission(
+            "GET",
+            "/api/testing/reports/complete",
         )
-        assert context.user_id == "platform-admin"
-
-
-def test_denied_fixture_request_never_reaches_route_work(monkeypatch, auth_engine):
-    _bind_context(monkeypatch, auth_engine, "ordinary-admin")
-
-    for method, path in RECEIPT_EXPORT_FIXTURE_ROUTES:
-        with pytest.raises(HTTPException) as exc:
-            authorize_receipt_export_fixture_request(
-                method,
-                path,
-                "Bearer forged-legacy-token",
-            )
-        assert exc.value.status_code == 403
+        is None
+    )
 
 
 def test_receipt_export_generate_is_removed_from_legacy_superuser_guard_only():
@@ -240,12 +224,16 @@ def test_receipt_export_generate_is_removed_from_legacy_superuser_guard_only():
         assert route in PROTECTED_MUTATIONS
 
 
-def _function_node(path: Path, function_name: str) -> ast.FunctionDef:
+def _function_node(
+    path: Path,
+    function_name: str,
+) -> ast.FunctionDef | ast.AsyncFunctionDef:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     matches = [
         node
         for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == function_name
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == function_name
     ]
     assert len(matches) == 1, function_name
     return matches[0]
@@ -264,26 +252,34 @@ def test_download_fallback_that_can_generate_fixture_is_inside_canonical_guard_b
     assert DOWNLOAD_ROUTE in RECEIPT_EXPORT_FIXTURE_ROUTES
 
 
-def test_permission_guard_executes_before_legacy_guard_and_before_route_dispatch():
-    install_node = _function_node(GUARD_SOURCE_PATH, "install_platform_admin_route_guard")
-    middleware_nodes = [
-        node
-        for node in ast.walk(install_node)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name == "platform_admin_route_guard"
-    ]
-    assert len(middleware_nodes) == 1
-    middleware = middleware_nodes[0]
-    try_nodes = [item for item in middleware.body if isinstance(item, ast.Try)]
-    assert len(try_nodes) == 1
-    calls = [
-        statement.value.func.id
-        for statement in try_nodes[0].body
-        if isinstance(statement, ast.Expr)
-        and isinstance(statement.value, ast.Call)
-        and isinstance(statement.value.func, ast.Name)
-    ]
-    assert calls[:2] == [
-        "authorize_receipt_export_fixture_request",
-        "authorize_platform_admin_request",
-    ]
+def _call_lines(node: ast.AST, call_name: str) -> list[int]:
+    return sorted(
+        item.lineno
+        for item in ast.walk(node)
+        if isinstance(item, ast.Call)
+        and isinstance(item.func, ast.Name)
+        and item.func.id == call_name
+    )
+
+
+def test_fixture_permission_check_runs_after_session_bind_and_before_route_dispatch():
+    node = _function_node(
+        SESSION_ENTRYPOINT_SOURCE_PATH,
+        "server_session_request_context",
+    )
+    bind_lines = _call_lines(node, "bind_request_session")
+    classify_lines = _call_lines(node, "required_receipt_export_fixture_permission")
+    permission_lines = _call_lines(node, "require_platform_permission_from_session")
+    dispatch_lines = _call_lines(node, "call_next")
+
+    assert len(bind_lines) == 1
+    assert len(classify_lines) == 1
+    assert len(permission_lines) == 1
+    assert len(dispatch_lines) == 1
+    assert bind_lines[0] < classify_lines[0] < permission_lines[0] < dispatch_lines[0]
+
+
+def test_receipt_export_no_longer_uses_runtime_superuser_pre_gate():
+    source = SESSION_ENTRYPOINT_SOURCE_PATH.read_text(encoding="utf-8")
+    assert "/api/testing/fixtures/receipt-export/generate" not in source
+    assert "ADMIN_ONLY_RUNTIME_PATHS" not in source
