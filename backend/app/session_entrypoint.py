@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from fastapi import Body, HTTPException, Request
 from fastapi.routing import APIRoute
-
+from fastapi.responses import JSONResponse
 import app.main as legacy_main
 from app.main import app
 from app.api.server_session_routes import create_server_session_router
@@ -121,6 +121,12 @@ async def server_session_request_context(request: Request, call_next):
                 )
 
         return await call_next(request)
+    except HTTPException as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers,
+        )
     finally:
         reset_request_session(token)
 
