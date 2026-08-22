@@ -13,6 +13,7 @@ from app.services.authorization_foundation_service import (
 from app.services.server_session_service import (
     create_none_server_session,
     create_server_session,
+    create_system_server_session,
     ensure_server_session_schema,
     hash_session_id,
     public_session_payload,
@@ -236,6 +237,7 @@ def test_session_belongs_to_exactly_one_user_and_household(connection):
     assert resolved.active_household_id == "1"
     assert resolved.role == "admin"
     assert resolved.context_type == "regular"
+    assert resolved.is_platform_superuser is False
     assert public_session_payload(resolved)["context_type"] == "regular"
     assert context.session_id == resolved.session_id
 
@@ -286,43 +288,108 @@ def test_missing_role_never_escalates_to_superuser(connection):
     assert_http_status(exc, 403)
 
 
-def test_household_zero_keeps_temporary_v1_1_owner_session_compatibility(connection):
+def test_superuser_system_session_uses_platform_role_without_household_membership(connection):
     connection.execute(text("""
         INSERT INTO app_users (id, email)
         VALUES ('system-superuser', 'supergebruiker@rezzerv.local')
     """))
     connection.execute(text("""
-        INSERT INTO household_memberships (user_id, household_id, role)
-        VALUES ('system-superuser', '0', 'owner')
-    """))
-    connection.execute(text("""
-        INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
-        VALUES ('0', 'system-superuser', 'household.admin')
+        INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+        VALUES ('system-superuser', 'platform.superuser', 1)
     """))
 
-    raw_id, created = create_server_session(
+    raw_id, created = create_system_server_session(
         connection,
         user_id='system-superuser',
-        active_household_id='0',
     )
     resolved = resolve_server_session(connection, raw_id)
     payload = public_session_payload(resolved)
 
-    assert created.role == 'owner'
-    assert resolved.role == 'owner'
+    assert created.role == resolved.role == 'owner'
     assert created.context_type == resolved.context_type == 'system'
+    assert created.active_household_id == resolved.active_household_id == '0'
+    assert created.is_platform_superuser is resolved.is_platform_superuser is True
+    assert connection.execute(text("""
+        SELECT COUNT(*) FROM household_memberships
+        WHERE user_id = 'system-superuser'
+    """)).scalar_one() == 0
     assert payload['context_type'] == 'system'
-    assert connection.execute(text("""
-        SELECT role_key FROM auth_membership_roles
-        WHERE household_id = '0' AND membership_id = 'system-superuser'
-    """)).scalar_one() == 'household.admin'
-    assert connection.execute(text("""
-        SELECT role FROM household_memberships
-        WHERE household_id = '0' AND user_id = 'system-superuser'
-    """)).scalar_one() == 'owner'
+    assert payload['is_platform_superuser'] is True
+    assert 'platform_roles' not in payload
     granted = {key for key, allowed in payload['permissions'].items() if allowed}
     assert ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS <= granted
     assert not (V2_SUPERUSER_TARGET_PERMISSIONS - ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS) & granted
+
+
+def test_ip_owner_system_session_uses_platform_role_without_household_membership(connection):
+    connection.execute(text("""
+        INSERT INTO app_users (id, email)
+        VALUES ('ip-owner', 'ip-owner@example.test')
+    """))
+    connection.execute(text("""
+        INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+        VALUES ('ip-owner', 'platform.ip_owner', 1)
+    """))
+
+    raw_id, created = create_system_server_session(connection, user_id='ip-owner')
+    resolved = resolve_server_session(connection, raw_id)
+    payload = public_session_payload(resolved)
+
+    assert created.context_type == resolved.context_type == 'system'
+    assert created.active_household_id == resolved.active_household_id == '0'
+    assert created.role == resolved.role == 'owner'
+    assert created.is_platform_superuser is resolved.is_platform_superuser is False
+    assert payload['is_platform_superuser'] is False
+    assert 'platform_roles' not in payload
+
+
+def test_fixed_superuser_email_without_active_role_cannot_create_household_zero_session(connection):
+    connection.execute(text("""
+        INSERT INTO app_users (id, email)
+        VALUES ('email-only-superuser', 'supergebruiker@rezzerv.local')
+    """))
+    connection.execute(text("""
+        INSERT INTO household_memberships (user_id, household_id, role)
+        VALUES ('email-only-superuser', '0', 'owner')
+    """))
+    connection.execute(text("""
+        INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
+        VALUES ('0', 'email-only-superuser', 'household.admin')
+    """))
+
+    with pytest.raises(HTTPException) as exc:
+        create_server_session(
+            connection,
+            user_id='email-only-superuser',
+            active_household_id='0',
+        )
+
+    assert_http_status(exc, 403)
+    assert connection.execute(text("""
+        SELECT COUNT(*) FROM server_sessions
+        WHERE user_id = 'email-only-superuser'
+    """)).scalar_one() == 0
+
+
+def test_system_session_fails_closed_after_platform_role_deactivation(connection):
+    connection.execute(text("""
+        INSERT INTO app_users (id, email)
+        VALUES ('ip-owner', 'ip-owner@example.test')
+    """))
+    connection.execute(text("""
+        INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+        VALUES ('ip-owner', 'platform.ip_owner', 1)
+    """))
+    raw_id, _ = create_system_server_session(connection, user_id='ip-owner')
+    connection.execute(text("""
+        UPDATE auth_platform_user_roles SET active = 0
+        WHERE user_id = 'ip-owner' AND role_key = 'platform.ip_owner'
+    """))
+
+    with pytest.raises(HTTPException) as exc:
+        resolve_server_session(connection, raw_id)
+
+    assert_http_status(exc, 403)
 
 
 def test_revoked_session_returns_401(connection):

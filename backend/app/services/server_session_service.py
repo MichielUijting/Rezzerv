@@ -35,6 +35,7 @@ SESSION_COOKIE_NAME = "rezzerv_session"
 DEFAULT_SESSION_TTL = timedelta(hours=12)
 REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
 SESSION_CONTEXT_TYPES = frozenset({"none", "regular", "system"})
+SYSTEM_PLATFORM_ROLES = frozenset({"platform.superuser", "platform.ip_owner"})
 SessionContextType = Literal["none", "regular", "system"]
 
 _SERVER_SESSION_COLUMNS = (
@@ -96,6 +97,7 @@ class ServerSessionContext:
     session_version: int
     issued_at: datetime
     expires_at: datetime
+    is_platform_superuser: bool = False
 
 
 def utc_now() -> datetime:
@@ -172,14 +174,40 @@ def _household_zero_allowed(*, household_id: str, email: str, role: str) -> bool
 
     normalized_email = str(email or "").strip().lower()
     normalized_role = str(role or "").strip().lower()
-    if normalized_email == SUPERGEBRUIKER_EMAIL and normalized_role == "owner":
-        return True
-
     return (
         _test_household_zero_enabled()
         and normalized_email == REGRESSION_TEST_ADMIN_EMAIL
         and normalized_role == "owner"
     )
+
+
+def _resolve_platform_context_roles(
+    conn: Connection,
+    *,
+    user_id: str,
+    email: str,
+) -> tuple[frozenset[str], frozenset[str]]:
+    platform_roles = resolve_active_platform_role_keys(conn, user_id)
+    system_roles = frozenset(platform_roles & SYSTEM_PLATFORM_ROLES)
+    normalized_email = str(email or "").strip().lower()
+
+    # The historical fixed e-mail address remains reserved for the canonical
+    # Superuser identity, but it never grants authority by itself.
+    if (
+        normalized_email == SUPERGEBRUIKER_EMAIL
+        and "platform.superuser" not in platform_roles
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
+    if "platform.platform_admin" in platform_roles and system_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+    return platform_roles, system_roles
 
 
 def _sqlite_schema_objects(conn: Connection, object_type: str) -> list[Mapping[str, Any]]:
@@ -469,6 +497,17 @@ def create_server_session(
         raise HTTPException(status_code=403, detail="Geen toegang tot dit huishouden")
 
     membership_email = str(membership.get("email") or "")
+    platform_roles, system_roles = _resolve_platform_context_roles(
+        conn,
+        user_id=user_id,
+        email=membership_email,
+    )
+    if "platform.platform_admin" in platform_roles or system_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
     effective_role_key = resolve_effective_household_role(
         conn,
         household_id=household_id,
@@ -510,6 +549,7 @@ def _insert_server_session(
     ttl: timedelta,
     replace_existing: bool,
     now: datetime | None,
+    is_platform_superuser: bool = False,
 ) -> tuple[str, ServerSessionContext]:
     issued_at = (now or utc_now()).astimezone(timezone.utc)
     expires_at = issued_at + ttl
@@ -555,6 +595,7 @@ def _insert_server_session(
         session_version=1,
         issued_at=issued_at,
         expires_at=expires_at,
+        is_platform_superuser=is_platform_superuser,
     )
 
 
@@ -564,13 +605,12 @@ def _require_platform_admin_none_context(
     user_id: str,
     email: str,
 ) -> None:
-    platform_roles = resolve_active_platform_role_keys(conn, user_id)
-    is_platform_admin = "platform.platform_admin" in platform_roles
-    has_superuser_context = (
-        "platform.superuser" in platform_roles
-        or str(email or "").strip().lower() == SUPERGEBRUIKER_EMAIL
+    platform_roles, system_roles = _resolve_platform_context_roles(
+        conn,
+        user_id=user_id,
+        email=email,
     )
-    if not is_platform_admin or has_superuser_context:
+    if "platform.platform_admin" not in platform_roles or system_roles:
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
@@ -616,6 +656,62 @@ def create_none_server_session(
     )
 
 
+def create_system_server_session(
+    conn: Connection,
+    *,
+    user_id: str,
+    ttl: timedelta = DEFAULT_SESSION_TTL,
+    replace_existing: bool = True,
+    now: datetime | None = None,
+) -> tuple[str, ServerSessionContext]:
+    ensure_server_session_schema(conn)
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        raise HTTPException(status_code=401, detail="Gebruiker ontbreekt")
+    user = conn.execute(text("""
+        SELECT id AS user_id, email
+        FROM app_users
+        WHERE id = :user_id
+        LIMIT 1
+    """), {"user_id": normalized_user_id}).mappings().first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Gebruiker ontbreekt")
+
+    email = str(user.get("email") or "")
+    platform_roles, system_roles = _resolve_platform_context_roles(
+        conn,
+        user_id=normalized_user_id,
+        email=email,
+    )
+    if not system_roles or "platform.platform_admin" in platform_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+    context_type = resolve_session_context_type(
+        conn,
+        SUPERGEBRUIKER_HUISHOUDEN_ID,
+    )
+    if context_type != "system":
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
+    return _insert_server_session(
+        conn,
+        user_id=normalized_user_id,
+        email=email,
+        active_household_id=SUPERGEBRUIKER_HUISHOUDEN_ID,
+        context_type="system",
+        role="owner",
+        ttl=ttl,
+        replace_existing=replace_existing,
+        now=now,
+        is_platform_superuser="platform.superuser" in system_roles,
+    )
+
+
 def resolve_server_session(
     conn: Connection,
     raw_session_id: str | None,
@@ -652,17 +748,23 @@ def resolve_server_session(
         )
         raise HTTPException(status_code=401, detail="Sessie is verlopen")
 
+    user_id = str(row.get("user_id") or "")
     email = str(row.get("email") or "")
+    platform_roles, system_roles = _resolve_platform_context_roles(
+        conn,
+        user_id=user_id,
+        email=email,
+    )
     raw_household_id = row.get("active_household_id")
     if raw_household_id is None:
-        _require_platform_admin_none_context(
-            conn,
-            user_id=str(row.get("user_id") or ""),
-            email=email,
-        )
+        if "platform.platform_admin" not in platform_roles or system_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
         return ServerSessionContext(
             session_id=str(row.get("session_id")),
-            user_id=str(row.get("user_id")),
+            user_id=user_id,
             email=email,
             active_household_id=None,
             context_type="none",
@@ -673,6 +775,35 @@ def resolve_server_session(
         )
 
     household_id = str(raw_household_id).strip()
+    if not household_id:
+        raise HTTPException(status_code=403, detail="Actief huishouden ontbreekt")
+
+    if household_id == SUPERGEBRUIKER_HUISHOUDEN_ID and system_roles:
+        context_type = resolve_session_context_type(conn, household_id)
+        if context_type != "system":
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
+        return ServerSessionContext(
+            session_id=str(row.get("session_id")),
+            user_id=user_id,
+            email=email,
+            active_household_id=household_id,
+            context_type="system",
+            role="owner",
+            session_version=int(row.get("session_version") or 1),
+            issued_at=_normalize_database_datetime(row.get("issued_at")),
+            expires_at=expires_at,
+            is_platform_superuser="platform.superuser" in system_roles,
+        )
+
+    if "platform.platform_admin" in platform_roles or system_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
     join_condition = membership_user_join_condition(conn)
     active_condition = membership_active_condition(conn)
     membership_id_sql = membership_id_expression(conn)
@@ -685,10 +816,15 @@ def resolve_server_session(
           AND {active_condition}
         LIMIT 1
     """), {
-        "user_id": str(row.get("user_id") or ""),
+        "user_id": user_id,
         "household_id": household_id,
     }).mappings().first()
     if not membership:
+        if household_id == SUPERGEBRUIKER_HUISHOUDEN_ID:
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
         raise HTTPException(status_code=401, detail="Sessie is ongeldig")
     effective_role_key = resolve_effective_household_role(
         conn,
@@ -697,8 +833,6 @@ def resolve_server_session(
         legacy_role=membership.get("role"),
     )
     role = canonical_role_to_runtime_role(effective_role_key or "") or ""
-    if not household_id:
-        raise HTTPException(status_code=403, detail="Actief huishouden ontbreekt")
     if not role:
         raise HTTPException(status_code=403, detail="Bevoegdheid ontbreekt")
     if not _household_zero_allowed(household_id=household_id, email=email, role=role):
@@ -707,7 +841,7 @@ def resolve_server_session(
 
     return ServerSessionContext(
         session_id=str(row.get("session_id")),
-        user_id=str(row.get("user_id")),
+        user_id=user_id,
         email=email,
         active_household_id=household_id,
         context_type=context_type,
@@ -785,8 +919,7 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
             "session_version": context.session_version,
             "expires_at": context.expires_at.isoformat(),
         }
-    normalized_email = str(context.email or "").strip().lower()
-    platform_superuser = normalized_email == SUPERGEBRUIKER_EMAIL
+    platform_superuser = bool(context.is_platform_superuser)
     granted_permissions = permissions_for_session_role(
         context.role,
         platform_superuser=platform_superuser,

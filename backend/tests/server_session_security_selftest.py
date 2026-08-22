@@ -15,10 +15,10 @@ from sqlalchemy import create_engine, text
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.server_session_service import (
     create_server_session,
+    create_system_server_session,
     resolve_server_session,
     revoke_server_session,
 )
-from app.services.session_request_context import is_platform_superuser
 from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
     SUPERGEBRUIKER_HUISHOUDEN_ID,
@@ -61,16 +61,18 @@ def _prepare_database(engine) -> None:
         conn.execute(text(
             "INSERT INTO household_memberships (user_id, household_id, role) VALUES "
             "('user-a', '1', 'owner'), "
-            "('user-b', '2', 'member'), "
-            "('system-superuser', '0', 'owner')"
+            "('user-b', '2', 'member')"
         ))
         ensure_authorization_foundation(conn)
         conn.execute(text(
             "INSERT INTO auth_membership_roles "
             "(household_id, membership_id, role_key, active) VALUES "
             "('1', 'user-a', 'household.admin', 1), "
-            "('2', 'user-b', 'household.member', 1), "
-            "('0', 'system-superuser', 'household.admin', 1)"
+            "('2', 'user-b', 'household.member', 1)"
+        ))
+        conn.execute(text(
+            "INSERT INTO auth_platform_user_roles(user_id, role_key, active) "
+            "VALUES ('system-superuser', 'platform.superuser', 1)"
         ))
 
 
@@ -127,21 +129,45 @@ def run() -> int:
         checks.append("canonical_role_refreshed_server_side")
 
         with engine.begin() as conn:
-            superuser_session, superuser_context = create_server_session(
+            superuser_session, superuser_context = create_system_server_session(
                 conn,
                 user_id="system-superuser",
-                active_household_id=SUPERGEBRUIKER_HUISHOUDEN_ID,
             )
             assert superuser_session
             assert superuser_context.email == SUPERGEBRUIKER_EMAIL
             assert superuser_context.active_household_id == SUPERGEBRUIKER_HUISHOUDEN_ID
             assert superuser_context.context_type == "system"
             assert superuser_context.role == "owner"
+            assert superuser_context.is_platform_superuser is True
+            assert conn.execute(text(
+                "SELECT COUNT(*) FROM household_memberships "
+                "WHERE user_id = 'system-superuser'"
+            )).scalar_one() == 0
         with engine.begin() as conn:
             resolved_superuser = resolve_server_session(conn, superuser_session)
             assert resolved_superuser.email == SUPERGEBRUIKER_EMAIL
             assert resolved_superuser.active_household_id == SUPERGEBRUIKER_HUISHOUDEN_ID
-        checks.append("canonical_superuser_household_zero_allowed")
+            assert resolved_superuser.is_platform_superuser is True
+        checks.append("platform_role_superuser_system_context_allowed")
+
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE auth_platform_user_roles SET active = 0 "
+                "WHERE user_id = 'system-superuser' AND role_key = 'platform.superuser'"
+            ))
+        with engine.begin() as conn:
+            _expect_http_status(
+                403,
+                lambda: resolve_server_session(conn, superuser_session),
+            )
+            _expect_http_status(
+                403,
+                lambda: create_system_server_session(
+                    conn,
+                    user_id="system-superuser",
+                ),
+            )
+        checks.append("inactive_superuser_role_blocks_system_context")
 
         with engine.begin() as conn:
             conn.execute(text(
@@ -168,12 +194,6 @@ def run() -> int:
                 ),
             )
         checks.append("cross_household_membership_blocked")
-
-        assert is_platform_superuser({"email": SUPERGEBRUIKER_EMAIL, "role": "owner"})
-        assert is_platform_superuser({"email": "  SUPERGEBRUIKER@REZZERV.LOCAL  ", "role": "member"})
-        assert not is_platform_superuser({"email": "admin@rezzerv.local", "role": "admin"})
-        assert not is_platform_superuser({"email": "owner@rezzerv.local", "role": "owner"})
-        checks.append("platform_superuser_matrix_enforced")
 
         with engine.begin() as conn:
             revoke_server_session(conn, raw_session)

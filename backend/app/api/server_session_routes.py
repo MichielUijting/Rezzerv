@@ -16,6 +16,7 @@ from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
     create_none_server_session,
     create_server_session,
+    create_system_server_session,
     membership_active_condition,
     membership_id_expression,
     membership_user_join_condition,
@@ -36,6 +37,7 @@ from app.services.system_superuser_session_provisioning import (
 )
 
 REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
+SYSTEM_PLATFORM_ROLES = frozenset({"platform.superuser", "platform.ip_owner"})
 
 
 class SessionLoginRequest(BaseModel):
@@ -128,22 +130,39 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
     user_id = str(account.get("user_id") or "")
     resolved_email = str(account.get("email") or "").strip().lower()
     platform_roles = resolve_active_platform_role_keys(conn, user_id)
+    system_roles = frozenset(platform_roles & SYSTEM_PLATFORM_ROLES)
     is_platform_admin = "platform.platform_admin" in platform_roles
-    has_superuser_context = (
-        "platform.superuser" in platform_roles
-        or resolved_email == SUPERGEBRUIKER_EMAIL
-    )
-    if is_platform_admin and has_superuser_context:
+
+    # The historical e-mail address identifies the reserved Superuser account,
+    # but only the active server-side role grants its system context.
+    if (
+        resolved_email == SUPERGEBRUIKER_EMAIL
+        and "platform.superuser" not in platform_roles
+    ):
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    if is_platform_admin and system_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+    if system_roles:
+        return {
+            "user_id": user_id,
+            "email": str(account.get("email") or ""),
+            "active_household_id": SUPERGEBRUIKER_HUISHOUDEN_ID,
+            "role": "owner",
+            "platform_system_context": True,
+        }
     if is_platform_admin:
         return {
             "user_id": user_id,
             "email": str(account.get("email") or ""),
             "active_household_id": None,
             "role": None,
+            "platform_system_context": False,
         }
 
     join_condition = membership_user_join_condition(conn)
@@ -199,16 +218,14 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             detail="Geen geldige accountcontext beschikbaar.",
         )
 
-    is_system_superuser = (
-        resolved_email == SUPERGEBRUIKER_EMAIL and role == "owner"
-    )
     is_regression_test_admin = (
         _test_household_zero_enabled()
         and resolved_email == REGRESSION_TEST_ADMIN_EMAIL
         and role == "owner"
     )
-    if household_id == SUPERGEBRUIKER_HUISHOUDEN_ID and not (
-        is_system_superuser or is_regression_test_admin
+    if (
+        household_id == SUPERGEBRUIKER_HUISHOUDEN_ID
+        and not is_regression_test_admin
     ):
         raise HTTPException(
             status_code=403,
@@ -220,6 +237,7 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
         "email": str(first.get("email") or ""),
         "active_household_id": household_id,
         "role": role,
+        "platform_system_context": False,
     }
 
 
@@ -234,7 +252,13 @@ def create_server_session_router(
     def login(payload: SessionLoginRequest, response: Response):
         with engine.begin() as conn:
             identity = _resolve_login_identity(conn, payload.email, payload.password)
-            if identity["active_household_id"] is None:
+            if identity.get("platform_system_context"):
+                raw_session_id, context = create_system_server_session(
+                    conn,
+                    user_id=identity["user_id"],
+                    replace_existing=True,
+                )
+            elif identity["active_household_id"] is None:
                 raw_session_id, context = create_none_server_session(
                     conn,
                     user_id=identity["user_id"],
