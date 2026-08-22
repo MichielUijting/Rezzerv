@@ -16,8 +16,6 @@ EXPECTED_PROTECTED_MUTATIONS = {
     ("POST", "/api/admin/backfill-purchase-import-live-aliases"),
     ("POST", "/api/admin/diagnose-receipt-status-baseline"),
     ("POST", "/api/admin/external-relations/batch/decision"),
-    ("POST", "/api/admin/kassa-regression/run"),
-    ("POST", "/api/admin/kassa-smoke/run"),
     ("POST", "/api/admin/product-groups/import-gpc-nl"),
     ("POST", "/api/admin/receipts/purge-archived"),
     ("POST", "/api/admin/recompute-receipt-statuses"),
@@ -36,12 +34,18 @@ MIGRATED_TEST_MUTATIONS = {
     ("POST", "/api/testing/regression/almost-out-self-test"),
 }
 
+MIGRATED_KASSA_DIAGNOSTIC_MUTATIONS = {
+    ("POST", "/api/admin/kassa-regression/run"),
+    ("POST", "/api/admin/kassa-smoke/run"),
+}
+
 
 def run_contract() -> None:
     assert PROTECTED_MUTATIONS == EXPECTED_PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 9
+    assert len(PROTECTED_MUTATIONS) == 7
     assert ("POST", "/api/admin/inventory/groups/ensure-schema") not in PROTECTED_MUTATIONS
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_TEST_MUTATIONS)
+    assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_KASSA_DIAGNOSTIC_MUTATIONS)
 
     app = FastAPI()
     calls: list[str] = []

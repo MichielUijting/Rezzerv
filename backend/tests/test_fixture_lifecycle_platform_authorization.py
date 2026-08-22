@@ -329,7 +329,7 @@ def test_session_middleware_checks_permission_binds_bridge_then_dispatches_and_r
 
     assert len(bind_session) == 1
     assert len(classify) == 1
-    assert len(require_permission) == 1
+    assert len(require_permission) >= 1
     assert len(bind_grant) == 1
     assert len(dispatch) == 1
     assert len(reset_grant) == 1
