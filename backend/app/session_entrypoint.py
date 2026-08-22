@@ -49,6 +49,9 @@ from app.services.receipt_lifecycle_foundation_service import (
     install_receipt_lifecycle_foundation,
     resolve_receipt_for_unpack_batch,
 )
+from app.services.receipt_status_baseline_route_authorization import (
+    required_receipt_status_baseline_permissions,
+)
 from app.services.session_request_context import (
     authorized_household_id_from_session,
     bind_canonical_platform_permission_grant,
@@ -163,6 +166,16 @@ async def server_session_request_context(request: Request, call_next):
         if maintenance_recompute_permission is not None:
             require_platform_permission_from_session(
                 maintenance_recompute_permission,
+                request.headers.get("authorization"),
+            )
+
+        receipt_status_baseline_permissions = required_receipt_status_baseline_permissions(
+            request.method,
+            request.url.path,
+        )
+        if receipt_status_baseline_permissions:
+            require_platform_permissions_from_session(
+                receipt_status_baseline_permissions,
                 request.headers.get("authorization"),
             )
 

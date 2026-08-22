@@ -1,0 +1,68 @@
+name: Receipt status baseline platform authorization validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/session_entrypoint.py'
+      - 'backend/app/services/receipt_status_baseline_route_authorization.py'
+      - 'backend/app/services/platform_admin_route_guard.py'
+      - 'backend/app/testing/receipt_admin_household_guard_contract.py'
+      - 'backend/tests/test_receipt_status_baseline_platform_authorization.py'
+      - 'backend/tests/test_hybrid_regression_platform_authorization.py'
+      - '.github/workflows/receipt-status-baseline-platform-authorization.yml'
+
+jobs:
+  receipt-status-baseline-platform-authorization:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest fastapi pydantic sqlalchemy httpx
+
+      - name: Compile receipt baseline authorization boundary and tests
+        run: |
+          python -m py_compile \
+            app/session_entrypoint.py \
+            app/services/receipt_status_baseline_route_authorization.py \
+            app/services/platform_admin_route_guard.py \
+            app/testing/receipt_admin_household_guard_contract.py \
+            tests/server_session_route_guard_audit.py \
+            tests/test_receipt_status_baseline_platform_authorization.py \
+            tests/test_hybrid_regression_platform_authorization.py \
+            tests/test_maintenance_recompute_platform_authorization.py \
+            tests/test_technical_schema_platform_route_authorization.py
+
+      - name: Run receipt baseline permission cutover tests
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: |
+          pytest -q \
+            tests/test_receipt_status_baseline_platform_authorization.py \
+            tests/test_hybrid_regression_platform_authorization.py \
+            tests/test_maintenance_recompute_platform_authorization.py \
+            tests/test_technical_schema_platform_route_authorization.py
+
+      - name: Run server session route guard audit
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: python tests/server_session_route_guard_audit.py
+
+      - name: Run legacy platform guard contract
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: python -m app.testing.receipt_admin_household_guard_contract
