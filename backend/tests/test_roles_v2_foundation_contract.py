@@ -313,11 +313,32 @@ def test_active_v1_1_superuser_permissions_and_public_payload_remain_exact():
         session_version=1,
         issued_at=now,
         expires_at=now + timedelta(hours=1),
+        is_platform_superuser=True,
     ))
     expected_public_permissions = ROLE_PERMISSIONS["household.owner"] | expected
     assert set(payload["permissions"]) == expected_public_permissions
     assert set(payload["supported_permissions"]) == expected_public_permissions
+    assert payload["is_platform_superuser"] is True
     assert not (set(V2_PLATFORM_PERMISSIONS) - expected) & set(payload["permissions"])
+
+
+def test_fixed_superuser_email_alone_does_not_grant_public_superuser_rights():
+    now = datetime.now(timezone.utc)
+    payload = public_session_payload(ServerSessionContext(
+        session_id="session-id",
+        user_id="email-only-id",
+        email=SUPERGEBRUIKER_EMAIL,
+        active_household_id="0",
+        context_type="system",
+        role="owner",
+        session_version=1,
+        issued_at=now,
+        expires_at=now + timedelta(hours=1),
+    ))
+
+    assert payload["is_platform_superuser"] is False
+    assert set(payload["permissions"]) == ROLE_PERMISSIONS["household.owner"]
+    assert not ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS & set(payload["permissions"])
 
 
 def test_existing_platform_superuser_is_not_granted_v2_target_permissions():

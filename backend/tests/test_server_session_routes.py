@@ -52,8 +52,7 @@ def build_client():
               ('2', 'u1', 'household.member'),
               ('2', 'u2', 'household.member'),
               ('1', 'u-platform', 'household.member'),
-              ('0', 'u3', 'household.owner'),
-              ('0', 'u-super', 'household.owner')
+              ('0', 'u3', 'household.owner')
         """))
         conn.execute(
             text(
@@ -93,8 +92,7 @@ def build_client():
                        ('u1', '2', 'member'),
                        ('u2', '2', 'member'),
                        ('u-platform', '1', 'member'),
-                       ('u3', '0', 'owner'),
-                       ('u-super', '0', 'owner')
+                       ('u3', '0', 'owner')
                 """
             )
         )
@@ -205,7 +203,7 @@ def test_member_login_keeps_regular_household_context():
     assert context.role == "member"
 
 
-def test_superuser_login_keeps_system_household_zero_compatibility():
+def test_superuser_login_uses_system_context_without_household_membership():
     client, engine = build_client()
 
     response = client.post(
@@ -215,12 +213,46 @@ def test_superuser_login_keeps_system_household_zero_compatibility():
     raw_session_id = response.cookies.get("rezzerv_session")
     with engine.begin() as conn:
         context = resolve_server_session(conn, raw_session_id)
+        membership_count = conn.execute(text("""
+            SELECT COUNT(*) FROM household_memberships
+            WHERE user_id = 'u-super'
+        """)).scalar_one()
 
     assert response.status_code == 200
+    assert membership_count == 0
     assert context.context_type == "system"
     assert response.json()["context_type"] == "system"
     assert context.active_household_id == "0"
     assert context.role == "owner"
+    assert context.is_platform_superuser is True
+    assert response.json()["is_platform_superuser"] is True
+    assert "platform_roles" not in response.json()
+
+
+def test_ip_owner_login_uses_system_context_without_household_membership():
+    client, engine = build_client()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "ip-owner@example.test", "password": "Rezzerv123"},
+    )
+    raw_session_id = response.cookies.get("rezzerv_session")
+    with engine.begin() as conn:
+        context = resolve_server_session(conn, raw_session_id)
+        membership_count = conn.execute(text("""
+            SELECT COUNT(*) FROM household_memberships
+            WHERE user_id = 'u-ip-owner'
+        """)).scalar_one()
+
+    assert response.status_code == 200
+    assert membership_count == 0
+    assert context.context_type == "system"
+    assert response.json()["context_type"] == "system"
+    assert context.active_household_id == "0"
+    assert context.role == "owner"
+    assert context.is_platform_superuser is False
+    assert response.json()["is_platform_superuser"] is False
+    assert "platform_roles" not in response.json()
 
 
 def test_platform_admin_only_login_creates_resolvable_none_session():
@@ -258,7 +290,6 @@ def test_platform_admin_only_login_creates_resolvable_none_session():
     [
         "none@example.test",
         "frontteam@example.test",
-        "ip-owner@example.test",
         "inactive-platform@example.test",
     ],
 )
@@ -314,7 +345,29 @@ def test_superuser_platform_admin_conflict_preserves_existing_session():
     assert sessions == [(session_id, None)]
 
 
-def test_fixed_superuser_identity_platform_admin_conflict_creates_no_session():
+def test_ip_owner_platform_admin_conflict_creates_no_session():
+    client, engine = build_client()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES ('u-ip-owner', 'platform.platform_admin', 1)
+        """))
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "ip-owner@example.test", "password": "Rezzerv123"},
+    )
+    with engine.begin() as conn:
+        session_count = conn.execute(text("""
+            SELECT COUNT(*) FROM server_sessions WHERE user_id = 'u-ip-owner'
+        """)).scalar_one()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+    assert session_count == 0
+
+
+def test_fixed_superuser_identity_without_active_superuser_role_creates_no_session():
     client, engine = build_client()
     with engine.begin() as conn:
         conn.execute(text("""
@@ -338,6 +391,26 @@ def test_fixed_superuser_identity_platform_admin_conflict_creates_no_session():
     assert response.status_code == 403
     assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
     assert session_count == 0
+
+
+def test_system_session_fails_closed_when_superuser_role_is_deactivated():
+    client, engine = build_client()
+    login = client.post(
+        "/api/auth/login",
+        json={"email": SUPERGEBRUIKER_EMAIL, "password": "Rezzerv123"},
+    )
+    assert login.status_code == 200
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE auth_platform_user_roles SET active = 0
+            WHERE user_id = 'u-super' AND role_key = 'platform.superuser'
+        """))
+
+    response = client.get("/api/session")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
 
 
 def test_session_endpoint_without_cookie_returns_401():
