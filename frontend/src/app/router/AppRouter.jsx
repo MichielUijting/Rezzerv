@@ -4,6 +4,7 @@ import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
+import InsightsPage from '../../features/insights/InsightsPage.jsx'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
 import KassaPage from '../../features/kassa/KassaPage.jsx'
 import SettingsPage from '../../features/settings/SettingsPage'
@@ -96,6 +97,7 @@ const router = createBrowserRouter([
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
+  { path: '/inzichten', element: <Protected><InsightsPage /></Protected> },
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/superuser', element: <ProtectedSuperuser><SuperuserDashboardPage /></ProtectedSuperuser> },
   { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
