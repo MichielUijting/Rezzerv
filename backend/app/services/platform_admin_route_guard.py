@@ -26,7 +26,6 @@ PROTECTED_MUTATIONS = {
     ("POST", "/api/admin/backfill-purchase-import-live-aliases"),
     ("POST", "/api/admin/diagnose-receipt-status-baseline"),
     ("POST", "/api/admin/external-relations/batch/decision"),
-    ("POST", "/api/admin/inventory/groups/ensure-schema"),
     ("POST", "/api/admin/kassa-regression/run"),
     ("POST", "/api/admin/kassa-smoke/run"),
     ("POST", "/api/admin/product-groups/import-gpc-nl"),
