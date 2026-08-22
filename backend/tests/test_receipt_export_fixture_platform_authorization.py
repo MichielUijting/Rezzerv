@@ -31,15 +31,17 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MAIN_SOURCE_PATH = BACKEND_ROOT / "app" / "main.py"
 SESSION_ENTRYPOINT_SOURCE_PATH = BACKEND_ROOT / "app" / "session_entrypoint.py"
 
-OTHER_LEGACY_FIXTURE_MUTATIONS = {
+REMAINING_LEGACY_FIXTURE_MUTATIONS = {
+    ("POST", "/api/testing/regression/almost-out-prediction"),
+    ("POST", "/api/testing/regression/almost-out-self-test"),
+}
+MIGRATED_LIFECYCLE_FIXTURE_MUTATIONS = {
     ("POST", "/api/testing/diagnostics/store-location-options"),
     ("POST", "/api/testing/fixtures/browser-regression/reset"),
     ("POST", "/api/testing/fixtures/cleanup"),
     ("POST", "/api/testing/fixtures/inventory/ensure"),
     ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
     ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
-    ("POST", "/api/testing/regression/almost-out-prediction"),
-    ("POST", "/api/testing/regression/almost-out-self-test"),
 }
 
 
@@ -218,9 +220,11 @@ def test_receipt_export_http_entrypoints_share_one_canonical_permission_boundary
     )
 
 
-def test_receipt_export_generate_is_removed_from_legacy_superuser_guard_only():
+def test_receipt_export_and_lifecycle_fixtures_are_out_of_legacy_superuser_guard():
     assert POST_ROUTE not in PROTECTED_MUTATIONS
-    for route in OTHER_LEGACY_FIXTURE_MUTATIONS:
+    for route in MIGRATED_LIFECYCLE_FIXTURE_MUTATIONS:
+        assert route not in PROTECTED_MUTATIONS
+    for route in REMAINING_LEGACY_FIXTURE_MUTATIONS:
         assert route in PROTECTED_MUTATIONS
 
 
