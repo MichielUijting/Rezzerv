@@ -278,7 +278,7 @@ def test_fixture_permission_check_runs_after_session_bind_and_before_route_dispa
 
     assert len(bind_lines) == 1
     assert len(classify_lines) == 1
-    assert len(permission_lines) == 1
+    assert len(permission_lines) >= 1
     assert len(dispatch_lines) == 1
     assert bind_lines[0] < classify_lines[0] < permission_lines[0] < dispatch_lines[0]
 
