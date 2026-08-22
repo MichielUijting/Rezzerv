@@ -29,7 +29,7 @@ MIGRATED_POST_ROUTES = {
     "/api/testing/reports/complete",
 }
 LATEST_REPORT_ROUTE = "/api/testing/reports/latest"
-EXCLUDED_LEGACY_MUTATIONS = {
+HYBRID_CUTOVER_MUTATIONS = {
     "/api/testing/regression/almost-out-prediction",
     "/api/testing/regression/almost-out-self-test",
 }
@@ -303,6 +303,6 @@ def test_migrated_post_routes_are_not_still_pre_gated_by_legacy_superuser_middle
         assert ("POST", path) not in PROTECTED_MUTATIONS
 
 
-def test_hybrid_fixture_regressions_remain_on_legacy_guard_in_this_slice():
-    for path in EXCLUDED_LEGACY_MUTATIONS:
-        assert ("POST", path) in PROTECTED_MUTATIONS
+def test_hybrid_fixture_regressions_are_also_out_of_legacy_guard_after_9_1_6d3():
+    for path in HYBRID_CUTOVER_MUTATIONS:
+        assert ("POST", path) not in PROTECTED_MUTATIONS

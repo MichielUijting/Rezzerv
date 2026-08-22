@@ -33,7 +33,7 @@ MIGRATED_ROUTES = frozenset(
         ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
     }
 )
-HYBRID_LEGACY_ROUTES = frozenset(
+HYBRID_CUTOVER_ROUTES = frozenset(
     {
         ("POST", "/api/testing/regression/almost-out-prediction"),
         ("POST", "/api/testing/regression/almost-out-self-test"),
@@ -129,7 +129,7 @@ def test_fixture_lifecycle_classifier_is_exact_and_reuses_existing_permission():
     for method, path in MIGRATED_ROUTES:
         assert required_fixture_lifecycle_permission(method, path) == PERMISSION
         assert required_fixture_lifecycle_permission(method.lower(), path) == PERMISSION
-    for method, path in HYBRID_LEGACY_ROUTES:
+    for method, path in HYBRID_CUTOVER_ROUTES:
         assert required_fixture_lifecycle_permission(method, path) is None
 
 
@@ -254,10 +254,9 @@ def test_bound_fixture_grant_rechecks_revocation_before_legacy_handler_work(
         session_request_context.reset_canonical_platform_permission_grant(token)
 
 
-def test_migrated_routes_leave_legacy_superuser_middleware_but_hybrid_routes_do_not():
+def test_fixture_lifecycle_and_hybrid_routes_are_out_of_legacy_superuser_middleware():
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_ROUTES)
-    for route in HYBRID_LEGACY_ROUTES:
-        assert route in PROTECTED_MUTATIONS
+    assert PROTECTED_MUTATIONS.isdisjoint(HYBRID_CUTOVER_ROUTES)
 
 
 def _route_nodes() -> dict[tuple[str, str], ast.FunctionDef | ast.AsyncFunctionDef]:

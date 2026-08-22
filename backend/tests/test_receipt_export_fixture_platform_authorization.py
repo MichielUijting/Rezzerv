@@ -31,7 +31,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MAIN_SOURCE_PATH = BACKEND_ROOT / "app" / "main.py"
 SESSION_ENTRYPOINT_SOURCE_PATH = BACKEND_ROOT / "app" / "session_entrypoint.py"
 
-REMAINING_LEGACY_FIXTURE_MUTATIONS = {
+MIGRATED_HYBRID_FIXTURE_MUTATIONS = {
     ("POST", "/api/testing/regression/almost-out-prediction"),
     ("POST", "/api/testing/regression/almost-out-self-test"),
 }
@@ -220,12 +220,12 @@ def test_receipt_export_http_entrypoints_share_one_canonical_permission_boundary
     )
 
 
-def test_receipt_export_and_lifecycle_fixtures_are_out_of_legacy_superuser_guard():
+def test_all_fixture_mutations_are_out_of_legacy_superuser_guard():
     assert POST_ROUTE not in PROTECTED_MUTATIONS
     for route in MIGRATED_LIFECYCLE_FIXTURE_MUTATIONS:
         assert route not in PROTECTED_MUTATIONS
-    for route in REMAINING_LEGACY_FIXTURE_MUTATIONS:
-        assert route in PROTECTED_MUTATIONS
+    for route in MIGRATED_HYBRID_FIXTURE_MUTATIONS:
+        assert route not in PROTECTED_MUTATIONS
 
 
 def _function_node(

@@ -97,6 +97,35 @@ def require_platform_permission_from_session(
     return context
 
 
+def require_platform_permissions_from_session(
+    permission_keys: tuple[str, ...],
+    _authorization: str | None = None,
+) -> ServerSessionContext:
+    """Require every listed canonical platform permission for one request.
+
+    Each permission is evaluated through the same live server-session authority.
+    The function deliberately does not collapse permissions into a role-name
+    shortcut: callers must satisfy every permission in the supplied order.
+    """
+
+    normalized_permissions = tuple(
+        str(permission_key or "").strip()
+        for permission_key in permission_keys
+        if str(permission_key or "").strip()
+    )
+    if not normalized_permissions:
+        raise ValueError("platformpermissies ontbreken")
+
+    context: ServerSessionContext | None = None
+    for permission_key in normalized_permissions:
+        context = require_platform_permission_from_session(
+            permission_key,
+            _authorization,
+        )
+    assert context is not None
+    return context
+
+
 def bind_current_actor_from_request_session_if_available() -> ServerSessionContext | None:
     """Eagerly bind the canonical actor for every authenticated request.
 

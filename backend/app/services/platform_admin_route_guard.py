@@ -6,8 +6,6 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 PROTECTED_MUTATIONS = {
-    ("POST", "/api/testing/regression/almost-out-prediction"),
-    ("POST", "/api/testing/regression/almost-out-self-test"),
     ("POST", "/api/admin/backfill-purchase-import-live-aliases"),
     ("POST", "/api/admin/diagnose-receipt-status-baseline"),
     ("POST", "/api/admin/external-relations/batch/decision"),
