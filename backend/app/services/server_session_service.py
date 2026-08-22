@@ -209,6 +209,12 @@ def _resolve_platform_context_roles(
             detail="Geen geldige accountcontext beschikbaar.",
         )
 
+    if system_roles and FRONTTEAM_PLATFORM_ROLE in platform_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
     if (
         "platform.platform_admin" in platform_roles
         and (system_roles or FRONTTEAM_PLATFORM_ROLE in platform_roles)

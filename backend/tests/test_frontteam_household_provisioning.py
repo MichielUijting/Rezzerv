@@ -10,6 +10,7 @@ from app.services.frontteam_household_provisioning import (
 )
 from app.services.server_session_service import (
     create_server_session,
+    create_system_server_session,
     public_session_payload,
     resolve_server_session,
 )
@@ -210,6 +211,40 @@ def test_active_frontteam_role_cannot_select_an_unrelated_regular_household():
                 conn,
                 user_id="front-active",
                 active_household_id="1",
+            )
+
+        assert exc.value.status_code == 403
+        assert exc.value.detail == "Geen geldige accountcontext beschikbaar."
+    finally:
+        conn.close()
+        engine.dispose()
+
+@pytest.mark.parametrize(
+    "system_role",
+    [
+        "platform.superuser",
+        "platform.ip_owner",
+    ],
+)
+def test_frontteam_system_role_conflict_fails_closed_in_session_service(system_role):
+    engine, conn = build_connection()
+    try:
+        ensure_frontteam_household_for_session_runtime(conn)
+
+        conn.execute(text("""
+            INSERT INTO household_registry(id, naam, context_type)
+            VALUES ('0', 'Systeemhuishouden', 'system')
+        """))
+
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES ('front-active', :role_key, 1)
+        """), {"role_key": system_role})
+
+        with pytest.raises(HTTPException) as exc:
+            create_system_server_session(
+                conn,
+                user_id="front-active",
             )
 
         assert exc.value.status_code == 403
