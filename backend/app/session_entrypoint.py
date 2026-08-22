@@ -240,9 +240,8 @@ def restore_archived_receipt_to_kassa(receipt_table_id: str):
                 """
             ),
             {
-                "id": normalized_receipt_id,
-                "household_id": household_id,
                 "receipt_table_id": normalized_receipt_id,
+                "household_id": household_id,
             },
         )
 
