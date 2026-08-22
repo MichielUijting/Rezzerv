@@ -82,7 +82,8 @@ def _add_api_routes(tree: ast.AST) -> set[tuple[str, str]]:
 def _registered_literal_runtime_routes() -> set[tuple[str, str]]:
     routes: set[tuple[str, str]] = set()
     for source_path in sorted(RUNTIME_ROOT.rglob("*.py")):
-        tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+        source = source_path.read_text(encoding="utf-8-sig")
+        tree = ast.parse(source, filename=str(source_path))
         routes.update(_decorated_routes(tree))
         routes.update(_add_api_routes(tree))
     return routes
