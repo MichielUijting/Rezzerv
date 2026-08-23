@@ -28,9 +28,9 @@ from app.services.authorization_membership_service import (
     resolve_effective_household_role,
 )
 from app.services.frontteam_household_provisioning import (
-    FRONTTEAM_HOUSEHOLD_ID,
-    FRONTTEAM_HOUSEHOLD_NAME,
     FRONTTEAM_PLATFORM_ROLE,
+    is_frontteam_personal_household,
+    is_legacy_frontteam_household,
 )
 from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
@@ -523,8 +523,18 @@ def create_server_session(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    if is_legacy_frontteam_household(household_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
     is_frontteam = FRONTTEAM_PLATFORM_ROLE in platform_roles
-    if is_frontteam != (household_id == FRONTTEAM_HOUSEHOLD_ID):
+    is_personal_frontteam_household = is_frontteam_personal_household(
+        conn,
+        user_id=user_id,
+        household_id=household_id,
+    )
+    if is_frontteam != is_personal_frontteam_household:
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
@@ -548,7 +558,7 @@ def create_server_session(
     context_type = resolve_session_context_type(conn, household_id)
     if is_frontteam and (
         context_type != "regular"
-        or household_id != FRONTTEAM_HOUSEHOLD_ID
+        or not is_personal_frontteam_household
         or membership_role != "admin"
     ):
         raise HTTPException(
@@ -837,8 +847,18 @@ def resolve_server_session(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    if is_legacy_frontteam_household(household_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
     is_frontteam = FRONTTEAM_PLATFORM_ROLE in platform_roles
-    if is_frontteam != (household_id == FRONTTEAM_HOUSEHOLD_ID):
+    is_personal_frontteam_household = is_frontteam_personal_household(
+        conn,
+        user_id=user_id,
+        household_id=household_id,
+    )
+    if is_frontteam != is_personal_frontteam_household:
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
@@ -880,7 +900,7 @@ def resolve_server_session(
     context_type = resolve_session_context_type(conn, household_id)
     if is_frontteam and (
         context_type != "regular"
-        or household_id != FRONTTEAM_HOUSEHOLD_ID
+        or not is_personal_frontteam_household
         or role != "admin"
     ):
         raise HTTPException(
@@ -981,8 +1001,6 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
     role = str(context.role or "").strip().lower()
     if context.active_household_id == SUPERGEBRUIKER_HUISHOUDEN_ID:
         active_household_name = "Systeemhuishouden"
-    elif context.active_household_id == FRONTTEAM_HOUSEHOLD_ID:
-        active_household_name = FRONTTEAM_HOUSEHOLD_NAME
     else:
         active_household_name = ""
     return {
