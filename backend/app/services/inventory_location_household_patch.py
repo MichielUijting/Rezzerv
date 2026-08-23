@@ -192,3 +192,9 @@ def install_inventory_location_household_patch(main_module) -> None:
 
     main_module._dev_resolve_space_id = resolve_space_id
     main_module._dev_resolve_sublocation_id = resolve_sublocation_id
+
+    from .purchase_import_location_policy_patch import (
+        install_purchase_import_location_policy_patch,
+    )
+
+    install_purchase_import_location_policy_patch(main_module)
