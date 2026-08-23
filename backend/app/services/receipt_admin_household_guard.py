@@ -8,8 +8,10 @@ New code must import :mod:`app.services.platform_admin_route_guard` directly.
 from app.services.platform_admin_route_guard import (
     PROTECTED_MUTATIONS,
     authorize_platform_admin_request,
-    deduplicate_receipt_parser_diagnosis_routes,
     install_platform_admin_route_guard,
+)
+from app.services.receipt_parser_diagnosis_route_cleanup import (
+    deduplicate_receipt_parser_diagnosis_routes,
 )
 
 _PROTECTED_REQUESTS = PROTECTED_MUTATIONS
