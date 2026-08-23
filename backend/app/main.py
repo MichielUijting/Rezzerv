@@ -7589,7 +7589,6 @@ app.include_router(receipt_preview_router)
 app.include_router(receipt_ingestion_review_router)
 
 app.include_router(create_dev_test_router(
-    require_platform_admin_user=require_platform_admin_user,
     testing_service=testing_service,
     run_receipt_parsing_baseline_suite=run_receipt_parsing_baseline_suite,
 ))
@@ -14847,7 +14846,6 @@ def count_table(table_name: str) -> int:
 
 @app.get("/api/testing/status")
 def get_dev_status(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
     return {
         "spaces": count_table("spaces"),
         "sublocations": count_table("sublocations"),
@@ -14856,7 +14854,6 @@ def get_dev_status(authorization: Optional[str] = Header(None)):
 
 @app.post("/api/testing/fixtures/browser-regression/reset")
 def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
     with engine.begin() as conn:
         fixture_names = [str(item['naam']).strip().lower() for item in BROWSER_REGRESSION_ARTICLES]
         conn.execute(
@@ -16316,7 +16313,6 @@ def generate_demo_data(authorization: Optional[str] = Header(None)):
 
 @app.post("/api/testing/fixtures/receipt-layer1/generate")
 def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
     household = ensure_household("admin@rezzerv.local")
     household_id = str(household.get("id") or "1")
     clear_regression_receipt_state(household_id)
@@ -18541,7 +18537,6 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
 
 @app.get("/api/testing/diagnostics/purchase-import-batches/{batch_id}")
 def get_purchase_import_batch_diagnostics(batch_id: str, authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
     with engine.begin() as conn:
         batch = conn.execute(text("SELECT id FROM purchase_import_batches WHERE id = :id"), {"id": batch_id}).mappings().first()
         if not batch:
@@ -19502,7 +19497,6 @@ def ensure_regression_inventory_fixture_endpoint():
 
 @app.post("/api/testing/fixtures/cleanup")
 def cleanup_regression_fixture_state_endpoint(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
     household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
     cleanup = cleanup_regression_fixture_state(household_id)
     log_regression_action('fixture.cleanup_endpoint', cleanup=cleanup)
@@ -19548,7 +19542,6 @@ def get_regression_receipt_fixture_file(kind: str = Query('manual')):
 
 @app.post("/api/testing/fixtures/receipts/seed-kassa")
 def seed_regression_kassa_receipts(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
     household = ensure_household("admin@rezzerv.local")
     household_id = str(household.get('id') or '1')
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, household_id)

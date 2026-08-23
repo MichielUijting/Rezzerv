@@ -27,14 +27,9 @@ DIAGNOSTICS_VIEW_PERMISSION = "platform.diagnostics.view"
 
 def create_dev_test_router(
     *,
-    require_platform_admin_user: Callable[[Optional[str]], object],
     testing_service,
     run_receipt_parsing_baseline_suite: Callable[[str], list],
 ) -> APIRouter:
-    # Compatibility-only injection for the legacy app assembly. The migrated
-    # routes below authorize exclusively through canonical server-session
-    # platform permissions.
-    _ = require_platform_admin_user
     router = APIRouter()
 
     @router.post('/api/testing/regression/smoke/run', response_model=TestStartResponse)
