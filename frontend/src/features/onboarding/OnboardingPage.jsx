@@ -3,7 +3,13 @@ import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import { readStoredAuthContext } from '../../lib/authSession.js'
-import { selectPrimaryUseCase } from './onboardingState.js'
+import InhuisHalenOnboardingPage from './InhuisHalenOnboardingPage.jsx'
+import {
+  completeInhuisHalenOnboarding,
+  isInhuisHalenFollowUp,
+  readHouseholdOnboarding,
+  selectPrimaryUseCase,
+} from './onboardingState.js'
 
 const OPTIONS = [
   {
@@ -27,16 +33,21 @@ const OPTIONS = [
 ]
 
 export default function OnboardingPage({ onUseCaseSelected }) {
+  const context = readStoredAuthContext()
+  const [onboarding, setOnboarding] = useState(() => readHouseholdOnboarding(context))
   const [savingKey, setSavingKey] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
   const [error, setError] = useState('')
 
   async function choose(primaryUseCase) {
     setError('')
     setSavingKey(primaryUseCase)
     try {
-      const context = readStoredAuthContext()
-      await selectPrimaryUseCase(context, primaryUseCase)
-      onUseCaseSelected?.()
+      const updated = await selectPrimaryUseCase(context, primaryUseCase)
+      setOnboarding(updated)
+      if (primaryUseCase !== 'inhuis_halen') {
+        onUseCaseSelected?.()
+      }
     } catch (err) {
       setError(err?.message || 'Gebruiksdoel opslaan mislukt.')
     } finally {
@@ -44,47 +55,71 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     }
   }
 
+  async function completeInhuisHalen(preferences) {
+    setError('')
+    setSavingProfile(true)
+    try {
+      const updated = await completeInhuisHalenOnboarding(context, preferences)
+      setOnboarding(updated)
+      onUseCaseSelected?.()
+    } catch (err) {
+      setError(err?.message || 'Inhuis halen instellen mislukt.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  const showInhuisHalenFollowUp = isInhuisHalenFollowUp(onboarding)
+
   return (
     <div className="rz-screen" data-testid="onboarding-use-case-page">
       <Header title="Welkom bij Inhuis" />
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card>
-            <div className="rz-form">
-              <div>
-                <h1 style={{ marginTop: 0 }}>Waar wil je Inhuis mee beginnen?</h1>
-                <p>
-                  Kies wat je nu het meest helpt. Daarmee bepaalt Inhuis welke vervolgstappen voor jou relevant zijn.
-                </p>
-              </div>
+            {showInhuisHalenFollowUp ? (
+              <InhuisHalenOnboardingPage
+                onSubmit={completeInhuisHalen}
+                saving={savingProfile}
+                error={error}
+              />
+            ) : (
+              <div className="rz-form">
+                <div>
+                  <h1 style={{ marginTop: 0 }}>Waar wil je Inhuis mee beginnen?</h1>
+                  <p>
+                    Kies wat je nu het meest helpt. Daarmee bepaalt Inhuis welke vervolgstappen voor jou relevant zijn.
+                  </p>
+                </div>
 
-              {OPTIONS.map((option) => (
-                <Card key={option.key}>
-                  <div className="rz-form">
-                    <div>
-                      <h2 style={{ marginTop: 0, marginBottom: 6 }}>{option.title}</h2>
-                      <strong>{option.question}</strong>
-                      <p style={{ marginBottom: 0 }}>{option.description}</p>
+                {OPTIONS.map((option) => (
+                  <Card key={option.key}>
+                    <div className="rz-form">
+                      <div>
+                        <h2 style={{ marginTop: 0, marginBottom: 6 }}>{option.title}</h2>
+                        <strong>{option.question}</strong>
+                        <p style={{ marginBottom: 0 }}>{option.description}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        disabled={Boolean(savingKey)}
+                        onClick={() => choose(option.key)}
+                        data-testid={`onboarding-choice-${option.key}`}
+                      >
+                        {savingKey === option.key ? 'Opslaan…' : `Start met ${option.title}`}
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      disabled={Boolean(savingKey)}
-                      onClick={() => choose(option.key)}
-                      data-testid={`onboarding-choice-${option.key}`}
-                    >
-                      {savingKey === option.key ? 'Opslaan…' : `Start met ${option.title}`}
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                ))}
 
-              <p style={{ marginBottom: 0 }}>
-                <strong>Je kunt later altijd andere mogelijkheden toevoegen.</strong>
-              </p>
+                <p style={{ marginBottom: 0 }}>
+                  <strong>Je kunt later altijd andere mogelijkheden toevoegen.</strong>
+                </p>
 
-              {error ? <div className="rz-alert">{error}</div> : null}
-            </div>
+                {error ? <div className="rz-alert">{error}</div> : null}
+              </div>
+            )}
           </Card>
         </div>
       </div>

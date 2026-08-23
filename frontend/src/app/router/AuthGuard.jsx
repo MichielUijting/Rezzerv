@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { clearAuthSession, fetchAuthContext, readStoredAuthContext } from '../../lib/authSession'
-import { fetchHouseholdOnboarding, requiresInitialUseCase } from '../../features/onboarding/onboardingState.js'
+import { fetchHouseholdOnboarding, requiresManagedOnboarding } from '../../features/onboarding/onboardingState.js'
 
 export default function AuthGuard({ children }) {
   const location = useLocation()
@@ -42,11 +42,11 @@ export default function AuthGuard({ children }) {
   }
 
   if (context?.context_type === 'regular') {
-    const initialChoiceRequired = requiresInitialUseCase(onboarding)
-    if (initialChoiceRequired && location.pathname !== '/onboarding') {
+    const onboardingRequired = requiresManagedOnboarding(onboarding)
+    if (onboardingRequired && location.pathname !== '/onboarding') {
       return <Navigate to="/onboarding" replace />
     }
-    if (!initialChoiceRequired && location.pathname === '/onboarding') {
+    if (!onboardingRequired && location.pathname === '/onboarding') {
       return <Navigate to="/home" replace />
     }
   }

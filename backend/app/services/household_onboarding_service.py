@@ -41,6 +41,14 @@ class HouseholdOnboardingState:
             and not self.primary_use_case
         )
 
+    @property
+    def profile_follow_up_required(self) -> bool:
+        return (
+            self.onboarding_status == ONBOARDING_STATUS_IN_PROGRESS
+            and self.primary_use_case in PRIMARY_USE_CASES
+            and self.onboarding_step == "profile_follow_up"
+        )
+
 
 def _household_registry_columns(conn) -> set[str]:
     inspector = inspect(conn)
@@ -89,8 +97,6 @@ def ensure_household_onboarding_foundation(conn) -> None:
     if "context_type" in columns:
         regular_predicate = "lower(trim(COALESCE(context_type, 'regular'))) = 'regular'"
     else:
-        # Household 0 is the historical system context. On old schemas without
-        # context_type it must never become an ordinary onboarding household.
         regular_predicate = f"CAST({household_id_column} AS TEXT) <> '0'"
 
     conn.execute(text(f"""
@@ -233,6 +239,43 @@ def select_primary_use_case(
     return resolve_household_onboarding_state(conn, current.household_id)
 
 
+def complete_household_onboarding(
+    conn,
+    *,
+    household_id: str,
+    expected_primary_use_case: str,
+) -> HouseholdOnboardingState:
+    normalized_use_case = str(expected_primary_use_case or "").strip().lower()
+    if normalized_use_case not in PRIMARY_USE_CASES:
+        raise ValueError("Ongeldig gebruiksdoel")
+
+    current = resolve_household_onboarding_state(conn, household_id)
+    if current.onboarding_status == ONBOARDING_STATUS_COMPLETED:
+        raise OnboardingAlreadyCompletedError(
+            "Dit huishouden heeft de initiële onboarding al afgerond"
+        )
+    if (
+        current.onboarding_status != ONBOARDING_STATUS_IN_PROGRESS
+        or current.onboarding_step != "profile_follow_up"
+        or current.primary_use_case != normalized_use_case
+    ):
+        raise ValueError("Onboarding staat niet op de verwachte profielstap")
+
+    conn.execute(text("""
+        UPDATE household_onboarding
+        SET onboarding_status = 'completed',
+            onboarding_step = NULL,
+            onboarding_completed_at = CURRENT_TIMESTAMP,
+            onboarding_version = :onboarding_version,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE household_id = :household_id
+    """), {
+        "household_id": current.household_id,
+        "onboarding_version": ONBOARDING_VERSION,
+    })
+    return resolve_household_onboarding_state(conn, current.household_id)
+
+
 def public_household_onboarding_payload(
     state: HouseholdOnboardingState,
     *,
@@ -245,5 +288,6 @@ def public_household_onboarding_payload(
         "primary_use_case": state.primary_use_case,
         "onboarding_step": state.onboarding_step,
         "initial_choice_required": state.initial_choice_required,
+        "profile_follow_up_required": state.profile_follow_up_required,
         "can_manage": bool(can_manage),
     }
