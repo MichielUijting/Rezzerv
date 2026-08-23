@@ -5,9 +5,7 @@ from collections.abc import Callable
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-PROTECTED_MUTATIONS = {
-    ("POST", "/api/admin/external-relations/batch/decision"),
-}
+PROTECTED_MUTATIONS: set[tuple[str, str]] = set()
 
 _DIAGNOSIS_DUPLICATE_PATHS = {
     "/api/testing/receipt-parser-diagnosis",
