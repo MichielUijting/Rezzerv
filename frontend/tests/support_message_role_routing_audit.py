@@ -2,6 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "src/features/home/HomePage.jsx"
+HOME_NAVIGATION = ROOT / "src/features/home/homeNavigation.js"
 ROUTER = ROOT / "src/app/router/AppRouter.jsx"
 PLATFORM_PAGE = ROOT / "src/features/support/PlatformSupportPage.jsx"
 SUPPORT_API = ROOT / "src/features/support/supportApi.js"
@@ -19,8 +20,12 @@ def main() -> None:
     require(
         HOME,
         "isPlatformSuperuserFromContext",
+        "meldingen: '/meldingen'",
+    )
+    require(
+        HOME_NAVIGATION,
+        "key: 'meldingen'",
         "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser",
-        "if (key === 'meldingen') navigate('/meldingen')",
     )
     require(
         SUPERUSER_OVERVIEW,
