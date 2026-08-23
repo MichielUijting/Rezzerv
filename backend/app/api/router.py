@@ -16,6 +16,7 @@ from fastapi import APIRouter
 from app.api.article_group_routes import router as article_group_router
 from app.api.barcode_routes import router as barcode_router
 from app.api.day_article_routes import router as day_article_router
+from app.api.household_capability_expansion_routes import router as household_capability_expansion_router
 from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
 from app.api.support_message_routes import router as support_message_router
 from app.api.routes.debug import router as debug_router
@@ -30,6 +31,7 @@ api_router = APIRouter()
 api_router.include_router(article_group_router)
 api_router.include_router(barcode_router)
 api_router.include_router(day_article_router)
+api_router.include_router(household_capability_expansion_router)
 api_router.include_router(loyalty_stamp_router)
 api_router.include_router(support_message_router)
 api_router.include_router(debug_router)

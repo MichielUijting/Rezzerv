@@ -15,6 +15,7 @@ function keys(navigation) {
   })
   assert.equal(navigation.mode, 'legacy')
   assert.deepEqual(keys(navigation), [
+    'capabilities',
     'article-details',
     'article-groups',
     'privacy-data-sharing',
@@ -42,6 +43,7 @@ function keys(navigation) {
   })
   assert.equal(navigation.mode, 'dynamic')
   assert.deepEqual(keys(navigation), [
+    'capabilities',
     'article-details',
     'article-groups',
     'privacy-data-sharing',
@@ -67,6 +69,7 @@ function keys(navigation) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'capabilities',
     'privacy-data-sharing',
     'store-import',
     'household',
@@ -88,6 +91,7 @@ function keys(navigation) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'capabilities',
     'article-details',
     'article-groups',
     'privacy-data-sharing',
@@ -114,6 +118,7 @@ function keys(navigation) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'capabilities',
     'article-details',
     'article-groups',
     'privacy-data-sharing',
