@@ -9,7 +9,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.services import session_request_context
 from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.server_session_service import ServerSessionContext
 
 
@@ -29,10 +28,6 @@ MIGRATED_POST_ROUTES = {
     "/api/testing/reports/complete",
 }
 LATEST_REPORT_ROUTE = "/api/testing/reports/latest"
-HYBRID_CUTOVER_MUTATIONS = {
-    "/api/testing/regression/almost-out-prediction",
-    "/api/testing/regression/almost-out-self-test",
-}
 
 
 @pytest.fixture
@@ -296,13 +291,3 @@ def test_legacy_platform_admin_injection_is_never_called_by_migrated_router():
         and item.func.id == "require_platform_admin_user"
     ]
     assert not legacy_calls
-
-
-def test_migrated_post_routes_are_not_still_pre_gated_by_legacy_superuser_middleware():
-    for path in MIGRATED_POST_ROUTES:
-        assert ("POST", path) not in PROTECTED_MUTATIONS
-
-
-def test_hybrid_fixture_regressions_are_also_out_of_legacy_guard_after_9_1_6d3():
-    for path in HYBRID_CUTOVER_MUTATIONS:
-        assert ("POST", path) not in PROTECTED_MUTATIONS

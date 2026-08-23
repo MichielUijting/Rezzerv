@@ -10,9 +10,7 @@ on:
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/external_relation_batch_decision_route_authorization.py'
       - 'backend/app/services/external_relation_batch_store.py'
-      - 'backend/app/services/platform_admin_route_guard.py'
       - 'backend/app/services/session_request_context.py'
-      - 'backend/app/testing/receipt_admin_household_guard_contract.py'
       - 'backend/tests/test_external_relation_batch_decision_platform_authorization.py'
       - 'backend/tests/test_archived_receipt_purge_platform_authorization.py'
       - 'backend/tests/test_maintenance_recompute_platform_authorization.py'
@@ -26,9 +24,7 @@ on:
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/external_relation_batch_decision_route_authorization.py'
       - 'backend/app/services/external_relation_batch_store.py'
-      - 'backend/app/services/platform_admin_route_guard.py'
       - 'backend/app/services/session_request_context.py'
-      - 'backend/app/testing/receipt_admin_household_guard_contract.py'
       - 'backend/tests/test_external_relation_batch_decision_platform_authorization.py'
       - 'backend/tests/test_archived_receipt_purge_platform_authorization.py'
       - 'backend/tests/test_maintenance_recompute_platform_authorization.py'
@@ -63,8 +59,6 @@ jobs:
           python -m py_compile \
             app/session_entrypoint.py \
             app/services/external_relation_batch_decision_route_authorization.py \
-            app/services/platform_admin_route_guard.py \
-            app/testing/receipt_admin_household_guard_contract.py \
             tests/test_external_relation_batch_decision_platform_authorization.py \
             tests/test_archived_receipt_purge_platform_authorization.py \
             tests/test_maintenance_recompute_platform_authorization.py \
@@ -82,9 +76,3 @@ jobs:
             tests/test_maintenance_recompute_platform_authorization.py \
             tests/test_receipt_status_baseline_platform_authorization.py \
             tests/test_hybrid_regression_platform_authorization.py
-
-      - name: Run legacy platform guard contract
-        env:
-          PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
-        run: python -m app.testing.receipt_admin_household_guard_contract

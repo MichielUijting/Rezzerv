@@ -5,8 +5,6 @@ on:
     paths:
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/maintenance_recompute_route_authorization.py'
-      - 'backend/app/services/platform_admin_route_guard.py'
-      - 'backend/app/testing/receipt_admin_household_guard_contract.py'
       - 'backend/tests/test_maintenance_recompute_platform_authorization.py'
       - '.github/workflows/maintenance-recompute-platform-authorization.yml'
 
@@ -35,8 +33,6 @@ jobs:
           python -m py_compile \
             app/session_entrypoint.py \
             app/services/maintenance_recompute_route_authorization.py \
-            app/services/platform_admin_route_guard.py \
-            app/testing/receipt_admin_household_guard_contract.py \
             tests/server_session_route_guard_audit.py \
             tests/test_maintenance_recompute_platform_authorization.py \
             tests/test_kassa_diagnostic_platform_authorization.py \
@@ -57,9 +53,3 @@ jobs:
           PYTHONPATH: .
           DATABASE_URL: 'sqlite:///:memory:'
         run: python tests/server_session_route_guard_audit.py
-
-      - name: Run legacy platform guard contract
-        env:
-          PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
-        run: python -m app.testing.receipt_admin_household_guard_contract

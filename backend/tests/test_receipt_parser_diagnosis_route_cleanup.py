@@ -2,12 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.services import platform_admin_route_guard
-from app.services.receipt_admin_household_guard import (
-    deduplicate_receipt_parser_diagnosis_routes as compatibility_deduplicate,
-)
 from app.services.receipt_parser_diagnosis_route_cleanup import (
     deduplicate_receipt_parser_diagnosis_routes,
+    has_canonical_receipt_parser_diagnosis_routes,
 )
 
 
@@ -76,51 +73,33 @@ def test_deduplication_keeps_only_preferred_diagnosis_module():
     assert app.router.routes == [unrelated]
 
 
-def test_legacy_import_paths_reexport_neutral_cleanup_helper():
-    assert (
-        platform_admin_route_guard.deduplicate_receipt_parser_diagnosis_routes
-        is deduplicate_receipt_parser_diagnosis_routes
-    )
-    assert compatibility_deduplicate is deduplicate_receipt_parser_diagnosis_routes
-
-
-def test_legacy_installer_still_runs_cleanup_before_middleware(monkeypatch):
-    cleanup_calls = []
-    registered_middleware = []
-
-    class FakeApp:
-        def __init__(self):
-            self.state = SimpleNamespace()
-
-        def middleware(self, middleware_type: str):
-            assert middleware_type == "http"
-
-            def register(handler):
-                registered_middleware.append(handler)
-                return handler
-
-            return register
-
-    app = FakeApp()
-
-    def fake_cleanup(actual_app):
-        cleanup_calls.append(actual_app)
-        return 0
-
-    monkeypatch.setattr(
-        platform_admin_route_guard,
-        "deduplicate_receipt_parser_diagnosis_routes",
-        fake_cleanup,
+def test_canonical_route_readiness_requires_both_preferred_paths():
+    preferred_summary = _route(SUMMARY_PATH, PREFERRED_MODULE, "preferred-summary")
+    legacy_download = _route(DOWNLOAD_PATH, LEGACY_MODULE, "legacy-download")
+    app = SimpleNamespace(
+        router=SimpleNamespace(routes=[preferred_summary, legacy_download])
     )
 
-    platform_admin_route_guard.install_platform_admin_route_guard(
-        SimpleNamespace(
-            app=app,
-            require_platform_admin_user=lambda authorization: authorization,
+    assert has_canonical_receipt_parser_diagnosis_routes(app) is False
+
+    app.router.routes.append(
+        _route(DOWNLOAD_PATH, PREFERRED_MODULE, "preferred-download")
+    )
+
+    assert has_canonical_receipt_parser_diagnosis_routes(app) is True
+
+
+def test_canonical_route_readiness_ignores_legacy_duplicates_and_unrelated_routes():
+    app = SimpleNamespace(
+        router=SimpleNamespace(
+            routes=[
+                _route("/health", "app.api.health", "health"),
+                _route(SUMMARY_PATH, LEGACY_MODULE, "legacy-summary"),
+                _route(SUMMARY_PATH, PREFERRED_MODULE, "preferred-summary"),
+                _route(DOWNLOAD_PATH, LEGACY_MODULE, "legacy-download"),
+                _route(DOWNLOAD_PATH, PREFERRED_MODULE, "preferred-download"),
+            ]
         )
     )
 
-    assert cleanup_calls == [app]
-    assert len(registered_middleware) == 1
-    assert app.state.platform_admin_route_guard_installed is True
-    assert app.state.receipt_admin_household_guard_installed is True
+    assert has_canonical_receipt_parser_diagnosis_routes(app) is True

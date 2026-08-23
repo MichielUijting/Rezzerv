@@ -17,7 +17,6 @@ from app.services.kassa_diagnostic_route_authorization import (
     KASSA_STATUS_ROUTES,
     required_kassa_diagnostic_permission,
 )
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.server_session_service import ServerSessionContext
 
 
@@ -232,11 +231,6 @@ def test_platform_admin_revocation_is_effective_on_next_kassa_permission_check(
     with pytest.raises(HTTPException) as exc:
         session_request_context.require_platform_permission_from_session(permission)
     assert exc.value.status_code == 403
-
-
-def test_kassa_run_routes_are_removed_from_legacy_superuser_guard():
-    assert PROTECTED_MUTATIONS.isdisjoint(EXPECTED_RUN_ROUTES)
-    assert PROTECTED_MUTATIONS.isdisjoint(EXPECTED_STATUS_ROUTES)
 
 
 def _route_nodes(path: Path) -> dict[tuple[str, str], ast.FunctionDef | ast.AsyncFunctionDef]:

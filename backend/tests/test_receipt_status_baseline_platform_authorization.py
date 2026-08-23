@@ -10,7 +10,6 @@ from sqlalchemy.pool import StaticPool
 from app.services import session_request_context
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.maintenance_recompute_route_authorization import MAINTENANCE_RECOMPUTE_ROUTES
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.receipt_status_baseline_route_authorization import (
     RECEIPT_STATUS_BASELINE_DIAGNOSTICS_PERMISSION,
     RECEIPT_STATUS_BASELINE_REQUIRED_PERMISSIONS,
@@ -258,10 +257,6 @@ def test_platform_admin_revocation_is_effective_on_next_baseline_check(
             RECEIPT_STATUS_BASELINE_REQUIRED_PERMISSIONS
         )
     assert exc.value.status_code == 403
-
-
-def test_receipt_status_baseline_routes_are_removed_from_legacy_superuser_guard():
-    assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_ROUTES)
 
 
 def _route_nodes() -> dict[tuple[str, str], ast.FunctionDef | ast.AsyncFunctionDef]:

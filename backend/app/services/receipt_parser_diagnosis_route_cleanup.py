@@ -8,6 +8,21 @@ _DIAGNOSIS_DUPLICATE_PATHS = {
 _PREFERRED_DIAGNOSIS_MODULE = "app.api.receipt_diagnosis_routes"
 
 
+def has_canonical_receipt_parser_diagnosis_routes(app) -> bool:
+    """Return whether both canonical diagnosis routes are registered."""
+
+    canonical_paths: set[str] = set()
+    for route in app.router.routes:
+        path = str(getattr(route, "path", "") or "")
+        if path not in _DIAGNOSIS_DUPLICATE_PATHS:
+            continue
+        endpoint = getattr(route, "endpoint", None)
+        module = str(getattr(endpoint, "__module__", "") or "")
+        if module == _PREFERRED_DIAGNOSIS_MODULE:
+            canonical_paths.add(path)
+    return _DIAGNOSIS_DUPLICATE_PATHS.issubset(canonical_paths)
+
+
 def deduplicate_receipt_parser_diagnosis_routes(app) -> int:
     """Remove legacy duplicate receipt-parser diagnosis routes.
 

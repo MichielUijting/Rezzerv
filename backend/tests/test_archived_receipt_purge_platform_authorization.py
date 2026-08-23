@@ -16,7 +16,6 @@ from app.services.archived_receipt_purge_route_authorization import (
     reset_archived_receipt_purge_platform_context,
 )
 from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.server_session_service import ServerSessionContext
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 
@@ -292,8 +291,3 @@ def test_household_admin_bridge_falls_back_outside_recovery_request():
     )
     assert len(_named_calls(node, "archived_receipt_purge_household_context")) == 1
     assert len(_named_calls(node, "require_household_admin_from_session")) == 1
-
-
-def test_purge_route_is_removed_from_legacy_superuser_guard_only():
-    assert ("POST", ROUTE_PATH) not in PROTECTED_MUTATIONS
-    assert PROTECTED_MUTATIONS == set()

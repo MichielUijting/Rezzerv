@@ -13,7 +13,6 @@ from app.services.external_relation_batch_decision_route_authorization import (
     EXTERNAL_RELATION_BATCH_DECISION_PERMISSION,
     required_external_relation_batch_decision_permission,
 )
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.server_session_service import ServerSessionContext
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 
@@ -280,8 +279,3 @@ def test_session_boundary_enforces_link_existing_before_dispatch():
     assert "external_relation_batch_decision_permission" in source
     assert "required_external_relation_batch_decision_permission" in source
     assert "bind_canonical_platform_permission_grant(external_relation_batch_decision_permission" not in source
-
-
-def test_decision_route_is_removed_from_legacy_superuser_guard_and_guard_is_empty():
-    assert ("POST", ROUTE_PATH) not in PROTECTED_MUTATIONS
-    assert PROTECTED_MUTATIONS == set()
