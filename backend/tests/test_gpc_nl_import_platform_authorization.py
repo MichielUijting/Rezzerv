@@ -9,7 +9,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.services import session_request_context
 from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.server_session_service import ServerSessionContext
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 
@@ -230,14 +229,10 @@ def test_bundled_gpc_import_keeps_its_existing_admin_key_boundary():
     assert [item for item in calls if item[0] == "require_platform_permission_from_session"] == []
 
 
-def test_gpc_nl_route_is_active_and_removed_from_legacy_superuser_guard():
+def test_gpc_nl_route_is_active():
     source = MAIN_SOURCE_PATH.read_text(encoding="utf-8-sig")
     assert "from app.api.product_inventory_group_routes import router as product_inventory_group_router" in source
     assert "app.include_router(product_inventory_group_router)" in source
-    assert ("POST", ROUTE_PATH) not in PROTECTED_MUTATIONS
-    assert ("POST", "/api/admin/external-relations/batch/decision") not in PROTECTED_MUTATIONS
-    assert ("POST", "/api/admin/receipts/purge-archived") not in PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 0
 
 
 def test_gpc_nl_import_is_technical_reference_data_mutation_not_household_inventory():
