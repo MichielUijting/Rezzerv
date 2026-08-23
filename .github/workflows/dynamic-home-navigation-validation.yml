@@ -1,0 +1,59 @@
+name: Dynamic Home navigation validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/household_onboarding_routes.py'
+      - 'backend/tests/dynamic_navigation_product_projection_selftest.py'
+      - 'frontend/src/features/home/**'
+      - 'frontend/tests/dynamic-home-navigation.contract.mjs'
+      - 'frontend/tests/e2e/dynamic-home-navigation.frontend-regression.spec.js'
+      - '.github/workflows/dynamic-home-navigation-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Compile changed backend projection
+        run: python -m py_compile backend/app/api/household_onboarding_routes.py backend/tests/dynamic_navigation_product_projection_selftest.py
+
+      - name: Validate product configuration projection
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/dynamic_navigation_product_projection_selftest.py | tee /tmp/dynamic-product-projection.log
+          grep -F 'DYNAMIC_NAVIGATION_PRODUCT_PROJECTION_GREEN' /tmp/dynamic-product-projection.log
+
+      - name: Validate frontend navigation matrix
+        run: |
+          node frontend/tests/dynamic-home-navigation.contract.mjs | tee /tmp/dynamic-home-navigation.log
+          grep -F 'DYNAMIC_HOME_NAVIGATION_CONTRACT_GREEN' /tmp/dynamic-home-navigation.log
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Dynamic navigation gate marker
+        run: echo 'DYNAMIC_HOME_NAVIGATION_VALIDATION_GREEN'
