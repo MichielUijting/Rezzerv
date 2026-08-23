@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse
 
 PROTECTED_MUTATIONS = {
     ("POST", "/api/admin/external-relations/batch/decision"),
-    ("POST", "/api/admin/receipts/purge-archived"),
 }
 
 _DIAGNOSIS_DUPLICATE_PATHS = {

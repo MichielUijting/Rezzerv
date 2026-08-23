@@ -14,7 +14,6 @@ from app.services.platform_admin_route_guard import (
 
 EXPECTED_PROTECTED_MUTATIONS = {
     ("POST", "/api/admin/external-relations/batch/decision"),
-    ("POST", "/api/admin/receipts/purge-archived"),
 }
 
 MIGRATED_TEST_MUTATIONS = {
@@ -48,16 +47,21 @@ MIGRATED_GPC_NL_IMPORT_MUTATIONS = {
     ("POST", "/api/admin/product-groups/import-gpc-nl"),
 }
 
+MIGRATED_ARCHIVED_RECEIPT_PURGE_MUTATIONS = {
+    ("POST", "/api/admin/receipts/purge-archived"),
+}
+
 
 def run_contract() -> None:
     assert PROTECTED_MUTATIONS == EXPECTED_PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 2
+    assert len(PROTECTED_MUTATIONS) == 1
     assert ("POST", "/api/admin/inventory/groups/ensure-schema") not in PROTECTED_MUTATIONS
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_TEST_MUTATIONS)
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_KASSA_DIAGNOSTIC_MUTATIONS)
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_MAINTENANCE_RECOMPUTE_MUTATIONS)
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_RECEIPT_STATUS_BASELINE_MUTATIONS)
     assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_GPC_NL_IMPORT_MUTATIONS)
+    assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_ARCHIVED_RECEIPT_PURGE_MUTATIONS)
 
     app = FastAPI()
     calls: list[str] = []

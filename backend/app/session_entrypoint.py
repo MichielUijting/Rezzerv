@@ -18,6 +18,12 @@ from app.api.superuser_routes import create_superuser_router
 from app.api.superuser_household_routes import create_superuser_household_router
 from app.api.support_broadcast_routes import router as support_broadcast_router
 from app.services.actor_attribution_service import install_actor_attribution_tracking
+from app.services.archived_receipt_purge_route_authorization import (
+    archived_receipt_purge_household_context,
+    bind_archived_receipt_purge_platform_context,
+    required_archived_receipt_purge_permission,
+    reset_archived_receipt_purge_platform_context,
+)
 from app.services.authorization_ui_fixture_provisioning import (
     ensure_authorization_ui_fixture_member,
 )
@@ -92,13 +98,28 @@ def _is_replaced_session_route(route) -> bool:
     )
 
 
+def require_household_admin_with_platform_recovery(
+    authorization: str | None = None,
+    requested_household_id: str | None = None,
+) -> dict:
+    """Keep household-admin semantics except for the authorized purge route."""
+
+    recovery_context = archived_receipt_purge_household_context(requested_household_id)
+    if recovery_context is not None:
+        return recovery_context
+    return require_household_admin_from_session(
+        authorization,
+        requested_household_id,
+    )
+
+
 def activate_server_side_route_context() -> None:
     """Make the server session the sole authority for existing route guards."""
 
     legacy_main.get_current_user_from_authorization = legacy_user_payload_from_session
     legacy_main.resolve_household_context_for_user = legacy_household_context_from_session
     legacy_main.require_household_context = household_context_from_session
-    legacy_main.require_household_admin_context = require_household_admin_from_session
+    legacy_main.require_household_admin_context = require_household_admin_with_platform_recovery
     legacy_main.resolve_authorized_household_id = authorized_household_id_from_session
     legacy_main.get_request_household_id = request_household_id_from_session
     legacy_main.require_platform_admin_user = require_platform_admin_from_session
@@ -115,6 +136,7 @@ def activate_server_side_route_context() -> None:
 async def server_session_request_context(request: Request, call_next):
     token = bind_request_session(request)
     canonical_permission_grant_token = None
+    archived_receipt_purge_context_token = None
     try:
         # Bind the canonical actor before any route/service can write domain data.
         # Public requests without a valid server session remain unattributed.
@@ -179,6 +201,19 @@ async def server_session_request_context(request: Request, call_next):
                 request.headers.get("authorization"),
             )
 
+        archived_receipt_purge_permission = required_archived_receipt_purge_permission(
+            request.method,
+            request.url.path,
+        )
+        if archived_receipt_purge_permission is not None:
+            purge_context = require_platform_permission_from_session(
+                archived_receipt_purge_permission,
+                request.headers.get("authorization"),
+            )
+            archived_receipt_purge_context_token = bind_archived_receipt_purge_platform_context(
+                purge_context
+            )
+
         # External database routes used to rely only on frontend navigation.
         # Enforce the platform permission matrix server-side for every request.
         required_permission = required_external_database_permission(
@@ -203,6 +238,10 @@ async def server_session_request_context(request: Request, call_next):
             headers=exc.headers,
         )
     finally:
+        if archived_receipt_purge_context_token is not None:
+            reset_archived_receipt_purge_platform_context(
+                archived_receipt_purge_context_token
+            )
         if canonical_permission_grant_token is not None:
             reset_canonical_platform_permission_grant(
                 canonical_permission_grant_token
