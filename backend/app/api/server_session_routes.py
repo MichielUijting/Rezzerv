@@ -142,6 +142,37 @@ def _clear_session_cookie(response: Response, configuration: SessionApiConfigura
     )
 
 
+def _public_session_payload_with_live_household_name(conn, context) -> dict[str, Any]:
+    payload = dict(public_session_payload(context))
+    if context.context_type != "regular" or not context.active_household_id:
+        return payload
+
+    columns = {
+        str(column.get("name") or "")
+        for column in inspect(conn).get_columns("household_registry")
+    }
+    household_id_column = "id" if "id" in columns else (
+        "household_id" if "household_id" in columns else None
+    )
+    household_name_column = "naam" if "naam" in columns else (
+        "name" if "name" in columns else None
+    )
+    if not household_id_column or not household_name_column:
+        return payload
+
+    row = conn.execute(text(f"""
+        SELECT {household_name_column} AS household_name
+        FROM household_registry
+        WHERE CAST({household_id_column} AS TEXT) = :household_id
+        LIMIT 1
+    """), {"household_id": str(context.active_household_id)}).mappings().first()
+    if not row:
+        raise HTTPException(status_code=403, detail="Actief huishouden ontbreekt")
+
+    payload["active_household_name"] = str(row.get("household_name") or "").strip()
+    return payload
+
+
 def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
     user_columns = {
         str(column.get("name") or "")
@@ -362,13 +393,14 @@ def create_server_session_router(
                     active_household_id=account.household_id,
                     replace_existing=True,
                 )
+                session_payload = _public_session_payload_with_live_household_name(conn, context)
         except ConsumerAccountExistsError as exc:
             raise HTTPException(
                 status_code=409,
                 detail="Er bestaat al een account met dit e-mailadres.",
             ) from exc
         _set_session_cookie(response, raw_session_id, configuration)
-        return public_session_payload(context)
+        return session_payload
 
     @router.post("/api/auth/login")
     def login(payload: SessionLoginRequest, response: Response):
@@ -393,15 +425,16 @@ def create_server_session_router(
                     active_household_id=identity["active_household_id"],
                     replace_existing=True,
                 )
+            session_payload = _public_session_payload_with_live_household_name(conn, context)
         _set_session_cookie(response, raw_session_id, configuration)
-        return public_session_payload(context)
+        return session_payload
 
     @router.get("/api/session")
     def get_session(request: Request):
         raw_session_id = request.cookies.get(SESSION_COOKIE_NAME)
         with engine.begin() as conn:
             context = resolve_server_session(conn, raw_session_id)
-        return public_session_payload(context)
+            return _public_session_payload_with_live_household_name(conn, context)
 
     @router.post("/api/auth/logout", status_code=204)
     def logout(request: Request, response: Response):

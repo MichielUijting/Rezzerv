@@ -9,20 +9,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
 
-from app.api.server_session_routes import (
-    SessionApiConfiguration,
-    create_server_session_router,
-)
+from app.api.server_session_routes import SessionApiConfiguration, create_server_session_router
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.household_onboarding_service import (
     ONBOARDING_STATUS_COMPLETED,
+    ONBOARDING_STATUS_IN_PROGRESS,
     ensure_household_onboarding_foundation,
     resolve_household_onboarding_state,
 )
-from app.services.household_product_configuration_service import (
-    resolve_household_product_configuration,
-)
+from app.services.household_product_configuration_service import resolve_household_product_configuration
 from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
 
 
@@ -57,7 +53,6 @@ def _prepare_database(engine) -> None:
         """))
         ensure_roles_v2_account_and_household_foundation(conn)
         ensure_authorization_foundation(conn)
-
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type)
             VALUES ('shared-household', 'Gedeeld huishouden', 'regular')
@@ -99,12 +94,10 @@ def _prepare_database(engine) -> None:
 
 def _application(engine) -> FastAPI:
     app = FastAPI()
-    app.include_router(
-        create_server_session_router(
-            engine,
-            SessionApiConfiguration(cookie_secure=False),
-        )
-    )
+    app.include_router(create_server_session_router(
+        engine,
+        SessionApiConfiguration(cookie_secure=False),
+    ))
     return app
 
 
@@ -124,6 +117,27 @@ def _register_and_select(client: TestClient, *, email: str) -> str:
     return household_id
 
 
+def _profile_payload(**overrides):
+    payload = {
+        "inventory_tracking_level": "presence",
+        "global_locations_enabled": False,
+        "almost_out_enabled": True,
+        "shopping_enabled": False,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _finish_shared(client: TestClient, *, name: str, mode: str = "alone"):
+    response = client.post(
+        "/api/onboarding/shared-household-minimum",
+        json={"household_name": name, "household_usage_mode": mode},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["onboarding_status"] == ONBOARDING_STATUS_COMPLETED
+    return response
+
+
 def run() -> int:
     checks: list[str] = []
     with tempfile.TemporaryDirectory(prefix="rezzerv-wat-inhuis-") as tmp:
@@ -140,12 +154,7 @@ def run() -> int:
             forged = anonymous.post(
                 "/api/onboarding/wat-inhuis",
                 headers={"Authorization": "Bearer forged-admin"},
-                json={
-                    "inventory_tracking_level": "presence",
-                    "global_locations_enabled": False,
-                    "almost_out_enabled": False,
-                    "shopping_enabled": False,
-                },
+                json=_profile_payload(),
             )
             assert forged.status_code == 401
         checks.append("forged_bearer_cannot_complete_wat_inhuis")
@@ -156,15 +165,7 @@ def run() -> int:
                 json={"email": "shared-member@rezzerv.local", "password": "MemberPass123!"},
             )
             assert login.status_code == 200
-            forbidden = member.post(
-                "/api/onboarding/wat-inhuis",
-                json={
-                    "inventory_tracking_level": "presence",
-                    "global_locations_enabled": False,
-                    "almost_out_enabled": False,
-                    "shopping_enabled": False,
-                },
-            )
+            forbidden = member.post("/api/onboarding/wat-inhuis", json=_profile_payload())
             assert forbidden.status_code == 403
         checks.append("member_cannot_change_wat_inhuis_configuration")
 
@@ -172,23 +173,12 @@ def run() -> int:
             household_id = _register_and_select(consumer, email="wat-presence@example.com")
             invalid_level = consumer.post(
                 "/api/onboarding/wat-inhuis",
-                json={
-                    "inventory_tracking_level": "exact",
-                    "global_locations_enabled": False,
-                    "almost_out_enabled": False,
-                    "shopping_enabled": False,
-                },
+                json=_profile_payload(inventory_tracking_level="exact"),
             )
             assert invalid_level.status_code == 422
             cross_household = consumer.post(
                 "/api/onboarding/wat-inhuis",
-                json={
-                    "inventory_tracking_level": "presence",
-                    "global_locations_enabled": False,
-                    "almost_out_enabled": False,
-                    "shopping_enabled": False,
-                    "household_id": "shared-household",
-                },
+                json={**_profile_payload(), "household_id": "shared-household"},
             )
             assert cross_household.status_code == 422
         with engine.begin() as conn:
@@ -208,19 +198,12 @@ def run() -> int:
                 json={"email": "wat-presence@example.com", "password": "SterkWachtwoord123!"},
             )
             assert login.status_code == 200
-            completed = consumer.post(
-                "/api/onboarding/wat-inhuis",
-                json={
-                    "inventory_tracking_level": "presence",
-                    "global_locations_enabled": False,
-                    "almost_out_enabled": True,
-                    "shopping_enabled": False,
-                },
-            )
-            assert completed.status_code == 200, completed.text
-            payload = completed.json()
-            assert payload["onboarding_status"] == ONBOARDING_STATUS_COMPLETED
-            assert payload["primary_use_case"] == "wat_inhuis"
+            profile = consumer.post("/api/onboarding/wat-inhuis", json=_profile_payload())
+            assert profile.status_code == 200, profile.text
+            payload = profile.json()
+            assert payload["onboarding_status"] == ONBOARDING_STATUS_IN_PROGRESS
+            assert payload["onboarding_step"] == "shared_household_minimum"
+            assert payload["shared_household_minimum_required"] is True
             configuration = payload["product_configuration"]
             assert configuration["inventory_tracking_level"] == "presence"
             assert configuration["location_tracking_level"] == "none"
@@ -229,36 +212,41 @@ def run() -> int:
             assert configuration["almost_out_notifications_enabled"] is False
             assert configuration["receipt_processing_enabled"] is False
             assert configuration["recipes_enabled"] is False
-        checks.append("presence_without_locations_can_complete_wat_inhuis")
+            _finish_shared(consumer, name="Huis Wat Inhuis", mode="together")
+        checks.append("presence_without_locations_advances_to_shared_minimum_then_completes")
 
         with engine.begin() as conn:
             state = resolve_household_onboarding_state(conn, household_id)
             assert state.onboarding_status == ONBOARDING_STATUS_COMPLETED
             assert state.onboarding_completed_at is not None
+            assert state.household_usage_mode == "together"
+            assert state.household_name == "Huis Wat Inhuis"
             configuration = resolve_household_product_configuration(conn, household_id)
             assert configuration.inventory_tracking_level == "presence"
             assert configuration.location_tracking_level == "none"
             assert configuration.almost_out_enabled is True
             assert configuration.shopping_enabled is False
-        checks.append("wat_inhuis_configuration_persists_server_side")
+        checks.append("wat_inhuis_configuration_and_shared_minimum_persist_server_side")
 
         with TestClient(app) as detailed:
             detailed_household_id = _register_and_select(detailed, email="wat-quantity@example.com")
-            completed = detailed.post(
+            profile = detailed.post(
                 "/api/onboarding/wat-inhuis",
-                json={
-                    "inventory_tracking_level": "quantity",
-                    "global_locations_enabled": True,
-                    "almost_out_enabled": False,
-                    "shopping_enabled": True,
-                },
+                json=_profile_payload(
+                    inventory_tracking_level="quantity",
+                    global_locations_enabled=True,
+                    almost_out_enabled=False,
+                    shopping_enabled=True,
+                ),
             )
-            assert completed.status_code == 200, completed.text
-            configuration = completed.json()["product_configuration"]
+            assert profile.status_code == 200, profile.text
+            assert profile.json()["onboarding_step"] == "shared_household_minimum"
+            configuration = profile.json()["product_configuration"]
             assert configuration["inventory_tracking_level"] == "quantity"
             assert configuration["location_tracking_level"] == "global"
             assert configuration["shopping_enabled"] is True
             assert configuration["almost_out_enabled"] is False
+            _finish_shared(detailed, name="Huis met aantallen")
         with engine.begin() as conn:
             detailed_configuration = resolve_household_product_configuration(conn, detailed_household_id)
             assert detailed_configuration.inventory_tracking_level == "quantity"
@@ -274,16 +262,8 @@ def run() -> int:
             state = returning.get("/api/onboarding")
             assert state.status_code == 200
             assert state.json()["onboarding_status"] == ONBOARDING_STATUS_COMPLETED
-            assert state.json()["profile_follow_up_required"] is False
-            duplicate = returning.post(
-                "/api/onboarding/wat-inhuis",
-                json={
-                    "inventory_tracking_level": "quantity",
-                    "global_locations_enabled": True,
-                    "almost_out_enabled": True,
-                    "shopping_enabled": True,
-                },
-            )
+            assert state.json()["shared_household_minimum_required"] is False
+            duplicate = returning.post("/api/onboarding/wat-inhuis", json=_profile_payload())
             assert duplicate.status_code == 409
         checks.append("completed_wat_inhuis_survives_login_and_cannot_restart")
 
@@ -299,15 +279,7 @@ def run() -> int:
                 json={"primary_use_case": "waar_inhuis"},
             )
             assert selected.status_code == 200
-            wrong_profile = other_profile.post(
-                "/api/onboarding/wat-inhuis",
-                json={
-                    "inventory_tracking_level": "presence",
-                    "global_locations_enabled": False,
-                    "almost_out_enabled": False,
-                    "shopping_enabled": False,
-                },
-            )
+            wrong_profile = other_profile.post("/api/onboarding/wat-inhuis", json=_profile_payload())
             assert wrong_profile.status_code == 409
             with engine.begin() as conn:
                 tables = inspect(conn).get_table_names()

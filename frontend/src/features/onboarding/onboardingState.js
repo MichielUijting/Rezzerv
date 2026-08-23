@@ -119,6 +119,15 @@ export function completeWaarInhuisOnboarding(context, preferences) {
   )
 }
 
+export function completeSharedHouseholdMinimum(context, preferences) {
+  return completeProfileOnboarding(
+    context,
+    '/api/onboarding/shared-household-minimum',
+    preferences,
+    'Huishouden afronden mislukt.',
+  )
+}
+
 export function requiresInitialUseCase(state) {
   return Boolean(
     state?.initial_choice_required
@@ -150,10 +159,19 @@ export function isWaarInhuisFollowUp(state) {
   )
 }
 
+export function isSharedHouseholdMinimum(state) {
+  return Boolean(
+    state?.onboarding_status === 'in_progress'
+    && state?.onboarding_step === 'shared_household_minimum'
+    && state?.shared_household_minimum_required,
+  )
+}
+
 export function requiresManagedOnboarding(state) {
   if (!state?.can_manage) return false
   if (state?.initial_choice_required) return true
   return isInhuisHalenFollowUp(state)
     || isWatInhuisFollowUp(state)
     || isWaarInhuisFollowUp(state)
+    || isSharedHouseholdMinimum(state)
 }

@@ -2,15 +2,18 @@ import { useState } from 'react'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
-import { readStoredAuthContext } from '../../lib/authSession.js'
+import { fetchAuthContext, readStoredAuthContext } from '../../lib/authSession.js'
 import InhuisHalenOnboardingPage from './InhuisHalenOnboardingPage.jsx'
 import WatInhuisOnboardingPage from './WatInhuisOnboardingPage.jsx'
 import WaarInhuisOnboardingPage from './WaarInhuisOnboardingPage.jsx'
+import SharedHouseholdMinimumPage from './SharedHouseholdMinimumPage.jsx'
 import {
   completeInhuisHalenOnboarding,
+  completeSharedHouseholdMinimum,
   completeWatInhuisOnboarding,
   completeWaarInhuisOnboarding,
   isInhuisHalenFollowUp,
+  isSharedHouseholdMinimum,
   isWatInhuisFollowUp,
   isWaarInhuisFollowUp,
   readHouseholdOnboarding,
@@ -64,7 +67,6 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     try {
       const updated = await completeInhuisHalenOnboarding(context, preferences)
       setOnboarding(updated)
-      onUseCaseSelected?.()
     } catch (err) {
       setError(err?.message || 'Inhuis halen instellen mislukt.')
     } finally {
@@ -78,7 +80,6 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     try {
       const updated = await completeWatInhuisOnboarding(context, preferences)
       setOnboarding(updated)
-      onUseCaseSelected?.()
     } catch (err) {
       setError(err?.message || 'Wat Inhuis instellen mislukt.')
     } finally {
@@ -92,9 +93,23 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     try {
       const updated = await completeWaarInhuisOnboarding(context, preferences)
       setOnboarding(updated)
-      onUseCaseSelected?.()
     } catch (err) {
       setError(err?.message || 'Waar Inhuis instellen mislukt.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  async function completeSharedMinimum(preferences) {
+    setError('')
+    setSavingProfile(true)
+    try {
+      const updated = await completeSharedHouseholdMinimum(context, preferences)
+      setOnboarding(updated)
+      await fetchAuthContext({ force: true })
+      onUseCaseSelected?.()
+    } catch (err) {
+      setError(err?.message || 'Huishouden afronden mislukt.')
     } finally {
       setSavingProfile(false)
     }
@@ -103,6 +118,7 @@ export default function OnboardingPage({ onUseCaseSelected }) {
   const showInhuisHalenFollowUp = isInhuisHalenFollowUp(onboarding)
   const showWatInhuisFollowUp = isWatInhuisFollowUp(onboarding)
   const showWaarInhuisFollowUp = isWaarInhuisFollowUp(onboarding)
+  const showSharedHouseholdMinimum = isSharedHouseholdMinimum(onboarding)
 
   return (
     <div className="rz-screen" data-testid="onboarding-use-case-page">
@@ -125,6 +141,13 @@ export default function OnboardingPage({ onUseCaseSelected }) {
             ) : showWaarInhuisFollowUp ? (
               <WaarInhuisOnboardingPage
                 onSubmit={completeWaarInhuis}
+                saving={savingProfile}
+                error={error}
+              />
+            ) : showSharedHouseholdMinimum ? (
+              <SharedHouseholdMinimumPage
+                initialHouseholdName={onboarding?.household_name || ''}
+                onSubmit={completeSharedMinimum}
                 saving={savingProfile}
                 error={error}
               />
