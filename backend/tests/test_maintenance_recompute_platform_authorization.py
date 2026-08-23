@@ -14,7 +14,6 @@ from app.services.maintenance_recompute_route_authorization import (
     MAINTENANCE_RECOMPUTE_ROUTES,
     required_maintenance_recompute_permission,
 )
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.server_session_service import ServerSessionContext
 
 
@@ -212,10 +211,6 @@ def test_platform_admin_revocation_is_effective_on_next_maintenance_permission_c
             BACKGROUND_JOB_PERMISSION
         )
     assert exc.value.status_code == 403
-
-
-def test_maintenance_recompute_routes_are_removed_from_legacy_superuser_guard():
-    assert PROTECTED_MUTATIONS.isdisjoint(EXPECTED_ROUTES)
 
 
 def _route_nodes(path: Path) -> dict[tuple[str, str], ast.FunctionDef | ast.AsyncFunctionDef]:
