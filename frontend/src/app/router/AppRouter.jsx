@@ -3,6 +3,7 @@ import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams }
 import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
+import RegisterPage from '../../features/auth/RegisterPage'
 import HomePage from '../../features/home/HomePage'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
 import KassaPage from '../../features/kassa/KassaPage.jsx'
@@ -45,6 +46,14 @@ function LoginRoute() {
     navigate('/home', { replace: false })
   }
   return <LoginPage onLoggedIn={handleLogin} />
+}
+
+function RegisterRoute() {
+  const navigate = useNavigate()
+  function handleRegistered() {
+    navigate('/home', { replace: true })
+  }
+  return <RegisterPage onRegistered={handleRegistered} />
 }
 
 function ResetSessionRoute() {
@@ -93,6 +102,7 @@ function ProtectedSuperuser({ children }) {
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
+  { path: '/registreren', element: <RegisterRoute /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/home', element: <Protected><HomePage /></Protected> },

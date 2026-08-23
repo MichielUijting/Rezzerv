@@ -6,9 +6,12 @@ on:
       - 'backend/app/api/server_session_routes.py'
       - 'backend/app/services/server_session_service.py'
       - 'backend/app/services/session_request_context.py'
+      - 'backend/app/services/consumer_account_provisioning.py'
+      - 'backend/app/services/password_service.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/main.py'
       - 'backend/tests/server_session_security_selftest.py'
+      - 'backend/tests/consumer_account_registration_selftest.py'
       - 'backend/tests/server_session_route_guard_audit.py'
       - 'backend/requirements.txt'
       - '.github/workflows/server-side-session-security.yml'
@@ -37,8 +40,11 @@ jobs:
             app/api/server_session_routes.py \
             app/services/server_session_service.py \
             app/services/session_request_context.py \
+            app/services/consumer_account_provisioning.py \
+            app/services/password_service.py \
             app/session_entrypoint.py \
             tests/server_session_security_selftest.py \
+            tests/consumer_account_registration_selftest.py \
             tests/server_session_route_guard_audit.py
       - name: Run Rezzerv server-side session security selftest
         env:
@@ -46,6 +52,11 @@ jobs:
           REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
           PYTHONPATH=. python tests/server_session_security_selftest.py
+      - name: Run consumer account foundation selftest
+        env:
+          REZZERV_SESSION_COOKIE_SECURE: 'false'
+        run: |
+          PYTHONPATH=. python tests/consumer_account_registration_selftest.py
       - name: Audit legacy route guards
         run: |
           PYTHONPATH=. python tests/server_session_route_guard_audit.py

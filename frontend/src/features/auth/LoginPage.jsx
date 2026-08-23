@@ -1,3 +1,5 @@
+import React from 'react'
+import { Link } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Input from '../../ui/Input.jsx'
@@ -39,7 +41,7 @@ export default function LoginPage({ onLoggedIn }) {
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card className="rz-card-login">
-<form className="rz-form" onSubmit={onSubmit}>
+            <form className="rz-form" onSubmit={onSubmit}>
               <Input
                 label="E-mail"
                 value={email}
@@ -60,12 +62,16 @@ export default function LoginPage({ onLoggedIn }) {
                 {loading ? 'Bezig...' : 'Inloggen'}
               </Button>
 
+              <div style={{ textAlign: 'center' }}>
+                <Link to="/registreren" data-testid="register-link">Nog geen account? Account maken</Link>
+              </div>
+
               {loginMessage && !error ? <div className="rz-inline-feedback rz-inline-feedback--warning">{loginMessage}</div> : null}
               {error && <div className="rz-alert">{error}</div>}
             </form>
           </Card>
         </div>
       </div>
-</div>
+    </div>
   )
 }
