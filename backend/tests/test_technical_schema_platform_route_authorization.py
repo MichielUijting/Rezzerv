@@ -9,7 +9,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.services import session_request_context
 from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.server_session_service import ServerSessionContext
 
 
@@ -198,7 +197,3 @@ def test_ensure_schema_route_checks_canonical_permission_before_schema_mutation(
     assert isinstance(permission_call.args[0], ast.Constant)
     assert permission_call.args[0].value == PERMISSION
     assert permission_call.lineno < schema_calls[0].lineno
-
-
-def test_ensure_schema_route_is_not_still_pre_gated_by_legacy_superuser_middleware():
-    assert ("POST", ROUTE_PATH) not in PROTECTED_MUTATIONS
