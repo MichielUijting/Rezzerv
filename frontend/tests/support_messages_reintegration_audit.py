@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "src"
 HOME = ROOT / "features" / "home" / "HomePage.jsx"
+HOME_NAVIGATION = ROOT / "features" / "home" / "homeNavigation.js"
 ROUTER = ROOT / "app" / "router" / "AppRouter.jsx"
 PAGE = ROOT / "features" / "support" / "HouseholdSupportPage.jsx"
 API = ROOT / "features" / "support" / "supportApi.js"
@@ -13,15 +14,16 @@ SUPERUSER_OVERVIEW = ROOT / "features" / "superuser" / "SuperuserOverviewSection
 def run() -> int:
     failures: list[str] = []
     home = HOME.read_text(encoding="utf-8")
+    navigation = HOME_NAVIGATION.read_text(encoding="utf-8")
     router = ROUTER.read_text(encoding="utf-8")
     page = PAGE.read_text(encoding="utf-8")
     api = API.read_text(encoding="utf-8")
     overview = SUPERUSER_OVERVIEW.read_text(encoding="utf-8")
 
     checks = {
-        "Meldingen-tegel bestaat voor gewone gebruiker": "key: 'meldingen'" in home,
-        "Meldingen-tegel verborgen voor platform-superuser": "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser" in home,
-        "gewone Meldingen-tegel opent huishoudroute": "if (key === 'meldingen') navigate('/meldingen')" in home,
+        "Meldingen-tegel bestaat voor gewone gebruiker": "key: 'meldingen'" in navigation,
+        "Meldingen-tegel verborgen voor platform-superuser": "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser" in navigation,
+        "gewone Meldingen-tegel opent huishoudroute": "meldingen: '/meldingen'" in home,
         "Superuser Meldingen-ingang staat in Beheercentrum": "navigate(notificationRoute)" in overview and "Meldingen (" in overview,
         "Meldingen-route is beveiligd": "path: '/meldingen'" in router and "<Protected><HouseholdSupportPage" in router,
         "platform-Meldingen-route blijft beveiligd": "path: '/superuser/meldingen'" in router and "PlatformSupportPage" in router,

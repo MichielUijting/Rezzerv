@@ -20,6 +20,7 @@ from app.services.household_onboarding_service import (
 )
 from app.services.household_product_configuration_service import (
     public_household_product_configuration_payload,
+    resolve_household_product_configuration,
     save_inhuis_halen_configuration,
     save_wat_inhuis_configuration,
     save_waar_inhuis_configuration,
@@ -247,6 +248,20 @@ def _require_profile_follow_up(conn, *, household_id: str, primary_use_case: str
         )
 
 
+def _public_onboarding_with_product_configuration(conn, state, *, can_manage: bool) -> dict:
+    try:
+        configuration = resolve_household_product_configuration(conn, state.household_id)
+    except LookupError:
+        configuration_payload = None
+    else:
+        configuration_payload = public_household_product_configuration_payload(configuration)
+
+    return {
+        **public_household_onboarding_payload(state, can_manage=can_manage),
+        "product_configuration": configuration_payload,
+    }
+
+
 def create_household_onboarding_router(engine: Engine) -> APIRouter:
     router = APIRouter()
 
@@ -259,7 +274,8 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 str(context.active_household_id),
             )
             can_manage = _can_manage_onboarding(conn, context)
-            return public_household_onboarding_payload(
+            return _public_onboarding_with_product_configuration(
+                conn,
                 state,
                 can_manage=can_manage,
             )
@@ -280,7 +296,8 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 )
             except OnboardingAlreadyCompletedError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
-            return public_household_onboarding_payload(
+            return _public_onboarding_with_product_configuration(
+                conn,
                 state,
                 can_manage=True,
             )
@@ -441,7 +458,8 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
             except ValueError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-            return public_household_onboarding_payload(
+            return _public_onboarding_with_product_configuration(
+                conn,
                 completed_state,
                 can_manage=True,
             )

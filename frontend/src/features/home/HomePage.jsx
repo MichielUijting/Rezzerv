@@ -4,6 +4,7 @@ import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import {
+  canCurrentUserPerform,
   fetchAuthContext,
   isFrontteamMemberFromContext,
   isHouseholdAdminFromContext,
@@ -11,49 +12,68 @@ import {
   logoutServerSession,
   readStoredAuthContext,
 } from '../../lib/authSession.js'
-
-const tiles = [
-  { key: 'meldingen', label: 'Meldingen', icon: '✉️' },
-  { key: 'bijna-op', label: 'Bijna op', icon: '📉' },
-  { key: 'winkelen', label: 'Winkelen', icon: '🛒' },
-  { key: 'prognoses', label: 'Prognoses', icon: '📊' },
-  { key: 'uitlenen', label: 'Uitlenen', icon: '🔁' },
-  { key: 'voorraad', label: 'Voorraad', icon: '📦' },
-  { key: 'productgroepen', label: 'Productgroepen', icon: '🧩' },
-  { key: 'kassabonnen', label: 'Uitpakken', icon: '🧾' },
-  { key: 'kassa', label: 'Kassa', icon: '🧾' },
-  { key: 'spaartegoeden', label: 'Spaartegoeden', icon: '🪙' },
-  { key: 'externe-databases', label: 'Externe databases', icon: '🗄️' },
-  { key: 'catalogus', label: 'Catalogus', icon: 'CAT' },
-  { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳' },
-  { key: 'recepten', label: 'Recepten', icon: '🍳' },
-  { key: 'bestellen', label: 'Bestellen', icon: '📋' },
-  { key: 'verlengen', label: 'Verlengen', icon: '⏳' },
-  { key: 'instellingen', label: 'Instellingen', icon: '⚙️' },
-  { key: 'admin', label: 'Admin', icon: '🛠️' },
-  { key: 'superuser', label: 'Superuser', icon: '🛡️' },
-]
+import {
+  fetchHouseholdOnboarding,
+  readHouseholdOnboarding,
+} from '../onboarding/onboardingState.js'
+import { buildHomeNavigation } from './homeNavigation.js'
 
 function visibilityFromContext(context) {
   return {
     canOpenAdmin: isHouseholdAdminFromContext(context),
     canOpenExternalDatabases: isFrontteamMemberFromContext(context),
     isPlatformSuperuser: isPlatformSuperuserFromContext(context),
+    canManageLocations: canCurrentUserPerform('locations.manage', context),
   }
+}
+
+const TILE_ROUTES = {
+  meldingen: '/meldingen',
+  'bijna-op': '/bijna-op',
+  winkelen: '/winkelen',
+  voorraad: '/voorraad',
+  productgroepen: '/productgroepen',
+  kassabonnen: '/kassabonnen',
+  kassa: '/kassa',
+  spaartegoeden: '/spaartegoeden',
+  'externe-databases': '/externe-databases',
+  catalogus: '/catalogus',
+  instellingen: '/instellingen',
+  locaties: '/instellingen/locaties',
+  admin: '/admin',
+  superuser: '/superuser',
 }
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const [context, setContext] = useState(() => readStoredAuthContext())
+  const initialContext = readStoredAuthContext()
+  const [context, setContext] = useState(initialContext)
+  const [onboarding, setOnboarding] = useState(() => readHouseholdOnboarding(initialContext))
+  const [showMore, setShowMore] = useState(false)
   const visibility = visibilityFromContext(context)
+  const navigation = buildHomeNavigation({ onboarding, visibility })
 
   useEffect(() => {
     let cancelled = false
-    fetchAuthContext()
-      .then((nextContext) => {
-        if (!cancelled) setContext(nextContext)
-      })
-      .catch(() => {})
+
+    async function refreshHomeContext() {
+      try {
+        const nextContext = await fetchAuthContext()
+        if (cancelled) return
+        setContext(nextContext)
+
+        if (nextContext?.context_type === 'regular') {
+          const nextOnboarding = await fetchHouseholdOnboarding(nextContext, { force: true })
+          if (!cancelled) setOnboarding(nextOnboarding)
+        } else if (!cancelled) {
+          setOnboarding(null)
+        }
+      } catch {
+        // AuthGuard remains authoritative for session failures.
+      }
+    }
+
+    refreshHomeContext()
     return () => {
       cancelled = true
     }
@@ -83,28 +103,26 @@ export default function HomePage() {
     )
   }
 
-  function openTile(key) {
-    if (key === 'meldingen') navigate('/meldingen')
-    if (key === 'bijna-op') navigate('/bijna-op')
-    if (key === 'winkelen') navigate('/winkelen')
-    if (key === 'voorraad') navigate('/voorraad')
-    if (key === 'productgroepen') navigate('/productgroepen')
-    if (key === 'kassabonnen') navigate('/kassabonnen')
-    if (key === 'kassa') navigate('/kassa')
-    if (key === 'spaartegoeden') navigate('/spaartegoeden')
-    if (key === 'externe-databases') navigate('/externe-databases')
-    if (key === 'catalogus') navigate('/catalogus')
-    if (key === 'instellingen') navigate('/instellingen')
-    if (key === 'admin') navigate('/admin')
-    if (key === 'superuser') navigate('/superuser')
+  function openTile(tile) {
+    const route = TILE_ROUTES[tile.key]
+    if (tile.clickable && route) navigate(route)
   }
 
-  function isVisible(tile) {
-    if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser
-    if (tile.key === 'admin') return visibility.canOpenAdmin
-    if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
-    if (tile.key === 'superuser') return visibility.isPlatformSuperuser
-    return true
+  function renderTile(tile) {
+    const route = TILE_ROUTES[tile.key]
+    const clickable = Boolean(tile.clickable && route)
+    return (
+      <div
+        key={tile.key}
+        className="rz-tile"
+        data-testid={`home-tile-${tile.key}`}
+        onClick={() => clickable && openTile(tile)}
+        style={{ cursor: clickable ? 'pointer' : 'default' }}
+      >
+        <div className="rz-tile-icon" aria-hidden="true">{tile.icon}</div>
+        <div className="rz-tile-label">{tile.label}</div>
+      </div>
+    )
   }
 
   return (
@@ -113,17 +131,47 @@ export default function HomePage() {
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card className="rz-card-home">
-            <div className="rz-tile-grid" role="navigation" aria-label="Acties">
-              {tiles.filter(isVisible).map((t) => {
-                const clickable = ['meldingen', 'bijna-op', 'winkelen', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus', 'superuser'].includes(t.key)
-                return (
-                  <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
-                    <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
-                    <div className="rz-tile-label">{t.label}</div>
+            {navigation.mode === 'legacy' ? (
+              <div
+                className="rz-tile-grid"
+                role="navigation"
+                aria-label="Acties"
+                data-testid="legacy-home-navigation"
+              >
+                {navigation.primaryTiles.map(renderTile)}
+              </div>
+            ) : (
+              <div data-testid="dynamic-home-navigation">
+                <h2 style={{ margin: '0 0 14px 0', fontSize: '20px' }}>Voor jou</h2>
+                <div className="rz-tile-grid" role="navigation" aria-label="Belangrijkste acties">
+                  {navigation.primaryTiles.map(renderTile)}
+                </div>
+
+                {navigation.moreTiles.length > 0 && (
+                  <div style={{ marginTop: '20px' }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setShowMore((current) => !current)}
+                      data-testid="home-more-toggle"
+                    >
+                      {showMore ? 'Minder tonen' : 'Meer'}
+                    </Button>
+                    {showMore && (
+                      <div
+                        className="rz-tile-grid"
+                        role="navigation"
+                        aria-label="Meer acties"
+                        data-testid="home-more-navigation"
+                        style={{ marginTop: '14px' }}
+                      >
+                        {navigation.moreTiles.map(renderTile)}
+                      </div>
+                    )}
                   </div>
-                )
-              })}
-            </div>
+                )}
+              </div>
+            )}
           </Card>
         </div>
       </div>
