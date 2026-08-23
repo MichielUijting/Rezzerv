@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - 'backend/app/services/inventory_location_household_patch.py'
+      - 'backend/app/services/inventory_location_policy_service.py'
+      - 'backend/app/services/canonical_inventory_identity_service.py'
+      - 'backend/app/schemas/inventory.py'
       - 'backend/app/testing/inventory_location_household_isolation_contract.py'
       - 'backend/app/api/**/*inventory*'
       - 'backend/tests/**/*inventory*'
@@ -32,14 +35,21 @@ jobs:
         run: |
           python -m pip install --quiet \
             fastapi==0.115.0 \
-            sqlalchemy==2.0.36
+            sqlalchemy==2.0.36 \
+            pydantic==2.12.5 \
+            pytest
 
       - name: Compileer gewijzigde modules
         run: |
           python -m py_compile \
             backend/app/__init__.py \
+            backend/app/schemas/inventory.py \
             backend/app/services/inventory_location_household_patch.py \
-            backend/app/testing/inventory_location_household_isolation_contract.py
+            backend/app/services/inventory_location_policy_service.py \
+            backend/app/services/canonical_inventory_identity_service.py \
+            backend/app/testing/inventory_location_household_isolation_contract.py \
+            backend/tests/test_inventory_location_policy_service.py \
+            backend/tests/test_locationless_inventory_identity_guard.py
 
       - name: Voer A-B-locatie-isolatiecontract uit
         env:
@@ -47,3 +57,12 @@ jobs:
         run: |
           python -m app.testing.inventory_location_household_isolation_contract | tee inventory-location-isolation.log
           grep -F 'INVENTORY_LOCATION_HOUSEHOLD_ISOLATION_GREEN' inventory-location-isolation.log
+
+      - name: Test locationless policy en database-identiteit
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m pytest -q \
+            backend/tests/test_inventory_location_policy_service.py \
+            backend/tests/test_locationless_inventory_identity_guard.py \
+            backend/tests/test_household_article_identity_slice2b4_inventory_contract.py
