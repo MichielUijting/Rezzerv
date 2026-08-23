@@ -5,6 +5,7 @@ import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import RegisterPage from '../../features/auth/RegisterPage'
 import HomePage from '../../features/home/HomePage'
+import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
 import KassaPage from '../../features/kassa/KassaPage.jsx'
 import SettingsPage from '../../features/settings/SettingsPage'
@@ -56,6 +57,14 @@ function RegisterRoute() {
   return <RegisterPage onRegistered={handleRegistered} />
 }
 
+function OnboardingRoute() {
+  const navigate = useNavigate()
+  function handleUseCaseSelected() {
+    navigate('/home', { replace: true })
+  }
+  return <OnboardingPage onUseCaseSelected={handleUseCaseSelected} />
+}
+
 function ResetSessionRoute() {
   React.useEffect(() => {
     clearAuthSession()
@@ -105,6 +114,7 @@ const router = createBrowserRouter([
   { path: '/registreren', element: <RegisterRoute /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
+  { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/superuser', element: <ProtectedSuperuser><SuperuserDashboardPage /></ProtectedSuperuser> },

@@ -10,6 +10,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
+from app.api.household_onboarding_routes import create_household_onboarding_router
 from app.services.consumer_account_provisioning import (
     ConsumerAccountExistsError,
     provision_new_consumer_account,
@@ -411,4 +412,5 @@ def create_server_session_router(
         response.status_code = 204
         return response
 
+    router.include_router(create_household_onboarding_router(engine))
     return router

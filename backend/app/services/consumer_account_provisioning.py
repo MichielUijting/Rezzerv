@@ -7,6 +7,7 @@ from sqlalchemy import inspect, text
 
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.authorization_membership_service import create_canonical_membership_role
+from app.services.household_onboarding_service import start_new_household_onboarding
 from app.services.password_service import hash_password
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 
@@ -193,6 +194,10 @@ def provision_new_consumer_account(
     )
     if role_key != "household.admin":
         raise RuntimeError("Nieuwe consument kreeg geen canonieke Beheerder-rol")
+
+    onboarding = start_new_household_onboarding(conn, household_id)
+    if not onboarding.initial_choice_required:
+        raise RuntimeError("Nieuw huishouden kreeg geen initiële onboardingstatus")
 
     return ConsumerAccountProvisioningResult(
         user_id=user_id,
