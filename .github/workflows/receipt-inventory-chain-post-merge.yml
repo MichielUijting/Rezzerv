@@ -47,26 +47,27 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: 1/6 Compileer ketentestmodules
+      - name: 1/7 Compileer ketentestmodules
         run: |
           python -m py_compile \
             backend/app/testing/receipt_inventory_chain_contract.py \
             backend/app/testing/receipt_inventory_chain_test_db.py \
             backend/app/testing/receipt_inventory_chain_step3.py \
             backend/app/testing/receipt_inventory_chain_step4.py \
-            backend/app/testing/receipt_inventory_production_chain.py
+            backend/app/testing/receipt_inventory_production_chain.py \
+            backend/app/testing/receipt_inventory_locationless_production_contract.py
 
-      - name: 2/6 Valideer contract en geïsoleerde testdatabase
+      - name: 2/7 Valideer contract en geïsoleerde testdatabase
         run: |
           python -m backend.app.testing.receipt_inventory_chain_contract
           python -m backend.app.testing.receipt_inventory_chain_test_db
 
-      - name: 3/6 Voer geïsoleerde keten 0-2-5-5 uit
+      - name: 3/7 Voer geïsoleerde keten 0-2-5-5 uit
         run: |
           python -m backend.app.testing.receipt_inventory_chain_step3
           python -m backend.app.testing.receipt_inventory_chain_step4
 
-      - name: 4/6 Installeer minimale productie-afhankelijkheden
+      - name: 4/7 Installeer minimale productie-afhankelijkheden
         run: |
           python -m pip install --quiet \
             fastapi==0.115.0 \
@@ -78,14 +79,22 @@ jobs:
             beautifulsoup4==4.12.3 \
             opencv-python-headless
 
-      - name: 5/6 Voer productie-ketentest uit
+      - name: 5/7 Voer bestaande productie-ketentest uit
         env:
           PYTHONPATH: backend
           RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts
         run: python backend/app/testing/receipt_inventory_production_chain.py
 
-      - name: 6/6 Bevestig groene merge-gate
-        run: echo 'KETENTEST GROEN - voorraadpad 0 -> 2 -> 5 -> 5'
+      - name: 6/7 Bewijs locationless ready-only productiepad
+        env:
+          PYTHONPATH: backend
+          RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts-locationless
+        run: |
+          python backend/app/testing/receipt_inventory_locationless_production_contract.py | tee locationless-receipt-production.log
+          grep -F 'LOCATIONLESS_RECEIPT_READY_ONLY_PRODUCTION_GREEN' locationless-receipt-production.log
+
+      - name: 7/7 Bevestig groene merge-gate
+        run: echo 'KETENTEST GROEN - voorraadpad 0 -> 2 -> 5 -> 5 plus locationless ready_only NULL/NULL'
 
   validate-powershell-runner:
     name: Valideer zichtbare PowerShell-runner
