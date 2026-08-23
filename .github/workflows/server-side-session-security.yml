@@ -17,6 +17,7 @@ on:
       - 'backend/tests/consumer_account_registration_selftest.py'
       - 'backend/tests/onboarding_use_case_foundation_selftest.py'
       - 'backend/tests/inhuis_halen_onboarding_selftest.py'
+      - 'backend/tests/wat_inhuis_onboarding_selftest.py'
       - 'backend/tests/server_session_route_guard_audit.py'
       - 'backend/requirements.txt'
       - '.github/workflows/server-side-session-security.yml'
@@ -55,6 +56,7 @@ jobs:
             tests/consumer_account_registration_selftest.py \
             tests/onboarding_use_case_foundation_selftest.py \
             tests/inhuis_halen_onboarding_selftest.py \
+            tests/wat_inhuis_onboarding_selftest.py \
             tests/server_session_route_guard_audit.py
       - name: Run Rezzerv server-side session security selftest
         env:
@@ -77,6 +79,11 @@ jobs:
           REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
           PYTHONPATH=. python tests/inhuis_halen_onboarding_selftest.py
+      - name: Run Wat Inhuis onboarding selftest
+        env:
+          REZZERV_SESSION_COOKIE_SECURE: 'false'
+        run: |
+          PYTHONPATH=. python tests/wat_inhuis_onboarding_selftest.py
       - name: Audit legacy route guards
         run: |
           PYTHONPATH=. python tests/server_session_route_guard_audit.py

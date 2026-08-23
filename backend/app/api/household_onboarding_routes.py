@@ -18,6 +18,7 @@ from app.services.household_onboarding_service import (
 from app.services.household_product_configuration_service import (
     public_household_product_configuration_payload,
     save_inhuis_halen_configuration,
+    save_wat_inhuis_configuration,
 )
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
@@ -60,6 +61,23 @@ class InhuisHalenOnboardingRequest(BaseModel):
                 "Bijna-op meldingen vereisen de eenvoudige voorraad van Inhuis halen"
             )
         return self
+
+
+class WatInhuisOnboardingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    inventory_tracking_level: str
+    global_locations_enabled: bool
+    almost_out_enabled: bool
+    shopping_enabled: bool
+
+    @field_validator("inventory_tracking_level")
+    @classmethod
+    def validate_inventory_tracking_level(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized not in {"presence", "quantity"}:
+            raise ValueError("Kies aanwezigheid of aantallen")
+        return normalized
 
 
 def _regular_household_context(conn, request: Request) -> ServerSessionContext:
@@ -125,6 +143,19 @@ def _require_manage_onboarding(conn, context: ServerSessionContext) -> None:
         )
 
 
+def _require_profile_follow_up(conn, *, household_id: str, primary_use_case: str) -> None:
+    state = resolve_household_onboarding_state(conn, household_id)
+    if (
+        state.onboarding_status != ONBOARDING_STATUS_IN_PROGRESS
+        or state.onboarding_step != "profile_follow_up"
+        or state.primary_use_case != primary_use_case
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{primary_use_case} is niet de actieve onboardingstap.",
+        )
+
+
 def create_household_onboarding_router(engine: Engine) -> APIRouter:
     router = APIRouter()
 
@@ -172,16 +203,11 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
             context = _regular_household_context(conn, request)
             _require_manage_onboarding(conn, context)
             household_id = str(context.active_household_id)
-            state = resolve_household_onboarding_state(conn, household_id)
-            if (
-                state.onboarding_status != ONBOARDING_STATUS_IN_PROGRESS
-                or state.onboarding_step != "profile_follow_up"
-                or state.primary_use_case != "inhuis_halen"
-            ):
-                raise HTTPException(
-                    status_code=409,
-                    detail="Inhuis halen is niet de actieve onboardingstap.",
-                )
+            _require_profile_follow_up(
+                conn,
+                household_id=household_id,
+                primary_use_case="inhuis_halen",
+            )
 
             try:
                 configuration = save_inhuis_halen_configuration(
@@ -196,6 +222,50 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                     conn,
                     household_id=household_id,
                     expected_primary_use_case="inhuis_halen",
+                )
+            except OnboardingAlreadyCompletedError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+            return {
+                **public_household_onboarding_payload(
+                    completed_state,
+                    can_manage=True,
+                ),
+                "product_configuration": public_household_product_configuration_payload(
+                    configuration
+                ),
+            }
+
+    @router.post("/api/onboarding/wat-inhuis")
+    def complete_wat_inhuis(
+        payload: WatInhuisOnboardingRequest,
+        request: Request,
+    ):
+        with engine.begin() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            household_id = str(context.active_household_id)
+            _require_profile_follow_up(
+                conn,
+                household_id=household_id,
+                primary_use_case="wat_inhuis",
+            )
+
+            try:
+                configuration = save_wat_inhuis_configuration(
+                    conn,
+                    household_id=household_id,
+                    inventory_tracking_level=payload.inventory_tracking_level,
+                    global_locations_enabled=payload.global_locations_enabled,
+                    almost_out_enabled=payload.almost_out_enabled,
+                    shopping_enabled=payload.shopping_enabled,
+                )
+                completed_state = complete_household_onboarding(
+                    conn,
+                    household_id=household_id,
+                    expected_primary_use_case="wat_inhuis",
                 )
             except OnboardingAlreadyCompletedError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc

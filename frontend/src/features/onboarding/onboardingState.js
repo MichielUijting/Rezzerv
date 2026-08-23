@@ -69,11 +69,11 @@ export async function selectPrimaryUseCase(context, primaryUseCase) {
   return payload
 }
 
-export async function completeInhuisHalenOnboarding(context, preferences) {
+async function completeProfileOnboarding(context, endpoint, preferences, fallback) {
   const key = contextCacheKey(context)
   if (!key) throw new Error('Geen actief huishouden beschikbaar.')
 
-  const response = await fetch('/api/onboarding/inhuis-halen', {
+  const response = await fetch(endpoint, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -85,11 +85,29 @@ export async function completeInhuisHalenOnboarding(context, preferences) {
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw requestError(response.status, payload, 'Inhuis halen instellen mislukt.')
+    throw requestError(response.status, payload, fallback)
   }
   cachedKey = key
   cachedState = payload
   return payload
+}
+
+export function completeInhuisHalenOnboarding(context, preferences) {
+  return completeProfileOnboarding(
+    context,
+    '/api/onboarding/inhuis-halen',
+    preferences,
+    'Inhuis halen instellen mislukt.',
+  )
+}
+
+export function completeWatInhuisOnboarding(context, preferences) {
+  return completeProfileOnboarding(
+    context,
+    '/api/onboarding/wat-inhuis',
+    preferences,
+    'Wat Inhuis instellen mislukt.',
+  )
 }
 
 export function requiresInitialUseCase(state) {
@@ -99,9 +117,7 @@ export function requiresInitialUseCase(state) {
   )
 }
 
-export function requiresManagedOnboarding(state) {
-  if (!state?.can_manage) return false
-  if (state?.initial_choice_required) return true
+export function isInhuisHalenFollowUp(state) {
   return Boolean(
     state?.onboarding_status === 'in_progress'
     && state?.onboarding_step === 'profile_follow_up'
@@ -109,10 +125,16 @@ export function requiresManagedOnboarding(state) {
   )
 }
 
-export function isInhuisHalenFollowUp(state) {
+export function isWatInhuisFollowUp(state) {
   return Boolean(
     state?.onboarding_status === 'in_progress'
     && state?.onboarding_step === 'profile_follow_up'
-    && state?.primary_use_case === 'inhuis_halen',
+    && state?.primary_use_case === 'wat_inhuis',
   )
+}
+
+export function requiresManagedOnboarding(state) {
+  if (!state?.can_manage) return false
+  if (state?.initial_choice_required) return true
+  return isInhuisHalenFollowUp(state) || isWatInhuisFollowUp(state)
 }

@@ -111,6 +111,69 @@ def save_inhuis_halen_configuration(
     return resolve_household_product_configuration(conn, normalized_household_id)
 
 
+def save_wat_inhuis_configuration(
+    conn,
+    *,
+    household_id: str,
+    inventory_tracking_level: str,
+    global_locations_enabled: bool,
+    almost_out_enabled: bool,
+    shopping_enabled: bool,
+) -> HouseholdProductConfiguration:
+    normalized_household_id = str(household_id or "").strip()
+    if not normalized_household_id:
+        raise ValueError("Huishouden ontbreekt")
+
+    normalized_inventory_level = str(inventory_tracking_level or "").strip().lower()
+    if normalized_inventory_level not in {"presence", "quantity"}:
+        raise ValueError("Wat Inhuis ondersteunt aanwezigheid of aantallen")
+
+    location_tracking_level = "global" if global_locations_enabled else "none"
+    ensure_household_product_configuration_foundation(conn)
+
+    conn.execute(text("""
+        INSERT INTO household_product_configuration (
+            household_id,
+            inventory_tracking_level,
+            location_tracking_level,
+            shopping_enabled,
+            almost_out_enabled,
+            almost_out_notifications_enabled,
+            receipt_processing_enabled,
+            recipes_enabled,
+            created_at,
+            updated_at
+        ) VALUES (
+            :household_id,
+            :inventory_tracking_level,
+            :location_tracking_level,
+            :shopping_enabled,
+            :almost_out_enabled,
+            0,
+            0,
+            0,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+        )
+        ON CONFLICT(household_id) DO UPDATE SET
+            inventory_tracking_level = excluded.inventory_tracking_level,
+            location_tracking_level = excluded.location_tracking_level,
+            shopping_enabled = excluded.shopping_enabled,
+            almost_out_enabled = excluded.almost_out_enabled,
+            almost_out_notifications_enabled = 0,
+            receipt_processing_enabled = 0,
+            recipes_enabled = 0,
+            updated_at = CURRENT_TIMESTAMP
+    """), {
+        "household_id": normalized_household_id,
+        "inventory_tracking_level": normalized_inventory_level,
+        "location_tracking_level": location_tracking_level,
+        "shopping_enabled": int(bool(shopping_enabled)),
+        "almost_out_enabled": int(bool(almost_out_enabled)),
+    })
+    return resolve_household_product_configuration(conn, normalized_household_id)
+
+
 def resolve_household_product_configuration(
     conn,
     household_id: str,
