@@ -58,12 +58,14 @@ from app.services.receipt_lifecycle_foundation_service import (
     install_receipt_lifecycle_foundation,
     resolve_receipt_for_unpack_batch,
 )
+from app.services.purchase_import_batch_diagnostics_route_authorization import (
+    required_purchase_import_batch_diagnostics_permission,
+)
 from app.services.receipt_status_baseline_route_authorization import (
     required_receipt_status_baseline_permissions,
 )
 from app.services.session_request_context import (
     authorized_household_id_from_session,
-    bind_canonical_platform_permission_grant,
     bind_current_actor_from_request_session_if_available,
     bind_request_session,
     household_context_from_session,
@@ -71,16 +73,17 @@ from app.services.session_request_context import (
     legacy_user_payload_from_session,
     request_household_id_from_session,
     require_household_admin_from_session,
-    require_platform_admin_from_session,
     require_platform_permission_from_session,
     require_platform_permissions_from_session,
-    reset_canonical_platform_permission_grant,
     reset_request_session,
     resolve_current_server_session,
 )
 from app.services.support_message_session_adapter import household_support_actor
 from app.services.system_superuser_session_provisioning import (
     ensure_system_superuser_for_session_runtime,
+)
+from app.services.testing_status_route_authorization import (
+    required_testing_status_permission,
 )
 
 
@@ -125,7 +128,6 @@ def activate_server_side_route_context() -> None:
     legacy_main.require_household_admin_context = require_household_admin_with_platform_recovery
     legacy_main.resolve_authorized_household_id = authorized_household_id_from_session
     legacy_main.get_request_household_id = request_household_id_from_session
-    legacy_main.require_platform_admin_user = require_platform_admin_from_session
 
     # The existing support-message router originally admitted only household
     # administrators. Rezzerv's functional contract allows every authenticated
@@ -138,7 +140,6 @@ def activate_server_side_route_context() -> None:
 @app.middleware("http")
 async def server_session_request_context(request: Request, call_next):
     token = bind_request_session(request)
-    canonical_permission_grant_token = None
     archived_receipt_purge_context_token = None
     try:
         # Bind the canonical actor before any route/service can write domain data.
@@ -160,8 +161,27 @@ async def server_session_request_context(request: Request, call_next):
                 fixture_permission,
                 request.headers.get("authorization"),
             )
-            canonical_permission_grant_token = bind_canonical_platform_permission_grant(
-                fixture_permission
+
+        testing_status_permission = required_testing_status_permission(
+            request.method,
+            request.url.path,
+        )
+        if testing_status_permission is not None:
+            require_platform_permission_from_session(
+                testing_status_permission,
+                request.headers.get("authorization"),
+            )
+
+        purchase_import_batch_diagnostics_permission = (
+            required_purchase_import_batch_diagnostics_permission(
+                request.method,
+                request.url.path,
+            )
+        )
+        if purchase_import_batch_diagnostics_permission is not None:
+            require_platform_permission_from_session(
+                purchase_import_batch_diagnostics_permission,
+                request.headers.get("authorization"),
             )
 
         hybrid_regression_permissions = required_hybrid_regression_permissions(
@@ -254,10 +274,6 @@ async def server_session_request_context(request: Request, call_next):
         if archived_receipt_purge_context_token is not None:
             reset_archived_receipt_purge_platform_context(
                 archived_receipt_purge_context_token
-            )
-        if canonical_permission_grant_token is not None:
-            reset_canonical_platform_permission_grant(
-                canonical_permission_grant_token
             )
         reset_request_session(token)
 

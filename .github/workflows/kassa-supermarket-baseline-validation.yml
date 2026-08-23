@@ -8,6 +8,8 @@ on:
       - 'backend/app/receipt_ingestion/**'
       - 'backend/app/integrations/receipt_scanners/**'
       - 'backend/app/runtime_preflight.py'
+      - 'backend/app/session_entrypoint.py'
+      - 'backend/app/services/session_request_context.py'
       - 'backend/app/api/**/*receipt*'
       - 'backend/tests/test_kassa_*'
       - 'backend/tests/test_receipt_financial_components_regression.py'

@@ -8,36 +8,21 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
 from app.services import session_request_context
-from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.services.fixture_lifecycle_route_authorization import (
-    FIXTURE_LIFECYCLE_PERMISSION,
-    FIXTURE_LIFECYCLE_ROUTES,
-    required_fixture_lifecycle_permission,
-)
-from app.services.receipt_export_fixture_route_authorization import (
-    RECEIPT_EXPORT_FIXTURE_ROUTES,
+from app.services.authorization_foundation_service import (
+    PLATFORM_ADMIN_PERMISSIONS,
+    V2_PLATFORM_PERMISSIONS,
+    ensure_authorization_foundation,
 )
 from app.services.server_session_service import ServerSessionContext
-from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
+from app.services.testing_status_route_authorization import (
+    TESTING_STATUS_PERMISSION,
+    TESTING_STATUS_ROUTES,
+    required_testing_status_permission,
+)
 
 
-PERMISSION = "platform.test_fixtures.manage"
-MIGRATED_ROUTES = frozenset(
-    {
-        ("POST", "/api/testing/diagnostics/store-location-options"),
-        ("POST", "/api/testing/fixtures/browser-regression/reset"),
-        ("POST", "/api/testing/fixtures/cleanup"),
-        ("POST", "/api/testing/fixtures/inventory/ensure"),
-        ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
-        ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
-    }
-)
-HYBRID_CUTOVER_ROUTES = frozenset(
-    {
-        ("POST", "/api/testing/regression/almost-out-prediction"),
-        ("POST", "/api/testing/regression/almost-out-self-test"),
-    }
-)
+PERMISSION = "platform.diagnostics.view"
+ROUTE = ("GET", "/api/testing/status")
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MAIN_SOURCE_PATH = BACKEND_ROOT / "app" / "main.py"
 SESSION_ENTRYPOINT_SOURCE_PATH = BACKEND_ROOT / "app" / "session_entrypoint.py"
@@ -86,11 +71,10 @@ def _context(user_id: str) -> ServerSessionContext:
             role = "admin"
         else:
             role = "member"
-    email = SUPERGEBRUIKER_EMAIL if user_id == "superuser" else f"{user_id}@example.test"
     return ServerSessionContext(
         session_id=f"session-{user_id}",
         user_id=user_id,
-        email=email,
+        email=f"{user_id}@example.test",
         active_household_id=household_id,
         context_type=context_type,
         role=role,
@@ -113,15 +97,15 @@ def _bind_context(monkeypatch, auth_engine, user_id: str) -> ServerSessionContex
     return context
 
 
-def test_fixture_lifecycle_classifier_is_exact_and_reuses_existing_permission():
-    assert FIXTURE_LIFECYCLE_PERMISSION == PERMISSION
-    assert FIXTURE_LIFECYCLE_ROUTES == MIGRATED_ROUTES
-    assert FIXTURE_LIFECYCLE_ROUTES.isdisjoint(RECEIPT_EXPORT_FIXTURE_ROUTES)
-    for method, path in MIGRATED_ROUTES:
-        assert required_fixture_lifecycle_permission(method, path) == PERMISSION
-        assert required_fixture_lifecycle_permission(method.lower(), path) == PERMISSION
-    for method, path in HYBRID_CUTOVER_ROUTES:
-        assert required_fixture_lifecycle_permission(method, path) is None
+def test_testing_status_classifier_is_exact_and_reuses_diagnostics_permission():
+    assert TESTING_STATUS_PERMISSION == PERMISSION
+    assert TESTING_STATUS_ROUTES == frozenset({ROUTE})
+    assert PERMISSION in V2_PLATFORM_PERMISSIONS
+    assert PERMISSION in PLATFORM_ADMIN_PERMISSIONS
+    assert required_testing_status_permission("GET", ROUTE[1]) == PERMISSION
+    assert required_testing_status_permission("get", ROUTE[1]) == PERMISSION
+    assert required_testing_status_permission("POST", ROUTE[1]) is None
+    assert required_testing_status_permission("GET", "/api/testing/reports/latest") is None
 
 
 @pytest.mark.parametrize(
@@ -136,7 +120,7 @@ def test_fixture_lifecycle_classifier_is_exact_and_reuses_existing_permission():
         ("ordinary-owner", False),
     ],
 )
-def test_fixture_lifecycle_permission_uses_canonical_role_matrix(
+def test_testing_status_uses_approved_canonical_role_matrix(
     monkeypatch,
     auth_engine,
     user_id,
@@ -177,6 +161,30 @@ def test_missing_or_invalid_server_session_remains_401(monkeypatch, auth_engine)
             "Bearer forged-legacy-token",
         )
     assert exc.value.status_code == 401
+    assert exc.value.detail == "Ongeldige of verlopen sessie"
+
+
+def test_platform_admin_revocation_applies_on_next_status_permission_check(
+    monkeypatch,
+    auth_engine,
+):
+    _bind_context(monkeypatch, auth_engine, "platform-admin")
+    assert (
+        session_request_context.require_platform_permission_from_session(PERMISSION).user_id
+        == "platform-admin"
+    )
+
+    with auth_engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE auth_platform_user_roles
+            SET active = 0
+            WHERE user_id = 'platform-admin'
+              AND role_key = 'platform.platform_admin'
+        """))
+
+    with pytest.raises(HTTPException) as exc:
+        session_request_context.require_platform_permission_from_session(PERMISSION)
+    assert exc.value.status_code == 403
 
 
 def _route_nodes() -> dict[tuple[str, str], ast.FunctionDef | ast.AsyncFunctionDef]:
@@ -196,20 +204,20 @@ def _route_nodes() -> dict[tuple[str, str], ast.FunctionDef | ast.AsyncFunctionD
     return routes
 
 
-def _calls_legacy_platform_admin(node: ast.AST) -> bool:
-    return any(
-        isinstance(item, ast.Call)
-        and isinstance(item.func, ast.Name)
-        and item.func.id == "require_platform_admin_user"
+def _named_calls(node: ast.AST, function_name: str) -> list[ast.Call]:
+    return [
+        item
         for item in ast.walk(node)
-    )
+        if isinstance(item, ast.Call)
+        and isinstance(item.func, ast.Name)
+        and item.func.id == function_name
+    ]
 
 
-def test_all_six_runtime_routes_exist_and_no_longer_call_legacy_platform_admin():
+def test_testing_status_handler_no_longer_calls_legacy_platform_admin_guard():
     routes = _route_nodes()
-    for route in MIGRATED_ROUTES:
-        assert route in routes
-        assert not _calls_legacy_platform_admin(routes[route])
+    node = routes[ROUTE]
+    assert _named_calls(node, "require_platform_admin_user") == []
 
 
 def _function_node(path: Path, function_name: str):
@@ -225,33 +233,22 @@ def _function_node(path: Path, function_name: str):
 
 
 def _call_lines(node: ast.AST, call_name: str) -> list[int]:
-    return sorted(
-        item.lineno
-        for item in ast.walk(node)
-        if isinstance(item, ast.Call)
-        and isinstance(item.func, ast.Name)
-        and item.func.id == call_name
-    )
+    return sorted(call.lineno for call in _named_calls(node, call_name))
 
 
-def test_session_middleware_checks_permission_then_dispatches_without_legacy_bridge():
+def test_status_permission_check_runs_after_session_bind_and_before_dispatch():
     node = _function_node(
         SESSION_ENTRYPOINT_SOURCE_PATH,
         "server_session_request_context",
     )
-    bind_session = _call_lines(node, "bind_request_session")
-    classify = _call_lines(node, "required_fixture_lifecycle_permission")
-    require_permission = _call_lines(node, "require_platform_permission_from_session")
-    bind_grant = _call_lines(node, "bind_canonical_platform_permission_grant")
-    dispatch = _call_lines(node, "call_next")
-    reset_grant = _call_lines(node, "reset_canonical_platform_permission_grant")
-    reset_session = _call_lines(node, "reset_request_session")
+    bind_lines = _call_lines(node, "bind_request_session")
+    classify_lines = _call_lines(node, "required_testing_status_permission")
+    permission_lines = _call_lines(node, "require_platform_permission_from_session")
+    dispatch_lines = _call_lines(node, "call_next")
 
-    assert len(bind_session) == 1
-    assert len(classify) == 1
-    assert len(require_permission) >= 1
-    assert bind_grant == []
-    assert len(dispatch) == 1
-    assert reset_grant == []
-    assert len(reset_session) == 1
-    assert bind_session[0] < classify[0] < require_permission[0] < dispatch[0] < reset_session[0]
+    assert len(bind_lines) == 1
+    assert len(classify_lines) == 1
+    assert permission_lines
+    assert len(dispatch_lines) == 1
+    assert bind_lines[0] < classify_lines[0] < dispatch_lines[0]
+    assert any(classify_lines[0] < line < dispatch_lines[0] for line in permission_lines)
