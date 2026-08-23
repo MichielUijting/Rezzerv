@@ -84,7 +84,7 @@ class SublocationUpdateRequest(BaseModel):
 class InventoryCreate(BaseModel):
     naam: str
     aantal: int
-    space_id: str
+    space_id: Optional[str] = None
     sublocation_id: Optional[str] = None
 
 
