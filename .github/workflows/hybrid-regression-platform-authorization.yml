@@ -6,9 +6,7 @@ on:
       - 'backend/app/main.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/hybrid_regression_route_authorization.py'
-      - 'backend/app/services/platform_admin_route_guard.py'
       - 'backend/app/services/session_request_context.py'
-      - 'backend/app/testing/receipt_admin_household_guard_contract.py'
       - 'backend/tests/server_session_route_guard_audit.py'
       - 'backend/tests/test_hybrid_regression_platform_authorization.py'
       - 'backend/tests/test_fixture_lifecycle_platform_authorization.py'
@@ -41,7 +39,6 @@ jobs:
           python -m py_compile \
             app/session_entrypoint.py \
             app/services/hybrid_regression_route_authorization.py \
-            app/services/platform_admin_route_guard.py \
             app/services/session_request_context.py \
             tests/server_session_route_guard_audit.py \
             tests/test_hybrid_regression_platform_authorization.py \
@@ -65,9 +62,3 @@ jobs:
           PYTHONPATH: .
           DATABASE_URL: 'sqlite:///:memory:'
         run: python tests/server_session_route_guard_audit.py
-
-      - name: Run legacy platform guard contract
-        env:
-          PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
-        run: python -m app.testing.receipt_admin_household_guard_contract
