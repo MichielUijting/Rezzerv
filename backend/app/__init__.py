@@ -59,6 +59,8 @@ def _install_inventory_location_patch_when_ready() -> None:
             module is not None
             and hasattr(module, '_dev_resolve_space_id')
             and hasattr(module, '_dev_resolve_sublocation_id')
+            and hasattr(module, 'resolve_store_storage_target_location')
+            and hasattr(module, 'process_purchase_import_batch')
         ):
             try:
                 from .services.inventory_location_household_patch import (
