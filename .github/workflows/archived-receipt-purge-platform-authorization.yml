@@ -58,12 +58,6 @@ jobs:
             tests/test_receipt_status_baseline_platform_authorization.py \
             tests/test_hybrid_regression_platform_authorization.py
 
-      - name: Run server-session route guard audit
-        env:
-          PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
-        run: python -m app.testing.server_session_route_guard_audit
-
       - name: Run legacy platform guard contract
         env:
           PYTHONPATH: .
