@@ -6,7 +6,9 @@ on:
       - 'backend/app/api/household_invitation_routes.py'
       - 'backend/app/api/router.py'
       - 'backend/app/services/household_invitation_service.py'
+      - 'backend/app/services/household_invitation_target_policy.py'
       - 'backend/tests/household_invitation_foundation_selftest.py'
+      - 'backend/tests/household_invitation_target_policy_selftest.py'
       - '.github/workflows/household-invitation-foundation-validation.yml'
   workflow_dispatch:
 
@@ -31,13 +33,21 @@ jobs:
         run: |
           python -m py_compile app/api/household_invitation_routes.py
           python -m py_compile app/services/household_invitation_service.py
+          python -m py_compile app/services/household_invitation_target_policy.py
           python -m py_compile tests/household_invitation_foundation_selftest.py
+          python -m py_compile tests/household_invitation_target_policy_selftest.py
 
       - name: Validate invitation security contract
         working-directory: backend
         run: |
           PYTHONPATH=. python tests/household_invitation_foundation_selftest.py | tee /tmp/invitation-foundation.log
           grep -F 'HOUSEHOLD_INVITATION_FOUNDATION_GREEN' /tmp/invitation-foundation.log
+
+      - name: Validate invitation target policy
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python tests/household_invitation_target_policy_selftest.py | tee /tmp/invitation-target-policy.log
+          grep -F 'HOUSEHOLD_INVITATION_TARGET_POLICY_GREEN' /tmp/invitation-target-policy.log
 
       - name: Invitation foundation gate marker
         run: echo 'ONBOARDING_V2_I1_INVITATION_FOUNDATION_GREEN'
