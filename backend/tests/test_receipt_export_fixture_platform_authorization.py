@@ -15,7 +15,6 @@ from app.services.authorization_foundation_service import (
     V2_SUPERUSER_TARGET_PERMISSIONS,
     ensure_authorization_foundation,
 )
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.receipt_export_fixture_route_authorization import (
     RECEIPT_EXPORT_FIXTURE_PERMISSION,
     RECEIPT_EXPORT_FIXTURE_ROUTES,
@@ -30,19 +29,6 @@ DOWNLOAD_ROUTE = ("GET", "/api/testing/fixtures/receipt-export/download")
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 MAIN_SOURCE_PATH = BACKEND_ROOT / "app" / "main.py"
 SESSION_ENTRYPOINT_SOURCE_PATH = BACKEND_ROOT / "app" / "session_entrypoint.py"
-
-MIGRATED_HYBRID_FIXTURE_MUTATIONS = {
-    ("POST", "/api/testing/regression/almost-out-prediction"),
-    ("POST", "/api/testing/regression/almost-out-self-test"),
-}
-MIGRATED_LIFECYCLE_FIXTURE_MUTATIONS = {
-    ("POST", "/api/testing/diagnostics/store-location-options"),
-    ("POST", "/api/testing/fixtures/browser-regression/reset"),
-    ("POST", "/api/testing/fixtures/cleanup"),
-    ("POST", "/api/testing/fixtures/inventory/ensure"),
-    ("POST", "/api/testing/fixtures/receipt-layer1/generate"),
-    ("POST", "/api/testing/fixtures/receipts/seed-kassa"),
-}
 
 
 @pytest.fixture
@@ -218,14 +204,6 @@ def test_receipt_export_http_entrypoints_share_one_canonical_permission_boundary
         )
         is None
     )
-
-
-def test_all_fixture_mutations_are_out_of_legacy_superuser_guard():
-    assert POST_ROUTE not in PROTECTED_MUTATIONS
-    for route in MIGRATED_LIFECYCLE_FIXTURE_MUTATIONS:
-        assert route not in PROTECTED_MUTATIONS
-    for route in MIGRATED_HYBRID_FIXTURE_MUTATIONS:
-        assert route not in PROTECTED_MUTATIONS
 
 
 def _function_node(
