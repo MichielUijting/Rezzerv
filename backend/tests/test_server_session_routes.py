@@ -9,7 +9,11 @@ from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
 )
-from app.services.frontteam_household_provisioning import FRONTTEAM_HOUSEHOLD_ID
+from app.services.frontteam_household_provisioning import (
+    FRONTTEAM_HOUSEHOLD_ID,
+    FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
+    resolve_frontteam_personal_household_id,
+)
 from app.services.server_session_service import (
     ensure_server_session_schema,
     resolve_server_session,
@@ -27,12 +31,17 @@ def build_client():
         conn.execute(text("""
             CREATE TABLE household_registry (
                 id VARCHAR(64) PRIMARY KEY,
+                naam TEXT NOT NULL,
                 context_type TEXT NOT NULL
             )
         """))
         conn.execute(text("""
-            INSERT INTO household_registry(id, context_type)
-            VALUES ('0', 'system'), ('1', 'regular'), ('2', 'regular')
+            INSERT INTO household_registry(id, naam, context_type)
+            VALUES
+              ('0', 'Systeemhuishouden', 'system'),
+              ('1', 'Huishouden 1', 'regular'),
+              ('2', 'Huishouden 2', 'regular'),
+              ('frontteam', 'Historisch Frontteam', 'regular')
         """))
         conn.execute(
             text(
@@ -93,10 +102,15 @@ def build_client():
                        ('u1', '2', 'member'),
                        ('u2', '2', 'member'),
                        ('u-platform', '1', 'member'),
-                       ('u3', '0', 'owner')
+                       ('u3', '0', 'owner'),
+                       ('u-frontteam', 'frontteam', 'admin')
                 """
             )
         )
+        conn.execute(text("""
+            INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
+            VALUES ('frontteam', 'u-frontteam', 'household.admin')
+        """))
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES
@@ -256,7 +270,7 @@ def test_ip_owner_login_uses_system_context_without_household_membership():
     assert "platform_roles" not in response.json()
 
 
-def test_frontteam_login_uses_dedicated_regular_admin_household():
+def test_frontteam_login_uses_personal_regular_admin_household():
     client, engine = build_client()
 
     response = client.post(
@@ -265,6 +279,7 @@ def test_frontteam_login_uses_dedicated_regular_admin_household():
     )
     raw_session_id = response.cookies.get("rezzerv_session")
     with engine.begin() as conn:
+        personal_household_id = resolve_frontteam_personal_household_id(conn, "u-frontteam")
         context = resolve_server_session(conn, raw_session_id)
         membership = conn.execute(text("""
             SELECT hm.role, mr.role_key
@@ -274,18 +289,25 @@ def test_frontteam_login_uses_dedicated_regular_admin_household():
              AND mr.membership_id = hm.user_id
             WHERE hm.user_id = 'u-frontteam'
               AND hm.household_id = :household_id
-        """), {"household_id": FRONTTEAM_HOUSEHOLD_ID}).mappings().one()
+        """), {"household_id": personal_household_id}).mappings().one()
+        legacy_membership_count = conn.execute(text("""
+            SELECT COUNT(*) FROM household_memberships
+            WHERE user_id = 'u-frontteam' AND household_id = :legacy_id
+        """), {"legacy_id": FRONTTEAM_HOUSEHOLD_ID}).scalar_one()
 
     payload = response.json()
     assert response.status_code == 200
+    assert personal_household_id
+    assert personal_household_id != FRONTTEAM_HOUSEHOLD_ID
     assert context.context_type == "regular"
-    assert context.active_household_id == FRONTTEAM_HOUSEHOLD_ID
+    assert context.active_household_id == personal_household_id
     assert context.role == "admin"
     assert context.is_frontteam is True
     assert membership["role"] == "admin"
     assert membership["role_key"] == "household.admin"
-    assert payload["active_household_id"] == FRONTTEAM_HOUSEHOLD_ID
-    assert payload["active_household_name"] == "Frontteam"
+    assert legacy_membership_count == 0
+    assert payload["active_household_id"] == personal_household_id
+    assert payload["active_household_name"] == FRONTTEAM_PERSONAL_HOUSEHOLD_NAME
     assert payload["context_type"] == "regular"
     assert payload["role"] == "admin"
     assert payload["is_frontteam"] is True
@@ -298,7 +320,7 @@ def test_frontteam_login_uses_dedicated_regular_admin_household():
     assert "platform_roles" not in payload
 
 
-def test_frontteam_other_admin_membership_does_not_override_reserved_household():
+def test_frontteam_other_admin_membership_does_not_override_personal_household():
     client, engine = build_client()
     with engine.begin() as conn:
         conn.execute(text("""
@@ -314,9 +336,12 @@ def test_frontteam_other_admin_membership_does_not_override_reserved_household()
         "/api/auth/login",
         json={"email": "frontteam@example.test", "password": "Rezzerv123"},
     )
+    with engine.begin() as conn:
+        personal_household_id = resolve_frontteam_personal_household_id(conn, "u-frontteam")
 
     assert response.status_code == 200
-    assert response.json()["active_household_id"] == FRONTTEAM_HOUSEHOLD_ID
+    assert response.json()["active_household_id"] == personal_household_id
+    assert response.json()["active_household_id"] != "1"
     assert response.json()["context_type"] == "regular"
     assert response.json()["is_frontteam"] is True
 

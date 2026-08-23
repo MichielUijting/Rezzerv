@@ -37,9 +37,10 @@ from app.services.authorization_membership_service import (
     resolve_effective_household_role,
 )
 from app.services.frontteam_household_provisioning import (
-    FRONTTEAM_HOUSEHOLD_ID,
+    LEGACY_FRONTTEAM_HOUSEHOLD_ID,
     FRONTTEAM_PLATFORM_ROLE,
     ensure_frontteam_household_for_session_runtime,
+    resolve_frontteam_personal_household_id,
 )
 from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
@@ -198,9 +199,8 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
     ):
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
 
-    # Keep the dedicated Frontteam household projection idempotently in sync.
-    # This never grants the platform role; it only projects roles that are
-    # already active in the server-side authorization registry.
+    # Keep every active Frontteam user's personal regular household projection
+    # idempotently in sync. This never grants the platform role itself.
     ensure_frontteam_household_for_session_runtime(conn)
 
     user_id = str(account.get("user_id") or "")
@@ -244,6 +244,12 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
     membership_id_sql = membership_id_expression(conn)
 
     if is_frontteam:
+        personal_household_id = resolve_frontteam_personal_household_id(conn, user_id)
+        if not personal_household_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
         frontteam_membership = conn.execute(
             text(
                 f"""
@@ -261,7 +267,7 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
                 LIMIT 1
                 """
             ),
-            {"user_id": user_id, "household_id": FRONTTEAM_HOUSEHOLD_ID},
+            {"user_id": user_id, "household_id": personal_household_id},
         ).mappings().first()
         if not frontteam_membership:
             raise HTTPException(
@@ -270,7 +276,7 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             )
         role_key = resolve_effective_household_role(
             conn,
-            household_id=FRONTTEAM_HOUSEHOLD_ID,
+            household_id=personal_household_id,
             membership_id=str(frontteam_membership.get("membership_id") or ""),
             legacy_role=frontteam_membership.get("role"),
         )
@@ -283,7 +289,7 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
         return {
             "user_id": user_id,
             "email": str(account.get("email") or ""),
-            "active_household_id": FRONTTEAM_HOUSEHOLD_ID,
+            "active_household_id": personal_household_id,
             "role": "admin",
             "platform_system_context": False,
         }
@@ -309,12 +315,15 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             FROM app_users u
             JOIN household_memberships hm ON {join_condition}
             WHERE u.id = :user_id
-              AND hm.household_id <> :frontteam_household_id
+              AND hm.household_id <> :legacy_frontteam_household_id
               AND {active_condition}
             ORDER BY hm.household_id ASC
             """
         ),
-        {"user_id": user_id, "frontteam_household_id": FRONTTEAM_HOUSEHOLD_ID},
+        {
+            "user_id": user_id,
+            "legacy_frontteam_household_id": LEGACY_FRONTTEAM_HOUSEHOLD_ID,
+        },
     ).mappings().all()
     resolved_rows = []
     for row in rows:

@@ -1,0 +1,53 @@
+name: Frontteam personal household validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/frontteam_household_provisioning.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/tests/test_frontteam_household_provisioning.py'
+      - 'backend/tests/test_server_session_routes.py'
+      - 'backend/tests/test_server_session_service.py'
+      - '.github/workflows/frontteam-personal-household-validation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: frontteam-personal-household-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-frontteam-personal-households:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Compile 9.1.5 Frontteam session contract
+        run: |
+          python -m py_compile app/services/frontteam_household_provisioning.py
+          python -m py_compile app/services/server_session_service.py
+          python -m py_compile app/api/server_session_routes.py
+
+      - name: Run focused 9.1.5 regressions
+        run: |
+          python -m pytest -q \
+            tests/test_frontteam_household_provisioning.py \
+            tests/test_server_session_routes.py \
+            tests/test_server_session_service.py
+
+      - name: Confirm Frontteam personal household gate
+        run: echo 'FRONTTEAM_PERSONAL_HOUSEHOLD_9_1_5_GREEN'
