@@ -7,6 +7,7 @@ on:
     paths:
       - 'backend/app/services/inventory_location_household_patch.py'
       - 'backend/app/services/inventory_location_policy_service.py'
+      - 'backend/app/services/inventory_location_event_policy_patch.py'
       - 'backend/app/services/purchase_import_location_policy_patch.py'
       - 'backend/app/services/canonical_inventory_identity_service.py'
       - 'backend/app/schemas/inventory.py'
@@ -48,10 +49,12 @@ jobs:
             backend/app/schemas/inventory.py \
             backend/app/services/inventory_location_household_patch.py \
             backend/app/services/inventory_location_policy_service.py \
+            backend/app/services/inventory_location_event_policy_patch.py \
             backend/app/services/purchase_import_location_policy_patch.py \
             backend/app/services/canonical_inventory_identity_service.py \
             backend/app/testing/inventory_location_household_isolation_contract.py \
             backend/tests/test_inventory_location_policy_service.py \
+            backend/tests/test_inventory_location_event_policy_patch.py \
             backend/tests/test_locationless_inventory_identity_guard.py \
             backend/tests/test_purchase_import_location_policy_patch.py
 
@@ -62,12 +65,13 @@ jobs:
           python -m app.testing.inventory_location_household_isolation_contract | tee inventory-location-isolation.log
           grep -F 'INVENTORY_LOCATION_HOUSEHOLD_ISOLATION_GREEN' inventory-location-isolation.log
 
-      - name: Test locationless policy, kassabonadapter en database-identiteit
+      - name: Test locationless policy, event-write, kassabonadapter en database-identiteit
         env:
           PYTHONPATH: backend
         run: |
           python -m pytest -q \
             backend/tests/test_inventory_location_policy_service.py \
+            backend/tests/test_inventory_location_event_policy_patch.py \
             backend/tests/test_purchase_import_location_policy_patch.py \
             backend/tests/test_locationless_inventory_identity_guard.py \
             backend/tests/test_household_article_identity_slice2b4_inventory_contract.py
