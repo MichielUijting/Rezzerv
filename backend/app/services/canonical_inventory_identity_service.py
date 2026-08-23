@@ -14,11 +14,15 @@ import uuid
 
 from fastapi import HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.services.temporal_inventory_service import (
     ensure_temporal_inventory_schema,
     reconcile_inventory_total,
 )
+
+
+LOCATIONLESS_ACTIVE_IDENTITY_INDEX = "uq_inventory_active_locationless_household_article"
 
 
 def _normalize(value: object | None) -> str:
@@ -76,6 +80,62 @@ def _table_exists(conn, table_name: str) -> bool:
     return bool(conn.execute(text(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name LIMIT 1"
     ), {"name": str(table_name)}).scalar())
+
+
+def ensure_locationless_inventory_identity_guard(conn) -> None:
+    """Protect the single active NULL/NULL row per household article in SQLite.
+
+    The duplicate check deliberately runs before creating the partial unique index so
+    an existing inconsistent database fails with a clear error instead of an opaque
+    CREATE INDEX integrity failure.
+    """
+    if not _table_exists(conn, "inventory"):
+        return
+
+    columns = {
+        str(row[1])
+        for row in conn.execute(text("PRAGMA table_info(inventory)")).fetchall()
+    }
+    required_columns = {
+        "household_id",
+        "household_article_id",
+        "space_id",
+        "sublocation_id",
+        "status",
+    }
+    if not required_columns.issubset(columns):
+        return
+
+    duplicate = conn.execute(text(
+        """
+        SELECT household_id, household_article_id, COUNT(*) AS row_count
+        FROM inventory
+        WHERE COALESCE(status, 'active') = 'active'
+          AND household_article_id IS NOT NULL
+          AND space_id IS NULL
+          AND sublocation_id IS NULL
+        GROUP BY household_id, household_article_id
+        HAVING COUNT(*) > 1
+        LIMIT 1
+        """
+    )).mappings().first()
+    if duplicate:
+        raise RuntimeError(
+            "Dubbele actieve locationless voorraadidentiteit gevonden voor "
+            f"household_id={duplicate['household_id']} en "
+            f"household_article_id={duplicate['household_article_id']}"
+        )
+
+    conn.execute(text(
+        f"""
+        CREATE UNIQUE INDEX IF NOT EXISTS {LOCATIONLESS_ACTIVE_IDENTITY_INDEX}
+        ON inventory (household_id, household_article_id)
+        WHERE COALESCE(status, 'active') = 'active'
+          AND household_article_id IS NOT NULL
+          AND space_id IS NULL
+          AND sublocation_id IS NULL
+        """
+    ))
 
 
 def _temporal_ledger_available_for_article(conn, household_id: str, household_article_id: str) -> bool:
@@ -260,6 +320,67 @@ def _reconcile_if_temporal_event_exists(
     )
 
 
+def _find_inventory_identity(
+    conn,
+    *,
+    household_id: str,
+    household_article_id: str,
+    space_id: str | None,
+    sublocation_id: str | None,
+):
+    return conn.execute(
+        text(
+            """
+            SELECT id, aantal
+            FROM inventory
+            WHERE household_id = :household_id
+              AND household_article_id = :household_article_id
+              AND COALESCE(space_id, '') = COALESCE(:space_id, '')
+              AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
+              AND COALESCE(status, 'active') = 'active'
+            LIMIT 1
+            """
+        ),
+        {
+            "household_id": household_id,
+            "household_article_id": household_article_id,
+            "space_id": space_id,
+            "sublocation_id": sublocation_id,
+        },
+    ).mappings().first()
+
+
+def _increase_existing_inventory(
+    conn,
+    *,
+    inventory_id: str,
+    household_id: str,
+    household_article_id: str,
+    article_name_snapshot: str,
+    quantity: int,
+) -> None:
+    conn.execute(
+        text(
+            """
+            UPDATE inventory
+            SET aantal = COALESCE(aantal, 0) + :quantity,
+                naam = :article_name_snapshot,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :inventory_id
+              AND household_id = :household_id
+              AND household_article_id = :household_article_id
+            """
+        ),
+        {
+            "inventory_id": inventory_id,
+            "household_id": household_id,
+            "household_article_id": household_article_id,
+            "article_name_snapshot": article_name_snapshot,
+            "quantity": quantity,
+        },
+    )
+
+
 def apply_inventory_purchase_by_identity(
     conn,
     *,
@@ -279,51 +400,25 @@ def apply_inventory_purchase_by_identity(
 
     if quantity_value <= 0:
         raise HTTPException(status_code=400, detail="Voorraadaantal moet groter zijn dan 0")
-    if not normalized_space_id and not normalized_sublocation_id:
-        raise HTTPException(status_code=400, detail="Voorraadmutatie vereist een expliciete ruimte of sublocatie")
 
-    existing = conn.execute(
-        text(
-            """
-            SELECT id, aantal
-            FROM inventory
-            WHERE household_id = :household_id
-              AND household_article_id = :household_article_id
-              AND COALESCE(space_id, '') = COALESCE(:space_id, '')
-              AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
-              AND COALESCE(status, 'active') = 'active'
-            LIMIT 1
-            """
-        ),
-        {
-            "household_id": normalized_household_id,
-            "household_article_id": normalized_article_id,
-            "space_id": normalized_space_id,
-            "sublocation_id": normalized_sublocation_id,
-        },
-    ).mappings().first()
+    ensure_locationless_inventory_identity_guard(conn)
+    existing = _find_inventory_identity(
+        conn,
+        household_id=normalized_household_id,
+        household_article_id=normalized_article_id,
+        space_id=normalized_space_id,
+        sublocation_id=normalized_sublocation_id,
+    )
 
     if existing:
         inventory_id = str(existing["id"])
-        conn.execute(
-            text(
-                """
-                UPDATE inventory
-                SET aantal = COALESCE(aantal, 0) + :quantity,
-                    naam = :article_name_snapshot,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :inventory_id
-                  AND household_id = :household_id
-                  AND household_article_id = :household_article_id
-                """
-            ),
-            {
-                "inventory_id": inventory_id,
-                "household_id": normalized_household_id,
-                "household_article_id": normalized_article_id,
-                "article_name_snapshot": article_name_snapshot,
-                "quantity": quantity_value,
-            },
+        _increase_existing_inventory(
+            conn,
+            inventory_id=inventory_id,
+            household_id=normalized_household_id,
+            household_article_id=normalized_article_id,
+            article_name_snapshot=article_name_snapshot,
+            quantity=quantity_value,
         )
         _reconcile_if_temporal_event_exists(
             conn,
@@ -337,28 +432,53 @@ def apply_inventory_purchase_by_identity(
         return inventory_id
 
     inventory_id = uuid.uuid4().hex
-    conn.execute(
-        text(
-            """
-            INSERT INTO inventory (
-                id, naam, aantal, household_id, household_article_id,
-                space_id, sublocation_id, status, updated_at
-            ) VALUES (
-                :id, :article_name_snapshot, :quantity, :household_id, :household_article_id,
-                :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP
-            )
-            """
-        ),
-        {
-            "id": inventory_id,
-            "article_name_snapshot": article_name_snapshot,
-            "quantity": quantity_value,
-            "household_id": normalized_household_id,
-            "household_article_id": normalized_article_id,
-            "space_id": normalized_space_id,
-            "sublocation_id": normalized_sublocation_id,
-        },
-    )
+    try:
+        conn.execute(
+            text(
+                """
+                INSERT INTO inventory (
+                    id, naam, aantal, household_id, household_article_id,
+                    space_id, sublocation_id, status, updated_at
+                ) VALUES (
+                    :id, :article_name_snapshot, :quantity, :household_id, :household_article_id,
+                    :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": inventory_id,
+                "article_name_snapshot": article_name_snapshot,
+                "quantity": quantity_value,
+                "household_id": normalized_household_id,
+                "household_article_id": normalized_article_id,
+                "space_id": normalized_space_id,
+                "sublocation_id": normalized_sublocation_id,
+            },
+        )
+    except IntegrityError:
+        # Only the locationless identity has a database-level race guard in this slice.
+        # If another writer won that race, merge into the canonical row it created.
+        if normalized_space_id is not None or normalized_sublocation_id is not None:
+            raise
+        existing = _find_inventory_identity(
+            conn,
+            household_id=normalized_household_id,
+            household_article_id=normalized_article_id,
+            space_id=None,
+            sublocation_id=None,
+        )
+        if not existing:
+            raise
+        inventory_id = str(existing["id"])
+        _increase_existing_inventory(
+            conn,
+            inventory_id=inventory_id,
+            household_id=normalized_household_id,
+            household_article_id=normalized_article_id,
+            article_name_snapshot=article_name_snapshot,
+            quantity=quantity_value,
+        )
+
     _reconcile_if_temporal_event_exists(
         conn,
         household_id=normalized_household_id,
