@@ -158,7 +158,7 @@ def _public_session_payload_with_live_household_name(conn, context) -> dict[str,
         "name" if "name" in columns else None
     )
     if not household_id_column or not household_name_column:
-        raise RuntimeError("household_registry mist bruikbare id-/naamkolommen")
+        return payload
 
     row = conn.execute(text(f"""
         SELECT {household_name_column} AS household_name
