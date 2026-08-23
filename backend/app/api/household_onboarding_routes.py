@@ -8,9 +8,11 @@ from sqlalchemy.engine import Engine
 from app.services.authorization_foundation_service import evaluate_household_permission
 from app.services.household_location_onboarding_service import provision_waar_inhuis_locations
 from app.services.household_onboarding_service import (
+    HOUSEHOLD_USAGE_MODES,
     ONBOARDING_STATUS_IN_PROGRESS,
     PRIMARY_USE_CASES,
     OnboardingAlreadyCompletedError,
+    advance_profile_to_shared_household_minimum,
     complete_household_onboarding,
     public_household_onboarding_payload,
     resolve_household_onboarding_state,
@@ -40,6 +42,15 @@ def _normalize_location_name(value: str) -> str:
         raise ValueError("Locatienaam is verplicht")
     if len(normalized) > 120:
         raise ValueError("Locatienaam mag maximaal 120 tekens bevatten")
+    return normalized
+
+
+def _normalize_household_name(value: str) -> str:
+    normalized = " ".join(str(value or "").strip().split())
+    if not normalized:
+        raise ValueError("Naam huishouden is verplicht")
+    if len(normalized) > 120:
+        raise ValueError("Naam huishouden mag maximaal 120 tekens bevatten")
     return normalized
 
 
@@ -138,6 +149,26 @@ class WaarInhuisOnboardingRequest(BaseModel):
                 )
             seen.add(duplicate_key)
         return self
+
+
+class SharedHouseholdMinimumRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    household_name: str
+    household_usage_mode: str
+
+    @field_validator("household_name")
+    @classmethod
+    def validate_household_name(cls, value: str) -> str:
+        return _normalize_household_name(value)
+
+    @field_validator("household_usage_mode")
+    @classmethod
+    def validate_household_usage_mode(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized not in HOUSEHOLD_USAGE_MODES:
+            raise ValueError("Kies of je Inhuis alleen of samen gebruikt")
+        return normalized
 
 
 def _regular_household_context(conn, request: Request) -> ServerSessionContext:
@@ -278,7 +309,7 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                     receipt_processing_enabled=payload.receipt_processing_enabled,
                     recipes_enabled=payload.recipes_enabled,
                 )
-                completed_state = complete_household_onboarding(
+                next_state = advance_profile_to_shared_household_minimum(
                     conn,
                     household_id=household_id,
                     expected_primary_use_case="inhuis_halen",
@@ -289,7 +320,7 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
             return {
-                **public_household_onboarding_payload(completed_state, can_manage=True),
+                **public_household_onboarding_payload(next_state, can_manage=True),
                 "product_configuration": public_household_product_configuration_payload(
                     configuration
                 ),
@@ -319,7 +350,7 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                     almost_out_enabled=payload.almost_out_enabled,
                     shopping_enabled=payload.shopping_enabled,
                 )
-                completed_state = complete_household_onboarding(
+                next_state = advance_profile_to_shared_household_minimum(
                     conn,
                     household_id=household_id,
                     expected_primary_use_case="wat_inhuis",
@@ -330,7 +361,7 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
             return {
-                **public_household_onboarding_payload(completed_state, can_manage=True),
+                **public_household_onboarding_payload(next_state, can_manage=True),
                 "product_configuration": public_household_product_configuration_payload(
                     configuration
                 ),
@@ -371,7 +402,7 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                     receipt_processing_enabled=payload.receipt_processing_enabled,
                     almost_out_enabled=payload.almost_out_enabled,
                 )
-                completed_state = complete_household_onboarding(
+                next_state = advance_profile_to_shared_household_minimum(
                     conn,
                     household_id=household_id,
                     expected_primary_use_case="waar_inhuis",
@@ -382,11 +413,37 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
             return {
-                **public_household_onboarding_payload(completed_state, can_manage=True),
+                **public_household_onboarding_payload(next_state, can_manage=True),
                 "product_configuration": public_household_product_configuration_payload(
                     configuration
                 ),
                 "location_setup": location_setup,
             }
+
+    @router.post("/api/onboarding/shared-household-minimum")
+    def complete_shared_household_minimum(
+        payload: SharedHouseholdMinimumRequest,
+        request: Request,
+    ):
+        with engine.begin() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            household_id = str(context.active_household_id)
+            try:
+                completed_state = complete_household_onboarding(
+                    conn,
+                    household_id=household_id,
+                    household_name=payload.household_name,
+                    household_usage_mode=payload.household_usage_mode,
+                )
+            except OnboardingAlreadyCompletedError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+            return public_household_onboarding_payload(
+                completed_state,
+                can_manage=True,
+            )
 
     return router

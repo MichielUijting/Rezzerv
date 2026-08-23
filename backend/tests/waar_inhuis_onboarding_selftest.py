@@ -9,21 +9,17 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
 
-from app.api.server_session_routes import (
-    SessionApiConfiguration,
-    create_server_session_router,
-)
+from app.api.server_session_routes import SessionApiConfiguration, create_server_session_router
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.household_location_onboarding_service import ensure_location_foundation
 from app.services.household_onboarding_service import (
     ONBOARDING_STATUS_COMPLETED,
+    ONBOARDING_STATUS_IN_PROGRESS,
     ensure_household_onboarding_foundation,
     resolve_household_onboarding_state,
 )
-from app.services.household_product_configuration_service import (
-    resolve_household_product_configuration,
-)
+from app.services.household_product_configuration_service import resolve_household_product_configuration
 from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
 
 
@@ -56,7 +52,6 @@ def _prepare_database(engine) -> None:
                 UNIQUE(household_id, user_email)
             )
         """))
-        # Legacy step-C/D shape: step E must add unpacking_enabled safely.
         conn.execute(text("""
             CREATE TABLE household_product_configuration (
                 household_id TEXT PRIMARY KEY,
@@ -73,7 +68,6 @@ def _prepare_database(engine) -> None:
         """))
         ensure_roles_v2_account_and_household_foundation(conn)
         ensure_authorization_foundation(conn)
-
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type)
             VALUES ('shared-household', 'Gedeeld huishouden', 'regular')
@@ -115,12 +109,10 @@ def _prepare_database(engine) -> None:
 
 def _application(engine) -> FastAPI:
     app = FastAPI()
-    app.include_router(
-        create_server_session_router(
-            engine,
-            SessionApiConfiguration(cookie_secure=False),
-        )
-    )
+    app.include_router(create_server_session_router(
+        engine,
+        SessionApiConfiguration(cookie_secure=False),
+    ))
     return app
 
 
@@ -137,6 +129,16 @@ def _payload(**overrides):
     }
     payload.update(overrides)
     return payload
+
+
+def _finish_shared(client: TestClient):
+    response = client.post(
+        "/api/onboarding/shared-household-minimum",
+        json={"household_name": "Huis Waar Inhuis", "household_usage_mode": "together"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["onboarding_status"] == ONBOARDING_STATUS_COMPLETED
+    return response
 
 
 def run() -> int:
@@ -173,33 +175,26 @@ def run() -> int:
         with TestClient(app) as consumer:
             registration = consumer.post(
                 "/api/auth/register",
-                json={
-                    "email": "waar-inhuis@example.com",
-                    "password": "SterkWachtwoord123!",
-                },
+                json={"email": "waar-inhuis@example.com", "password": "SterkWachtwoord123!"},
             )
             assert registration.status_code == 201, registration.text
             household_id = str(registration.json()["active_household_id"])
-
             selected = consumer.post(
                 "/api/onboarding/primary-use-case",
                 json={"primary_use_case": "waar_inhuis"},
             )
             assert selected.status_code == 200, selected.text
             assert selected.json()["profile_follow_up_required"] is True
-
             empty_locations = consumer.post(
                 "/api/onboarding/waar-inhuis",
                 json=_payload(main_locations=[], sublocations=[]),
             )
             assert empty_locations.status_code == 422
-
             cross_household = consumer.post(
                 "/api/onboarding/waar-inhuis",
                 json={**_payload(), "household_id": "shared-household"},
             )
             assert cross_household.status_code == 422
-
             invalid_parent = consumer.post(
                 "/api/onboarding/waar-inhuis",
                 json=_payload(
@@ -212,8 +207,7 @@ def run() -> int:
 
         with engine.begin() as conn:
             count = conn.execute(text("""
-                SELECT COUNT(*)
-                FROM household_product_configuration
+                SELECT COUNT(*) FROM household_product_configuration
                 WHERE household_id = :household_id
             """), {"household_id": household_id}).scalar_one()
             assert int(count) == 0
@@ -222,7 +216,6 @@ def run() -> int:
                 SELECT COUNT(*) FROM spaces WHERE household_id = :household_id
             """), {"household_id": household_id}).scalar_one()
             assert int(space_count) == 0
-
             conn.execute(text("""
                 INSERT INTO spaces (id, naam, household_id, active)
                 VALUES ('existing-kitchen', 'keuken', :household_id, 0)
@@ -235,13 +228,12 @@ def run() -> int:
                 json={"email": "waar-inhuis@example.com", "password": "SterkWachtwoord123!"},
             )
             assert login.status_code == 200
-            completed = consumer.post("/api/onboarding/waar-inhuis", json=_payload())
-            assert completed.status_code == 200, completed.text
-            payload = completed.json()
-            assert payload["onboarding_status"] == ONBOARDING_STATUS_COMPLETED
-            assert payload["primary_use_case"] == "waar_inhuis"
-            assert payload["onboarding_step"] is None
-            assert payload["profile_follow_up_required"] is False
+            profile = consumer.post("/api/onboarding/waar-inhuis", json=_payload())
+            assert profile.status_code == 200, profile.text
+            payload = profile.json()
+            assert payload["onboarding_status"] == ONBOARDING_STATUS_IN_PROGRESS
+            assert payload["onboarding_step"] == "shared_household_minimum"
+            assert payload["shared_household_minimum_required"] is True
             configuration = payload["product_configuration"]
             assert configuration["inventory_tracking_level"] == "presence"
             assert configuration["location_tracking_level"] == "exact"
@@ -253,7 +245,8 @@ def run() -> int:
             assert configuration["recipes_enabled"] is False
             assert len(payload["location_setup"]["spaces"]) == 2
             assert len(payload["location_setup"]["sublocations"]) == 2
-        checks.append("waar_inhuis_answers_complete_with_exact_location_configuration")
+            _finish_shared(consumer)
+        checks.append("waar_inhuis_answers_advance_to_shared_minimum_then_complete")
 
         with engine.begin() as conn:
             columns = {
@@ -261,15 +254,15 @@ def run() -> int:
                 for column in inspect(conn).get_columns("household_product_configuration")
             }
             assert "unpacking_enabled" in columns
-
             state = resolve_household_onboarding_state(conn, household_id)
             assert state.onboarding_status == ONBOARDING_STATUS_COMPLETED
             assert state.onboarding_completed_at is not None
+            assert state.household_usage_mode == "together"
+            assert state.household_name == "Huis Waar Inhuis"
             configuration = resolve_household_product_configuration(conn, household_id)
             assert configuration.inventory_tracking_level == "presence"
             assert configuration.location_tracking_level == "exact"
             assert configuration.unpacking_enabled is True
-
             spaces = conn.execute(text("""
                 SELECT id, naam, active
                 FROM spaces
@@ -280,7 +273,6 @@ def run() -> int:
             kitchen = next(row for row in spaces if str(row["naam"]).lower() == "keuken")
             assert str(kitchen["id"]) == "existing-kitchen"
             assert bool(kitchen["active"]) is True
-
             sublocations = conn.execute(text("""
                 SELECT sl.naam, s.naam AS space_name
                 FROM sublocations sl
@@ -290,7 +282,7 @@ def run() -> int:
             """), {"household_id": household_id}).mappings().all()
             pairs = {(str(row["space_name"]), str(row["naam"])) for row in sublocations}
             assert pairs == {("Keuken", "Koelkast"), ("Garage", "Stelling")}
-        checks.append("legacy_config_migrated_and_locations_persist_without_duplicates")
+        checks.append("legacy_config_locations_and_shared_minimum_persist_without_duplicates")
 
         with TestClient(app) as returning_consumer:
             login = returning_consumer.post(
@@ -301,6 +293,7 @@ def run() -> int:
             state = returning_consumer.get("/api/onboarding")
             assert state.status_code == 200
             assert state.json()["onboarding_status"] == ONBOARDING_STATUS_COMPLETED
+            assert state.json()["shared_household_minimum_required"] is False
             duplicate = returning_consumer.post("/api/onboarding/waar-inhuis", json=_payload())
             assert duplicate.status_code == 409
         checks.append("completed_waar_inhuis_survives_login_and_cannot_restart")
@@ -308,10 +301,7 @@ def run() -> int:
         with TestClient(app) as other_profile:
             registration = other_profile.post(
                 "/api/auth/register",
-                json={
-                    "email": "other-profile@example.com",
-                    "password": "SterkWachtwoord123!",
-                },
+                json={"email": "other-profile@example.com", "password": "SterkWachtwoord123!"},
             )
             assert registration.status_code == 201
             other_household_id = str(registration.json()["active_household_id"])
@@ -328,6 +318,7 @@ def run() -> int:
                     WHERE household_id = :household_id
                 """), {"household_id": other_household_id}).scalar_one()
                 assert int(count) == 0
+                ensure_location_foundation(conn)
                 space_count = conn.execute(text("""
                     SELECT COUNT(*) FROM spaces WHERE household_id = :household_id
                 """), {"household_id": other_household_id}).scalar_one()
