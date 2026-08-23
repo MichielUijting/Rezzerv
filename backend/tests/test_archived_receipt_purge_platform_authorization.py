@@ -296,6 +296,4 @@ def test_household_admin_bridge_falls_back_outside_recovery_request():
 
 def test_purge_route_is_removed_from_legacy_superuser_guard_only():
     assert ("POST", ROUTE_PATH) not in PROTECTED_MUTATIONS
-    assert PROTECTED_MUTATIONS == {
-        ("POST", "/api/admin/external-relations/batch/decision"),
-    }
+    assert PROTECTED_MUTATIONS == set()

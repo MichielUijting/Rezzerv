@@ -235,9 +235,9 @@ def test_gpc_nl_route_is_active_and_removed_from_legacy_superuser_guard():
     assert "from app.api.product_inventory_group_routes import router as product_inventory_group_router" in source
     assert "app.include_router(product_inventory_group_router)" in source
     assert ("POST", ROUTE_PATH) not in PROTECTED_MUTATIONS
-    assert ("POST", "/api/admin/external-relations/batch/decision") in PROTECTED_MUTATIONS
+    assert ("POST", "/api/admin/external-relations/batch/decision") not in PROTECTED_MUTATIONS
     assert ("POST", "/api/admin/receipts/purge-archived") not in PROTECTED_MUTATIONS
-    assert len(PROTECTED_MUTATIONS) == 1
+    assert len(PROTECTED_MUTATIONS) == 0
 
 
 def test_gpc_nl_import_is_technical_reference_data_mutation_not_household_inventory():
