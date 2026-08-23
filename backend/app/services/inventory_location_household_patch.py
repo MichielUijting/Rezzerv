@@ -196,5 +196,9 @@ def install_inventory_location_household_patch(main_module) -> None:
     from .purchase_import_location_policy_patch import (
         install_purchase_import_location_policy_patch,
     )
+    from .inventory_location_event_policy_patch import (
+        install_inventory_location_event_policy_patch,
+    )
 
     install_purchase_import_location_policy_patch(main_module)
+    install_inventory_location_event_policy_patch(main_module)
