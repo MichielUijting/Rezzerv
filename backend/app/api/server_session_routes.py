@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-import hmac
 import os
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, field_validator
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
+from app.services.consumer_account_provisioning import (
+    ConsumerAccountExistsError,
+    provision_new_consumer_account,
+)
+from app.services.password_service import verify_password
 from app.services.server_session_service import (
     DEFAULT_SESSION_TTL,
     SESSION_COOKIE_NAME,
@@ -45,6 +49,13 @@ REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
 SYSTEM_PLATFORM_ROLES = frozenset({"platform.superuser", "platform.ip_owner"})
 
 
+def _normalize_email(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    if not normalized or "@" not in normalized:
+        raise ValueError("Geldig e-mailadres is verplicht")
+    return normalized
+
+
 class SessionLoginRequest(BaseModel):
     email: str
     password: str
@@ -52,10 +63,27 @@ class SessionLoginRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: str) -> str:
-        normalized = str(value or "").strip().lower()
-        if not normalized or "@" not in normalized:
-            raise ValueError("Geldig e-mailadres is verplicht")
-        return normalized
+        return _normalize_email(value)
+
+
+class SessionRegisterRequest(BaseModel):
+    email: str
+    password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return _normalize_email(value)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        supplied = str(value or "")
+        if len(supplied) < 10:
+            raise ValueError("Wachtwoord moet minimaal 10 tekens bevatten")
+        if len(supplied) > 256:
+            raise ValueError("Wachtwoord mag maximaal 256 tekens bevatten")
+        return supplied
 
 
 class SessionApiConfiguration(BaseModel):
@@ -113,15 +141,17 @@ def _clear_session_cookie(response: Response, configuration: SessionApiConfigura
     )
 
 
-def _verify_password(stored_password: Any, supplied_password: str) -> bool:
-    stored = str(stored_password or "")
-    supplied = str(supplied_password or "")
-    return bool(stored) and hmac.compare_digest(stored, supplied)
-
-
 def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
-    accounts = conn.execute(text("""
-        SELECT id AS user_id, email, password
+    user_columns = {
+        str(column.get("name") or "")
+        for column in inspect(conn).get_columns("app_users")
+    }
+    password_hash_expression = (
+        "password_hash" if "password_hash" in user_columns else "NULL"
+    )
+    accounts = conn.execute(text(f"""
+        SELECT id AS user_id, email, password,
+               {password_hash_expression} AS password_hash
         FROM app_users
         WHERE lower(trim(email)) = :email
         LIMIT 2
@@ -129,7 +159,11 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
     if len(accounts) != 1:
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
     account = accounts[0]
-    if not _verify_password(account.get("password"), password):
+    if not verify_password(
+        account.get("password"),
+        password,
+        stored_password_hash=account.get("password_hash"),
+    ):
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
 
     # Keep the dedicated Frontteam household projection idempotently in sync.
@@ -311,6 +345,29 @@ def create_server_session_router(
 ) -> APIRouter:
     configuration = configuration or session_api_configuration_from_environment()
     router = APIRouter()
+
+    @router.post("/api/auth/register", status_code=201)
+    def register(payload: SessionRegisterRequest, response: Response):
+        try:
+            with engine.begin() as conn:
+                account = provision_new_consumer_account(
+                    conn,
+                    email=payload.email,
+                    password=payload.password,
+                )
+                raw_session_id, context = create_server_session(
+                    conn,
+                    user_id=account.user_id,
+                    active_household_id=account.household_id,
+                    replace_existing=True,
+                )
+        except ConsumerAccountExistsError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="Er bestaat al een account met dit e-mailadres.",
+            ) from exc
+        _set_session_cookie(response, raw_session_id, configuration)
+        return public_session_payload(context)
 
     @router.post("/api/auth/login")
     def login(payload: SessionLoginRequest, response: Response):
