@@ -4,14 +4,17 @@ on:
   pull_request:
     paths:
       - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/household_onboarding_routes.py'
       - 'backend/app/services/server_session_service.py'
       - 'backend/app/services/session_request_context.py'
       - 'backend/app/services/consumer_account_provisioning.py'
+      - 'backend/app/services/household_onboarding_service.py'
       - 'backend/app/services/password_service.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/main.py'
       - 'backend/tests/server_session_security_selftest.py'
       - 'backend/tests/consumer_account_registration_selftest.py'
+      - 'backend/tests/onboarding_use_case_foundation_selftest.py'
       - 'backend/tests/server_session_route_guard_audit.py'
       - 'backend/requirements.txt'
       - '.github/workflows/server-side-session-security.yml'
@@ -38,13 +41,16 @@ jobs:
         run: |
           PYTHONPATH=. python -m py_compile \
             app/api/server_session_routes.py \
+            app/api/household_onboarding_routes.py \
             app/services/server_session_service.py \
             app/services/session_request_context.py \
             app/services/consumer_account_provisioning.py \
+            app/services/household_onboarding_service.py \
             app/services/password_service.py \
             app/session_entrypoint.py \
             tests/server_session_security_selftest.py \
             tests/consumer_account_registration_selftest.py \
+            tests/onboarding_use_case_foundation_selftest.py \
             tests/server_session_route_guard_audit.py
       - name: Run Rezzerv server-side session security selftest
         env:
@@ -57,6 +63,11 @@ jobs:
           REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
           PYTHONPATH=. python tests/consumer_account_registration_selftest.py
+      - name: Run onboarding use-case foundation selftest
+        env:
+          REZZERV_SESSION_COOKIE_SECURE: 'false'
+        run: |
+          PYTHONPATH=. python tests/onboarding_use_case_foundation_selftest.py
       - name: Audit legacy route guards
         run: |
           PYTHONPATH=. python tests/server_session_route_guard_audit.py
