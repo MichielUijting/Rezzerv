@@ -9,6 +9,7 @@ import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
 import KassaPage from '../../features/kassa/KassaPage.jsx'
 import SettingsPage from '../../features/settings/SettingsPage'
+import SettingsCapabilitiesPage from '../../features/settings/SettingsCapabilitiesPage.jsx'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
 import SettingsArticleGroupsPage from '../../features/settings/SettingsArticleGroupsPage'
 import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
@@ -140,6 +141,7 @@ const router = createBrowserRouter([
   { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
+  { path: '/instellingen/mogelijkheden', element: <ProtectedPermission permission="household_settings.manage" message="Alleen de beheerder kan de mogelijkheden van het huishouden uitbreiden."><SettingsCapabilitiesPage /></ProtectedPermission> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },
   { path: '/instellingen/artikelgroepen', element: <ProtectedSettings allowViewer={false}><SettingsArticleGroupsPage /></ProtectedSettings> },
   { path: '/instellingen/privacy-datadeling', element: <ProtectedSettings allowViewer={true}><SettingsPrivacyDataSharingPage /></ProtectedSettings> },
