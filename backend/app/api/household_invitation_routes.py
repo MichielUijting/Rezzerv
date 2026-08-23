@@ -16,6 +16,10 @@ from app.services.household_invitation_service import (
     list_household_invitations,
     revoke_household_invitation,
 )
+from app.services.household_invitation_target_policy import (
+    InvitationTargetNotAllowedError,
+    assert_household_invitation_target_allowed,
+)
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
     membership_active_condition,
@@ -135,6 +139,7 @@ def create_household_invitation_router(engine: Engine) -> APIRouter:
             with engine.begin() as conn:
                 context = _actor_context(conn, request)
                 _require_invitation_management(conn, context)
+                assert_household_invitation_target_allowed(conn, payload.email)
                 result = create_household_invitation(
                     conn,
                     household_id=context["household_id"],
@@ -143,6 +148,8 @@ def create_household_invitation_router(engine: Engine) -> APIRouter:
                 )
                 # The raw bearer token is intentionally not returned by I.1.
                 return {"ok": True, "invitation": result.invitation}
+        except InvitationTargetNotAllowedError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except InvitationConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
