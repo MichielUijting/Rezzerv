@@ -69,9 +69,50 @@ export async function selectPrimaryUseCase(context, primaryUseCase) {
   return payload
 }
 
+export async function completeInhuisHalenOnboarding(context, preferences) {
+  const key = contextCacheKey(context)
+  if (!key) throw new Error('Geen actief huishouden beschikbaar.')
+
+  const response = await fetch('/api/onboarding/inhuis-halen', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+    body: JSON.stringify(preferences),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw requestError(response.status, payload, 'Inhuis halen instellen mislukt.')
+  }
+  cachedKey = key
+  cachedState = payload
+  return payload
+}
+
 export function requiresInitialUseCase(state) {
   return Boolean(
     state?.initial_choice_required
     && state?.can_manage,
+  )
+}
+
+export function requiresManagedOnboarding(state) {
+  if (!state?.can_manage) return false
+  if (state?.initial_choice_required) return true
+  return Boolean(
+    state?.onboarding_status === 'in_progress'
+    && state?.onboarding_step === 'profile_follow_up'
+    && state?.primary_use_case === 'inhuis_halen',
+  )
+}
+
+export function isInhuisHalenFollowUp(state) {
+  return Boolean(
+    state?.onboarding_status === 'in_progress'
+    && state?.onboarding_step === 'profile_follow_up'
+    && state?.primary_use_case === 'inhuis_halen',
   )
 }

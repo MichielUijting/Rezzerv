@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.services.authorization_foundation_service import evaluate_household_permission
 from app.services.household_onboarding_service import (
+    ONBOARDING_STATUS_IN_PROGRESS,
     PRIMARY_USE_CASES,
     OnboardingAlreadyCompletedError,
+    complete_household_onboarding,
     public_household_onboarding_payload,
     resolve_household_onboarding_state,
     select_primary_use_case,
+)
+from app.services.household_product_configuration_service import (
+    public_household_product_configuration_payload,
+    save_inhuis_halen_configuration,
 )
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
@@ -37,6 +43,23 @@ class PrimaryUseCaseSelectionRequest(BaseModel):
         if normalized not in PRIMARY_USE_CASES:
             raise ValueError("Kies Inhuis halen, Wat Inhuis of Waar Inhuis")
         return normalized
+
+
+class InhuisHalenOnboardingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    simple_inventory_enabled: bool
+    almost_out_notifications_enabled: bool
+    receipt_processing_enabled: bool
+    recipes_enabled: bool
+
+    @model_validator(mode="after")
+    def validate_dependencies(self):
+        if not self.simple_inventory_enabled and self.almost_out_notifications_enabled:
+            raise ValueError(
+                "Bijna-op meldingen vereisen de eenvoudige voorraad van Inhuis halen"
+            )
+        return self
 
 
 def _regular_household_context(conn, request: Request) -> ServerSessionContext:
@@ -91,6 +114,17 @@ def _can_manage_onboarding(conn, context: ServerSessionContext) -> bool:
     return bool(decision.allowed)
 
 
+def _require_manage_onboarding(conn, context: ServerSessionContext) -> None:
+    if not _can_manage_onboarding(conn, context):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Ontbrekende huishoudpermissie: "
+                f"{HOUSEHOLD_ONBOARDING_MANAGE_PERMISSION}"
+            ),
+        )
+
+
 def create_household_onboarding_router(engine: Engine) -> APIRouter:
     router = APIRouter()
 
@@ -115,14 +149,7 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
     ):
         with engine.begin() as conn:
             context = _regular_household_context(conn, request)
-            if not _can_manage_onboarding(conn, context):
-                raise HTTPException(
-                    status_code=403,
-                    detail=(
-                        "Ontbrekende huishoudpermissie: "
-                        f"{HOUSEHOLD_ONBOARDING_MANAGE_PERMISSION}"
-                    ),
-                )
+            _require_manage_onboarding(conn, context)
             try:
                 state = select_primary_use_case(
                     conn,
@@ -135,5 +162,54 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 state,
                 can_manage=True,
             )
+
+    @router.post("/api/onboarding/inhuis-halen")
+    def complete_inhuis_halen(
+        payload: InhuisHalenOnboardingRequest,
+        request: Request,
+    ):
+        with engine.begin() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            household_id = str(context.active_household_id)
+            state = resolve_household_onboarding_state(conn, household_id)
+            if (
+                state.onboarding_status != ONBOARDING_STATUS_IN_PROGRESS
+                or state.onboarding_step != "profile_follow_up"
+                or state.primary_use_case != "inhuis_halen"
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Inhuis halen is niet de actieve onboardingstap.",
+                )
+
+            try:
+                configuration = save_inhuis_halen_configuration(
+                    conn,
+                    household_id=household_id,
+                    simple_inventory_enabled=payload.simple_inventory_enabled,
+                    almost_out_notifications_enabled=payload.almost_out_notifications_enabled,
+                    receipt_processing_enabled=payload.receipt_processing_enabled,
+                    recipes_enabled=payload.recipes_enabled,
+                )
+                completed_state = complete_household_onboarding(
+                    conn,
+                    household_id=household_id,
+                    expected_primary_use_case="inhuis_halen",
+                )
+            except OnboardingAlreadyCompletedError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+            return {
+                **public_household_onboarding_payload(
+                    completed_state,
+                    can_manage=True,
+                ),
+                "product_configuration": public_household_product_configuration_payload(
+                    configuration
+                ),
+            }
 
     return router
