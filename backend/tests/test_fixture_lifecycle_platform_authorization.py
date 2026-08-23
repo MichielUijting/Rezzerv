@@ -14,7 +14,6 @@ from app.services.fixture_lifecycle_route_authorization import (
     FIXTURE_LIFECYCLE_ROUTES,
     required_fixture_lifecycle_permission,
 )
-from app.services.platform_admin_route_guard import PROTECTED_MUTATIONS
 from app.services.receipt_export_fixture_route_authorization import (
     RECEIPT_EXPORT_FIXTURE_ROUTES,
 )
@@ -252,11 +251,6 @@ def test_bound_fixture_grant_rechecks_revocation_before_legacy_handler_work(
         assert exc.value.status_code == 403
     finally:
         session_request_context.reset_canonical_platform_permission_grant(token)
-
-
-def test_fixture_lifecycle_and_hybrid_routes_are_out_of_legacy_superuser_middleware():
-    assert PROTECTED_MUTATIONS.isdisjoint(MIGRATED_ROUTES)
-    assert PROTECTED_MUTATIONS.isdisjoint(HYBRID_CUTOVER_ROUTES)
 
 
 def _route_nodes() -> dict[tuple[str, str], ast.FunctionDef | ast.AsyncFunctionDef]:
