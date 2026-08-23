@@ -16,7 +16,7 @@ import SettingsAlmostOutPage from '../../features/settings/SettingsAlmostOutPage
 import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
 import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage'
 import SettingsAuthorizationPage from '../../features/settings/SettingsAuthorizationPage.jsx'
-import SettingsLocationsPage from '../../features/settings/SettingsLocationsPage'
+import SettingsLocationsRoutePage from '../../features/settings/SettingsLocationsRoutePage.jsx'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
 import Voorraad from '../../pages/Voorraad'
 import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
@@ -148,7 +148,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/winkelimport', element: <ProtectedSettings allowViewer={false}><SettingsStoreImportPage /></ProtectedSettings> },
   { path: '/instellingen/huishouden', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdPage /></ProtectedSettings> },
   { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettings allowViewer={true}><SettingsAuthorizationPage /></ProtectedSettings> },
-  { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsPage /></ProtectedSettings> },
+  { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsRoutePage /></ProtectedSettings> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
   { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
   { path: '/admin', element: <ProtectedAdmin><AdminPage /></ProtectedAdmin> },
