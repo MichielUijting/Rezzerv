@@ -4,9 +4,12 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import { readStoredAuthContext } from '../../lib/authSession.js'
 import InhuisHalenOnboardingPage from './InhuisHalenOnboardingPage.jsx'
+import WatInhuisOnboardingPage from './WatInhuisOnboardingPage.jsx'
 import {
   completeInhuisHalenOnboarding,
+  completeWatInhuisOnboarding,
   isInhuisHalenFollowUp,
+  isWatInhuisFollowUp,
   readHouseholdOnboarding,
   selectPrimaryUseCase,
 } from './onboardingState.js'
@@ -45,7 +48,7 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     try {
       const updated = await selectPrimaryUseCase(context, primaryUseCase)
       setOnboarding(updated)
-      if (primaryUseCase !== 'inhuis_halen') {
+      if (primaryUseCase === 'waar_inhuis') {
         onUseCaseSelected?.()
       }
     } catch (err) {
@@ -69,7 +72,22 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     }
   }
 
+  async function completeWatInhuis(preferences) {
+    setError('')
+    setSavingProfile(true)
+    try {
+      const updated = await completeWatInhuisOnboarding(context, preferences)
+      setOnboarding(updated)
+      onUseCaseSelected?.()
+    } catch (err) {
+      setError(err?.message || 'Wat Inhuis instellen mislukt.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
   const showInhuisHalenFollowUp = isInhuisHalenFollowUp(onboarding)
+  const showWatInhuisFollowUp = isWatInhuisFollowUp(onboarding)
 
   return (
     <div className="rz-screen" data-testid="onboarding-use-case-page">
@@ -80,6 +98,12 @@ export default function OnboardingPage({ onUseCaseSelected }) {
             {showInhuisHalenFollowUp ? (
               <InhuisHalenOnboardingPage
                 onSubmit={completeInhuisHalen}
+                saving={savingProfile}
+                error={error}
+              />
+            ) : showWatInhuisFollowUp ? (
+              <WatInhuisOnboardingPage
+                onSubmit={completeWatInhuis}
                 saving={savingProfile}
                 error={error}
               />
