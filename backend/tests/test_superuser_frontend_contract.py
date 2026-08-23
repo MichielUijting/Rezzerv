@@ -8,18 +8,21 @@ def _read(relative_path: str) -> str:
 
 
 def test_home_exposes_superuser_tile_only_through_superuser_visibility():
-    source = _read("frontend/src/features/home/HomePage.jsx")
-    assert "{ key: 'superuser', label: 'Superuser'" in source
-    assert "if (tile.key === 'superuser') return visibility.isPlatformSuperuser" in source
-    assert "navigate('/superuser')" in source
+    home = _read("frontend/src/features/home/HomePage.jsx")
+    navigation = _read("frontend/src/features/home/homeNavigation.js")
+    assert "{ key: 'superuser', label: 'Superuser'" in navigation
+    assert "if (tile.key === 'superuser') return visibility.isPlatformSuperuser" in navigation
+    assert "superuser: '/superuser'" in home
 
 
 def test_home_keeps_meldingen_for_regular_users_but_not_platform_superuser():
-    source = _read("frontend/src/features/home/HomePage.jsx")
-    assert "{ key: 'meldingen', label: 'Meldingen'" in source
-    assert "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser" in source
-    assert "if (key === 'meldingen') navigate('/meldingen')" in source
-    assert "visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen'" not in source
+    home = _read("frontend/src/features/home/HomePage.jsx")
+    navigation = _read("frontend/src/features/home/homeNavigation.js")
+    assert "{ key: 'meldingen', label: 'Meldingen'" in navigation
+    assert "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser" in navigation
+    assert "meldingen: '/meldingen'" in home
+    assert "visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen'" not in home
+    assert "visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen'" not in navigation
 
 
 def test_superuser_route_has_dedicated_guard_and_manage_center_page():
