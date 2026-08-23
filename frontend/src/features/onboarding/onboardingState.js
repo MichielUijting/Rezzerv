@@ -110,6 +110,15 @@ export function completeWatInhuisOnboarding(context, preferences) {
   )
 }
 
+export function completeWaarInhuisOnboarding(context, preferences) {
+  return completeProfileOnboarding(
+    context,
+    '/api/onboarding/waar-inhuis',
+    preferences,
+    'Waar Inhuis instellen mislukt.',
+  )
+}
+
 export function requiresInitialUseCase(state) {
   return Boolean(
     state?.initial_choice_required
@@ -133,8 +142,18 @@ export function isWatInhuisFollowUp(state) {
   )
 }
 
+export function isWaarInhuisFollowUp(state) {
+  return Boolean(
+    state?.onboarding_status === 'in_progress'
+    && state?.onboarding_step === 'profile_follow_up'
+    && state?.primary_use_case === 'waar_inhuis',
+  )
+}
+
 export function requiresManagedOnboarding(state) {
   if (!state?.can_manage) return false
   if (state?.initial_choice_required) return true
-  return isInhuisHalenFollowUp(state) || isWatInhuisFollowUp(state)
+  return isInhuisHalenFollowUp(state)
+    || isWatInhuisFollowUp(state)
+    || isWaarInhuisFollowUp(state)
 }

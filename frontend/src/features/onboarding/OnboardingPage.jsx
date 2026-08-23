@@ -5,11 +5,14 @@ import Button from '../../ui/Button.jsx'
 import { readStoredAuthContext } from '../../lib/authSession.js'
 import InhuisHalenOnboardingPage from './InhuisHalenOnboardingPage.jsx'
 import WatInhuisOnboardingPage from './WatInhuisOnboardingPage.jsx'
+import WaarInhuisOnboardingPage from './WaarInhuisOnboardingPage.jsx'
 import {
   completeInhuisHalenOnboarding,
   completeWatInhuisOnboarding,
+  completeWaarInhuisOnboarding,
   isInhuisHalenFollowUp,
   isWatInhuisFollowUp,
+  isWaarInhuisFollowUp,
   readHouseholdOnboarding,
   selectPrimaryUseCase,
 } from './onboardingState.js'
@@ -48,9 +51,6 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     try {
       const updated = await selectPrimaryUseCase(context, primaryUseCase)
       setOnboarding(updated)
-      if (primaryUseCase === 'waar_inhuis') {
-        onUseCaseSelected?.()
-      }
     } catch (err) {
       setError(err?.message || 'Gebruiksdoel opslaan mislukt.')
     } finally {
@@ -86,8 +86,23 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     }
   }
 
+  async function completeWaarInhuis(preferences) {
+    setError('')
+    setSavingProfile(true)
+    try {
+      const updated = await completeWaarInhuisOnboarding(context, preferences)
+      setOnboarding(updated)
+      onUseCaseSelected?.()
+    } catch (err) {
+      setError(err?.message || 'Waar Inhuis instellen mislukt.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
   const showInhuisHalenFollowUp = isInhuisHalenFollowUp(onboarding)
   const showWatInhuisFollowUp = isWatInhuisFollowUp(onboarding)
+  const showWaarInhuisFollowUp = isWaarInhuisFollowUp(onboarding)
 
   return (
     <div className="rz-screen" data-testid="onboarding-use-case-page">
@@ -104,6 +119,12 @@ export default function OnboardingPage({ onUseCaseSelected }) {
             ) : showWatInhuisFollowUp ? (
               <WatInhuisOnboardingPage
                 onSubmit={completeWatInhuis}
+                saving={savingProfile}
+                error={error}
+              />
+            ) : showWaarInhuisFollowUp ? (
+              <WaarInhuisOnboardingPage
+                onSubmit={completeWaarInhuis}
                 saving={savingProfile}
                 error={error}
               />

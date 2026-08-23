@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.services.authorization_foundation_service import evaluate_household_permission
+from app.services.household_location_onboarding_service import provision_waar_inhuis_locations
 from app.services.household_onboarding_service import (
     ONBOARDING_STATUS_IN_PROGRESS,
     PRIMARY_USE_CASES,
@@ -19,6 +20,7 @@ from app.services.household_product_configuration_service import (
     public_household_product_configuration_payload,
     save_inhuis_halen_configuration,
     save_wat_inhuis_configuration,
+    save_waar_inhuis_configuration,
 )
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
@@ -30,6 +32,15 @@ from app.services.server_session_service import (
 )
 
 HOUSEHOLD_ONBOARDING_MANAGE_PERMISSION = "household_settings.manage"
+
+
+def _normalize_location_name(value: str) -> str:
+    normalized = " ".join(str(value or "").strip().split())
+    if not normalized:
+        raise ValueError("Locatienaam is verplicht")
+    if len(normalized) > 120:
+        raise ValueError("Locatienaam mag maximaal 120 tekens bevatten")
+    return normalized
 
 
 class PrimaryUseCaseSelectionRequest(BaseModel):
@@ -78,6 +89,55 @@ class WatInhuisOnboardingRequest(BaseModel):
         if normalized not in {"presence", "quantity"}:
             raise ValueError("Kies aanwezigheid of aantallen")
         return normalized
+
+
+class WaarInhuisSublocationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    space_name: str
+    name: str
+
+    @field_validator("space_name", "name")
+    @classmethod
+    def validate_location_names(cls, value: str) -> str:
+        return _normalize_location_name(value)
+
+
+class WaarInhuisOnboardingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    main_locations: list[str] = Field(min_length=1, max_length=12)
+    sublocations: list[WaarInhuisSublocationRequest] = Field(default_factory=list, max_length=30)
+    unpacking_enabled: bool
+    receipt_processing_enabled: bool
+    almost_out_enabled: bool
+
+    @field_validator("main_locations")
+    @classmethod
+    def validate_main_locations(cls, values: list[str]) -> list[str]:
+        normalized = [_normalize_location_name(value) for value in values]
+        keys = [value.casefold() for value in normalized]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Een hoofdlocatie mag maar één keer worden gekozen")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_sublocation_parents(self):
+        selected = {name.casefold() for name in self.main_locations}
+        seen: set[tuple[str, str]] = set()
+        for sublocation in self.sublocations:
+            parent_key = sublocation.space_name.casefold()
+            if parent_key not in selected:
+                raise ValueError(
+                    f"Sublocatie '{sublocation.name}' hoort niet bij een gekozen hoofdlocatie"
+                )
+            duplicate_key = (parent_key, sublocation.name.casefold())
+            if duplicate_key in seen:
+                raise ValueError(
+                    f"Sublocatie '{sublocation.name}' is dubbel gekozen"
+                )
+            seen.add(duplicate_key)
+        return self
 
 
 def _regular_household_context(conn, request: Request) -> ServerSessionContext:
@@ -229,10 +289,7 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
             return {
-                **public_household_onboarding_payload(
-                    completed_state,
-                    can_manage=True,
-                ),
+                **public_household_onboarding_payload(completed_state, can_manage=True),
                 "product_configuration": public_household_product_configuration_payload(
                     configuration
                 ),
@@ -273,13 +330,63 @@ def create_household_onboarding_router(engine: Engine) -> APIRouter:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
             return {
-                **public_household_onboarding_payload(
-                    completed_state,
-                    can_manage=True,
-                ),
+                **public_household_onboarding_payload(completed_state, can_manage=True),
                 "product_configuration": public_household_product_configuration_payload(
                     configuration
                 ),
+            }
+
+    @router.post("/api/onboarding/waar-inhuis")
+    def complete_waar_inhuis(
+        payload: WaarInhuisOnboardingRequest,
+        request: Request,
+    ):
+        with engine.begin() as conn:
+            context = _regular_household_context(conn, request)
+            _require_manage_onboarding(conn, context)
+            household_id = str(context.active_household_id)
+            _require_profile_follow_up(
+                conn,
+                household_id=household_id,
+                primary_use_case="waar_inhuis",
+            )
+
+            try:
+                location_setup = provision_waar_inhuis_locations(
+                    conn,
+                    household_id=household_id,
+                    main_locations=payload.main_locations,
+                    sublocations=[
+                        {
+                            "space_name": item.space_name,
+                            "name": item.name,
+                        }
+                        for item in payload.sublocations
+                    ],
+                )
+                configuration = save_waar_inhuis_configuration(
+                    conn,
+                    household_id=household_id,
+                    unpacking_enabled=payload.unpacking_enabled,
+                    receipt_processing_enabled=payload.receipt_processing_enabled,
+                    almost_out_enabled=payload.almost_out_enabled,
+                )
+                completed_state = complete_household_onboarding(
+                    conn,
+                    household_id=household_id,
+                    expected_primary_use_case="waar_inhuis",
+                )
+            except OnboardingAlreadyCompletedError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+            return {
+                **public_household_onboarding_payload(completed_state, can_manage=True),
+                "product_configuration": public_household_product_configuration_payload(
+                    configuration
+                ),
+                "location_setup": location_setup,
             }
 
     return router
