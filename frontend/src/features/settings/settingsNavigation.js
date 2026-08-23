@@ -1,5 +1,13 @@
 const SETTINGS_TILES = [
   {
+    key: 'capabilities',
+    title: 'Wat wil je met Inhuis doen?',
+    description: 'Voeg later extra mogelijkheden toe zonder opnieuw te beginnen',
+    to: '/instellingen/mogelijkheden',
+    permission: 'household_settings.manage',
+    relevance: 'always',
+  },
+  {
     key: 'article-details',
     title: 'Artikeldetails',
     description: 'Veldzichtbaarheid',
