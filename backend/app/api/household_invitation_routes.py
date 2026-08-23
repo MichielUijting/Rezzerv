@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
-from app.db import engine as default_engine
 from app.services.authorization_membership_service import (
     AuthorizationDeniedError,
     require_household_permission,
@@ -185,6 +184,3 @@ def create_household_invitation_router(engine: Engine) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return router
-
-
-router = create_household_invitation_router(default_engine)
