@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - 'backend/app/api/product_inventory_group_routes.py'
-      - 'backend/app/services/platform_admin_route_guard.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/session_request_context.py'
       - 'backend/tests/test_technical_schema_platform_route_authorization.py'
