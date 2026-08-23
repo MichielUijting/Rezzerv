@@ -230,3 +230,91 @@ def provision_waar_inhuis_locations(
             for sublocation in provisioned_sublocations
         ],
     }
+
+
+def provision_waar_inhuis_expansion_locations(
+    conn,
+    *,
+    household_id: str,
+    main_locations: list[str],
+    sublocations: list[dict[str, str]],
+) -> dict[str, list[dict[str, str]]]:
+    """Add only missing location detail while preserving every existing location."""
+    normalized_household_id = str(household_id or "").strip()
+    if not normalized_household_id:
+        raise ValueError("Huishouden ontbreekt")
+    if len(main_locations) > 12:
+        raise ValueError("Voeg maximaal 12 nieuwe hoofdlocaties tegelijk toe")
+    if len(sublocations) > 30:
+        raise ValueError("Voeg maximaal 30 nieuwe sublocaties tegelijk toe")
+
+    ensure_location_foundation(conn)
+    existing_rows = conn.execute(text("""
+        SELECT id, naam
+        FROM spaces
+        WHERE household_id = :household_id
+          AND COALESCE(active, 1) = 1
+        ORDER BY lower(trim(naam)), id
+    """), {"household_id": normalized_household_id}).mappings().all()
+
+    spaces_by_key: dict[str, ProvisionedSpace] = {
+        _normalize_name(row.get("naam"), label="Hoofdlocatie").casefold(): ProvisionedSpace(
+            id=str(row.get("id") or "").strip(),
+            name=_normalize_name(row.get("naam"), label="Hoofdlocatie"),
+        )
+        for row in existing_rows
+    }
+
+    added_spaces: list[ProvisionedSpace] = []
+    seen_new: set[str] = set()
+    for raw_name in main_locations:
+        normalized_name = _normalize_name(raw_name, label="Hoofdlocatie")
+        key = normalized_name.casefold()
+        if key in seen_new:
+            raise ValueError(f"Hoofdlocatie '{normalized_name}' is dubbel gekozen")
+        seen_new.add(key)
+        if key in spaces_by_key:
+            continue
+        space = _resolve_or_create_space(
+            conn,
+            household_id=normalized_household_id,
+            name=normalized_name,
+        )
+        spaces_by_key[key] = space
+        added_spaces.append(space)
+
+    if not spaces_by_key:
+        raise ValueError("Kies minimaal één hoofdlocatie om Waar Inhuis toe te voegen")
+
+    added_sublocations: list[ProvisionedSublocation] = []
+    seen_sublocations: set[tuple[str, str]] = set()
+    for item in sublocations:
+        space_name = _normalize_name(item.get("space_name"), label="Hoofdlocatie bij sublocatie")
+        sublocation_name = _normalize_name(item.get("name"), label="Sublocatie")
+        space = spaces_by_key.get(space_name.casefold())
+        if not space:
+            raise ValueError(
+                f"Sublocatie '{sublocation_name}' verwijst naar een onbekende hoofdlocatie"
+            )
+        duplicate_key = (space.name.casefold(), sublocation_name.casefold())
+        if duplicate_key in seen_sublocations:
+            raise ValueError(
+                f"Sublocatie '{sublocation_name}' is dubbel gekozen onder '{space.name}'"
+            )
+        seen_sublocations.add(duplicate_key)
+        added_sublocations.append(
+            _resolve_or_create_sublocation(conn, space=space, name=sublocation_name)
+        )
+
+    return {
+        "spaces": [{"id": item.id, "name": item.name} for item in added_spaces],
+        "sublocations": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "space_id": item.space_id,
+                "space_name": item.space_name,
+            }
+            for item in added_sublocations
+        ],
+    }
