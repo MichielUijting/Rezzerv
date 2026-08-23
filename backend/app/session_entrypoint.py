@@ -31,6 +31,9 @@ from app.services.external_database_route_authorization import (
     authorize_external_database_request,
     required_external_database_permission,
 )
+from app.services.external_relation_batch_decision_route_authorization import (
+    required_external_relation_batch_decision_permission,
+)
 from app.services.fixture_lifecycle_route_authorization import (
     required_fixture_lifecycle_permission,
 )
@@ -212,6 +215,16 @@ async def server_session_request_context(request: Request, call_next):
             )
             archived_receipt_purge_context_token = bind_archived_receipt_purge_platform_context(
                 purge_context
+            )
+
+        external_relation_batch_decision_permission = required_external_relation_batch_decision_permission(
+            request.method,
+            request.url.path,
+        )
+        if external_relation_batch_decision_permission is not None:
+            require_platform_permission_from_session(
+                external_relation_batch_decision_permission,
+                request.headers.get("authorization"),
             )
 
         # External database routes used to rely only on frontend navigation.
