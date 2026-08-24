@@ -34,10 +34,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install backend dependencies
+      - name: Install backend and test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt pytest
 
       - name: Compile platform Sessions boundary and tests
         run: |
@@ -51,7 +51,7 @@ jobs:
         env:
           PYTHONPATH: .
           DATABASE_URL: 'sqlite:///:memory:'
-        run: pytest -q tests/test_platform_sessions_route_authorization.py
+        run: python -m pytest -q tests/test_platform_sessions_route_authorization.py
 
       - name: Run existing server-side session security selftest
         env:
