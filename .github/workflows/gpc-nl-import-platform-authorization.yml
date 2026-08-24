@@ -6,6 +6,9 @@ on:
       - 'backend/app/api/product_inventory_group_routes.py'
       - 'backend/tests/test_gpc_nl_import_platform_authorization.py'
       - 'backend/tests/test_technical_schema_platform_route_authorization.py'
+      - 'frontend/src/features/platform/PlatformTechnicalConfigurationPage.jsx'
+      - 'frontend/src/features/platform/PlatformCapabilityPage.jsx'
+      - 'frontend/tests/e2e/session-none-context.frontend-regression.spec.js'
       - '.github/workflows/gpc-nl-import-platform-authorization.yml'
 
 jobs:
