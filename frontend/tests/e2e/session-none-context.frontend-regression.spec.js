@@ -54,6 +54,7 @@ async function mockNoneSession(page, session = noneSession) {
 test('none session gets a permission-driven platform landing and stays household-free', async ({ page }) => {
   let loginCalled = false
   let logoutCalled = false
+  const diagnosticRequests = []
 
   await page.route('**/api/auth/login', async (route) => {
     loginCalled = true
@@ -63,6 +64,34 @@ test('none session gets a permission-driven platform landing and stays household
   await page.route('**/api/auth/logout', async (route) => {
     logoutCalled = true
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+  })
+  await page.route('**/api/admin/kassa-regression/status', async (route) => {
+    diagnosticRequests.push(route.request().method())
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'idle',
+        message: 'Nog niet gestart',
+        progress_current: 0,
+        progress_total: 18,
+        finished_at: null,
+      }),
+    })
+  })
+  await page.route('**/api/admin/kassa-smoke/status', async (route) => {
+    diagnosticRequests.push(route.request().method())
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'passed',
+        message: 'Kassa smoke-check afgerond',
+        progress_current: 6,
+        progress_total: 6,
+        finished_at: '2026-08-24T11:30:00+00:00',
+      }),
+    })
   })
 
   await page.goto('/login')
@@ -88,7 +117,13 @@ test('none session gets a permission-driven platform landing and stays household
 
   await page.getByTestId('platform-home-tile-diagnostics').click()
   await expect(page).toHaveURL(/\/platform\/diagnostiek$/)
-  await expect(page.getByTestId('platform-capability-diagnostics')).toBeVisible()
+  await expect(page.getByTestId('platform-diagnostics-page')).toBeVisible()
+  await expect(page.getByTestId('platform-diagnostic-regression')).toContainText('Status: idle')
+  await expect(page.getByTestId('platform-diagnostic-regression')).toContainText('Voortgang: 0 / 18')
+  await expect(page.getByTestId('platform-diagnostic-smoke')).toContainText('Status: passed')
+  await expect(page.getByTestId('platform-diagnostic-smoke')).toContainText('Voortgang: 6 / 6')
+  expect(diagnosticRequests).toEqual(['GET', 'GET'])
+  await expect(page.getByText('Het starten van controles hoort bij Achtergrondtaken en is hier niet beschikbaar.')).toBeVisible()
   await page.getByRole('button', { name: 'Terug naar platformbeheer' }).click()
   await expect(page).toHaveURL(/\/home$/)
 
@@ -137,4 +172,23 @@ test('platform navigation and direct routes both fail closed without the concret
   await page.goto('/platform/logs')
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('none-session-home')).toBeVisible()
+})
+
+test('diagnostics direct route stays closed without platform.diagnostics.view and performs no status reads', async ({ page }) => {
+  const auditOnlySession = {
+    ...noneSession,
+    permissions: { 'platform.audit.view': true },
+    supported_permissions: ['platform.audit.view'],
+  }
+  let diagnosticReads = 0
+  await mockNoneSession(page, auditOnlySession)
+  await page.route('**/api/admin/kassa-*/status', async (route) => {
+    diagnosticReads += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+  })
+
+  await page.goto('/platform/diagnostiek')
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('none-session-home')).toBeVisible()
+  expect(diagnosticReads).toBe(0)
 })
