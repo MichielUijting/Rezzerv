@@ -4,6 +4,7 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import PlatformAuditPage from './PlatformAuditPage.jsx'
 import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
+import PlatformTechnicalConfigurationPage from './PlatformTechnicalConfigurationPage.jsx'
 
 export default function PlatformCapabilityPage({ item }) {
   const navigate = useNavigate()
@@ -14,6 +15,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'audit') {
     return <PlatformAuditPage />
+  }
+
+  if (item?.key === 'technical-configuration') {
+    return <PlatformTechnicalConfigurationPage />
   }
 
   return (
