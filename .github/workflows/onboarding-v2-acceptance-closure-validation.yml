@@ -1,0 +1,131 @@
+name: Onboarding v2 acceptance closure validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/onboarding-v2-acceptance-closure-validation.yml'
+      - 'docs/product/INHUIS_PRODUCTONTWERP_ONBOARDING_V2.md'
+      - 'docs/product/ONBOARDING_V2_ACCEPTANCE_CLOSURE.md'
+      - 'backend/app/**'
+      - 'backend/tests/**'
+      - 'frontend/src/**'
+      - 'frontend/tests/**'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+  workflow_dispatch:
+
+jobs:
+  onboarding-v2-acceptance-closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: backend
+      REZZERV_EMAIL_ENABLED: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+
+      - name: Validate A — consumer account foundation
+        run: python backend/tests/consumer_account_registration_selftest.py
+
+      - name: Validate B — onboarding use-case foundation
+        run: python backend/tests/onboarding_use_case_foundation_selftest.py
+
+      - name: Validate C — Inhuis halen
+        run: python backend/tests/inhuis_halen_onboarding_selftest.py
+
+      - name: Validate D — Wat Inhuis
+        run: python backend/tests/wat_inhuis_onboarding_selftest.py
+
+      - name: Validate E — Waar Inhuis and shared/locationless foundations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/waar_inhuis_onboarding_selftest.py
+          python backend/tests/shared_household_minimum_selftest.py
+          python -m pytest -q backend/tests/test_locationless_inventory_identity_guard.py
+
+      - name: Validate F — dynamic navigation projection
+        run: python backend/tests/dynamic_navigation_product_projection_selftest.py
+
+      - name: Validate H — circular capability expansion
+        run: python backend/tests/circular_capability_expansion_selftest.py
+
+      - name: Validate I.1 — invitation foundation and target policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/household_invitation_foundation_selftest.py
+          python backend/tests/household_invitation_target_policy_selftest.py
+
+      - name: Validate I.2 — invitation acceptance and household context
+        run: python backend/tests/household_invitation_acceptance_selftest.py
+
+      - name: Validate I.3 — invitation delivery and secret redaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/household_invitation_delivery_selftest.py
+          python backend/tests/household_invitation_delivery_redaction_selftest.py
+
+      - name: Validate I.4 — legacy member-create closure
+        run: python backend/tests/household_member_legacy_closure_selftest.py
+
+      - name: Validate server-session household authority
+        run: >-
+          python -m pytest -q
+          backend/tests/test_server_session_routes.py
+          backend/tests/test_server_session_service.py
+          backend/tests/test_session_request_context.py
+
+      - name: Validate I.5 cross-slice closure invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$(python backend/tests/onboarding_v2_acceptance_closure_selftest.py)"
+          printf '%s\n' "$output"
+          grep -Fq 'ONBOARDING_V2_I5_ACCEPTANCE_CLOSURE_SELFTEST_GREEN' <<<"$output"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Validate F/G/H frontend product contracts
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/dynamic-home-navigation.contract.mjs
+          node tests/dynamic-settings-navigation.contract.mjs
+          node tests/circular-capability-expansion.contract.mjs
+
+      - name: Validate I.2/I.4 frontend invitation contracts
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/invitation-acceptance.contract.mjs
+          node src/features/settings/SettingsHouseholdPage.invitations.contract.test.js
+
+      - name: Build production frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Emit I.5 acceptance marker
+        run: echo ONBOARDING_V2_I5_ACCEPTANCE_CLOSURE_GREEN
