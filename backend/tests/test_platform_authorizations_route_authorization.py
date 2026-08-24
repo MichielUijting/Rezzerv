@@ -4,7 +4,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.platform_authorizations_routes import PLATFORM_AUTHORIZATIONS_PERMISSION
 from app.services.authorization_foundation_service import (
-    PLATFORM_PERMISSIONS,
     ROLE_PERMISSIONS,
     ensure_authorization_foundation,
     evaluate_platform_permission,
@@ -56,11 +55,10 @@ def test_platform_authorizations_uses_existing_canonical_permission_matrix():
     assert PLATFORM_AUTHORIZATIONS_PERMISSION == "platform.permissions.manage"
     assert PLATFORM_AUTHORIZATIONS_PERMISSION in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_AUTHORIZATIONS_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
-    assert PLATFORM_AUTHORIZATIONS_PERMISSION in ROLE_PERMISSIONS["platform.superuser"]
+    assert PLATFORM_AUTHORIZATIONS_PERMISSION not in ROLE_PERMISSIONS["platform.superuser"]
     assert PLATFORM_AUTHORIZATIONS_PERMISSION not in ROLE_PERMISSIONS["platform.frontteam"]
     assert PLATFORM_AUTHORIZATIONS_PERMISSION not in ROLE_PERMISSIONS["platform.support_read"]
     assert PLATFORM_AUTHORIZATIONS_PERMISSION not in ROLE_PERMISSIONS["household.admin"]
-    assert set(ROLE_PERMISSIONS["platform.superuser"]) == set(PLATFORM_PERMISSIONS)
 
 
 def test_authorization_inventory_is_safe_and_only_platform_admin_is_mutable():
@@ -146,7 +144,7 @@ def test_revoke_platform_admin_is_live_audited_and_preserves_special_role():
         ensure_authorization_foundation(conn)
         _insert_user(conn, "actor", "actor@example.test")
         _insert_user(conn, "target", "target@example.test")
-        _assign_role(conn, "actor", "platform.superuser")
+        _assign_role(conn, "actor", PLATFORM_ADMIN_ROLE_KEY)
         _assign_role(conn, "target", "platform.ip_owner")
         _assign_role(conn, "target", PLATFORM_ADMIN_ROLE_KEY)
 
