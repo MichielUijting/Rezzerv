@@ -87,8 +87,8 @@ function LegacyReceiptLineRouteRedirect() {
   return <Navigate to={target} replace />
 }
 
-function Protected({ children }) {
-  return <AuthGuard>{children}</AuthGuard>
+function Protected({ children, allowNone = false }) {
+  return <AuthGuard allowNone={allowNone}>{children}</AuthGuard>
 }
 
 function ProtectedAdmin({ children }) {
@@ -99,8 +99,8 @@ function ProtectedFrontteam({ children }) {
   return <AuthGuard><FrontteamGuard>{children}</FrontteamGuard></AuthGuard>
 }
 
-function ProtectedPermission({ permission, children, message }) {
-  return <AuthGuard><PermissionGuard permission={permission} message={message}>{children}</PermissionGuard></AuthGuard>
+function ProtectedPermission({ permission, children, message, allowNone = false }) {
+  return <AuthGuard allowNone={allowNone}><PermissionGuard permission={permission} message={message}>{children}</PermissionGuard></AuthGuard>
 }
 
 function ProtectedSettings({ children, allowViewer = true }) {
@@ -118,7 +118,7 @@ const router = createBrowserRouter([
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
-  { path: '/home', element: <Protected><HomePage /></Protected> },
+  { path: '/home', element: <Protected allowNone><HomePage /></Protected> },
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/superuser', element: <ProtectedSuperuser><SuperuserDashboardPage /></ProtectedSuperuser> },
   { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },

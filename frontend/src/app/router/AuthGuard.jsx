@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { clearAuthSession, fetchAuthContext, readStoredAuthContext } from '../../lib/authSession'
 import { fetchHouseholdOnboarding, requiresManagedOnboarding } from '../../features/onboarding/onboardingState.js'
 
-export default function AuthGuard({ children }) {
+export default function AuthGuard({ children, allowNone = false }) {
   const location = useLocation()
   const [status, setStatus] = useState('checking')
   const [onboarding, setOnboarding] = useState(null)
@@ -37,7 +37,7 @@ export default function AuthGuard({ children }) {
   if (status !== 'ready') return <div className="rz-screen"><div className="rz-content"><div className="rz-content-inner">Sessie controleren…</div></div></div>
 
   const context = readStoredAuthContext()
-  if (context?.context_type === 'none' && location.pathname !== '/home') {
+  if (context?.context_type === 'none' && !allowNone) {
     return <Navigate to="/home" replace />
   }
 
