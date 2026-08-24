@@ -13,7 +13,11 @@ from app.services.household_invitation_acceptance_service import (
     preview_household_invitation,
     provision_invited_consumer_account,
 )
-from app.services.household_invitation_service import InvitationConflictError, InvitationNotFoundError
+from app.services.household_invitation_service import (
+    InvitationConflictError,
+    InvitationNotFoundError,
+    resolve_pending_invitation_token,
+)
 from app.services.household_invitation_target_policy import InvitationTargetNotAllowedError
 from app.services.server_session_service import (
     DEFAULT_SESSION_TTL,
@@ -90,6 +94,7 @@ def create_household_invitation_acceptance_router(
         try:
             with engine.begin() as conn:
                 preview = preview_household_invitation(conn, raw_token=raw_token)
+                invitation = resolve_pending_invitation_token(conn, raw_token=raw_token)
                 authenticated = False
                 authenticated_email_matches = False
                 raw_session_id = request.cookies.get(SESSION_COOKIE_NAME)
@@ -99,7 +104,7 @@ def create_household_invitation_acceptance_router(
                         authenticated = True
                         authenticated_email_matches = (
                             str(current.email or "").strip().lower()
-                            == str(preview.get("invitee_email_masked") or "").strip().lower()
+                            == str(invitation.get("invitee_email") or "").strip().lower()
                         )
                     except HTTPException:
                         pass
@@ -157,7 +162,7 @@ def create_household_invitation_acceptance_router(
         try:
             with engine.begin() as conn:
                 invitation_preview = preview_household_invitation(conn, raw_token=raw_token)
-                # Exact e-mail binding is enforced again inside accept_household_invitation;
+                # Exact e-mail binding is enforced inside accept_household_invitation;
                 # preview deliberately exposes only a masked address.
                 account = provision_invited_consumer_account(
                     conn,
