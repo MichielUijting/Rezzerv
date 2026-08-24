@@ -11,6 +11,7 @@ import PlatformRecoveryPage from './PlatformRecoveryPage.jsx'
 import PlatformSessionsPage from './PlatformSessionsPage.jsx'
 import PlatformTechnicalConfigurationPage from './PlatformTechnicalConfigurationPage.jsx'
 import PlatformTestFixturesPage from './PlatformTestFixturesPage.jsx'
+import PlatformUsersPage from './PlatformUsersPage.jsx'
 
 export default function PlatformCapabilityPage({ item }) {
   const navigate = useNavigate()
@@ -49,6 +50,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'sessions') {
     return <PlatformSessionsPage />
+  }
+
+  if (item?.key === 'users') {
+    return <PlatformUsersPage />
   }
 
   return (
