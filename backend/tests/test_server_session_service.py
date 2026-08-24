@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.services.authorization_foundation_service import (
     ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS,
+    ROLE_PERMISSIONS,
     V2_SUPERUSER_TARGET_PERMISSIONS,
     ensure_authorization_foundation,
 )
@@ -162,6 +163,7 @@ def test_platform_admin_none_session_is_sql_null_and_resolves_without_membership
     assert created.active_household_id is resolved.active_household_id is None
     assert created.context_type == resolved.context_type == 'none'
     assert created.role is resolved.role is None
+    expected_permissions = set(ROLE_PERMISSIONS['platform.platform_admin'])
     assert public_session_payload(resolved) == {
         'user': {'id': 'platform-admin', 'email': 'platform@example.test'},
         'user_id': 'platform-admin',
@@ -171,8 +173,8 @@ def test_platform_admin_none_session_is_sql_null_and_resolves_without_membership
         'context_type': 'none',
         'role': None,
         'display_role': None,
-        'permissions': {},
-        'supported_permissions': [],
+        'permissions': {key: True for key in sorted(expected_permissions)},
+        'supported_permissions': sorted(expected_permissions),
         'can_manage_member_permissions': False,
         'can_manage_members': False,
         'is_viewer': False,

@@ -970,6 +970,8 @@ def rotate_active_household(
 
 def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
     if context.context_type == "none":
+        granted_permissions = set(ROLE_PERMISSIONS["platform.platform_admin"])
+        permissions = {key: True for key in sorted(granted_permissions)}
         return {
             "user": {"id": context.user_id, "email": context.email},
             "user_id": context.user_id,
@@ -979,8 +981,8 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
             "context_type": context.context_type,
             "role": None,
             "display_role": None,
-            "permissions": {},
-            "supported_permissions": [],
+            "permissions": permissions,
+            "supported_permissions": sorted(granted_permissions),
             "can_manage_member_permissions": False,
             "can_manage_members": False,
             "is_viewer": False,

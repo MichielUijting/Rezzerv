@@ -4,7 +4,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
-from app.services.authorization_foundation_service import ensure_authorization_foundation
+from app.services.authorization_foundation_service import (
+    ROLE_PERMISSIONS,
+    ensure_authorization_foundation,
+)
 from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
@@ -440,8 +443,11 @@ def test_platform_admin_only_login_creates_resolvable_none_session():
     assert response.json()["active_household_name"] == ""
     assert response.json()["role"] is None
     assert response.json()["display_role"] is None
-    assert response.json()["permissions"] == {}
-    assert response.json()["supported_permissions"] == []
+    expected_permissions = set(ROLE_PERMISSIONS["platform.platform_admin"])
+    assert response.json()["permissions"] == {
+        key: True for key in sorted(expected_permissions)
+    }
+    assert response.json()["supported_permissions"] == sorted(expected_permissions)
     assert response.json()["context_type"] == "none"
     assert "platform_roles" not in response.json()
 
