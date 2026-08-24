@@ -94,15 +94,17 @@ export default function PlatformDiagnosticsPage() {
                 {DIAGNOSTIC_CHECKS.map((check) => {
                   const status = statuses[check.key] || {}
                   return (
-                    <Card key={check.key} className="rz-card-home" data-testid={`platform-diagnostic-${check.key}`}>
-                      <h3>{check.label}</h3>
-                      <p>Status: <strong>{displayValue(status.status, 'onbekend')}</strong></p>
-                      <p>{displayValue(status.message, 'Geen statusmelding.')}</p>
-                      <p>
-                        Voortgang: {displayValue(status.progress_current, '0')} / {displayValue(status.progress_total, '0')}
-                      </p>
-                      <p>Laatst afgerond: {displayValue(status.finished_at)}</p>
-                    </Card>
+                    <div key={check.key} data-testid={`platform-diagnostic-${check.key}`}>
+                      <Card className="rz-card-home">
+                        <h3>{check.label}</h3>
+                        <p>Status: <strong>{displayValue(status.status, 'onbekend')}</strong></p>
+                        <p>{displayValue(status.message, 'Geen statusmelding.')}</p>
+                        <p>
+                          Voortgang: {displayValue(status.progress_current, '0')} / {displayValue(status.progress_total, '0')}
+                        </p>
+                        <p>Laatst afgerond: {displayValue(status.finished_at)}</p>
+                      </Card>
+                    </div>
                   )
                 })}
               </div>
