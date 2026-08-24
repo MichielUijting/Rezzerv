@@ -1,0 +1,64 @@
+name: Household invitation UI closure validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/legacy_household_member_creation_closure.py'
+      - 'backend/app/api/router.py'
+      - 'backend/tests/household_member_legacy_closure_selftest.py'
+      - 'frontend/src/features/settings/SettingsHouseholdPage.jsx'
+      - 'frontend/src/features/settings/SettingsHouseholdPage.invitations.contract.test.js'
+      - 'frontend/src/features/settings/settingsHousehold.css'
+      - 'frontend/src/features/settings/services/householdMembersService.js'
+      - 'frontend/src/features/settings/services/householdInvitationsService.js'
+      - 'frontend/tests/e2e/settings-authorization.frontend-regression.spec.js'
+      - '.github/workflows/household-invitation-ui-closure-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Compile legacy closure
+        working-directory: backend
+        run: |
+          python -m py_compile app/api/legacy_household_member_creation_closure.py
+          python -m py_compile app/api/router.py
+          python -m py_compile tests/household_member_legacy_closure_selftest.py
+
+      - name: Validate legacy member creation is fail-closed
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python tests/household_member_legacy_closure_selftest.py | tee /tmp/household-member-closure.log
+          grep -F 'HOUSEHOLD_MEMBER_LEGACY_CLOSURE_GREEN' /tmp/household-member-closure.log
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate household invitation UI contract
+        working-directory: frontend
+        run: |
+          node src/features/settings/SettingsHouseholdPage.invitations.contract.test.js | tee /tmp/household-invitation-ui.log
+          grep -F 'HOUSEHOLD_INVITATION_UI_CONTRACT_GREEN' /tmp/household-invitation-ui.log
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: I.4 household UI closure gate marker
+        run: echo 'ONBOARDING_V2_I4_HOUSEHOLD_UI_CLOSURE_GREEN'
