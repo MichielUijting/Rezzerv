@@ -6,6 +6,7 @@ on:
       - 'backend/app/api/household_invitation_routes.py'
       - 'backend/app/services/household_invitation_delivery_service.py'
       - 'backend/tests/household_invitation_delivery_selftest.py'
+      - 'backend/tests/household_invitation_delivery_redaction_selftest.py'
       - '.github/workflows/household-invitation-delivery-validation.yml'
   workflow_dispatch:
 
@@ -31,12 +32,19 @@ jobs:
           python -m py_compile app/api/household_invitation_routes.py
           python -m py_compile app/services/household_invitation_delivery_service.py
           python -m py_compile tests/household_invitation_delivery_selftest.py
+          python -m py_compile tests/household_invitation_delivery_redaction_selftest.py
 
       - name: Validate invitation delivery security contract
         working-directory: backend
         run: |
           PYTHONPATH=. python tests/household_invitation_delivery_selftest.py | tee /tmp/invitation-delivery.log
           grep -F 'HOUSEHOLD_INVITATION_DELIVERY_GREEN' /tmp/invitation-delivery.log
+
+      - name: Validate provider error token redaction
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python tests/household_invitation_delivery_redaction_selftest.py | tee /tmp/invitation-delivery-redaction.log
+          grep -F 'HOUSEHOLD_INVITATION_DELIVERY_REDACTION_GREEN' /tmp/invitation-delivery-redaction.log
 
       - name: Invitation delivery gate marker
         run: echo 'ONBOARDING_V2_I3_INVITATION_DELIVERY_GREEN'
