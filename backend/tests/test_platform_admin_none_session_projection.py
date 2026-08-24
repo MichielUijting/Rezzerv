@@ -1,7 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
-from app.services.authorization_foundation_service import HOUSEHOLD_PERMISSIONS, ROLE_PERMISSIONS
-from app.services.server_session_service import ServerSessionContext, public_session_payload
+from app.services.authorization_foundation_service import (
+    HOUSEHOLD_PERMISSIONS,
+    ROLE_PERMISSIONS,
+)
+from app.services.server_session_service import (
+    ServerSessionContext,
+    public_session_payload,
+)
 
 
 def test_platform_admin_none_session_projects_exact_platform_permissions():
@@ -19,7 +25,9 @@ def test_platform_admin_none_session_projects_exact_platform_permissions():
     )
     payload = public_session_payload(context)
     expected_permissions = set(ROLE_PERMISSIONS["platform.platform_admin"])
-    granted_permissions = {key for key, allowed in payload["permissions"].items() if allowed}
+    granted_permissions = {
+        key for key, allowed in payload["permissions"].items() if allowed
+    }
 
     assert granted_permissions == expected_permissions
     assert payload["supported_permissions"] == sorted(expected_permissions)
