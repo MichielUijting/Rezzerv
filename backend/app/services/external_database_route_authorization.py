@@ -6,6 +6,10 @@ from fastapi import HTTPException
 from sqlalchemy.engine import Connection
 
 from app.services.authorization_foundation_service import evaluate_platform_permission
+from app.services.platform_feature_flag_service import (
+    FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH,
+    is_platform_feature_enabled,
+)
 
 EXTERNAL_DATABASE_PREFIX = "/api/external-databases"
 EXTERNAL_PRODUCTS_OFF_SEARCH_PATH = "/api/external-products/off/search"
@@ -57,5 +61,13 @@ def authorize_external_database_request(
         raise HTTPException(
             status_code=403,
             detail="Onvoldoende platformbevoegdheid voor externe databases",
+        )
+    if (
+        permission_key == "platform.external_products.search"
+        and not is_platform_feature_enabled(conn, FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH)
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="Externe productzoekfunctie is platformbreed uitgeschakeld",
         )
     return permission_key
