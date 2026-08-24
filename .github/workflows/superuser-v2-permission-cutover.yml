@@ -5,6 +5,7 @@ on:
     paths:
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/server_session_service.py'
+      - 'backend/app/testing/authorization_matrix_acceptance.py'
       - 'backend/tests/test_superuser_v2_permission_cutover.py'
       - 'backend/tests/test_roles_v2_foundation_contract.py'
       - 'backend/tests/test_authorization_foundation_contract.py'
@@ -45,6 +46,7 @@ jobs:
         run: |
           python -m py_compile \
             app/services/authorization_foundation_service.py \
+            app/testing/authorization_matrix_acceptance.py \
             tests/test_superuser_v2_permission_cutover.py \
             tests/test_roles_v2_foundation_contract.py \
             tests/platform_admin_acceptance_closure_selftest.py \
@@ -70,6 +72,12 @@ jobs:
           pytest -q \
             tests/test_roles_v2_foundation_contract.py \
             tests/test_authorization_foundation_contract.py
+
+      - name: Validate authorization matrix separation
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: python -m app.testing.authorization_matrix_acceptance
 
       - name: Prove technical Platformbeheerder separation
         env:
