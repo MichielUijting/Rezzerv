@@ -1,0 +1,70 @@
+name: Household invitation acceptance validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/household_invitation_acceptance_routes.py'
+      - 'backend/app/api/session_household_routes.py'
+      - 'backend/app/api/router.py'
+      - 'backend/app/services/household_invitation_acceptance_service.py'
+      - 'backend/tests/household_invitation_acceptance_selftest.py'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/src/features/auth/InvitationAcceptancePage.jsx'
+      - 'frontend/src/ui/Header.jsx'
+      - 'frontend/tests/invitation-acceptance.contract.mjs'
+      - 'frontend/tests/e2e/invitation-acceptance.frontend-regression.spec.js'
+      - '.github/workflows/household-invitation-acceptance-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Compile invitation acceptance
+        working-directory: backend
+        run: |
+          python -m py_compile app/api/household_invitation_acceptance_routes.py
+          python -m py_compile app/api/session_household_routes.py
+          python -m py_compile app/services/household_invitation_acceptance_service.py
+          python -m py_compile tests/household_invitation_acceptance_selftest.py
+
+      - name: Validate invitation acceptance transaction contract
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python tests/household_invitation_acceptance_selftest.py | tee /tmp/invitation-acceptance.log
+          grep -F 'HOUSEHOLD_INVITATION_ACCEPTANCE_GREEN' /tmp/invitation-acceptance.log
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Validate invitation frontend contract
+        working-directory: frontend
+        run: |
+          node tests/invitation-acceptance.contract.mjs | tee /tmp/invitation-acceptance-frontend.log
+          grep -F 'INVITATION_ACCEPTANCE_FRONTEND_CONTRACT_GREEN' /tmp/invitation-acceptance-frontend.log
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Invitation acceptance gate marker
+        run: echo 'ONBOARDING_V2_I2_INVITATION_ACCEPTANCE_GREEN'

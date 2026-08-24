@@ -17,8 +17,10 @@ from app.api.article_group_routes import router as article_group_router
 from app.api.barcode_routes import router as barcode_router
 from app.api.day_article_routes import router as day_article_router
 from app.api.household_capability_expansion_routes import router as household_capability_expansion_router
+from app.api.household_invitation_acceptance_routes import create_household_invitation_acceptance_router
 from app.api.household_invitation_routes import create_household_invitation_router
 from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
+from app.api.session_household_routes import create_session_household_router
 from app.api.support_message_routes import router as support_message_router
 from app.api.routes.debug import router as debug_router
 from app.api.routes.receipt_db_snapshot import router as receipt_db_snapshot_router
@@ -30,6 +32,8 @@ from app.services import receipt_loyalty_line_patch
 from app.services import receipt_g1_merge
 
 household_invitation_router = create_household_invitation_router(engine)
+household_invitation_acceptance_router = create_household_invitation_acceptance_router(engine)
+session_household_router = create_session_household_router(engine)
 
 api_router = APIRouter()
 api_router.include_router(article_group_router)
@@ -37,6 +41,8 @@ api_router.include_router(barcode_router)
 api_router.include_router(day_article_router)
 api_router.include_router(household_capability_expansion_router)
 api_router.include_router(household_invitation_router)
+api_router.include_router(household_invitation_acceptance_router)
+api_router.include_router(session_household_router)
 api_router.include_router(loyalty_stamp_router)
 api_router.include_router(support_message_router)
 api_router.include_router(debug_router)

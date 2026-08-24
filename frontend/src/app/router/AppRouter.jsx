@@ -2,6 +2,7 @@ import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
+import InvitationAcceptancePage from '../../features/auth/InvitationAcceptancePage.jsx'
 import LoginPage from '../../features/auth/LoginPage'
 import RegisterPage from '../../features/auth/RegisterPage'
 import HomePage from '../../features/home/HomePage'
@@ -113,6 +114,7 @@ function ProtectedSuperuser({ children }) {
 const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   { path: '/registreren', element: <RegisterRoute /> },
+  { path: '/uitnodiging/:token', element: <InvitationAcceptancePage /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
