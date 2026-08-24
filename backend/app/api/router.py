@@ -6,7 +6,7 @@ Technical Design Reference:
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
 - Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -28,6 +28,7 @@ from app.api.platform_audit_routes import router as platform_audit_router
 from app.api.platform_feature_flags_routes import router as platform_feature_flags_router
 from app.api.platform_integrations_routes import router as platform_integrations_router
 from app.api.platform_sessions_routes import router as platform_sessions_router
+from app.api.platform_users_routes import router as platform_users_router
 from app.api.session_household_routes import create_session_household_router
 from app.api.support_message_routes import router as support_message_router
 from app.api.routes.debug import router as debug_router
@@ -39,6 +40,10 @@ from app.services import receipt_parser_quality_patch
 from app.services import receipt_loyalty_line_patch
 from app.services import receipt_g1_merge
 from app.services.platform_feature_flag_service import ensure_platform_feature_flag_schema
+from app.services.platform_user_suspension_service import (
+    ensure_user_account_status_schema,
+    install_server_session_suspension_guard,
+)
 
 # app.main imports this module only after its legacy routes have been declared.
 # Retire exactly the old POST member-create route before the canonical API router
@@ -55,6 +60,13 @@ session_household_router = create_session_household_router(engine)
 with engine.begin() as schema_conn:
     ensure_platform_feature_flag_schema(schema_conn)
 
+# Account suspension is canonical identity authority. Existing accounts are
+# migrated idempotently to active status before requests are accepted, and the
+# cookie-login resolver is guarded without changing household or role state.
+with engine.begin() as schema_conn:
+    ensure_user_account_status_schema(schema_conn)
+install_server_session_suspension_guard()
+
 api_router = APIRouter()
 api_router.include_router(article_group_router)
 api_router.include_router(barcode_router)
@@ -70,6 +82,7 @@ api_router.include_router(platform_audit_router)
 api_router.include_router(platform_integrations_router)
 api_router.include_router(platform_feature_flags_router)
 api_router.include_router(platform_sessions_router)
+api_router.include_router(platform_users_router)
 api_router.include_router(debug_router)
 api_router.include_router(receipt_db_snapshot_router)
 api_router.include_router(kassa_regression_router)
