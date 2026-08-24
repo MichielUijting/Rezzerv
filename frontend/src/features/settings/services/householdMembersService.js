@@ -17,15 +17,6 @@ export async function fetchHouseholdMembers() {
   return parseJson(response)
 }
 
-export async function createHouseholdMember(payload) {
-  const response = await fetchJsonWithAuth('/api/household/members', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  return parseJson(response)
-}
-
 export async function updateHouseholdName(payload) {
   const response = await fetchJsonWithAuth('/api/household/name', {
     method: 'PUT',

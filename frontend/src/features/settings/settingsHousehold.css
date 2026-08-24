@@ -81,12 +81,20 @@
   align-items: end;
 }
 
-.rz-household-members-list {
+.rz-household-members-list,
+.rz-household-invitations-list {
   display: grid;
   gap: 12px;
 }
 
-.rz-household-member-card {
+.rz-household-invitations-title {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rz-household-member-card,
+.rz-household-invitation-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
@@ -96,7 +104,12 @@
   border-radius: 12px;
 }
 
-.rz-household-member-content {
+.rz-household-invitation-card {
+  background: #f8fafc;
+}
+
+.rz-household-member-content,
+.rz-household-invitation-content {
   display: grid;
   gap: 4px;
 }
@@ -111,6 +124,54 @@
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.rz-household-invitation-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rz-household-status-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rz-household-status-badge--pending {
+  background: #fff4e5;
+  color: #8a4b08;
+}
+
+.rz-household-status-badge--accepted {
+  background: #e8f5ec;
+  color: #146c3a;
+}
+
+.rz-household-status-badge--expired,
+.rz-household-status-badge--revoked {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.rz-household-delivery-status {
+  color: #667085;
+  font-size: 13px;
+}
+
+.rz-household-invitation-delivery-detail {
+  max-width: 720px;
+  color: #b54708;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .rz-household-permissions-form {
@@ -172,6 +233,15 @@
   align-items: end;
 }
 
+.rz-household-invitation-form {
+  width: 100%;
+  max-width: 760px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px 20px;
+  align-items: end;
+}
+
 .rz-household-form-field {
   display: grid;
   gap: 6px;
@@ -198,12 +268,14 @@
 }
 
 @media (max-width: 720px) {
-  .rz-household-name-form {
+  .rz-household-name-form,
+  .rz-household-invitation-form {
     max-width: none;
     grid-template-columns: 1fr;
   }
 
-  .rz-household-member-card {
+  .rz-household-member-card,
+  .rz-household-invitation-card {
     grid-template-columns: 1fr;
   }
 
