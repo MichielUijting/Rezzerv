@@ -21,6 +21,7 @@ jobs:
     env:
       PYTHONPATH: backend
       REZZERV_EMAIL_ENABLED: 'false'
+      DATABASE_URL: 'sqlite:////tmp/rezzerv_i5.db'
 
     steps:
       - name: Checkout
