@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from app.services.authorization_foundation_service import (
-    ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS,
+    ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS,
     PLATFORM_ADMIN_PERMISSIONS,
     ROLE_PERMISSIONS,
     V2_SUPERUSER_TARGET_PERMISSIONS,
@@ -31,16 +31,6 @@ EXPECTED_CAPABILITIES = (
 )
 
 EXPECTED_PLATFORM_ADMIN_PERMISSIONS = frozenset(item[1] for item in EXPECTED_CAPABILITIES)
-V1_1_PLATFORM_ADMIN_OVERLAP = frozenset(
-    {
-        "platform.audit.view",
-        "platform.feature_flags.manage",
-        "platform.permissions.manage",
-        "platform.sessions.revoke",
-        "platform.users.suspend",
-    }
-)
-NEWER_PLATFORM_ADMIN_PERMISSIONS = EXPECTED_PLATFORM_ADMIN_PERMISSIONS - V1_1_PLATFORM_ADMIN_OVERLAP
 
 EXPECTED_REGRESSION_SPECS = (
     "tests/e2e/session-none-context.frontend-regression.spec.js",
@@ -83,13 +73,10 @@ def _assert_authorization_matrix() -> None:
     assert "platform.special_roles.manage" not in ROLE_PERMISSIONS["platform.platform_admin"]
 
     superuser = frozenset(ROLE_PERMISSIONS["platform.superuser"])
-    assert superuser == frozenset(ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS)
-    assert superuser & EXPECTED_PLATFORM_ADMIN_PERMISSIONS == V1_1_PLATFORM_ADMIN_OVERLAP
-    assert not (NEWER_PLATFORM_ADMIN_PERMISSIONS & superuser)
+    assert superuser == frozenset(ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS)
+    assert superuser == frozenset(V2_SUPERUSER_TARGET_PERMISSIONS)
+    assert not (superuser & EXPECTED_PLATFORM_ADMIN_PERMISSIONS)
     assert "platform.special_roles.manage" not in superuser
-
-    # The v2 set is target-only in 9.1.7; this closure must not perform the runtime cutover.
-    assert frozenset(V2_SUPERUSER_TARGET_PERMISSIONS) != superuser
 
 
 def _assert_every_capability_has_concrete_page() -> None:

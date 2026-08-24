@@ -75,7 +75,7 @@ def test_frontteam_platform_role_can_use_all_intended_external_database_capabili
         engine.dispose()
 
 
-@pytest.mark.parametrize("user_id", ["regular-admin", "platform-admin", "superuser"])
+@pytest.mark.parametrize("user_id", ["regular-admin", "platform-admin"])
 def test_roles_without_v2_external_product_permission_are_denied(user_id):
     engine, conn = build_connection()
     try:
@@ -88,6 +88,25 @@ def test_roles_without_v2_external_product_permission_are_denied(user_id):
             )
         assert exc.value.status_code == 403
         assert exc.value.detail == "Onvoldoende platformbevoegdheid voor externe databases"
+    finally:
+        conn.close()
+        engine.dispose()
+
+
+def test_superuser_v2_can_use_functional_external_product_capabilities():
+    engine, conn = build_connection()
+    try:
+        for method, path in (
+            ("GET", "/api/external-databases/summary"),
+            ("POST", "/api/external-databases/retailers/lidl/match-preview"),
+            ("POST", "/api/external-databases/catalog/unlink"),
+        ):
+            assert authorize_external_database_request(
+                conn,
+                user_id="superuser",
+                method=method,
+                path=path,
+            ) == required_external_database_permission(method, path)
     finally:
         conn.close()
         engine.dispose()

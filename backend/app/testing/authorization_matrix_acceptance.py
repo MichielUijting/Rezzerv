@@ -1,10 +1,11 @@
-"""PO acceptance test for Rezzerv authorization matrix v1.1.
+"""PO acceptance test for the Rezzerv authorization matrix.
 
 Run locally from the repository root with:
     docker compose exec -T backend python -m app.testing.authorization_matrix_acceptance
 
-The program compares the role permissions produced by the runtime with the
-PO-approved matrix. It exits with code 0 for GO and code 1 for NO-GO.
+The program compares the household role permissions from matrix v1.1 plus the
+active Superuser-v2 platform boundary with the runtime. It exits with code 0
+for GO and code 1 for NO-GO.
 """
 
 from __future__ import annotations
@@ -12,7 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.services.authorization_foundation_service import (
-    PLATFORM_PERMISSIONS,
+    ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS,
+    PLATFORM_ADMIN_PERMISSIONS,
     permissions_for_session_role,
 )
 
@@ -97,8 +99,8 @@ def run() -> int:
     failures: list[str] = []
     checks = 0
 
-    print("REZZERV AUTORISATIEMATRIX ACCEPTATIETEST v1.1")
-    print("=" * 58)
+    print("REZZERV AUTORISATIEMATRIX ACCEPTATIETEST v1.1 + SUPERUSER-v2")
+    print("=" * 70)
 
     for rule in RULES:
         for role in ROLES:
@@ -112,11 +114,25 @@ def run() -> int:
                     f"werkelijk={'JA' if granted else 'NEE'} ({rule.permission})"
                 )
 
-    # High-risk structural assertions.
+    superuser_platform = {p for p in actual["superuser"] if p.startswith("platform.")}
+
+    # High-risk structural assertions. Household matrix v1.1 remains intact while
+    # the platform Superuser follows the explicit v2 functional boundary.
     invariants = (
         ("beheerder heeft alle toegestane lidrechten", actual["lid"] <= actual["beheerder"]),
-        ("superuser heeft alle beheerderrechten", actual["beheerder"] <= actual["superuser"]),
-        ("superuser heeft alle platformrechten", set(PLATFORM_PERMISSIONS) <= actual["superuser"]),
+        ("superuser heeft alle beheerder-huishoudrechten", actual["beheerder"] <= actual["superuser"]),
+        (
+            "superuser heeft exact de actieve functionele platform-v2-rechten",
+            superuser_platform == set(ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS),
+        ),
+        (
+            "superuser heeft geen technische Platformbeheerderrechten",
+            not (set(PLATFORM_ADMIN_PERMISSIONS) & superuser_platform),
+        ),
+        (
+            "superuser beheert geen speciale platformrollen",
+            "platform.special_roles.manage" not in superuser_platform,
+        ),
         ("beheerder heeft geen platformrechten", not any(p.startswith("platform.") for p in actual["beheerder"])),
         ("lid heeft geen Admin-toegang", "admin.access" not in actual["lid"]),
         ("beheerder heeft geen Externe-databases-toegang", "frontteam.external_databases.access" not in actual["beheerder"]),
@@ -137,7 +153,7 @@ def run() -> int:
             print(f"FOUT: {failure}")
         return 1
 
-    print(f"GO: alle {checks} controles zijn conform matrix v1.1")
+    print(f"GO: alle {checks} controles zijn conform household-matrix v1.1 + Superuser-v2")
     print(f"- {len(RULES)} functionele rechten x {len(ROLES)} rollen")
     print(f"- {len(invariants)} extra risicocontroles")
     print("AUTORISATIEMATRIX_ACCEPTATIE_GREEN")

@@ -75,7 +75,7 @@ def test_platform_users_permission_matrix_is_existing_canonical_matrix():
     assert PLATFORM_USERS_SUSPEND_PERMISSION == "platform.users.suspend"
     assert PLATFORM_USERS_SUSPEND_PERMISSION in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_USERS_SUSPEND_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
-    assert PLATFORM_USERS_SUSPEND_PERMISSION in ROLE_PERMISSIONS["platform.superuser"]
+    assert PLATFORM_USERS_SUSPEND_PERMISSION not in ROLE_PERMISSIONS["platform.superuser"]
     assert PLATFORM_USERS_SUSPEND_PERMISSION not in ROLE_PERMISSIONS["platform.frontteam"]
     assert PLATFORM_USERS_SUSPEND_PERMISSION not in ROLE_PERMISSIONS["platform.support_read"]
     assert PLATFORM_USERS_SUSPEND_PERMISSION not in ROLE_PERMISSIONS["household.admin"]
