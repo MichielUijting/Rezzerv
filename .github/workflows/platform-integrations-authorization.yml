@@ -1,0 +1,50 @@
+name: Platform Integrations authorization validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/platform_integrations_routes.py'
+      - 'backend/app/api/router.py'
+      - 'backend/app/integrations/receipt_scanners/**'
+      - 'backend/app/services/email_config_service.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'backend/tests/test_platform_integrations_route_authorization.py'
+      - 'frontend/src/features/platform/PlatformIntegrationsPage.jsx'
+      - 'frontend/src/features/platform/PlatformCapabilityPage.jsx'
+      - 'frontend/tests/e2e/platform-integrations.frontend-regression.spec.js'
+      - 'frontend/package.json'
+      - '.github/workflows/platform-integrations-authorization.yml'
+
+jobs:
+  platform-integrations-authorization:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest fastapi pydantic sqlalchemy httpx
+
+      - name: Compile platform Integrations boundary and tests
+        run: |
+          python -m py_compile \
+            app/api/platform_integrations_routes.py \
+            app/api/router.py \
+            tests/test_platform_integrations_route_authorization.py
+
+      - name: Run platform Integrations authorization tests
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: pytest -q tests/test_platform_integrations_route_authorization.py
