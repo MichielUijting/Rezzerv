@@ -1,0 +1,61 @@
+name: Platform Sessions authorization validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/platform_sessions_routes.py'
+      - 'backend/app/api/router.py'
+      - 'backend/app/services/platform_session_management_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/tests/test_platform_sessions_route_authorization.py'
+      - 'backend/tests/server_session_security_selftest.py'
+      - 'frontend/src/features/platform/PlatformSessionsPage.jsx'
+      - 'frontend/src/features/platform/PlatformCapabilityPage.jsx'
+      - 'frontend/tests/e2e/platform-sessions.frontend-regression.spec.js'
+      - 'frontend/package.json'
+      - '.github/workflows/platform-sessions-authorization.yml'
+
+jobs:
+  platform-sessions-authorization:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+
+      - name: Compile platform Sessions boundary and tests
+        run: |
+          PYTHONPATH=. python -m py_compile \
+            app/api/platform_sessions_routes.py \
+            app/api/router.py \
+            app/services/platform_session_management_service.py \
+            tests/test_platform_sessions_route_authorization.py
+
+      - name: Run platform Sessions authorization tests
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: python -m pytest -q tests/test_platform_sessions_route_authorization.py
+
+      - name: Run existing server-side session security selftest
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: sqlite:////tmp/rezzerv-platform-sessions-security.db
+          REZZERV_SESSION_COOKIE_SECURE: 'false'
+        run: python tests/server_session_security_selftest.py
