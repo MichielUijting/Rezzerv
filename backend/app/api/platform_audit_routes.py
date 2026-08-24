@@ -4,7 +4,6 @@ from fastapi import APIRouter, Query
 from sqlalchemy import text
 
 from app.db import engine
-from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.session_request_context import require_platform_permission_from_session
 
 
@@ -51,7 +50,6 @@ def get_platform_authorization_audit(
 ) -> dict:
     require_platform_permission_from_session(PLATFORM_AUDIT_VIEW_PERMISSION)
     with engine.begin() as conn:
-        ensure_authorization_foundation(conn)
         items = list_platform_authorization_audit(conn, limit=limit)
     return {
         "items": items,
