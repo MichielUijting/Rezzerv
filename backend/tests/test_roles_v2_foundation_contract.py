@@ -7,13 +7,13 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from app.services.authorization_foundation_service import (
+    ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS,
     ADMIN_PERMISSIONS,
     FRONTTEAM_PLATFORM_PERMISSIONS,
     HOUSEHOLD_PERMISSIONS,
     IP_OWNER_PERMISSIONS,
     PLATFORM_ADMIN_PERMISSIONS,
     ROLE_PERMISSIONS,
-    ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS,
     V2_PLATFORM_PERMISSIONS,
     V2_SUPERUSER_TARGET_PERMISSIONS,
     ensure_authorization_foundation,
@@ -285,22 +285,13 @@ def test_roles_v2_foundation_does_not_change_server_session_schema_or_rows():
     assert active_household["nullable"] is False
 
 
-def test_active_v1_1_superuser_permissions_and_public_payload_remain_exact():
-    expected = {
-        "platform.households.search",
-        "platform.households.view_metadata",
-        "platform.support_access.request",
-        "platform.support_access.activate",
-        "platform.support_access.read",
-        "platform.support_access.mutate",
-        "platform.users.suspend",
-        "platform.sessions.revoke",
-        "platform.audit.view",
-        "platform.permissions.manage",
-        "platform.feature_flags.manage",
-    }
-    assert ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS == expected
+def test_active_v2_superuser_permissions_and_public_payload_are_exact():
+    expected = set(V2_SUPERUSER_TARGET_PERMISSIONS)
+    assert ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS == expected
+    assert ROLE_PERMISSIONS["platform.superuser"] == expected
     assert permissions_for_session_role("", platform_superuser=True) == expected
+    assert not (expected & PLATFORM_ADMIN_PERMISSIONS)
+    assert "platform.special_roles.manage" not in expected
 
     now = datetime.now(timezone.utc)
     payload = public_session_payload(ServerSessionContext(
@@ -319,7 +310,8 @@ def test_active_v1_1_superuser_permissions_and_public_payload_remain_exact():
     assert set(payload["permissions"]) == expected_public_permissions
     assert set(payload["supported_permissions"]) == expected_public_permissions
     assert payload["is_platform_superuser"] is True
-    assert not (set(V2_PLATFORM_PERMISSIONS) - expected) & set(payload["permissions"])
+    assert not (PLATFORM_ADMIN_PERMISSIONS & set(payload["permissions"]))
+    assert "platform.special_roles.manage" not in payload["permissions"]
 
 
 def test_fixed_superuser_email_alone_does_not_grant_public_superuser_rights():
@@ -338,10 +330,10 @@ def test_fixed_superuser_email_alone_does_not_grant_public_superuser_rights():
 
     assert payload["is_platform_superuser"] is False
     assert set(payload["permissions"]) == ROLE_PERMISSIONS["household.owner"]
-    assert not ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS & set(payload["permissions"])
+    assert not ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS & set(payload["permissions"])
 
 
-def test_existing_platform_superuser_is_not_granted_v2_target_permissions():
+def test_existing_platform_superuser_is_cut_over_to_exact_v2_target_permissions():
     engine = make_engine()
     with engine.begin() as conn:
         ensure_authorization_foundation(conn)
@@ -355,13 +347,26 @@ def test_existing_platform_superuser_is_not_granted_v2_target_permissions():
                 user_id="existing-superuser",
                 permission_key=permission_key,
             )
-            assert decision.allowed is False, permission_key
+            assert decision.allowed is (
+                permission_key in V2_SUPERUSER_TARGET_PERMISSIONS
+            ), permission_key
         for permission_key in V2_SUPERUSER_TARGET_PERMISSIONS:
             decision = evaluate_platform_permission(
                 conn,
                 user_id="existing-superuser",
                 permission_key=permission_key,
             )
-            assert decision.allowed is (
-                permission_key in ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS
-            ), permission_key
+            assert decision.allowed is True, permission_key
+        for permission_key in PLATFORM_ADMIN_PERMISSIONS:
+            decision = evaluate_platform_permission(
+                conn,
+                user_id="existing-superuser",
+                permission_key=permission_key,
+            )
+            assert decision.allowed is False, permission_key
+        special_role = evaluate_platform_permission(
+            conn,
+            user_id="existing-superuser",
+            permission_key="platform.special_roles.manage",
+        )
+        assert special_role.allowed is False
