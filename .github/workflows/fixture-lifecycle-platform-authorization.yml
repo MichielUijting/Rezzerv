@@ -16,6 +16,9 @@ on:
       - 'backend/tests/test_receipt_export_fixture_platform_authorization.py'
       - 'backend/tests/test_testing_status_platform_authorization.py'
       - 'backend/tests/test_test_orchestration_platform_route_authorization.py'
+      - 'frontend/src/features/platform/PlatformTestFixturesPage.jsx'
+      - 'frontend/src/features/platform/PlatformCapabilityPage.jsx'
+      - 'frontend/tests/e2e/platform-test-fixtures.frontend-regression.spec.js'
       - '.github/workflows/fixture-lifecycle-platform-authorization.yml'
 
 jobs:

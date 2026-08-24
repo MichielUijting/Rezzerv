@@ -5,6 +5,7 @@ import Button from '../../ui/Button.jsx'
 import PlatformAuditPage from './PlatformAuditPage.jsx'
 import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
 import PlatformTechnicalConfigurationPage from './PlatformTechnicalConfigurationPage.jsx'
+import PlatformTestFixturesPage from './PlatformTestFixturesPage.jsx'
 
 export default function PlatformCapabilityPage({ item }) {
   const navigate = useNavigate()
@@ -19,6 +20,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'technical-configuration') {
     return <PlatformTechnicalConfigurationPage />
+  }
+
+  if (item?.key === 'test-fixtures') {
+    return <PlatformTestFixturesPage />
   }
 
   return (
