@@ -4,7 +4,11 @@ import Button from '../../ui/Button'
 import Card from '../../ui/Card'
 import Header from '../../ui/Header'
 
-const PLATFORM_ADMIN_ROLE_KEY = 'platform.platform_admin'
+const SPECIAL_ROLES = [
+  { roleKey: 'platform.superuser', slug: 'superuser', label: 'Superuser' },
+  { roleKey: 'platform.frontteam', slug: 'frontteam', label: 'Frontteamlid' },
+  { roleKey: 'platform.platform_admin', slug: 'platform-admin', label: 'Platformbeheerder' },
+]
 
 function roleLabel(roleKey, roles) {
   return roles.find((role) => role.role_key === roleKey)?.name || roleKey
@@ -13,6 +17,7 @@ function roleLabel(roleKey, roles) {
 export default function PlatformAuthorizationsPage() {
   const [users, setUsers] = React.useState([])
   const [roles, setRoles] = React.useState([])
+  const [canManageSpecialRoles, setCanManageSpecialRoles] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
   const [result, setResult] = React.useState('')
@@ -35,6 +40,7 @@ export default function PlatformAuthorizationsPage() {
       const payload = await response.json()
       setUsers(Array.isArray(payload?.users) ? payload.users : [])
       setRoles(Array.isArray(payload?.roles) ? payload.roles : [])
+      setCanManageSpecialRoles(payload?.can_manage_special_roles === true)
     } catch (err) {
       setError(err?.message || 'Platformautorisaties ophalen mislukt.')
     } finally {
@@ -54,7 +60,7 @@ export default function PlatformAuthorizationsPage() {
     setResult('')
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/platform/authorizations/users/${encodeURIComponent(pending.user.user_id)}/platform-admin/${action}`,
+        `${API_BASE_URL}/api/platform/authorizations/users/${encodeURIComponent(pending.user.user_id)}/${pending.role.slug}/${action}`,
         {
           method: 'POST',
           credentials: 'include',
@@ -74,8 +80,8 @@ export default function PlatformAuthorizationsPage() {
       }
       setResult(
         action === 'grant'
-          ? `${pending.user.email} is Platformbeheerder geworden.`
-          : `De Platformbeheerder-rol van ${pending.user.email} is ingetrokken.`,
+          ? `${pending.role.label} is toegekend aan ${pending.user.email}.`
+          : `${pending.role.label} is ingetrokken bij ${pending.user.email}.`,
       )
       setPending(null)
     } catch (err) {
@@ -89,22 +95,29 @@ export default function PlatformAuthorizationsPage() {
     <div data-testid="platform-authorizations-page">
       <Header
         title="Platformautorisaties"
-        subtitle="Bekijk platformrollen en beheer uitsluitend de normale Platformbeheerder-toekenning."
+        subtitle="Bekijk platformrollen; alleen de IP-eigenaar kan Superuser, Frontteamlid en Platformbeheerder aanstellen of intrekken."
       />
 
       <Card>
         <p>
-          Deze pagina gebruikt uitsluitend <strong>platform.permissions.manage</strong>. De autorisatie wordt
-          live uit de canonical role-permission authority gelezen; er is geen householdcontext en geen H0-fallback.
+          Inventarisatie gebruikt <strong>platform.permissions.manage</strong>. Speciale rolmutaties gebruiken
+          afzonderlijk <strong>platform.special_roles.manage</strong>. De backend blijft de enige authority;
+          er is geen householdcontext en geen H0-fallback voor deze beheeractie.
         </p>
         <p>
-          Alleen <strong>{PLATFORM_ADMIN_ROLE_KEY}</strong> is hier wijzigbaar. IP-owner, de bestaande
-          Superuser-v1.1-rol, support en frontteam blijven read-only en worden niet via deze capability aangepast.
+          De IP-eigenaar is beschermd en kan hier niet worden verwijderd of gedegradeerd. Superuser en
+          Platformbeheerder mogen samen bestaan; Frontteamlid blijft een afzonderlijke accountvorm met een eigen
+          persoonlijk regulier huishouden.
         </p>
         <p>
           Wachtwoorden, hashes en sessietokens worden niet geprojecteerd. Iedere rolwijziging wordt in de bestaande
           authorization-audit vastgelegd en is vanaf de eerstvolgende request effectief.
         </p>
+        {!canManageSpecialRoles ? (
+          <p data-testid="platform-authorizations-read-only">
+            Read-only: alleen de IP-eigenaar beschikt over platform.special_roles.manage.
+          </p>
+        ) : null}
       </Card>
 
       {error ? <Card><p role="alert">{error}</p></Card> : null}
@@ -118,6 +131,7 @@ export default function PlatformAuthorizationsPage() {
         const permissionCount = Array.isArray(user.effective_platform_permissions)
           ? user.effective_platform_permissions.length
           : 0
+        const roleActions = user.role_actions || {}
         return (
           <Card key={user.user_id}>
             <div data-testid={`platform-authorization-user-${user.user_id}`}>
@@ -130,34 +144,44 @@ export default function PlatformAuthorizationsPage() {
                   : 'Geen'}
               </p>
               <p>Effectieve platformpermissies: {permissionCount}</p>
+              {user.is_ip_owner ? <p>Beschermde IP-eigenaar — niet wijzigbaar via regulier rolbeheer.</p> : null}
 
-              {user.has_platform_admin ? (
-                user.is_current ? (
-                  <p>Huidig beheeraccount — de eigen Platformbeheerder-rol kan hier niet worden ingetrokken.</p>
-                ) : user.can_revoke_platform_admin ? (
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setPending({ user, action: 'revoke' })
-                      setResult('')
-                    }}
-                  >
-                    Platformbeheerder intrekken
-                  </Button>
-                ) : null
-              ) : user.can_grant_platform_admin ? (
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setPending({ user, action: 'grant' })
-                    setResult('')
-                  }}
-                >
-                  Platformbeheerder maken
-                </Button>
-              ) : user.account_status === 'suspended' ? (
-                <p>Een geschorst account kan geen Platformbeheerder worden.</p>
-              ) : null}
+              {SPECIAL_ROLES.map((role) => {
+                const action = roleActions[role.roleKey] || {}
+                if (action.active && action.can_revoke) {
+                  return (
+                    <Button
+                      key={role.roleKey}
+                      type="button"
+                      onClick={() => {
+                        setPending({ user, role, action: 'revoke' })
+                        setResult('')
+                      }}
+                    >
+                      {role.label} intrekken
+                    </Button>
+                  )
+                }
+                if (!action.active && action.can_grant) {
+                  return (
+                    <Button
+                      key={role.roleKey}
+                      type="button"
+                      onClick={() => {
+                        setPending({ user, role, action: 'grant' })
+                        setResult('')
+                      }}
+                    >
+                      {role.label} toekennen
+                    </Button>
+                  )
+                }
+                if (canManageSpecialRoles && (action.grant_blocked_reason || action.revoke_blocked_reason)) {
+                  const reason = action.active ? action.revoke_blocked_reason : action.grant_blocked_reason
+                  return reason ? <p key={role.roleKey}>{role.label}: {reason}</p> : null
+                }
+                return null
+              })}
             </div>
           </Card>
         )
@@ -171,7 +195,7 @@ export default function PlatformAuthorizationsPage() {
               <div key={role.role_key} data-testid={`platform-role-${role.role_key}`}>
                 <h3>{role.name}</h3>
                 <p>Rol: {role.role_key}</p>
-                <p>{role.managed_by_this_page ? 'Beheerbaar op deze pagina' : 'Read-only op deze pagina'}</p>
+                <p>{role.protected ? 'Beschermde rol' : role.managed_by_this_page ? 'Beheerbaar door IP-eigenaar' : 'Read-only op deze pagina'}</p>
                 <p>Permissies: {(role.permissions || []).join(', ') || 'Geen'}</p>
               </div>
             ))}
@@ -183,15 +207,13 @@ export default function PlatformAuthorizationsPage() {
         <Card>
           <div data-testid="platform-authorization-confirmation">
             <h3>
-              {pending.action === 'grant'
-                ? 'Platformbeheerder definitief toekennen?'
-                : 'Platformbeheerder definitief intrekken?'}
+              {pending.role.label} {pending.action === 'grant' ? 'definitief toekennen?' : 'definitief intrekken?'}
             </h3>
             <p>
               Deze wijziging geldt voor <strong>{pending.user.email}</strong> en wordt direct in de canonical
               platformrol-authority vastgelegd.
             </p>
-            <p>Householdrollen, memberships en speciale platformrollen worden niet gewijzigd.</p>
+            <p>Alleen de gekozen speciale platformrol wordt gewijzigd; overige rollen blijven behouden.</p>
             <div>
               <Button
                 type="button"
