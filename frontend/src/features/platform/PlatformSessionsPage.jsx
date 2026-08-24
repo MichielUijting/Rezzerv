@@ -1,5 +1,5 @@
 import React from 'react'
-import { API_BASE_URL } from '../../lib/api'
+import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button'
 import Card from '../../ui/Card'
 import Header from '../../ui/Header'
