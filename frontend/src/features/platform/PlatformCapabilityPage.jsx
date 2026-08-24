@@ -5,6 +5,7 @@ import Button from '../../ui/Button.jsx'
 import PlatformAuditPage from './PlatformAuditPage.jsx'
 import PlatformBackgroundJobsPage from './PlatformBackgroundJobsPage.jsx'
 import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
+import PlatformFeatureFlagsPage from './PlatformFeatureFlagsPage.jsx'
 import PlatformIntegrationsPage from './PlatformIntegrationsPage.jsx'
 import PlatformRecoveryPage from './PlatformRecoveryPage.jsx'
 import PlatformTechnicalConfigurationPage from './PlatformTechnicalConfigurationPage.jsx'
@@ -39,6 +40,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'test-fixtures') {
     return <PlatformTestFixturesPage />
+  }
+
+  if (item?.key === 'feature-flags') {
+    return <PlatformFeatureFlagsPage />
   }
 
   return (
