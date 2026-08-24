@@ -34,6 +34,12 @@ test('platform logs is a read-only cookie-session projection with level filterin
   let auditReads = 0
   let platformMutations = 0
 
+  page.on('request', (request) => {
+    if (request.url().includes('/api/platform/') && request.method() !== 'GET') {
+      platformMutations += 1
+    }
+  })
+
   await page.route(LOGS_ENDPOINT, async (route) => {
     const request = route.request()
     reads.push({
@@ -94,10 +100,6 @@ test('platform logs is a read-only cookie-session projection with level filterin
   await page.route('**/api/platform/audit?*', async (route) => {
     auditReads += 1
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' })
-  })
-  await page.route('**/api/platform/**', async (route) => {
-    if (route.request().method() !== 'GET') platformMutations += 1
-    await route.continue()
   })
 
   await page.goto('/home')
