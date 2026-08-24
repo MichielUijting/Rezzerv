@@ -90,7 +90,7 @@ class PlatformRuntimeLogHandler(logging.Handler):
 
 
 def install_platform_log_capture() -> logging.Handler:
-    """Attach one runtime-only capture handler to the Rezzerv logger namespace."""
+    """Attach one observer without changing any existing production log threshold."""
 
     global _capture_handler
     logger = logging.getLogger(PLATFORM_LOGGER_PREFIX)
@@ -99,12 +99,10 @@ def install_platform_log_capture() -> logging.Handler:
             if getattr(handler, "_rezzerv_platform_log_handler", False):
                 _capture_handler = handler
                 return handler
-        handler = PlatformRuntimeLogHandler(level=logging.INFO)
+        # NOTSET means the handler observes every record that the existing logger
+        # hierarchy already emits. It does not enable DEBUG/INFO records itself.
+        handler = PlatformRuntimeLogHandler(level=logging.NOTSET)
         logger.addHandler(handler)
-        # Rezzerv already emits informational operational records intentionally.
-        # Give that namespace a stable threshold without touching root/third-party logging.
-        if logger.level == logging.NOTSET or logger.level > logging.INFO:
-            logger.setLevel(logging.INFO)
         _capture_handler = handler
         return handler
 
