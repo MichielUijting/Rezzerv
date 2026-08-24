@@ -3,6 +3,7 @@ import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import PlatformAuditPage from './PlatformAuditPage.jsx'
+import PlatformAuthorizationsPage from './PlatformAuthorizationsPage.jsx'
 import PlatformBackgroundJobsPage from './PlatformBackgroundJobsPage.jsx'
 import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
 import PlatformFeatureFlagsPage from './PlatformFeatureFlagsPage.jsx'
@@ -54,6 +55,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'users') {
     return <PlatformUsersPage />
+  }
+
+  if (item?.key === 'permissions') {
+    return <PlatformAuthorizationsPage />
   }
 
   return (
