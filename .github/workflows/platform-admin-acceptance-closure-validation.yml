@@ -1,0 +1,127 @@
+name: Platform Admin 9.1.7 acceptance closure validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/platform-admin-acceptance-closure-validation.yml'
+      - 'backend/app/api/platform_*.py'
+      - 'backend/app/services/platform_*.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/tests/platform_admin_acceptance_closure_selftest.py'
+      - 'backend/tests/test_*platform*'
+      - 'backend/tests/test_authorization_foundation_contract.py'
+      - 'backend/tests/test_platform_*.py'
+      - 'backend/tests/server_session_security_selftest.py'
+      - 'docs/product/PLATFORM_ADMIN_ACCEPTANCE_CLOSURE.md'
+      - 'frontend/package.json'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/src/features/platform/**'
+      - 'frontend/tests/e2e/session-none-context.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/platform-*.frontend-regression.spec.js'
+  workflow_dispatch:
+
+jobs:
+  platform-admin-acceptance-closure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend and test dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+
+      - name: Compile closure and authorization foundation
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python -m py_compile \
+            app/services/authorization_foundation_service.py \
+            tests/platform_admin_acceptance_closure_selftest.py
+
+      - name: Run 9.1.7 executable closure contract
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: python tests/platform_admin_acceptance_closure_selftest.py
+
+      - name: Run canonical authorization foundation contract
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: python -m pytest -q tests/test_authorization_foundation_contract.py
+
+      - name: Run insight capability contracts
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: |
+          python -m pytest -q \
+            tests/test_testing_status_platform_authorization.py \
+            tests/test_platform_audit_route_authorization.py \
+            tests/test_platform_logs_route_authorization.py
+
+      - name: Run platform operations capability contracts
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: |
+          python -m pytest -q \
+            tests/test_platform_integrations_route_authorization.py \
+            tests/test_test_orchestration_platform_route_authorization.py \
+            tests/test_platform_background_jobs_ui_contract.py \
+            tests/test_archived_receipt_purge_platform_authorization.py \
+            tests/test_technical_schema_platform_route_authorization.py \
+            tests/test_fixture_lifecycle_platform_authorization.py \
+            tests/test_platform_feature_flags_route_authorization.py
+
+      - name: Run platform security capability contracts
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: |
+          python -m pytest -q \
+            tests/test_platform_sessions_route_authorization.py \
+            tests/test_platform_users_route_authorization.py \
+            tests/test_platform_authorizations_route_authorization.py
+
+      - name: Run existing server-side session security selftest
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: sqlite:////tmp/rezzerv-platform-admin-closure-security.db
+          REZZERV_SESSION_COOKIE_SECURE: 'false'
+        run: python tests/server_session_security_selftest.py
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build production frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Acceptance marker
+        run: echo PLATFORM_ADMIN_9_1_7_ACCEPTANCE_CLOSURE_GREEN
