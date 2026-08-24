@@ -25,6 +25,7 @@ from app.api.legacy_household_member_creation_closure import (
 )
 from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
 from app.api.platform_audit_routes import router as platform_audit_router
+from app.api.platform_feature_flags_routes import router as platform_feature_flags_router
 from app.api.platform_integrations_routes import router as platform_integrations_router
 from app.api.session_household_routes import create_session_household_router
 from app.api.support_message_routes import router as support_message_router
@@ -36,6 +37,7 @@ from app.db import engine
 from app.services import receipt_parser_quality_patch
 from app.services import receipt_loyalty_line_patch
 from app.services import receipt_g1_merge
+from app.services.platform_feature_flag_service import ensure_platform_feature_flag_schema
 
 # app.main imports this module only after its legacy routes have been declared.
 # Retire exactly the old POST member-create route before the canonical API router
@@ -46,6 +48,11 @@ household_invitation_router = create_household_invitation_router(engine)
 household_invitation_acceptance_router = create_household_invitation_acceptance_router(engine)
 legacy_household_member_creation_closure_router = create_legacy_household_member_creation_closure_router()
 session_household_router = create_session_household_router(engine)
+
+# Platform feature-flag persistence is initialized once during backend startup.
+# GET requests never create schema or seed default rows.
+with engine.begin() as schema_conn:
+    ensure_platform_feature_flag_schema(schema_conn)
 
 api_router = APIRouter()
 api_router.include_router(article_group_router)
@@ -60,6 +67,7 @@ api_router.include_router(loyalty_stamp_router)
 api_router.include_router(support_message_router)
 api_router.include_router(platform_audit_router)
 api_router.include_router(platform_integrations_router)
+api_router.include_router(platform_feature_flags_router)
 api_router.include_router(debug_router)
 api_router.include_router(receipt_db_snapshot_router)
 api_router.include_router(kassa_regression_router)
