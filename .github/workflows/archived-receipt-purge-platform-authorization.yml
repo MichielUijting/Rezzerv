@@ -11,6 +11,9 @@ on:
       - 'backend/tests/test_maintenance_recompute_platform_authorization.py'
       - 'backend/tests/test_receipt_status_baseline_platform_authorization.py'
       - 'backend/tests/test_hybrid_regression_platform_authorization.py'
+      - 'frontend/src/features/platform/PlatformRecoveryPage.jsx'
+      - 'frontend/src/features/platform/PlatformCapabilityPage.jsx'
+      - 'frontend/tests/e2e/platform-recovery.frontend-regression.spec.js'
       - '.github/workflows/archived-receipt-purge-platform-authorization.yml'
 
 jobs:
