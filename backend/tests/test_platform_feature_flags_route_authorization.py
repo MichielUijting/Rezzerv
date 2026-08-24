@@ -91,7 +91,7 @@ def _bind_context(monkeypatch, auth_engine, user_id: str) -> ServerSessionContex
     [
         ("platform-admin", True),
         ("ip-owner", True),
-        ("superuser", False),
+        ("superuser", True),
         ("support-reader", False),
         ("frontteam", False),
         ("ordinary-admin", False),
