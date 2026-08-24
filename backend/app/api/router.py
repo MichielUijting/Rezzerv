@@ -25,6 +25,7 @@ from app.api.legacy_household_member_creation_closure import (
 )
 from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
 from app.api.platform_audit_routes import router as platform_audit_router
+from app.api.platform_integrations_routes import router as platform_integrations_router
 from app.api.session_household_routes import create_session_household_router
 from app.api.support_message_routes import router as support_message_router
 from app.api.routes.debug import router as debug_router
@@ -58,6 +59,7 @@ api_router.include_router(session_household_router)
 api_router.include_router(loyalty_stamp_router)
 api_router.include_router(support_message_router)
 api_router.include_router(platform_audit_router)
+api_router.include_router(platform_integrations_router)
 api_router.include_router(debug_router)
 api_router.include_router(receipt_db_snapshot_router)
 api_router.include_router(kassa_regression_router)

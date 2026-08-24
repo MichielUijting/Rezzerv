@@ -5,6 +5,7 @@ import Button from '../../ui/Button.jsx'
 import PlatformAuditPage from './PlatformAuditPage.jsx'
 import PlatformBackgroundJobsPage from './PlatformBackgroundJobsPage.jsx'
 import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
+import PlatformIntegrationsPage from './PlatformIntegrationsPage.jsx'
 import PlatformRecoveryPage from './PlatformRecoveryPage.jsx'
 import PlatformTechnicalConfigurationPage from './PlatformTechnicalConfigurationPage.jsx'
 import PlatformTestFixturesPage from './PlatformTestFixturesPage.jsx'
@@ -18,6 +19,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'audit') {
     return <PlatformAuditPage />
+  }
+
+  if (item?.key === 'integrations') {
+    return <PlatformIntegrationsPage />
   }
 
   if (item?.key === 'background-jobs') {
