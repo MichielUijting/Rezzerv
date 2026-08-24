@@ -1,11 +1,8 @@
 # Rezzerv autorisatie-regressieprotocol v1.1
 
-Status: **verplicht regressieonderdeel**
+Status: **verplicht regressieonderdeel voor huishoudmatrix v1.1 + Superuser-v2 platformoverlay**
 
-Overgangsstatus: dit protocol valideert tijdelijk de huidige runtime volgens
-autorisatiematrix v1.1. Het PO-goedgekeurde functionele doelcontract staat in
-`docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`. De matrix en dit protocol worden
-pas in de afzonderlijke implementatiestap 9.1 aangepast aan v2.0.
+De huishoudmatrix v1.1 blijft de regressiebaseline voor bestaande huishoudfuncties. Het PO-goedgekeurde rollen- en accountdoelcontract staat in `docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`. Vanaf 9.1.8a is de functionele Superuser-v2 platformauthority actief en is technische Platformbeheerderauthority daarvan expliciet gescheiden.
 
 ## Doel
 
@@ -24,7 +21,7 @@ Uitvoerbaar met:
 Acceptatiecriterium:
 
 ```text
-GO: alle 190 controles zijn conform matrix v1.1
+GO: alle 192 controles zijn conform household-matrix v1.1 + Superuser-v2
 AUTORISATIEMATRIX_ACCEPTATIE_GREEN
 ```
 
@@ -39,7 +36,9 @@ De bestaande regressiegates moeten bevestigen:
 - een huishoudmismatch faalt met 403;
 - huishouden `0` is alleen bereikbaar voor de canonieke superuser;
 - directe URL-toegang omzeilt geen frontendguard;
-- backendroutes controleren dezelfde permissie als de zichtbare frontendactie.
+- backendroutes controleren dezelfde permissie als de zichtbare frontendactie;
+- Superuser-v2 krijgt zijn functionele platformset maar geen technische Platformbeheerderpermissions;
+- `platform.special_roles.manage` blijft buiten de gewone Superuser-set.
 
 ### Laag 3 — handmatige UI-steekproef
 
@@ -49,8 +48,8 @@ Test minimaal de volgende accounts/rollen:
 |---|---|
 | Lid | geen Admin, geen Externe databases, Catalogus lezen, geen GPC-mutatie |
 | Beheerder | Admin aanwezig, geen Externe databases, GPC-mutatie toegestaan, geen algemene Catalogusmutatie |
-| Superuser | Admin, Externe databases, volledige Catalogus/GPC en platformrechten |
-| Frontteamlid | Externe databases en frontteamrechten, geen impliciete platformrechten |
+| Superuser | Admin voor huishoudbeheer, Externe databases, volledige functionele Catalogus/GPC; geen technische Platformbeheerderauthority zonder afzonderlijke rol |
+| Frontteamlid | Externe databases en Frontteamrechten, geen impliciete technische platformrechten |
 
 Controleer per rol:
 
@@ -60,7 +59,7 @@ Controleer per rol:
 4. zichtbaarheid/disabled-state van mutatieknoppen;
 5. daadwerkelijke backendresponse bij een toegestane en verboden actie;
 6. correcte 401/403-afhandeling;
-7. behoud van het actieve huishouden in de header.
+7. behoud van de actieve context in de header.
 
 ## Bewijsvoering
 
@@ -69,7 +68,8 @@ Een autorisatieregressie is pas afgerond wanneer beschikbaar zijn:
 - console-uitvoer van de matrixacceptatietest;
 - groene GitHub Actions-run `Authorization matrix acceptance`;
 - resultaten van de sessie- en routeguards;
-- screenshots of testnotities van de UI-steekproef;
+- resultaten van de Superuser-v2 focused cutover-gate wanneer platformauthority wijzigt;
+- screenshots of testnotities van de UI-steekproef waar van toepassing;
 - vermelding van branch en commit-SHA;
 - expliciet PO-oordeel GO of NO-GO.
 
@@ -92,21 +92,29 @@ De volledige autorisatieregressie moet opnieuw worden uitgevoerd bij wijzigingen
 
 NO-GO geldt onder meer wanneer:
 
-- één van de 190 matrixcontroles faalt;
+- één van de 192 matrixcontroles faalt;
 - een verboden tegel of knop zichtbaar is;
 - een verboden route via een directe URL bereikbaar is;
 - frontend en backend verschillende permissies hanteren;
 - een beheerder platformrechten krijgt;
-- een superuser geen Externe-databases-toegang heeft;
+- een gewone Superuser een technische Platformbeheerderpermission krijgt;
+- een gewone Superuser `platform.special_roles.manage` krijgt;
+- een Superuser-v2 zijn functionele Externe-databasesrechten mist;
 - een lid Admin of mutatierechten krijgt die in de matrix op Nee staan;
 - een oude sessie of browseropslag autoriteit blijft geven.
 
 ## Relaties
 
-Canonieke autorisatiedocumentatie:
+Canonieke huishoudmatrix plus actieve Superuser-v2 overlay:
 
 ```text
 docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
+```
+
+Rollen-v2 doelcontract:
+
+```text
+docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md
 ```
 
 Uitvoerbare matrix:
@@ -115,8 +123,9 @@ Uitvoerbare matrix:
 backend/app/testing/authorization_matrix_acceptance.py
 ```
 
-CI-workflow:
+CI-workflows:
 
 ```text
 .github/workflows/authorization-matrix-acceptance.yml
+.github/workflows/superuser-v2-permission-cutover.yml
 ```
