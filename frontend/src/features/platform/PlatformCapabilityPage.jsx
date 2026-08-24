@@ -8,6 +8,7 @@ import PlatformBackgroundJobsPage from './PlatformBackgroundJobsPage.jsx'
 import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
 import PlatformFeatureFlagsPage from './PlatformFeatureFlagsPage.jsx'
 import PlatformIntegrationsPage from './PlatformIntegrationsPage.jsx'
+import PlatformLogsPage from './PlatformLogsPage.jsx'
 import PlatformRecoveryPage from './PlatformRecoveryPage.jsx'
 import PlatformSessionsPage from './PlatformSessionsPage.jsx'
 import PlatformTechnicalConfigurationPage from './PlatformTechnicalConfigurationPage.jsx'
@@ -19,6 +20,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'diagnostics') {
     return <PlatformDiagnosticsPage />
+  }
+
+  if (item?.key === 'logs') {
+    return <PlatformLogsPage />
   }
 
   if (item?.key === 'audit') {
