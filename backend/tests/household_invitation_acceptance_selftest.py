@@ -16,7 +16,7 @@ from app.services.authorization_foundation_service import ensure_authorization_f
 from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.household_invitation_service import create_household_invitation
 from app.services.password_service import hash_password
-from app.services.server_session_service import SESSION_COOKIE_NAME, create_server_session, resolve_server_session
+from app.services.server_session_service import SESSION_COOKIE_NAME, create_server_session
 
 
 def _prepare_database(engine) -> None:
@@ -120,6 +120,18 @@ def _session(engine, user_id: str, household_id: str) -> str:
         return raw
 
 
+def _set_test_session_cookie(client: TestClient, raw_session: str) -> None:
+    # TestClient normalizes the single-label host `testserver` to the cookie
+    # domain `testserver.local`. Matching that scope makes a Set-Cookie from
+    # session rotation replace the fixture cookie exactly as a browser does.
+    client.cookies.set(
+        SESSION_COOKIE_NAME,
+        raw_session,
+        domain='testserver.local',
+        path='/',
+    )
+
+
 def run() -> int:
     checks: list[str] = []
     with tempfile.TemporaryDirectory(prefix='rezzerv-invitation-acceptance-') as tmp:
@@ -146,7 +158,7 @@ def run() -> int:
 
         wrong_session = _session(engine, 'wrong-user', 'hh-own')
         with TestClient(app) as wrong_client:
-            wrong_client.cookies.set(SESSION_COOKIE_NAME, wrong_session)
+            _set_test_session_cookie(wrong_client, wrong_session)
             wrong_accept = wrong_client.post(
                 f'/api/household/invitations/accept/{existing_token}', json={}
             )
@@ -165,14 +177,18 @@ def run() -> int:
 
         existing_session = _session(engine, 'existing-user', 'hh-own')
         with TestClient(app) as existing_client:
-            existing_client.cookies.set(SESSION_COOKIE_NAME, existing_session)
+            _set_test_session_cookie(existing_client, existing_session)
             accepted = existing_client.post(
                 f'/api/household/invitations/accept/{existing_token}', json={}
             )
             assert accepted.status_code == 200, accepted.text
             assert accepted.json()['active_household_id'] == 'hh-invite'
             assert accepted.json()['role'] == 'member'
-            current_cookie = existing_client.cookies.get(SESSION_COOKIE_NAME)
+            current_cookie = existing_client.cookies.get(
+                SESSION_COOKIE_NAME,
+                domain='testserver.local',
+                path='/',
+            )
             assert current_cookie and current_cookie != existing_session
 
             households = existing_client.get('/api/session/households')
@@ -207,7 +223,10 @@ def run() -> int:
         checks.append('existing_account_accepts_atomically_and_can_switch_households')
 
         with TestClient(app) as replay_client:
-            replay_client.cookies.set(SESSION_COOKIE_NAME, _session(engine, 'existing-user', 'hh-own'))
+            _set_test_session_cookie(
+                replay_client,
+                _session(engine, 'existing-user', 'hh-own'),
+            )
             replay = replay_client.post(
                 f'/api/household/invitations/accept/{existing_token}', json={}
             )
@@ -225,7 +244,11 @@ def run() -> int:
             assert registered.status_code == 201, registered.text
             assert registered.json()['active_household_id'] == 'hh-invite'
             assert registered.json()['role'] == 'member'
-            assert new_client.cookies.get(SESSION_COOKIE_NAME)
+            assert new_client.cookies.get(
+                SESSION_COOKIE_NAME,
+                domain='testserver.local',
+                path='/',
+            )
         with engine.begin() as conn:
             households_after = int(conn.execute(text('SELECT COUNT(*) FROM household_registry')).scalar_one())
             assert households_after == households_before
@@ -272,7 +295,7 @@ def run() -> int:
             audits = conn.execute(text("""
                 SELECT action, object_type, new_value FROM auth_audit_log
                 WHERE action = 'household.invitation.accepted'
-                ORDER BY id
+                ORDER BY created_at, object_id
             """)).mappings().all()
             assert len(audits) >= 2
             assert all(row['object_type'] == 'household_invitation' for row in audits)
