@@ -10,6 +10,13 @@ on:
       - 'backend/tests/test_authorization_foundation_contract.py'
       - 'backend/tests/platform_admin_acceptance_closure_selftest.py'
       - 'backend/tests/test_superuser_foundation.py'
+      - 'backend/tests/test_platform_audit_route_authorization.py'
+      - 'backend/tests/test_platform_users_route_authorization.py'
+      - 'backend/tests/test_platform_sessions_route_authorization.py'
+      - 'backend/tests/test_platform_feature_flags_route_authorization.py'
+      - 'backend/tests/test_platform_authorizations_route_authorization.py'
+      - 'backend/tests/test_external_database_route_authorization.py'
+      - 'backend/tests/test_external_relation_batch_decision_platform_authorization.py'
       - 'docs/security/SUPERUSER-V2-PERMISSION-CUTOVER.md'
       - '.github/workflows/superuser-v2-permission-cutover.yml'
   workflow_dispatch:
@@ -40,7 +47,14 @@ jobs:
             app/services/authorization_foundation_service.py \
             tests/test_superuser_v2_permission_cutover.py \
             tests/test_roles_v2_foundation_contract.py \
-            tests/platform_admin_acceptance_closure_selftest.py
+            tests/platform_admin_acceptance_closure_selftest.py \
+            tests/test_platform_audit_route_authorization.py \
+            tests/test_platform_users_route_authorization.py \
+            tests/test_platform_sessions_route_authorization.py \
+            tests/test_platform_feature_flags_route_authorization.py \
+            tests/test_platform_authorizations_route_authorization.py \
+            tests/test_external_database_route_authorization.py \
+            tests/test_external_relation_batch_decision_platform_authorization.py
 
       - name: Run dedicated Superuser v2 cutover contract
         env:
@@ -56,6 +70,27 @@ jobs:
           pytest -q \
             tests/test_roles_v2_foundation_contract.py \
             tests/test_authorization_foundation_contract.py
+
+      - name: Prove technical Platformbeheerder separation
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: |
+          pytest -q \
+            tests/test_platform_audit_route_authorization.py \
+            tests/test_platform_users_route_authorization.py \
+            tests/test_platform_sessions_route_authorization.py \
+            tests/test_platform_feature_flags_route_authorization.py \
+            tests/test_platform_authorizations_route_authorization.py
+
+      - name: Prove functional Superuser v2 external-product authority
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: |
+          pytest -q \
+            tests/test_external_database_route_authorization.py \
+            tests/test_external_relation_batch_decision_platform_authorization.py
 
       - name: Preserve Superuser identity boundary
         env:
