@@ -1,0 +1,57 @@
+name: Platform background jobs authorization validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/dev_test_routes.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'backend/app/services/testing_service.py'
+      - 'backend/app/services/testing_status_route_authorization.py'
+      - 'backend/tests/test_test_orchestration_platform_route_authorization.py'
+      - 'backend/tests/test_testing_status_platform_authorization.py'
+      - 'backend/tests/test_platform_background_jobs_ui_contract.py'
+      - 'frontend/src/features/platform/PlatformBackgroundJobsPage.jsx'
+      - 'frontend/src/features/platform/PlatformCapabilityPage.jsx'
+      - 'frontend/tests/e2e/platform-background-jobs.frontend-regression.spec.js'
+      - '.github/workflows/platform-background-jobs-authorization.yml'
+
+jobs:
+  platform-background-jobs-authorization:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest fastapi pydantic sqlalchemy httpx
+
+      - name: Compile background jobs boundary and tests
+        run: |
+          python -m py_compile \
+            app/api/dev_test_routes.py \
+            app/services/testing_service.py \
+            app/services/testing_status_route_authorization.py \
+            tests/test_test_orchestration_platform_route_authorization.py \
+            tests/test_testing_status_platform_authorization.py \
+            tests/test_platform_background_jobs_ui_contract.py
+
+      - name: Run background jobs authorization and UI contract tests
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: |
+          pytest -q \
+            tests/test_test_orchestration_platform_route_authorization.py \
+            tests/test_testing_status_platform_authorization.py \
+            tests/test_platform_background_jobs_ui_contract.py
