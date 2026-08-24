@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
+import PlatformAuditPage from './PlatformAuditPage.jsx'
 import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
 
 export default function PlatformCapabilityPage({ item }) {
@@ -9,6 +10,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'diagnostics') {
     return <PlatformDiagnosticsPage />
+  }
+
+  if (item?.key === 'audit') {
+    return <PlatformAuditPage />
   }
 
   return (
