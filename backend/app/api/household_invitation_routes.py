@@ -9,11 +9,21 @@ from app.services.authorization_membership_service import (
     AuthorizationDeniedError,
     require_household_permission,
 )
+from app.services.household_invitation_delivery_service import (
+    DELIVERY_STATUS_CONFIG_INVALID,
+    DELIVERY_STATUS_DISABLED,
+    DELIVERY_STATUS_SENT,
+    InvitationEmailConfiguration,
+    InvitationEmailTransport,
+    deliver_created_household_invitation,
+    get_household_invitation_with_delivery,
+    list_household_invitations_with_delivery,
+    resend_household_invitation,
+)
 from app.services.household_invitation_service import (
     InvitationConflictError,
     InvitationNotFoundError,
     create_household_invitation,
-    list_household_invitations,
     revoke_household_invitation,
 )
 from app.services.household_invitation_target_policy import (
@@ -130,7 +140,12 @@ def _require_invitation_management(conn, context: dict[str, str]) -> None:
         ) from exc
 
 
-def create_household_invitation_router(engine: Engine) -> APIRouter:
+def create_household_invitation_router(
+    engine: Engine,
+    *,
+    email_configuration: InvitationEmailConfiguration | None = None,
+    email_transport: InvitationEmailTransport | None = None,
+) -> APIRouter:
     router = APIRouter(tags=["household-invitations"])
 
     @router.post("/api/household/invitations", status_code=status.HTTP_201_CREATED)
@@ -146,8 +161,26 @@ def create_household_invitation_router(engine: Engine) -> APIRouter:
                     invitee_email=payload.email,
                     created_by_user_id=context["user_id"],
                 )
-                # The raw bearer token is intentionally not returned by I.1.
-                return {"ok": True, "invitation": result.invitation}
+                delivery = deliver_created_household_invitation(
+                    conn,
+                    household_id=context["household_id"],
+                    invitation_id=str(result.invitation["id"]),
+                    raw_token=result.raw_token,
+                    actor_user_id=context["user_id"],
+                    configuration=email_configuration,
+                    transport=email_transport,
+                )
+                invitation = get_household_invitation_with_delivery(
+                    conn,
+                    household_id=context["household_id"],
+                    invitation_id=str(result.invitation["id"]),
+                )
+                # The raw bearer token exists only transiently for the outbound email.
+                return {
+                    "ok": True,
+                    "invitation": invitation,
+                    "delivery": delivery.public_payload(),
+                }
         except InvitationTargetNotAllowedError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except InvitationConflictError as exc:
@@ -160,7 +193,7 @@ def create_household_invitation_router(engine: Engine) -> APIRouter:
         with engine.begin() as conn:
             context = _actor_context(conn, request)
             _require_invitation_management(conn, context)
-            items = list_household_invitations(
+            items = list_household_invitations_with_delivery(
                 conn,
                 household_id=context["household_id"],
             )
@@ -170,17 +203,73 @@ def create_household_invitation_router(engine: Engine) -> APIRouter:
                 "total": len(items),
             }
 
+    @router.post("/api/household/invitations/{invitation_id}/resend")
+    def resend_invitation(invitation_id: str, request: Request):
+        try:
+            with engine.begin() as conn:
+                context = _actor_context(conn, request)
+                _require_invitation_management(conn, context)
+                current = get_household_invitation_with_delivery(
+                    conn,
+                    household_id=context["household_id"],
+                    invitation_id=invitation_id,
+                )
+                assert_household_invitation_target_allowed(
+                    conn,
+                    str(current["invitee_email"]),
+                )
+                invitation, delivery = resend_household_invitation(
+                    conn,
+                    household_id=context["household_id"],
+                    invitation_id=invitation_id,
+                    actor_user_id=context["user_id"],
+                    configuration=email_configuration,
+                    transport=email_transport,
+                )
+        except InvitationTargetNotAllowedError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except InvitationNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except InvitationConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        if delivery.status != DELIVERY_STATUS_SENT:
+            failure_status = (
+                503
+                if delivery.status in {DELIVERY_STATUS_DISABLED, DELIVERY_STATUS_CONFIG_INVALID}
+                else 502
+            )
+            raise HTTPException(
+                status_code=failure_status,
+                detail={
+                    "code": "invitation_delivery_failed",
+                    "delivery": delivery.public_payload(),
+                },
+            )
+        return {
+            "ok": True,
+            "invitation": invitation,
+            "delivery": delivery.public_payload(),
+        }
+
     @router.post("/api/household/invitations/{invitation_id}/revoke")
     def revoke_invitation(invitation_id: str, request: Request):
         try:
             with engine.begin() as conn:
                 context = _actor_context(conn, request)
                 _require_invitation_management(conn, context)
-                invitation = revoke_household_invitation(
+                revoke_household_invitation(
                     conn,
                     household_id=context["household_id"],
                     invitation_id=invitation_id,
                     actor_user_id=context["user_id"],
+                )
+                invitation = get_household_invitation_with_delivery(
+                    conn,
+                    household_id=context["household_id"],
+                    invitation_id=invitation_id,
                 )
                 return {"ok": True, "invitation": invitation}
         except InvitationNotFoundError as exc:
