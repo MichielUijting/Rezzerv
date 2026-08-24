@@ -7,6 +7,8 @@ import LoginPage from '../../features/auth/LoginPage'
 import RegisterPage from '../../features/auth/RegisterPage'
 import HomePage from '../../features/home/HomePage'
 import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
+import PlatformCapabilityPage from '../../features/platform/PlatformCapabilityPage.jsx'
+import { PLATFORM_NAVIGATION_ITEMS } from '../../features/platform/platformNavigation.js'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
 import KassaPage from '../../features/kassa/KassaPage.jsx'
 import SettingsPage from '../../features/settings/SettingsPage'
@@ -111,6 +113,19 @@ function ProtectedSuperuser({ children }) {
   return <AuthGuard><SuperuserGuard>{children}</SuperuserGuard></AuthGuard>
 }
 
+const platformRoutes = PLATFORM_NAVIGATION_ITEMS.map((item) => ({
+  path: item.route,
+  element: (
+    <ProtectedPermission
+      permission={item.permission}
+      allowNone
+      message={`Je hebt geen toegang tot ${item.label}.`}
+    >
+      <PlatformCapabilityPage item={item} />
+    </ProtectedPermission>
+  ),
+}))
+
 const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   { path: '/registreren', element: <RegisterRoute /> },
@@ -119,6 +134,7 @@ const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
   { path: '/home', element: <Protected allowNone><HomePage /></Protected> },
+  ...platformRoutes,
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/superuser', element: <ProtectedSuperuser><SuperuserDashboardPage /></ProtectedSuperuser> },
   { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
