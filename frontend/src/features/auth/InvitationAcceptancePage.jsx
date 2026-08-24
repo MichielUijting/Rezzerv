@@ -5,7 +5,7 @@ import Card from '../../ui/Card.jsx'
 import Input from '../../ui/Input.jsx'
 import Button from '../../ui/Button.jsx'
 import { apiPost } from '../../lib/apiClient.js'
-import { fetchAuthContext } from '../../lib/authSession.js'
+import { clearAuthSession, fetchAuthContext } from '../../lib/authSession.js'
 
 function detailMessage(data, fallback) {
   if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
@@ -74,6 +74,28 @@ export default function InvitationAcceptancePage() {
     }
   }
 
+  async function useAnotherAccount() {
+    setSubmitting(true)
+    setError('')
+    try {
+      await apiPost('/api/auth/logout', {})
+    } catch {
+      // Clearing local session state is safe even when the server session is already absent.
+    } finally {
+      clearAuthSession()
+      setPreview((current) => current ? {
+        ...current,
+        authenticated: false,
+        authenticated_email_matches: false,
+      } : current)
+      setMode(preview?.account_exists ? 'login' : 'register')
+      setEmail('')
+      setPassword('')
+      setPasswordRepeat('')
+      setSubmitting(false)
+    }
+  }
+
   async function loginAndAccept(event) {
     event.preventDefault()
     setSubmitting(true)
@@ -117,6 +139,9 @@ export default function InvitationAcceptancePage() {
     }
   }
 
+  const authenticatedCorrectAccount = Boolean(preview?.authenticated && preview?.authenticated_email_matches)
+  const authenticatedWrongAccount = Boolean(preview?.authenticated && !preview?.authenticated_email_matches)
+
   return (
     <div className="rz-screen" data-testid="invitation-acceptance-page">
       <Header title="Uitnodiging" />
@@ -132,11 +157,18 @@ export default function InvitationAcceptancePage() {
                   De uitnodiging is gericht aan <strong>{preview.invitee_email_masked}</strong>.
                 </p>
 
-                {preview.authenticated ? (
+                {authenticatedCorrectAccount ? (
                   <div className="rz-form" data-testid="invitation-authenticated-actions">
-                    <p>Je bent al ingelogd. Accepteer de uitnodiging met dit account.</p>
+                    <p>Je bent ingelogd met het account waarvoor deze uitnodiging is bedoeld.</p>
                     <Button type="button" variant="primary" disabled={submitting} onClick={acceptCurrentSession} data-testid="invitation-accept-current">
                       {submitting ? 'Bezig...' : 'Uitnodiging accepteren'}
+                    </Button>
+                  </div>
+                ) : authenticatedWrongAccount ? (
+                  <div className="rz-form" data-testid="invitation-wrong-account-actions">
+                    <p>Je bent ingelogd met een ander account. Gebruik het account dat hoort bij {preview.invitee_email_masked}.</p>
+                    <Button type="button" variant="primary" disabled={submitting} onClick={useAnotherAccount} data-testid="invitation-use-another-account">
+                      {submitting ? 'Bezig...' : 'Ander account gebruiken'}
                     </Button>
                   </div>
                 ) : (
