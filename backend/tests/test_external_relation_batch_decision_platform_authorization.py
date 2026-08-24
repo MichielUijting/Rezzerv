@@ -129,7 +129,7 @@ def test_classifier_is_exact_and_reuses_external_product_link_permission():
         ("ip-owner", True),
         ("frontteam", True),
         ("platform-admin", False),
-        ("superuser", False),
+        ("superuser", True),
         ("support-reader", False),
         ("ordinary-admin", False),
         ("ordinary-owner", False),
