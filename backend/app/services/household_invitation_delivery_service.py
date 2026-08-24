@@ -9,7 +9,7 @@ import urllib.parse
 import urllib.request
 from typing import Callable
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 from app.services.authorization_foundation_service import write_authorization_audit
@@ -27,8 +27,8 @@ from app.services.household_invitation_service import (
     InvitationConflictError,
     InvitationNotFoundError,
     ensure_household_invitation_foundation,
-    get_household_invitation,
     hash_invitation_token,
+    list_household_invitations,
     new_invitation_token,
     utc_now,
 )
@@ -94,6 +94,29 @@ def default_invitation_email_configuration() -> InvitationEmailConfiguration:
 def _iso(value: datetime) -> str:
     normalized = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
     return normalized.astimezone(timezone.utc).isoformat()
+
+
+def ensure_household_invitation_delivery_foundation(conn: Connection) -> None:
+    """Add I.3 delivery metadata without rewriting the I.1 lifecycle table."""
+
+    ensure_household_invitation_foundation(conn)
+    columns = {
+        str(column.get("name") or "").strip().lower()
+        for column in inspect(conn).get_columns("household_invitations")
+    }
+    additions = (
+        ("delivery_status", "TEXT NOT NULL DEFAULT 'not_sent'"),
+        ("delivery_attempt_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("last_delivery_attempt_at", "TEXT"),
+        ("last_delivered_at", "TEXT"),
+        ("last_delivery_error", "TEXT"),
+        ("delivery_provider_message_id", "TEXT"),
+        ("last_delivery_actor_user_id", "TEXT"),
+    )
+    for column_name, definition in additions:
+        if column_name not in columns:
+            conn.execute(text(f"ALTER TABLE household_invitations ADD COLUMN {column_name} {definition}"))
+            columns.add(column_name)
 
 
 def _configuration_problem(configuration: InvitationEmailConfiguration) -> tuple[str | None, str | None]:
@@ -267,6 +290,51 @@ def _stored_invitation_row(conn: Connection, household_id: str, invitation_id: s
     ).mappings().first()
 
 
+def _delivery_metadata(row) -> dict[str, object]:
+    return {
+        "delivery_status": str(row.get("delivery_status") or DELIVERY_STATUS_NOT_SENT),
+        "delivery_attempt_count": int(row.get("delivery_attempt_count") or 0),
+        "last_delivery_attempt_at": row.get("last_delivery_attempt_at"),
+        "last_delivered_at": row.get("last_delivered_at"),
+        "last_delivery_error": row.get("last_delivery_error"),
+        "delivery_provider_message_id": row.get("delivery_provider_message_id"),
+        "last_delivery_actor_user_id": row.get("last_delivery_actor_user_id"),
+    }
+
+
+def get_household_invitation_with_delivery(
+    conn: Connection,
+    *,
+    household_id: str,
+    invitation_id: str,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    ensure_household_invitation_delivery_foundation(conn)
+    items = list_household_invitations(conn, household_id=household_id, now=now)
+    invitation = next((item for item in items if str(item.get("id")) == str(invitation_id)), None)
+    if not invitation:
+        raise InvitationNotFoundError("Uitnodiging niet gevonden")
+    row = _stored_invitation_row(conn, household_id, invitation_id)
+    if not row:
+        raise InvitationNotFoundError("Uitnodiging niet gevonden")
+    return {**invitation, **_delivery_metadata(row)}
+
+
+def list_household_invitations_with_delivery(
+    conn: Connection,
+    *,
+    household_id: str,
+    now: datetime | None = None,
+) -> list[dict[str, object]]:
+    ensure_household_invitation_delivery_foundation(conn)
+    items = list_household_invitations(conn, household_id=household_id, now=now)
+    enriched: list[dict[str, object]] = []
+    for invitation in items:
+        row = _stored_invitation_row(conn, household_id, str(invitation.get("id") or ""))
+        enriched.append({**invitation, **(_delivery_metadata(row) if row else {})})
+    return enriched
+
+
 def _record_delivery_attempt(
     conn: Connection,
     *,
@@ -332,8 +400,8 @@ def deliver_created_household_invitation(
     transport: InvitationEmailTransport | None = None,
     now: datetime | None = None,
 ) -> InvitationDeliveryResult:
-    ensure_household_invitation_foundation(conn)
-    invitation = get_household_invitation(
+    ensure_household_invitation_delivery_foundation(conn)
+    invitation = get_household_invitation_with_delivery(
         conn,
         household_id=household_id,
         invitation_id=invitation_id,
@@ -371,9 +439,9 @@ def resend_household_invitation(
     transport: InvitationEmailTransport | None = None,
     now: datetime | None = None,
 ) -> tuple[dict[str, object], InvitationDeliveryResult]:
-    ensure_household_invitation_foundation(conn)
+    ensure_household_invitation_delivery_foundation(conn)
     current_time = now or utc_now()
-    invitation = get_household_invitation(
+    invitation = get_household_invitation_with_delivery(
         conn,
         household_id=household_id,
         invitation_id=invitation_id,
@@ -444,7 +512,7 @@ def resend_household_invitation(
         result=result,
         attempted_at=attempted_at,
     )
-    refreshed = get_household_invitation(
+    refreshed = get_household_invitation_with_delivery(
         conn,
         household_id=household_id,
         invitation_id=invitation_id,
