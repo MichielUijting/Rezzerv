@@ -23,6 +23,7 @@ jobs:
       REZZERV_EMAIL_ENABLED: 'false'
       DATABASE_URL: 'sqlite:////tmp/rezzerv_i5.db'
       RECEIPT_STORAGE_ROOT: '/tmp/rezzerv_i5_receipts'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
 
     steps:
       - name: Checkout
