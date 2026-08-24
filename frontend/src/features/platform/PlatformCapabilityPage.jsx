@@ -3,6 +3,7 @@ import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import PlatformAuditPage from './PlatformAuditPage.jsx'
+import PlatformBackgroundJobsPage from './PlatformBackgroundJobsPage.jsx'
 import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
 import PlatformTechnicalConfigurationPage from './PlatformTechnicalConfigurationPage.jsx'
 import PlatformTestFixturesPage from './PlatformTestFixturesPage.jsx'
@@ -16,6 +17,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'audit') {
     return <PlatformAuditPage />
+  }
+
+  if (item?.key === 'background-jobs') {
+    return <PlatformBackgroundJobsPage />
   }
 
   if (item?.key === 'technical-configuration') {
