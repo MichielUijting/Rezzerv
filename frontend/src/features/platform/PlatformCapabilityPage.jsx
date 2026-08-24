@@ -8,6 +8,7 @@ import PlatformDiagnosticsPage from './PlatformDiagnosticsPage.jsx'
 import PlatformFeatureFlagsPage from './PlatformFeatureFlagsPage.jsx'
 import PlatformIntegrationsPage from './PlatformIntegrationsPage.jsx'
 import PlatformRecoveryPage from './PlatformRecoveryPage.jsx'
+import PlatformSessionsPage from './PlatformSessionsPage.jsx'
 import PlatformTechnicalConfigurationPage from './PlatformTechnicalConfigurationPage.jsx'
 import PlatformTestFixturesPage from './PlatformTestFixturesPage.jsx'
 
@@ -44,6 +45,10 @@ export default function PlatformCapabilityPage({ item }) {
 
   if (item?.key === 'feature-flags') {
     return <PlatformFeatureFlagsPage />
+  }
+
+  if (item?.key === 'sessions') {
+    return <PlatformSessionsPage />
   }
 
   return (
