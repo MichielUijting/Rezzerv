@@ -234,6 +234,12 @@ test.describe('Autorisaties frontend-regressie', () => {
     await expect(page.getByTestId('household-invitation-status-invite-new')).toHaveText('Ingetrokken')
     await expect(page.getByTestId('household-invitation-resend-invite-new')).toHaveCount(0)
 
-    await expectNoConsoleErrors(consoleErrors)
+    const expectedResendConsoleErrors = consoleErrors.filter((message) =>
+      message.includes('status of 503 (Service Unavailable)')
+      && message.includes('/api/household/invitations/invite-new/resend')
+    )
+    expect(expectedResendConsoleErrors).toHaveLength(1)
+    const unexpectedConsoleErrors = consoleErrors.filter((message) => !expectedResendConsoleErrors.includes(message))
+    await expectNoConsoleErrors(unexpectedConsoleErrors)
   })
 })
