@@ -146,7 +146,7 @@ def test_revoke_platform_admin_is_live_audited_and_preserves_special_role():
         ensure_authorization_foundation(conn)
         _insert_user(conn, "actor", "actor@example.test")
         _insert_user(conn, "target", "target@example.test")
-        _assign_role(conn, "actor", "platform.ip_owner")
+        _assign_role(conn, "actor", "platform.superuser")
         _assign_role(conn, "target", "platform.ip_owner")
         _assign_role(conn, "target", PLATFORM_ADMIN_ROLE_KEY)
 
@@ -182,8 +182,7 @@ def test_self_revoke_is_blocked():
 
 def test_revoke_cannot_remove_last_active_manage_authority():
     engine = _engine()
-    _create_connection = engine.begin
-    with _create_connection() as conn:
+    with engine.begin() as conn:
         _create_users(conn)
         ensure_authorization_foundation(conn)
         _insert_user(conn, "actor", "actor@example.test")
