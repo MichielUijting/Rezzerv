@@ -16,6 +16,10 @@ import {
   fetchHouseholdOnboarding,
   readHouseholdOnboarding,
 } from '../onboarding/onboardingState.js'
+import {
+  PLATFORM_NAVIGATION_GROUPS,
+  PLATFORM_NAVIGATION_ITEMS,
+} from '../platform/platformNavigation.js'
 import { buildHomeNavigation } from './homeNavigation.js'
 
 function visibilityFromContext(context) {
@@ -52,6 +56,15 @@ export default function HomePage() {
   const [showMore, setShowMore] = useState(false)
   const visibility = visibilityFromContext(context)
   const navigation = buildHomeNavigation({ onboarding, visibility })
+  const platformNavigation = context?.context_type === 'none'
+    ? PLATFORM_NAVIGATION_ITEMS.filter((item) => canCurrentUserPerform(item.permission, context))
+    : []
+  const platformGroups = PLATFORM_NAVIGATION_GROUPS
+    .map((group) => ({
+      ...group,
+      items: platformNavigation.filter((item) => item.group === group.key),
+    }))
+    .filter((group) => group.items.length > 0)
 
   useEffect(() => {
     let cancelled = false
@@ -91,11 +104,48 @@ export default function HomePage() {
         <div className="rz-content">
           <div className="rz-content-inner">
             <Card className="rz-card-home">
-              <h2>Platformbeheerder</h2>
-              <p>Er is geen huishoudcontext actief.</p>
-              <Button type="button" variant="secondary" onClick={logout} data-testid="none-session-logout">
-                Uitloggen
-              </Button>
+              <h2>Platformbeheer</h2>
+              <p>Er is geen huishoudcontext actief. Je ziet alleen platformfuncties waarvoor je geautoriseerd bent.</p>
+
+              {platformGroups.length > 0 ? (
+                <div data-testid="platform-home-navigation">
+                  {platformGroups.map((group) => (
+                    <div key={group.key} data-testid={`platform-home-group-${group.key}`} style={{ marginTop: '20px' }}>
+                      <h3 style={{ margin: '0 0 12px 0', fontSize: '17px' }}>{group.label}</h3>
+                      <div className="rz-tile-grid" role="navigation" aria-label={group.label}>
+                        {group.items.map((item) => (
+                          <div
+                            key={item.key}
+                            className="rz-tile"
+                            data-testid={`platform-home-tile-${item.key}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => navigate(item.route)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                navigate(item.route)
+                              }
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <div className="rz-tile-icon" aria-hidden="true">{item.icon}</div>
+                            <div className="rz-tile-label">{item.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p data-testid="platform-home-empty">Voor deze account zijn geen platformfuncties beschikbaar.</p>
+              )}
+
+              <div style={{ marginTop: '24px' }}>
+                <Button type="button" variant="secondary" onClick={logout} data-testid="none-session-logout">
+                  Uitloggen
+                </Button>
+              </div>
             </Card>
           </div>
         </div>
