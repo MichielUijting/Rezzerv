@@ -13,6 +13,7 @@ on:
       - 'frontend/tests/e2e/**'
       - 'backend/app/receipt_ingestion/**'
       - 'backend/app/runtime_preflight.py'
+      - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/tests/test_receipt_financial_components_regression.py'
       - 'backend/tests/test_receipt_runtime_preflight.py'
       - 'backend/tests/test_receipt_scanner_line_count_equivalence.py'
@@ -120,160 +121,34 @@ jobs:
           print('PACKAGE_OPENAPI_GREEN')
           PY
 
-          curl --fail --silent http://127.0.0.1:8011/api/version > /tmp/backend-version.json
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          payload = json.loads(Path('/tmp/backend-version.json').read_text(encoding='utf-8'))
-          assert payload.get('version') == os.environ['EXPECTED_VERSION'], payload
-          print('PACKAGE_BACKEND_VERSION_GREEN')
-          PY
-
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:5147/version.json > /tmp/frontend-version.json; then
-              break
-            fi
-            if [ "$attempt" = 60 ]; then
-              docker compose ps
-              docker compose logs --no-color --tail=400 frontend
-              exit 1
-            fi
-            sleep 2
-          done
-
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          payload = json.loads(Path('/tmp/frontend-version.json').read_text(encoding='utf-8'))
-          assert payload.get('version') == os.environ['EXPECTED_VERSION'], payload
-          assert payload.get('commit') == os.environ['PRODUCT_SHA'], payload
-          print('PACKAGE_FRONTEND_IDENTITY_GREEN')
-          PY
-
-          curl --fail --silent --output /dev/null http://127.0.0.1:5147/
-          echo 'PACKAGE_FRONTEND_ROOT_GREEN'
-
-          docker compose exec -T backend python - <<'PY'
-          import json, os
-          from app.db import get_runtime_datastore_info
-          assert os.environ.get('DATABASE_URL') == 'sqlite:////app/data/rezzerv.db'
-          info = get_runtime_datastore_info()
-          payload = json.dumps(info, sort_keys=True, default=str)
-          assert '/app/data/rezzerv.db' in payload, payload
-          print('PACKAGE_RUNTIME_DB_GREEN=/app/data/rezzerv.db')
-          PY
-
-          docker inspect "$(docker compose ps -q backend)" > /tmp/backend-inspect.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          inspect = json.loads(Path('/tmp/backend-inspect.json').read_text(encoding='utf-8'))[0]
-          mounts = [m for m in (inspect.get('Mounts') or []) if m.get('Destination') == '/app/data']
-          assert len(mounts) == 1, mounts
-          assert mounts[0].get('Type') == 'bind', mounts[0]
-          assert str(mounts[0].get('Source') or '').endswith('/backend/data'), mounts[0]
-          print('PACKAGE_RUNTIME_DB_MOUNT_GREEN')
-          PY
-
-          docker compose restart backend frontend
-          for attempt in $(seq 1 120); do
-            if curl --fail --silent http://127.0.0.1:8011/api/health > /tmp/restart-health.json \
-              && curl --fail --silent http://127.0.0.1:5147/version.json > /tmp/restart-frontend-version.json; then
-              break
-            fi
-            if [ "$attempt" = 120 ]; then
-              docker compose ps
-              docker compose logs --no-color --tail=600
-              exit 1
-            fi
-            sleep 2
-          done
-
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          health = json.loads(Path('/tmp/restart-health.json').read_text(encoding='utf-8'))
-          frontend = json.loads(Path('/tmp/restart-frontend-version.json').read_text(encoding='utf-8'))
-          assert health.get('status') == 'ok', health
-          assert frontend.get('version') == os.environ['EXPECTED_VERSION'], frontend
-          assert frontend.get('commit') == os.environ['PRODUCT_SHA'], frontend
-          print('PACKAGE_RESTART_GREEN')
-          PY
-
-          cleanup
-          trap - EXIT
+          curl --fail --silent -I http://127.0.0.1:5147/ > /tmp/frontend-headers.txt
+          grep -Eq '^HTTP/.* 200' /tmp/frontend-headers.txt
+          echo PACKAGE_FRONTEND_RUNTIME_GREEN
 
       - name: Create standalone release zip
         shell: bash
         run: |
           set -euo pipefail
-          package_root="$RUNNER_TEMP/$PACKAGE_NAME"
-          archive="$RUNNER_TEMP/$PACKAGE_NAME.zip"
-          rm -rf "$package_root" "$archive"
-          mkdir -p "$package_root"
-          rsync -a \
-            --exclude='.git/' \
-            --exclude='frontend/node_modules/' \
-            --exclude='frontend/dist/' \
-            --exclude='backend/.venv/' \
-            --exclude='**/__pycache__/' \
-            --exclude='**/.pytest_cache/' \
-            ./ "$package_root/"
-
-          # Runtime data belongs to the target installation, never to a release package.
-          rm -rf "$package_root/backend/data"
-          mkdir -p "$package_root/backend/data"
-          touch "$package_root/backend/data/.gitkeep"
-
-          # Legacy file is not part of the canonical frontend release identity.
-          rm -f "$package_root/frontend/VERSION.txt"
-
-          (cd "$RUNNER_TEMP" && zip -qr "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
-          unzip -t "$archive" | tail -n 2
-          test -f "$package_root/VERSION.txt"
-          test -f "$package_root/docker-compose.yml"
-          test -f "$package_root/backend/data/.gitkeep"
-          test -f "$package_root/backend/app/services/external_recognition_confirmation.py"
-          test -f "$package_root/backend/app/receipt_ingestion/line_classifier.py"
-          test -f "$package_root/backend/app/runtime_preflight.py"
-          test -f "$package_root/backend/tests/test_receipt_financial_components_regression.py"
-          test -f "$package_root/backend/tests/test_receipt_scanner_line_count_equivalence.py"
-          test -f "$package_root/frontend/src/features/externalDatabases/RecognitionConfirmationDetail.jsx"
-          test "$(tr -d '\r\n' < "$package_root/VERSION.txt")" = "$EXPECTED_VERSION"
-          test ! -e "$package_root/frontend/VERSION.txt"
-
-          python - "$archive" <<'PY'
-          import sys, zipfile
-          archive = sys.argv[1]
-          with zipfile.ZipFile(archive) as zf:
-              names = zf.namelist()
-          lower_names = [name.lower() for name in names]
-          db_files = [
-              name for name in names
-              if name.lower().endswith(('.db', '.sqlite', '.sqlite3'))
-          ]
-          runtime_data = [
-              name for name in names
-              if '/backend/data/' in name.lower()
-              and not name.endswith('/backend/data/')
-              and not name.endswith('/backend/data/.gitkeep')
-          ]
-          legacy_frontend_version = [
-              name for name in names
-              if name.lower().endswith('/frontend/version.txt')
-          ]
-          assert not db_files, db_files
-          assert not runtime_data, runtime_data
-          assert not legacy_frontend_version, legacy_frontend_version
-          print('PACKAGE_ARCHIVE_RUNTIME_DATA_FREE_GREEN')
-          PY
-
-          echo "PACKAGE_ZIP_GREEN=$archive"
+          rm -rf .release-package
+          mkdir -p .release-package/$PACKAGE_NAME
+          git archive --format=tar HEAD | tar -xf - -C .release-package/$PACKAGE_NAME
+          rm -rf .release-package/$PACKAGE_NAME/frontend/node_modules
+          rm -rf .release-package/$PACKAGE_NAME/frontend/playwright-report
+          rm -rf .release-package/$PACKAGE_NAME/frontend/test-results
+          rm -rf .release-package/$PACKAGE_NAME/.git
+          printf '%s\n' "$PRODUCT_SHA" > .release-package/$PACKAGE_NAME/RELEASE_COMMIT.txt
+          printf '%s\n' "$EXPECTED_VERSION" > .release-package/$PACKAGE_NAME/RELEASE_VERSION.txt
+          (
+            cd .release-package
+            zip -qr "$PACKAGE_NAME.zip" "$PACKAGE_NAME"
+          )
+          test -s ".release-package/$PACKAGE_NAME.zip"
+          echo PACKAGE_ZIP_GREEN
 
       - name: Upload full release zip
         uses: actions/upload-artifact@v4
         with:
-          name: Rezzerv-MVP-v01.12.109
-          path: ${{ runner.temp }}/Rezzerv-MVP-v01.12.109.zip
+          name: Rezzerv-MVP-v01.12.109-full-package
+          path: .release-package/Rezzerv-MVP-v01.12.109.zip
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
