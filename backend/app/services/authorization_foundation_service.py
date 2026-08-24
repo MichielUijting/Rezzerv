@@ -141,10 +141,6 @@ FRONTTEAM_PLATFORM_PERMISSIONS = {
     "platform.external_products.link_existing",
 }
 
-ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS = set(PLATFORM_PERMISSIONS)
-
-# Target-only until the controlled v2 runtime cutover. Existing Superusers keep
-# the exact v1.1 grants and public session payload throughout foundation slice 9.1.1.
 V2_SUPERUSER_TARGET_PERMISSIONS = {
     "platform.households.search",
     "platform.households.view_metadata",
@@ -170,6 +166,14 @@ V2_SUPERUSER_TARGET_PERMISSIONS = {
     "platform.external_sources.view",
     "platform.external_sources.manage",
 }
+
+# Canonical runtime grantset from 9.1.8a onward. The v2 target is no longer
+# target-only: ordinary platform.superuser sessions and seeded role grants use it.
+ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS = set(V2_SUPERUSER_TARGET_PERMISSIONS)
+
+# Deprecated compatibility alias for older regression imports. It intentionally
+# resolves to the active v2 set and must not be used as a separate authority source.
+ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS = ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS
 
 PLATFORM_ADMIN_PERMISSIONS = {
     "platform.diagnostics.view",
@@ -205,7 +209,7 @@ ROLE_PERMISSIONS = {
         "platform.support_access.read", "platform.audit.view",
     },
     "platform.frontteam": set(FRONTTEAM_PLATFORM_PERMISSIONS),
-    "platform.superuser": set(ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS),
+    "platform.superuser": set(ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS),
     "platform.platform_admin": set(PLATFORM_ADMIN_PERMISSIONS),
     "platform.ip_owner": set(IP_OWNER_PERMISSIONS),
 }
