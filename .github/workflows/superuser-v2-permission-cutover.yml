@@ -1,0 +1,73 @@
+name: Superuser v2 permission cutover validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/tests/test_superuser_v2_permission_cutover.py'
+      - 'backend/tests/test_roles_v2_foundation_contract.py'
+      - 'backend/tests/test_authorization_foundation_contract.py'
+      - 'backend/tests/platform_admin_acceptance_closure_selftest.py'
+      - 'backend/tests/test_superuser_foundation.py'
+      - 'docs/security/SUPERUSER-V2-PERMISSION-CUTOVER.md'
+      - '.github/workflows/superuser-v2-permission-cutover.yml'
+  workflow_dispatch:
+
+jobs:
+  superuser-v2-permission-cutover:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest fastapi pydantic sqlalchemy httpx
+
+      - name: Compile authority cutover and contracts
+        run: |
+          python -m py_compile \
+            app/services/authorization_foundation_service.py \
+            tests/test_superuser_v2_permission_cutover.py \
+            tests/test_roles_v2_foundation_contract.py \
+            tests/platform_admin_acceptance_closure_selftest.py
+
+      - name: Run dedicated Superuser v2 cutover contract
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: pytest -q tests/test_superuser_v2_permission_cutover.py
+
+      - name: Run roles-v2 and authorization foundation contracts
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: |
+          pytest -q \
+            tests/test_roles_v2_foundation_contract.py \
+            tests/test_authorization_foundation_contract.py
+
+      - name: Preserve Superuser identity boundary
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: pytest -q tests/test_superuser_foundation.py
+
+      - name: Preserve Platformbeheerder 9.1.7 closure
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+        run: python tests/platform_admin_acceptance_closure_selftest.py
+
+      - name: Acceptance marker
+        run: echo SUPERUSER_V2_9_1_8A_PERMISSION_CUTOVER_GREEN
