@@ -17,13 +17,14 @@ PLATFORM_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 PLATFORM_LOGGER_PREFIX = "rezzerv"
 
 
+_COOKIE_HEADER_RE = re.compile(r"(?i)\b(cookie|set-cookie)(\s*[:=]\s*)[^\r\n]+")
 _BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")
 _URL_CREDENTIAL_RE = re.compile(r"(?i)([a-z][a-z0-9+.-]*://)([^\s/@:]+):([^\s/@]+)@")
 _QUERY_SECRET_RE = re.compile(
     r"(?i)([?&](?:access_token|refresh_token|token|api[_-]?key|password|secret|session(?:_id)?)=)[^&#\s]+"
 )
 _KEY_VALUE_SECRET_RE = re.compile(
-    r"(?i)\b(authorization|cookie|set-cookie|password|passwd|pwd|access_token|refresh_token|token|api[_-]?key|apikey|secret|session(?:_id)?)"
+    r"(?i)\b(authorization|password|passwd|pwd|access_token|refresh_token|token|api[_-]?key|apikey|secret|session(?:_id)?)"
     r"(\s*[:=]\s*)([^\s,;]+)"
 )
 
@@ -44,6 +45,7 @@ def sanitize_platform_log_message(value: Any) -> str:
     """
 
     message = str(value or "").replace("\x00", "").strip()
+    message = _COOKIE_HEADER_RE.sub(r"\1\2[REDACTED]", message)
     message = _BEARER_RE.sub("Bearer [REDACTED]", message)
     message = _URL_CREDENTIAL_RE.sub(r"\1[REDACTED]:[REDACTED]@", message)
     message = _QUERY_SECRET_RE.sub(r"\1[REDACTED]", message)
