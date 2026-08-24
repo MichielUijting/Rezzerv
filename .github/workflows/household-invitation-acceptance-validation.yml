@@ -12,6 +12,7 @@ on:
       - 'frontend/src/features/auth/InvitationAcceptancePage.jsx'
       - 'frontend/src/ui/Header.jsx'
       - 'frontend/tests/invitation-acceptance.contract.mjs'
+      - 'frontend/tests/e2e/invitation-acceptance.frontend-regression.spec.js'
       - '.github/workflows/household-invitation-acceptance-validation.yml'
   workflow_dispatch:
 
