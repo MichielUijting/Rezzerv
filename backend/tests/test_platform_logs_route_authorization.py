@@ -27,22 +27,30 @@ def test_platform_logs_permission_uses_existing_role_matrix_without_expanding_v1
     assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["household.admin"]
 
 
-def test_platform_runtime_log_capture_is_idempotent_and_projects_safe_fields_only():
+def test_platform_runtime_log_capture_is_idempotent_preserves_threshold_and_projects_safe_fields_only():
     clear_platform_log_buffer_for_tests()
+    rezzerv_logger = logging.getLogger("rezzerv")
+    original_parent_level = rezzerv_logger.level
     first = install_platform_log_capture()
     second = install_platform_log_capture()
     assert first is second
+    assert rezzerv_logger.level == original_parent_level
 
     logger = logging.getLogger("rezzerv.api.e12-test")
-    logger.warning(
-        "request failed password=hunter2 token=abc123 "
-        "url=postgresql://dbuser:dbpass@db.internal/rezzerv "
-        "Cookie: sessionid=cookie-secret; second=also-secret"
-    )
+    original_level = logger.level
+    logger.setLevel(logging.INFO)
     try:
-        raise RuntimeError("raw exception detail must not become traceback payload")
-    except RuntimeError:
-        logger.exception("operation failed authorization=Bearer super-secret")
+        logger.warning(
+            "request failed password=hunter2 token=abc123 "
+            "url=postgresql://dbuser:dbpass@db.internal/rezzerv "
+            "Cookie: sessionid=cookie-secret; second=also-secret"
+        )
+        try:
+            raise RuntimeError("raw exception detail must not become traceback payload")
+        except RuntimeError:
+            logger.exception("operation failed authorization=Bearer super-secret")
+    finally:
+        logger.setLevel(original_level)
 
     items = list_platform_logs(limit=10)
     assert len(items) == 2
@@ -67,9 +75,14 @@ def test_platform_log_filters_are_bounded_newest_first_and_case_normalized():
     clear_platform_log_buffer_for_tests()
     install_platform_log_capture()
     logger = logging.getLogger("rezzerv.api.e12-filter")
-    logger.info("first info")
-    logger.error("middle error")
-    logger.info("last info")
+    original_level = logger.level
+    logger.setLevel(logging.INFO)
+    try:
+        logger.info("first info")
+        logger.error("middle error")
+        logger.info("last info")
+    finally:
+        logger.setLevel(original_level)
 
     all_items = list_platform_logs(limit=9999)
     assert len(all_items) == 3
