@@ -1,14 +1,13 @@
 # Rezzerv autorisatiemechanisme en autorisatiematrix v1.1
 
-Status: **canonieke functionele en technische basis voor PR #216**
+Status: **canonieke huishoudmatrix v1.1 met actieve Superuser-v2 platformoverlay**
 
-Overgangsstatus: dit document en de uitvoerbare 190-check matrix blijven
-tijdelijk de beschrijving en regressiebaseline van de huidige runtime. Het
-PO-goedgekeurde functionele doelcontract staat vanaf v2.0 in
-`docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`. Implementatiestap 9.1 moet de
-runtime en regressies bewust met dat doelcontract in overeenstemming brengen;
-een verschil tussen v1.1 en v2.0 mag tot die tijd niet stilzwijgend worden
-opgelost.
+Overgangsstatus: de huishoudmatrix v1.1 blijft de regressiebaseline voor de
+bestaande huishoudrollen. Het PO-goedgekeurde rollen- en accountdoelcontract
+staat in `docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md`. Met 9.1.8a is de
+platformauthority van `platform.superuser` bewust naar de v2-doelset
+omgezet. Technische Platformbeheerderauthority is sindsdien een afzonderlijk
+domein en is niet langer impliciet onderdeel van Superuser.
 
 ## 1. Doel
 
@@ -17,10 +16,10 @@ Deze documentatie legt vast:
 - hoe Rezzerv authenticatie en autorisatie uitvoert;
 - welke rollen bestaan;
 - welke rechten per rol gelden;
-- hoe de matrix automatisch en handmatig wordt getest;
+- hoe de huishoudmatrix v1.1 en de actieve Superuser-v2 overlay automatisch en handmatig worden getest;
 - welke regressiegates verplicht groen moeten zijn.
 
-De autorisatiematrix v1.1 is door de Product Owner gecontroleerd en is leidend voor implementatie, tests en toekomstige wijzigingen.
+De huishoudmatrix v1.1 blijft leidend voor de bestaande huishoudfuncties. Voor platformauthority van de Superuser is vanaf 9.1.8a de v2-grens leidend.
 
 ## 2. Autorisatiemechanisme
 
@@ -58,13 +57,17 @@ Erft alle toegestane ledenrechten en krijgt de aanvullende huishoudbeheerrechten
 
 ### Superuser
 
-Erft de toegestane beheerder- en ledenrechten, krijgt alle platformrechten en heeft toegang tot systeemhuishouden `0`. De canonieke identiteit is `supergebruiker@rezzerv.local`.
+Erft de toegestane beheerder- en ledenrechten en heeft toegang tot systeemhuishouden `0`. De canonieke identiteit is `supergebruiker@rezzerv.local`.
 
-De superuser heeft tevens volledige toegang tot **Externe databases**.
+Voor platformauthority gebruikt de Superuser vanaf 9.1.8a exact de actieve functionele Superuser-v2-set (`ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS` / `V2_SUPERUSER_TARGET_PERMISSIONS`). Daaronder vallen onder meer supporttoegang, systeemhuishoudtoegang, Frontteam-berichten en polls, externe producten, platformcatalogus/GPC en externe bronnen.
+
+De gewone Superuser heeft **geen technische Platformbeheerderrechten**. Rechten zoals `platform.sessions.revoke`, `platform.users.suspend`, `platform.audit.view`, `platform.permissions.manage`, `platform.feature_flags.manage` en de overige technische Platformbeheerderpermissions vereisen een afzonderlijke Platformbeheerderrol. Ook `platform.special_roles.manage` hoort niet bij de gewone Superuser.
+
+De Superuser heeft wel volledige functionele toegang tot **Externe databases** voor de v2-rechten view/search/link-existing.
 
 ### Frontteamlid
 
-Is een afzonderlijke rol met de rechten die in de kolom **Frontteamlid** met **Ja** zijn gemarkeerd. Een frontteamlid heeft volledige toegang tot **Externe databases**.
+Is een afzonderlijke rol met de rechten die in de kolom **Frontteamlid** met **Ja** zijn gemarkeerd. Een frontteamlid heeft volledige toegang tot **Externe databases** binnen de Frontteampermission-set.
 
 ## 4. Matrix v1.1 — kernbesluiten
 
@@ -72,7 +75,7 @@ De volledige uitvoerbare matrix staat in:
 
 - `backend/app/testing/authorization_matrix_acceptance.py`
 
-Belangrijke onderscheidingen:
+Belangrijke onderscheidingen voor huishoudfuncties:
 
 | Functie | Lid | Beheerder | Superuser | Frontteamlid |
 |---|---:|---:|---:|---:|
@@ -84,9 +87,11 @@ Belangrijke onderscheidingen:
 | GPC bekijken | Ja | Ja | Ja | Ja |
 | GPC wijzigen | Nee | Ja | Ja | Ja |
 | GPC beheren | Nee | Ja | Ja | Ja |
-| Platformbeheer | Nee | Nee | Ja | Nee |
+| Technisch Platformbeheer | Nee | Nee | Nee* | Nee |
 
-Daarom mag een beheerder op het Catalogusoverzicht wel GPC classificeren, maar geen algemene catalogusgegevens wijzigen of beheren.
+`*` Een Superuser krijgt technisch Platformbeheer alleen wanneer hetzelfde platformaccount daarnaast afzonderlijk de rol `platform.platform_admin` heeft. De role-stacking runtimecutover valt buiten 9.1.8a.
+
+Daarom mag een beheerder op het Catalogusoverzicht wel GPC classificeren, maar geen algemene catalogusgegevens wijzigen of beheren. Een gewone Superuser heeft functionele v2-platformauthority, maar niet automatisch de technische Platformbeheerder-set.
 
 ## 5. Automatische regressietest
 
@@ -96,15 +101,15 @@ De matrix wordt volledig gecontroleerd door:
 backend/app/testing/authorization_matrix_acceptance.py
 ```
 
-De test voert **190 controles** uit:
+De test voert **192 controles** uit:
 
-- 45 functionele rechten × 4 rollen;
-- 10 extra structuur- en risicocontroles.
+- 45 functionele huishoudrechten × 4 rollen;
+- 12 extra structuur- en risicocontroles, inclusief de Superuser-v2/Platformbeheerder-separation.
 
 Een geldige run eindigt met:
 
 ```text
-GO: alle 190 controles zijn conform matrix v1.1
+GO: alle 192 controles zijn conform household-matrix v1.1 + Superuser-v2
 AUTORISATIEMATRIX_ACCEPTATIE_GREEN
 ```
 
@@ -140,7 +145,7 @@ GitHub Actions-workflow:
 .github/workflows/authorization-matrix-acceptance.yml
 ```
 
-Deze workflow draait bij iedere pull request en kan handmatig worden gestart. Een matrixafwijking blokkeert het regressie-oordeel.
+Deze workflow draait bij iedere relevante pull request en kan handmatig worden gestart. Een matrixafwijking blokkeert het regressie-oordeel.
 
 ## 8. Verplichte handmatige UI-steekproef
 
@@ -159,20 +164,31 @@ Minimale steekproef:
    - GPC classificeren toegestaan;
    - algemene catalogusmutaties geweigerd.
 3. **Superuser**
-   - Admin zichtbaar en bereikbaar;
-   - Externe databases zichtbaar en volledig bereikbaar;
-   - Catalogus en GPC volledig beheerbaar;
-   - platformfuncties toegestaan.
+   - Admin zichtbaar en bereikbaar voor huishoudbeheer;
+   - Externe databases zichtbaar en functioneel bereikbaar;
+   - Catalogus en GPC volledig beheerbaar binnen de v2 functionele scope;
+   - technische Platformbeheerpagina's/rechten geweigerd tenzij afzonderlijk Platformbeheerder toegekend;
+   - `platform.special_roles.manage` niet impliciet toegekend.
 4. **Frontteamlid**
-   - Externe databases zichtbaar en volledig bereikbaar;
+   - Externe databases zichtbaar en bereikbaar volgens de Frontteamset;
    - rechten conform de frontteamkolom;
-   - geen platformrechten tenzij afzonderlijk toegekend.
+   - geen technische platformrechten tenzij afzonderlijk toegekend.
+
+Controleer per rol:
+
+1. zichtbaarheid van de tegel;
+2. openen via normale navigatie;
+3. directe URL;
+4. zichtbaarheid/disabled-state van mutatieknoppen;
+5. daadwerkelijke backendresponse bij een toegestane en verboden actie;
+6. correcte 401/403-afhandeling;
+7. behoud van de actieve context in de header.
 
 ## 9. Wijzigingsbeheer
 
 Een wijziging in autorisatie is pas compleet wanneer alle volgende onderdelen in dezelfde wijziging zijn aangepast:
 
-1. PO-matrix en dit document;
+1. PO-matrix/doelcontract en dit document;
 2. `ROLE_PERMISSIONS` en permissieregistratie;
 3. sessiepayload en server-side autorisatie;
 4. frontendguards en zichtbaarheid;
@@ -180,4 +196,4 @@ Een wijziging in autorisatie is pas compleet wanneer alle volgende onderdelen in
 6. handmatige UI-steekproef;
 7. relevante release- en regressiedocumentatie.
 
-Losse uitzonderingen of hardgecodeerde e-mailcontroles buiten de canonieke superuseridentiteit zijn niet toegestaan.
+Losse uitzonderingen of hardgecodeerde e-mailcontroles buiten de canonieke Superuser-identiteit zijn niet toegestaan.
