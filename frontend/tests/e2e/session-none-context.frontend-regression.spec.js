@@ -250,3 +250,102 @@ test('audit direct route stays closed without platform.audit.view and performs n
   await expect(page.getByTestId('none-session-home')).toBeVisible()
   expect(auditReads).toBe(0)
 })
+
+test('technical configuration requires explicit confirmation and uses only canonical platform actions', async ({ page }) => {
+  const technicalOnlySession = {
+    ...noneSession,
+    permissions: { 'platform.technical_configuration.manage': true },
+    supported_permissions: ['platform.technical_configuration.manage'],
+  }
+  const technicalRequests = []
+  let bundledRequests = 0
+  await mockNoneSession(page, technicalOnlySession)
+
+  await page.route('**/api/admin/inventory/groups/ensure-schema', async (route) => {
+    technicalRequests.push(`${route.request().method()} schema`)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        schema: 'product_inventory_groups',
+        seed: 'm2c2i30a_seed',
+        mutates_inventory: false,
+      }),
+    })
+  })
+  await page.route('**/api/admin/product-groups/import-gpc-nl', async (route) => {
+    technicalRequests.push(`${route.request().method()} gpc-nl`)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        source: 'gs1_gpc_api',
+        language_code: 'nl',
+        source_version: '2026-Q3',
+        total_bricks: 1200,
+        total_families: 80,
+        total_classes: 240,
+        product_groups_created: 25,
+        product_groups_updated: 1175,
+        mutates_inventory: false,
+      }),
+    })
+  })
+  await page.route('**/api/admin/product-groups/import-gpc-en-bundled', async (route) => {
+    bundledRequests += 1
+    await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+  })
+
+  await page.goto('/home')
+  await expect(page.getByTestId('platform-home-tile-technical-configuration')).toBeVisible()
+  await expect(page.locator('[data-testid^="platform-home-tile-"]')).toHaveCount(1)
+
+  await page.goto('/platform/technische-configuratie')
+  await expect(page.getByTestId('platform-technical-configuration-page')).toBeVisible()
+  await expect(page.getByText('De legacy bundled GPC-import met admin-key is hier bewust niet beschikbaar.')).toBeVisible()
+  expect(technicalRequests).toEqual([])
+  expect(bundledRequests).toBe(0)
+
+  await page.getByRole('button', { name: 'Voorraadgroepschema initialiseren' }).click()
+  await expect(page.getByTestId('platform-technical-confirm-schema')).toBeVisible()
+  expect(technicalRequests).toEqual([])
+  await page.getByRole('button', { name: 'Schema-initialisatie bevestigen' }).click()
+  await expect(page.getByTestId('platform-technical-result-schema')).toContainText('Schema: product_inventory_groups')
+  await expect(page.getByTestId('platform-technical-result-schema')).toContainText('Huishoudvoorraad gewijzigd: nee')
+  expect(technicalRequests).toEqual(['POST schema'])
+
+  await page.getByRole('button', { name: 'GS1 GPC NL bijwerken' }).click()
+  await expect(page.getByTestId('platform-technical-confirm-gpc-nl')).toBeVisible()
+  expect(technicalRequests).toEqual(['POST schema'])
+  await page.getByRole('button', { name: 'GPC NL-import bevestigen' }).click()
+  await expect(page.getByTestId('platform-technical-result-gpc-nl')).toContainText('Bronversie: 2026-Q3')
+  await expect(page.getByTestId('platform-technical-result-gpc-nl')).toContainText('GPC bricks: 1200')
+  await expect(page.getByTestId('platform-technical-result-gpc-nl')).toContainText('Huishoudvoorraad gewijzigd: nee')
+  expect(technicalRequests).toEqual(['POST schema', 'POST gpc-nl'])
+  expect(bundledRequests).toBe(0)
+})
+
+test('technical configuration direct route stays closed without permission and performs no mutation', async ({ page }) => {
+  const auditOnlySession = {
+    ...noneSession,
+    permissions: { 'platform.audit.view': true },
+    supported_permissions: ['platform.audit.view'],
+  }
+  let technicalMutations = 0
+  await mockNoneSession(page, auditOnlySession)
+  await page.route('**/api/admin/inventory/groups/ensure-schema', async (route) => {
+    technicalMutations += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+  })
+  await page.route('**/api/admin/product-groups/import-gpc-nl', async (route) => {
+    technicalMutations += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+  })
+
+  await page.goto('/platform/technische-configuratie')
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('none-session-home')).toBeVisible()
+  expect(technicalMutations).toBe(0)
+})
