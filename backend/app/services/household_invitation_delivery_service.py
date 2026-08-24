@@ -232,6 +232,15 @@ def build_invitation_email_payload(
     }
 
 
+def _redact_token(value: object, raw_token: str) -> str:
+    message = str(value or "").strip()
+    token = str(raw_token or "").strip()
+    if not token:
+        return message
+    encoded = urllib.parse.quote(token, safe="")
+    return message.replace(token, "[redacted]").replace(encoded, "[redacted]")
+
+
 def send_household_invitation_email(
     *,
     recipient_email: str,
@@ -256,7 +265,10 @@ def send_household_invitation_email(
     try:
         provider_message_id = sender(payload, config)
     except InvitationDeliveryTransportError as exc:
-        return InvitationDeliveryResult(DELIVERY_STATUS_FAILED, str(exc))
+        return InvitationDeliveryResult(
+            DELIVERY_STATUS_FAILED,
+            _redact_token(exc, raw_token) or "Uitnodigingsmail niet verzonden.",
+        )
     except Exception:
         return InvitationDeliveryResult(
             DELIVERY_STATUS_FAILED,
