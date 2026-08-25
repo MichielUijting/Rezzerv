@@ -17,6 +17,7 @@ async function seedAdminSession(page) {
         email: 'admin@rezzerv.local',
         active_household_id: '1',
         active_household_name: 'Testhuishouden',
+        context_type: 'regular',
         role: 'admin',
         display_role: 'admin',
         permissions,
