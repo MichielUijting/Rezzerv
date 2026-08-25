@@ -39,8 +39,12 @@ async function seedSession(page, { contextType = 'regular', isViewer = false } =
 test.describe('Hulp & Over frontend-regressie', () => {
   test('regular viewer kan pagina lezen met canonical versie- en bestemmingslinks', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page)
-    await page.addInitScript(() => {
-      window.__REZZERV_VERSION__ = { version: '1.12.109-test' }
+    await page.route('**/version.json', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ version: '1.12.109-test' }),
+      })
     })
     await seedSession(page, { contextType: 'regular', isViewer: true })
 
