@@ -69,8 +69,9 @@ function authorizationPayload() {
 }
 
 async function mockHouseholdScreen(page, { isAdmin = true, denyMutations = false } = {}) {
-  const calls = { name: 0, add: 0, role: 0, remove: 0, forbidden: 0 }
+  const calls = { name: 0, add: 0, invite: 0, role: 0, remove: 0, forbidden: 0 }
   let currentName = 'Testhuishouden'
+  let invitations = []
   const auth = authorizationPayload()
   const forbidden = async (route) => {
     calls.forbidden += 1
@@ -101,10 +102,37 @@ async function mockHouseholdScreen(page, { isAdmin = true, denyMutations = false
   })
 
   await page.route('**/api/household/invitations', async (route) => {
+    if (route.request().method() === 'POST') {
+      calls.invite += 1
+      if (denyMutations) return forbidden(route)
+      const payload = await route.request().postDataJSON()
+      const invitation = {
+        id: 'invite-new',
+        household_id: HOUSEHOLD_ID,
+        invitee_email: payload?.email || 'nieuw@rezzerv.local',
+        role_key: 'household.member',
+        status: 'pending',
+        expires_at: '2026-08-31T07:00:00+00:00',
+        delivery_status: 'disabled',
+        delivery_attempt_count: 1,
+        last_delivery_error: 'Uitnodigingsmail is uitgeschakeld.',
+      }
+      invitations = [invitation]
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          invitation,
+          delivery: { status: 'disabled', message: 'Uitnodigingsmail is uitgeschakeld.', provider_message_id: null },
+        }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ household_id: HOUSEHOLD_ID, items: [], total: 0 }),
+      body: JSON.stringify({ household_id: HOUSEHOLD_ID, items: invitations, total: invitations.length }),
     })
   })
 
@@ -150,7 +178,7 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await expectNoConsoleErrors(consoleErrors)
   })
 
-  test('beheerder kan naam, rol en leden via actiebuttons muteren', async ({ page }) => {
+  test('beheerder kan naam, rol, uitnodiging en leden via actiebuttons muteren', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page)
     await seedSession(page, { 'household_settings.manage': true, 'members.manage': true, 'roles.manage': true }, 'admin')
     const calls = await mockHouseholdScreen(page, { isAdmin: true })
@@ -165,10 +193,9 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await expect.poll(() => calls.role).toBe(1)
     await dismissSuccessFeedback(page)
 
-    await page.getByTestId('household-member-email-input').fill('nieuw@rezzerv.local')
-    await page.getByTestId('household-member-password-input').fill('Testwachtwoord-2026')
-    await page.getByTestId('household-add-member').click()
-    await expect.poll(() => calls.add).toBe(1)
+    await page.getByTestId('household-invitation-email-input').fill('nieuw@rezzerv.local')
+    await page.getByTestId('household-invitation-submit').click()
+    await expect.poll(() => calls.invite).toBe(1)
     await dismissSuccessFeedback(page)
 
     await page.getByTestId('household-remove-lid@rezzerv.local').click()
@@ -186,7 +213,7 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
 
     await expect(page).toHaveURL(/\/home$/)
     await expect(page.getByTestId('household-settings-page')).toHaveCount(0)
-    expect(calls.name + calls.add + calls.role + calls.remove).toBe(0)
+    expect(calls.name + calls.add + calls.invite + calls.role + calls.remove).toBe(0)
     await expectNoConsoleErrors(consoleErrors)
 
     const status = await page.evaluate(async () => {
