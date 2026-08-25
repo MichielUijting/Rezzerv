@@ -22,6 +22,7 @@ import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage
 import SettingsAuthorizationPage from '../../features/settings/SettingsAuthorizationPage.jsx'
 import SettingsLocationsRoutePage from '../../features/settings/SettingsLocationsRoutePage.jsx'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
+import { SETTINGS_ROOT_POLICY, getSettingsTile } from '../../features/settings/settingsNavigation.js'
 import Voorraad from '../../pages/Voorraad'
 import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
 import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
@@ -105,8 +106,29 @@ function ProtectedPermission({ permission, children, message, allowNone = false 
   return <AuthGuard allowNone={allowNone}><PermissionGuard permission={permission} message={message}>{children}</PermissionGuard></AuthGuard>
 }
 
-function ProtectedSettings({ children, allowViewer = true }) {
-  return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>
+function ProtectedSettingsRoute({ children, settingKey = null }) {
+  const policy = settingKey ? getSettingsTile(settingKey) : SETTINGS_ROOT_POLICY
+  if (!policy) return <Navigate to="/home" replace />
+
+  const content = policy.permission ? (
+    <PermissionGuard
+      permission={policy.permission}
+      message={`Je hebt geen toegang tot ${policy.title || 'deze instelling'}.`}
+    >
+      {children}
+    </PermissionGuard>
+  ) : children
+
+  return (
+    <AuthGuard>
+      <SettingsGuard
+        allowViewer={policy.allowViewer}
+        allowedContexts={policy.allowedContexts}
+      >
+        {content}
+      </SettingsGuard>
+    </AuthGuard>
+  )
 }
 
 function ProtectedSuperuser({ children }) {
@@ -158,19 +180,19 @@ const router = createBrowserRouter([
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
   { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
-  { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
-  { path: '/instellingen/mogelijkheden', element: <ProtectedPermission permission="household_settings.manage" message="Alleen de beheerder kan de mogelijkheden van het huishouden uitbreiden."><SettingsCapabilitiesPage /></ProtectedPermission> },
-  { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },
-  { path: '/instellingen/artikelgroepen', element: <ProtectedSettings allowViewer={false}><SettingsArticleGroupsPage /></ProtectedSettings> },
-  { path: '/instellingen/privacy-datadeling', element: <ProtectedSettings allowViewer={true}><SettingsPrivacyDataSharingPage /></ProtectedSettings> },
-  { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdAutomationPage /></ProtectedSettings> },
-  { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettings allowViewer={false}><SettingsAlmostOutPage /></ProtectedSettings> },
-  { path: '/instellingen/winkelimport', element: <ProtectedSettings allowViewer={false}><SettingsStoreImportPage /></ProtectedSettings> },
-  { path: '/instellingen/huishouden', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdPage /></ProtectedSettings> },
-  { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettings allowViewer={true}><SettingsAuthorizationPage /></ProtectedSettings> },
-  { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsRoutePage /></ProtectedSettings> },
-  { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
-  { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
+  { path: '/instellingen', element: <ProtectedSettingsRoute><SettingsPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/mogelijkheden', element: <ProtectedSettingsRoute settingKey="capabilities"><SettingsCapabilitiesPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettingsRoute settingKey="article-details"><SettingsArticleFieldsPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/artikelgroepen', element: <ProtectedSettingsRoute settingKey="article-groups"><SettingsArticleGroupsPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/privacy-datadeling', element: <ProtectedSettingsRoute settingKey="privacy-data-sharing"><SettingsPrivacyDataSharingPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettingsRoute settingKey="household-automation"><SettingsHouseholdAutomationPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettingsRoute settingKey="almost-out"><SettingsAlmostOutPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/winkelimport', element: <ProtectedSettingsRoute settingKey="store-import"><SettingsStoreImportPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/huishouden', element: <ProtectedSettingsRoute settingKey="household"><SettingsHouseholdPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettingsRoute settingKey="authorizations"><SettingsAuthorizationPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/locaties', element: <ProtectedSettingsRoute settingKey="locations"><SettingsLocationsRoutePage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/ruimtes', element: <ProtectedSettingsRoute settingKey="locations"><Navigate to="/instellingen/locaties" replace /></ProtectedSettingsRoute> },
+  { path: '/instellingen/sublocaties', element: <ProtectedSettingsRoute settingKey="locations"><Navigate to="/instellingen/locaties" replace /></ProtectedSettingsRoute> },
   { path: '/admin', element: <ProtectedAdmin><AdminPage /></ProtectedAdmin> },
   { path: '*', element: <Navigate to="/login" replace /> },
 ])
