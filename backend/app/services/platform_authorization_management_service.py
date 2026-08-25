@@ -10,7 +10,9 @@ from app.services.authorization_foundation_service import (
     write_authorization_audit,
 )
 from app.services.frontteam_household_provisioning import (
+    FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE,
     ensure_frontteam_personal_household_for_user,
+    frontteam_personal_household_id,
     resolve_frontteam_personal_household_id,
 )
 
@@ -191,11 +193,15 @@ def _grant_block_reason(
     if role_key == FRONTTEAM_ROLE_KEY:
         if active_role_keys & {SUPERUSER_ROLE_KEY, PLATFORM_ADMIN_ROLE_KEY, IP_OWNER_ROLE_KEY}:
             return "Frontteamlid kan niet met een systeem- of Platformbeheerderrol worden gecombineerd"
-        mapped_household_id = resolve_frontteam_personal_household_id(conn, str(row["id"]))
+        target_user_id = str(row["id"])
+        mapped_household_id = resolve_frontteam_personal_household_id(conn, target_user_id)
+        personal_household_id = str(
+            mapped_household_id or frontteam_personal_household_id(target_user_id)
+        )
         unrelated = [
             household_id
-            for household_id in _active_regular_household_ids(conn, str(row["id"]))
-            if household_id != str(mapped_household_id or "")
+            for household_id in _active_regular_household_ids(conn, target_user_id)
+            if household_id != personal_household_id
         ]
         if unrelated:
             return "Frontteamlid vereist een eigen persoonlijk huishouden zonder andere actieve huishoudlidmaatschappen"
@@ -419,6 +425,23 @@ def revoke_special_role(
         SET active = 0, updated_at = CURRENT_TIMESTAMP
         WHERE user_id = :user_id AND role_key = :role_key
     """), {"user_id": target_user_id, "role_key": normalized_role_key})
+
+    if normalized_role_key == FRONTTEAM_ROLE_KEY:
+        mapped_household_id = resolve_frontteam_personal_household_id(
+            conn,
+            target_user_id,
+        )
+        if mapped_household_id:
+            expected_household_id = frontteam_personal_household_id(target_user_id)
+            if str(mapped_household_id) != expected_household_id:
+                raise PlatformAuthorizationConflictError(
+                    "Frontteam-persoonlijk huishouden wijkt af van canonieke identiteit"
+                )
+            conn.execute(text(f"""
+                DELETE FROM {FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE}
+                WHERE user_id = :user_id
+            """), {"user_id": target_user_id})
+
     write_authorization_audit(
         conn,
         actor_user_id=str(actor_user_id),
