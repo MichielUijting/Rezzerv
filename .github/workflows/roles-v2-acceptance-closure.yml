@@ -23,6 +23,7 @@ on:
       - 'docs/security/ROLLEN-V2-9.1-ACCEPTANCE-CLOSURE.md'
       - 'docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md'
       - 'docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md'
+      - '.github/workflows/authorization-matrix-acceptance.yml'
       - '.github/workflows/roles-v2-acceptance-closure.yml'
   workflow_dispatch:
 
