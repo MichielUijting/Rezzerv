@@ -33,7 +33,17 @@ async function registerAndComplete(page, { prefix, useCase, profile, householdNa
   return completed.json()
 }
 
-test('Inhuis halen shows only product-relevant settings while keeping general household settings', async ({ page }) => {
+test('system context cannot enter consumer Settings', async ({ page }) => {
+  const session = await page.request.get('/api/session')
+  expect(session.ok()).toBeTruthy()
+  expect((await session.json()).context_type).toBe('system')
+
+  await page.goto('/instellingen')
+  await expect(page).toHaveURL(/\/home$/)
+  await expect(page.getByTestId('settings-page')).toHaveCount(0)
+})
+
+test('Inhuis halen shows grouped product-relevant settings while keeping general household settings', async ({ page }) => {
   await registerAndComplete(page, {
     prefix: 'dynamic-settings-inhuis-halen',
     useCase: 'inhuis_halen',
@@ -49,11 +59,18 @@ test('Inhuis halen shows only product-relevant settings while keeping general ho
   await page.goto('/instellingen')
   await expect(page.getByTestId('settings-page')).toHaveAttribute('data-settings-mode', 'dynamic')
 
+  await expect(page.getByTestId('settings-section-account')).toBeVisible()
+  await expect(page.getByTestId('settings-section-household')).toBeVisible()
+  await expect(page.getByTestId('settings-section-usage')).toBeVisible()
+  await expect(page.getByTestId('settings-section-help')).toHaveCount(0)
+
   await expect(page.getByTestId('settings-tile-article-details')).toBeVisible()
+  await expect(page.getByTestId('settings-tile-article-details')).toHaveAttribute('data-settings-scope', 'personal')
   await expect(page.getByTestId('settings-tile-article-groups')).toBeVisible()
   await expect(page.getByTestId('settings-tile-privacy-data-sharing')).toBeVisible()
   await expect(page.getByTestId('settings-tile-store-import')).toBeVisible()
   await expect(page.getByTestId('settings-tile-household')).toBeVisible()
+  await expect(page.getByTestId('settings-tile-household')).toHaveAttribute('data-settings-scope', 'household')
   await expect(page.getByTestId('settings-tile-authorizations')).toBeVisible()
   await expect(page.getByTestId('settings-tile-household-automation')).toBeVisible()
   await expect(page.getByTestId('settings-tile-almost-out')).toBeVisible()
