@@ -30,6 +30,13 @@ async function seedAdminSession(page) {
       }),
     })
   })
+  await page.route('**/api/onboarding', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    })
+  })
 }
 
 function authorizationPayload(roleKey = 'household.member') {
