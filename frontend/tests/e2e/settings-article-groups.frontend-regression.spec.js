@@ -3,7 +3,8 @@ import {
   attachConsoleErrorCollector,
   expectNoConsoleErrors,
 } from './helpers/rezzervAssertions.js';
-import { DEMO_HOUSEHOLD_ID } from './helpers/devApi.js';
+
+const SETTINGS_HOUSEHOLD_ID = '1';
 
 test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
   test('Universele artikelnaam blijft zichtbaar en bulktoewijzing wordt opgeslagen', async ({ page }) => {
@@ -11,6 +12,37 @@ test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
     const universalArticleName = 'Mosterd fijne Dijon extra lange universele artikelnaam';
     let assignedGroupId = null;
     let assignmentPayload = null;
+
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          authenticated: true,
+          user: { id: 'settings-article-groups-admin', email: 'settings-article-groups-admin@example.com' },
+          user_id: 'settings-article-groups-admin',
+          email: 'settings-article-groups-admin@example.com',
+          active_household_id: SETTINGS_HOUSEHOLD_ID,
+          active_household_name: 'Artikelgroepen huishouden',
+          context_type: 'regular',
+          role: 'admin',
+          display_role: 'admin',
+          household_role: 'household.admin',
+          permissions: { 'article_groups.manage': true },
+          supported_permissions: ['article_groups.manage'],
+          is_viewer: false,
+          is_platform_superuser: false,
+          is_frontteam: false,
+        }),
+      });
+    });
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({}),
+      });
+    });
 
     const groups = [
       { id: 'group-sauzen', name: 'Sauzen' },
@@ -105,7 +137,7 @@ test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
     }).click();
 
     await expect.poll(() => assignmentPayload).toEqual({
-      household_id: String(DEMO_HOUSEHOLD_ID),
+      household_id: SETTINGS_HOUSEHOLD_ID,
       article_group_id: 'group-sauzen',
     });
     await expect(page.getByText('Geselecteerde huishoudartikelen bijgewerkt.', {

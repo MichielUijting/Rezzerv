@@ -1,0 +1,57 @@
+name: Settings v2 information architecture validation
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/features/settings/**'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/src/app/router/SettingsGuard.jsx'
+      - 'frontend/tests/dynamic-settings-navigation.contract.mjs'
+      - 'frontend/tests/settings-role-alignment.contract.mjs'
+      - 'frontend/tests/settings-v2-information-architecture.contract.mjs'
+      - 'frontend/tests/e2e/dynamic-settings.frontend-regression.spec.js'
+      - 'frontend/package.json'
+      - '.github/workflows/settings-v2-information-architecture.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: settings-v2-information-architecture-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Validate Settings v2 information architecture
+        run: |
+          node frontend/tests/settings-v2-information-architecture.contract.mjs | tee /tmp/settings-v2.log
+          grep -F 'SETTINGS_V2_INFORMATION_ARCHITECTURE_CONTRACT_GREEN' /tmp/settings-v2.log
+
+      - name: Validate dynamic Settings matrix
+        run: |
+          node frontend/tests/dynamic-settings-navigation.contract.mjs | tee /tmp/dynamic-settings.log
+          grep -F 'DYNAMIC_SETTINGS_NAVIGATION_CONTRACT_GREEN' /tmp/dynamic-settings.log
+
+      - name: Validate Settings role alignment
+        run: |
+          node frontend/tests/settings-role-alignment.contract.mjs | tee /tmp/settings-role-alignment.log
+          grep -F 'SETTINGS_ROLE_ALIGNMENT_CONTRACT_GREEN' /tmp/settings-role-alignment.log
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Settings v2 gate marker
+        run: echo 'SETTINGS_V2_INFORMATION_ARCHITECTURE_VALIDATION_GREEN'

@@ -17,6 +17,7 @@ async function seedAdminSession(page) {
         email: 'admin@rezzerv.local',
         active_household_id: '1',
         active_household_name: 'Testhuishouden',
+        context_type: 'regular',
         role: 'admin',
         display_role: 'admin',
         permissions,
@@ -27,6 +28,13 @@ async function seedAdminSession(page) {
         is_platform_superuser: false,
         is_frontteam: false,
       }),
+    })
+  })
+  await page.route('**/api/onboarding', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
     })
   })
 }

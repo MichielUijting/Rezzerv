@@ -1,30 +1,36 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { SETTINGS_TILES } from '../src/features/settings/settingsNavigation.js'
 
-const settingsSource = readFileSync(new URL('../src/features/settings/SettingsPage.jsx', import.meta.url), 'utf8')
 const householdSource = readFileSync(new URL('../src/features/settings/SettingsHouseholdPage.jsx', import.meta.url), 'utf8')
 const authorizationSource = readFileSync(new URL('../src/features/settings/SettingsAuthorizationPage.jsx', import.meta.url), 'utf8')
 const membershipServiceSource = readFileSync(new URL('../../backend/app/services/authorization_membership_service.py', import.meta.url), 'utf8')
 const membershipRoutesSource = readFileSync(new URL('../../backend/app/api/authorization_membership_routes.py', import.meta.url), 'utf8')
 
-assert.match(
-  settingsSource,
-  /permission="household_settings\.manage" to="\/instellingen\/winkelimport"/,
+function settingsTile(key) {
+  const tile = SETTINGS_TILES.find((item) => item.key === key)
+  assert.ok(tile, `Instelling ${key} moet in de canonical Settings metadata bestaan`)
+  return tile
+}
+
+assert.equal(
+  settingsTile('store-import').permission,
+  'household_settings.manage',
   'Winkelimport moet household_settings.manage gebruiken',
 )
-assert.doesNotMatch(
-  settingsSource,
-  /permission="catalog\.manage" to="\/instellingen\/winkelimport"/,
+assert.notEqual(
+  settingsTile('store-import').permission,
+  'catalog.manage',
   'Winkelimport mag niet catalog.manage gebruiken',
 )
-assert.match(
-  settingsSource,
-  /permission="household_settings\.manage" to="\/instellingen\/bijna-op-voorspelling"/,
+assert.equal(
+  settingsTile('almost-out').permission,
+  'household_settings.manage',
   'Bijna-op-instellingen moeten household_settings.manage gebruiken',
 )
-assert.doesNotMatch(
-  settingsSource,
-  /permission="almost_out\.update" to="\/instellingen\/bijna-op-voorspelling"/,
+assert.notEqual(
+  settingsTile('almost-out').permission,
+  'almost_out.update',
   'Bijna-op-instellingen mogen niet almost_out.update gebruiken',
 )
 

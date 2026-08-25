@@ -51,6 +51,7 @@ export default function SettingsPage() {
         to={tile.to}
         style={getTileStyle(false)}
         data-testid={`settings-tile-${tile.key}`}
+        data-settings-scope={tile.scope}
       >
         <div>
           <div style={{ fontWeight: 600 }}>{tile.title}</div>
@@ -80,7 +81,7 @@ export default function SettingsPage() {
     <AppShell title="Instellingen" showExit={false}>
       <Card>
         <div
-          style={{ display: 'grid', gap: '18px' }}
+          style={{ display: 'grid', gap: '24px' }}
           data-testid="settings-page"
           data-settings-mode={navigation.mode}
         >
@@ -89,10 +90,25 @@ export default function SettingsPage() {
             <p style={{ margin: 0, color: '#667085' }}>
               {navigation.mode === 'dynamic'
                 ? 'Je ziet instellingen die passen bij de mogelijkheden die voor dit huishouden actief zijn.'
-                : 'Beheer hier voorkeuren voor de weergave en automatisering binnen Rezzerv.'}
+                : 'Beheer hier je persoonlijke voorkeuren en de inrichting van je huishouden.'}
             </p>
           </div>
-          {navigation.tiles.map(renderTile)}
+
+          {navigation.sections.map((section) => (
+            <section
+              key={section.key}
+              data-testid={`settings-section-${section.key}`}
+              style={{ display: 'grid', gap: '12px' }}
+            >
+              <div>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '17px' }}>{section.title}</h3>
+                <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>{section.description}</p>
+              </div>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {section.tiles.map(renderTile)}
+              </div>
+            </section>
+          ))}
         </div>
       </Card>
     </AppShell>

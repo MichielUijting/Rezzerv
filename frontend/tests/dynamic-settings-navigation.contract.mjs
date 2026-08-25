@@ -1,8 +1,33 @@
 import assert from 'node:assert/strict'
-import { buildSettingsNavigation } from '../src/features/settings/settingsNavigation.js'
+import {
+  SETTINGS_ROOT_POLICY,
+  SETTINGS_SECTIONS,
+  SETTINGS_TILES,
+  buildSettingsNavigation,
+} from '../src/features/settings/settingsNavigation.js'
 
 function keys(navigation) {
   return navigation.tiles.map((tile) => tile.key)
+}
+
+function sectionKeys(navigation) {
+  return Object.fromEntries(
+    navigation.sections.map((section) => [section.key, section.tiles.map((tile) => tile.key)]),
+  )
+}
+
+assert.deepEqual(
+  SETTINGS_SECTIONS.map((section) => section.key),
+  ['account', 'household', 'usage', 'help'],
+)
+assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
+assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
+assert.equal(SETTINGS_TILES.length, 10)
+for (const tile of SETTINGS_TILES) {
+  assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
+  assert.ok(['personal', 'household'].includes(tile.scope))
+  assert.deepEqual(tile.allowedContexts, ['regular'])
+  assert.equal(typeof tile.allowViewer, 'boolean')
 }
 
 {
@@ -26,6 +51,18 @@ function keys(navigation) {
     'household-automation',
     'almost-out',
   ])
+  assert.deepEqual(sectionKeys(navigation), {
+    account: ['article-details', 'privacy-data-sharing'],
+    household: ['household', 'authorizations'],
+    usage: [
+      'capabilities',
+      'article-groups',
+      'locations',
+      'store-import',
+      'household-automation',
+      'almost-out',
+    ],
+  })
 }
 
 {
@@ -53,6 +90,11 @@ function keys(navigation) {
     'household-automation',
     'almost-out',
   ])
+  assert.deepEqual(sectionKeys(navigation), {
+    account: ['article-details', 'privacy-data-sharing'],
+    household: ['household', 'authorizations'],
+    usage: ['capabilities', 'article-groups', 'store-import', 'household-automation', 'almost-out'],
+  })
 }
 
 {
