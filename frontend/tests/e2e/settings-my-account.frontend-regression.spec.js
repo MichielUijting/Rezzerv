@@ -105,6 +105,11 @@ test.describe('Mijn account frontend-regressie', () => {
     await page.getByTestId('my-account-password-submit').click()
     await expect.poll(() => apiCalls).toBe(1)
     await expect(page.getByTestId('my-account-error')).toHaveText('Huidig wachtwoord is onjuist')
-    await expectNoConsoleErrors(consoleErrors)
+
+    const unexpectedConsoleErrors = consoleErrors.filter((entry) => !(
+      entry.includes('400 (Bad Request)')
+      && entry.includes('/api/account/password')
+    ))
+    await expectNoConsoleErrors(unexpectedConsoleErrors)
   })
 })
