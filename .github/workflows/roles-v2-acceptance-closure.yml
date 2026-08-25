@@ -1,0 +1,83 @@
+name: Roles v2 9.1 acceptance closure validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/testing/authorization_matrix_acceptance.py'
+      - 'backend/tests/test_authorization_role_matrix.py'
+      - 'backend/tests/test_roles_v2_acceptance_closure.py'
+      - 'backend/tests/test_roles_v2_foundation_contract.py'
+      - 'backend/tests/test_server_session_service.py'
+      - 'backend/tests/test_special_role_management_v2.py'
+      - 'backend/tests/test_superuser_platform_admin_stacking_cutover.py'
+      - 'backend/tests/test_frontteam_household_provisioning.py'
+      - 'backend/tests/test_support_platform_route_authorization.py'
+      - 'backend/tests/test_external_database_route_authorization.py'
+      - 'backend/tests/test_gpc_nl_import_platform_authorization.py'
+      - 'backend/tests/server_session_security_selftest.py'
+      - 'docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md'
+      - 'docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md'
+      - 'docs/security/ROLLEN-V2-9.1-ACCEPTANCE-CLOSURE.md'
+      - 'docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md'
+      - 'docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md'
+      - '.github/workflows/roles-v2-acceptance-closure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  roles-v2-acceptance-closure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend and test dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+
+      - name: Compile roles-v2 closure boundary and contracts
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python -m py_compile \
+            app/services/authorization_foundation_service.py \
+            app/services/authorization_membership_service.py \
+            app/services/server_session_service.py \
+            app/testing/authorization_matrix_acceptance.py \
+            tests/test_authorization_role_matrix.py \
+            tests/test_roles_v2_acceptance_closure.py
+
+      - name: Run roles-v2 acceptance closure contracts
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+          REZZERV_SESSION_COOKIE_SECURE: 'false'
+        run: |
+          python -m pytest -q \
+            tests/test_roles_v2_acceptance_closure.py \
+            tests/test_authorization_role_matrix.py \
+            tests/test_roles_v2_foundation_contract.py \
+            tests/test_server_session_service.py \
+            tests/test_special_role_management_v2.py \
+            tests/test_superuser_platform_admin_stacking_cutover.py \
+            tests/test_frontteam_household_provisioning.py \
+            tests/test_support_platform_route_authorization.py \
+            tests/test_external_database_route_authorization.py \
+            tests/test_gpc_nl_import_platform_authorization.py
+          python -m app.testing.authorization_matrix_acceptance
+          python tests/server_session_security_selftest.py
+          echo ROLES_V2_9_1_ACCEPTANCE_CLOSURE_GREEN
