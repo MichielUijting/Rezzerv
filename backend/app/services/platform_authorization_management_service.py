@@ -203,6 +203,14 @@ def _grant_block_reason(
 
     if FRONTTEAM_ROLE_KEY in active_role_keys:
         return "Superuser en Platformbeheerder kunnen niet met Frontteamlid worden gecombineerd"
+    if (
+        role_key == SUPERUSER_ROLE_KEY
+        and PLATFORM_ADMIN_ROLE_KEY in active_role_keys
+    ) or (
+        role_key == PLATFORM_ADMIN_ROLE_KEY
+        and SUPERUSER_ROLE_KEY in active_role_keys
+    ):
+        return "Superuser en Platformbeheerder kunnen nog niet worden gecombineerd"
     if _active_regular_household_ids(conn, str(row["id"])):
         return "Superuser en Platformbeheerder hebben geen regulier huishoudlidmaatschap"
     return None
