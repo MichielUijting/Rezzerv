@@ -105,6 +105,7 @@ class ServerSessionContext:
     expires_at: datetime
     is_platform_superuser: bool = False
     is_platform_admin: bool = False
+    is_ip_owner: bool = False
     is_frontteam: bool = False
 
 
@@ -658,6 +659,7 @@ def _insert_server_session(
     now: datetime | None,
     is_platform_superuser: bool = False,
     is_platform_admin: bool = False,
+    is_ip_owner: bool = False,
     is_frontteam: bool = False,
 ) -> tuple[str, ServerSessionContext]:
     issued_at = (now or utc_now()).astimezone(timezone.utc)
@@ -706,6 +708,7 @@ def _insert_server_session(
         expires_at=expires_at,
         is_platform_superuser=is_platform_superuser,
         is_platform_admin=is_platform_admin,
+        is_ip_owner=is_ip_owner,
         is_frontteam=is_frontteam,
     )
 
@@ -822,6 +825,7 @@ def create_system_server_session(
         now=now,
         is_platform_superuser="platform.superuser" in system_roles,
         is_platform_admin="platform.platform_admin" in platform_roles,
+        is_ip_owner="platform.ip_owner" in system_roles,
     )
 
 
@@ -911,6 +915,7 @@ def resolve_server_session(
             expires_at=expires_at,
             is_platform_superuser="platform.superuser" in system_roles,
             is_platform_admin="platform.platform_admin" in platform_roles,
+            is_ip_owner="platform.ip_owner" in system_roles,
         )
 
     if "platform.platform_admin" in platform_roles or system_roles:
@@ -1064,6 +1069,7 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
         }
     platform_superuser = bool(context.is_platform_superuser)
     platform_admin = bool(context.is_platform_admin)
+    platform_ip_owner = bool(context.is_ip_owner)
     platform_frontteam = bool(context.is_frontteam)
     granted_permissions = permissions_for_session_role(
         context.role,
@@ -1071,6 +1077,8 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
     )
     if platform_admin:
         granted_permissions.update(ROLE_PERMISSIONS["platform.platform_admin"])
+    if platform_ip_owner:
+        granted_permissions.update(ROLE_PERMISSIONS["platform.ip_owner"])
     if platform_frontteam:
         granted_permissions.update(ROLE_PERMISSIONS[FRONTTEAM_PLATFORM_ROLE])
     permissions = {key: True for key in sorted(granted_permissions)}
