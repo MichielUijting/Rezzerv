@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -22,7 +23,13 @@ function InfoRow({ title, description, to, linkLabel, testId }) {
 }
 
 export default function SettingsHelpAboutPage() {
-  const version = getRezzervVersionTag()
+  const [version, setVersion] = useState(getRezzervVersionTag())
+
+  useEffect(() => {
+    const refreshVersion = () => setVersion(getRezzervVersionTag())
+    window.addEventListener('rezzerv-version-ready', refreshVersion)
+    return () => window.removeEventListener('rezzerv-version-ready', refreshVersion)
+  }, [])
 
   return (
     <AppShell title="Instellingen" showExit={false}>
