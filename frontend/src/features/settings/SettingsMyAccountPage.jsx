@@ -6,7 +6,6 @@ import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import { apiPost } from '../../lib/apiClient.js'
 import { readStoredAuthContext } from '../../lib/authSession.js'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 
 export default function SettingsMyAccountPage() {
   const context = readStoredAuthContext()
@@ -17,12 +16,19 @@ export default function SettingsMyAccountPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  useDismissOnComponentClick([() => setMessage(''), () => setError('')], Boolean(message || error))
+  function clearFeedback() {
+    setMessage('')
+    setError('')
+  }
+
+  function updatePasswordField(setValue, value) {
+    clearFeedback()
+    setValue(value)
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
-    setMessage('')
-    setError('')
+    clearFeedback()
 
     if (newPassword !== newPasswordRepeat) {
       setError('De nieuwe wachtwoorden zijn niet gelijk.')
@@ -108,7 +114,7 @@ export default function SettingsMyAccountPage() {
                 label="Huidig wachtwoord"
                 type="password"
                 value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
+                onChange={(event) => updatePasswordField(setCurrentPassword, event.target.value)}
                 autoComplete="current-password"
                 required
                 disabled={isSaving}
@@ -118,7 +124,7 @@ export default function SettingsMyAccountPage() {
                 label="Nieuw wachtwoord"
                 type="password"
                 value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
+                onChange={(event) => updatePasswordField(setNewPassword, event.target.value)}
                 autoComplete="new-password"
                 minLength={10}
                 required
@@ -129,7 +135,7 @@ export default function SettingsMyAccountPage() {
                 label="Herhaal nieuw wachtwoord"
                 type="password"
                 value={newPasswordRepeat}
-                onChange={(event) => setNewPasswordRepeat(event.target.value)}
+                onChange={(event) => updatePasswordField(setNewPasswordRepeat, event.target.value)}
                 autoComplete="new-password"
                 minLength={10}
                 required
