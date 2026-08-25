@@ -9,6 +9,7 @@ on:
       - 'backend/app/services/password_service.py'
       - 'backend/app/services/server_session_service.py'
       - 'backend/tests/consumer_account_management_selftest.py'
+      - 'backend/tests/consumer_account_route_policy_selftest.py'
       - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/src/features/settings/SettingsMyAccountPage.jsx'
       - 'frontend/src/features/settings/settingsNavigation.js'
@@ -48,14 +49,17 @@ jobs:
           PYTHONPATH=. python -m py_compile \
             app/api/consumer_account_routes.py \
             app/services/consumer_account_management_service.py \
-            tests/consumer_account_management_selftest.py
+            tests/consumer_account_management_selftest.py \
+            tests/consumer_account_route_policy_selftest.py
 
       - name: Validate consumer account password management
         working-directory: backend
         env:
           PYTHONPATH: .
           DATABASE_URL: sqlite:////tmp/rezzerv-my-account.db
-        run: python tests/consumer_account_management_selftest.py
+        run: |
+          python tests/consumer_account_management_selftest.py
+          python tests/consumer_account_route_policy_selftest.py
 
       - uses: actions/setup-node@v4
         with:
