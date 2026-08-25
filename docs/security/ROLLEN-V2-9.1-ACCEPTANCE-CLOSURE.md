@@ -10,7 +10,9 @@ Status: **9.1.9 acceptance candidate**. Dit document sluit geen PR zelfstandig; 
 - resterende transitional regressieclaims te verwijderen of als legacy-compatibility te classificeren;
 - legacy huishoudrollen niet-destructief te behouden maar buiten normale nieuwe roltoewijzing te houden;
 - de expliciet in v2 genoemde bestaande functionele domeinen tegen de actuele permissiongrenzen te controleren;
-- één gevonden runtimegap te sluiten: IP-owner-only system-sessies moeten de canonical IP-owner permission-union publiek projecteren zonder losse Superuser- of Platformbeheerderrollen te vereisen.
+- twee gevonden runtimegaps te sluiten:
+  - IP-owner-only system-sessies moeten de canonical IP-owner permission-union publiek projecteren zonder losse Superuser- of Platformbeheerderrollen te vereisen;
+  - een pure IP-owner moet de functionele Superuser-UI kunnen gebruiken via de canonical system-capability, zonder extra Superuser-role row of e-mail/H0-fallback.
 
 ## 2. Canonical v2 rol- en contextmatrix
 
@@ -78,7 +80,9 @@ H0 is uitsluitend `context_type=system`. Een vast e-mailadres verleent geen auth
 
 Server-side sessies blijven de identity/contextauthority. Platformpermissions worden live server-side geëvalueerd; role revocation werkt op de eerstvolgende request/sessionresolution. De publieke sessie projecteert permissions, geen raw platformrollen.
 
-## 5. 9.1.9 runtimecorrectie: IP-owner public permission projection
+## 5. 9.1.9 runtimecorrecties
+
+### 5.1 IP-owner public permission projection
 
 Voor 9.1.9 kon een account met uitsluitend `platform.ip_owner` backend-routepermissions correct verkrijgen via de canonical evaluator, maar de publieke system-sessionpayload projecteerde niet automatisch `ROLE_PERMISSIONS["platform.ip_owner"]`.
 
@@ -88,6 +92,25 @@ De closure voegt daarom intern `is_ip_owner` toe aan `ServerSessionContext` en p
 - publiceert geen `platform_roles`;
 - verandert geen householdauthority;
 - houdt `platform.special_roles.manage` exclusief bij IP-owner.
+
+### 5.2 IP-owner functional Superuser UI boundary
+
+Voor 9.1.9 gebruikte `SuperuserGuard` via `isPlatformSuperuserFromContext()` alleen de expliciete `is_platform_superuser`-flag. Een account met uitsluitend `platform.ip_owner` hoefde die extra Superuser-role row volgens v2 juist niet te hebben en kon daardoor ondanks correcte backendpermissions uit de functionele Superuser-UI worden geweerd.
+
+De centrale frontendhelper accepteert daarom nu:
+
+- de expliciete Superuserflag; of
+- exact `context_type=system` plus `platform.system_household.access`.
+
+Daarmee geldt:
+
+- pure IP-owner krijgt functionele Superuser-UI zonder extra role row;
+- Platformbeheerder-only (`none`) blijft uitgesloten;
+- een reguliere context met geïnjecteerde system-permission blijft uitgesloten;
+- e-mail-only/H0-fallback verleent geen toegang;
+- de backend blijft de beslissende autorisatieauthority.
+
+Deze grens wordt direct executable bewaakt door `frontend/tests/session-context-normalization.contract.mjs` in de umbrella closureworkflow.
 
 ## 6. Regressiebron na closure
 
@@ -103,7 +126,7 @@ Na succesvolle merge van 9.1.9 geldt:
 
 Een 9.1.9-kandidaat is alleen Ready wanneer op één exacte head groen zijn:
 
-- dedicated roles-v2 acceptance closure workflow;
+- dedicated roles-v2 acceptance closure workflow, inclusief de directe frontend system-capability boundarytest;
 - server-side session security;
 - Superuser-v2 permission cutover validation;
 - Superuser + Platformbeheerder stacking validation;
