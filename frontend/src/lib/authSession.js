@@ -1,5 +1,6 @@
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
 const FRONTTEAM_EXTERNAL_DATABASES_PERMISSION = 'frontteam.external_databases.access'
+const SYSTEM_HOUSEHOLD_ACCESS_PERMISSION = 'platform.system_household.access'
 
 let currentSessionContext = null
 let sessionRequest = null
@@ -215,7 +216,13 @@ export function isHouseholdAdminFromContext(context = null) {
 
 export function isPlatformSuperuserFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return Boolean(source?.is_platform_superuser)
+  return Boolean(
+    source?.is_platform_superuser
+    || (
+      source?.context_type === 'system'
+      && source?.permissions?.[SYSTEM_HOUSEHOLD_ACCESS_PERMISSION]
+    )
+  )
 }
 
 export function isFrontteamMemberFromContext(context = null) {

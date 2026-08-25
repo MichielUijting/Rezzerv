@@ -10,6 +10,7 @@ on:
       - 'backend/tests/**authorization**'
       - 'docs/security/**'
       - 'docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md'
+      - 'docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md'
       - 'RUN_AUTORISATIEMATRIX_TEST.bat'
       - '.github/workflows/authorization-matrix-acceptance.yml'
   workflow_dispatch:
@@ -39,19 +40,22 @@ jobs:
       - name: Validate household matrix v1.1 and Superuser v2 overlay
         run: python -m app.testing.authorization_matrix_acceptance
 
-      - name: Validate canonical authorization documentation
+      - name: Validate authorization documentation transition contract
         working-directory: .
         shell: bash
         run: |
           set -euo pipefail
           test -f docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
           test -f docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md
+          test -f docs/security/ROLLEN-V2-9.1-ACCEPTANCE-CLOSURE.md
           test -f docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md
+          test -f docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md
           test -f RUN_AUTORISATIEMATRIX_TEST.bat
+          grep -q "historische/compatibility" docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
           grep -q "192 controles" docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
-          grep -q "Superuser-v2" docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
-          grep -q "geen technische Platformbeheerderrechten" docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
           grep -q "AUTORISATIEMATRIX_ACCEPTATIE_GREEN" docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md
-          grep -q "192 matrixcontroles" docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md
-          grep -q "Superuser-v2" docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md
+          grep -q "historisch compatibility-protocol" docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md
+          grep -q "Superuser + Platformbeheerder" docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md
+          grep -q "platform.special_roles.manage" docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md
+          grep -q "IP-owner" docs/security/ROLLEN-V2-9.1-ACCEPTANCE-CLOSURE.md
           echo "AUTORISATIEDOCUMENTATIE_CONTRACT_GREEN"
