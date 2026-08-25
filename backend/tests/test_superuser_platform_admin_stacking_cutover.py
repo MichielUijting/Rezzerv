@@ -61,15 +61,11 @@ def connection():
             INSERT INTO app_users(id, email, password, account_status)
             VALUES
               ('owner', 'owner@example.test', 'owner-secret', 'active'),
-              ('stacked', 'stacked@example.test', 'stacked-secret', 'active'),
-              ('invalid-owner-stack', 'invalid-owner-stack@example.test', 'invalid-secret', 'active')
+              ('stacked', 'stacked@example.test', 'stacked-secret', 'active')
         """))
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES
-              ('owner', 'platform.ip_owner', 1),
-              ('invalid-owner-stack', 'platform.ip_owner', 1),
-              ('invalid-owner-stack', 'platform.platform_admin', 1)
+            VALUES ('owner', 'platform.ip_owner', 1)
         """))
         yield conn
 
@@ -180,17 +176,22 @@ def test_revoking_superuser_invalidates_h0_session_and_next_login_becomes_none_c
 
 
 def test_ip_owner_platform_admin_combination_stays_fail_closed(connection):
+    connection.execute(text("""
+        INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+        VALUES ('owner', 'platform.platform_admin', 1)
+    """))
+
     with pytest.raises(HTTPException) as login_exc:
         _resolve_login_identity(
             connection,
-            "invalid-owner-stack@example.test",
-            "invalid-secret",
+            "owner@example.test",
+            "owner-secret",
         )
     assert login_exc.value.status_code == 403
 
     with pytest.raises(HTTPException) as session_exc:
         create_system_server_session(
             connection,
-            user_id="invalid-owner-stack",
+            user_id="owner",
         )
     assert session_exc.value.status_code == 403
