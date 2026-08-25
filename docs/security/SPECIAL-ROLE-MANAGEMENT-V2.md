@@ -31,17 +31,28 @@ De backend blijft de enige bron van waarheid. Speciale rollen worden uitsluitend
 - Iedere mutatie wordt geschreven naar de bestaande authorization audit met `reason=platform.special_roles.manage`.
 - Householdcontext, H0-fallback, bearer authority en admin-key authority zijn geen onderdeel van deze beheerflow.
 
-## Frontteam
+## Frontteam lifecycle
 
 Een Frontteam-grant gebruikt de bestaande canonical Frontteam-provisioning en creëert of hergebruikt het deterministische persoonlijke reguliere huishouden met `household.admin`.
 
 Frontteam is onverenigbaar met systeem- en Platformbeheerderrollen. Een eerste Frontteam-grant wordt geweigerd wanneer het doelaccount al unrelated reguliere huishoudlidmaatschappen heeft.
 
+De revoke/regrant-lifecycle wordt in 9.1.8b volledig gesloten:
+
+- canonical Frontteam-revoke deactiveert uitsluitend `platform.frontteam` en verwijdert de actieve Frontteam→persoonlijk-huishouden mapping;
+- het persoonlijke huishouden zelf blijft bestaan met exact dezelfde ID en `context_type=regular`;
+- het bestaande reguliere household membership en `household.admin` blijven actief;
+- bestaande en nieuwe sessies op dat huishouden worden na revoke als gewone reguliere household-sessies opgelost, zonder Frontteam-platformpermissions;
+- regrant herstelt de Frontteam-mapping deterministisch naar exact dezelfde household-ID en maakt geen tweede huishouden of membership aan;
+- direct/stale database-deactivatie buiten de canonical revoke-flow krijgt deze transitie niet en blijft via de bestaande sessiecontracts fail-closed.
+
+Daarmee wordt de persoonlijke household-data niet weggegooid wanneer iemand tijdelijk geen Frontteamlid meer is, terwijl Frontteamauthority zelf direct verdwijnt.
+
 ## Gecontroleerde vervolgslice 9.1.8c
 
 De v2-doelarchitectuur staat toe dat `platform.superuser` en `platform.platform_admin` op één account worden gecombineerd. De huidige server-session runtime modelleert die combinatie nog als incompatibele accountcontext.
 
-Die accountcontextwijziging wordt bewust niet stil in dezelfde authority-slice uitgevoerd. **9.1.8c** wordt de afzonderlijke session/account-context cutover voor role stacking en de volledige post-revoke Frontteam-contexttransitie.
+Die accountcontextwijziging wordt bewust niet stil in dezelfde authority-slice uitgevoerd. **9.1.8c** wordt uitsluitend de afzonderlijke session/account-context cutover voor Superuser + Platformbeheerder role stacking.
 
 Tot die cutover Ready is, blijft stacking in 9.1.8b expliciet **fail-closed**:
 
@@ -63,11 +74,12 @@ Voor Ready moeten op één exacte PR-head aantoonbaar groen zijn:
 3. protected IP-owner invariant;
 4. safe server-generated role actions;
 5. Superuser + Platformbeheerder stacking blijft fail-closed tot 9.1.8c;
-6. Frontteam provisioning/lifecycle contract;
-7. bestaande server-session fail-closed contracts;
-8. Platformautorisaties Playwright regression;
-9. production frontend build;
-10. volledige canonical frontend regression;
-11. canonical release package.
+6. Frontteam revoke/regrant behoudt exact hetzelfde reguliere huishouden en membership;
+7. Frontteamauthority verdwijnt direct na revoke en keert pas terug na regrant;
+8. bestaande server-session fail-closed contracts;
+9. Platformautorisaties Playwright regression;
+10. production frontend build;
+11. volledige canonical frontend regression;
+12. canonical release package.
 
 Geen merge zolang één van deze grenzen rood of inhoudelijk onbeslist is.
