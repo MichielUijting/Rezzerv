@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+test.use({ storageState: { cookies: [], origins: [] } })
+
 const INVENTORY_PERMISSION = 'platform.permissions.manage'
 const SPECIAL_ROLES_PERMISSION = 'platform.special_roles.manage'
 const AUTHORIZATIONS_ENDPOINT = '**/api/platform/authorizations'
