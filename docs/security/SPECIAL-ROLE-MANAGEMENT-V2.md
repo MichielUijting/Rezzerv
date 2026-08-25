@@ -43,7 +43,14 @@ De v2-doelarchitectuur staat toe dat `platform.superuser` en `platform.platform_
 
 Die accountcontextwijziging wordt bewust niet stil in dezelfde authority-slice uitgevoerd. **9.1.8c** wordt de afzonderlijke session/account-context cutover voor role stacking en de volledige post-revoke Frontteam-contexttransitie.
 
-Tot die cutover Ready is, mag 9.1.8b geen samengestelde runtime-state introduceren die de bestaande sessielaag niet kan oplossen. De focused 9.1.8b-gate draait daarom ook de bestaande server-session- en Frontteam-provisioningcontracts.
+Tot die cutover Ready is, blijft stacking in 9.1.8b expliciet **fail-closed**:
+
+- een account met actieve `platform.superuser` kan niet ook `platform.platform_admin` krijgen;
+- een account met actieve `platform.platform_admin` kan niet ook `platform.superuser` krijgen;
+- de server-generated `role_actions` projecteert dezelfde blokkade naar de UI;
+- `grant_special_role()` handhaaft dezelfde invariant server-side, onafhankelijk van de UI.
+
+Daarmee kan 9.1.8b geen samengestelde runtime-state introduceren die de bestaande sessielaag niet kan oplossen. De focused 9.1.8b-gate draait daarom ook de bestaande server-session- en Frontteam-provisioningcontracts.
 
 ## Acceptatie 9.1.8b
 
@@ -53,11 +60,12 @@ Voor Ready moeten op één exacte PR-head aantoonbaar groen zijn:
 2. IP-owner-only special-role mutation;
 3. protected IP-owner invariant;
 4. safe server-generated role actions;
-5. Frontteam provisioning/lifecycle contract;
-6. bestaande server-session fail-closed contracts;
-7. Platformautorisaties Playwright regression;
-8. production frontend build;
-9. volledige canonical frontend regression;
-10. canonical release package.
+5. Superuser + Platformbeheerder stacking blijft fail-closed tot 9.1.8c;
+6. Frontteam provisioning/lifecycle contract;
+7. bestaande server-session fail-closed contracts;
+8. Platformautorisaties Playwright regression;
+9. production frontend build;
+10. volledige canonical frontend regression;
+11. canonical release package.
 
 Geen merge zolang één van deze grenzen rood of inhoudelijk onbeslist is.
