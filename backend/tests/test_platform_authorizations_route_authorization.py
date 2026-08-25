@@ -131,7 +131,7 @@ def test_inventory_is_safe_and_ip_owner_gets_all_three_managed_role_actions():
         assert "token" not in rendered
 
 
-def test_superuser_and_platform_admin_stack_but_frontteam_conflicts():
+def test_superuser_and_platform_admin_stacking_is_denied_until_session_context_cutover():
     engine = _engine()
     with engine.begin() as conn:
         _create_schema(conn)
@@ -140,17 +140,30 @@ def test_superuser_and_platform_admin_stack_but_frontteam_conflicts():
         _assign_role(conn, "owner", IP_OWNER_ROLE_KEY)
 
         grant_special_role(conn, "target", role_key=SUPERUSER_ROLE_KEY, actor_user_id="owner")
-        item = grant_special_role(conn, "target", role_key=PLATFORM_ADMIN_ROLE_KEY, actor_user_id="owner")
-        assert set(item["platform_role_keys"]) == {SUPERUSER_ROLE_KEY, PLATFORM_ADMIN_ROLE_KEY}
+        owner_payload = list_platform_authorizations(conn, current_user_id="owner")
+        target = next(item for item in owner_payload["users"] if item["user_id"] == "target")
+        assert target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is False
+        assert "nog niet" in str(
+            target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["grant_blocked_reason"]
+        )
+
+        with pytest.raises(PlatformAuthorizationConflictError, match="nog niet"):
+            grant_special_role(conn, "target", role_key=PLATFORM_ADMIN_ROLE_KEY, actor_user_id="owner")
+
         assert evaluate_platform_permission(
             conn, user_id="target", permission_key=PLATFORM_AUTHORIZATIONS_PERMISSION
-        ).allowed is True
+        ).allowed is False
 
         with pytest.raises(PlatformAuthorizationConflictError, match="Frontteamlid"):
             grant_special_role(conn, "target", role_key=FRONTTEAM_ROLE_KEY, actor_user_id="owner")
 
-        item = revoke_special_role(conn, "target", role_key=PLATFORM_ADMIN_ROLE_KEY, actor_user_id="owner")
-        assert item["platform_role_keys"] == [SUPERUSER_ROLE_KEY]
+        item = revoke_special_role(conn, "target", role_key=SUPERUSER_ROLE_KEY, actor_user_id="owner")
+        assert item["platform_role_keys"] == []
+
+        item = grant_special_role(conn, "target", role_key=PLATFORM_ADMIN_ROLE_KEY, actor_user_id="owner")
+        assert item["platform_role_keys"] == [PLATFORM_ADMIN_ROLE_KEY]
+        with pytest.raises(PlatformAuthorizationConflictError, match="nog niet"):
+            grant_special_role(conn, "target", role_key=SUPERUSER_ROLE_KEY, actor_user_id="owner")
 
 
 def test_ip_owner_target_is_immutable_and_suspended_grant_is_blocked():
