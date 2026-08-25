@@ -36,6 +36,13 @@ test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
         }),
       });
     });
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({}),
+      });
+    });
 
     const groups = [
       { id: 'group-sauzen', name: 'Sauzen' },
