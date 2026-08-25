@@ -34,7 +34,8 @@ Iedere relevante regressie moet waar van toepassing bewijzen:
 - Frontteam is een aparte platformrol bovenop het eigen reguliere `household.admin`-lidmaatschap;
 - normale household rolmutatie kan alleen Lid en Beheerder toekennen;
 - legacy viewer/advanced-member data blijft non-destructief compatible maar is geen nieuw toewijsbare productrol;
-- `platform.special_roles.manage` is uitsluitend IP-owner.
+- `platform.special_roles.manage` is uitsluitend IP-owner;
+- de functionele Superuser-UI-boundary volgt de canonical system-capability en context, niet een hardgecodeerd e-mailadres of een extra gefabriceerde role row.
 
 ## 4. Permission-partition
 
@@ -56,7 +57,7 @@ Exact:
 
 `V2_SUPERUSER_TARGET_PERMISSIONS | PLATFORM_ADMIN_PERMISSIONS | {"platform.special_roles.manage"}`
 
-Een IP-owner-only system-session moet deze platformset publiek als permissions projecteren zonder `platform_roles` te exposen.
+Een IP-owner-only system-session moet deze platformset publiek als permissions projecteren zonder `platform_roles` te exposen. De frontend functionele Superuser-boundary moet dezelfde owner herkennen via `context_type=system` + `platform.system_household.access`, zonder een extra `platform.superuser` role row te vereisen.
 
 ## 5. Bestaande functionele domeinen
 
@@ -70,7 +71,8 @@ De umbrella closure moet minstens de volgende bestaande boundaries meenemen:
 - externe databronconfiguratie: `platform.external_sources.*`;
 - systeemhuishouden 0;
 - special-role management;
-- server-side session/context foundation.
+- server-side session/context foundation;
+- frontend functionele Superuser system-capability boundary.
 
 ## 6. Executable testlagen
 
@@ -91,7 +93,8 @@ Deze gate draait minimaal:
 - external database authorization;
 - GPC-NL platform authorization;
 - de bestaande household compatibility authorization matrix;
-- server-session security selftest.
+- server-session security selftest;
+- `frontend/tests/session-context-normalization.contract.mjs` als directe capability/contexttest voor Superuser/IP-owner versus Platformbeheerder/regular/e-mailfallback.
 
 ### B. Focused bestaande gates
 
