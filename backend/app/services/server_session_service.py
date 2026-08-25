@@ -104,6 +104,7 @@ class ServerSessionContext:
     issued_at: datetime
     expires_at: datetime
     is_platform_superuser: bool = False
+    is_platform_admin: bool = False
     is_frontteam: bool = False
 
 
@@ -215,14 +216,17 @@ def _resolve_platform_context_roles(
             detail="Geen geldige accountcontext beschikbaar.",
         )
 
-    if (
-        "platform.platform_admin" in platform_roles
-        and (system_roles or FRONTTEAM_PLATFORM_ROLE in platform_roles)
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Geen geldige accountcontext beschikbaar.",
-        )
+    if "platform.platform_admin" in platform_roles:
+        if FRONTTEAM_PLATFORM_ROLE in platform_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
+        if system_roles and system_roles != frozenset({"platform.superuser"}):
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
     return platform_roles, system_roles
 
 
@@ -592,6 +596,7 @@ def _insert_server_session(
     replace_existing: bool,
     now: datetime | None,
     is_platform_superuser: bool = False,
+    is_platform_admin: bool = False,
     is_frontteam: bool = False,
 ) -> tuple[str, ServerSessionContext]:
     issued_at = (now or utc_now()).astimezone(timezone.utc)
@@ -639,6 +644,7 @@ def _insert_server_session(
         issued_at=issued_at,
         expires_at=expires_at,
         is_platform_superuser=is_platform_superuser,
+        is_platform_admin=is_platform_admin,
         is_frontteam=is_frontteam,
     )
 
@@ -697,6 +703,7 @@ def create_none_server_session(
         ttl=ttl,
         replace_existing=replace_existing,
         now=now,
+        is_platform_admin=True,
     )
 
 
@@ -727,7 +734,7 @@ def create_system_server_session(
         user_id=normalized_user_id,
         email=email,
     )
-    if not system_roles or "platform.platform_admin" in platform_roles:
+    if not system_roles:
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
@@ -753,6 +760,7 @@ def create_system_server_session(
         replace_existing=replace_existing,
         now=now,
         is_platform_superuser="platform.superuser" in system_roles,
+        is_platform_admin="platform.platform_admin" in platform_roles,
     )
 
 
@@ -816,6 +824,7 @@ def resolve_server_session(
             session_version=int(row.get("session_version") or 1),
             issued_at=_normalize_database_datetime(row.get("issued_at")),
             expires_at=expires_at,
+            is_platform_admin=True,
         )
 
     household_id = str(raw_household_id).strip()
@@ -840,6 +849,7 @@ def resolve_server_session(
             issued_at=_normalize_database_datetime(row.get("issued_at")),
             expires_at=expires_at,
             is_platform_superuser="platform.superuser" in system_roles,
+            is_platform_admin="platform.platform_admin" in platform_roles,
         )
 
     if "platform.platform_admin" in platform_roles or system_roles:
@@ -992,11 +1002,14 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
             "expires_at": context.expires_at.isoformat(),
         }
     platform_superuser = bool(context.is_platform_superuser)
+    platform_admin = bool(context.is_platform_admin)
     platform_frontteam = bool(context.is_frontteam)
     granted_permissions = permissions_for_session_role(
         context.role,
         platform_superuser=platform_superuser,
     )
+    if platform_admin:
+        granted_permissions.update(ROLE_PERMISSIONS["platform.platform_admin"])
     if platform_frontteam:
         granted_permissions.update(ROLE_PERMISSIONS[FRONTTEAM_PLATFORM_ROLE])
     permissions = {key: True for key in sorted(granted_permissions)}
