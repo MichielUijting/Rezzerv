@@ -3,24 +3,37 @@
 Status: **PO-goedgekeurde functionele bron van waarheid voor rollen,
 accounttypen, huishoudrelatie, systeemhuishouden 0 en toewijzingsregels.**
 
-## 1. Doel en overgangssituatie
+9.1.9 is de executable acceptance closure die de reeds geïmplementeerde v2-runtime
+formeel als runtime- en regressiebaseline afsluit. Tot de merge van die closure
+blijven de v1.1-bronnen verplicht als compatibility-subgate; na succesvolle
+9.1.9-merge zijn dit document en `AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md` de
+canonieke rollen-v2 bronnen.
 
-Dit document is het functionele doelcontract voor het toekomstige rollen- en
-accountmodel van Rezzerv.
+## 1. Doel en acceptatiestatus
 
-De huidige runtime wordt tijdelijk nog beschreven en bewaakt door:
+Dit document is het functionele contract voor het rollen- en accountmodel van
+Rezzerv. De hoofdonderdelen van implementatiestap 9.1 zijn inmiddels in runtime
+gebracht: householdrollen, expliciete sessiecontexten, systeemhuishouden 0,
+Frontteam, Superuser-v2, Platformbeheerder, IP-owner special-role management,
+onboarding en Superuser + Platformbeheerder role stacking.
+
+De historische compatibilitybronnen blijven behouden:
 
 - `docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md`;
 - `docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md`;
-- de uitvoerbare autorisatiematrix met 190 controles.
+- `backend/app/testing/authorization_matrix_acceptance.py`, met 192 actuele
+  household-compatibility/Superuser-v2 controles.
 
-Deze v1.1-bronnen blijven de regressiebaseline van de huidige runtime totdat
-implementatiestap 9.1 is afgerond. V2.0 is vanaf nu het goedgekeurde functionele
-doelcontract. Implementatiestap 9.1 moet runtime, permissies, sessie, rollen en
-regressietests bewust met v2.0 in overeenstemming brengen. Tot die tijd bestaat
-er dus een bedoelde, gedocumenteerde overgangssituatie. Een conflict tussen het
-runtimecontract v1.1 en het functionele doelcontract v2.0 mag niet stilzwijgend
-worden opgelost.
+Deze bronnen zijn na 9.1.9 geen zelfstandige volledige platformrollen-bron van
+waarheid meer. De volledige v2-acceptatie wordt bewaakt door:
+
+- `docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md`;
+- `docs/security/ROLLEN-V2-9.1-ACCEPTANCE-CLOSURE.md`;
+- `.github/workflows/roles-v2-acceptance-closure.yml`;
+- de bestaande focused role/session/security gates.
+
+Een conflict tussen een historische compatibilityclaim en dit v2-contract mag
+niet stilzwijgend ten gunste van v1.1 worden opgelost.
 
 ## 2. Rollen en accounttypen
 
@@ -142,7 +155,8 @@ Bescherming van de IP-eigenaar:
 ## 3. Systeemhuishouden 0
 
 - Huishouden 0 is geen normaal gebruikershuishouden.
-- Het is het gedeelde systeemhuishouden van de bevoegde Superuser(s).
+- Het is het gedeelde systeemhuishouden van de bevoegde Superuser(s) en de
+  beschermde IP-eigenaar.
 - Het wordt voornamelijk gebruikt voor geautomatiseerde en functionele tests,
   het reproduceren en analyseren van fout- en uitzonderingssituaties en de
   diagnose van Rezzerv-processen.
@@ -161,7 +175,7 @@ Bescherming van de IP-eigenaar:
 |---|---|
 | Normale nieuwe registratie | Maakt een nieuw regulier huishouden; de gebruiker wordt automatisch Beheerder. |
 | Uitnodiging vanuit een huishouden | De gebruiker wordt standaard Lid; voor een normale uitnodiging is geen rolkeuze nodig. |
-| Toekomstige uitnodigingsflow | Moet een link naar Rezzerv plus Apple App Store en Google Play ondersteunen. |
+| Uitnodigingsflow | Gebruikt een beveiligde uitnodigingslink; distributie via app-/storekanalen kan later verder worden uitgebreid. |
 | Frontteamlid | Heeft of krijgt een eigen regulier huishouden en is daarvan automatisch Beheerder; de Frontteamrol komt daar bovenop. |
 | Superuser | Heeft geen regulier huishouden en wel toegang tot gedeeld systeemhuishouden 0. |
 | Platformbeheerder | Heeft geen regulier huishouden en geen automatische toegang tot huishouden 0. |
@@ -191,8 +205,12 @@ Bescherming van de IP-eigenaar:
 - Bestaande gegevens mogen niet destructief verdwijnen.
 - Legacyrollen zijn geen nieuwe gebruikersrollen en worden niet opnieuw voor
   normale toewijzing aangeboden.
-- Technische migratie en normalisatie horen bij implementatiestap 9.1.
-- Deze documentatietaak voert geen migratie uit.
+- De runtime bewaart deze rollen als compatibility-/migratievorm waar bestaande
+  data dat vereist.
+- De normale household role mutation boundary accepteert uitsluitend
+  `household.member` en `household.admin`.
+- 9.1.9 bewaakt deze non-destructieve grens executable; er wordt geen brede
+  destructieve dataconversie uitgevoerd.
 
 ## 7. Functioneel en technisch onderscheid
 
@@ -203,49 +221,52 @@ Bescherming van de IP-eigenaar:
 | Frontteamlid | Eigen regulier huishouden als Beheerder plus beperkte Frontteamfuncties |
 | Superuser | Functioneel platformbeheer plus systeemhuishouden 0 |
 | Platformbeheerder | Technisch platformbeheer |
-| IP-eigenaar | Hoogste bevoegdheid over functioneel en technisch platformbeheer plus systeemhuishouden 0 |
+| Superuser + Platformbeheerder | Systeemhuishouden 0 plus de exacte union van functionele en technische platformrechten |
+| IP-eigenaar | Hoogste bevoegdheid over functioneel en technisch platformbeheer plus systeemhuishouden 0 en protected special-role authority |
 
 Een technische rol geeft niet automatisch functionele centrale rechten. De
 functionele Superuserrol geeft niet automatisch technische beheerrechten.
 Systeemhuishouden 0 is een bijzondere systeemcontext en geen regulier
-gebruikershuishouden.
+gebruikershuishouden. De combinatie Superuser + Platformbeheerder geeft niet de
+IP-owner-only permission `platform.special_roles.manage`.
 
 ## 8. Bestaande en toekomstige functionaliteit
 
-### Bestaand; autorisatie te controleren bij implementatie
+### Bestaand en in 9.1 gericht gecontroleerd
 
-Bij implementatiestap 9.1 moet eerst in code en runtime worden vastgesteld welke
-onderdelen aantoonbaar aanwezig zijn en vervolgens of hun autorisatie met dit
-doelcontract overeenkomt:
+De 9.1-lijn en 9.1.9 closure hebben de aantoonbaar aanwezige onderdelen uit de
+oorspronkelijke inventaris opnieuw tegen het v2-contract gecontroleerd:
 
-- Meldingen en de bestaande statussen daarvan;
-- Externe bestanden;
-- centrale catalogus en universele artikelen;
-- GPC;
-- externe databronnen;
+- Meldingen/support en de bestaande platform-supportgrenzen;
+- Externe bestanden / externe productbronnen;
+- centrale catalogus en universele artikelen via de functionele
+  `platform.catalog.*`-grenzen;
+- GPC functioneel en de afzonderlijke technische GPC-importgrens;
+- externe databronnen / `platform.external_sources.*`;
 - systeemhuishouden 0;
-- bestaande autorisatie- en sessiefoundation.
+- bestaande autorisatie- en sessiefoundation;
+- Platformbeheerder-capabilities en none-context;
+- speciale-rollenbeheer door IP-owner;
+- onboarding, uitnodiging en householdcontext;
+- Superuser + Platformbeheerder stacking.
 
-Deze opsomming bevestigt geen volledigheid of productiegereedheid. Zo meldt de
-huidige actieve projectdocumentatie dat op haar statusdatum geen actieve
-Meldingen-API bestond. De actuele implementatie moet bij stap 9.1 opnieuw worden
-geïnventariseerd; er wordt geen niet-aantoonbare functionaliteit verondersteld.
+Deze opsomming is een autorisatie-/contextacceptatie en geen verklaring dat elk
+mogelijk toekomstig productonderdeel volledig is uitgebouwd.
 
-### Nog nieuw te bouwen of later uit te werken
+### Later of buiten implementatiestap 9.1
 
 - nieuwe functionele platforminstellingen die nog niet in de code bestaan;
-- uitgebreide technische Platformbeheerderomgeving;
-- volledig beheer van speciale platformrollen waar dit nog niet aanwezig is;
-- IP-eigenaarsbeheer;
-- extra beveiligde bevestigingsflow voor kritieke IP-eigenaaracties;
-- onboarding volgens het nieuw goedgekeurde model;
-- contextuele introducties van artikelgroepen, Uitpakken-automatisering,
-  Afboeken voorraad en Bijna op.
+- uitbreiding van de technische Platformbeheerderomgeving met toekomstige
+  capabilities;
+- overdracht van IP-eigenaarschap als uitzonderlijke procedure;
+- extra beveiligde herauthenticatie/eindbevestiging voor toekomstige kritieke
+  IP-eigenaaracties;
+- verdere productintroducties of uitbreidingen die niet nodig zijn om het
+  rollen-/accountmodel v2 te accepteren.
 
-## 9. Implementatieopdracht 9.1
+## 9. Implementatieopdracht 9.1 — closurestatus
 
-Deze documentatietaak wijzigt geen runtime. Een afzonderlijk goedgekeurde
-implementatiestap 9.1 moet minimaal:
+De oorspronkelijke implementatieopdracht vereiste minimaal:
 
 1. account-, lidmaatschaps- en rolrepresentatie met v2.0 in overeenstemming
    brengen;
@@ -259,10 +280,18 @@ implementatiestap 9.1 moet minimaal:
    functioneel onderscheiden;
 6. onboarding, uitnodiging en beschermde roltoewijzing implementeren;
 7. legacyrollen niet-destructief migreren of normaliseren;
-8. de 190-check matrix, overige regressietests en documentatie actualiseren naar
-   het geïmplementeerde v2.0-contract;
+8. de household compatibilitymatrix, overige regressietests en documentatie
+   actualiseren naar het geïmplementeerde v2.0-contract;
 9. bestaande functies uit sectie 8 inventariseren en hun autorisatie gericht
    controleren.
 
-Tot afronding en acceptatie van stap 9.1 blijven v1.1 en de bestaande 190-check
-matrix de verplichte runtime- en regressiebaseline.
+9.1.9 is de formele acceptance closure van deze opdracht. Vóór de merge van de
+9.1.9-kandidaat blijven de v1.1 compatibilitymatrix en alle bestaande focused
+gates verplicht. Na een succesvolle exact-head 9.1.9-acceptatie en merge geldt:
+
+- dit document als functionele rollen-/accountbron van waarheid;
+- `AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md` als canonical rollen-v2
+  regressieprotocol;
+- `Roles v2 9.1 acceptance closure validation` als umbrella executable gate;
+- de v1.1 matrix/protocollen uitsluitend als historische household
+  compatibility-subgate.
