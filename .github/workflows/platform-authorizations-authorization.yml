@@ -80,7 +80,7 @@ jobs:
 
       - name: Run Platformautorisaties frontend regression
         working-directory: frontend
-        run: npx playwright test tests/e2e/platform-authorizations.frontend-regression.spec.js --project=chromium
+        run: npx playwright test tests/e2e/platform-authorizations.frontend-regression.spec.js --project=chromium --no-deps
 
       - name: Build production frontend
         working-directory: frontend
