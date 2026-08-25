@@ -22,7 +22,7 @@ assert.deepEqual(
 )
 assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
-assert.equal(SETTINGS_TILES.length, 10)
+assert.equal(SETTINGS_TILES.length, 11)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
   assert.ok(['personal', 'household'].includes(tile.scope))
@@ -40,6 +40,7 @@ for (const tile of SETTINGS_TILES) {
   })
   assert.equal(navigation.mode, 'legacy')
   assert.deepEqual(keys(navigation), [
+    'account',
     'capabilities',
     'article-details',
     'article-groups',
@@ -52,7 +53,7 @@ for (const tile of SETTINGS_TILES) {
     'almost-out',
   ])
   assert.deepEqual(sectionKeys(navigation), {
-    account: ['article-details', 'privacy-data-sharing'],
+    account: ['account', 'article-details', 'privacy-data-sharing'],
     household: ['household', 'authorizations'],
     usage: [
       'capabilities',
@@ -80,6 +81,7 @@ for (const tile of SETTINGS_TILES) {
   })
   assert.equal(navigation.mode, 'dynamic')
   assert.deepEqual(keys(navigation), [
+    'account',
     'capabilities',
     'article-details',
     'article-groups',
@@ -91,7 +93,7 @@ for (const tile of SETTINGS_TILES) {
     'almost-out',
   ])
   assert.deepEqual(sectionKeys(navigation), {
-    account: ['article-details', 'privacy-data-sharing'],
+    account: ['account', 'article-details', 'privacy-data-sharing'],
     household: ['household', 'authorizations'],
     usage: ['capabilities', 'article-groups', 'store-import', 'household-automation', 'almost-out'],
   })
@@ -111,6 +113,7 @@ for (const tile of SETTINGS_TILES) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'account',
     'capabilities',
     'privacy-data-sharing',
     'store-import',
@@ -133,6 +136,7 @@ for (const tile of SETTINGS_TILES) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'account',
     'capabilities',
     'article-details',
     'article-groups',
@@ -160,6 +164,7 @@ for (const tile of SETTINGS_TILES) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'account',
     'capabilities',
     'article-details',
     'article-groups',
