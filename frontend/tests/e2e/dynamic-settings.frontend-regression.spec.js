@@ -5,6 +5,12 @@ function uniqueEmail(prefix) {
 }
 
 async function registerAndComplete(page, { prefix, useCase, profile, householdName }) {
+  // The canonical full-regression project starts each test with the shared system
+  // fixture cookie. Drop it only from this fresh browser context so these tests
+  // can create their own regular consumer account without revoking the shared
+  // server session used by the rest of the regression suite.
+  await page.context().clearCookies()
+
   const registration = await page.request.post('/api/auth/register', {
     data: {
       email: uniqueEmail(prefix),
