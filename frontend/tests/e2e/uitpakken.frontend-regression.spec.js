@@ -77,6 +77,45 @@ test.describe('Uitpakken frontend-regressie', () => {
   test('Locatiebeheer blijft als route beschikbaar voor uitpakken-flow', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
 
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          authenticated: true,
+          user: { id: 'uitpakken-settings-admin', email: 'uitpakken-settings-admin@example.com' },
+          user_id: 'uitpakken-settings-admin',
+          email: 'uitpakken-settings-admin@example.com',
+          active_household_id: '1',
+          active_household_name: 'Uitpakken huishouden',
+          context_type: 'regular',
+          role: 'admin',
+          display_role: 'admin',
+          household_role: 'household.admin',
+          permissions: { 'locations.manage': true },
+          supported_permissions: ['locations.manage'],
+          is_viewer: false,
+          is_platform_superuser: false,
+          is_frontteam: false,
+        }),
+      });
+    });
+    await page.route('**/api/onboarding', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    }));
+    await page.route('**/api/spaces', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [] }),
+    }));
+    await page.route('**/api/sublocations', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [] }),
+    }));
+
     await expectRouteLoads(page, '/instellingen/locaties', [
       'Beheer locaties',
       'Locaties',
