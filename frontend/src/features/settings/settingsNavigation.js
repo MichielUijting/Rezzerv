@@ -157,6 +157,17 @@ const SETTINGS_TILES = [
     allowedContexts: REGULAR_SETTINGS_CONTEXTS,
     allowViewer: false,
   },
+  {
+    key: 'help-about',
+    title: 'Hulp & Over',
+    description: 'Versie, ondersteuning en privacy',
+    to: '/instellingen/hulp-over',
+    relevance: 'always',
+    section: 'help',
+    scope: 'personal',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: true,
+  },
 ]
 
 function normalizedConfiguration(onboarding) {

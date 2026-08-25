@@ -46,6 +46,7 @@ const expectedTiles = {
   'store-import': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
   'household-automation': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
   'almost-out': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
+  'help-about': { section: 'help', scope: 'personal', permission: null, allowViewer: true },
 }
 
 assert.equal(SETTINGS_TILES.length, Object.keys(expectedTiles).length)
@@ -59,13 +60,17 @@ for (const [key, expected] of Object.entries(expectedTiles)) {
   assert.deepEqual(tile.allowedContexts, ['regular'])
 }
 
-for (const deferredKey of ['notifications', 'help', 'about', 'recipes']) {
+for (const deferredKey of ['notifications', 'recipes']) {
   assert.equal(
     getSettingsTile(deferredKey),
     null,
     `${deferredKey} mag nog geen half-afgebouwde instellingenbestemming worden`,
   )
 }
+
+const helpAbout = getSettingsTile('help-about')
+assert.equal(helpAbout.to, '/instellingen/hulp-over')
+assert.equal(helpAbout.relevance, 'always')
 
 assert.match(settingsPageSource, /navigation\.sections\.map\(\(section\) =>/)
 assert.match(settingsPageSource, /settings-section-\$\{section\.key\}/)
@@ -86,6 +91,7 @@ for (const [path, key] of [
   ['/instellingen/artikeldetails/veldzichtbaarheid', 'article-details'],
   ['/instellingen/artikelgroepen', 'article-groups'],
   ['/instellingen/privacy-datadeling', 'privacy-data-sharing'],
+  ['/instellingen/hulp-over', 'help-about'],
   ['/instellingen/huishoudautomatisering', 'household-automation'],
   ['/instellingen/bijna-op-voorspelling', 'almost-out'],
   ['/instellingen/winkelimport', 'store-import'],

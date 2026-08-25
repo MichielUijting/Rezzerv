@@ -22,7 +22,7 @@ assert.deepEqual(
 )
 assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
-assert.equal(SETTINGS_TILES.length, 11)
+assert.equal(SETTINGS_TILES.length, 12)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
   assert.ok(['personal', 'household'].includes(tile.scope))
@@ -51,6 +51,7 @@ for (const tile of SETTINGS_TILES) {
     'authorizations',
     'household-automation',
     'almost-out',
+    'help-about',
   ])
   assert.deepEqual(sectionKeys(navigation), {
     account: ['account', 'article-details', 'privacy-data-sharing'],
@@ -63,6 +64,7 @@ for (const tile of SETTINGS_TILES) {
       'household-automation',
       'almost-out',
     ],
+    help: ['help-about'],
   })
 }
 
@@ -91,11 +93,13 @@ for (const tile of SETTINGS_TILES) {
     'authorizations',
     'household-automation',
     'almost-out',
+    'help-about',
   ])
   assert.deepEqual(sectionKeys(navigation), {
     account: ['account', 'article-details', 'privacy-data-sharing'],
     household: ['household', 'authorizations'],
     usage: ['capabilities', 'article-groups', 'store-import', 'household-automation', 'almost-out'],
+    help: ['help-about'],
   })
 }
 
@@ -119,6 +123,7 @@ for (const tile of SETTINGS_TILES) {
     'store-import',
     'household',
     'authorizations',
+    'help-about',
   ])
 }
 
@@ -146,6 +151,7 @@ for (const tile of SETTINGS_TILES) {
     'authorizations',
     'household-automation',
     'almost-out',
+    'help-about',
   ])
 }
 
@@ -174,6 +180,7 @@ for (const tile of SETTINGS_TILES) {
     'household',
     'authorizations',
     'almost-out',
+    'help-about',
   ])
 
   const sameCapabilitiesDifferentStart = buildSettingsNavigation({
