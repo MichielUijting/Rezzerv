@@ -22,6 +22,7 @@ import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage
 import SettingsAuthorizationPage from '../../features/settings/SettingsAuthorizationPage.jsx'
 import SettingsLocationsRoutePage from '../../features/settings/SettingsLocationsRoutePage.jsx'
 import SettingsMyAccountPage from '../../features/settings/SettingsMyAccountPage.jsx'
+import SettingsHelpAboutPage from '../../features/settings/SettingsHelpAboutPage.jsx'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
 import { SETTINGS_ROOT_POLICY, getSettingsTile } from '../../features/settings/settingsNavigation.js'
 import Voorraad from '../../pages/Voorraad'
@@ -187,6 +188,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettingsRoute settingKey="article-details"><SettingsArticleFieldsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/artikelgroepen', element: <ProtectedSettingsRoute settingKey="article-groups"><SettingsArticleGroupsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/privacy-datadeling', element: <ProtectedSettingsRoute settingKey="privacy-data-sharing"><SettingsPrivacyDataSharingPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/hulp-over', element: <ProtectedSettingsRoute settingKey="help-about"><SettingsHelpAboutPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettingsRoute settingKey="household-automation"><SettingsHouseholdAutomationPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettingsRoute settingKey="almost-out"><SettingsAlmostOutPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/winkelimport', element: <ProtectedSettingsRoute settingKey="store-import"><SettingsStoreImportPage /></ProtectedSettingsRoute> },
