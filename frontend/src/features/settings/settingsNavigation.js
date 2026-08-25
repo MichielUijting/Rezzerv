@@ -30,6 +30,17 @@ export const SETTINGS_ROOT_POLICY = {
 
 const SETTINGS_TILES = [
   {
+    key: 'account',
+    title: 'Mijn account',
+    description: 'E-mailadres en wachtwoord',
+    to: '/instellingen/mijn-account',
+    relevance: 'always',
+    section: 'account',
+    scope: 'personal',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: true,
+  },
+  {
     key: 'capabilities',
     title: 'Wat wil je met Inhuis doen?',
     description: 'Voeg later extra mogelijkheden toe zonder opnieuw te beginnen',

@@ -35,6 +35,7 @@ assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
 
 const expectedTiles = {
+  account: { section: 'account', scope: 'personal', permission: null, allowViewer: true },
   'article-details': { section: 'account', scope: 'personal', permission: null, allowViewer: true },
   'privacy-data-sharing': { section: 'account', scope: 'personal', permission: null, allowViewer: true },
   household: { section: 'household', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
@@ -58,11 +59,11 @@ for (const [key, expected] of Object.entries(expectedTiles)) {
   assert.deepEqual(tile.allowedContexts, ['regular'])
 }
 
-for (const deferredKey of ['account', 'notifications', 'help', 'about', 'recipes']) {
+for (const deferredKey of ['notifications', 'help', 'about', 'recipes']) {
   assert.equal(
     getSettingsTile(deferredKey),
     null,
-    `${deferredKey} mag in 9.3.2 nog geen half-afgebouwde instellingenbestemming worden`,
+    `${deferredKey} mag nog geen half-afgebouwde instellingenbestemming worden`,
   )
 }
 
@@ -80,6 +81,7 @@ assert.match(appRouterSource, /const policy = settingKey \? getSettingsTile\(set
 assert.doesNotMatch(appRouterSource, /function ProtectedSettings\(/)
 
 for (const [path, key] of [
+  ['/instellingen/mijn-account', 'account'],
   ['/instellingen/mogelijkheden', 'capabilities'],
   ['/instellingen/artikeldetails/veldzichtbaarheid', 'article-details'],
   ['/instellingen/artikelgroepen', 'article-groups'],

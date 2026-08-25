@@ -21,6 +21,7 @@ import SettingsStoreImportPage from '../../features/settings/SettingsStoreImport
 import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage'
 import SettingsAuthorizationPage from '../../features/settings/SettingsAuthorizationPage.jsx'
 import SettingsLocationsRoutePage from '../../features/settings/SettingsLocationsRoutePage.jsx'
+import SettingsMyAccountPage from '../../features/settings/SettingsMyAccountPage.jsx'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
 import { SETTINGS_ROOT_POLICY, getSettingsTile } from '../../features/settings/settingsNavigation.js'
 import Voorraad from '../../pages/Voorraad'
@@ -181,6 +182,7 @@ const router = createBrowserRouter([
   { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <ProtectedSettingsRoute><SettingsPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/mijn-account', element: <ProtectedSettingsRoute settingKey="account"><SettingsMyAccountPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/mogelijkheden', element: <ProtectedSettingsRoute settingKey="capabilities"><SettingsCapabilitiesPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettingsRoute settingKey="article-details"><SettingsArticleFieldsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/artikelgroepen', element: <ProtectedSettingsRoute settingKey="article-groups"><SettingsArticleGroupsPage /></ProtectedSettingsRoute> },
