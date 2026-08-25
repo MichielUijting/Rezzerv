@@ -111,5 +111,5 @@ test('Wat Inhuis global settings expose main locations without sublocation contr
 
   await page.getByTestId('global-location-name-input').fill('Woning')
   await page.getByTestId('global-location-add').click()
-  await expect(page.getByDisplayValue('Woning')).toBeVisible()
+  await expect(page.getByLabel('Locatienaam Woning')).toBeVisible()
 })
