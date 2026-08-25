@@ -50,6 +50,8 @@ Tot die cutover Ready is, blijft stacking in 9.1.8b expliciet **fail-closed**:
 - de server-generated `role_actions` projecteert dezelfde blokkade naar de UI;
 - `grant_special_role()` handhaaft dezelfde invariant server-side, onafhankelijk van de UI.
 
+Deze blokkade is een bewuste tijdelijke runtimeveiligheidsgrens en geen wijziging van het uiteindelijke v2-doelmodel. 9.1.8c mag haar pas verwijderen nadat de gecombineerde session/account-context expliciet executable is bewezen.
+
 Daarmee kan 9.1.8b geen samengestelde runtime-state introduceren die de bestaande sessielaag niet kan oplossen. De focused 9.1.8b-gate draait daarom ook de bestaande server-session- en Frontteam-provisioningcontracts.
 
 ## Acceptatie 9.1.8b
