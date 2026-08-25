@@ -15,6 +15,7 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
         email: 'authorization-ui-test@rezzerv.local',
         active_household_id: HOUSEHOLD_ID,
         active_household_name: 'Testhuishouden',
+        context_type: 'regular',
         role: displayRole,
         display_role: displayRole,
         permissions,
