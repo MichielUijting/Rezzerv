@@ -18,6 +18,9 @@ on:
       - 'backend/tests/test_external_database_route_authorization.py'
       - 'backend/tests/test_gpc_nl_import_platform_authorization.py'
       - 'backend/tests/server_session_security_selftest.py'
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/src/app/router/SuperuserGuard.jsx'
+      - 'frontend/tests/session-context-normalization.contract.mjs'
       - 'docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md'
       - 'docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md'
       - 'docs/security/ROLLEN-V2-9.1-ACCEPTANCE-CLOSURE.md'
@@ -81,4 +84,14 @@ jobs:
             tests/test_gpc_nl_import_platform_authorization.py
           python -m app.testing.authorization_matrix_acceptance
           python tests/server_session_security_selftest.py
-          echo ROLES_V2_9_1_ACCEPTANCE_CLOSURE_GREEN
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate frontend system capability boundary
+        run: node frontend/tests/session-context-normalization.contract.mjs
+
+      - name: Mark roles-v2 closure green
+        run: echo ROLES_V2_9_1_ACCEPTANCE_CLOSURE_GREEN
