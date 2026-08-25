@@ -16,6 +16,11 @@ from app.services.platform_authorization_management_service import (
     list_platform_authorizations,
     revoke_special_role,
 )
+from app.services.server_session_service import (
+    create_server_session,
+    public_session_payload,
+    resolve_server_session,
+)
 
 
 @pytest.fixture()
@@ -123,13 +128,14 @@ def test_ip_owner_is_protected_from_ordinary_special_role_management(connection)
         )
 
 
-def test_superuser_and_platform_admin_stacking_remains_fail_closed_until_context_cutover(connection):
+def test_superuser_and_platform_admin_stacking_is_fail_closed_until_9_1_8c(connection):
     grant_special_role(
         connection,
         "target",
         role_key=SUPERUSER_ROLE_KEY,
         actor_user_id="owner",
     )
+
     inventory = list_platform_authorizations(connection, current_user_id="owner")
     target = next(item for item in inventory["users"] if item["user_id"] == "target")
     platform_admin_action = target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]
@@ -167,7 +173,7 @@ def test_superuser_and_platform_admin_stacking_remains_fail_closed_until_context
     assert active_roles(connection, "target") == {PLATFORM_ADMIN_ROLE_KEY}
 
 
-def test_frontteam_grant_provisions_personal_household_and_revoke_retains_it(connection):
+def test_frontteam_revoke_keeps_regular_household_and_regrant_reuses_exact_household(connection):
     grant_special_role(
         connection,
         "front",
@@ -177,6 +183,12 @@ def test_frontteam_grant_provisions_personal_household_and_revoke_retains_it(con
     household_id = resolve_frontteam_personal_household_id(connection, "front")
     assert household_id
     assert active_roles(connection, "front") == {FRONTTEAM_ROLE_KEY}
+
+    household = connection.execute(text("""
+        SELECT id, context_type
+        FROM household_registry
+        WHERE id = :household_id
+    """), {"household_id": household_id}).mappings().one()
     membership = connection.execute(text("""
         SELECT hm.role, hm.status, mr.role_key, mr.active
         FROM household_memberships hm
@@ -185,10 +197,19 @@ def test_frontteam_grant_provisions_personal_household_and_revoke_retains_it(con
          AND mr.membership_id = hm.user_id
         WHERE hm.user_id = 'front' AND hm.household_id = :household_id
     """), {"household_id": household_id}).mappings().one()
+    assert household["context_type"] == "regular"
     assert membership["role"] == "admin"
     assert membership["status"] == "active"
     assert membership["role_key"] == "household.admin"
     assert membership["active"] == 1
+
+    raw_frontteam_session, created_frontteam = create_server_session(
+        connection,
+        user_id="front",
+        active_household_id=household_id,
+    )
+    assert created_frontteam.context_type == "regular"
+    assert created_frontteam.is_frontteam is True
 
     revoke_special_role(
         connection,
@@ -197,11 +218,50 @@ def test_frontteam_grant_provisions_personal_household_and_revoke_retains_it(con
         actor_user_id="owner",
     )
     assert active_roles(connection, "front") == set()
-    assert resolve_frontteam_personal_household_id(connection, "front") == household_id
-    assert connection.execute(text("""
-        SELECT COUNT(*) FROM household_memberships
-        WHERE user_id = 'front' AND household_id = :household_id
-    """), {"household_id": household_id}).scalar_one() == 1
+    assert resolve_frontteam_personal_household_id(connection, "front") is None
+
+    retained_household = connection.execute(text("""
+        SELECT id, context_type
+        FROM household_registry
+        WHERE id = :household_id
+    """), {"household_id": household_id}).mappings().one()
+    retained_membership = connection.execute(text("""
+        SELECT hm.role, hm.status, mr.role_key, mr.active
+        FROM household_memberships hm
+        JOIN auth_membership_roles mr
+          ON mr.household_id = hm.household_id
+         AND mr.membership_id = hm.user_id
+        WHERE hm.user_id = 'front' AND hm.household_id = :household_id
+    """), {"household_id": household_id}).mappings().one()
+    assert retained_household["context_type"] == "regular"
+    assert retained_membership["role"] == "admin"
+    assert retained_membership["status"] == "active"
+    assert retained_membership["role_key"] == "household.admin"
+    assert retained_membership["active"] == 1
+
+    resolved_after_revoke = resolve_server_session(connection, raw_frontteam_session)
+    payload_after_revoke = public_session_payload(resolved_after_revoke)
+    assert resolved_after_revoke.active_household_id == household_id
+    assert resolved_after_revoke.context_type == "regular"
+    assert resolved_after_revoke.role == "admin"
+    assert resolved_after_revoke.is_frontteam is False
+    assert payload_after_revoke["is_frontteam"] is False
+    for permission in (
+        "platform.external_products.view",
+        "platform.external_products.search",
+        "platform.external_products.link_existing",
+    ):
+        assert payload_after_revoke["permissions"].get(permission) is not True
+
+    raw_regular_session, created_regular = create_server_session(
+        connection,
+        user_id="front",
+        active_household_id=household_id,
+    )
+    assert created_regular.context_type == "regular"
+    assert created_regular.role == "admin"
+    assert created_regular.is_frontteam is False
+    assert resolve_server_session(connection, raw_regular_session).is_frontteam is False
 
     grant_special_role(
         connection,
@@ -209,7 +269,21 @@ def test_frontteam_grant_provisions_personal_household_and_revoke_retains_it(con
         role_key=FRONTTEAM_ROLE_KEY,
         actor_user_id="owner",
     )
+    assert active_roles(connection, "front") == {FRONTTEAM_ROLE_KEY}
     assert resolve_frontteam_personal_household_id(connection, "front") == household_id
+    assert connection.execute(text("""
+        SELECT COUNT(*) FROM household_registry WHERE id = :household_id
+    """), {"household_id": household_id}).scalar_one() == 1
+    assert connection.execute(text("""
+        SELECT COUNT(*) FROM household_memberships
+        WHERE user_id = 'front' AND household_id = :household_id
+    """), {"household_id": household_id}).scalar_one() == 1
+
+    resolved_after_regrant = resolve_server_session(connection, raw_regular_session)
+    assert resolved_after_regrant.active_household_id == household_id
+    assert resolved_after_regrant.context_type == "regular"
+    assert resolved_after_regrant.role == "admin"
+    assert resolved_after_regrant.is_frontteam is True
 
 
 def test_frontteam_cannot_stack_with_system_or_platform_admin_roles(connection):
