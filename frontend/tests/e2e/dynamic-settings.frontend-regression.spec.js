@@ -70,6 +70,8 @@ test('Inhuis halen shows grouped product-relevant settings while keeping general
   await expect(page.getByTestId('settings-section-usage')).toBeVisible()
   await expect(page.getByTestId('settings-section-help')).toHaveCount(0)
 
+  await expect(page.getByTestId('settings-tile-account')).toBeVisible()
+  await expect(page.getByTestId('settings-tile-account')).toHaveAttribute('data-settings-scope', 'personal')
   await expect(page.getByTestId('settings-tile-article-details')).toBeVisible()
   await expect(page.getByTestId('settings-tile-article-details')).toHaveAttribute('data-settings-scope', 'personal')
   await expect(page.getByTestId('settings-tile-article-groups')).toBeVisible()
@@ -98,6 +100,7 @@ test('Wat Inhuis global settings expose main locations without sublocation contr
 
   await page.goto('/instellingen')
   await expect(page.getByTestId('settings-page')).toHaveAttribute('data-settings-mode', 'dynamic')
+  await expect(page.getByTestId('settings-tile-account')).toBeVisible()
   await expect(page.getByTestId('settings-tile-locations')).toBeVisible()
   await expect(page.getByTestId('settings-tile-store-import')).toHaveCount(0)
   await expect(page.getByTestId('settings-tile-almost-out')).toHaveCount(0)
