@@ -1,3 +1,33 @@
+export const SETTINGS_SECTIONS = [
+  {
+    key: 'account',
+    title: 'Mijn account',
+    description: 'Persoonlijke voorkeuren en privacy.',
+  },
+  {
+    key: 'household',
+    title: 'Huishouden & samen gebruiken',
+    description: 'Beheer je huishouden, leden en rollen.',
+  },
+  {
+    key: 'usage',
+    title: 'Gebruik & inrichting',
+    description: 'Pas Inhuis aan op de mogelijkheden die je huishouden gebruikt.',
+  },
+  {
+    key: 'help',
+    title: 'Hulp & informatie',
+    description: 'Hulp en informatie over Inhuis.',
+  },
+]
+
+const REGULAR_SETTINGS_CONTEXTS = ['regular']
+
+export const SETTINGS_ROOT_POLICY = {
+  allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+  allowViewer: true,
+}
+
 const SETTINGS_TILES = [
   {
     key: 'capabilities',
@@ -6,6 +36,10 @@ const SETTINGS_TILES = [
     to: '/instellingen/mogelijkheden',
     permission: 'household_settings.manage',
     relevance: 'always',
+    section: 'usage',
+    scope: 'household',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: false,
   },
   {
     key: 'article-details',
@@ -13,6 +47,10 @@ const SETTINGS_TILES = [
     description: 'Veldzichtbaarheid',
     to: '/instellingen/artikeldetails/veldzichtbaarheid',
     relevance: 'inventory',
+    section: 'account',
+    scope: 'personal',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: true,
   },
   {
     key: 'article-groups',
@@ -21,6 +59,10 @@ const SETTINGS_TILES = [
     to: '/instellingen/artikelgroepen',
     permission: 'article_groups.manage',
     relevance: 'inventory',
+    section: 'usage',
+    scope: 'household',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: false,
   },
   {
     key: 'privacy-data-sharing',
@@ -28,6 +70,10 @@ const SETTINGS_TILES = [
     description: 'Persoonlijke toestemming per gebruiker · standaard alles uit',
     to: '/instellingen/privacy-datadeling',
     relevance: 'always',
+    section: 'account',
+    scope: 'personal',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: true,
   },
   {
     key: 'locations',
@@ -36,6 +82,10 @@ const SETTINGS_TILES = [
     to: '/instellingen/locaties',
     permission: 'locations.manage',
     relevance: 'locations',
+    section: 'usage',
+    scope: 'household',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: false,
   },
   {
     key: 'store-import',
@@ -44,6 +94,10 @@ const SETTINGS_TILES = [
     to: '/instellingen/winkelimport',
     permission: 'household_settings.manage',
     relevance: 'shopping-or-receipts',
+    section: 'usage',
+    scope: 'household',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: false,
   },
   {
     key: 'household',
@@ -52,6 +106,10 @@ const SETTINGS_TILES = [
     to: '/instellingen/huishouden',
     permission: 'household_settings.manage',
     relevance: 'always',
+    section: 'household',
+    scope: 'household',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: false,
   },
   {
     key: 'authorizations',
@@ -59,6 +117,10 @@ const SETTINGS_TILES = [
     description: 'Bekijk welke mogelijkheden bij elke rol horen',
     to: '/instellingen/huishouden/autorisaties',
     relevance: 'always',
+    section: 'household',
+    scope: 'household',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: true,
   },
   {
     key: 'household-automation',
@@ -67,6 +129,10 @@ const SETTINGS_TILES = [
     to: '/instellingen/huishoudautomatisering',
     permission: 'household_settings.manage',
     relevance: 'quantity-inventory',
+    section: 'usage',
+    scope: 'household',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: false,
   },
   {
     key: 'almost-out',
@@ -75,6 +141,10 @@ const SETTINGS_TILES = [
     to: '/instellingen/bijna-op-voorspelling',
     permission: 'household_settings.manage',
     relevance: 'almost-out',
+    section: 'usage',
+    scope: 'household',
+    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowViewer: false,
   },
 ]
 
@@ -100,19 +170,31 @@ function isRelevant(tile, configuration) {
   return false
 }
 
+function buildSections(tiles) {
+  return SETTINGS_SECTIONS
+    .map((section) => ({
+      ...section,
+      tiles: tiles.filter((tile) => tile.section === section.key),
+    }))
+    .filter((section) => section.tiles.length > 0)
+}
+
 export function buildSettingsNavigation({ onboarding } = {}) {
   const configuration = normalizedConfiguration(onboarding)
-  if (!configuration) {
-    return {
-      mode: 'legacy',
-      tiles: SETTINGS_TILES,
-    }
-  }
+  const mode = configuration ? 'dynamic' : 'legacy'
+  const tiles = configuration
+    ? SETTINGS_TILES.filter((tile) => isRelevant(tile, configuration))
+    : SETTINGS_TILES
 
   return {
-    mode: 'dynamic',
-    tiles: SETTINGS_TILES.filter((tile) => isRelevant(tile, configuration)),
+    mode,
+    tiles,
+    sections: buildSections(tiles),
   }
+}
+
+export function getSettingsTile(key) {
+  return SETTINGS_TILES.find((tile) => tile.key === key) || null
 }
 
 export { SETTINGS_TILES }
