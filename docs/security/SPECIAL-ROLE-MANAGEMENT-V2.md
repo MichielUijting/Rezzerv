@@ -1,6 +1,6 @@
 # 9.1.8b — Special-role management door de IP-eigenaar
 
-Status: implementatieslice voor de v2 special-role management authority.
+Status: afgeronde v2 special-role management authority; 9.1.8c voert de eerder gereserveerde stackingcutover uit.
 
 ## Doel
 
@@ -48,32 +48,29 @@ De revoke/regrant-lifecycle wordt in 9.1.8b volledig gesloten:
 
 Daarmee wordt de persoonlijke household-data niet weggegooid wanneer iemand tijdelijk geen Frontteamlid meer is, terwijl Frontteamauthority zelf direct verdwijnt.
 
-## Gecontroleerde vervolgslice 9.1.8c
+## Vervolg 9.1.8c
 
-De v2-doelarchitectuur staat toe dat `platform.superuser` en `platform.platform_admin` op één account worden gecombineerd. De huidige server-session runtime modelleert die combinatie nog als incompatibele accountcontext.
+De tijdelijke 9.1.8b-blokkade op `platform.superuser` + `platform.platform_admin` wordt in 9.1.8c gecontroleerd opgeheven nadat de gecombineerde session/account-context executable is gemaakt.
 
-Die accountcontextwijziging wordt bewust niet stil in dezelfde authority-slice uitgevoerd. **9.1.8c** wordt uitsluitend de afzonderlijke session/account-context cutover voor Superuser + Platformbeheerder role stacking.
+Het v2-doelmodel is:
 
-Tot die cutover Ready is, blijft stacking in 9.1.8b expliciet **fail-closed**:
+- Superuser + Platformbeheerder mag op één account worden gecombineerd;
+- de combinatie gebruikt H0 / `context_type=system`, omdat Superuser H0 verleent;
+- technische Platformbeheerderpermissions worden in dezelfde sessie toegevoegd;
+- Frontteamconflicten en IP-owner + Platformbeheerder blijven fail-closed;
+- de browser krijgt geen `platform_roles`-authorityprojectie.
 
-- een account met actieve `platform.superuser` kan niet ook `platform.platform_admin` krijgen;
-- een account met actieve `platform.platform_admin` kan niet ook `platform.superuser` krijgen;
-- de server-generated `role_actions` projecteert dezelfde blokkade naar de UI;
-- `grant_special_role()` handhaaft dezelfde invariant server-side, onafhankelijk van de UI.
-
-Deze blokkade is een bewuste tijdelijke runtimeveiligheidsgrens en geen wijziging van het uiteindelijke v2-doelmodel. 9.1.8c mag haar pas verwijderen nadat de gecombineerde session/account-context expliciet executable is bewezen.
-
-Daarmee kan 9.1.8b geen samengestelde runtime-state introduceren die de bestaande sessielaag niet kan oplossen. De focused 9.1.8b-gate draait daarom ook de bestaande server-session- en Frontteam-provisioningcontracts.
+Het executable contract en de revoke-transities staan in `SUPERUSER-PLATFORM-ADMIN-STACKING-CUTOVER.md`.
 
 ## Acceptatie 9.1.8b
 
-Voor Ready moeten op één exacte PR-head aantoonbaar groen zijn:
+De gemergde 9.1.8b-kandidaat bewees:
 
 1. exact permission split: inventory versus mutation;
 2. IP-owner-only special-role mutation;
 3. protected IP-owner invariant;
 4. safe server-generated role actions;
-5. Superuser + Platformbeheerder stacking blijft fail-closed tot 9.1.8c;
+5. de tijdelijke stackinggrens bleef fail-closed tot de aparte 9.1.8c-cutover;
 6. Frontteam revoke/regrant behoudt exact hetzelfde reguliere huishouden en membership;
 7. Frontteamauthority verdwijnt direct na revoke en keert pas terug na regrant;
 8. bestaande server-session fail-closed contracts;
@@ -81,5 +78,3 @@ Voor Ready moeten op één exacte PR-head aantoonbaar groen zijn:
 10. production frontend build;
 11. volledige canonical frontend regression;
 12. canonical release package.
-
-Geen merge zolang één van deze grenzen rood of inhoudelijk onbeslist is.

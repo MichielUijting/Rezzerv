@@ -104,6 +104,7 @@ class ServerSessionContext:
     issued_at: datetime
     expires_at: datetime
     is_platform_superuser: bool = False
+    is_platform_admin: bool = False
     is_frontteam: bool = False
 
 
@@ -169,6 +170,56 @@ def membership_id_expression(
     raise RuntimeError("household_memberships mist een bruikbare lidmaatschapsidentiteit")
 
 
+def _has_active_regular_household_membership(
+    conn: Connection,
+    *,
+    user_id: str,
+) -> bool:
+    inspector = inspect(conn)
+    if not inspector.has_table("household_memberships"):
+        return False
+
+    join_condition = membership_user_join_condition(conn)
+    active_condition = membership_active_condition(conn)
+    registry_columns = {
+        str(column.get("name") or "").strip().lower()
+        for column in inspector.get_columns("household_registry")
+    } if inspector.has_table("household_registry") else set()
+    registry_id_column = (
+        "id" if "id" in registry_columns else
+        "household_id" if "household_id" in registry_columns else
+        None
+    )
+
+    if registry_id_column and "context_type" in registry_columns:
+        value = conn.execute(text(f"""
+            SELECT 1
+            FROM household_memberships hm
+            JOIN app_users u ON {join_condition}
+            JOIN household_registry hr
+              ON CAST(hr.{registry_id_column} AS TEXT) = CAST(hm.household_id AS TEXT)
+            WHERE u.id = :user_id
+              AND {active_condition}
+              AND lower(trim(COALESCE(hr.context_type, ''))) = 'regular'
+            LIMIT 1
+        """), {"user_id": str(user_id)}).first()
+        return bool(value)
+
+    value = conn.execute(text(f"""
+        SELECT 1
+        FROM household_memberships hm
+        JOIN app_users u ON {join_condition}
+        WHERE u.id = :user_id
+          AND {active_condition}
+          AND CAST(hm.household_id AS TEXT) <> :system_household_id
+        LIMIT 1
+    """), {
+        "user_id": str(user_id),
+        "system_household_id": SUPERGEBRUIKER_HUISHOUDEN_ID,
+    }).first()
+    return bool(value)
+
+
 def _test_household_zero_enabled() -> bool:
     return str(
         os.getenv("REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO", "false") or "false"
@@ -215,14 +266,28 @@ def _resolve_platform_context_roles(
             detail="Geen geldige accountcontext beschikbaar.",
         )
 
-    if (
-        "platform.platform_admin" in platform_roles
-        and (system_roles or FRONTTEAM_PLATFORM_ROLE in platform_roles)
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Geen geldige accountcontext beschikbaar.",
-        )
+    if "platform.platform_admin" in platform_roles:
+        if FRONTTEAM_PLATFORM_ROLE in platform_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
+        if system_roles and system_roles != frozenset({"platform.superuser"}):
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
+        if (
+            system_roles == frozenset({"platform.superuser"})
+            and _has_active_regular_household_membership(
+                conn,
+                user_id=user_id,
+            )
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
     return platform_roles, system_roles
 
 
@@ -592,6 +657,7 @@ def _insert_server_session(
     replace_existing: bool,
     now: datetime | None,
     is_platform_superuser: bool = False,
+    is_platform_admin: bool = False,
     is_frontteam: bool = False,
 ) -> tuple[str, ServerSessionContext]:
     issued_at = (now or utc_now()).astimezone(timezone.utc)
@@ -639,6 +705,7 @@ def _insert_server_session(
         issued_at=issued_at,
         expires_at=expires_at,
         is_platform_superuser=is_platform_superuser,
+        is_platform_admin=is_platform_admin,
         is_frontteam=is_frontteam,
     )
 
@@ -697,6 +764,7 @@ def create_none_server_session(
         ttl=ttl,
         replace_existing=replace_existing,
         now=now,
+        is_platform_admin=True,
     )
 
 
@@ -727,7 +795,7 @@ def create_system_server_session(
         user_id=normalized_user_id,
         email=email,
     )
-    if not system_roles or "platform.platform_admin" in platform_roles:
+    if not system_roles:
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
@@ -753,6 +821,7 @@ def create_system_server_session(
         replace_existing=replace_existing,
         now=now,
         is_platform_superuser="platform.superuser" in system_roles,
+        is_platform_admin="platform.platform_admin" in platform_roles,
     )
 
 
@@ -816,6 +885,7 @@ def resolve_server_session(
             session_version=int(row.get("session_version") or 1),
             issued_at=_normalize_database_datetime(row.get("issued_at")),
             expires_at=expires_at,
+            is_platform_admin=True,
         )
 
     household_id = str(raw_household_id).strip()
@@ -840,6 +910,7 @@ def resolve_server_session(
             issued_at=_normalize_database_datetime(row.get("issued_at")),
             expires_at=expires_at,
             is_platform_superuser="platform.superuser" in system_roles,
+            is_platform_admin="platform.platform_admin" in platform_roles,
         )
 
     if "platform.platform_admin" in platform_roles or system_roles:
@@ -992,11 +1063,14 @@ def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
             "expires_at": context.expires_at.isoformat(),
         }
     platform_superuser = bool(context.is_platform_superuser)
+    platform_admin = bool(context.is_platform_admin)
     platform_frontteam = bool(context.is_frontteam)
     granted_permissions = permissions_for_session_role(
         context.role,
         platform_superuser=platform_superuser,
     )
+    if platform_admin:
+        granted_permissions.update(ROLE_PERMISSIONS["platform.platform_admin"])
     if platform_frontteam:
         granted_permissions.update(ROLE_PERMISSIONS[FRONTTEAM_PLATFORM_ROLE])
     permissions = {key: True for key in sorted(granted_permissions)}

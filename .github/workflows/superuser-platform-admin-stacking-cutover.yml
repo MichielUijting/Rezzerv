@@ -1,0 +1,64 @@
+name: Superuser Platform Admin stacking cutover validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/platform_authorization_management_service.py'
+      - 'backend/tests/test_superuser_platform_admin_stacking_cutover.py'
+      - 'backend/tests/test_special_role_management_v2.py'
+      - 'backend/tests/test_server_session_service.py'
+      - 'backend/tests/server_session_security_selftest.py'
+      - 'docs/security/SUPERUSER-PLATFORM-ADMIN-STACKING-CUTOVER.md'
+      - '.github/workflows/superuser-platform-admin-stacking-cutover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stacking-cutover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend and test dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+
+      - name: Compile stacking boundary and contracts
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python -m py_compile \
+            app/api/server_session_routes.py \
+            app/services/server_session_service.py \
+            app/services/platform_authorization_management_service.py \
+            tests/test_superuser_platform_admin_stacking_cutover.py \
+            tests/test_special_role_management_v2.py \
+            tests/test_server_session_service.py \
+            tests/server_session_security_selftest.py
+
+      - name: Run stacking and session contracts
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: 'sqlite:///:memory:'
+          REZZERV_SESSION_COOKIE_SECURE: 'false'
+        run: |
+          python -m pytest -q \
+            tests/test_superuser_platform_admin_stacking_cutover.py \
+            tests/test_special_role_management_v2.py \
+            tests/test_server_session_service.py
+          python tests/server_session_security_selftest.py
+          echo SUPERUSER_PLATFORM_ADMIN_9_1_8C_STACKING_GREEN

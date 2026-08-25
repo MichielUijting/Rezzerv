@@ -128,33 +128,38 @@ def test_ip_owner_is_protected_from_ordinary_special_role_management(connection)
         )
 
 
-def test_superuser_and_platform_admin_stacking_is_fail_closed_until_9_1_8c(connection):
+def test_superuser_and_platform_admin_stacking_is_allowed_in_both_directions(connection):
     grant_special_role(
         connection,
         "target",
         role_key=SUPERUSER_ROLE_KEY,
         actor_user_id="owner",
     )
-
     inventory = list_platform_authorizations(connection, current_user_id="owner")
     target = next(item for item in inventory["users"] if item["user_id"] == "target")
-    platform_admin_action = target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]
-    assert platform_admin_action["can_grant"] is False
-    assert "nog niet" in str(platform_admin_action["grant_blocked_reason"])
+    assert target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is True
 
-    with pytest.raises(PlatformAuthorizationConflictError, match="nog niet"):
-        grant_special_role(
-            connection,
-            "target",
-            role_key=PLATFORM_ADMIN_ROLE_KEY,
-            actor_user_id="owner",
-        )
-    assert active_roles(connection, "target") == {SUPERUSER_ROLE_KEY}
+    grant_special_role(
+        connection,
+        "target",
+        role_key=PLATFORM_ADMIN_ROLE_KEY,
+        actor_user_id="owner",
+    )
+    assert active_roles(connection, "target") == {
+        SUPERUSER_ROLE_KEY,
+        PLATFORM_ADMIN_ROLE_KEY,
+    }
 
     revoke_special_role(
         connection,
         "target",
         role_key=SUPERUSER_ROLE_KEY,
+        actor_user_id="owner",
+    )
+    revoke_special_role(
+        connection,
+        "target",
+        role_key=PLATFORM_ADMIN_ROLE_KEY,
         actor_user_id="owner",
     )
     grant_special_role(
@@ -163,14 +168,20 @@ def test_superuser_and_platform_admin_stacking_is_fail_closed_until_9_1_8c(conne
         role_key=PLATFORM_ADMIN_ROLE_KEY,
         actor_user_id="owner",
     )
-    with pytest.raises(PlatformAuthorizationConflictError, match="nog niet"):
-        grant_special_role(
-            connection,
-            "target",
-            role_key=SUPERUSER_ROLE_KEY,
-            actor_user_id="owner",
-        )
-    assert active_roles(connection, "target") == {PLATFORM_ADMIN_ROLE_KEY}
+    inventory = list_platform_authorizations(connection, current_user_id="owner")
+    target = next(item for item in inventory["users"] if item["user_id"] == "target")
+    assert target["role_actions"][SUPERUSER_ROLE_KEY]["can_grant"] is True
+
+    grant_special_role(
+        connection,
+        "target",
+        role_key=SUPERUSER_ROLE_KEY,
+        actor_user_id="owner",
+    )
+    assert active_roles(connection, "target") == {
+        SUPERUSER_ROLE_KEY,
+        PLATFORM_ADMIN_ROLE_KEY,
+    }
 
 
 def test_frontteam_revoke_keeps_regular_household_and_regrant_reuses_exact_household(connection):
