@@ -100,6 +100,14 @@ async function mockHouseholdScreen(page, { isAdmin = true, denyMutations = false
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(householdPayload({ isAdmin, name: currentName })) })
   })
 
+  await page.route('**/api/household/invitations', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ household_id: HOUSEHOLD_ID, items: [], total: 0 }),
+    })
+  })
+
   await page.route(`**/api/households/${HOUSEHOLD_ID}/authorization/members`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(auth.members) }))
   await page.route(`**/api/households/${HOUSEHOLD_ID}/authorization/roles`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(auth.roles) }))
   await page.route(`**/api/households/${HOUSEHOLD_ID}/authorization/permissions`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(auth.permissions) }))
@@ -170,17 +178,14 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await expectNoConsoleErrors(consoleErrors)
   })
 
-  test('niet-beheerder kan geen actiebuttons uitvoeren en gemanipuleerde mutatie krijgt 403', async ({ page }) => {
+  test('niet-beheerder wordt bij huishoudroute geblokkeerd en gemanipuleerde mutatie krijgt 403', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page)
     await seedSession(page, { 'permissions.view': true }, 'member')
     const calls = await mockHouseholdScreen(page, { isAdmin: false, denyMutations: true })
     await page.goto('/instellingen/huishouden')
 
-    await expect(page.getByTestId('household-name-input')).toBeDisabled()
-    await expect(page.getByTestId('household-role-select-lid@rezzerv.local')).toBeDisabled()
-    await expect(page.getByTestId('household-add-member')).toBeDisabled()
-    await expect(page.getByTestId('household-name-save')).toHaveCount(0)
-    await expect(page.getByTestId('household-remove-lid@rezzerv.local')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/home$/)
+    await expect(page.getByTestId('household-settings-page')).toHaveCount(0)
     expect(calls.name + calls.add + calls.role + calls.remove).toBe(0)
     await expectNoConsoleErrors(consoleErrors)
 
