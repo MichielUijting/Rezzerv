@@ -170,6 +170,56 @@ def membership_id_expression(
     raise RuntimeError("household_memberships mist een bruikbare lidmaatschapsidentiteit")
 
 
+def _has_active_regular_household_membership(
+    conn: Connection,
+    *,
+    user_id: str,
+) -> bool:
+    inspector = inspect(conn)
+    if not inspector.has_table("household_memberships"):
+        return False
+
+    join_condition = membership_user_join_condition(conn)
+    active_condition = membership_active_condition(conn)
+    registry_columns = {
+        str(column.get("name") or "").strip().lower()
+        for column in inspector.get_columns("household_registry")
+    } if inspector.has_table("household_registry") else set()
+    registry_id_column = (
+        "id" if "id" in registry_columns else
+        "household_id" if "household_id" in registry_columns else
+        None
+    )
+
+    if registry_id_column and "context_type" in registry_columns:
+        value = conn.execute(text(f"""
+            SELECT 1
+            FROM household_memberships hm
+            JOIN app_users u ON {join_condition}
+            JOIN household_registry hr
+              ON CAST(hr.{registry_id_column} AS TEXT) = CAST(hm.household_id AS TEXT)
+            WHERE u.id = :user_id
+              AND {active_condition}
+              AND lower(trim(COALESCE(hr.context_type, ''))) = 'regular'
+            LIMIT 1
+        """), {"user_id": str(user_id)}).first()
+        return bool(value)
+
+    value = conn.execute(text(f"""
+        SELECT 1
+        FROM household_memberships hm
+        JOIN app_users u ON {join_condition}
+        WHERE u.id = :user_id
+          AND {active_condition}
+          AND CAST(hm.household_id AS TEXT) <> :system_household_id
+        LIMIT 1
+    """), {
+        "user_id": str(user_id),
+        "system_household_id": SUPERGEBRUIKER_HUISHOUDEN_ID,
+    }).first()
+    return bool(value)
+
+
 def _test_household_zero_enabled() -> bool:
     return str(
         os.getenv("REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO", "false") or "false"
@@ -223,6 +273,17 @@ def _resolve_platform_context_roles(
                 detail="Geen geldige accountcontext beschikbaar.",
             )
         if system_roles and system_roles != frozenset({"platform.superuser"}):
+            raise HTTPException(
+                status_code=403,
+                detail="Geen geldige accountcontext beschikbaar.",
+            )
+        if (
+            system_roles == frozenset({"platform.superuser"})
+            and _has_active_regular_household_membership(
+                conn,
+                user_id=user_id,
+            )
+        ):
             raise HTTPException(
                 status_code=403,
                 detail="Geen geldige accountcontext beschikbaar.",
