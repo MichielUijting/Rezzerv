@@ -123,8 +123,29 @@ def test_ip_owner_is_protected_from_ordinary_special_role_management(connection)
         )
 
 
-def test_superuser_and_platform_admin_can_be_stacked_in_canonical_storage(connection):
+def test_superuser_and_platform_admin_stacking_remains_fail_closed_until_context_cutover(connection):
     grant_special_role(
+        connection,
+        "target",
+        role_key=SUPERUSER_ROLE_KEY,
+        actor_user_id="owner",
+    )
+    inventory = list_platform_authorizations(connection, current_user_id="owner")
+    target = next(item for item in inventory["users"] if item["user_id"] == "target")
+    platform_admin_action = target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]
+    assert platform_admin_action["can_grant"] is False
+    assert "nog niet" in str(platform_admin_action["grant_blocked_reason"])
+
+    with pytest.raises(PlatformAuthorizationConflictError, match="nog niet"):
+        grant_special_role(
+            connection,
+            "target",
+            role_key=PLATFORM_ADMIN_ROLE_KEY,
+            actor_user_id="owner",
+        )
+    assert active_roles(connection, "target") == {SUPERUSER_ROLE_KEY}
+
+    revoke_special_role(
         connection,
         "target",
         role_key=SUPERUSER_ROLE_KEY,
@@ -136,19 +157,14 @@ def test_superuser_and_platform_admin_can_be_stacked_in_canonical_storage(connec
         role_key=PLATFORM_ADMIN_ROLE_KEY,
         actor_user_id="owner",
     )
-
-    assert active_roles(connection, "target") == {
-        SUPERUSER_ROLE_KEY,
-        PLATFORM_ADMIN_ROLE_KEY,
-    }
-
-    revoke_special_role(
-        connection,
-        "target",
-        role_key=PLATFORM_ADMIN_ROLE_KEY,
-        actor_user_id="owner",
-    )
-    assert active_roles(connection, "target") == {SUPERUSER_ROLE_KEY}
+    with pytest.raises(PlatformAuthorizationConflictError, match="nog niet"):
+        grant_special_role(
+            connection,
+            "target",
+            role_key=SUPERUSER_ROLE_KEY,
+            actor_user_id="owner",
+        )
+    assert active_roles(connection, "target") == {PLATFORM_ADMIN_ROLE_KEY}
 
 
 def test_frontteam_grant_provisions_personal_household_and_revoke_retains_it(connection):
