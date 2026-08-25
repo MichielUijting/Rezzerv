@@ -80,7 +80,33 @@ jobs:
 
       - name: Run Platformautorisaties frontend regression
         working-directory: frontend
-        run: npx playwright test tests/e2e/platform-authorizations.frontend-regression.spec.js --project=chromium --no-deps
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+        shell: bash
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5174 >/tmp/rezzerv-platform-authorizations-vite.log 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5174/ >/dev/null; then
+              echo "Focused Vite server is ready after ${attempt} attempts."
+              break
+            fi
+            if ! kill -0 "$vite_pid" 2>/dev/null; then
+              echo "Focused Vite server exited before becoming ready."
+              cat /tmp/rezzerv-platform-authorizations-vite.log
+              exit 1
+            fi
+            if (( attempt == 30 )); then
+              echo "Focused Vite server did not become ready."
+              cat /tmp/rezzerv-platform-authorizations-vite.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          npx playwright test tests/e2e/platform-authorizations.frontend-regression.spec.js --project=chromium --no-deps
 
       - name: Build production frontend
         working-directory: frontend
