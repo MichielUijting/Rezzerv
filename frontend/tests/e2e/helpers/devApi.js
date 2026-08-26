@@ -117,7 +117,7 @@ export async function resetAndSeedStoreImportFixture(request) {
 export async function loginThroughUi(page) {
   await page.goto('/login');
   await page.getByLabel('E-mail').fill(TEST_ADMIN_EMAIL);
-  await page.getByLabel('Wachtwoord').fill(requireCredential(TEST_ADMIN_PASSWORD, 'test-admin wachtwoord'));
+  await page.getByTestId('login-password').fill(requireCredential(TEST_ADMIN_PASSWORD, 'test-admin wachtwoord'));
   await page.getByRole('button', { name: 'Inloggen' }).click();
   await page.waitForURL('**/home');
 }
