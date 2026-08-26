@@ -4,7 +4,8 @@ from datetime import date, datetime
 import re
 from typing import Any
 
-from sqlalchemy import inspect, text
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 
 AUTO_CONSUME_NONE = "none"
@@ -20,13 +21,7 @@ def _as_non_negative_int(value: Any) -> int:
 
 
 def _canonical_purchase_day(value: Any) -> str | None:
-    """Return the canonical YYYY-MM-DD product-day key when possible.
-
-    Receipt ingestion normally supplies an ISO date/time. The fallback regex
-    deliberately accepts an ISO date prefix as well so timezone-bearing values
-    keep their receipt-local calendar day. A non-ISO/unknown value fails closed
-    to the legacy per-purchase behavior in the caller.
-    """
+    """Return the receipt-local YYYY-MM-DD product-day key when possible."""
     if isinstance(value, datetime):
         return value.date().isoformat()
     if isinstance(value, date):
@@ -58,79 +53,58 @@ def _legacy_requested_deduction(mode: str, pre_purchase_total: Any, purchased_qu
     return 0
 
 
-def _inventory_event_columns(conn) -> set[str]:
-    try:
-        return {str(column.get("name") or "") for column in inspect(conn).get_columns("inventory_events")}
-    except Exception:
-        return set()
+def _fallback_result(
+    *,
+    requested: int,
+    purchase_day: str | None,
+    pre_purchase_total: int,
+    purchased_quantity: int,
+) -> dict[str, Any]:
+    return {
+        "requested_deduction_quantity": requested,
+        "product_day_applied": False,
+        "purchase_day": purchase_day,
+        "day_start_stock": pre_purchase_total,
+        "prior_day_purchased_quantity": 0,
+        "prior_day_auto_consumed_quantity": 0,
+        "cumulative_day_purchased_quantity": purchased_quantity,
+    }
 
 
-def _first_product_day_purchase_old_quantity(
+def _read_product_day_state(
     conn,
     *,
     household_id: str,
     household_article_id: str,
     purchase_day: str,
-    columns: set[str],
-) -> int | None:
-    if not {"household_id", "household_article_id", "purchase_date", "event_type", "source", "old_quantity"}.issubset(columns):
-        return None
+) -> tuple[int, int, int | None]:
+    """Read all prior product-day state with one indexed-scope SQL statement.
 
-    if "effective_at" in columns:
-        order_sql = "datetime(COALESCE(effective_at, purchase_date, created_at)) ASC"
-    elif "created_at" in columns:
-        order_sql = "datetime(COALESCE(purchase_date, created_at)) ASC"
-    else:
-        order_sql = "purchase_date ASC"
-
-    if "event_priority" in columns:
-        order_sql += ", event_priority ASC"
-    if "source_reference" in columns:
-        order_sql += ", COALESCE(source_reference, '') ASC"
-    if "source_line_id" in columns:
-        order_sql += ", COALESCE(source_line_id, '') ASC"
-    order_sql += ", id ASC"
-
-    row = conn.execute(
-        text(
-            f"""
-            SELECT old_quantity
-            FROM inventory_events
-            WHERE household_id = :household_id
-              AND household_article_id = :household_article_id
-              AND event_type = 'purchase'
-              AND source = 'store_import'
-              AND substr(trim(COALESCE(purchase_date, '')), 1, 10) = :purchase_day
-            ORDER BY {order_sql}
-            LIMIT 1
-            """
-        ),
-        {
-            "household_id": str(household_id),
-            "household_article_id": str(household_article_id),
-            "purchase_day": purchase_day,
-        },
-    ).mappings().first()
-    if not row:
-        return None
-    return _as_non_negative_int(row.get("old_quantity"))
-
-
-def _product_day_totals(
-    conn,
-    *,
-    household_id: str,
-    household_article_id: str,
-    purchase_day: str,
-    columns: set[str],
-) -> tuple[int, int]:
-    required = {"household_id", "household_article_id", "purchase_date", "event_type", "source", "quantity"}
-    if not required.issubset(columns):
-        return 0, 0
-
+    The canonical event table already carries household/article/date lineage.
+    Avoiding per-line schema introspection keeps this rule out of the Uitpakken
+    performance hot path. If an older datastore lacks a required temporal/event
+    column, the caller catches the SQL error and deliberately uses legacy logic.
+    """
     row = conn.execute(
         text(
             """
+            WITH day_events AS (
+                SELECT
+                    id,
+                    event_type,
+                    source,
+                    quantity,
+                    old_quantity,
+                    effective_at,
+                    event_priority,
+                    source_reference,
+                    source_line_id,
+                    purchase_date
+                FROM inventory_events
+                WHERE household_id = :household_id
+                  AND household_article_id = :household_article_id
+                  AND substr(trim(COALESCE(purchase_date, '')), 1, 10) = :purchase_day
+            )
             SELECT
                 COALESCE(SUM(
                     CASE
@@ -145,11 +119,21 @@ def _product_day_totals(
                         THEN ABS(COALESCE(quantity, 0))
                         ELSE 0
                     END
-                ), 0) AS auto_consumed_quantity
-            FROM inventory_events
-            WHERE household_id = :household_id
-              AND household_article_id = :household_article_id
-              AND substr(trim(COALESCE(purchase_date, '')), 1, 10) = :purchase_day
+                ), 0) AS auto_consumed_quantity,
+                (
+                    SELECT old_quantity
+                    FROM day_events first_purchase
+                    WHERE first_purchase.event_type = 'purchase'
+                      AND first_purchase.source = 'store_import'
+                    ORDER BY
+                        datetime(COALESCE(first_purchase.effective_at, first_purchase.purchase_date)) ASC,
+                        COALESCE(first_purchase.event_priority, 0) ASC,
+                        COALESCE(first_purchase.source_reference, '') ASC,
+                        COALESCE(first_purchase.source_line_id, '') ASC,
+                        first_purchase.id ASC
+                    LIMIT 1
+                ) AS first_purchase_old_quantity
+            FROM day_events
             """
         ),
         {
@@ -157,12 +141,13 @@ def _product_day_totals(
             "household_article_id": str(household_article_id),
             "purchase_day": purchase_day,
         },
-    ).mappings().first()
-    if not row:
-        return 0, 0
+    ).mappings().one()
+
+    first_old_raw = row.get("first_purchase_old_quantity")
     return (
         _as_non_negative_int(row.get("purchased_quantity")),
         _as_non_negative_int(row.get("auto_consumed_quantity")),
+        None if first_old_raw is None else _as_non_negative_int(first_old_raw),
     )
 
 
@@ -179,12 +164,9 @@ def compute_product_day_auto_deduction(
     """Compute the incremental auto-consume quantity for one product-day.
 
     All receipt purchases for the same household + canonical household article
-    + receipt purchase calendar day form one cumulative purchase. The amount
-    bought earlier on that same day therefore never becomes fresh "old stock"
-    merely because a second receipt is processed later.
-
-    The function is deliberately fail-closed: if the purchase date or canonical
-    event columns are unavailable, it returns the legacy per-purchase deduction.
+    + receipt purchase calendar day form one cumulative purchase. Stock bought
+    earlier on that same day therefore cannot reset the old-stock target when a
+    second or later receipt is unpacked.
     """
     normalized_mode = str(mode or "").strip().lower()
     pre_purchase_total_int = _as_non_negative_int(pre_purchase_total)
@@ -196,44 +178,30 @@ def compute_product_day_auto_deduction(
     )
 
     purchase_day = _canonical_purchase_day(purchase_date)
-    if not purchase_day or not str(household_article_id or "").strip():
-        return {
-            "requested_deduction_quantity": legacy_requested,
-            "product_day_applied": False,
-            "purchase_day": purchase_day,
-            "day_start_stock": pre_purchase_total_int,
-            "prior_day_purchased_quantity": 0,
-            "prior_day_auto_consumed_quantity": 0,
-            "cumulative_day_purchased_quantity": purchased_quantity_int,
-        }
+    normalized_article_id = str(household_article_id or "").strip()
+    if not purchase_day or not normalized_article_id:
+        return _fallback_result(
+            requested=legacy_requested,
+            purchase_day=purchase_day,
+            pre_purchase_total=pre_purchase_total_int,
+            purchased_quantity=purchased_quantity_int,
+        )
 
-    columns = _inventory_event_columns(conn)
-    required = {"id", "household_id", "household_article_id", "purchase_date", "event_type", "source", "quantity", "old_quantity"}
-    if not required.issubset(columns):
-        return {
-            "requested_deduction_quantity": legacy_requested,
-            "product_day_applied": False,
-            "purchase_day": purchase_day,
-            "day_start_stock": pre_purchase_total_int,
-            "prior_day_purchased_quantity": 0,
-            "prior_day_auto_consumed_quantity": 0,
-            "cumulative_day_purchased_quantity": purchased_quantity_int,
-        }
+    try:
+        prior_day_purchased, prior_day_auto_consumed, first_old_quantity = _read_product_day_state(
+            conn,
+            household_id=str(household_id),
+            household_article_id=normalized_article_id,
+            purchase_day=purchase_day,
+        )
+    except SQLAlchemyError:
+        return _fallback_result(
+            requested=legacy_requested,
+            purchase_day=purchase_day,
+            pre_purchase_total=pre_purchase_total_int,
+            purchased_quantity=purchased_quantity_int,
+        )
 
-    prior_day_purchased, prior_day_auto_consumed = _product_day_totals(
-        conn,
-        household_id=str(household_id),
-        household_article_id=str(household_article_id),
-        purchase_day=purchase_day,
-        columns=columns,
-    )
-    first_old_quantity = _first_product_day_purchase_old_quantity(
-        conn,
-        household_id=str(household_id),
-        household_article_id=str(household_article_id),
-        purchase_day=purchase_day,
-        columns=columns,
-    )
     day_start_stock = pre_purchase_total_int if first_old_quantity is None else first_old_quantity
     cumulative_day_purchased = prior_day_purchased + purchased_quantity_int
 
@@ -245,9 +213,9 @@ def compute_product_day_auto_deduction(
         desired_total_auto_consumed = 0
 
     incremental = max(0, desired_total_auto_consumed - prior_day_auto_consumed)
-    # Never ask the legacy inventory mutation to consume more stock than existed
-    # immediately before the current purchase. This also keeps the newly added
-    # current receipt quantity protected by the existing mutation contract.
+    # The existing inventory mutation protects the current purchase quantity.
+    # Never request more consumption than stock that existed immediately before
+    # the current receipt was added.
     incremental = min(incremental, pre_purchase_total_int)
 
     return {
