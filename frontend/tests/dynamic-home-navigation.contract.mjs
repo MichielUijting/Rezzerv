@@ -61,15 +61,16 @@ function keys(tiles) {
         location_tracking_level: 'global',
         shopping_enabled: false,
         almost_out_enabled: true,
-        receipt_processing_enabled: false,
+        receipt_processing_enabled: true,
         unpacking_enabled: false,
       },
     },
     visibility: baseVisibility,
   })
-  assert.deepEqual(keys(navigation.primaryTiles), ['voorraad', 'bijna-op'])
+  assert.deepEqual(keys(navigation.primaryTiles), ['voorraad', 'bijna-op', 'kassa'])
   assert.ok(keys(navigation.moreTiles).includes('locaties'))
   assert.ok(keys(navigation.moreTiles).includes('winkelen'))
+  assert.ok(!keys(navigation.moreTiles).includes('kassa'))
 }
 
 {
