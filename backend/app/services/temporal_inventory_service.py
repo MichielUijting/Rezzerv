@@ -283,9 +283,9 @@ def replay_article(conn, *, household_id: str, household_article_id: str) -> dic
     )
     replayed = replay_running_balances(events)
     replayed_at = datetime.now(timezone.utc).isoformat()
-    for row in replayed:
-        existing_old = _as_decimal_or_none(row.get("old_quantity"))
-        existing_new = _as_decimal_or_none(row.get("new_quantity"))
+    for persisted_row, row in zip(events, replayed):
+        existing_old = _as_decimal_or_none(persisted_row.get("old_quantity"))
+        existing_new = _as_decimal_or_none(persisted_row.get("new_quantity"))
         if existing_old == row["old_quantity"] and existing_new == row["new_quantity"]:
             continue
         conn.execute(text(
