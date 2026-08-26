@@ -1,0 +1,12 @@
+/* Rezzerv native form-control branding.
+   Keep browser-native checkbox/radio behavior, but never browser-default blue. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-brand-primary);
+}
+
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
