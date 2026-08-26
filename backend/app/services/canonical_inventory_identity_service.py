@@ -82,14 +82,22 @@ def _table_exists(conn, table_name: str) -> bool:
     ), {"name": str(table_name)}).scalar())
 
 
+def _index_exists(conn, index_name: str) -> bool:
+    return bool(conn.execute(text(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name=:name LIMIT 1"
+    ), {"name": str(index_name)}).scalar())
+
+
 def ensure_locationless_inventory_identity_guard(conn) -> None:
     """Protect the single active NULL/NULL row per household article in SQLite.
 
-    The duplicate check deliberately runs before creating the partial unique index so
-    an existing inconsistent database fails with a clear error instead of an opaque
-    CREATE INDEX integrity failure.
+    The expensive duplicate scan is only needed before the unique index exists. Once
+    SQLite has installed that index, the index itself is the canonical race/integrity
+    guard and repeating the full grouped scan on every purchase is unnecessary.
     """
     if not _table_exists(conn, "inventory"):
+        return
+    if _index_exists(conn, LOCATIONLESS_ACTIVE_IDENTITY_INDEX):
         return
 
     columns = {
