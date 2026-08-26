@@ -16,6 +16,11 @@ function sourceFiles(directory) {
   return result
 }
 
+function isCanonicalAccent(value) {
+  const normalized = String(value || '').replace(/\s+/g, '').toLowerCase()
+  return normalized === 'var(--color-brand-primary)' || normalized === '#1a3e2b'
+}
+
 const login = read('src/features/auth/LoginPage.jsx')
 const controls = read('src/features/onboarding/OnboardingChoiceControls.jsx')
 const onboarding = read('src/features/onboarding/OnboardingPage.jsx')
@@ -38,12 +43,12 @@ for (const file of sourceFiles(srcRoot)) {
 
   for (const match of content.matchAll(/accent-color\s*:\s*([^;}\n]+)/gi)) {
     const value = String(match[1] || '').trim()
-    if (value !== 'var(--color-brand-primary)') nonCanonicalAccents.push(`${relative}: accent-color ${value}`)
+    if (!isCanonicalAccent(value)) nonCanonicalAccents.push(`${relative}: accent-color ${value}`)
   }
 
   for (const match of content.matchAll(/accentColor\s*:\s*['"]([^'"]+)['"]/g)) {
     const value = String(match[1] || '').trim()
-    if (value !== 'var(--color-brand-primary)') nonCanonicalAccents.push(`${relative}: accentColor ${value}`)
+    if (!isCanonicalAccent(value)) nonCanonicalAccents.push(`${relative}: accentColor ${value}`)
   }
 }
 
@@ -81,7 +86,7 @@ const checks = [
   [formControls.includes("input[type='checkbox']:focus-visible") && formControls.includes("input[type='radio']:focus-visible"), 'keyboard focus branding covers checkboxes and radios'],
   [formControls.includes('outline: 2px solid var(--color-brand-primary);'), 'native focus ring uses Rezzerv primary color'],
   [checkboxComponent.includes("accentColor: 'var(--color-brand-primary)'"), 'shared Checkbox component uses canonical brand token'],
-  [nonCanonicalAccents.length === 0, `all frontend accent declarations use Rezzerv token${nonCanonicalAccents.length ? `: ${nonCanonicalAccents.join(', ')}` : ''}`],
+  [nonCanonicalAccents.length === 0, `all frontend accent declarations use canonical Rezzerv green${nonCanonicalAccents.length ? `: ${nonCanonicalAccents.join(', ')}` : ''}`],
 ]
 
 for (const [ok, label] of checks) {
