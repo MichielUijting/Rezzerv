@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 from app.api.household_onboarding_routes import _public_onboarding_with_product_configuration
 from app.services.household_onboarding_service import (
@@ -10,6 +10,7 @@ from app.services.household_onboarding_service import (
     ONBOARDING_STATUS_COMPLETED,
 )
 from app.services.household_product_configuration_service import (
+    resolve_household_product_configuration,
     save_inhuis_halen_configuration,
     save_wat_inhuis_configuration,
     save_waar_inhuis_configuration,
@@ -63,6 +64,32 @@ def run() -> int:
         assert inhuis_config["receipt_processing_enabled"] is True
         checks.append("inhuis_halen_configuration_is_projected")
 
+        save_inhuis_halen_configuration(
+            conn,
+            household_id="inhuis-halen-no-kassa-household",
+            simple_inventory_enabled=True,
+            almost_out_notifications_enabled=False,
+            receipt_processing_enabled=False,
+            recipes_enabled=False,
+        )
+        inhuis_no_kassa_payload = _public_onboarding_with_product_configuration(
+            conn,
+            _state("inhuis-halen-no-kassa-household", "inhuis_halen"),
+            can_manage=True,
+        )
+        assert (
+            inhuis_no_kassa_payload["product_configuration"]["receipt_processing_enabled"]
+            is False
+        )
+        assert (
+            resolve_household_product_configuration(
+                conn,
+                "inhuis-halen-no-kassa-household",
+            ).receipt_processing_enabled
+            is False
+        )
+        checks.append("non_wat_inhuis_configuration_is_not_upgraded")
+
         save_wat_inhuis_configuration(
             conn,
             household_id="wat-inhuis-household",
@@ -71,6 +98,19 @@ def run() -> int:
             almost_out_enabled=False,
             shopping_enabled=True,
         )
+        conn.execute(text("""
+            UPDATE household_product_configuration
+            SET receipt_processing_enabled = 0
+            WHERE household_id = :household_id
+        """), {"household_id": "wat-inhuis-household"})
+        assert (
+            resolve_household_product_configuration(
+                conn,
+                "wat-inhuis-household",
+            ).receipt_processing_enabled
+            is False
+        )
+
         wat_payload = _public_onboarding_with_product_configuration(
             conn,
             _state("wat-inhuis-household", "wat_inhuis"),
@@ -83,7 +123,14 @@ def run() -> int:
         assert wat_config["shopping_enabled"] is True
         assert wat_config["receipt_processing_enabled"] is True
         assert wat_config["unpacking_enabled"] is False
-        checks.append("wat_inhuis_configuration_is_projected_for_read_only_member")
+        assert (
+            resolve_household_product_configuration(
+                conn,
+                "wat-inhuis-household",
+            ).receipt_processing_enabled
+            is True
+        )
+        checks.append("legacy_wat_inhuis_configuration_is_upgraded_for_kassa")
 
         save_waar_inhuis_configuration(
             conn,
