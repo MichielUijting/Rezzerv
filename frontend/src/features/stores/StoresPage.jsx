@@ -262,7 +262,6 @@ export default function StoresPage() {
                 Lees nieuwe kassabonnen in en hervat open bonnen als dat nodig is.
               </p>
             </div>
-            <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
           </div>
         </Card>
 
