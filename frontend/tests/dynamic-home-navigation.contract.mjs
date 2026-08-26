@@ -32,6 +32,34 @@ function keys(tiles) {
   const navigation = buildHomeNavigation({
     onboarding: {
       onboarding_status: 'completed',
+      primary_use_case: null,
+      product_configuration: {
+        inventory_tracking_level: 'quantity',
+        location_tracking_level: 'none',
+        shopping_enabled: true,
+        almost_out_enabled: true,
+        receipt_processing_enabled: true,
+        unpacking_enabled: true,
+      },
+    },
+    visibility: {
+      ...baseVisibility,
+      canOpenAdmin: true,
+    },
+  })
+  assert.equal(navigation.mode, 'legacy')
+  assert.ok(keys(navigation.primaryTiles).includes('voorraad'))
+  assert.ok(keys(navigation.primaryTiles).includes('kassa'))
+  assert.ok(keys(navigation.primaryTiles).includes('prognoses'))
+  assert.ok(keys(navigation.primaryTiles).includes('recepten'))
+  assert.ok(keys(navigation.primaryTiles).includes('admin'))
+  assert.equal(navigation.moreTiles.length, 0)
+}
+
+{
+  const navigation = buildHomeNavigation({
+    onboarding: {
+      onboarding_status: 'completed',
       primary_use_case: 'inhuis_halen',
       product_configuration: {
         inventory_tracking_level: 'quantity',
