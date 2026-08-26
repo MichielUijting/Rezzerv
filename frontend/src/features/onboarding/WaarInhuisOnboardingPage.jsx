@@ -1,33 +1,9 @@
 import { useMemo, useState } from 'react'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
+import { BooleanRadioChoices, CheckboxChoice, ChoiceSummary, yesNo } from './OnboardingChoiceControls.jsx'
 
 const PRESET_LOCATIONS = ['Keuken', 'Bijkeuken', 'Garage', 'Schuur', 'Zolder', 'Badkamer']
-
-function ChoiceButtons({ yesLabel = 'Ja', noLabel = 'Nee', value, onChange, disabled = false, testId }) {
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      <Button
-        type="button"
-        variant={value ? 'primary' : 'secondary'}
-        disabled={disabled}
-        onClick={() => onChange(true)}
-        data-testid={`${testId}-yes`}
-      >
-        {yesLabel}
-      </Button>
-      <Button
-        type="button"
-        variant={!value ? 'primary' : 'secondary'}
-        disabled={disabled}
-        onClick={() => onChange(false)}
-        data-testid={`${testId}-no`}
-      >
-        {noLabel}
-      </Button>
-    </div>
-  )
-}
 
 function normalizeName(value) {
   return String(value || '').trim().replace(/\s+/g, ' ')
@@ -139,6 +115,17 @@ export default function WaarInhuisOnboardingPage({ onSubmit, saving = false, err
         </p>
       </div>
 
+      <ChoiceSummary
+        items={[
+          { label: 'Hoofdlocaties', value: mainLocations.length ? mainLocations.join(', ') : 'Nog niet gekozen' },
+          { label: 'Locaties verfijnen', value: yesNo(refineLocations, 'Nu', 'Later') },
+          { label: 'Sublocaties', value: refineLocations ? (sublocations.length ? `${sublocations.length} toegevoegd` : 'Nog geen') : 'Later' },
+          { label: 'Uitpakken', value: yesNo(unpacking, 'Nu', 'Later') },
+          { label: 'Kassabonnen', value: yesNo(receiptProcessing, 'Nu', 'Later') },
+          { label: 'Bijna op', value: yesNo(almostOut) },
+        ]}
+      />
+
       <Card>
         <div className="rz-form">
           <div>
@@ -147,20 +134,18 @@ export default function WaarInhuisOnboardingPage({ onSubmit, saving = false, err
               Kies één of meer plekken waar je spullen of voorraad bewaart.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gap: 8 }}>
             {PRESET_LOCATIONS.map((name) => {
               const selected = selectedKeys.has(name.toLocaleLowerCase())
               return (
-                <Button
+                <CheckboxChoice
                   key={name}
-                  type="button"
-                  variant={selected ? 'primary' : 'secondary'}
+                  checked={selected}
                   disabled={saving}
-                  onClick={() => toggleLocation(name)}
-                  data-testid={`waar-inhuis-location-${name.toLocaleLowerCase()}`}
-                >
-                  {name}
-                </Button>
+                  onChange={() => toggleLocation(name)}
+                  label={name}
+                  testId={`waar-inhuis-location-${name.toLocaleLowerCase()}`}
+                />
               )
             })}
           </div>
@@ -206,7 +191,8 @@ export default function WaarInhuisOnboardingPage({ onSubmit, saving = false, err
               Denk aan Voorraadkast, Koelkast, Kast links, Stelling of Lade 2. Dit mag ook later.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Locaties nu al verfijnen"
             yesLabel="Nu verfijnen"
             noLabel="Later"
             value={refineLocations}
@@ -275,7 +261,8 @@ export default function WaarInhuisOnboardingPage({ onSubmit, saving = false, err
               Na een aankoop kan Inhuis je helpen spullen direct aan hun plek te koppelen.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Direct starten met Uitpakken"
             yesLabel="Nu"
             noLabel="Later"
             value={unpacking}
@@ -294,7 +281,8 @@ export default function WaarInhuisOnboardingPage({ onSubmit, saving = false, err
               Hiermee kun je nieuwe aankopen later sneller aan je overzicht toevoegen.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Kassabonnen gebruiken"
             yesLabel="Nu"
             noLabel="Later"
             value={receiptProcessing}
@@ -313,7 +301,8 @@ export default function WaarInhuisOnboardingPage({ onSubmit, saving = false, err
               Activeer dit als je naast terugvinden ook wilt signaleren wat aangevuld moet worden.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Ook Bijna op gebruiken"
             value={almostOut}
             onChange={setAlmostOut}
             disabled={saving}
