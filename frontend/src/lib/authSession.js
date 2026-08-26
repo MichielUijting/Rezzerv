@@ -31,7 +31,9 @@ function normalizedRequestUrl(url) {
 function referenceReadCacheKey(url, method) {
   if (method !== 'GET') return ''
   const normalizedUrl = normalizedRequestUrl(url)
-  return ['/api/spaces', '/api/sublocations'].includes(normalizedUrl) ? normalizedUrl : ''
+  if (!['/api/spaces', '/api/sublocations'].includes(normalizedUrl)) return ''
+  const householdId = String(currentSessionContext?.active_household_id || '').trim()
+  return householdId ? `${normalizedUrl}::${householdId}` : ''
 }
 
 function invalidateReferenceReadCache(url, method) {
@@ -41,9 +43,7 @@ function invalidateReferenceReadCache(url, method) {
     || normalizedUrl.startsWith('/api/spaces/')
     || normalizedUrl === '/api/sublocations'
     || normalizedUrl.startsWith('/api/sublocations/')
-  if (!changesLocations) return
-  referenceReadCache.delete('/api/spaces')
-  referenceReadCache.delete('/api/sublocations')
+  if (changesLocations) referenceReadCache.clear()
 }
 
 function getCachedReferenceResponse(cacheKey) {
@@ -142,7 +142,11 @@ export function getAuthHeaders() { return {} }
 export function readStoredAuthContext() { return currentSessionContext }
 
 export function storeAuthContext(context) {
-  currentSessionContext = normalizeSessionContext(context)
+  const nextContext = normalizeSessionContext(context)
+  const previousHouseholdId = String(currentSessionContext?.active_household_id || '').trim()
+  const nextHouseholdId = String(nextContext?.active_household_id || '').trim()
+  if (previousHouseholdId !== nextHouseholdId) referenceReadCache.clear()
+  currentSessionContext = nextContext
   removeLegacyAuthStorage()
   return currentSessionContext
 }
