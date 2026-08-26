@@ -21,8 +21,16 @@ requireSource(
   'Alleen stabiele locatie-referentielijsten mogen via deze read-cache lopen.',
 )
 requireSource(
-  authSession.includes("referenceReadCache.delete('/api/spaces')")
-    && authSession.includes("referenceReadCache.delete('/api/sublocations')"),
+  authSession.includes("const householdId = String(currentSessionContext?.active_household_id || '').trim()")
+    && authSession.includes('return householdId ? `${normalizedUrl}::${householdId}` :'),
+  'Locatiecache moet expliciet aan het actieve huishouden zijn gebonden.',
+)
+requireSource(
+  authSession.includes('if (previousHouseholdId !== nextHouseholdId) referenceReadCache.clear()'),
+  'Een huishoudwissel moet de locatiecache direct wissen.',
+)
+requireSource(
+  authSession.includes('if (changesLocations) referenceReadCache.clear()'),
   'Locatiecache moet bij locatie-/sublocatiemutaties fail-safe worden geïnvalideerd.',
 )
 requireSource(
