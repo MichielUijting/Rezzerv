@@ -110,12 +110,6 @@ export default function OnboardingPage({ onUseCaseSelected }) {
     }
   }
 
-  async function editPreviousChoices() {
-    const primaryUseCase = String(onboarding?.primary_use_case || '')
-    if (!primaryUseCase) return
-    await choose(primaryUseCase)
-  }
-
   async function completeInhuisHalen(preferences) {
     setError('')
     setSavingProfile(true)
@@ -205,9 +199,8 @@ export default function OnboardingPage({ onUseCaseSelected }) {
                 initialHouseholdName={onboarding?.household_name || ''}
                 primaryUseCaseTitle={primaryUseCaseTitle}
                 previousChoices={persistedProfileChoices(onboarding)}
-                onEditPreviousChoices={editPreviousChoices}
                 onSubmit={completeSharedMinimum}
-                saving={savingProfile || Boolean(savingKey)}
+                saving={savingProfile}
                 error={error}
               />
             ) : (
