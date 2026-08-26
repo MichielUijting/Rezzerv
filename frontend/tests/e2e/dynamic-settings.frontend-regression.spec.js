@@ -102,10 +102,13 @@ test('Wat Inhuis global settings expose main locations without sublocation contr
 
   await page.goto('/instellingen')
   await expect(page.getByTestId('settings-page')).toHaveAttribute('data-settings-mode', 'dynamic')
+  await expect(page.getByTestId('settings-active-profile')).toContainText('Kassabonnen')
   await expect(page.getByTestId('settings-tile-account')).toBeVisible()
   await expect(page.getByTestId('settings-tile-help-about')).toBeVisible()
   await expect(page.getByTestId('settings-tile-locations')).toBeVisible()
-  await expect(page.getByTestId('settings-tile-store-import')).toHaveCount(0)
+  // Wat Inhuis keeps Kassa/receipt processing canonical active even with shopping off,
+  // so the shopping-or-receipts Winkelimport setting remains relevant.
+  await expect(page.getByTestId('settings-tile-store-import')).toBeVisible()
   await expect(page.getByTestId('settings-tile-almost-out')).toHaveCount(0)
   await expect(page.getByTestId('settings-tile-household-automation')).toBeVisible()
 
