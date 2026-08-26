@@ -75,6 +75,7 @@ function primaryKeysFor(onboarding) {
       inventoryEnabled ? 'voorraad' : null,
       almostOutEnabled ? 'bijna-op' : null,
       shoppingEnabled ? 'winkelen' : null,
+      receiptProcessingEnabled ? 'kassa' : null,
     ].filter(Boolean)
   }
 
