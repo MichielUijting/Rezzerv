@@ -25,6 +25,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('backend/app/main.py')
           source = path.read_text(encoding='utf-8')
@@ -85,38 +86,31 @@ jobs:
               }
           '''
 
-          call_old = '''                auto_consume_decision = determine_auto_consume_decision(
-                      conn,
-                      str(batch["household_id"]),
-                      str(article_id),
-                      article_name,
-                      pre_purchase_total,
-                      quantity,
-                  )
-          '''
-          call_new = '''                auto_consume_decision = determine_auto_consume_decision(
-                      conn,
-                      str(batch["household_id"]),
-                      str(article_id),
-                      article_name,
-                      pre_purchase_total,
-                      quantity,
-                      purchase_date=purchase_date,
-                  )
-          '''
-
           replacements = [
               ('import', import_anchor, import_replacement),
               ('signature', signature_old, signature_new),
               ('deduction', deduction_old, deduction_new),
               ('return', return_old, return_new),
-              ('call', call_old, call_new),
           ]
           for label, old, new in replacements:
               count = source.count(old)
               if count != 1:
                   raise SystemExit(f'{label} anchor count expected 1, got {count}')
               source = source.replace(old, new, 1)
+
+          call_pattern = re.compile(
+              r'(?P<prefix>auto_consume_decision\s*=\s*determine_auto_consume_decision\(\s*'
+              r'conn,\s*str\(batch\["household_id"\]\),\s*str\(article_id\),\s*'
+              r'article_name,\s*pre_purchase_total,\s*quantity,)(?P<suffix>\s*\))'
+          )
+          call_matches = list(call_pattern.finditer(source))
+          if len(call_matches) != 1:
+              raise SystemExit(f'call anchor count expected 1, got {len(call_matches)}')
+          source = call_pattern.sub(
+              lambda match: match.group('prefix') + '\n                    purchase_date=purchase_date,' + match.group('suffix'),
+              source,
+              count=1,
+          )
 
           path.write_text(source, encoding='utf-8')
           PY
