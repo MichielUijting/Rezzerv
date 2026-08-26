@@ -65,6 +65,8 @@ const checks = [
   [onboarding.includes('Welkom bij Inhuis · ${primaryUseCaseTitle}'), 'selected primary use case is visible in header'],
   [inhuis.includes('<ChoiceSummary'), 'Inhuis halen shows live selected settings'],
   [wat.includes('<ChoiceSummary'), 'Wat Inhuis shows live selected settings'],
+  [wat.includes("{ label: 'Kassa', value: 'Actief' }"), 'Wat Inhuis shows Kassa active by default'],
+  [wat.includes('Kassa staat standaard aan, zodat Inhuis kan vastleggen wat je aankopen zijn.'), 'Wat Inhuis explains why Kassa is active'],
   [waar.includes('<ChoiceSummary'), 'Waar Inhuis shows live selected settings'],
   [waar.includes('<CheckboxChoice'), 'Waar Inhuis location choices are checkboxes'],
   [shared.includes('title="Jouw volledige inrichting"'), 'final household step reviews the complete setup'],
