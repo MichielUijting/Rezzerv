@@ -1,9 +1,11 @@
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
 const FRONTTEAM_EXTERNAL_DATABASES_PERMISSION = 'frontteam.external_databases.access'
 const SYSTEM_HOUSEHOLD_ACCESS_PERMISSION = 'platform.system_household.access'
+const REFERENCE_READ_CACHE_TTL_MS = 60_000
 
 let currentSessionContext = null
 let sessionRequest = null
+const referenceReadCache = new Map()
 
 function safeWindow() {
   return typeof window !== 'undefined' ? window : null
@@ -16,6 +18,51 @@ function normalizeRoleValue(value) {
 function normalizeContextType(value) {
   const normalized = String(value || '').trim().toLowerCase()
   return ['regular', 'system', 'none'].includes(normalized) ? normalized : ''
+}
+
+function normalizedRequestMethod(options = {}) {
+  return String(options?.method || 'GET').trim().toUpperCase() || 'GET'
+}
+
+function normalizedRequestUrl(url) {
+  return String(url || '').split('?')[0]
+}
+
+function referenceReadCacheKey(url, method) {
+  if (method !== 'GET') return ''
+  const normalizedUrl = normalizedRequestUrl(url)
+  return ['/api/spaces', '/api/sublocations'].includes(normalizedUrl) ? normalizedUrl : ''
+}
+
+function invalidateReferenceReadCache(url, method) {
+  if (method === 'GET') return
+  const normalizedUrl = normalizedRequestUrl(url)
+  const changesLocations = normalizedUrl === '/api/spaces'
+    || normalizedUrl.startsWith('/api/spaces/')
+    || normalizedUrl === '/api/sublocations'
+    || normalizedUrl.startsWith('/api/sublocations/')
+  if (!changesLocations) return
+  referenceReadCache.delete('/api/spaces')
+  referenceReadCache.delete('/api/sublocations')
+}
+
+function getCachedReferenceResponse(cacheKey) {
+  if (!cacheKey) return null
+  const cached = referenceReadCache.get(cacheKey)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    referenceReadCache.delete(cacheKey)
+    return null
+  }
+  return cached.response.clone()
+}
+
+function cacheReferenceResponse(cacheKey, response) {
+  if (!cacheKey || !response?.ok) return
+  referenceReadCache.set(cacheKey, {
+    expiresAt: Date.now() + REFERENCE_READ_CACHE_TTL_MS,
+    response: response.clone(),
+  })
 }
 
 const NON_VIEWER_HOUSEHOLD_ROLES = new Set([
@@ -124,6 +171,7 @@ export function setLoginMessage(message) {
 export function clearAuthSession(message = '') {
   currentSessionContext = null
   sessionRequest = null
+  referenceReadCache.clear()
   removeLegacyAuthStorage()
   setLoginMessage(message)
 }
@@ -183,6 +231,13 @@ export async function fetchJsonWithAuth(url, options = {}) {
   delete mergedHeaders.Authorization
   delete mergedHeaders.authorization
 
+  const requestMethod = normalizedRequestMethod(restOptions)
+  const normalizedUrl = normalizedRequestUrl(url)
+  const cacheKey = referenceReadCacheKey(url, requestMethod)
+  const cachedResponse = getCachedReferenceResponse(cacheKey)
+  if (cachedResponse) return cachedResponse
+  invalidateReferenceReadCache(url, requestMethod)
+
   const response = await fetch(url, {
     ...restOptions, credentials: 'include', headers: mergedHeaders, cache,
   })
@@ -193,7 +248,8 @@ export async function fetchJsonWithAuth(url, options = {}) {
     throw error
   }
 
-  const normalizedUrl = String(url || '').split('?')[0]
+  cacheReferenceResponse(cacheKey, response)
+
   if (response.ok && normalizedUrl === '/api/household') {
     try {
       const payload = await response.clone().json()
