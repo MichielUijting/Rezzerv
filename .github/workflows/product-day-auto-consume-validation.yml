@@ -6,6 +6,7 @@ on:
       - 'backend/app/main.py'
       - 'backend/app/services/product_day_auto_consume_service.py'
       - 'backend/tests/test_product_day_auto_consume_service.py'
+      - 'backend/tests/test_product_day_auto_consume_processing_order.py'
       - 'backend/tests/test_product_day_auto_consume_integration_contract.py'
       - '.github/workflows/product-day-auto-consume-validation.yml'
   workflow_dispatch:
@@ -28,6 +29,7 @@ jobs:
             backend/app/main.py \
             backend/app/services/product_day_auto_consume_service.py \
             backend/tests/test_product_day_auto_consume_service.py \
+            backend/tests/test_product_day_auto_consume_processing_order.py \
             backend/tests/test_product_day_auto_consume_integration_contract.py
 
       - name: Install focused test dependencies
@@ -36,4 +38,7 @@ jobs:
       - name: Run product-day auto-consume regressions
         env:
           PYTHONPATH: backend
-        run: pytest -q backend/tests/test_product_day_auto_consume_service.py backend/tests/test_product_day_auto_consume_integration_contract.py
+        run: pytest -q \
+          backend/tests/test_product_day_auto_consume_service.py \
+          backend/tests/test_product_day_auto_consume_processing_order.py \
+          backend/tests/test_product_day_auto_consume_integration_contract.py
