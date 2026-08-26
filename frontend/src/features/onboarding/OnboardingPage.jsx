@@ -7,6 +7,7 @@ import InhuisHalenOnboardingPage from './InhuisHalenOnboardingPage.jsx'
 import WatInhuisOnboardingPage from './WatInhuisOnboardingPage.jsx'
 import WaarInhuisOnboardingPage from './WaarInhuisOnboardingPage.jsx'
 import SharedHouseholdMinimumPage from './SharedHouseholdMinimumPage.jsx'
+import { ChoiceSummary, RadioChoices } from './OnboardingChoiceControls.jsx'
 import {
   completeInhuisHalenOnboarding,
   completeSharedHouseholdMinimum,
@@ -41,24 +42,78 @@ const OPTIONS = [
   },
 ]
 
+function optionTitle(key) {
+  return OPTIONS.find((option) => option.key === key)?.title || ''
+}
+
+function onOff(value, onLabel = 'Ja', offLabel = 'Nee') {
+  return value ? onLabel : offLabel
+}
+
+function persistedProfileChoices(onboarding) {
+  const config = onboarding?.product_configuration
+  if (!config) return []
+
+  if (onboarding?.primary_use_case === 'inhuis_halen') {
+    return [
+      { label: 'Eenvoudige voorraad', value: onOff(config.simple_inventory_enabled) },
+      { label: 'Bijna-op meldingen', value: onOff(config.almost_out_notifications_enabled) },
+      { label: 'Kassabonnen', value: onOff(config.receipt_processing_enabled, 'Nu', 'Later') },
+      { label: 'Gerechten', value: onOff(config.recipes_enabled, 'Nu', 'Later') },
+    ]
+  }
+
+  if (onboarding?.primary_use_case === 'wat_inhuis') {
+    return [
+      { label: 'Voorraad bijhouden', value: config.inventory_tracking_level === 'quantity' ? 'Ook aantallen' : 'Alleen aanwezigheid' },
+      { label: 'Globale plekken', value: config.location_tracking_level === 'global' ? 'Ja' : 'Nee' },
+      { label: 'Bijna op', value: onOff(config.almost_out_enabled) },
+      { label: 'Winkelen', value: onOff(config.shopping_enabled, 'Nu', 'Later') },
+    ]
+  }
+
+  if (onboarding?.primary_use_case === 'waar_inhuis') {
+    return [
+      { label: 'Locaties', value: config.location_tracking_level === 'exact' ? 'Exacte plekken' : 'Geen exacte plekken' },
+      { label: 'Uitpakken', value: onOff(config.unpacking_enabled, 'Nu', 'Later') },
+      { label: 'Kassabonnen', value: onOff(config.receipt_processing_enabled, 'Nu', 'Later') },
+      { label: 'Bijna op', value: onOff(config.almost_out_enabled) },
+    ]
+  }
+
+  return []
+}
+
 export default function OnboardingPage({ onUseCaseSelected }) {
   const context = readStoredAuthContext()
-  const [onboarding, setOnboarding] = useState(() => readHouseholdOnboarding(context))
+  const initialOnboarding = readHouseholdOnboarding(context)
+  const [onboarding, setOnboarding] = useState(() => initialOnboarding)
+  const [selectedPrimaryUseCase, setSelectedPrimaryUseCase] = useState(
+    () => String(initialOnboarding?.primary_use_case || ''),
+  )
   const [savingKey, setSavingKey] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
   const [error, setError] = useState('')
 
-  async function choose(primaryUseCase) {
+  async function choose(primaryUseCase = selectedPrimaryUseCase) {
+    if (!primaryUseCase) return
     setError('')
     setSavingKey(primaryUseCase)
     try {
       const updated = await selectPrimaryUseCase(context, primaryUseCase)
       setOnboarding(updated)
+      setSelectedPrimaryUseCase(primaryUseCase)
     } catch (err) {
       setError(err?.message || 'Gebruiksdoel opslaan mislukt.')
     } finally {
       setSavingKey('')
     }
+  }
+
+  async function editPreviousChoices() {
+    const primaryUseCase = String(onboarding?.primary_use_case || '')
+    if (!primaryUseCase) return
+    await choose(primaryUseCase)
   }
 
   async function completeInhuisHalen(preferences) {
@@ -119,10 +174,11 @@ export default function OnboardingPage({ onUseCaseSelected }) {
   const showWatInhuisFollowUp = isWatInhuisFollowUp(onboarding)
   const showWaarInhuisFollowUp = isWaarInhuisFollowUp(onboarding)
   const showSharedHouseholdMinimum = isSharedHouseholdMinimum(onboarding)
+  const primaryUseCaseTitle = optionTitle(onboarding?.primary_use_case || selectedPrimaryUseCase)
 
   return (
     <div className="rz-screen" data-testid="onboarding-use-case-page">
-      <Header title="Welkom bij Inhuis" />
+      <Header title={primaryUseCaseTitle ? `Welkom bij Inhuis · ${primaryUseCaseTitle}` : 'Welkom bij Inhuis'} />
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card>
@@ -147,8 +203,11 @@ export default function OnboardingPage({ onUseCaseSelected }) {
             ) : showSharedHouseholdMinimum ? (
               <SharedHouseholdMinimumPage
                 initialHouseholdName={onboarding?.household_name || ''}
+                primaryUseCaseTitle={primaryUseCaseTitle}
+                previousChoices={persistedProfileChoices(onboarding)}
+                onEditPreviousChoices={editPreviousChoices}
                 onSubmit={completeSharedMinimum}
-                saving={savingProfile}
+                saving={savingProfile || Boolean(savingKey)}
                 error={error}
               />
             ) : (
@@ -156,33 +215,42 @@ export default function OnboardingPage({ onUseCaseSelected }) {
                 <div>
                   <h1 style={{ marginTop: 0 }}>Waar wil je Inhuis mee beginnen?</h1>
                   <p>
-                    Kies wat je nu het meest helpt. Daarmee bepaalt Inhuis welke vervolgstappen voor jou relevant zijn.
+                    Kies wat je nu het meest helpt. De keuze wordt pas opgeslagen als je op Verder drukt.
                   </p>
                 </div>
 
-                {OPTIONS.map((option) => (
-                  <Card key={option.key}>
-                    <div className="rz-form">
-                      <div>
-                        <h2 style={{ marginTop: 0, marginBottom: 6 }}>{option.title}</h2>
-                        <strong>{option.question}</strong>
-                        <p style={{ marginBottom: 0 }}>{option.description}</p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        disabled={Boolean(savingKey)}
-                        onClick={() => choose(option.key)}
-                        data-testid={`onboarding-choice-${option.key}`}
-                      >
-                        {savingKey === option.key ? 'Opslaan…' : `Start met ${option.title}`}
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
+                <ChoiceSummary
+                  items={[
+                    { label: 'Start met', value: optionTitle(selectedPrimaryUseCase) || 'Nog niet gekozen' },
+                  ]}
+                />
+
+                <RadioChoices
+                  name="Waar wil je Inhuis mee beginnen"
+                  value={selectedPrimaryUseCase}
+                  onChange={setSelectedPrimaryUseCase}
+                  disabled={Boolean(savingKey)}
+                  testId="onboarding-choice"
+                  options={OPTIONS.map((option) => ({
+                    value: option.key,
+                    label: option.title,
+                    description: `${option.question} ${option.description}`,
+                    testId: `onboarding-choice-${option.key}`,
+                  }))}
+                />
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!selectedPrimaryUseCase || Boolean(savingKey)}
+                  onClick={() => choose()}
+                  data-testid="onboarding-primary-continue"
+                >
+                  {savingKey ? 'Opslaan…' : 'Verder'}
+                </Button>
 
                 <p style={{ marginBottom: 0 }}>
-                  <strong>Je kunt later altijd andere mogelijkheden toevoegen.</strong>
+                  <strong>Je kunt vóór Verder altijd een andere radioknop kiezen.</strong>
                 </p>
 
                 {error ? <div className="rz-alert">{error}</div> : null}
