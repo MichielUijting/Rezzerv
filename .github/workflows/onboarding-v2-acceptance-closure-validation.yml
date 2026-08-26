@@ -120,6 +120,10 @@ jobs:
           node tests/dynamic-settings-navigation.contract.mjs
           node tests/circular-capability-expansion.contract.mjs
 
+      - name: Validate onboarding choice visibility UX
+        working-directory: frontend
+        run: node tests/onboarding-choice-visibility.contract.mjs
+
       - name: Validate I.2/I.4 frontend invitation contracts
         working-directory: frontend
         shell: bash
