@@ -85,12 +85,20 @@ jobs:
               }
           '''
 
-          call_old = '''                    article_name,
+          call_old = '''                auto_consume_decision = determine_auto_consume_decision(
+                      conn,
+                      str(batch["household_id"]),
+                      str(article_id),
+                      article_name,
                       pre_purchase_total,
                       quantity,
                   )
           '''
-          call_new = '''                    article_name,
+          call_new = '''                auto_consume_decision = determine_auto_consume_decision(
+                      conn,
+                      str(batch["household_id"]),
+                      str(article_id),
+                      article_name,
                       pre_purchase_total,
                       quantity,
                       purchase_date=purchase_date,
