@@ -2,7 +2,10 @@ import { useState } from 'react'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
-import { createHouseholdInvitation } from '../settings/services/householdInvitationsService.js'
+import {
+  createHouseholdInvitation,
+  revokeHouseholdInvitation,
+} from '../settings/services/householdInvitationsService.js'
 import { ChoiceSummary, RadioChoices } from './OnboardingChoiceControls.jsx'
 
 function invitationMessage(email, delivery) {
@@ -31,17 +34,38 @@ export default function SharedHouseholdMinimumPage({
   const [inviteSaving, setInviteSaving] = useState(false)
   const [inviteMessage, setInviteMessage] = useState('')
   const [inviteError, setInviteError] = useState('')
+  const [onboardingInvitations, setOnboardingInvitations] = useState([])
 
-  const canFinish = Boolean(String(householdName || '').trim() && usageMode)
+  const canFinish = Boolean(String(householdName || '').trim() && usageMode && !inviteSaving)
   const normalizedInviteEmail = String(inviteEmail || '').trim().toLowerCase()
   const canInvite = usageMode === 'together' && normalizedInviteEmail.includes('@') && !inviteSaving
 
-  function changeUsageMode(nextMode) {
-    setUsageMode(nextMode)
+  async function changeUsageMode(nextMode) {
+    if (nextMode === usageMode || inviteSaving) return
     setInviteError('')
-    if (nextMode !== 'together') {
-      setInviteMessage('')
+
+    if (nextMode === 'alone' && onboardingInvitations.length) {
+      setInviteSaving(true)
+      try {
+        for (const invitation of onboardingInvitations) {
+          await revokeHouseholdInvitation(invitation.id)
+        }
+        setOnboardingInvitations([])
+        setInviteMessage('')
+        setInviteEmail('')
+      } catch (err) {
+        setInviteError(
+          err?.message
+          || 'De eerder verstuurde uitnodiging kon niet worden ingetrokken. Samen blijft daarom geselecteerd.',
+        )
+        return
+      } finally {
+        setInviteSaving(false)
+      }
     }
+
+    setUsageMode(nextMode)
+    if (nextMode !== 'together') setInviteMessage('')
   }
 
   async function sendInvitation(event) {
@@ -52,6 +76,13 @@ export default function SharedHouseholdMinimumPage({
     setInviteMessage('')
     try {
       const payload = await createHouseholdInvitation({ email: normalizedInviteEmail })
+      const invitation = payload?.invitation
+      if (invitation?.id) {
+        setOnboardingInvitations((current) => [
+          ...current,
+          { id: String(invitation.id), email: normalizedInviteEmail },
+        ])
+      }
       setInviteMessage(invitationMessage(normalizedInviteEmail, payload?.delivery))
     } catch (err) {
       setInviteError(err?.message || 'De uitnodiging kon niet worden aangemaakt.')
@@ -68,6 +99,8 @@ export default function SharedHouseholdMinimumPage({
     })
   }
 
+  const invitedEmails = onboardingInvitations.map((item) => item.email)
+
   return (
     <div className="rz-form" data-testid="onboarding-shared-household-minimum">
       <div>
@@ -83,7 +116,10 @@ export default function SharedHouseholdMinimumPage({
           ...previousChoices,
           { label: 'Naam huishouden', value: String(householdName || '').trim() || 'Nog niet ingevuld' },
           { label: 'Gebruik huishouden', value: usageMode === 'together' ? 'Samen' : usageMode === 'alone' ? 'Alleen' : 'Nog niet gekozen' },
-          ...(usageMode === 'together' ? [{ label: 'Uitnodiging', value: inviteMessage || normalizedInviteEmail || 'Nog geen e-mailadres' }] : []),
+          ...(usageMode === 'together' ? [{
+            label: 'Uitgenodigd',
+            value: invitedEmails.length ? invitedEmails.join(', ') : normalizedInviteEmail || 'Nog niemand',
+          }] : []),
         ]}
         title="Jouw volledige inrichting"
       />
@@ -100,7 +136,7 @@ export default function SharedHouseholdMinimumPage({
             label="Naam huishouden"
             value={householdName}
             onChange={(event) => setHouseholdName(event.target.value)}
-            disabled={saving}
+            disabled={saving || inviteSaving}
             required
             maxLength={120}
             placeholder="Bijvoorbeeld Familie Jansen"
@@ -121,13 +157,18 @@ export default function SharedHouseholdMinimumPage({
             name="Gebruik je Inhuis alleen of samen"
             value={usageMode}
             onChange={changeUsageMode}
-            disabled={saving}
+            disabled={saving || inviteSaving}
             testId="shared-household-usage"
             options={[
               { value: 'alone', label: 'Alleen', testId: 'shared-household-usage-alone' },
               { value: 'together', label: 'Samen', testId: 'shared-household-usage-together' },
             ]}
           />
+          {usageMode === 'together' && onboardingInvitations.length ? (
+            <small>
+              Kies je alsnog Alleen, dan trekt Inhuis de uitnodiging(en) die je in deze stap hebt verstuurd eerst in.
+            </small>
+          ) : null}
         </div>
       </Card>
 
@@ -160,7 +201,7 @@ export default function SharedHouseholdMinimumPage({
               disabled={saving || !canInvite}
               data-testid="shared-household-invite-send"
             >
-              {inviteSaving ? 'Uitnodigen…' : 'Uitnodiging versturen'}
+              {inviteSaving ? 'Bezig…' : 'Uitnodiging versturen'}
             </Button>
             {inviteMessage ? <div className="rz-inline-feedback" data-testid="shared-household-invite-success">{inviteMessage}</div> : null}
             {inviteError ? <div className="rz-alert" data-testid="shared-household-invite-error">{inviteError}</div> : null}
