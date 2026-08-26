@@ -21,6 +21,7 @@ export default function SharedHouseholdMinimumPage({
   initialHouseholdName = '',
   primaryUseCaseTitle = '',
   previousChoices = [],
+  onEditPreviousChoices,
   onSubmit,
   saving = false,
   error = '',
@@ -87,6 +88,18 @@ export default function SharedHouseholdMinimumPage({
         ]}
         title="Jouw volledige inrichting"
       />
+
+      {onEditPreviousChoices ? (
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={saving || inviteSaving}
+          onClick={onEditPreviousChoices}
+          data-testid="shared-household-edit-previous-choices"
+        >
+          Vorige keuzes wijzigen
+        </Button>
+      ) : null}
 
       <Card>
         <div className="rz-form">
