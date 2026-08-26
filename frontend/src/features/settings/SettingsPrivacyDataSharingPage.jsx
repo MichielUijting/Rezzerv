@@ -166,7 +166,7 @@ export default function SettingsPrivacyDataSharingPage() {
                       onChange={(event) => updateSetting(item.key, event.target.checked)}
                       disabled={isSaving}
                       data-testid={`privacy-setting-${item.key}`}
-                      style={{ marginTop: '2px', accentColor: '#1f6f43', width: '18px', height: '18px', cursor: isSaving ? 'not-allowed' : 'pointer' }}
+                      style={{ marginTop: '2px', accentColor: 'var(--color-brand-primary)', width: '18px', height: '18px', cursor: isSaving ? 'not-allowed' : 'pointer' }}
                     />
                     <span>
                       <strong>{item.title}</strong><br />
