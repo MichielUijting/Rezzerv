@@ -23,13 +23,14 @@ export default function WatInhuisOnboardingPage({ onSubmit, saving = false, erro
       <div>
         <h1 style={{ marginTop: 0 }}>Wat Inhuis</h1>
         <p>
-          Kies hoeveel detail je nu wilt bijhouden. Exacte opslagplekken zijn niet nodig.
+          Kies hoeveel detail je nu wilt bijhouden. Exacte opslagplekken zijn niet nodig. Kassa staat standaard aan, zodat Inhuis kan vastleggen wat je aankopen zijn.
         </p>
       </div>
 
       <ChoiceSummary
         items={[
           { label: 'Voorraad bijhouden', value: inventoryTrackingLevel === 'quantity' ? 'Ook aantallen' : 'Alleen aanwezigheid' },
+          { label: 'Kassa', value: 'Actief' },
           { label: 'Globale plekken', value: yesNo(globalLocations) },
           { label: 'Bijna op', value: yesNo(almostOut) },
           { label: 'Winkelen', value: yesNo(shopping, 'Nu', 'Later') },
