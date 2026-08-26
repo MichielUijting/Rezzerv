@@ -298,6 +298,31 @@ def resolve_household_product_configuration(
     )
 
 
+def resolve_canonical_household_product_configuration(
+    conn,
+    *,
+    household_id: str,
+    primary_use_case: str | None,
+) -> HouseholdProductConfiguration:
+    configuration = resolve_household_product_configuration(conn, household_id)
+    normalized_primary_use_case = str(primary_use_case or "").strip().lower()
+
+    if (
+        normalized_primary_use_case != "wat_inhuis"
+        or configuration.receipt_processing_enabled
+    ):
+        return configuration
+
+    conn.execute(text("""
+        UPDATE household_product_configuration
+        SET receipt_processing_enabled = 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE household_id = :household_id
+          AND receipt_processing_enabled = 0
+    """), {"household_id": configuration.household_id})
+    return resolve_household_product_configuration(conn, configuration.household_id)
+
+
 def public_household_product_configuration_payload(
     configuration: HouseholdProductConfiguration,
 ) -> dict[str, Any]:
