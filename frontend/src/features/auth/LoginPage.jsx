@@ -12,6 +12,7 @@ import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 export default function LoginPage({ onLoggedIn }) {
   const [email, setEmail] = useState('admin@rezzerv.local')
   const [password, setPassword] = useState('Rezzerv123')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [loginMessage] = useState(() => getLoginMessage())
@@ -51,12 +52,22 @@ export default function LoginPage({ onLoggedIn }) {
               />
               <Input
                 label="Wachtwoord"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Rezzerv123"
                 data-testid="login-password"
               />
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={showPassword}
+                  onChange={(event) => setShowPassword(event.target.checked)}
+                  data-testid="login-show-password"
+                />
+                <span>Wachtwoord tonen</span>
+              </label>
 
               <Button type="submit" variant="primary" disabled={loading} className="rz-btn-center" data-testid="login-submit">
                 {loading ? 'Bezig...' : 'Inloggen'}
