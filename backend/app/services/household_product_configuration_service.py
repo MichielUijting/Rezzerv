@@ -167,7 +167,7 @@ def save_wat_inhuis_configuration(
             :shopping_enabled,
             :almost_out_enabled,
             0,
-            0,
+            1,
             0,
             0,
             CURRENT_TIMESTAMP,
@@ -179,7 +179,7 @@ def save_wat_inhuis_configuration(
             shopping_enabled = excluded.shopping_enabled,
             almost_out_enabled = excluded.almost_out_enabled,
             almost_out_notifications_enabled = 0,
-            receipt_processing_enabled = 0,
+            receipt_processing_enabled = 1,
             recipes_enabled = 0,
             unpacking_enabled = 0,
             updated_at = CURRENT_TIMESTAMP
