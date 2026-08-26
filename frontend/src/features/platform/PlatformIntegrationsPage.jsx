@@ -1,5 +1,4 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -35,7 +34,6 @@ function statusLabel(status) {
 }
 
 export default function PlatformIntegrationsPage() {
-  const navigate = useNavigate()
   const [loading, setLoading] = React.useState(true)
   const [refreshing, setRefreshing] = React.useState(false)
   const [items, setItems] = React.useState([])
@@ -114,10 +112,6 @@ export default function PlatformIntegrationsPage() {
                 </Card>
               </div>
             )) : null}
-
-            <Button type="button" variant="secondary" onClick={() => navigate('/home')}>
-              Terug naar platformbeheer
-            </Button>
           </Card>
         </div>
       </div>

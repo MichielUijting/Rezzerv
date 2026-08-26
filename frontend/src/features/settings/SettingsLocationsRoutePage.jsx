@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import { readStoredAuthContext } from '../../lib/authSession.js'
@@ -67,7 +66,6 @@ export default function SettingsLocationsRoutePage() {
           <p style={{ margin: 0, color: '#667085' }}>
             Dit huishouden gebruikt momenteel geen locaties. Activeer later een locatiemogelijkheid via de productinrichting van Inhuis.
           </p>
-          <div><Link to="/instellingen">← Terug naar instellingen</Link></div>
         </div>
       </Card>
     </AppShell>

@@ -372,9 +372,22 @@ export default function IncidentalPurchasePage() {
     purchaseLookupRequestRef.current = normalizedBarcode
     setPurchaseLookupState({ status: 'loading', message: `Barcode ${normalizedBarcode} controleren…` })
     setPurchaseSaveState({ status: 'idle', message: '' })
-    const result = await scanBarcodeArticle(normalizedBarcode)
-    applyBarcodeLookupResult(normalizedBarcode, result)
-    logEvent?.('ENRICH_TRIGGERED', { barcode: String(barcode || '').trim(), found: Boolean(result?.found || result?.external_match) })
+    try {
+      logEvent?.('ENRICH_TRIGGERED', { barcode: normalizedBarcode })
+      const result = await scanBarcodeArticle(normalizedBarcode)
+      if (purchaseLookupRequestRef.current !== normalizedBarcode) return
+      applyBarcodeLookupResult(normalizedBarcode, result)
+      logEvent?.('ENRICH_COMPLETED', {
+        barcode: normalizedBarcode,
+        found: Boolean(result?.found),
+        externalMatch: Boolean(result?.external_match),
+        articleName: String(result?.article?.name || ''),
+      })
+    } catch (error) {
+      if (purchaseLookupRequestRef.current !== normalizedBarcode) return
+      setPurchaseLookupState({ status: 'error', message: error.message || 'Barcode controleren mislukt' })
+      logEvent?.('ENRICH_FAILED', { barcode: normalizedBarcode, message: error?.message || 'Barcode controleren mislukt' })
+    }
   }
 
   async function handleOpenBarcodeCamera() {
@@ -442,7 +455,6 @@ export default function IncidentalPurchasePage() {
                 {purchaseCameraState.status === 'loading' ? 'Camera openen…' : purchaseLookupState.status === 'loading' ? 'Barcode scannen…' : 'Barcode scannen'}
               </Button>
             ) : null}
-            <Button type="button" variant="secondary" onClick={() => navigate('/voorraad')}>Terug naar Voorraad</Button>
             {!isMobileScanner ? <span style={{ color: '#475467', fontSize: 14 }}>Gebruik mobiel voor live scannen of vul de barcode hieronder handmatig in.</span> : null}
           </div>
 

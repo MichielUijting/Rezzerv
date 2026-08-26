@@ -40,7 +40,6 @@ export default function SettingsHelpAboutPage() {
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Hulp & Over</h2>
               <p style={{ margin: 0, color: '#667085' }}>Ondersteuning en informatie over Inhuis.</p>
             </div>
-            <Link to="/instellingen" style={{ textDecoration: 'none', fontWeight: 600 }}>← Terug naar instellingen</Link>
           </div>
 
           <section style={{ display: 'grid', gap: '8px' }} aria-labelledby="help-about-version-title">

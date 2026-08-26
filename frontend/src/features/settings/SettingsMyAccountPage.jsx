@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -73,7 +72,6 @@ export default function SettingsMyAccountPage() {
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Mijn account</h2>
               <p style={{ margin: 0, color: '#667085' }}>Bekijk je inlogadres en beheer je wachtwoord.</p>
             </div>
-            <Link to="/instellingen" style={{ textDecoration: 'none', fontWeight: 600 }}>← Terug naar instellingen</Link>
           </div>
 
           <section style={{ display: 'grid', gap: '12px' }} aria-labelledby="account-identity-title">

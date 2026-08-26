@@ -1,5 +1,4 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -35,7 +34,6 @@ async function fetchPlatformLogs(level, signal) {
 }
 
 export default function PlatformLogsPage() {
-  const navigate = useNavigate()
   const [items, setItems] = React.useState([])
   const [levels, setLevels] = React.useState(FALLBACK_LEVELS)
   const [level, setLevel] = React.useState('')
@@ -135,9 +133,6 @@ export default function PlatformLogsPage() {
             <div>
               <Button type="button" variant="secondary" onClick={() => setReloadKey((value) => value + 1)}>
                 Vernieuwen
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => navigate('/home')}>
-                Terug naar platformbeheer
               </Button>
             </div>
           </Card>

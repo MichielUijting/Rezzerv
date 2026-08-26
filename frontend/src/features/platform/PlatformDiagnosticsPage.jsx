@@ -1,5 +1,4 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -38,7 +37,6 @@ async function fetchDiagnosticStatus(endpoint, signal) {
 }
 
 export default function PlatformDiagnosticsPage() {
-  const navigate = useNavigate()
   const [statuses, setStatuses] = React.useState({})
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
@@ -113,9 +111,6 @@ export default function PlatformDiagnosticsPage() {
             <div>
               <Button type="button" variant="secondary" onClick={() => setReloadKey((value) => value + 1)}>
                 Vernieuwen
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => navigate('/home')}>
-                Terug naar platformbeheer
               </Button>
             </div>
           </Card>

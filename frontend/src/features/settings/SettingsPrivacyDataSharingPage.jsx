@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useBlocker } from 'react-router-dom'
+import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -146,7 +146,6 @@ export default function SettingsPrivacyDataSharingPage() {
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Privacy &amp; Datadeling</h2>
               <p style={{ margin: 0, color: '#667085' }}>Beheer hier per gebruiker welke data mag worden gebruikt. Alles staat standaard uit en alleen jij kunt dit voor jezelf wijzigen.</p>
             </div>
-            <Link to="/instellingen" style={{ textDecoration: 'none', fontWeight: 600 }}>← Terug naar instellingen</Link>
           </div>
 
           {(message || error) ? (

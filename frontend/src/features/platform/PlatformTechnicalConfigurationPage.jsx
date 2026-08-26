@@ -1,5 +1,4 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -66,7 +65,6 @@ function ActionResult({ actionKey, result }) {
 }
 
 export default function PlatformTechnicalConfigurationPage() {
-  const navigate = useNavigate()
   const [confirming, setConfirming] = React.useState('')
   const [running, setRunning] = React.useState('')
   const [results, setResults] = React.useState({})
@@ -130,10 +128,6 @@ export default function PlatformTechnicalConfigurationPage() {
                 </Card>
               </div>
             ))}
-
-            <Button type="button" variant="secondary" onClick={() => navigate('/home')} disabled={Boolean(running)}>
-              Terug naar platformbeheer
-            </Button>
           </Card>
         </div>
       </div>
