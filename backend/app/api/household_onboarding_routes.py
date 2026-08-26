@@ -20,7 +20,7 @@ from app.services.household_onboarding_service import (
 )
 from app.services.household_product_configuration_service import (
     public_household_product_configuration_payload,
-    resolve_household_product_configuration,
+    resolve_canonical_household_product_configuration,
     save_inhuis_halen_configuration,
     save_wat_inhuis_configuration,
     save_waar_inhuis_configuration,
@@ -250,7 +250,11 @@ def _require_profile_follow_up(conn, *, household_id: str, primary_use_case: str
 
 def _public_onboarding_with_product_configuration(conn, state, *, can_manage: bool) -> dict:
     try:
-        configuration = resolve_household_product_configuration(conn, state.household_id)
+        configuration = resolve_canonical_household_product_configuration(
+            conn,
+            household_id=state.household_id,
+            primary_use_case=state.primary_use_case,
+        )
     except LookupError:
         configuration_payload = None
     else:
