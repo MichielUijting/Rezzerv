@@ -27,6 +27,12 @@ const LOCATIONS_TILE = {
   clickable: true,
 }
 
+const DYNAMIC_PRIMARY_USE_CASES = new Set([
+  'inhuis_halen',
+  'wat_inhuis',
+  'waar_inhuis',
+])
+
 function isVisible(tile, visibility) {
   if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser
   if (tile.key === 'admin') return visibility.canOpenAdmin
@@ -101,8 +107,13 @@ export function buildHomeNavigation({ onboarding, visibility }) {
     canManageLocations: Boolean(visibility?.canManageLocations),
   }
   const configuration = onboarding?.product_configuration
+  const primaryUseCase = String(onboarding?.primary_use_case || '').trim().toLowerCase()
 
-  if (!configuration || typeof configuration !== 'object') {
+  if (
+    !configuration
+    || typeof configuration !== 'object'
+    || !DYNAMIC_PRIMARY_USE_CASES.has(primaryUseCase)
+  ) {
     return {
       mode: 'legacy',
       primaryTiles: LEGACY_TILES.filter((tile) => isVisible(tile, safeVisibility)),
