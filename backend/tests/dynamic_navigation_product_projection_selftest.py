@@ -81,6 +81,7 @@ def run() -> int:
         assert wat_config["inventory_tracking_level"] == "presence"
         assert wat_config["location_tracking_level"] == "global"
         assert wat_config["shopping_enabled"] is True
+        assert wat_config["receipt_processing_enabled"] is True
         assert wat_config["unpacking_enabled"] is False
         checks.append("wat_inhuis_configuration_is_projected_for_read_only_member")
 
