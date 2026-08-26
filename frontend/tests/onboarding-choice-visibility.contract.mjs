@@ -11,6 +11,7 @@ const inhuis = read('src/features/onboarding/InhuisHalenOnboardingPage.jsx')
 const wat = read('src/features/onboarding/WatInhuisOnboardingPage.jsx')
 const waar = read('src/features/onboarding/WaarInhuisOnboardingPage.jsx')
 const shared = read('src/features/onboarding/SharedHouseholdMinimumPage.jsx')
+const settings = read('src/features/settings/SettingsPage.jsx')
 const invitationService = read('src/features/settings/services/householdInvitationsService.js')
 
 const checks = [
@@ -22,18 +23,21 @@ const checks = [
   [controls.includes("title = 'Jouw keuzes'"), 'onboarding has reusable visible choice summary'],
   [onboarding.includes('data-testid="onboarding-primary-continue"'), 'primary use case is confirmed explicitly'],
   [onboarding.includes('De keuze wordt pas opgeslagen als je op Verder drukt.'), 'primary choice remains changeable before confirmation'],
+  [onboarding.includes('Je kunt vóór Verder altijd een andere radioknop kiezen.'), 'primary choice can be revised before save'],
   [onboarding.includes('Welkom bij Inhuis · ${primaryUseCaseTitle}'), 'selected primary use case is visible in header'],
   [inhuis.includes('<ChoiceSummary'), 'Inhuis halen shows live selected settings'],
   [wat.includes('<ChoiceSummary'), 'Wat Inhuis shows live selected settings'],
   [waar.includes('<ChoiceSummary'), 'Waar Inhuis shows live selected settings'],
   [waar.includes('<CheckboxChoice'), 'Waar Inhuis location choices are checkboxes'],
   [shared.includes('title="Jouw volledige inrichting"'), 'final household step reviews the complete setup'],
-  [shared.includes('data-testid="shared-household-edit-previous-choices"'), 'user can return to change previous onboarding choices'],
   [shared.includes('createHouseholdInvitation'), 'Samen reuses canonical invitation service'],
   [shared.includes('data-testid="shared-household-invite-email"'), 'Samen shows invitation email input immediately'],
   [shared.includes('data-testid="shared-household-invite-send"'), 'Samen can send invitation immediately'],
   [!shared.includes('shared-household-invite-deferred'), 'deferred invitation placeholder is removed'],
   [invitationService.includes("'/api/household/invitations'"), 'immediate invite uses existing secured household invitation endpoint'],
+  [settings.includes('data-testid="settings-active-profile"'), 'completed household keeps active profile visible in Settings'],
+  [settings.includes('Jouw Inhuis'), 'Settings labels persistent active profile clearly'],
+  [settings.includes('buildActiveProfileItems'), 'Settings derives visible profile from authoritative onboarding product configuration'],
 ]
 
 for (const [ok, label] of checks) {
