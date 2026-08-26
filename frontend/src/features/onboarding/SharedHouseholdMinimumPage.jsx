@@ -21,7 +21,6 @@ export default function SharedHouseholdMinimumPage({
   initialHouseholdName = '',
   primaryUseCaseTitle = '',
   previousChoices = [],
-  onEditPreviousChoices,
   onSubmit,
   saving = false,
   error = '',
@@ -89,18 +88,6 @@ export default function SharedHouseholdMinimumPage({
         title="Jouw volledige inrichting"
       />
 
-      {onEditPreviousChoices ? (
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={saving || inviteSaving}
-          onClick={onEditPreviousChoices}
-          data-testid="shared-household-edit-previous-choices"
-        >
-          Vorige keuzes wijzigen
-        </Button>
-      ) : null}
-
       <Card>
         <div className="rz-form">
           <div>
@@ -127,7 +114,7 @@ export default function SharedHouseholdMinimumPage({
           <div>
             <h2 style={{ marginTop: 0 }}>Gebruik je Inhuis alleen of samen?</h2>
             <p style={{ marginBottom: 0 }}>
-              Kies één optie. De geselecteerde radioknop laat direct zien wat actief is.
+              Kies één optie. De geselecteerde radioknop laat direct zien wat actief is en je kunt vóór afronden altijd wisselen.
             </p>
           </div>
           <RadioChoices
@@ -182,7 +169,7 @@ export default function SharedHouseholdMinimumPage({
       ) : null}
 
       <p style={{ marginBottom: 0 }}>
-        <strong>Je kunt deze gegevens en mogelijkheden later verder aanpassen.</strong>
+        <strong>Na afronden blijft je actieve inrichting zichtbaar bovenaan Instellingen.</strong>
       </p>
 
       <Button
