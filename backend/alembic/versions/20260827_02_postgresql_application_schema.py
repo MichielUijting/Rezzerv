@@ -475,6 +475,16 @@ def _create_server_sessions(bind: sa.engine.Connection) -> None:
 
 def _install_postgresql_invariants(bind: sa.engine.Connection) -> None:
     bind.exec_driver_sql(
+        """
+        CREATE UNIQUE INDEX uq_inventory_active_locationless_household_article
+        ON inventory (household_id, household_article_id)
+        WHERE household_article_id IS NOT NULL
+          AND space_id IS NULL
+          AND sublocation_id IS NULL
+          AND status = 'active'
+        """
+    )
+    bind.exec_driver_sql(
         "ALTER TABLE household_registry "
         "ADD CONSTRAINT ck_household_registry_context_type "
         "CHECK (context_type IN ('regular', 'system'))"
