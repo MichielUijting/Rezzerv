@@ -135,6 +135,8 @@ test('Waar Inhuis exact locations keep the full location and sublocation managem
     useCase: 'waar_inhuis',
     householdName: 'Dynamische instellingen Waar Inhuis',
     profile: {
+      main_locations: ['Keuken'],
+      sublocations: [],
       unpacking_enabled: true,
       receipt_processing_enabled: true,
       almost_out_enabled: false,
