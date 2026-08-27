@@ -3,6 +3,9 @@ name: Dynamic settings validation
 on:
   pull_request:
     paths:
+      - 'backend/app/services/canonical_direct_location_service.py'
+      - 'backend/app/services/household_product_configuration_service.py'
+      - 'backend/tests/canonical_direct_location_selftest.py'
       - 'frontend/src/features/settings/**'
       - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/tests/dynamic-settings-navigation.contract.mjs'
@@ -15,6 +18,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Validate canonical Direct location
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/canonical_direct_location_selftest.py | tee /tmp/canonical-direct.log
+          grep -F 'CANONICAL_DIRECT_LOCATION_SELFTEST_GREEN' /tmp/canonical-direct.log
 
       - uses: actions/setup-node@v4
         with:
