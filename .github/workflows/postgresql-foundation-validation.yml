@@ -1,0 +1,86 @@
+name: PostgreSQL foundation validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/db.py'
+      - 'backend/requirements.txt'
+      - 'backend/tests/database_foundation_selftest.py'
+      - 'docker-compose.postgresql.yml'
+      - 'docs/technical/POSTGRESQL-FOUNDATION.md'
+      - '.github/workflows/postgresql-foundation-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sqlite-foundation:
+    name: SQLite compatibility smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install database foundation dependency
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "$(grep '^sqlalchemy==' backend/requirements.txt)"
+
+      - name: Validate current SQLite database foundation
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: sqlite:////tmp/rezzerv-database-foundation.sqlite
+          REZZERV_EXPECT_DATASTORE: sqlite
+        run: |
+          python backend/tests/database_foundation_selftest.py | tee /tmp/database-foundation-sqlite.log
+          grep -F 'DATABASE_FOUNDATION_SELFTEST_GREEN' /tmp/database-foundation-sqlite.log
+
+  postgresql-foundation:
+    name: PostgreSQL 17 / psycopg 3 smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: rezzerv_foundation
+          POSTGRES_USER: rezzerv
+          POSTGRES_PASSWORD: rezzerv-ci-foundation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv -d rezzerv_foundation"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PostgreSQL foundation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
+            "$(grep '^psycopg\[binary\]==' backend/requirements.txt)"
+
+      - name: Validate real PostgreSQL connection and transactions
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: postgresql://rezzerv:rezzerv-ci-foundation@127.0.0.1:5432/rezzerv_foundation
+          REZZERV_EXPECT_DATASTORE: postgresql
+          REZZERV_DATABASE_TEST_SECRET: rezzerv-ci-foundation
+          DATABASE_CONNECT_TIMEOUT_SECONDS: '5'
+          DATABASE_POOL_SIZE: '2'
+          DATABASE_MAX_OVERFLOW: '1'
+          DATABASE_POOL_TIMEOUT_SECONDS: '10'
+        run: |
+          python backend/tests/database_foundation_selftest.py | tee /tmp/database-foundation-postgresql.log
+          grep -F 'DATABASE_FOUNDATION_SELFTEST_GREEN' /tmp/database-foundation-postgresql.log
