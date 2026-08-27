@@ -28,6 +28,16 @@ EXPECTED_BOOLEAN_COLUMNS = {
     ("spaces", "active"),
     ("sublocations", "active"),
 }
+EXPECTED_POSTGRESQL_CHECK_CONSTRAINTS = {
+    "ck_app_users_account_status",
+    "ck_auth_membership_permission_overrides_effect",
+    "ck_auth_permissions_scope",
+    "ck_auth_roles_scope",
+    "ck_auth_support_sessions_access_level",
+    "ck_external_article_product_links_identity",
+    "ck_external_article_product_links_status",
+    "ck_household_registry_context_type",
+}
 
 
 def _engine_url():
@@ -117,6 +127,7 @@ def _assert_postgresql_schema(connection) -> None:
         "household_article_id is not null",
         "space_id is null",
         "sublocation_id is null",
+        "status = 'active'",
     ):
         if fragment not in normalized_index:
             raise AssertionError(
@@ -151,19 +162,27 @@ def _assert_postgresql_schema(connection) -> None:
                 FROM pg_constraint c
                 JOIN pg_namespace n ON n.oid = c.connamespace
                 WHERE n.nspname = current_schema()
+                  AND c.contype = 'c'
                   AND c.conname IN (
-                    'ck_household_registry_context_type',
-                    'ck_app_users_account_status'
+                    'ck_app_users_account_status',
+                    'ck_auth_membership_permission_overrides_effect',
+                    'ck_auth_permissions_scope',
+                    'ck_auth_roles_scope',
+                    'ck_auth_support_sessions_access_level',
+                    'ck_external_article_product_links_identity',
+                    'ck_external_article_product_links_status',
+                    'ck_household_registry_context_type'
                   )
                 """
             )
         ).all()
     }
-    if constraints != {
-        "ck_household_registry_context_type",
-        "ck_app_users_account_status",
-    }:
-        raise AssertionError(f"Missing PostgreSQL role/account constraints: {sorted(constraints)}")
+    if constraints != EXPECTED_POSTGRESQL_CHECK_CONSTRAINTS:
+        raise AssertionError(
+            "Missing PostgreSQL CHECK constraints: "
+            f"expected={sorted(EXPECTED_POSTGRESQL_CHECK_CONSTRAINTS)} "
+            f"actual={sorted(constraints)}"
+        )
 
     triggers = {
         str(row[0])
