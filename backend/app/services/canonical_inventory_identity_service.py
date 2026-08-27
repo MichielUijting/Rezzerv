@@ -10,6 +10,7 @@ independent from receipt import order while preserving the existing location mod
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 import uuid
 
 from fastapi import HTTPException
@@ -23,10 +24,28 @@ from app.services.temporal_inventory_service import (
 
 
 LOCATIONLESS_ACTIVE_IDENTITY_INDEX = "uq_inventory_active_locationless_household_article"
+TEMPORAL_PURCHASE_FAST_PATH_COLUMNS = {
+    "household_article_id",
+    "effective_at",
+    "recorded_at",
+    "effective_at_precision",
+    "event_priority",
+    "source_reference",
+    "source_line_id",
+}
 
 
 def _normalize(value: object | None) -> str:
     return str(value or "").strip()
+
+
+def _as_decimal_or_none(value: object | None) -> Decimal | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def require_household_article(conn, household_id: str, household_article_id: str) -> dict:
@@ -82,14 +101,45 @@ def _table_exists(conn, table_name: str) -> bool:
     ), {"name": str(table_name)}).scalar())
 
 
+def _index_exists(conn, index_name: str) -> bool:
+    return bool(conn.execute(text(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name=:name LIMIT 1"
+    ), {"name": str(index_name)}).scalar())
+
+
+def _inventory_event_columns(conn) -> set[str]:
+    return {
+        str(row[1])
+        for row in conn.execute(text("PRAGMA table_info(inventory_events)")).fetchall()
+    }
+
+
+def _ensure_temporal_purchase_fast_path_schema(conn) -> None:
+    """Only run the legacy global schema/backfill ensure when columns are missing.
+
+    Current databases already carry the temporal columns. Normal Uitpakken purchases
+    must not scan the full inventory_events ledger merely to prove that again. Older
+    databases still fall back to the canonical full ensure once before using this path.
+    """
+    columns = _inventory_event_columns(conn)
+    if TEMPORAL_PURCHASE_FAST_PATH_COLUMNS.issubset(columns):
+        return
+    ensure_temporal_inventory_schema(conn)
+    columns = _inventory_event_columns(conn)
+    if not TEMPORAL_PURCHASE_FAST_PATH_COLUMNS.issubset(columns):
+        raise RuntimeError("Temporeel inventory_events schema is niet volledig geinitialiseerd")
+
+
 def ensure_locationless_inventory_identity_guard(conn) -> None:
     """Protect the single active NULL/NULL row per household article in SQLite.
 
-    The duplicate check deliberately runs before creating the partial unique index so
-    an existing inconsistent database fails with a clear error instead of an opaque
-    CREATE INDEX integrity failure.
+    The expensive duplicate scan is only needed before the unique index exists. Once
+    SQLite has installed that index, the index itself is the canonical race/integrity
+    guard and repeating the full grouped scan on every purchase is unnecessary.
     """
     if not _table_exists(conn, "inventory"):
+        return
+    if _index_exists(conn, LOCATIONLESS_ACTIVE_IDENTITY_INDEX):
         return
 
     columns = {
@@ -141,7 +191,7 @@ def ensure_locationless_inventory_identity_guard(conn) -> None:
 def _temporal_ledger_available_for_article(conn, household_id: str, household_article_id: str) -> bool:
     if not _table_exists(conn, "inventory_events"):
         return False
-    columns = {str(row[1]) for row in conn.execute(text("PRAGMA table_info(inventory_events)")).fetchall()}
+    columns = _inventory_event_columns(conn)
     if "household_article_id" not in columns:
         return False
     event_exists = conn.execute(text(
@@ -167,12 +217,12 @@ def _hydrate_latest_receipt_purchase_event(
     quantity: int,
     space_id: str | None,
     sublocation_id: str | None,
-) -> None:
-    """Attach the exact receipt purchase timestamp to the event just created by Uitpakken.
+) -> str | None:
+    """Attach the exact receipt timestamp to the event just created by Uitpakken.
 
     The legacy batch payload deliberately stores a date label. The authoritative
     receipt row still contains ``purchase_at`` (including time when detected). The
-    stock event is therefore linked back to that receipt before chronological replay.
+    stock event is linked back to that receipt before chronological evaluation.
     No match means this was not a receipt-driven purchase and nothing is changed.
     """
     required_tables = {
@@ -182,14 +232,14 @@ def _hydrate_latest_receipt_purchase_event(
         "receipt_tables",
     }
     if not all(_table_exists(conn, table_name) for table_name in required_tables):
-        return
+        return None
 
-    ensure_temporal_inventory_schema(conn)
+    _ensure_temporal_purchase_fast_path_schema(conn)
     location_id = _normalize(sublocation_id) or _normalize(space_id) or None
 
     event = conn.execute(text(
         """
-        SELECT id, location_id, quantity, source_reference
+        SELECT id, location_id, quantity, source_reference, created_at
         FROM inventory_events
         WHERE household_id = :household_id
           AND household_article_id = :household_article_id
@@ -208,7 +258,7 @@ def _hydrate_latest_receipt_purchase_event(
         "location_id": location_id,
     }).mappings().first()
     if not event:
-        return
+        return None
 
     line = conn.execute(text(
         """
@@ -240,14 +290,14 @@ def _hydrate_latest_receipt_purchase_event(
         "location_id": location_id,
     }).mappings().first()
     if not line:
-        return
+        return None
 
     source_reference = str(line.get("source_reference") or "").strip()
     if not source_reference.startswith("receipt:"):
-        return
+        return None
     receipt_table_id = source_reference.split(":", 1)[1].strip()
     if not receipt_table_id:
-        return
+        return None
 
     receipt = conn.execute(text(
         """
@@ -262,7 +312,7 @@ def _hydrate_latest_receipt_purchase_event(
         "household_id": str(household_id),
     }).mappings().first()
     if not receipt or not str(receipt.get("purchase_at") or "").strip():
-        return
+        return None
 
     purchase_at = str(receipt.get("purchase_at") or "").strip()
     purchase_at_source = str(receipt.get("purchase_at_source") or "").strip().lower()
@@ -272,10 +322,12 @@ def _hydrate_latest_receipt_purchase_event(
         purchase_at = f"{purchase_at}T00:00:00+00:00"
         precision = "date"
 
+    event_id = str(event.get("id"))
     conn.execute(text(
         """
         UPDATE inventory_events
         SET effective_at = :effective_at,
+            recorded_at = COALESCE(NULLIF(trim(recorded_at), ''), :recorded_at),
             effective_at_precision = :precision,
             event_priority = 10,
             source_reference = :source_reference,
@@ -284,11 +336,115 @@ def _hydrate_latest_receipt_purchase_event(
         """
     ), {
         "effective_at": purchase_at,
+        "recorded_at": str(event.get("created_at") or "").strip() or purchase_at,
         "precision": precision,
         "source_reference": source_reference,
         "source_line_id": str(line.get("line_id") or ""),
-        "event_id": str(event.get("id")),
+        "event_id": event_id,
     })
+    return event_id
+
+
+def _receipt_purchase_can_use_append_fast_path(
+    conn,
+    *,
+    household_id: str,
+    household_article_id: str,
+    purchase_event_id: str,
+) -> bool:
+    """Return True only when the new receipt event is a safe chronological tail append.
+
+    The fast path is deliberately conservative. Any incomplete temporal history,
+    backdated/tie-reordered purchase, balance mismatch, or projection drift falls back
+    to the canonical full chronological reconcile.
+    """
+    normalized_event_id = _normalize(purchase_event_id)
+    if not normalized_event_id:
+        return False
+
+    incomplete = conn.execute(text(
+        """
+        SELECT 1
+        FROM inventory_events
+        WHERE household_id = :household_id
+          AND COALESCE(household_article_id, article_id) = :household_article_id
+          AND (
+                COALESCE(trim(effective_at), '') = ''
+             OR COALESCE(trim(recorded_at), '') = ''
+             OR COALESCE(trim(effective_at_precision), '') = ''
+             OR event_priority IS NULL
+             OR old_quantity IS NULL
+             OR new_quantity IS NULL
+          )
+        LIMIT 1
+        """
+    ), {
+        "household_id": str(household_id),
+        "household_article_id": str(household_article_id),
+    }).scalar()
+    if incomplete:
+        return False
+
+    tail = conn.execute(text(
+        """
+        SELECT id, event_type, quantity, old_quantity, new_quantity,
+               source, source_reference, source_line_id
+        FROM inventory_events
+        WHERE household_id = :household_id
+          AND COALESCE(household_article_id, article_id) = :household_article_id
+        ORDER BY datetime(effective_at) DESC,
+                 event_priority DESC,
+                 COALESCE(source_reference, '') DESC,
+                 COALESCE(source_line_id, '') DESC,
+                 id DESC
+        LIMIT 2
+        """
+    ), {
+        "household_id": str(household_id),
+        "household_article_id": str(household_article_id),
+    }).mappings().all()
+    if not tail or str(tail[0].get("id") or "") != normalized_event_id:
+        return False
+
+    purchase = tail[0]
+    if str(purchase.get("event_type") or "").strip().lower() != "purchase":
+        return False
+    if str(purchase.get("source") or "").strip().lower() != "store_import":
+        return False
+    if not str(purchase.get("source_reference") or "").strip():
+        return False
+    if not str(purchase.get("source_line_id") or "").strip():
+        return False
+
+    old_quantity = _as_decimal_or_none(purchase.get("old_quantity"))
+    new_quantity = _as_decimal_or_none(purchase.get("new_quantity"))
+    quantity = _as_decimal_or_none(purchase.get("quantity"))
+    if old_quantity is None or new_quantity is None or quantity is None:
+        return False
+    if new_quantity != old_quantity + abs(quantity):
+        return False
+
+    if len(tail) == 1:
+        if old_quantity != Decimal("0"):
+            return False
+    else:
+        previous_new = _as_decimal_or_none(tail[1].get("new_quantity"))
+        if previous_new is None or previous_new != old_quantity:
+            return False
+
+    projected_total = _as_decimal_or_none(conn.execute(text(
+        """
+        SELECT COALESCE(SUM(aantal), 0)
+        FROM inventory
+        WHERE household_id = :household_id
+          AND household_article_id = :household_article_id
+          AND COALESCE(status, 'active') = 'active'
+        """
+    ), {
+        "household_id": str(household_id),
+        "household_article_id": str(household_article_id),
+    }).scalar())
+    return projected_total is not None and projected_total == new_quantity
 
 
 def _reconcile_if_temporal_event_exists(
@@ -304,7 +460,7 @@ def _reconcile_if_temporal_event_exists(
     # Some deliberately minimal isolated tests do not create inventory_events.
     if not _temporal_ledger_available_for_article(conn, household_id, household_article_id):
         return
-    _hydrate_latest_receipt_purchase_event(
+    purchase_event_id = _hydrate_latest_receipt_purchase_event(
         conn,
         household_id=str(household_id),
         household_article_id=str(household_article_id),
@@ -312,6 +468,13 @@ def _reconcile_if_temporal_event_exists(
         space_id=space_id,
         sublocation_id=sublocation_id,
     )
+    if purchase_event_id and _receipt_purchase_can_use_append_fast_path(
+        conn,
+        household_id=str(household_id),
+        household_article_id=str(household_article_id),
+        purchase_event_id=purchase_event_id,
+    ):
+        return
     reconcile_inventory_total(
         conn,
         household_id=str(household_id),

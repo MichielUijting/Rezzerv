@@ -5,6 +5,31 @@ export const DIRECT_CONSUMPTION = 'DIRECT_CONSUMPTION'
 export const DIRECT_LOCATION = 'Direct'
 export const DIRECT_SUBLOCATION = 'Direct'
 
+const HANDLING_CACHE_TTL_MS = 60_000
+const articleHandlingCache = new Map()
+const lineOverrideCache = new Map()
+
+function cacheKey(householdId, objectId) {
+  return `${String(householdId || '').trim()}::${String(objectId || '').trim()}`
+}
+
+function readHandlingCache(cache, key) {
+  const entry = cache.get(key)
+  if (!entry) return { hit: false, value: null }
+  if (entry.expiresAt <= Date.now()) {
+    cache.delete(key)
+    return { hit: false, value: null }
+  }
+  return { hit: true, value: entry.value }
+}
+
+function writeHandlingCache(cache, key, value) {
+  cache.set(key, {
+    expiresAt: Date.now() + HANDLING_CACHE_TTL_MS,
+    value,
+  })
+}
+
 export function normalizeInventoryHandling(value) {
   return String(value || '').trim().toUpperCase() === DIRECT_CONSUMPTION
     ? DIRECT_CONSUMPTION
@@ -105,21 +130,36 @@ export async function fetchInventoryHandlingByArticleIds(householdId, householdA
 
   if (uniqueArticleIds.length === 0) return {}
 
-  const response = await fetchJsonWithAuth(
-    `/api/households/${encodeURIComponent(normalizedHouseholdId)}/articles/inventory-handling/batch`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ household_article_ids: uniqueArticleIds }),
-    },
-  )
-  const data = await readJsonResponse(response, 'Directe consumptie kon niet worden geladen.')
+  const result = {}
+  const missingArticleIds = []
+  uniqueArticleIds.forEach((articleId) => {
+    const cached = readHandlingCache(articleHandlingCache, cacheKey(normalizedHouseholdId, articleId))
+    if (cached.hit) {
+      result[articleId] = cached.value
+    } else {
+      missingArticleIds.push(articleId)
+    }
+  })
 
-  return Object.fromEntries(
-    (Array.isArray(data?.items) ? data.items : []).map((item) => [
-      String(item.id),
-      inventoryHandlingPresentation(item.default_inventory_handling),
-    ]),
-  )
+  if (missingArticleIds.length > 0) {
+    const response = await fetchJsonWithAuth(
+      `/api/households/${encodeURIComponent(normalizedHouseholdId)}/articles/inventory-handling/batch`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ household_article_ids: missingArticleIds }),
+      },
+    )
+    const data = await readJsonResponse(response, 'Directe consumptie kon niet worden geladen.')
+
+    ;(Array.isArray(data?.items) ? data.items : []).forEach((item) => {
+      const articleId = String(item.id)
+      const presentation = inventoryHandlingPresentation(item.default_inventory_handling)
+      result[articleId] = presentation
+      writeHandlingCache(articleHandlingCache, cacheKey(normalizedHouseholdId, articleId), presentation)
+    })
+  }
+
+  return result
 }
 
 export async function fetchInventoryHandlingOverridesByLineIds(householdId, purchaseImportLineIds) {
@@ -133,20 +173,35 @@ export async function fetchInventoryHandlingOverridesByLineIds(householdId, purc
   ))
   if (uniqueLineIds.length === 0) return {}
 
-  const response = await fetchJsonWithAuth(
-    `/api/households/${encodeURIComponent(normalizedHouseholdId)}/purchase-import-lines/inventory-handling-overrides/batch`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ purchase_import_line_ids: uniqueLineIds }),
-    },
-  )
-  const data = await readJsonResponse(response, 'Regelafwijkingen konden niet worden geladen.')
-  return Object.fromEntries(
-    (Array.isArray(data?.items) ? data.items : []).map((item) => [
-      String(item.purchase_import_line_id),
-      normalizeInventoryHandlingOverride(item.inventory_handling_override),
-    ]),
-  )
+  const result = {}
+  const missingLineIds = []
+  uniqueLineIds.forEach((lineId) => {
+    const cached = readHandlingCache(lineOverrideCache, cacheKey(normalizedHouseholdId, lineId))
+    if (cached.hit) {
+      result[lineId] = cached.value
+    } else {
+      missingLineIds.push(lineId)
+    }
+  })
+
+  if (missingLineIds.length > 0) {
+    const response = await fetchJsonWithAuth(
+      `/api/households/${encodeURIComponent(normalizedHouseholdId)}/purchase-import-lines/inventory-handling-overrides/batch`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ purchase_import_line_ids: missingLineIds }),
+      },
+    )
+    const data = await readJsonResponse(response, 'Regelafwijkingen konden niet worden geladen.')
+    ;(Array.isArray(data?.items) ? data.items : []).forEach((item) => {
+      const lineId = String(item.purchase_import_line_id)
+      const normalizedOverride = normalizeInventoryHandlingOverride(item.inventory_handling_override)
+      result[lineId] = normalizedOverride
+      writeHandlingCache(lineOverrideCache, cacheKey(normalizedHouseholdId, lineId), normalizedOverride)
+    })
+  }
+
+  return result
 }
 
 export async function saveInventoryHandlingOverride(householdId, purchaseImportLineId, value) {
@@ -165,5 +220,7 @@ export async function saveInventoryHandlingOverride(householdId, purchaseImportL
     },
   )
   const data = await readJsonResponse(response, 'Regelafwijking kon niet worden opgeslagen.')
-  return normalizeInventoryHandlingOverride(data?.inventory_handling_override)
+  const normalizedOverride = normalizeInventoryHandlingOverride(data?.inventory_handling_override)
+  writeHandlingCache(lineOverrideCache, cacheKey(normalizedHouseholdId, normalizedLineId), normalizedOverride)
+  return normalizedOverride
 }

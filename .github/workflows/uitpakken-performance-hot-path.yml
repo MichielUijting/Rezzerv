@@ -1,0 +1,63 @@
+name: Uitpakken performance hot path validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/src/features/receipts/dayArticleHandling.js'
+      - 'backend/app/services/temporal_inventory_service.py'
+      - 'backend/app/services/canonical_inventory_identity_service.py'
+      - 'backend/tests/test_uitpakken_inventory_performance_hot_path.py'
+      - 'frontend/tests/uitpakken-performance-hot-path.contract.mjs'
+      - '.github/workflows/uitpakken-performance-hot-path.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uitpakken-performance-hot-path-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install focused backend test dependencies
+        run: python -m pip install --disable-pip-version-check -q pytest sqlalchemy fastapi
+
+      - name: Compile inventory hot path
+        run: python -m py_compile backend/app/services/temporal_inventory_service.py backend/app/services/canonical_inventory_identity_service.py
+
+      - name: Inventory hot path regression
+        env:
+          PYTHONPATH: backend
+        run: python -m pytest -q backend/tests/test_uitpakken_inventory_performance_hot_path.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Uitpakken request reuse contract
+        run: node frontend/tests/uitpakken-performance-hot-path.contract.mjs
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend production build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Diff hygiene
+        run: git diff --check origin/main...HEAD

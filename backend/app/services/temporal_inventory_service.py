@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Iterable
 import uuid
 
@@ -35,6 +35,15 @@ def _normalize_text(value: object | None) -> str | None:
     return normalized or None
 
 
+def _as_decimal_or_none(value: object | None) -> Decimal | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
 def _as_iso_datetime(value: datetime | str | None) -> str:
     if isinstance(value, datetime):
         dt = value
@@ -50,7 +59,12 @@ def _as_iso_datetime(value: datetime | str | None) -> str:
 
 
 def ensure_temporal_inventory_schema(conn) -> None:
-    """Idempotently extend the existing inventory_events ledger."""
+    """Idempotently extend and only backfill incomplete temporal ledger rows.
+
+    This helper is called from purchase hot paths for backward compatibility. It must
+    therefore remain effectively read-only once the schema and historic rows are
+    already current; a normal purchase must never rewrite the full ledger.
+    """
     columns = {
         str(row[1])
         for row in conn.execute(text("PRAGMA table_info(inventory_events)")).fetchall()
@@ -70,12 +84,11 @@ def ensure_temporal_inventory_schema(conn) -> None:
     for column, sql_type in additions.items():
         if column not in columns:
             conn.execute(text(f"ALTER TABLE inventory_events ADD COLUMN {column} {sql_type}"))
+            columns.add(column)
 
     # Existing rows retain their historical meaning as closely as possible.
-    # purchase_date wins over created_at. Both YYYY-MM-DD and DD-MM-YYYY are
-    # normalized because both forms exist in older fixtures/import paths.
-    # Once an event has been linked back to its authoritative source, its
-    # hydrated precision must not be downgraded by a later idempotent schema pass.
+    # The WHERE clause is deliberately selective: once a row is normalized this
+    # statement must not touch it again on each subsequent inventory mutation.
     conn.execute(text(
         """
         UPDATE inventory_events
@@ -115,6 +128,25 @@ def ensure_temporal_inventory_schema(conn) -> None:
                 WHEN 'adjustment' THEN 50
                 ELSE COALESCE(event_priority, 100)
             END
+        WHERE COALESCE(trim(effective_at), '') = ''
+           OR COALESCE(trim(recorded_at), '') = ''
+           OR COALESCE(trim(effective_at_precision), '') = ''
+           OR event_priority IS NULL
+           OR event_priority <> CASE lower(COALESCE(event_type, ''))
+                WHEN 'purchase' THEN 10
+                WHEN 'auto_repurchase' THEN 10
+                WHEN 'transfer_in' THEN 20
+                WHEN 'transfer_out' THEN 30
+                WHEN 'consume' THEN 40
+                WHEN 'adjustment' THEN 50
+                ELSE COALESCE(event_priority, 100)
+              END
+           OR (
+                COALESCE(trim(source_reference), '') = ''
+                AND COALESCE(trim(purchase_date), '') <> ''
+                AND length(trim(purchase_date)) = 10
+                AND COALESCE(trim(effective_at_precision), '') <> 'date'
+              )
         """
     ))
     conn.execute(text(
@@ -196,9 +228,10 @@ def ordered_events(conn, *, household_id: str, household_article_id: str) -> lis
     rows = conn.execute(text(
         """
         SELECT id, household_id, household_article_id, article_name, event_type,
-               quantity, effective_at, recorded_at, effective_at_precision,
+               quantity, old_quantity, new_quantity,
+               effective_at, recorded_at, effective_at_precision,
                event_priority, source, source_reference, source_line_id,
-               location_id, location_label
+               location_id, location_label, replayed_at
         FROM inventory_events
         WHERE household_id = :household_id
           AND COALESCE(household_article_id, article_id) = :household_article_id
@@ -242,7 +275,7 @@ def replay_running_balances(events: Iterable[dict]) -> list[dict]:
 
 
 def replay_article(conn, *, household_id: str, household_article_id: str) -> dict:
-    """Recompute event balances in chronological order."""
+    """Recompute event balances and only persist rows whose balances changed."""
     events = ordered_events(
         conn,
         household_id=household_id,
@@ -250,7 +283,11 @@ def replay_article(conn, *, household_id: str, household_article_id: str) -> dic
     )
     replayed = replay_running_balances(events)
     replayed_at = datetime.now(timezone.utc).isoformat()
-    for row in replayed:
+    for persisted_row, row in zip(events, replayed):
+        existing_old = _as_decimal_or_none(persisted_row.get("old_quantity"))
+        existing_new = _as_decimal_or_none(persisted_row.get("new_quantity"))
+        if existing_old == row["old_quantity"] and existing_new == row["new_quantity"]:
+            continue
         conn.execute(text(
             """
             UPDATE inventory_events
