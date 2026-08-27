@@ -39,6 +39,14 @@ jobs:
           python -m pip install -r backend/requirements.txt
           python -m pip install pytest
 
+      - name: Initialize backend test schema through Alembic
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/rezzerv_i5.db
+          python -m alembic -c backend/alembic.ini upgrade head
+          python -m alembic -c backend/alembic.ini current
+
       - name: Validate A — consumer account foundation
         run: python backend/tests/consumer_account_registration_selftest.py
 

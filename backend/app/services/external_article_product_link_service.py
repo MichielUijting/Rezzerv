@@ -6,6 +6,10 @@ Domeinregel:
 - Kassa en Uitpakken mogen deze koppeling later alleen uitlezen.
 - Deze service zoekt niet in Open Food Facts.
 - Deze service maakt geen household_article of voorraadmutatie aan.
+
+Schemaregel:
+- Alembic is de enige runtime-authority voor external_article_product_links.
+- Deze service leest en schrijft domeindata, maar maakt of wijzigt geen schema.
 """
 
 from __future__ import annotations
@@ -186,91 +190,13 @@ def deactivate_incomplete_confirmed_external_links(conn) -> int:
 
 
 def ensure_external_article_product_link_schema(conn) -> None:
-    """Maak de koppeltabel en indexen idempotent aan."""
-    conn.execute(
-        text(
-            """
-            CREATE TABLE IF NOT EXISTS external_article_product_links (
-                id TEXT PRIMARY KEY,
-                retailer_code TEXT NOT NULL,
-                receipt_text_normalized TEXT NOT NULL DEFAULT '',
-                external_article_code TEXT NOT NULL DEFAULT '',
-                global_product_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'confirmed',
-                confirmed_by TEXT NULL,
-                confirmed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                source_candidate_id TEXT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                CHECK (status IN ('confirmed', 'inactive')),
-                CHECK (
-                    length(trim(receipt_text_normalized)) > 0
-                    OR length(trim(external_article_code)) > 0
-                ),
-                FOREIGN KEY (global_product_id)
-                    REFERENCES global_products(id)
-                    ON DELETE RESTRICT
-            )
-            """
-        )
-    )
+    """Legacy compatibility shim; schema authority lives exclusively in Alembic.
 
-    conn.execute(
-        text(
-            """
-            CREATE INDEX IF NOT EXISTS
-                idx_external_article_product_links_product
-            ON external_article_product_links (
-                global_product_id,
-                status
-            )
-            """
-        )
-    )
-
-    conn.execute(
-        text(
-            """
-            CREATE INDEX IF NOT EXISTS
-                idx_external_article_product_links_candidate
-            ON external_article_product_links (
-                source_candidate_id
-            )
-            """
-        )
-    )
-
-    conn.execute(
-        text(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS
-                uq_external_article_product_links_code_confirmed
-            ON external_article_product_links (
-                retailer_code,
-                external_article_code
-            )
-            WHERE
-                status = 'confirmed'
-                AND external_article_code <> ''
-            """
-        )
-    )
-
-    conn.execute(
-        text(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS
-                uq_external_article_product_links_text_confirmed
-            ON external_article_product_links (
-                retailer_code,
-                receipt_text_normalized
-            )
-            WHERE
-                status = 'confirmed'
-                AND receipt_text_normalized <> ''
-            """
-        )
-    )
+    `app.main` still calls this historical symbol during direct module imports.
+    It intentionally performs no read, write or DDL. Normal runtime startup is
+    guarded by `app.schema_migration_preflight` before Uvicorn imports the app.
+    """
+    del conn
 
 
 def _serialize_external_article_product_link(
@@ -316,8 +242,6 @@ def save_external_article_product_link(
     - dezelfde retailer + winkelartikelcode;
     - dezelfde retailer + genormaliseerde bontekst.
     """
-    ensure_external_article_product_link_schema(conn)
-
     normalized_retailer = normalize_external_link_retailer_code(
         retailer_code
     )
@@ -494,8 +418,6 @@ def get_confirmed_external_article_product_link(
     1. retailer + externe artikelcode;
     2. retailer + genormaliseerde bontekst.
     """
-    ensure_external_article_product_link_schema(conn)
-
     normalized_retailer = normalize_external_link_retailer_code(
         retailer_code
     )

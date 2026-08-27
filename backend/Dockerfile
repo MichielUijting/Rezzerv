@@ -27,6 +27,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
  && pip install --no-cache-dir paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/ \
  && pip install --no-cache-dir -r requirements.txt
 
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 COPY app ./app
 COPY receipt_ingestion ./receipt_ingestion
 COPY tests ./tests

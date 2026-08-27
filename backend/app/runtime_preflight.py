@@ -1,9 +1,10 @@
-"""Fail-closed startup preflight for heavyweight receipt runtime dependencies."""
+"""Fail-closed startup preflight for schema and receipt runtime dependencies."""
 
 from __future__ import annotations
 
 import os
 
+from app.schema_migration_preflight import run_schema_migration_preflight
 from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import (
     warm_receipt_image_preprocessing,
 )
@@ -28,12 +29,10 @@ def _paddle_warmup_enabled() -> bool:
 
 
 def run_runtime_preflight() -> dict:
-    """Warm receipt image/OCR models before Uvicorn accepts user requests.
+    """Migrate schema and warm receipt models before health can become green."""
+    schema_result = run_schema_migration_preflight()
+    print(f"Schema startup migration: {schema_result}", flush=True)
 
-    A first receipt upload may never determine parser quality merely because the
-    Paddle model is still cold. The preflight therefore makes both rembg and the
-    primary Paddle OCR runtime ready before backend health can become green.
-    """
     image_result = warm_receipt_image_preprocessing()
     print(f"Receipt image preprocessing startup warmup: {image_result}", flush=True)
 
@@ -52,8 +51,9 @@ def run_runtime_preflight() -> dict:
         )
 
     # Preserve the historical top-level rembg result contract while exposing
-    # the OCR readiness evidence as an additional diagnostic field.
+    # schema/OCR readiness as additional diagnostic fields.
     result = dict(image_result)
+    result["schema_migration"] = dict(schema_result)
     result["ocr_runtime"] = dict(ocr_result)
     return result
 
