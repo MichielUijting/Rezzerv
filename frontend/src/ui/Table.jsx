@@ -111,17 +111,12 @@ export default function Table({
       delta,
       MIN_RESIZABLE_COLUMN_WIDTH,
     )
-    const rightColumnIndex = activeResize.columnIndex + 1
-    const nextLeftWidth = nextWidths[activeResize.columnIndex]
-    const nextRightWidth = nextWidths[rightColumnIndex]
 
-    const leftCol = activeResize.colgroup.children[activeResize.columnIndex]
-    const rightCol = activeResize.colgroup.children[rightColumnIndex]
-    if (leftCol) leftCol.style.width = `${nextLeftWidth}px`
-    if (rightCol) rightCol.style.width = `${nextRightWidth}px`
-
-    onColumnResize?.(activeResize.columnIndex, nextLeftWidth)
-    onColumnResize?.(rightColumnIndex, nextRightWidth)
+    nextWidths.forEach((nextWidth, columnIndex) => {
+      const col = activeResize.colgroup.children[columnIndex]
+      if (col) col.style.width = `${nextWidth}px`
+      onColumnResize?.(columnIndex, nextWidth)
+    })
     event.preventDefault()
   }, [onColumnResize])
 
