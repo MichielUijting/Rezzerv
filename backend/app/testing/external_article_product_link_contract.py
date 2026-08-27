@@ -1,6 +1,7 @@
 """Geïsoleerde contracttest voor algemene winkelartikelkoppelingen.
 
 Draait op een tijdelijke SQLite-database en raakt geen normale runtime-data.
+De testfixture maakt zijn eigen schema; productiecode mag geen schema self-healen.
 """
 
 from __future__ import annotations
@@ -88,6 +89,84 @@ def _create_test_database():
                     inventory_group_key TEXT NOT NULL,
                     active INTEGER NOT NULL DEFAULT 1
                 )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE external_article_product_links (
+                    id TEXT PRIMARY KEY,
+                    retailer_code TEXT NOT NULL,
+                    receipt_text_normalized TEXT NOT NULL DEFAULT '',
+                    external_article_code TEXT NOT NULL DEFAULT '',
+                    global_product_id TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'confirmed',
+                    confirmed_by TEXT NULL,
+                    confirmed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    source_candidate_id TEXT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CHECK (status IN ('confirmed', 'inactive')),
+                    CHECK (
+                        length(trim(receipt_text_normalized)) > 0
+                        OR length(trim(external_article_code)) > 0
+                    ),
+                    FOREIGN KEY (global_product_id)
+                        REFERENCES global_products(id)
+                        ON DELETE RESTRICT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX idx_external_article_product_links_product
+                ON external_article_product_links (
+                    global_product_id,
+                    status
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX idx_external_article_product_links_candidate
+                ON external_article_product_links (
+                    source_candidate_id
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX
+                    uq_external_article_product_links_code_confirmed
+                ON external_article_product_links (
+                    retailer_code,
+                    external_article_code
+                )
+                WHERE
+                    status = 'confirmed'
+                    AND external_article_code <> ''
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX
+                    uq_external_article_product_links_text_confirmed
+                ON external_article_product_links (
+                    retailer_code,
+                    receipt_text_normalized
+                )
+                WHERE
+                    status = 'confirmed'
+                    AND receipt_text_normalized <> ''
                 """
             )
         )
