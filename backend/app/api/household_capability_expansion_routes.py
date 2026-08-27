@@ -11,9 +11,6 @@ from app.services.household_capability_expansion_service import (
     expand_with_wat_inhuis,
     expand_with_waar_inhuis,
 )
-from app.services.household_location_onboarding_service import (
-    provision_waar_inhuis_expansion_locations,
-)
 from app.services.household_onboarding_service import (
     ONBOARDING_STATUS_COMPLETED,
     resolve_household_onboarding_state,
@@ -56,6 +53,9 @@ class ExpansionSublocationRequest(BaseModel):
 
 
 class ExpandWaarInhuisRequest(BaseModel):
+    # Transitional compatibility only: older clients may still send these fields.
+    # Waar Inhuis activation itself never creates or changes locations; that belongs
+    # exclusively to Instellingen → Locaties.
     main_locations: list[str] = Field(default_factory=list, max_length=12)
     sublocations: list[ExpansionSublocationRequest] = Field(default_factory=list, max_length=30)
     unpacking_enabled: bool = False
@@ -217,21 +217,9 @@ def expand_waar_inhuis(payload: ExpandWaarInhuisRequest):
         with engine.begin() as conn:
             _require_completed(conn, household_id)
             if not _already_active(conn, household_id, "waar_inhuis"):
-                current_location_level = "none"
-                try:
-                    current = resolve_household_product_configuration(conn, household_id)
-                except LookupError:
-                    pass
-                else:
-                    current_location_level = current.location_tracking_level
-
-                if current_location_level != "exact":
-                    provision_waar_inhuis_expansion_locations(
-                        conn,
-                        household_id=household_id,
-                        main_locations=payload.main_locations,
-                        sublocations=[item.model_dump() for item in payload.sublocations],
-                    )
+                # Deliberately do not provision or mutate locations here. Existing
+                # locationless inventory remains locationless and can be assigned later;
+                # location management belongs exclusively to Instellingen → Locaties.
                 expand_with_waar_inhuis(
                     conn,
                     household_id=household_id,
