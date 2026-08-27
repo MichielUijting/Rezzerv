@@ -88,6 +88,60 @@ def run() -> None:
         )
         assert active == ["inhuis_halen", "wat_inhuis", "waar_inhuis"]
 
+        # Legacy/locationless voorraad blijft exact behouden wanneer Waar Inhuis later
+        # wordt geactiveerd. Alleen de productpolicy wordt exact; historische voorraad
+        # krijgt niet stilzwijgend een fictieve locatie en verliest geen aantallen.
+        locationless_initial = save_inhuis_halen_configuration(
+            conn,
+            household_id="h-locationless",
+            simple_inventory_enabled=True,
+            almost_out_notifications_enabled=False,
+            receipt_processing_enabled=False,
+            recipes_enabled=False,
+        )
+        assert locationless_initial.location_tracking_level == "none"
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS inventory (
+                id TEXT PRIMARY KEY,
+                naam TEXT,
+                aantal INTEGER,
+                household_id TEXT,
+                household_article_id TEXT,
+                space_id TEXT,
+                sublocation_id TEXT,
+                status TEXT,
+                updated_at TEXT
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO inventory (
+                id, naam, aantal, household_id, household_article_id,
+                space_id, sublocation_id, status, updated_at
+            ) VALUES (
+                'inv-locationless', 'Pasta', 5, 'h-locationless', 'article-pasta',
+                NULL, NULL, 'active', CURRENT_TIMESTAMP
+            )
+        """))
+
+        locationless_after_waar = expand_with_waar_inhuis(
+            conn,
+            household_id="h-locationless",
+            unpacking_enabled=False,
+            receipt_processing_enabled=False,
+            almost_out_enabled=False,
+        )
+        assert locationless_after_waar.inventory_tracking_level == "quantity"
+        assert locationless_after_waar.location_tracking_level == "exact"
+        preserved = conn.execute(text("""
+            SELECT aantal, space_id, sublocation_id, status
+            FROM inventory
+            WHERE id = 'inv-locationless'
+        """)).mappings().one()
+        assert int(preserved["aantal"]) == 5
+        assert preserved["space_id"] is None
+        assert preserved["sublocation_id"] is None
+        assert preserved["status"] == "active"
+
         # Legacy household: viewing would create nothing; explicit expansion may create a neutral config.
         legacy = expand_with_wat_inhuis(
             conn,

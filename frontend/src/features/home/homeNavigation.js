@@ -20,19 +20,17 @@ const LEGACY_TILES = [
   { key: 'superuser', label: 'Superuser', icon: '🛡️', clickable: true },
 ]
 
-const LOCATIONS_TILE = {
-  key: 'locaties',
-  label: 'Locaties',
-  icon: '📍',
-  clickable: true,
-}
+const DYNAMIC_PRIMARY_USE_CASES = new Set([
+  'inhuis_halen',
+  'wat_inhuis',
+  'waar_inhuis',
+])
 
 function isVisible(tile, visibility) {
   if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser
   if (tile.key === 'admin') return visibility.canOpenAdmin
   if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
   if (tile.key === 'superuser') return visibility.isPlatformSuperuser
-  if (tile.key === 'locaties') return visibility.canManageLocations
   return true
 }
 
@@ -46,7 +44,6 @@ function uniqueTiles(tiles) {
 }
 
 function findTile(key) {
-  if (key === LOCATIONS_TILE.key) return LOCATIONS_TILE
   return LEGACY_TILES.find((tile) => tile.key === key) || null
 }
 
@@ -56,7 +53,6 @@ function primaryKeysFor(onboarding) {
 
   const primaryUseCase = String(onboarding?.primary_use_case || '').trim().toLowerCase()
   const inventoryEnabled = String(configuration.inventory_tracking_level || '').trim().toLowerCase() !== 'none'
-  const locationLevel = String(configuration.location_tracking_level || '').trim().toLowerCase()
   const almostOutEnabled = Boolean(configuration.almost_out_enabled)
   const shoppingEnabled = Boolean(configuration.shopping_enabled)
   const receiptProcessingEnabled = Boolean(configuration.receipt_processing_enabled)
@@ -75,13 +71,13 @@ function primaryKeysFor(onboarding) {
       inventoryEnabled ? 'voorraad' : null,
       almostOutEnabled ? 'bijna-op' : null,
       shoppingEnabled ? 'winkelen' : null,
+      receiptProcessingEnabled ? 'kassa' : null,
     ].filter(Boolean)
   }
 
   if (primaryUseCase === 'waar_inhuis') {
     return [
       inventoryEnabled ? 'voorraad' : null,
-      locationLevel === 'exact' ? 'locaties' : null,
       unpackingEnabled ? 'kassabonnen' : null,
       receiptProcessingEnabled ? 'kassa' : null,
       almostOutEnabled ? 'bijna-op' : null,
@@ -97,11 +93,15 @@ export function buildHomeNavigation({ onboarding, visibility }) {
     canOpenAdmin: Boolean(visibility?.canOpenAdmin),
     canOpenExternalDatabases: Boolean(visibility?.canOpenExternalDatabases),
     isPlatformSuperuser: Boolean(visibility?.isPlatformSuperuser),
-    canManageLocations: Boolean(visibility?.canManageLocations),
   }
   const configuration = onboarding?.product_configuration
+  const primaryUseCase = String(onboarding?.primary_use_case || '').trim().toLowerCase()
 
-  if (!configuration || typeof configuration !== 'object') {
+  if (
+    !configuration
+    || typeof configuration !== 'object'
+    || !DYNAMIC_PRIMARY_USE_CASES.has(primaryUseCase)
+  ) {
     return {
       mode: 'legacy',
       primaryTiles: LEGACY_TILES.filter((tile) => isVisible(tile, safeVisibility)),
@@ -115,12 +115,7 @@ export function buildHomeNavigation({ onboarding, visibility }) {
       .filter((tile) => tile && tile.clickable && isVisible(tile, safeVisibility)),
   )
   const primaryKeys = new Set(primaryTiles.map((tile) => tile.key))
-  const locationLevel = String(configuration.location_tracking_level || '').trim().toLowerCase()
-  const dynamicCandidates = [
-    ...LEGACY_TILES,
-    ...(locationLevel !== 'none' ? [LOCATIONS_TILE] : []),
-  ]
-  const moreTiles = uniqueTiles(dynamicCandidates)
+  const moreTiles = uniqueTiles(LEGACY_TILES)
     .filter((tile) => tile.clickable)
     .filter((tile) => !primaryKeys.has(tile.key))
     .filter((tile) => isVisible(tile, safeVisibility))

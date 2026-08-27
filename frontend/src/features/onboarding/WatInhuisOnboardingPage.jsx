@@ -1,56 +1,7 @@
 import { useState } from 'react'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
-
-function ChoiceButtons({ yesLabel = 'Ja', noLabel = 'Nee', value, onChange, disabled = false, testId }) {
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      <Button
-        type="button"
-        variant={value ? 'primary' : 'secondary'}
-        disabled={disabled}
-        onClick={() => onChange(true)}
-        data-testid={`${testId}-yes`}
-      >
-        {yesLabel}
-      </Button>
-      <Button
-        type="button"
-        variant={!value ? 'primary' : 'secondary'}
-        disabled={disabled}
-        onClick={() => onChange(false)}
-        data-testid={`${testId}-no`}
-      >
-        {noLabel}
-      </Button>
-    </div>
-  )
-}
-
-function TrackingLevelButtons({ value, onChange, disabled = false }) {
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      <Button
-        type="button"
-        variant={value === 'presence' ? 'primary' : 'secondary'}
-        disabled={disabled}
-        onClick={() => onChange('presence')}
-        data-testid="wat-inhuis-tracking-presence"
-      >
-        Alleen aanwezigheid
-      </Button>
-      <Button
-        type="button"
-        variant={value === 'quantity' ? 'primary' : 'secondary'}
-        disabled={disabled}
-        onClick={() => onChange('quantity')}
-        data-testid="wat-inhuis-tracking-quantity"
-      >
-        Ook aantallen
-      </Button>
-    </div>
-  )
-}
+import { BooleanRadioChoices, ChoiceSummary, RadioChoices, yesNo } from './OnboardingChoiceControls.jsx'
 
 export default function WatInhuisOnboardingPage({ onSubmit, saving = false, error = '' }) {
   const [inventoryTrackingLevel, setInventoryTrackingLevel] = useState('presence')
@@ -72,9 +23,19 @@ export default function WatInhuisOnboardingPage({ onSubmit, saving = false, erro
       <div>
         <h1 style={{ marginTop: 0 }}>Wat Inhuis</h1>
         <p>
-          Kies hoeveel detail je nu wilt bijhouden. Exacte opslagplekken zijn niet nodig.
+          Kies hoeveel detail je nu wilt bijhouden. Exacte opslagplekken zijn niet nodig. Kassa staat standaard aan, zodat Inhuis kan vastleggen wat je aankopen zijn.
         </p>
       </div>
+
+      <ChoiceSummary
+        items={[
+          { label: 'Voorraad bijhouden', value: inventoryTrackingLevel === 'quantity' ? 'Ook aantallen' : 'Alleen aanwezigheid' },
+          { label: 'Kassa', value: 'Actief' },
+          { label: 'Globale plekken', value: yesNo(globalLocations) },
+          { label: 'Bijna op', value: yesNo(almostOut) },
+          { label: 'Winkelen', value: yesNo(shopping, 'Nu', 'Later') },
+        ]}
+      />
 
       <Card>
         <div className="rz-form">
@@ -84,10 +45,16 @@ export default function WatInhuisOnboardingPage({ onSubmit, saving = false, erro
               Je kunt alleen vastleggen óf je iets hebt, of ook hoeveel je ervan hebt.
             </p>
           </div>
-          <TrackingLevelButtons
+          <RadioChoices
+            name="Wat wil je bijhouden"
             value={inventoryTrackingLevel}
             onChange={setInventoryTrackingLevel}
             disabled={saving}
+            testId="wat-inhuis-tracking"
+            options={[
+              { value: 'presence', label: 'Alleen aanwezigheid', testId: 'wat-inhuis-tracking-presence' },
+              { value: 'quantity', label: 'Ook aantallen', testId: 'wat-inhuis-tracking-quantity' },
+            ]}
           />
         </div>
       </Card>
@@ -100,7 +67,8 @@ export default function WatInhuisOnboardingPage({ onSubmit, saving = false, erro
               Denk aan Keuken, Garage of Badkamer. Je hoeft geen kasten, planken of bakken vast te leggen.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Globale plekken gebruiken"
             value={globalLocations}
             onChange={setGlobalLocations}
             disabled={saving}
@@ -117,7 +85,8 @@ export default function WatInhuisOnboardingPage({ onSubmit, saving = false, erro
               Hiermee kun je vanuit je overzicht ook bijhouden wat aangevuld moet worden.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Bijna op gebruiken"
             value={almostOut}
             onChange={setAlmostOut}
             disabled={saving}
@@ -134,7 +103,8 @@ export default function WatInhuisOnboardingPage({ onSubmit, saving = false, erro
               Kies Nu als je direct boodschappen wilt kunnen maken, of Later als je eerst alleen overzicht wilt.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Vanuit je overzicht ook winkelen"
             yesLabel="Nu"
             noLabel="Later"
             value={shopping}

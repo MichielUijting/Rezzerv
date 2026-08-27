@@ -124,7 +124,7 @@ test('none session gets a permission-driven platform landing and stays household
   await expect(page.getByTestId('platform-diagnostic-smoke')).toContainText('Voortgang: 6 / 6')
   expect(diagnosticRequests).toEqual(['GET', 'GET'])
   await expect(page.getByText('Het starten van controles hoort bij Achtergrondtaken en is hier niet beschikbaar.')).toBeVisible()
-  await page.getByRole('button', { name: 'Terug naar platformbeheer' }).click()
+  await page.goBack()
   await expect(page).toHaveURL(/\/home$/)
 
   await page.goto('/voorraad')

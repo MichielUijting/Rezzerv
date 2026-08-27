@@ -210,7 +210,7 @@ def run() -> int:
             assert configuration["shopping_enabled"] is False
             assert configuration["almost_out_enabled"] is True
             assert configuration["almost_out_notifications_enabled"] is False
-            assert configuration["receipt_processing_enabled"] is False
+            assert configuration["receipt_processing_enabled"] is True
             assert configuration["recipes_enabled"] is False
             _finish_shared(consumer, name="Huis Wat Inhuis", mode="together")
         checks.append("presence_without_locations_advances_to_shared_minimum_then_completes")
@@ -226,6 +226,7 @@ def run() -> int:
             assert configuration.location_tracking_level == "none"
             assert configuration.almost_out_enabled is True
             assert configuration.shopping_enabled is False
+            assert configuration.receipt_processing_enabled is True
         checks.append("wat_inhuis_configuration_and_shared_minimum_persist_server_side")
 
         with TestClient(app) as detailed:
@@ -246,11 +247,13 @@ def run() -> int:
             assert configuration["location_tracking_level"] == "global"
             assert configuration["shopping_enabled"] is True
             assert configuration["almost_out_enabled"] is False
+            assert configuration["receipt_processing_enabled"] is True
             _finish_shared(detailed, name="Huis met aantallen")
         with engine.begin() as conn:
             detailed_configuration = resolve_household_product_configuration(conn, detailed_household_id)
             assert detailed_configuration.inventory_tracking_level == "quantity"
             assert detailed_configuration.location_tracking_level == "global"
+            assert detailed_configuration.receipt_processing_enabled is True
         checks.append("quantity_with_global_locations_and_shopping_supported")
 
         with TestClient(app) as returning:

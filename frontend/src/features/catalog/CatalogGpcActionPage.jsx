@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
@@ -40,7 +39,6 @@ function rememberSuggestionRejection(productId, suggestion) {
 }
 
 export default function CatalogGpcActionPage() {
-  const navigate = useNavigate()
   const [items, setItems] = useState([])
   const [articleQuery, setArticleQuery] = useState('')
   const [selectedArticle, setSelectedArticle] = useState(null)
@@ -210,7 +208,6 @@ export default function CatalogGpcActionPage() {
                 <h2>GPC classificeren</h2>
                 <p>Selecteer een universeel catalogusartikel en bevestig de bijbehorende GS1 GPC Brick.</p>
               </div>
-              <Button type="button" variant="secondary" onClick={() => navigate('/catalogus')}>Terug naar Catalogus</Button>
             </div>
 
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}

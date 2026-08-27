@@ -1,5 +1,5 @@
 const CHECKBOX_STYLE = {
-  accentColor: '#1A3E2B',
+  accentColor: 'var(--color-brand-primary)',
   width: 18,
   height: 18,
   margin: 0,

@@ -88,7 +88,7 @@
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: #0f5b32;
+  accent-color: var(--color-brand-primary);
   cursor: default;
 }
 

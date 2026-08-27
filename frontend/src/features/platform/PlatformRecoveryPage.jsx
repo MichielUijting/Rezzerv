@@ -1,5 +1,4 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -26,7 +25,6 @@ async function purgeArchivedReceipts(householdId) {
 }
 
 export default function PlatformRecoveryPage() {
-  const navigate = useNavigate()
   const [householdId, setHouseholdId] = React.useState('')
   const [confirmationTarget, setConfirmationTarget] = React.useState('')
   const [confirmationText, setConfirmationText] = React.useState('')
@@ -135,10 +133,6 @@ export default function PlatformRecoveryPage() {
                 </Button>
               )}
             </Card>
-
-            <Button type="button" variant="secondary" onClick={() => navigate('/home')} disabled={running}>
-              Terug naar platformbeheer
-            </Button>
           </Card>
         </div>
       </div>

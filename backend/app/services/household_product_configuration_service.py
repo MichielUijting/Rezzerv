@@ -5,6 +5,8 @@ from typing import Any
 
 from sqlalchemy import inspect, text
 
+from app.services.canonical_direct_location_service import ensure_canonical_direct_location
+
 INVENTORY_TRACKING_LEVELS = frozenset({"none", "presence", "quantity"})
 LOCATION_TRACKING_LEVELS = frozenset({"none", "global", "exact"})
 
@@ -167,7 +169,7 @@ def save_wat_inhuis_configuration(
             :shopping_enabled,
             :almost_out_enabled,
             0,
-            0,
+            1,
             0,
             0,
             CURRENT_TIMESTAMP,
@@ -179,7 +181,7 @@ def save_wat_inhuis_configuration(
             shopping_enabled = excluded.shopping_enabled,
             almost_out_enabled = excluded.almost_out_enabled,
             almost_out_notifications_enabled = 0,
-            receipt_processing_enabled = 0,
+            receipt_processing_enabled = 1,
             recipes_enabled = 0,
             unpacking_enabled = 0,
             updated_at = CURRENT_TIMESTAMP
@@ -190,6 +192,8 @@ def save_wat_inhuis_configuration(
         "shopping_enabled": int(bool(shopping_enabled)),
         "almost_out_enabled": int(bool(almost_out_enabled)),
     })
+    if location_tracking_level == "global":
+        ensure_canonical_direct_location(conn, household_id=normalized_household_id)
     return resolve_household_product_configuration(conn, normalized_household_id)
 
 
@@ -296,6 +300,34 @@ def resolve_household_product_configuration(
         recipes_enabled=bool(row.get("recipes_enabled")),
         unpacking_enabled=bool(row.get("unpacking_enabled")),
     )
+
+
+def resolve_canonical_household_product_configuration(
+    conn,
+    *,
+    household_id: str,
+    primary_use_case: str | None,
+) -> HouseholdProductConfiguration:
+    configuration = resolve_household_product_configuration(conn, household_id)
+    normalized_primary_use_case = str(primary_use_case or "").strip().lower()
+
+    if configuration.location_tracking_level == "global":
+        ensure_canonical_direct_location(conn, household_id=configuration.household_id)
+
+    if (
+        normalized_primary_use_case != "wat_inhuis"
+        or configuration.receipt_processing_enabled
+    ):
+        return configuration
+
+    conn.execute(text("""
+        UPDATE household_product_configuration
+        SET receipt_processing_enabled = 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE household_id = :household_id
+          AND receipt_processing_enabled = 0
+    """), {"household_id": configuration.household_id})
+    return resolve_household_product_configuration(conn, configuration.household_id)
 
 
 def public_household_product_configuration_payload(

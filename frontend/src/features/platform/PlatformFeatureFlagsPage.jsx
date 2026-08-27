@@ -1,5 +1,4 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -39,7 +38,6 @@ async function persistPlatformFeatureFlag(flagKey, enabled) {
 }
 
 export default function PlatformFeatureFlagsPage() {
-  const navigate = useNavigate()
   const [loading, setLoading] = React.useState(true)
   const [items, setItems] = React.useState([])
   const [error, setError] = React.useState('')
@@ -163,10 +161,6 @@ export default function PlatformFeatureFlagsPage() {
                 </div>
               </Card>
             ) : null}
-
-            <Button type="button" variant="secondary" onClick={() => navigate('/home')} disabled={updating}>
-              Terug naar platformbeheer
-            </Button>
           </Card>
         </div>
       </div>

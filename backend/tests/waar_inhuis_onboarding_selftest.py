@@ -118,11 +118,6 @@ def _application(engine) -> FastAPI:
 
 def _payload(**overrides):
     payload = {
-        "main_locations": ["Keuken", "Garage"],
-        "sublocations": [
-            {"space_name": "Keuken", "name": "Koelkast"},
-            {"space_name": "Garage", "name": "Stelling"},
-        ],
         "unpacking_enabled": True,
         "receipt_processing_enabled": True,
         "almost_out_enabled": False,
@@ -185,25 +180,23 @@ def run() -> int:
             )
             assert selected.status_code == 200, selected.text
             assert selected.json()["profile_follow_up_required"] is True
-            empty_locations = consumer.post(
-                "/api/onboarding/waar-inhuis",
-                json=_payload(main_locations=[], sublocations=[]),
-            )
-            assert empty_locations.status_code == 422
-            cross_household = consumer.post(
+
+            client_household = consumer.post(
                 "/api/onboarding/waar-inhuis",
                 json={**_payload(), "household_id": "shared-household"},
             )
-            assert cross_household.status_code == 422
-            invalid_parent = consumer.post(
+            assert client_household.status_code == 422
+
+            legacy_location_payload = consumer.post(
                 "/api/onboarding/waar-inhuis",
-                json=_payload(
-                    main_locations=["Keuken"],
-                    sublocations=[{"space_name": "Garage", "name": "Stelling"}],
-                ),
+                json={
+                    **_payload(),
+                    "main_locations": ["Keuken"],
+                    "sublocations": [{"space_name": "Keuken", "name": "Koelkast"}],
+                },
             )
-            assert invalid_parent.status_code == 422
-        checks.append("invalid_locations_and_client_household_id_rejected")
+            assert legacy_location_payload.status_code == 422
+        checks.append("client_household_and_location_payload_are_rejected")
 
         with engine.begin() as conn:
             count = conn.execute(text("""
@@ -218,9 +211,9 @@ def run() -> int:
             assert int(space_count) == 0
             conn.execute(text("""
                 INSERT INTO spaces (id, naam, household_id, active)
-                VALUES ('existing-kitchen', 'keuken', :household_id, 0)
+                VALUES ('existing-kitchen', 'Keuken bestaand', :household_id, 0)
             """), {"household_id": household_id})
-        checks.append("invalid_answers_leave_no_partial_configuration_or_locations")
+        checks.append("rejected_answers_leave_no_partial_configuration_or_locations")
 
         with TestClient(app) as consumer:
             login = consumer.post(
@@ -234,6 +227,7 @@ def run() -> int:
             assert payload["onboarding_status"] == ONBOARDING_STATUS_IN_PROGRESS
             assert payload["onboarding_step"] == "shared_household_minimum"
             assert payload["shared_household_minimum_required"] is True
+            assert "location_setup" not in payload
             configuration = payload["product_configuration"]
             assert configuration["inventory_tracking_level"] == "presence"
             assert configuration["location_tracking_level"] == "exact"
@@ -243,10 +237,8 @@ def run() -> int:
             assert configuration["shopping_enabled"] is False
             assert configuration["almost_out_notifications_enabled"] is False
             assert configuration["recipes_enabled"] is False
-            assert len(payload["location_setup"]["spaces"]) == 2
-            assert len(payload["location_setup"]["sublocations"]) == 2
             _finish_shared(consumer)
-        checks.append("waar_inhuis_answers_advance_to_shared_minimum_then_complete")
+        checks.append("waar_inhuis_profile_advances_without_location_provisioning")
 
         with engine.begin() as conn:
             columns = {
@@ -269,20 +261,18 @@ def run() -> int:
                 WHERE household_id = :household_id
                 ORDER BY lower(naam)
             """), {"household_id": household_id}).mappings().all()
-            assert len(spaces) == 2
-            kitchen = next(row for row in spaces if str(row["naam"]).lower() == "keuken")
-            assert str(kitchen["id"]) == "existing-kitchen"
-            assert bool(kitchen["active"]) is True
-            sublocations = conn.execute(text("""
-                SELECT sl.naam, s.naam AS space_name
+            assert len(spaces) == 1
+            assert str(spaces[0]["id"]) == "existing-kitchen"
+            assert str(spaces[0]["naam"]) == "Keuken bestaand"
+            assert bool(spaces[0]["active"]) is False
+            sublocation_count = conn.execute(text("""
+                SELECT COUNT(*)
                 FROM sublocations sl
                 JOIN spaces s ON s.id = sl.space_id
                 WHERE s.household_id = :household_id
-                ORDER BY lower(s.naam), lower(sl.naam)
-            """), {"household_id": household_id}).mappings().all()
-            pairs = {(str(row["space_name"]), str(row["naam"])) for row in sublocations}
-            assert pairs == {("Keuken", "Koelkast"), ("Garage", "Stelling")}
-        checks.append("legacy_config_locations_and_shared_minimum_persist_without_duplicates")
+            """), {"household_id": household_id}).scalar_one()
+            assert int(sublocation_count) == 0
+        checks.append("onboarding_preserves_existing_locations_for_settings_management")
 
         with TestClient(app) as returning_consumer:
             login = returning_consumer.post(

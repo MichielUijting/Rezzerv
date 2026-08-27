@@ -1,9 +1,8 @@
 ﻿import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
-import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './catalog.css'
 
@@ -49,7 +48,6 @@ function identityTypeLabel(value) {
 
 export default function CatalogDetailPage() {
   const { globalProductId } = useParams()
-  const navigate = useNavigate()
   const [detail, setDetail] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -112,16 +110,6 @@ export default function CatalogDetailPage() {
         data-testid="catalog-detail-page"
       >
         <ScreenCard fullWidth>
-          <div className="rz-catalog-detail-actions">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => navigate('/catalogus')}
-            >
-              Terug naar Catalogus
-            </Button>
-          </div>
-
           {isLoading ? <div>Catalogusartikel laden...</div> : null}
 
           {error ? (

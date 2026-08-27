@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import { buildExpansionQuestions, isUseCaseActive } from '../src/features/settings/capabilityExpansion.js'
 import { buildSettingsNavigation } from '../src/features/settings/settingsNavigation.js'
 
@@ -26,9 +27,9 @@ const inhuisConfiguration = {
     ...inhuisConfiguration,
     location_tracking_level: 'global',
   })
-  assert.equal(questions.locationRefinement, true)
-  assert.equal(questions.needsFirstMainLocation, false)
-  assert.equal(questions.preserveGlobalLocations, true)
+  assert.equal(questions.locationRefinement, false, 'Waar Inhuis mag geen tweede locatie-invoer tonen')
+  assert.equal(questions.needsFirstMainLocation, false, 'Locaties worden uitsluitend via Instellingen → Locaties ingericht')
+  assert.equal(questions.preserveGlobalLocations, false)
   assert.equal(questions.receiptProcessing, false)
   assert.equal(questions.almostOut, false)
   assert.equal(questions.unpacking, true)
@@ -63,5 +64,22 @@ for (const onboarding of [
   assert.ok(capabilityTile, 'Wat wil je met Inhuis doen? moet altijd in Instellingen staan')
   assert.equal(capabilityTile.permission, 'household_settings.manage')
 }
+
+const articleStockSource = fs.readFileSync(
+  new URL('../src/features/articles/tabs/ArticleStockTab.jsx', import.meta.url),
+  'utf8',
+)
+assert.match(articleStockSource, /Nog geen locatie/, 'Locatie-loze voorraad moet herkenbaar blijven')
+assert.match(articleStockSource, /Locatie toewijzen/, 'Locatie-loze voorraad moet toewijsbaar zijn')
+assert.match(
+  articleStockSource,
+  /inventory-transfers/,
+  'Toewijzen moet de canonical transfer-flow gebruiken zodat gedeeltelijk splitsen mogelijk blijft',
+)
+assert.match(
+  articleStockSource,
+  /Instellingen → Locaties/,
+  'Locaties moeten vanuit de voorraadflow naar de canonical instellingenplek verwijzen',
+)
 
 console.log('CIRCULAR_CAPABILITY_EXPANSION_FRONTEND_GREEN')

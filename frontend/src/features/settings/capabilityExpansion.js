@@ -32,7 +32,6 @@ function normalizedConfiguration(configuration) {
 export function buildExpansionQuestions(useCase, configuration) {
   const config = normalizedConfiguration(configuration)
   const inventoryLevel = String(config.inventory_tracking_level || 'none').trim().toLowerCase()
-  const locationLevel = String(config.location_tracking_level || 'none').trim().toLowerCase()
 
   if (useCase === 'inhuis_halen') {
     return {
@@ -46,7 +45,7 @@ export function buildExpansionQuestions(useCase, configuration) {
   if (useCase === 'wat_inhuis') {
     return {
       inventoryLevel: inventoryLevel === 'none',
-      globalLocations: locationLevel === 'none',
+      globalLocations: String(config.location_tracking_level || 'none').trim().toLowerCase() === 'none',
       almostOut: !Boolean(config.almost_out_enabled),
       shopping: !Boolean(config.shopping_enabled),
     }
@@ -54,9 +53,11 @@ export function buildExpansionQuestions(useCase, configuration) {
 
   if (useCase === 'waar_inhuis') {
     return {
-      locationRefinement: locationLevel !== 'exact',
-      needsFirstMainLocation: locationLevel === 'none',
-      preserveGlobalLocations: locationLevel === 'global',
+      // Locaties worden uitsluitend beheerd via Instellingen → Locaties.
+      // Het activeren van Waar Inhuis mag daarom nooit een tweede locatie-invoer tonen.
+      locationRefinement: false,
+      needsFirstMainLocation: false,
+      preserveGlobalLocations: false,
       unpacking: !Boolean(config.unpacking_enabled),
       receiptProcessing: !Boolean(config.receipt_processing_enabled),
       almostOut: !Boolean(config.almost_out_enabled),

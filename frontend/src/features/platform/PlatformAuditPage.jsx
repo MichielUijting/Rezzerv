@@ -1,5 +1,4 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -28,7 +27,6 @@ async function fetchPlatformAudit(signal) {
 }
 
 export default function PlatformAuditPage() {
-  const navigate = useNavigate()
   const [items, setItems] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
@@ -101,9 +99,6 @@ export default function PlatformAuditPage() {
             <div>
               <Button type="button" variant="secondary" onClick={() => setReloadKey((value) => value + 1)}>
                 Vernieuwen
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => navigate('/home')}>
-                Terug naar platformbeheer
               </Button>
             </div>
           </Card>

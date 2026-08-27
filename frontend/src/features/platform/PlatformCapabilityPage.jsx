@@ -1,7 +1,5 @@
-import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
-import Button from '../../ui/Button.jsx'
 import PlatformAuditPage from './PlatformAuditPage.jsx'
 import PlatformAuthorizationsPage from './PlatformAuthorizationsPage.jsx'
 import PlatformBackgroundJobsPage from './PlatformBackgroundJobsPage.jsx'
@@ -16,8 +14,6 @@ import PlatformTestFixturesPage from './PlatformTestFixturesPage.jsx'
 import PlatformUsersPage from './PlatformUsersPage.jsx'
 
 export default function PlatformCapabilityPage({ item }) {
-  const navigate = useNavigate()
-
   if (item?.key === 'diagnostics') {
     return <PlatformDiagnosticsPage />
   }
@@ -76,9 +72,6 @@ export default function PlatformCapabilityPage({ item }) {
             <p>{item.description}</p>
             <p>Je bent voor dit platformonderdeel geautoriseerd.</p>
             <p>De functionele beheeracties voor dit onderdeel worden afzonderlijk aangesloten.</p>
-            <Button type="button" variant="secondary" onClick={() => navigate('/home')}>
-              Terug naar platformbeheer
-            </Button>
           </Card>
         </div>
       </div>

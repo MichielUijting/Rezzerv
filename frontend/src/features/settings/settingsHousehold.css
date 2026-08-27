@@ -194,11 +194,11 @@
 
 .rz-household-permission-toggle input {
   margin-top: 4px;
-  accent-color: #1f7a3f;
+  accent-color: var(--color-brand-primary);
 }
 
 .rz-household-permission-toggle input:focus-visible {
-  outline: 2px solid #1f7a3f;
+  outline: 2px solid var(--color-brand-primary);
   outline-offset: 2px;
 }
 

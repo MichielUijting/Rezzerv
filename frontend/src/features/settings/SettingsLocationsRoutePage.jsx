@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import { readStoredAuthContext } from '../../lib/authSession.js'
@@ -7,8 +6,7 @@ import {
   fetchHouseholdOnboarding,
   readHouseholdOnboarding,
 } from '../onboarding/onboardingState.js'
-import SettingsGlobalLocationsPage from './SettingsGlobalLocationsPage.jsx'
-import SettingsLocationsPage from './SettingsLocationsPage.jsx'
+import SettingsLocationsManagementPage from './SettingsLocationsManagementPage.jsx'
 
 export default function SettingsLocationsRoutePage() {
   const context = readStoredAuthContext()
@@ -30,7 +28,7 @@ export default function SettingsLocationsRoutePage() {
         const next = await fetchHouseholdOnboarding(context, { force: true })
         if (!cancelled) setOnboarding(next)
       } catch {
-        // Keep the legacy page as fail-safe when product relevance cannot be read.
+        // Keep the full management page as fail-safe when product relevance cannot be read.
       } finally {
         if (!cancelled) setIsLoadingProduct(false)
       }
@@ -52,12 +50,12 @@ export default function SettingsLocationsRoutePage() {
 
   const configuration = onboarding?.product_configuration
   if (!configuration || typeof configuration !== 'object') {
-    return <SettingsLocationsPage />
+    return <SettingsLocationsManagementPage sublocationsEnabled />
   }
 
   const level = String(configuration.location_tracking_level || '').trim().toLowerCase()
-  if (level === 'global') return <SettingsGlobalLocationsPage />
-  if (level === 'exact') return <SettingsLocationsPage />
+  if (level === 'global') return <SettingsLocationsManagementPage sublocationsEnabled={false} />
+  if (level === 'exact') return <SettingsLocationsManagementPage sublocationsEnabled />
 
   return (
     <AppShell title="Locaties" showExit={false}>
@@ -67,7 +65,6 @@ export default function SettingsLocationsRoutePage() {
           <p style={{ margin: 0, color: '#667085' }}>
             Dit huishouden gebruikt momenteel geen locaties. Activeer later een locatiemogelijkheid via de productinrichting van Inhuis.
           </p>
-          <div><Link to="/instellingen">← Terug naar instellingen</Link></div>
         </div>
       </Card>
     </AppShell>

@@ -442,7 +442,6 @@ export default function IncidentalPurchasePage() {
                 {purchaseCameraState.status === 'loading' ? 'Camera openen…' : purchaseLookupState.status === 'loading' ? 'Barcode scannen…' : 'Barcode scannen'}
               </Button>
             ) : null}
-            <Button type="button" variant="secondary" onClick={() => navigate('/voorraad')}>Terug naar Voorraad</Button>
             {!isMobileScanner ? <span style={{ color: '#475467', fontSize: 14 }}>Gebruik mobiel voor live scannen of vul de barcode hieronder handmatig in.</span> : null}
           </div>
 

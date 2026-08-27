@@ -1,31 +1,7 @@
 import { useState } from 'react'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
-
-function ChoiceButtons({ yesLabel = 'Ja', noLabel = 'Nee', value, onChange, disabled = false, testId }) {
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      <Button
-        type="button"
-        variant={value ? 'primary' : 'secondary'}
-        disabled={disabled}
-        onClick={() => onChange(true)}
-        data-testid={`${testId}-yes`}
-      >
-        {yesLabel}
-      </Button>
-      <Button
-        type="button"
-        variant={!value ? 'primary' : 'secondary'}
-        disabled={disabled}
-        onClick={() => onChange(false)}
-        data-testid={`${testId}-no`}
-      >
-        {noLabel}
-      </Button>
-    </div>
-  )
-}
+import { BooleanRadioChoices, ChoiceSummary, yesNo } from './OnboardingChoiceControls.jsx'
 
 export default function InhuisHalenOnboardingPage({ onSubmit, saving = false, error = '' }) {
   const [simpleInventory, setSimpleInventory] = useState(true)
@@ -56,6 +32,15 @@ export default function InhuisHalenOnboardingPage({ onSubmit, saving = false, er
         </p>
       </div>
 
+      <ChoiceSummary
+        items={[
+          { label: 'Eenvoudige voorraad', value: yesNo(simpleInventory) },
+          { label: 'Bijna-op meldingen', value: simpleInventory ? yesNo(almostOutNotifications) : 'Niet beschikbaar zonder voorraad' },
+          { label: 'Kassabonnen', value: yesNo(receiptProcessing, 'Nu', 'Later') },
+          { label: 'Gerechten', value: yesNo(recipes, 'Nu', 'Later') },
+        ]}
+      />
+
       <Card>
         <div className="rz-form">
           <div>
@@ -64,9 +49,11 @@ export default function InhuisHalenOnboardingPage({ onSubmit, saving = false, er
               Hiermee kan Inhuis helpen bepalen wat bijna op is. Dit staat standaard aan.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Eenvoudige voorraad gebruiken"
             value={simpleInventory}
             onChange={changeSimpleInventory}
+            disabled={saving}
             testId="inhuis-halen-simple-inventory"
           />
         </div>
@@ -80,10 +67,11 @@ export default function InhuisHalenOnboardingPage({ onSubmit, saving = false, er
               Je kunt dit later altijd aanpassen bij de relevante instellingen.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Meldingen wanneer iets bijna op is"
             value={almostOutNotifications}
             onChange={setAlmostOutNotifications}
-            disabled={!simpleInventory}
+            disabled={saving || !simpleInventory}
             testId="inhuis-halen-almost-out-notifications"
           />
           {!simpleInventory ? (
@@ -100,11 +88,13 @@ export default function InhuisHalenOnboardingPage({ onSubmit, saving = false, er
               Kies Nu als je kassabonnen vanaf de start wilt gebruiken, of Later om dit nog niet te activeren.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Aankopen via kassabonnen verwerken"
             yesLabel="Nu"
             noLabel="Later"
             value={receiptProcessing}
             onChange={setReceiptProcessing}
+            disabled={saving}
             testId="inhuis-halen-receipts"
           />
         </div>
@@ -118,11 +108,13 @@ export default function InhuisHalenOnboardingPage({ onSubmit, saving = false, er
               Gerechten kunnen later helpen om van inspiratie naar boodschappen te gaan.
             </p>
           </div>
-          <ChoiceButtons
+          <BooleanRadioChoices
+            name="Gerechten gebruiken als inspiratie"
             yesLabel="Nu"
             noLabel="Later"
             value={recipes}
             onChange={setRecipes}
+            disabled={saving}
             testId="inhuis-halen-recipes"
           />
         </div>

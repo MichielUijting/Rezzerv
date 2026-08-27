@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
+import { MIN_RESIZABLE_COLUMN_WIDTH, resizeTableBoundary } from './tableResize.js'
 
-const MIN_RESIZABLE_COLUMN_WIDTH = 56
+function normalizedDefaultWidth(value) {
+  return Math.max(1, Math.round(Number(value) || MIN_RESIZABLE_COLUMN_WIDTH))
+}
+
+function minimumWidthFor(defaultWidths, columnKey) {
+  const configured = normalizedDefaultWidth(defaultWidths?.[columnKey])
+  return Math.min(MIN_RESIZABLE_COLUMN_WIDTH, configured)
+}
 
 export function useResizableColumnWidths(defaultWidths) {
   const defaultWidthsSignature = Object.entries(defaultWidths || {})
@@ -8,19 +16,22 @@ export function useResizableColumnWidths(defaultWidths) {
     .join('|')
   const [widths, setWidths] = useState(() => ({ ...defaultWidths }))
   const widthsRef = useRef(widths)
+  const defaultsRef = useRef(defaultWidths || {})
 
   useEffect(() => {
     widthsRef.current = widths
   }, [widths])
 
   useEffect(() => {
+    defaultsRef.current = defaultWidths || {}
     setWidths({ ...defaultWidths })
   }, [defaultWidthsSignature])
 
   function setColumnWidth(columnKey, nextWidth) {
+    const minimumWidth = minimumWidthFor(defaultsRef.current, columnKey)
     const normalizedWidth = Math.max(
-      MIN_RESIZABLE_COLUMN_WIDTH,
-      Math.round(Number(nextWidth) || MIN_RESIZABLE_COLUMN_WIDTH),
+      minimumWidth,
+      Math.round(Number(nextWidth) || minimumWidth),
     )
     setWidths((current) => ({ ...current, [columnKey]: normalizedWidth }))
   }
@@ -28,12 +39,25 @@ export function useResizableColumnWidths(defaultWidths) {
   function startResize(columnKey, event) {
     event.preventDefault()
     event.stopPropagation()
+
+    const orderedKeys = Object.keys(widthsRef.current || defaultWidths || {})
+    const boundaryIndex = orderedKeys.indexOf(columnKey)
+    if (boundaryIndex < 0 || boundaryIndex >= orderedKeys.length - 1) return
+
     const startX = event.clientX
-    const startWidth = Number(widthsRef.current?.[columnKey] ?? defaultWidths?.[columnKey] ?? 120)
+    const startWidths = orderedKeys.map((key) => normalizedDefaultWidth(
+      widthsRef.current?.[key] ?? defaultsRef.current?.[key],
+    ))
 
     function handleMouseMove(moveEvent) {
       const delta = moveEvent.clientX - startX
-      setColumnWidth(columnKey, startWidth + delta)
+      const nextWidths = resizeTableBoundary(
+        startWidths,
+        boundaryIndex,
+        delta,
+        MIN_RESIZABLE_COLUMN_WIDTH,
+      )
+      setWidths(Object.fromEntries(orderedKeys.map((key, index) => [key, nextWidths[index]])))
     }
 
     function handleMouseUp() {

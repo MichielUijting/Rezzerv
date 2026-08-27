@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -305,7 +304,6 @@ export default function SettingsCapabilitiesPage() {
               <h2 style={{ margin: '0 0 8px 0', fontSize: 20 }}>Wat wil je met Inhuis doen?</h2>
               <p style={{ margin: 0, color: '#667085' }}>Je kunt Inhuis later uitbreiden. Wat al is ingesteld blijft behouden.</p>
             </div>
-            <div><Link to="/instellingen" style={{ color: '#0f5b32', textDecoration: 'none', fontWeight: 600 }}>← Terug naar instellingen</Link></div>
             {isLoading ? <div>Mogelijkheden laden…</div> : CAPABILITY_USE_CASES.map((item) => {
               const active = isUseCaseActive(state?.active_use_cases, item.key)
               return (
