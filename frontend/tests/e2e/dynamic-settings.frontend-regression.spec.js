@@ -174,5 +174,11 @@ test('Waar Inhuis exact locations keep the full location and sublocation managem
   const sublocationConfirmation = page.getByRole('dialog', { name: 'Bevestiging' })
   await expect(sublocationConfirmation).toBeVisible()
   await sublocationConfirmation.getByRole('button', { name: 'OK' }).click()
+
+  const woningExactRow = page.getByRole('row').filter({
+    has: page.getByLabel('Locatienaam Woning exact'),
+  })
+  await woningExactRow.dblclick()
+  await expect(page.getByText('Sublocaties van Woning exact', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Sublocatienaam Kast 1')).toBeVisible()
 })
