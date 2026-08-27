@@ -60,7 +60,11 @@ def _source_contract() -> None:
     )
     _require(
         service.count("ensure_external_article_product_link_schema(conn)") == 1,
-        "Schema-guard mag alleen nog als read-only functiedefinitie bestaan",
+        "Legacy schema-hook mag alleen nog als inerte functiedefinitie bestaan",
+    )
+    _require(
+        "del conn" in service,
+        "Legacy schema-hook is niet aantoonbaar inert",
     )
 
     _require(
@@ -106,7 +110,7 @@ def _source_contract() -> None:
     )
 
 
-def _read_only_guard_contract() -> None:
+def _inert_legacy_hook_contract() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
 
     with engine.begin() as conn:
@@ -122,17 +126,7 @@ def _read_only_guard_contract() -> None:
         ).scalar_one()
         _require(before_missing == 0, "Testdatabase begon niet schema-loos")
 
-        try:
-            ensure_external_article_product_link_schema(conn)
-        except RuntimeError as exc:
-            _require(
-                "Alembic" in str(exc),
-                "Read-only guard geeft geen migratiegerichte fout",
-            )
-        else:
-            raise AssertionError(
-                "Read-only schema-guard accepteerde een ontbrekende tabel"
-            )
+        ensure_external_article_product_link_schema(conn)
 
         after_missing = conn.execute(
             text(
@@ -146,7 +140,7 @@ def _read_only_guard_contract() -> None:
         ).scalar_one()
         _require(
             after_missing == 0,
-            "Read-only schema-guard heeft onverwacht schema aangemaakt",
+            "Legacy schema-hook heeft onverwacht schema aangemaakt",
         )
 
         conn.execute(
@@ -183,15 +177,16 @@ def _read_only_guard_contract() -> None:
         ).scalar_one()
         _require(
             schema_before == schema_after,
-            "Read-only schema-guard wijzigde bestaand schema",
+            "Legacy schema-hook wijzigde bestaand schema",
         )
 
 
 def main() -> None:
     _source_contract()
-    _read_only_guard_contract()
+    _inert_legacy_hook_contract()
     print("SCHEMA_AUTHORITY_SOURCE_CONTRACT_GREEN")
     print("EXTERNAL_LINK_RUNTIME_DDL_REMOVED_GREEN")
+    print("EXTERNAL_LINK_LEGACY_SCHEMA_HOOK_INERT_GREEN")
     print("SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN")
 
 
