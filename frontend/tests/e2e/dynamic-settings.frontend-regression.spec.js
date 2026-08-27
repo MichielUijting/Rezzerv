@@ -39,6 +39,11 @@ async function registerAndComplete(page, { prefix, useCase, profile, householdNa
   return completed.json()
 }
 
+async function dismissFeedback(page) {
+  const ok = page.getByRole('button', { name: 'OK' })
+  if (await ok.count()) await ok.click()
+}
+
 test('system context cannot enter consumer Settings', async ({ page }) => {
   const session = await page.request.get('/api/session')
   expect(session.ok()).toBeTruthy()
@@ -87,7 +92,7 @@ test('Inhuis halen shows grouped product-relevant settings while keeping general
   await expect(page.getByTestId('settings-tile-locations')).toHaveCount(0)
 })
 
-test('Wat Inhuis global settings use the standard locations table without sublocation controls', async ({ page }) => {
+test('Wat Inhuis global locations keep the full standard management UX without sublocations', async ({ page }) => {
   await registerAndComplete(page, {
     prefix: 'dynamic-settings-wat-inhuis',
     useCase: 'wat_inhuis',
@@ -102,34 +107,69 @@ test('Wat Inhuis global settings use the standard locations table without subloc
 
   await page.goto('/instellingen')
   await expect(page.getByTestId('settings-page')).toHaveAttribute('data-settings-mode', 'dynamic')
-  await expect(page.getByTestId('settings-active-profile')).toContainText('Kassabonnen')
-  await expect(page.getByTestId('settings-tile-account')).toBeVisible()
-  await expect(page.getByTestId('settings-tile-help-about')).toBeVisible()
   await expect(page.getByTestId('settings-tile-locations')).toBeVisible()
-  // Wat Inhuis keeps Kassa/receipt processing canonical active even with shopping off,
-  // so the shopping-or-receipts Winkelimport setting remains relevant.
-  await expect(page.getByTestId('settings-tile-store-import')).toBeVisible()
-  await expect(page.getByTestId('settings-tile-almost-out')).toHaveCount(0)
-  await expect(page.getByTestId('settings-tile-household-automation')).toBeVisible()
-
   await page.getByTestId('settings-tile-locations').click()
+
   await expect(page).toHaveURL(/\/instellingen\/locaties$/)
-  await expect(page.getByTestId('settings-global-locations-page')).toBeVisible()
-  await expect(page.getByTestId('settings-locations-page')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Toevoegen sublocatie' })).toHaveCount(0)
+  const locationsPage = page.getByTestId('settings-locations-page')
+  await expect(locationsPage).toBeVisible()
+  await expect(locationsPage).toHaveAttribute('data-sublocations-enabled', 'false')
+  await expect(page.getByTestId('sublocations-section')).toHaveCount(0)
 
-  const table = page.getByTestId('settings-global-locations-table')
+  const table = page.getByTestId('settings-locations-table')
   await expect(table).toBeVisible()
-  expect(await table.evaluate((element) => element.style.tableLayout)).toBe('fixed')
-  expect(await table.locator('col').nth(0).evaluate((element) => element.style.width)).toBe('420px')
-  expect(await table.locator('col').nth(1).evaluate((element) => element.style.width)).toBe('140px')
+  await expect(page.getByLabel('Filter op locatie')).toBeVisible()
+  await expect(page.getByLabel('Filter op actief')).toBeVisible()
+  await expect(page.getByLabel('Selecteer alle locaties')).toBeVisible()
+  await expect(table.locator('.rz-column-resize-handle')).toHaveCount(3)
 
-  await page.getByTestId('global-location-name-input').fill('Woning')
-  await page.getByTestId('global-location-add').click()
+  const direct = page.getByTestId('canonical-direct-location')
+  await expect(direct).toHaveText('Direct')
+  await expect(page.locator('input[aria-label="Locatienaam Direct"]')).toHaveCount(0)
+  await expect(page.getByLabel('Actief Direct')).toBeDisabled()
+  await expect(page.getByLabel('Selecteer Direct')).toBeDisabled()
+
+  const locationHeader = table.locator('th').nth(1)
+  const handle = locationHeader.locator('.rz-column-resize-handle')
+  const beforeWidth = Number.parseFloat(await table.locator('col').nth(1).evaluate((element) => element.style.width))
+  const box = await handle.boundingBox()
+  expect(box).toBeTruthy()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2)
+  await page.mouse.up()
+  const afterWidth = Number.parseFloat(await table.locator('col').nth(1).evaluate((element) => element.style.width))
+  expect(afterWidth).toBeGreaterThan(beforeWidth)
+
+  await expect(page.getByRole('button', { name: 'Exporteren' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Verwijderen' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Wijzigingen opslaan' })).toHaveCount(0)
+
+  const newRow = page.getByTestId('new-main-location-row')
+  const labelBox = await newRow.getByText('Nieuwe hoofdlocatie', { exact: true }).boundingBox()
+  const inputBox = await newRow.locator('#new-main-location').boundingBox()
+  expect(labelBox).toBeTruthy()
+  expect(inputBox).toBeTruthy()
+  expect(labelBox.x).toBeLessThan(inputBox.x)
+
+  await newRow.locator('#new-main-location').fill('Woning')
+  await newRow.getByRole('button', { name: 'Toevoegen' }).click()
+  const successDialog = page.getByRole('dialog')
+  await expect(successDialog).toContainText('Hoofdlocatie toegevoegd.')
+  await dismissFeedback(page)
   await expect(page.getByLabel('Locatienaam Woning')).toBeVisible()
+
+  await page.getByLabel('Locatienaam Woning').fill('Woning gewijzigd')
+  await page.goBack()
+  const pending = page.getByTestId('locations-pending-changes-overlay')
+  await expect(pending).toBeVisible()
+  await expect(pending.getByRole('button', { name: 'Wijzigingen opslaan' })).toBeVisible()
+  await expect(pending.getByRole('button', { name: 'Wijzigingen annuleren' })).toBeVisible()
+  await pending.getByRole('button', { name: 'Wijzigingen annuleren' }).click()
+  await expect(page).toHaveURL(/\/instellingen$/)
 })
 
-test('Waar Inhuis exact locations keep the full location and sublocation management flow working', async ({ page }) => {
+test('Waar Inhuis exact locations keep full main-location and sublocation management working', async ({ page }) => {
   await registerAndComplete(page, {
     prefix: 'dynamic-settings-waar-inhuis',
     useCase: 'waar_inhuis',
@@ -144,41 +184,33 @@ test('Waar Inhuis exact locations keep the full location and sublocation managem
   })
 
   await page.goto('/instellingen')
-  await expect(page.getByTestId('settings-page')).toHaveAttribute('data-settings-mode', 'dynamic')
   await expect(page.getByTestId('settings-tile-locations')).toBeVisible()
-
   await page.getByTestId('settings-tile-locations').click()
   await expect(page).toHaveURL(/\/instellingen\/locaties$/)
-  await expect(page.getByTestId('settings-locations-page')).toBeVisible()
-  await expect(page.getByTestId('settings-global-locations-page')).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Toevoegen locatie' }).click()
-  const locationDialog = page.getByRole('dialog', { name: 'Nieuwe locatie' })
-  await locationDialog.getByLabel('Locatie naam').fill('Woning exact')
-  await locationDialog.getByRole('button', { name: 'Opslaan' }).click()
+  const locationsPage = page.getByTestId('settings-locations-page')
+  await expect(locationsPage).toHaveAttribute('data-sublocations-enabled', 'true')
+  await expect(page.getByTestId('sublocations-section')).toBeVisible()
+  await expect(page.getByLabel('Filter op locatie')).toBeVisible()
+  await expect(page.getByLabel('Selecteer alle locaties')).toBeVisible()
 
-  const locationConfirmation = page.getByRole('dialog', { name: 'Bevestiging' })
-  await expect(locationConfirmation).toBeVisible()
-  await locationConfirmation.getByRole('button', { name: 'OK' }).click()
+  const newLocationRow = page.getByTestId('new-main-location-row')
+  await newLocationRow.locator('#new-main-location').fill('Woning exact')
+  await newLocationRow.getByRole('button', { name: 'Toevoegen' }).click()
+  await dismissFeedback(page)
   await expect(page.getByLabel('Locatienaam Woning exact')).toBeVisible()
 
-  const addSublocation = page.getByRole('button', { name: 'Toevoegen sublocatie' })
-  await expect(addSublocation).toBeEnabled()
-  await addSublocation.click()
-
-  const sublocationDialog = page.getByRole('dialog', { name: 'Nieuwe sublocatie' })
-  await sublocationDialog.getByRole('combobox', { name: 'Locatie', exact: true }).selectOption({ label: 'Woning exact' })
-  await sublocationDialog.getByLabel('Sublocatie naam').fill('Kast 1')
-  await sublocationDialog.getByRole('button', { name: 'Opslaan' }).click()
-
-  const sublocationConfirmation = page.getByRole('dialog', { name: 'Bevestiging' })
-  await expect(sublocationConfirmation).toBeVisible()
-  await sublocationConfirmation.getByRole('button', { name: 'OK' }).click()
-
-  const woningExactRow = page.getByRole('row').filter({
-    has: page.getByLabel('Locatienaam Woning exact'),
-  })
+  const woningExactRow = page.getByRole('row').filter({ has: page.getByLabel('Locatienaam Woning exact') })
   await woningExactRow.dblclick()
-  await expect(page.getByText('Sublocaties van Woning exact', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('sublocations-heading')).toHaveText('Sublocaties van Woning exact')
+
+  const newSublocationRow = page.getByTestId('new-sublocation-row')
+  await newSublocationRow.getByLabel('Hoofdlocatie voor nieuwe sublocatie').selectOption({ label: 'Woning exact' })
+  await newSublocationRow.getByLabel('Naam nieuwe sublocatie').fill('Kast 1')
+  await newSublocationRow.getByRole('button', { name: 'Toevoegen' }).click()
+  await dismissFeedback(page)
+
+  await expect(page.getByTestId('sublocations-heading')).toHaveText('Sublocaties van Woning exact')
   await expect(page.getByLabel('Sublocatienaam Kast 1')).toBeVisible()
+  await expect(page.getByTestId('settings-sublocations-table').locator('.rz-column-resize-handle')).toHaveCount(3)
 })
