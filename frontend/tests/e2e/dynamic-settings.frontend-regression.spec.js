@@ -41,7 +41,9 @@ async function registerAndComplete(page, { prefix, useCase, profile, householdNa
 
 async function dismissFeedback(page) {
   const ok = page.getByRole('button', { name: 'OK' })
-  if (await ok.count()) await ok.click()
+  await expect(ok).toBeVisible()
+  await ok.click()
+  await expect(ok).toHaveCount(0)
 }
 
 test('system context cannot enter consumer Settings', async ({ page }) => {
