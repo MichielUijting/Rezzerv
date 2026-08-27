@@ -178,14 +178,38 @@ test('Wat Inhuis global locations keep the full standard management UX without s
   await expect(page).toHaveURL(/\/instellingen$/)
 })
 
+test('Waar Inhuis onboarding defers all location entry to Settings', async ({ page }) => {
+  await page.context().clearCookies()
+  const registration = await page.request.post('/api/auth/register', {
+    data: {
+      email: uniqueEmail('waar-inhuis-no-location-frame'),
+      password: 'SterkWachtwoord123!',
+    },
+  })
+  expect(registration.status()).toBe(201)
+
+  await page.goto('/onboarding')
+  await page.getByTestId('onboarding-choice-waar_inhuis').check()
+  await page.getByTestId('onboarding-primary-continue').click()
+
+  await expect(page.getByTestId('onboarding-waar-inhuis-follow-up')).toBeVisible()
+  await expect(page.getByTestId('waar-inhuis-locations-settings-hint')).toContainText('Instellingen → Locaties')
+  await expect(page.getByText('Welke hoofdlocaties wil je gebruiken?')).toHaveCount(0)
+  await expect(page.getByText('Locaties nu al verfijnen?')).toHaveCount(0)
+  await expect(page.getByTestId('waar-inhuis-custom-location-input')).toHaveCount(0)
+  await expect(page.getByTestId('waar-inhuis-refine-locations')).toHaveCount(0)
+  await expect(page.getByTestId('waar-inhuis-sublocation-add')).toHaveCount(0)
+
+  await page.getByTestId('waar-inhuis-finish').click()
+  await expect(page.getByText('Jouw volledige inrichting')).toBeVisible()
+})
+
 test('Waar Inhuis exact locations keep full main-location and sublocation management working', async ({ page }) => {
   await registerAndComplete(page, {
     prefix: 'dynamic-settings-waar-inhuis',
     useCase: 'waar_inhuis',
     householdName: 'Dynamische instellingen Waar Inhuis',
     profile: {
-      main_locations: ['Keuken'],
-      sublocations: [],
       unpacking_enabled: true,
       receipt_processing_enabled: true,
       almost_out_enabled: false,
