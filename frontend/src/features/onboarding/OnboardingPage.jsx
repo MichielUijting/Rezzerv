@@ -74,7 +74,7 @@ function persistedProfileChoices(onboarding) {
 
   if (onboarding?.primary_use_case === 'waar_inhuis') {
     return [
-      { label: 'Locaties', value: config.location_tracking_level === 'exact' ? 'Exacte plekken' : 'Geen exacte plekken' },
+      { label: 'Locaties', value: 'Via Instellingen' },
       { label: 'Uitpakken', value: onOff(config.unpacking_enabled, 'Nu', 'Later') },
       { label: 'Kassabonnen', value: onOff(config.receipt_processing_enabled, 'Nu', 'Later') },
       { label: 'Bijna op', value: onOff(config.almost_out_enabled) },
