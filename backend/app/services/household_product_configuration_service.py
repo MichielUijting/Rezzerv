@@ -5,6 +5,8 @@ from typing import Any
 
 from sqlalchemy import inspect, text
 
+from app.services.canonical_direct_location_service import ensure_canonical_direct_location
+
 INVENTORY_TRACKING_LEVELS = frozenset({"none", "presence", "quantity"})
 LOCATION_TRACKING_LEVELS = frozenset({"none", "global", "exact"})
 
@@ -190,6 +192,8 @@ def save_wat_inhuis_configuration(
         "shopping_enabled": int(bool(shopping_enabled)),
         "almost_out_enabled": int(bool(almost_out_enabled)),
     })
+    if location_tracking_level == "global":
+        ensure_canonical_direct_location(conn, household_id=normalized_household_id)
     return resolve_household_product_configuration(conn, normalized_household_id)
 
 
@@ -306,6 +310,9 @@ def resolve_canonical_household_product_configuration(
 ) -> HouseholdProductConfiguration:
     configuration = resolve_household_product_configuration(conn, household_id)
     normalized_primary_use_case = str(primary_use_case or "").strip().lower()
+
+    if configuration.location_tracking_level == "global":
+        ensure_canonical_direct_location(conn, household_id=configuration.household_id)
 
     if (
         normalized_primary_use_case != "wat_inhuis"
