@@ -167,7 +167,7 @@ test('Waar Inhuis exact locations keep the full location and sublocation managem
   await addSublocation.click()
 
   const sublocationDialog = page.getByRole('dialog', { name: 'Nieuwe sublocatie' })
-  await sublocationDialog.getByLabel('Locatie').selectOption({ label: 'Woning exact' })
+  await sublocationDialog.getByRole('combobox', { name: 'Locatie', exact: true }).selectOption({ label: 'Woning exact' })
   await sublocationDialog.getByLabel('Sublocatie naam').fill('Kast 1')
   await sublocationDialog.getByRole('button', { name: 'Opslaan' }).click()
 
