@@ -3,16 +3,22 @@ name: PostgreSQL migration foundation validation
 on:
   pull_request:
     paths:
+      - 'backend/Dockerfile'
       - 'backend/alembic.ini'
       - 'backend/alembic/**'
       - 'backend/app/db.py'
       - 'backend/app/main.py'
       - 'backend/app/models/**'
+      - 'backend/app/runtime_preflight.py'
+      - 'backend/app/schema_migration_preflight.py'
       - 'backend/app/services/**'
+      - 'backend/app/testing/external_article_product_link_contract.py'
       - 'backend/requirements.txt'
       - 'backend/tests/capture_schema_baseline.py'
       - 'backend/tests/migration_foundation_selftest.py'
+      - 'backend/tests/schema_authority_cutover_selftest.py'
       - 'docs/technical/POSTGRESQL-MIGRATIONS.md'
+      - 'docs/technical/POSTGRESQL-SCHEMA-AUTHORITY-CUTOVER.md'
       - '.github/workflows/postgresql-migration-foundation-validation.yml'
   workflow_dispatch:
 
@@ -48,11 +54,15 @@ jobs:
           python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-sqlite.log
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' /tmp/migration-sqlite.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
+          python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority.log
+          grep -F 'SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN' /tmp/schema-authority.log
+          python -m app.testing.external_article_product_link_contract | tee /tmp/external-link-contract.log
+          grep -F 'EXTERNAL_ARTICLE_PRODUCT_LINK_CONTRACT=GREEN' /tmp/external-link-contract.log
           python -m alembic -c backend/alembic.ini current
           python -m alembic -c backend/alembic.ini heads
 
-  sqlite-current-runtime-contract:
-    name: Current runtime schema equals baseline and can be stamped
+  sqlite-existing-adoption:
+    name: Existing SQLite baseline is validated and adopted
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,39 +81,53 @@ jobs:
       - name: Build exact current backend image
         run: docker build -t rezzerv-migration-runtime ./backend
 
-      - name: Bootstrap current SQLite runtime schema
+      - name: Prepare existing unversioned SQLite baseline
+        shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/rezzerv-schema"
+          TARGET_DB="$RUNNER_TEMP/rezzerv-schema/current-runtime.sqlite" python - <<'PY'
+          import gzip
+          import os
+          import sqlite3
+          from pathlib import Path
+
+          target = Path(os.environ['TARGET_DB'])
+          target.unlink(missing_ok=True)
+          with gzip.open('backend/alembic/baseline_sqlite.sql.gz', 'rt', encoding='utf-8') as handle:
+              baseline = handle.read()
+          connection = sqlite3.connect(str(target))
+          try:
+              connection.executescript(baseline)
+              connection.commit()
+          finally:
+              connection.close()
+          PY
+
+      - name: Validate, adopt and start existing SQLite runtime
+        run: |
           docker run --rm \
             -e DATABASE_URL=sqlite:////capture/current-runtime.sqlite \
             -e REZZERV_RECEIPT_STARTUP_REMBG_WARMUP=false \
             -e REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP=false \
             -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO=true \
             -e REZZERV_SUPERGEBRUIKER_PASSWORD='MigrationContractOnly123!' \
+            -e REZZERV_EXPECT_MIGRATION_MODE=sqlite-stamped-runtime \
             -v "$RUNNER_TEMP/rezzerv-schema:/capture" \
             rezzerv-migration-runtime \
-            sh -lc 'python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /capture/current-runtime.sqlite > /capture/current-schema.sql && chmod 666 /capture/current-runtime.sqlite /capture/current-schema.sql'
+            sh -lc 'python -m app.schema_migration_preflight && python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /capture/current-runtime.sqlite > /capture/current-schema.sql && python tests/migration_foundation_selftest.py > /capture/migration-adoption.log && python -m alembic -c alembic.ini current > /capture/alembic-current.log && chmod 666 /capture/current-runtime.sqlite /capture/current-schema.sql /capture/migration-adoption.log /capture/alembic-current.log'
 
-      - name: Prove immutable baseline equals current runtime schema
+      - name: Prove adoption preserved immutable schema
         run: |
           gzip -dc backend/alembic/baseline_sqlite.sql.gz > "$RUNNER_TEMP/rezzerv-schema/baseline.sql"
           diff -u "$RUNNER_TEMP/rezzerv-schema/baseline.sql" "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           test "$(sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" | cut -d' ' -f1)" = 'e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7'
-
-      - name: Stamp existing current runtime without replaying baseline DDL
-        env:
-          PYTHONPATH: backend
-          REZZERV_EXPECT_MIGRATION_MODE: sqlite-stamped-runtime
-        run: |
-          export DATABASE_URL="sqlite:///$RUNNER_TEMP/rezzerv-schema/current-runtime.sqlite"
-          python -m alembic -c backend/alembic.ini stamp head
-          python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-stamp.log
-          grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' /tmp/migration-stamp.log
-          grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-stamp.log
+          grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F '20260827_02' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
-    name: PostgreSQL 17 migration lineage
+    name: PostgreSQL 17 migration lineage and authority
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -135,7 +159,7 @@ jobs:
             "$(grep '^alembic==' backend/requirements.txt)" \
             "$(grep '^psycopg\[binary\]==' backend/requirements.txt)"
 
-      - name: Validate PostgreSQL lineage without premature application schema
+      - name: Validate PostgreSQL lineage and external-link authority
         env:
           PYTHONPATH: backend
           DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:5432/rezzerv_migrations
@@ -149,5 +173,27 @@ jobs:
           python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-postgresql.log
           grep -F 'MIGRATION_POSTGRESQL_LINEAGE_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
+          python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority-postgresql.log
+          grep -F 'EXTERNAL_LINK_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
+          python - <<'PY'
+          from sqlalchemy import inspect
+          from app.db import engine
+
+          inspector = inspect(engine)
+          assert 'external_article_product_links' in inspector.get_table_names()
+          indexes = {
+              item['name']
+              for item in inspector.get_indexes('external_article_product_links')
+          }
+          expected = {
+              'idx_external_article_product_links_product',
+              'idx_external_article_product_links_candidate',
+              'uq_external_article_product_links_code_confirmed',
+              'uq_external_article_product_links_text_confirmed',
+          }
+          missing = expected - indexes
+          assert not missing, f'PostgreSQL external-link indexes ontbreken: {sorted(missing)}'
+          print('POSTGRESQL_EXTERNAL_LINK_SCHEMA_AUTHORITY_GREEN')
+          PY
           python -m alembic -c backend/alembic.ini current
           python -m alembic -c backend/alembic.ini heads
