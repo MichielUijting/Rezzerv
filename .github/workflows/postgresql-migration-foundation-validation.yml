@@ -1,0 +1,153 @@
+name: PostgreSQL migration foundation validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/db.py'
+      - 'backend/app/main.py'
+      - 'backend/app/models/**'
+      - 'backend/app/services/**'
+      - 'backend/requirements.txt'
+      - 'backend/tests/capture_schema_baseline.py'
+      - 'backend/tests/migration_foundation_selftest.py'
+      - 'docs/technical/POSTGRESQL-MIGRATIONS.md'
+      - '.github/workflows/postgresql-migration-foundation-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sqlite-fresh-baseline:
+    name: Fresh SQLite from immutable baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install migration dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
+            "$(grep '^alembic==' backend/requirements.txt)"
+
+      - name: Build fresh SQLite schema through Alembic
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: sqlite:////tmp/rezzerv-migration-baseline.sqlite
+          REZZERV_EXPECT_MIGRATION_MODE: sqlite-baseline
+        run: |
+          rm -f /tmp/rezzerv-migration-baseline.sqlite
+          python -m alembic -c backend/alembic.ini upgrade head
+          python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-sqlite.log
+          grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' /tmp/migration-sqlite.log
+          grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
+          python -m alembic -c backend/alembic.ini current
+          python -m alembic -c backend/alembic.ini heads
+
+  sqlite-current-runtime-contract:
+    name: Current runtime schema equals baseline and can be stamped
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install migration dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
+            "$(grep '^alembic==' backend/requirements.txt)"
+
+      - name: Build exact current backend image
+        run: docker build -t rezzerv-migration-runtime ./backend
+
+      - name: Bootstrap current SQLite runtime schema
+        run: |
+          mkdir -p "$RUNNER_TEMP/rezzerv-schema"
+          docker run --rm \
+            -e DATABASE_URL=sqlite:////capture/current-runtime.sqlite \
+            -e REZZERV_RECEIPT_STARTUP_REMBG_WARMUP=false \
+            -e REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP=false \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO=true \
+            -e REZZERV_SUPERGEBRUIKER_PASSWORD='MigrationContractOnly123!' \
+            -v "$RUNNER_TEMP/rezzerv-schema:/capture" \
+            rezzerv-migration-runtime \
+            sh -lc 'python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /capture/current-runtime.sqlite > /capture/current-schema.sql && chmod 666 /capture/current-runtime.sqlite /capture/current-schema.sql'
+
+      - name: Prove immutable baseline equals current runtime schema
+        run: |
+          gzip -dc backend/alembic/baseline_sqlite.sql.gz > "$RUNNER_TEMP/rezzerv-schema/baseline.sql"
+          diff -u "$RUNNER_TEMP/rezzerv-schema/baseline.sql" "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          test "$(sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" | cut -d' ' -f1)" = 'e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7'
+
+      - name: Stamp existing current runtime without replaying baseline DDL
+        env:
+          PYTHONPATH: backend
+          REZZERV_EXPECT_MIGRATION_MODE: sqlite-stamped-runtime
+        run: |
+          export DATABASE_URL="sqlite:///$RUNNER_TEMP/rezzerv-schema/current-runtime.sqlite"
+          python -m alembic -c backend/alembic.ini stamp head
+          python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-stamp.log
+          grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' /tmp/migration-stamp.log
+          grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-stamp.log
+
+  postgresql-lineage:
+    name: PostgreSQL 17 migration lineage
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: rezzerv_migrations
+          POSTGRES_USER: rezzerv
+          POSTGRES_PASSWORD: rezzerv-ci-migrations
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv -d rezzerv_migrations"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PostgreSQL migration dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
+            "$(grep '^alembic==' backend/requirements.txt)" \
+            "$(grep '^psycopg\[binary\]==' backend/requirements.txt)"
+
+      - name: Validate PostgreSQL lineage without premature application schema
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:5432/rezzerv_migrations
+          REZZERV_EXPECT_MIGRATION_MODE: postgresql-lineage
+          DATABASE_CONNECT_TIMEOUT_SECONDS: '5'
+          DATABASE_POOL_SIZE: '2'
+          DATABASE_MAX_OVERFLOW: '1'
+          DATABASE_POOL_TIMEOUT_SECONDS: '10'
+        run: |
+          python -m alembic -c backend/alembic.ini upgrade head
+          python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-postgresql.log
+          grep -F 'MIGRATION_POSTGRESQL_LINEAGE_GREEN' /tmp/migration-postgresql.log
+          grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
+          python -m alembic -c backend/alembic.ini current
+          python -m alembic -c backend/alembic.ini heads
