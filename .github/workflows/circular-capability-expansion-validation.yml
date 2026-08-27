@@ -10,6 +10,7 @@ on:
       - 'backend/app/services/household_location_onboarding_service.py'
       - 'backend/tests/circular_capability_expansion_selftest.py'
       - 'frontend/src/features/settings/**'
+      - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
       - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/tests/circular-capability-expansion.contract.mjs'
       - 'frontend/tests/e2e/circular-capability-expansion.frontend-regression.spec.js'
