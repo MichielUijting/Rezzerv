@@ -2,8 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
+import { buildTableWidth } from '../../ui/resizableTable'
 import Table from '../../ui/Table'
 import { canCurrentUserPerform, fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
+
+const globalLocationColumnWidths = {
+  naam: 420,
+  actief: 140,
+}
 
 function draftMap(items) {
   return Object.fromEntries(
@@ -138,7 +144,20 @@ export default function SettingsGlobalLocationsPage() {
 
           {canManage ? (
             <>
-              <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table">
+              <Table
+                wrapperClassName="rz-stock-table-wrapper"
+                tableClassName="rz-stock-table"
+                dataTestId="settings-global-locations-table"
+                tableStyle={{
+                  tableLayout: 'fixed',
+                  width: buildTableWidth(globalLocationColumnWidths),
+                  minWidth: buildTableWidth(globalLocationColumnWidths),
+                }}
+              >
+                <colgroup>
+                  <col style={{ width: '420px' }} />
+                  <col style={{ width: '140px' }} />
+                </colgroup>
                 <thead>
                   <tr className="rz-table-header">
                     <th>Locatie</th>
