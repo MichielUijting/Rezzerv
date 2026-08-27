@@ -35,6 +35,13 @@ _EXPECTED_SQLITE_TRIGGERS = {
     "trg_household_zero_system_insert",
     "trg_receipt_tables_preserve_explicit_approval",
 }
+_EXPECTED_SQLITE_CHECK_TABLES = {
+    "auth_membership_permission_overrides",
+    "auth_permissions",
+    "auth_roles",
+    "auth_support_sessions",
+    "external_article_product_links",
+}
 
 _BOOLEAN_INTEGER_COLUMNS = {
     ("household_permission_policies", "member_allowed"),
@@ -46,6 +53,38 @@ _BOOLEAN_INTEGER_COLUMNS = {
     ("receipt_tables", "totals_overridden"),
     ("spaces", "active"),
     ("sublocations", "active"),
+}
+
+_POSTGRESQL_CHECK_CONSTRAINTS: dict[str, tuple[tuple[str, str], ...]] = {
+    "auth_membership_permission_overrides": (
+        (
+            "ck_auth_membership_permission_overrides_effect",
+            "effect IN ('allow', 'deny')",
+        ),
+    ),
+    "auth_permissions": (
+        ("ck_auth_permissions_scope", "scope IN ('household', 'platform')"),
+    ),
+    "auth_roles": (
+        ("ck_auth_roles_scope", "scope IN ('household', 'platform')"),
+    ),
+    "auth_support_sessions": (
+        (
+            "ck_auth_support_sessions_access_level",
+            "access_level IN ('metadata', 'read', 'mutate', 'emergency')",
+        ),
+    ),
+    "external_article_product_links": (
+        (
+            "ck_external_article_product_links_status",
+            "status IN ('confirmed', 'inactive')",
+        ),
+        (
+            "ck_external_article_product_links_identity",
+            "length(trim(receipt_text_normalized)) > 0 "
+            "OR length(trim(external_article_code)) > 0",
+        ),
+    ),
 }
 
 
@@ -140,15 +179,20 @@ def _assert_source_contract(source: _SourceContract) -> None:
             "Unexpected immutable SQLite trigger contract: "
             f"expected={sorted(_EXPECTED_SQLITE_TRIGGERS)} actual={sorted(triggers)}"
         )
-    tables_with_check = [
+    tables_with_check = {
         name
         for name in tables
         if re.search(r"\bCHECK\s*\(", source.table_sql(name), flags=re.IGNORECASE)
-    ]
-    if tables_with_check:
+    }
+    if tables_with_check != _EXPECTED_SQLITE_CHECK_TABLES:
         raise RuntimeError(
-            "SQLite CHECK constraints require an explicit PostgreSQL port: "
-            + ", ".join(tables_with_check)
+            "Unexpected immutable SQLite CHECK contract: "
+            f"expected={sorted(_EXPECTED_SQLITE_CHECK_TABLES)} "
+            f"actual={sorted(tables_with_check)}"
+        )
+    if set(_POSTGRESQL_CHECK_CONSTRAINTS) != _EXPECTED_SQLITE_CHECK_TABLES:
+        raise RuntimeError(
+            "PostgreSQL CHECK port does not cover the immutable SQLite CHECK tables"
         )
 
 
@@ -270,6 +314,13 @@ def _foreign_key_constraints(source: _SourceContract, table_name: str) -> list[s
     return constraints
 
 
+def _postgresql_check_constraints(table_name: str) -> list[sa.CheckConstraint]:
+    return [
+        sa.CheckConstraint(expression, name=constraint_name)
+        for constraint_name, expression in _POSTGRESQL_CHECK_CONSTRAINTS.get(table_name, ())
+    ]
+
+
 def _build_metadata(source: _SourceContract) -> sa.MetaData:
     metadata = sa.MetaData()
     for table_name in source.tables():
@@ -300,6 +351,7 @@ def _build_metadata(source: _SourceContract) -> sa.MetaData:
             *columns,
             *_unique_constraints(source, table_name),
             *_foreign_key_constraints(source, table_name),
+            *_postgresql_check_constraints(table_name),
         )
     return metadata
 
