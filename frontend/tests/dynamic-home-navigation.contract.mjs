@@ -12,6 +12,11 @@ function keys(tiles) {
   return tiles.map((tile) => tile.key)
 }
 
+function assertNoLocationsHomeTile(navigation) {
+  assert.ok(!keys(navigation.primaryTiles).includes('locaties'))
+  assert.ok(!keys(navigation.moreTiles).includes('locaties'))
+}
+
 {
   const navigation = buildHomeNavigation({
     onboarding: {
@@ -76,7 +81,7 @@ function keys(tiles) {
   assert.deepEqual(keys(navigation.primaryTiles), ['bijna-op', 'winkelen', 'kassa'])
   assert.ok(keys(navigation.moreTiles).includes('voorraad'))
   assert.ok(!keys(navigation.moreTiles).includes('prognoses'))
-  assert.ok(!keys(navigation.moreTiles).includes('locaties'))
+  assertNoLocationsHomeTile(navigation)
 }
 
 {
@@ -96,9 +101,9 @@ function keys(tiles) {
     visibility: baseVisibility,
   })
   assert.deepEqual(keys(navigation.primaryTiles), ['voorraad', 'bijna-op', 'kassa'])
-  assert.ok(keys(navigation.moreTiles).includes('locaties'))
   assert.ok(keys(navigation.moreTiles).includes('winkelen'))
   assert.ok(!keys(navigation.moreTiles).includes('kassa'))
+  assertNoLocationsHomeTile(navigation)
 }
 
 {
@@ -119,9 +124,10 @@ function keys(tiles) {
   })
   assert.deepEqual(
     keys(navigation.primaryTiles),
-    ['voorraad', 'locaties', 'kassabonnen', 'kassa', 'bijna-op'],
+    ['voorraad', 'kassabonnen', 'kassa', 'bijna-op'],
   )
   assert.ok(!keys(navigation.moreTiles).some((key) => keys(navigation.primaryTiles).includes(key)))
+  assertNoLocationsHomeTile(navigation)
 }
 
 {
@@ -141,7 +147,7 @@ function keys(tiles) {
     visibility: { ...baseVisibility, canManageLocations: false },
   })
   assert.deepEqual(keys(navigation.primaryTiles), ['voorraad'])
-  assert.ok(!keys(navigation.moreTiles).includes('locaties'))
+  assertNoLocationsHomeTile(navigation)
 }
 
 {
@@ -169,6 +175,7 @@ function keys(tiles) {
   assert.ok(keys(navigation.moreTiles).includes('admin'))
   assert.ok(keys(navigation.moreTiles).includes('externe-databases'))
   assert.ok(!keys(navigation.moreTiles).includes('superuser'))
+  assertNoLocationsHomeTile(navigation)
 }
 
 console.log('DYNAMIC_HOME_NAVIGATION_CONTRACT_GREEN')
