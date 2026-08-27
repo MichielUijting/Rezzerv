@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
@@ -10,7 +11,6 @@ from app.services.external_article_product_link_service import (
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = BACKEND_ROOT.parent
 SERVICE_PATH = (
     BACKEND_ROOT
     / "app"
@@ -23,6 +23,7 @@ MIGRATION_PATH = (
     / "versions"
     / "20260827_02_postgresql_application_schema.py"
 )
+BASELINE_PATH = BACKEND_ROOT / "alembic" / "baseline_sqlite.sql.gz"
 RUNTIME_PREFLIGHT_PATH = BACKEND_ROOT / "app" / "runtime_preflight.py"
 SCHEMA_PREFLIGHT_PATH = BACKEND_ROOT / "app" / "schema_migration_preflight.py"
 DOCKERFILE_PATH = BACKEND_ROOT / "Dockerfile"
@@ -46,6 +47,8 @@ def _source_contract() -> None:
     schema_preflight = SCHEMA_PREFLIGHT_PATH.read_text(encoding="utf-8")
     dockerfile = DOCKERFILE_PATH.read_text(encoding="utf-8")
     test_contract = TEST_CONTRACT_PATH.read_text(encoding="utf-8")
+    with gzip.open(BASELINE_PATH, "rt", encoding="utf-8") as handle:
+        baseline = handle.read()
 
     _require(
         "CREATE TABLE" not in service.upper(),
@@ -60,16 +63,19 @@ def _source_contract() -> None:
         "Schema-guard mag alleen nog als read-only functiedefinitie bestaan",
     )
 
-    for required_fragment in (
-        "external_article_product_links",
+    _require(
+        "external_article_product_links" in migration,
+        "PostgreSQL application migration mist external-link table contract",
+    )
+    for required_index in (
         "uq_external_article_product_links_code_confirmed",
         "uq_external_article_product_links_text_confirmed",
         "idx_external_article_product_links_product",
         "idx_external_article_product_links_candidate",
     ):
         _require(
-            required_fragment in migration,
-            f"Alembic migration mist authority-contract: {required_fragment}",
+            required_index in baseline,
+            f"Immutable schema baseline mist external-link index: {required_index}",
         )
 
     _require(
