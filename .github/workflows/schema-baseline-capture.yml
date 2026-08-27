@@ -1,0 +1,46 @@
+name: Temporary current SQLite schema capture
+
+on:
+  pull_request:
+    paths:
+      - 'backend/tests/capture_schema_baseline.py'
+      - '.github/workflows/schema-baseline-capture.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture-current-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build current backend image
+        run: docker build -t rezzerv-schema-capture ./backend
+
+      - name: Bootstrap exact current SQLite runtime schema
+        run: |
+          mkdir -p "$RUNNER_TEMP/rezzerv-schema"
+          docker run --rm \
+            -e DATABASE_URL=sqlite:////tmp/rezzerv-schema.sqlite \
+            -e REZZERV_RECEIPT_STARTUP_REMBG_WARMUP=false \
+            -e REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP=false \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO=true \
+            -e REZZERV_SUPERGEBRUIKER_PASSWORD='SchemaCaptureOnly123!' \
+            -v "$RUNNER_TEMP/rezzerv-schema:/capture" \
+            rezzerv-schema-capture \
+            sh -lc 'python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /tmp/rezzerv-schema.sqlite > /capture/current-schema.sql'
+
+      - name: Emit deterministic schema evidence
+        run: |
+          echo 'CURRENT_SCHEMA_CAPTURE_BEGIN'
+          sha256sum "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          wc -l "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          cat "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          echo 'CURRENT_SCHEMA_CAPTURE_END'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: current-sqlite-schema
+          path: ${{ runner.temp }}/rezzerv-schema/current-schema.sql
