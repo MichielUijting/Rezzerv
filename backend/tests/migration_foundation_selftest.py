@@ -127,7 +127,8 @@ def _assert_postgresql_schema(connection) -> None:
         "household_article_id is not null",
         "space_id is null",
         "sublocation_id is null",
-        "status = 'active'",
+        "status",
+        "'active'",
     ):
         if fragment not in normalized_index:
             raise AssertionError(
