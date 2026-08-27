@@ -48,14 +48,15 @@ export function useResizableColumnWidths(defaultWidths) {
     const startWidths = orderedKeys.map((key) => normalizedDefaultWidth(
       widthsRef.current?.[key] ?? defaultsRef.current?.[key],
     ))
-    const pairMinimum = Math.min(
-      minimumWidthFor(defaultsRef.current, orderedKeys[boundaryIndex]),
-      minimumWidthFor(defaultsRef.current, orderedKeys[boundaryIndex + 1]),
-    )
 
     function handleMouseMove(moveEvent) {
       const delta = moveEvent.clientX - startX
-      const nextWidths = resizeTableBoundary(startWidths, boundaryIndex, delta, pairMinimum)
+      const nextWidths = resizeTableBoundary(
+        startWidths,
+        boundaryIndex,
+        delta,
+        MIN_RESIZABLE_COLUMN_WIDTH,
+      )
       setWidths(Object.fromEntries(orderedKeys.map((key, index) => [key, nextWidths[index]])))
     }
 
