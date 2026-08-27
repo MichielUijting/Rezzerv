@@ -14,6 +14,7 @@ def dump_schema(database_path: Path) -> str:
             FROM sqlite_master
             WHERE sql IS NOT NULL
               AND name NOT LIKE 'sqlite_%'
+              AND name <> 'alembic_version'
             ORDER BY
               CASE type
                 WHEN 'table' THEN 0
