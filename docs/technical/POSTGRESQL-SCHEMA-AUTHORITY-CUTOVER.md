@@ -25,13 +25,17 @@ runtime-portability claim.
   `CREATE INDEX`;
 - save/read paths no longer self-heal schema;
 - the legacy-named `ensure_external_article_product_link_schema()` remains only
-  as a temporary **read-only, fail-closed assertion** because `app.main` still
-  calls that symbol during startup;
+  as a temporary **inert compatibility shim** because `app.main` still calls
+  that historical symbol during direct module imports;
+- that shim performs no query, write or DDL and therefore owns no schema
+  authority;
 - the isolated contract test provisions its own SQLite schema fixture instead
   of relying on production DDL.
 
-The compatibility assertion must be removed together with the remaining
-`app.main` startup call in a later cleanup slice. It may never regain DDL.
+The compatibility shim and remaining `app.main` call should be removed together
+in a later cleanup slice. The shim may never regain schema reads, writes or DDL.
+The fail-closed runtime boundary is `app.schema_migration_preflight`, which runs
+before Uvicorn imports the application in the production backend entrypoint.
 
 ## Migration before runtime
 
@@ -73,7 +77,7 @@ path.
 2. an existing unversioned SQLite database built from that contract is validated,
    stamped and upgraded without schema drift;
 3. the external-link production service contains no table/index DDL and its
-   compatibility guard cannot create a missing table;
+   historical compatibility hook is inert, including when the table is absent;
 4. the isolated external-link functional contract stays green using a
    test-owned fixture;
 5. PostgreSQL 17 reaches Alembic head with `external_article_product_links` and
