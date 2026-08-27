@@ -189,6 +189,29 @@ def deactivate_incomplete_confirmed_external_links(conn) -> int:
     return len(invalid_ids)
 
 
+def ensure_external_article_product_link_schema(conn) -> None:
+    """Fail closed wanneer de migration-owned koppeltabel ontbreekt.
+
+    De naam blijft tijdelijk bestaan voor bestaande startup-calls. Deze functie
+    voert bewust geen DDL uit: Alembic moet het schema vóór runtime aanbrengen.
+    """
+    try:
+        conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM external_article_product_links
+                WHERE 1 = 0
+                """
+            )
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "external_article_product_links ontbreekt; voer de Alembic-"
+            "migraties uit vóór Rezzerv runtime start"
+        ) from exc
+
+
 def _serialize_external_article_product_link(
     row: Optional[Mapping[str, Any]],
 ) -> Optional[dict[str, Any]]:
