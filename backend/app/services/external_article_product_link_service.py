@@ -190,26 +190,13 @@ def deactivate_incomplete_confirmed_external_links(conn) -> int:
 
 
 def ensure_external_article_product_link_schema(conn) -> None:
-    """Fail closed wanneer de migration-owned koppeltabel ontbreekt.
+    """Legacy compatibility shim; schema authority lives exclusively in Alembic.
 
-    De naam blijft tijdelijk bestaan voor bestaande startup-calls. Deze functie
-    voert bewust geen DDL uit: Alembic moet het schema vóór runtime aanbrengen.
+    `app.main` still calls this historical symbol during direct module imports.
+    It intentionally performs no read, write or DDL. Normal runtime startup is
+    guarded by `app.schema_migration_preflight` before Uvicorn imports the app.
     """
-    try:
-        conn.execute(
-            text(
-                """
-                SELECT 1
-                FROM external_article_product_links
-                WHERE 1 = 0
-                """
-            )
-        )
-    except Exception as exc:
-        raise RuntimeError(
-            "external_article_product_links ontbreekt; voer de Alembic-"
-            "migraties uit vóór Rezzerv runtime start"
-        ) from exc
+    del conn
 
 
 def _serialize_external_article_product_link(
