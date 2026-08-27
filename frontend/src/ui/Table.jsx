@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from "react"
+import { MIN_RESIZABLE_COLUMN_WIDTH, resizeTableBoundary } from './tableResize.js'
 
 const DEFAULT_KEYBOARD_STEP = 28
 const DEFAULT_PAGE_STEP = DEFAULT_KEYBOARD_STEP * 10
-const MIN_RESIZABLE_COLUMN_WIDTH = 56
 const RESIZE_HIT_ZONE_PX = 8
 
 function columnIndexForHeader(th) {
@@ -28,16 +28,10 @@ function ensureResizableColgroup(table, widths) {
 
   widths.forEach((width, index) => {
     const col = colgroup.children[index]
-    if (col) col.style.width = `${Math.max(MIN_RESIZABLE_COLUMN_WIDTH, width)}px`
+    if (col) col.style.width = `${Math.max(1, Math.round(Number(width) || 1))}px`
   })
 
   return colgroup
-}
-
-function setTablePixelWidth(table, widths) {
-  const totalWidth = widths.reduce((sum, width) => sum + Math.max(MIN_RESIZABLE_COLUMN_WIDTH, width), 0)
-  const wrapperWidth = table.parentElement?.clientWidth || 0
-  table.style.width = `${Math.max(totalWidth, wrapperWidth)}px`
 }
 
 export default function Table({
@@ -111,18 +105,23 @@ export default function Table({
     if (!activeResize) return
 
     const delta = event.clientX - activeResize.startX
-    const nextWidths = [...activeResize.widths]
-    const nextWidth = Math.max(
+    const nextWidths = resizeTableBoundary(
+      activeResize.startWidths,
+      activeResize.columnIndex,
+      delta,
       MIN_RESIZABLE_COLUMN_WIDTH,
-      Math.round(activeResize.startWidth + delta),
     )
-    nextWidths[activeResize.columnIndex] = nextWidth
+    const rightColumnIndex = activeResize.columnIndex + 1
+    const nextLeftWidth = nextWidths[activeResize.columnIndex]
+    const nextRightWidth = nextWidths[rightColumnIndex]
 
-    activeResize.widths = nextWidths
-    const col = activeResize.colgroup.children[activeResize.columnIndex]
-    if (col) col.style.width = `${nextWidth}px`
-    setTablePixelWidth(activeResize.table, nextWidths)
-    onColumnResize?.(activeResize.columnIndex, nextWidth)
+    const leftCol = activeResize.colgroup.children[activeResize.columnIndex]
+    const rightCol = activeResize.colgroup.children[rightColumnIndex]
+    if (leftCol) leftCol.style.width = `${nextLeftWidth}px`
+    if (rightCol) rightCol.style.width = `${nextRightWidth}px`
+
+    onColumnResize?.(activeResize.columnIndex, nextLeftWidth)
+    onColumnResize?.(rightColumnIndex, nextRightWidth)
     event.preventDefault()
   }, [onColumnResize])
 
@@ -156,16 +155,18 @@ export default function Table({
     }
 
     const widths = tableColumnWidths(table)
+    if (columnIndex < 0 || columnIndex >= widths.length - 1) return
+
+    const fixedTableWidth = Math.round(table.getBoundingClientRect().width)
     const colgroup = ensureResizableColgroup(table, widths)
-    setTablePixelWidth(table, widths)
+    table.style.width = `${fixedTableWidth}px`
 
     resizeRef.current = {
       table,
       colgroup,
       columnIndex,
       startX: event.clientX,
-      startWidth: widths[columnIndex] || rect.width,
-      widths,
+      startWidths: widths,
     }
 
     document.body.classList.add('rz-table-column-resizing')
