@@ -1,8 +1,8 @@
-"""Test-only installer for the Alembic-owned authorization schema contract.
+"""Test-only installer for Alembic-owned authorization/runtime schema contracts.
 
 Production code must never import this module. Isolated SQLite tests can use it
-to provision the canonical authorization tables before exercising runtime
-validation/seeding behavior.
+to provision the canonical authorization and session-startup support tables
+before exercising runtime validation/seeding behavior.
 """
 from __future__ import annotations
 
@@ -105,6 +105,30 @@ _AUTHORIZATION_SCHEMA = (
     CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_single_active_ip_owner
     ON auth_platform_user_roles(role_key)
     WHERE role_key = 'platform.ip_owner' AND active = 1
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS frontteam_personal_households (
+        user_id TEXT PRIMARY KEY,
+        household_id TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS actor_object_attributions (
+        object_type TEXT NOT NULL,
+        object_id TEXT NOT NULL,
+        household_id TEXT NOT NULL,
+        actor_user_id TEXT NOT NULL,
+        attribution_source TEXT NOT NULL DEFAULT 'runtime_session',
+        first_attributed_at TEXT NOT NULL,
+        last_attributed_at TEXT NOT NULL,
+        PRIMARY KEY (object_type, object_id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_actor_object_attributions_household_actor
+    ON actor_object_attributions (household_id, actor_user_id, object_type)
     """,
 )
 
