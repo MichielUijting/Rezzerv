@@ -13,9 +13,11 @@ on:
       - 'backend/app/schema_migration_preflight.py'
       - 'backend/app/services/**'
       - 'backend/app/testing/external_article_product_link_contract.py'
+      - 'backend/app/testing/receipt_lifecycle_contract.py'
       - 'backend/requirements.txt'
       - 'backend/tests/capture_schema_baseline.py'
       - 'backend/tests/migration_foundation_selftest.py'
+      - 'backend/tests/receipt_lifecycle_schema_authority_selftest.py'
       - 'backend/tests/schema_authority_cutover_selftest.py'
       - 'backend/tests/server_session_schema_authority_selftest.py'
       - 'docs/technical/POSTGRESQL-MIGRATIONS.md'
@@ -58,11 +60,17 @@ jobs:
           python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority.log
           grep -F 'SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN' /tmp/schema-authority.log
           grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority.log
           python backend/tests/server_session_schema_authority_selftest.py | tee /tmp/server-session-authority.log
           grep -F 'SERVER_SESSION_FRESH_SQLITE_MIGRATION_GREEN' /tmp/server-session-authority.log
           grep -F 'SERVER_SESSION_LEGACY_SQLITE_MIGRATION_GREEN' /tmp/server-session-authority.log
           grep -F 'SERVER_SESSION_MALFORMED_SQLITE_REJECTED_GREEN' /tmp/server-session-authority.log
           grep -F 'SERVER_SESSION_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/server-session-authority.log
+          python backend/tests/receipt_lifecycle_schema_authority_selftest.py | tee /tmp/receipt-lifecycle-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_CANONICAL_SQLITE_VALIDATION_GREEN' /tmp/receipt-lifecycle-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_MALFORMED_INDEX_REJECTED_GREEN' /tmp/receipt-lifecycle-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_MALFORMED_TRIGGER_REJECTED_GREEN' /tmp/receipt-lifecycle-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/receipt-lifecycle-authority.log
           python -m app.testing.external_article_product_link_contract | tee /tmp/external-link-contract.log
           grep -F 'EXTERNAL_ARTICLE_PRODUCT_LINK_CONTRACT=GREEN' /tmp/external-link-contract.log
           python -m alembic -c backend/alembic.ini current
@@ -132,7 +140,7 @@ jobs:
           grep -F -- '-- index: idx_server_sessions_user_active (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260828_01' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260828_02' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -184,8 +192,9 @@ jobs:
           python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority-postgresql.log
           grep -F 'EXTERNAL_LINK_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
           grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
+          grep -F 'RECEIPT_LIFECYCLE_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
           python - <<'PY'
-          from sqlalchemy import inspect
+          from sqlalchemy import inspect, text
           from app.db import engine
 
           inspector = inspect(engine)
@@ -217,8 +226,36 @@ jobs:
               if item['name'] == 'active_household_id'
           )
           assert active_household['nullable'] is True
+
+          receipt_indexes = {
+              item['name']
+              for table_name in ('raw_receipts', 'receipt_tables', 'receipt_table_lines')
+              for item in inspector.get_indexes(table_name)
+          }
+          for required in (
+              'uq_raw_receipts_household_hash',
+              'idx_receipt_tables_logical_receipt_key',
+              'idx_receipt_tables_workflow_state',
+              'idx_receipt_table_lines_logical_line_key',
+          ):
+              assert required in receipt_indexes, f'PostgreSQL receipt lifecycle index ontbreekt: {required}'
+          with engine.connect() as connection:
+              triggers = {
+                  str(row[0])
+                  for row in connection.execute(text("""
+                      SELECT t.tgname
+                      FROM pg_trigger t
+                      JOIN pg_class c ON c.oid = t.tgrelid
+                      JOIN pg_namespace n ON n.oid = c.relnamespace
+                      WHERE n.nspname = current_schema()
+                        AND c.relname = 'receipt_tables'
+                        AND NOT t.tgisinternal
+                  """)).all()
+              }
+          assert triggers == {'trg_receipt_tables_preserve_explicit_approval'}
           print('POSTGRESQL_EXTERNAL_LINK_SCHEMA_AUTHORITY_GREEN')
           print('POSTGRESQL_SERVER_SESSION_SCHEMA_AUTHORITY_GREEN')
+          print('POSTGRESQL_RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current
           python -m alembic -c backend/alembic.ini heads
