@@ -3,9 +3,9 @@ from __future__ import annotations
 from sqlalchemy import create_engine, text
 
 from app.services.receipt_lifecycle_foundation_service import (
-    ensure_receipt_lifecycle_foundation_schema,
     reconcile_explicit_receipt_approvals,
 )
+from app.testing.receipt_lifecycle_contract import create_receipt_approval_guard_trigger
 
 
 def _engine():
@@ -49,6 +49,7 @@ def _engine():
                 quantity REAL
             )
         """))
+        create_receipt_approval_guard_trigger(conn)
     return engine
 
 
@@ -110,10 +111,10 @@ def test_startup_reconciliation_preserves_user_approval_and_restores_parse_statu
             parse_status="review_needed",
             approved_at="2026-08-13 14:20:06",
         )
-        result = ensure_receipt_lifecycle_foundation_schema(conn)
+        result = reconcile_explicit_receipt_approvals(conn)
         row = _row(conn, "ah-app-1")
 
-    assert result["reconciled_explicit_approvals"] == 1
+    assert result["reconciled_count"] == 1
     assert row["parse_status"] == "approved"
     assert row["approved_at"] == "2026-08-13 14:20:06"
     assert row["workflow_state"] == "active"
@@ -146,7 +147,6 @@ def test_background_parse_status_update_cannot_downgrade_explicit_approval():
             parse_status="approved",
             approved_at="2026-08-15 06:20:02",
         )
-        ensure_receipt_lifecycle_foundation_schema(conn)
         conn.execute(
             text("UPDATE receipt_tables SET parse_status = 'review_needed', updated_at = CURRENT_TIMESTAMP WHERE id = 'protected'")
         )
@@ -167,7 +167,6 @@ def test_returned_to_kassa_receipt_without_approval_is_not_reapproved_by_trigger
             approved_at=None,
             workflow_state="returned_to_kassa",
         )
-        ensure_receipt_lifecycle_foundation_schema(conn)
         conn.execute(
             text("UPDATE receipt_tables SET parse_status = 'review_needed', updated_at = CURRENT_TIMESTAMP WHERE id = 'returned'")
         )
@@ -188,7 +187,6 @@ def test_new_explicit_approval_reactivates_returned_to_kassa_receipt():
             approved_at=None,
             workflow_state="returned_to_kassa",
         )
-        ensure_receipt_lifecycle_foundation_schema(conn)
         conn.execute(
             text("""
                 UPDATE receipt_tables
@@ -225,11 +223,11 @@ def test_deleted_archived_or_removed_receipts_are_not_reactivated():
             deleted_at="2026-08-02 10:00:00",
             raw_deleted_at="2026-08-02 10:00:00",
         )
-        result = ensure_receipt_lifecycle_foundation_schema(conn)
+        result = reconcile_explicit_receipt_approvals(conn)
         archived = _row(conn, "archived")
         removed = _row(conn, "removed")
 
-    assert result["reconciled_explicit_approvals"] == 0
+    assert result["reconciled_count"] == 0
     assert archived["workflow_state"] == "archived"
     assert archived["approved_at"] == "2026-08-01 10:00:00"
     assert removed["workflow_state"] == "removed_reimport_allowed"
@@ -249,7 +247,7 @@ def test_reconciliation_does_not_touch_inventory_events():
             text("INSERT INTO inventory_events (id, receipt_table_id, quantity) VALUES ('evt-1', 'inventory-safe', 3)")
         )
         before = conn.execute(text("SELECT id, receipt_table_id, quantity FROM inventory_events")).all()
-        ensure_receipt_lifecycle_foundation_schema(conn)
+        reconcile_explicit_receipt_approvals(conn)
         after = conn.execute(text("SELECT id, receipt_table_id, quantity FROM inventory_events")).all()
         row = _row(conn, "inventory-safe")
 
