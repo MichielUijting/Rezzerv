@@ -17,11 +17,9 @@ from app.services.frontteam_household_provisioning import (
     FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
     resolve_frontteam_personal_household_id,
 )
-from app.services.server_session_service import (
-    ensure_server_session_schema,
-    resolve_server_session,
-)
+from app.services.server_session_service import resolve_server_session
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def build_client():
@@ -123,7 +121,7 @@ def build_client():
               ('u-ip-owner', 'platform.ip_owner', 1),
               ('u-inactive-platform', 'platform.platform_admin', 0)
         """))
-        ensure_server_session_schema(conn)
+        create_server_session_contract_schema(conn)
 
     app = FastAPI()
     app.include_router(
@@ -716,6 +714,7 @@ def test_secure_cookie_can_be_enabled_for_non_local_runtime():
             INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
             VALUES ('1', 'u1', 'household.admin')
         """))
+        create_server_session_contract_schema(conn)
     app = FastAPI()
     app.include_router(
         create_server_session_router(
