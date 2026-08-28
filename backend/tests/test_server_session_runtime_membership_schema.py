@@ -8,6 +8,7 @@ from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
 )
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _runtime_schema_client():
@@ -56,6 +57,7 @@ def _runtime_schema_client():
                 ('m-active', '1', 'ADMIN@REZZERV.LOCAL', 'owner', 'active')
         """))
         migrate_legacy_household_memberships(conn)
+        create_server_session_contract_schema(conn)
 
     app = FastAPI()
     app.include_router(
