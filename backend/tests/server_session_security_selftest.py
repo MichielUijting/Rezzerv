@@ -12,6 +12,7 @@ import tempfile
 from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 
+from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.server_session_service import (
     create_server_session,
     create_system_server_session,
@@ -65,6 +66,7 @@ def _prepare_database(engine) -> None:
             "('user-b', '2', 'member')"
         ))
         install_authorization_schema(conn)
+        ensure_authorization_foundation(conn)
         conn.execute(text(
             "INSERT INTO auth_membership_roles "
             "(household_id, membership_id, role_key, active) VALUES "
