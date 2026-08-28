@@ -1,4 +1,4 @@
-name: Temporary receipt chain diagnostics
+name: Temporary inventory authority patch
 
 on:
   push:
@@ -6,43 +6,264 @@ on:
       - codex/postgresql-inventory-temporal-authority-cutover
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose-chain:
+  patch-authority:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install production-chain dependencies
-        run: |
-          python -m pip install --quiet \
-            fastapi==0.115.0 \
-            sqlalchemy==2.0.36 \
-            alembic==1.19.1 \
-            pydantic==2.12.5 \
-            python-multipart==0.0.20 \
-            pypdf==5.4.0 \
-            Pillow \
-            beautifulsoup4==4.12.3 \
-            opencv-python-headless
-      - name: Expose batch rollback before consume assertion
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Move locationless identity index authority to Alembic
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('backend/app/testing/receipt_inventory_production_chain.py')
-          source = path.read_text(encoding='utf-8')
-          needle = '        _apply_consume_event(main, ids, quantity_before=5, quantity_after=1)'
-          diagnostic = "        with main.engine.begin() as conn:\n            diagnostic_lines = conn.execute(text(\"SELECT pil.id, pil.processing_status, pil.processing_error, pil.matched_household_article_id, pil.quantity_raw, pib.id AS batch_id, pib.import_status FROM purchase_import_lines pil JOIN purchase_import_batches pib ON pib.id = pil.batch_id WHERE pil.id IN ('chain-line-1', 'chain-line-2') ORDER BY pil.id\")).mappings().all()\n            diagnostic_events = conn.execute(text(\"SELECT id, event_type, source, effective_at, recorded_at, effective_at_precision, event_priority, source_reference, source_line_id FROM inventory_events WHERE household_id = '0' ORDER BY created_at, id\")).mappings().all()\n            diagnostic_inventory = conn.execute(text(\"SELECT id, household_article_id, aantal, space_id, sublocation_id, status FROM inventory WHERE household_id = '0' ORDER BY id\")).mappings().all()\n        print('CHAIN_DIAGNOSTIC_FIRST', first)\n        print('CHAIN_DIAGNOSTIC_SECOND', second)\n        print('CHAIN_DIAGNOSTIC_REPEAT', repeated)\n        print('CHAIN_DIAGNOSTIC_LINES', [dict(row) for row in diagnostic_lines])\n        print('CHAIN_DIAGNOSTIC_EVENTS', [dict(row) for row in diagnostic_events])\n        print('CHAIN_DIAGNOSTIC_INVENTORY', [dict(row) for row in diagnostic_inventory])\n        print('CHAIN_DIAGNOSTIC_COUNTS', quantity_after_first, quantity_after_second, quantity_after_repeat, event_count_after_second, event_count_after_repeat)\n        assert first['processed_count'] == 1, f'first import failed: {first!r}; lines={diagnostic_lines!r}'\n        assert quantity_after_first == 2, f'first inventory mismatch: {quantity_after_first}; lines={diagnostic_lines!r}'\n        assert second['processed_count'] == 1, f'second import failed: {second!r}; lines={diagnostic_lines!r}'\n        assert quantity_after_second == 5, f'second inventory mismatch: {quantity_after_second}; lines={diagnostic_lines!r}'\n" + needle
-          if needle not in source:
-              raise SystemExit('diagnostic insertion point not found')
-          path.write_text(source.replace(needle, diagnostic, 1), encoding='utf-8')
+
+          migration_path = Path('backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py')
+          source = migration_path.read_text(encoding='utf-8')
+
+          source = source.replace(
+              'This revision adds the seven temporal inventory fields, the two canonical\nordering/source indexes and backfills existing inventory_events rows. It does\nnot change inventory location nullability: space_id and sublocation_id remain\nnullable by design.',
+              'This revision adds the seven temporal inventory fields, the two canonical\nordering/source indexes, adopts the canonical active locationless inventory\nidentity index, and backfills existing inventory_events rows. It does not change\ninventory location nullability: space_id and sublocation_id remain nullable by design.',
+          )
+
+          constants_anchor = '''_SOURCE_REFERENCE_COLUMNS = (
+              "source",
+              "source_reference",
+              "source_line_id",
+          )
+          '''
+          constants_insert = constants_anchor + '''_LOCATIONLESS_ACTIVE_IDENTITY_INDEX = "uq_inventory_active_locationless_household_article"
+          _LOCATIONLESS_ACTIVE_IDENTITY_COLUMNS = ("household_id", "household_article_id")
+          _LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE = (
+              "COALESCE(status, 'active') = 'active' "
+              "AND household_article_id IS NOT NULL "
+              "AND space_id IS NULL "
+              "AND sublocation_id IS NULL"
+          )
+          '''
+          if '_LOCATIONLESS_ACTIVE_IDENTITY_INDEX' not in source:
+              if constants_anchor not in source:
+                  raise SystemExit('migration constants anchor not found')
+              source = source.replace(constants_anchor, constants_insert, 1)
+
+          helper_anchor = '''def _validate_contract(bind: sa.engine.Connection) -> None:
+          '''
+          helper_code = '''def _locationless_index_sql(bind: sa.engine.Connection) -> str | None:
+              if bind.dialect.name == "sqlite":
+                  return bind.execute(sa.text(
+                      """
+                      SELECT sql
+                      FROM sqlite_master
+                      WHERE type = 'index' AND name = :name
+                      LIMIT 1
+                      """
+                  ), {"name": _LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
+              if bind.dialect.name == "postgresql":
+                  return bind.execute(sa.text(
+                      """
+                      SELECT indexdef
+                      FROM pg_indexes
+                      WHERE schemaname = current_schema()
+                        AND tablename = 'inventory'
+                        AND indexname = :name
+                      LIMIT 1
+                      """
+                  ), {"name": _LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
+              raise RuntimeError(f"Unsupported Rezzerv migration dialect: {bind.dialect.name}")
+
+
+          def _validate_locationless_identity_index(bind: sa.engine.Connection) -> None:
+              inspector = sa.inspect(bind)
+              indexes = {
+                  str(item.get("name") or ""): item
+                  for item in inspector.get_indexes("inventory")
+              }
+              index = indexes.get(_LOCATIONLESS_ACTIVE_IDENTITY_INDEX)
+              if not index:
+                  raise RuntimeError(
+                      f"Canonical locationless inventory index ontbreekt: {_LOCATIONLESS_ACTIVE_IDENTITY_INDEX}"
+                  )
+              if not bool(index.get("unique")) or tuple(index.get("column_names") or ()) != _LOCATIONLESS_ACTIVE_IDENTITY_COLUMNS:
+                  raise RuntimeError("Canonical locationless inventory index wijkt af in uniqueness/kolommen")
+
+              index_sql = _locationless_index_sql(bind)
+              normalized = " ".join(str(index_sql or "").lower().replace('"', '').split())
+              for fragment in (
+                  "household_article_id is not null",
+                  "space_id is null",
+                  "sublocation_id is null",
+                  "status",
+                  "'active'",
+              ):
+                  if fragment not in normalized:
+                      raise RuntimeError(
+                          "Canonical locationless inventory index wijkt af: "
+                          f"missing={fragment!r} index={index_sql!r}"
+                      )
+
+
+          def _ensure_locationless_identity_index(bind: sa.engine.Connection) -> None:
+              inspector = sa.inspect(bind)
+              if not inspector.has_table("inventory"):
+                  raise RuntimeError("inventory table ontbreekt")
+              columns = {
+                  str(column.get("name") or ""): column
+                  for column in inspector.get_columns("inventory")
+              }
+              required = {"household_id", "household_article_id", "space_id", "sublocation_id", "status"}
+              missing = required - set(columns)
+              if missing:
+                  raise RuntimeError(
+                      "Canonical locationless inventory schema mist kolommen: " + ", ".join(sorted(missing))
+                  )
+
+              duplicate = bind.execute(sa.text(
+                  """
+                  SELECT household_id, household_article_id, COUNT(*) AS row_count
+                  FROM inventory
+                  WHERE COALESCE(status, 'active') = 'active'
+                    AND household_article_id IS NOT NULL
+                    AND space_id IS NULL
+                    AND sublocation_id IS NULL
+                  GROUP BY household_id, household_article_id
+                  HAVING COUNT(*) > 1
+                  LIMIT 1
+                  """
+              )).mappings().first()
+              if duplicate:
+                  raise RuntimeError(
+                      "Dubbele actieve locationless voorraadidentiteit gevonden voor "
+                      f"household_id={duplicate['household_id']} en "
+                      f"household_article_id={duplicate['household_article_id']}"
+                  )
+
+              indexes = {
+                  str(item.get("name") or ""): item
+                  for item in inspector.get_indexes("inventory")
+              }
+              if _LOCATIONLESS_ACTIVE_IDENTITY_INDEX not in indexes:
+                  predicate = sa.text(_LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE)
+                  op.create_index(
+                      _LOCATIONLESS_ACTIVE_IDENTITY_INDEX,
+                      "inventory",
+                      list(_LOCATIONLESS_ACTIVE_IDENTITY_COLUMNS),
+                      unique=True,
+                      sqlite_where=predicate,
+                      postgresql_where=predicate,
+                  )
+              _validate_locationless_identity_index(bind)
+
+
+          '''
+          if 'def _ensure_locationless_identity_index' not in source:
+              if helper_anchor not in source:
+                  raise SystemExit('migration helper anchor not found')
+              source = source.replace(helper_anchor, helper_code + helper_anchor, 1)
+
+          validation_anchor = '''    for column_name in ("space_id", "sublocation_id"):
+              column = inventory_columns.get(column_name)
+              if column is None:
+                  raise RuntimeError(f"inventory.{column_name} ontbreekt")
+              if not bool(column.get("nullable")):
+                  raise RuntimeError(
+                      f"inventory.{column_name} moet nullable blijven voor locationless voorraad"
+                  )
+          '''
+          validation_replacement = validation_anchor + '''
+              _validate_locationless_identity_index(bind)
+          '''
+          if '_validate_locationless_identity_index(bind)' not in source[source.index('def _validate_contract'):source.index('def upgrade')]:
+              if validation_anchor not in source:
+                  raise SystemExit('migration validation anchor not found')
+              source = source.replace(validation_anchor, validation_replacement, 1)
+
+          upgrade_anchor = '''    _backfill_inventory_events(bind)
+              _ensure_indexes(bind)
+              _validate_contract(bind)
+          '''
+          upgrade_replacement = '''    _backfill_inventory_events(bind)
+              _ensure_indexes(bind)
+              _ensure_locationless_identity_index(bind)
+              _validate_contract(bind)
+          '''
+          if '_ensure_locationless_identity_index(bind)' not in source[source.index('def upgrade'):]:
+              if upgrade_anchor not in source:
+                  raise SystemExit('migration upgrade anchor not found')
+              source = source.replace(upgrade_anchor, upgrade_replacement, 1)
+
+          migration_path.write_text(source, encoding='utf-8')
+
+          selftest_path = Path('backend/tests/migration_foundation_selftest.py')
+          selftest = selftest_path.read_text(encoding='utf-8')
+          excluded_anchor = '        "-- index: idx_inventory_events_source_reference (table=inventory_events)",\n'
+          excluded_line = '        "-- index: uq_inventory_active_locationless_household_article (table=inventory)",\n'
+          if excluded_line not in selftest:
+              if excluded_anchor not in selftest:
+                  raise SystemExit('selftest exclusion anchor not found')
+              selftest = selftest.replace(excluded_anchor, excluded_anchor + excluded_line, 1)
+
+          sqlite_anchor = '''    if not bool(_column(inspector, "inventory", "sublocation_id")["nullable"]):
+              raise AssertionError("Waar Inhuis requires nullable inventory.sublocation_id")
+
+              if connection.dialect.name == "postgresql":
+          '''
+          sqlite_replacement = '''    if not bool(_column(inspector, "inventory", "sublocation_id")["nullable"]):
+              raise AssertionError("Waar Inhuis requires nullable inventory.sublocation_id")
+
+              if connection.dialect.name == "sqlite":
+                  inventory_indexes = {
+                      str(index.get("name") or ""): index
+                      for index in inspector.get_indexes("inventory")
+                  }
+                  locationless = inventory_indexes.get("uq_inventory_active_locationless_household_article")
+                  if not locationless or not bool(locationless.get("unique")) or tuple(locationless.get("column_names") or ()) != (
+                      "household_id", "household_article_id"
+                  ):
+                      raise AssertionError("Invalid SQLite locationless inventory partial unique index")
+                  locationless_sql = connection.execute(text(
+                      "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_inventory_active_locationless_household_article'"
+                  )).scalar_one_or_none()
+                  normalized_index = " ".join(str(locationless_sql or "").lower().split())
+                  for fragment in (
+                      "create unique index",
+                      "household_article_id is not null",
+                      "space_id is null",
+                      "sublocation_id is null",
+                      "status",
+                      "'active'",
+                  ):
+                      if fragment not in normalized_index:
+                          raise AssertionError(
+                              "Invalid SQLite locationless inventory partial unique index: "
+                              f"missing={fragment!r} index={locationless_sql!r}"
+                          )
+
+              if connection.dialect.name == "postgresql":
+          '''
+          if 'Invalid SQLite locationless inventory partial unique index' not in selftest:
+              if sqlite_anchor not in selftest:
+                  raise SystemExit('selftest SQLite locationless anchor not found')
+              selftest = selftest.replace(sqlite_anchor, sqlite_replacement, 1)
+          selftest_path.write_text(selftest, encoding='utf-8')
           PY
-      - name: Run diagnosed production chain
-        env:
-          PYTHONPATH: backend
-          RECEIPT_STORAGE_ROOT: /tmp/rezzerv-receipts
-        run: python backend/app/testing/receipt_inventory_production_chain.py
+      - name: Compile changed authority files
+        run: |
+          python -m py_compile \
+            backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py \
+            backend/tests/migration_foundation_selftest.py
+      - name: Commit authority fix
+        shell: bash
+        run: |
+          if git diff --quiet -- backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py backend/tests/migration_foundation_selftest.py; then
+            echo 'Authority files already patched'
+            exit 0
+          fi
+          git config user.name 'rezzerv-ci-bot'
+          git config user.email 'rezzerv-ci-bot@users.noreply.github.com'
+          git add -- backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py backend/tests/migration_foundation_selftest.py
+          git commit -m 'Move locationless inventory index authority to Alembic'
+          git push origin HEAD:${{ github.ref_name }}
