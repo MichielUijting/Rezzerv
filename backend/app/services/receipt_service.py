@@ -1913,19 +1913,19 @@ def ensure_default_receipt_sources(engine, receipt_root: Path, household_id: str
             if exists:
                 conn.execute(
                     text(
-                        'UPDATE receipt_sources SET label = :label, source_path = :source_path, is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
+                        'UPDATE receipt_sources SET label = :label, source_path = :source_path, is_active = :is_active, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
                     ),
-                    definition,
+                    {**definition, 'is_active': True},
                 )
             else:
                 conn.execute(
                     text(
                         '''
                         INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
-                        VALUES (:id, :household_id, :type, :label, :source_path, 1)
+                        VALUES (:id, :household_id, :type, :label, :source_path, :is_active)
                         '''
                     ),
-                    {**definition, 'household_id': household_id},
+                    {**definition, 'household_id': household_id, 'is_active': True},
                 )
     return defaults
 
