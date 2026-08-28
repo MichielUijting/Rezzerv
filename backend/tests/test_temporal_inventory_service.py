@@ -500,4 +500,3 @@ def test_migration_normalizes_known_legacy_locationless_predicate():
     normalized = "".join(str(index_sql).lower().split())
     assert "coalesce(status,'active')='active'" in normalized
     ensure_locationless_inventory_identity_guard(conn)
-

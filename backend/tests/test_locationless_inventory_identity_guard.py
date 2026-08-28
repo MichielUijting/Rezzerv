@@ -156,4 +156,3 @@ def test_wrong_locationless_predicate_is_rejected_even_with_matching_tokens():
 
         with pytest.raises(RuntimeError, match="predicate wijkt af"):
             ensure_locationless_inventory_identity_guard(conn)
-
