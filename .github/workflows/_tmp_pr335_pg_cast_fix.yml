@@ -47,6 +47,11 @@ jobs:
           python -m py_compile \
             backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py \
             backend/app/services/canonical_inventory_identity_service.py
+      - name: Install targeted dependencies
+        run: |
+          python -m pip install --quiet pytest \
+            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
+            "$(grep '^alembic==' backend/requirements.txt)" fastapi pydantic
       - name: Prove exact PostgreSQL predicate serialization normalizes canonically
         env:
           PYTHONPATH: backend
@@ -65,11 +70,6 @@ jobs:
           assert _normalized_predicate_terms(actual) == _normalized_predicate_terms(expected)
           print('POSTGRESQL_MULTIWORD_CAST_NORMALIZATION_GREEN')
           PY
-      - name: Install targeted dependencies
-        run: |
-          python -m pip install --quiet pytest \
-            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
-            "$(grep '^alembic==' backend/requirements.txt)" fastapi pydantic
       - name: Run targeted inventory regressions
         env:
           PYTHONPATH: backend
