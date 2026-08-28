@@ -22,6 +22,7 @@ from app.api.server_session_routes import (
     create_server_session_router,
 )
 from app.services.authorization_foundation_service import ensure_authorization_foundation
+from app.testing.authorization_schema_fixture import install_authorization_schema
 from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.password_service import is_password_hash
 from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
@@ -89,6 +90,7 @@ def _prepare_database(engine) -> None:
             )
         """))
         ensure_roles_v2_account_and_household_foundation(conn)
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         create_server_session_contract_schema(conn)
 
