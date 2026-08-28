@@ -1,0 +1,59 @@
+name: Temporary PR335 whitespace fix
+
+on:
+  push:
+    branches:
+      - codex/postgresql-inventory-temporal-authority-cutover
+    paths:
+      - '.github/workflows/_tmp_pr335_whitespace_fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  whitespace-fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Normalize EOF whitespace only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for name in (
+              'backend/tests/test_locationless_inventory_identity_guard.py',
+              'backend/tests/test_temporal_inventory_service.py',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              path.write_text(text.rstrip() + '\n', encoding='utf-8')
+          PY
+      - name: Prove whitespace diff is clean
+        run: git diff --check
+      - name: Install targeted dependencies
+        run: |
+          python -m pip install --quiet pytest \
+            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
+            "$(grep '^alembic==' backend/requirements.txt)" fastapi pydantic
+      - name: Run targeted inventory regressions
+        env:
+          PYTHONPATH: backend
+        run: |
+          pytest -q \
+            backend/tests/test_locationless_inventory_identity_guard.py \
+            backend/tests/test_temporal_inventory_service.py
+      - name: Commit test whitespace only
+        run: |
+          git config user.name 'rezzerv-ci-bot'
+          git config user.email 'rezzerv-ci-bot@users.noreply.github.com'
+          git add -- \
+            backend/tests/test_locationless_inventory_identity_guard.py \
+            backend/tests/test_temporal_inventory_service.py
+          git diff --cached --check
+          git commit -m 'Fix PR335 test whitespace'
+          git push origin HEAD:${{ github.ref_name }}
