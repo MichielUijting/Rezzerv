@@ -3,9 +3,9 @@
 Functional rule: inventory history is ordered by when an event happened
 (`effective_at`), never by when Rezzerv happened to record it (`recorded_at`).
 
-This module extends the existing `inventory_events` table instead of creating a
-second ledger. Existing callers can keep using `created_at`; new chronological
-processing should populate `effective_at` explicitly.
+Alembic revision 20260828_03 owns the temporal inventory schema. This module
+only validates that contract before using the ledger; it never mutates schema or
+performs historical schema backfill at runtime.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from decimal import Decimal
 from typing import Iterable
 import uuid
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 
 EVENT_PRIORITY = {
@@ -27,6 +27,30 @@ EVENT_PRIORITY = {
     "transfer_out": 30,
     "consume": 40,
     "adjustment": 50,
+}
+
+_TEMPORAL_COLUMNS = {
+    "effective_at",
+    "recorded_at",
+    "effective_at_precision",
+    "event_priority",
+    "source_reference",
+    "source_line_id",
+    "replayed_at",
+}
+_TEMPORAL_INDEX_CONTRACT = {
+    "idx_inventory_events_temporal_order": (
+        "household_id",
+        "household_article_id",
+        "effective_at",
+        "event_priority",
+        "id",
+    ),
+    "idx_inventory_events_source_reference": (
+        "source",
+        "source_reference",
+        "source_line_id",
+    ),
 }
 
 
@@ -50,81 +74,70 @@ def _as_iso_datetime(value: datetime | str | None) -> str:
 
 
 def ensure_temporal_inventory_schema(conn) -> None:
-    """Idempotently extend the existing inventory_events ledger."""
+    """Fail closed when Alembic-owned temporal inventory schema is missing/drifted."""
+    inspector = inspect(conn)
+    if not inspector.has_table("inventory_events"):
+        raise RuntimeError(
+            "inventory_events table ontbreekt; voer Alembic upgrade naar 20260828_03/head uit"
+        )
+
     columns = {
-        str(row[1])
-        for row in conn.execute(text("PRAGMA table_info(inventory_events)")).fetchall()
+        str(column.get("name") or ""): column
+        for column in inspector.get_columns("inventory_events")
     }
-    if not columns:
-        raise RuntimeError("inventory_events table ontbreekt; basisdatamodel is niet geinitialiseerd")
+    missing = _TEMPORAL_COLUMNS - set(columns)
+    if missing:
+        raise RuntimeError(
+            "Temporal inventory schema is niet gemigreerd; ontbrekende kolommen: "
+            + ", ".join(sorted(missing))
+        )
+    for column_name in ("effective_at_precision", "event_priority"):
+        if bool(columns[column_name].get("nullable")):
+            raise RuntimeError(
+                f"Temporal inventory schema drift: inventory_events.{column_name} moet NOT NULL zijn"
+            )
 
-    additions = {
-        "effective_at": "TEXT",
-        "recorded_at": "TEXT",
-        "effective_at_precision": "TEXT NOT NULL DEFAULT 'datetime'",
-        "event_priority": "INTEGER NOT NULL DEFAULT 100",
-        "source_reference": "TEXT",
-        "source_line_id": "TEXT",
-        "replayed_at": "TEXT",
+    indexes = {
+        str(index.get("name") or ""): tuple(index.get("column_names") or ())
+        for index in inspector.get_indexes("inventory_events")
     }
-    for column, sql_type in additions.items():
-        if column not in columns:
-            conn.execute(text(f"ALTER TABLE inventory_events ADD COLUMN {column} {sql_type}"))
+    for index_name, expected_columns in _TEMPORAL_INDEX_CONTRACT.items():
+        actual_columns = indexes.get(index_name)
+        if actual_columns != expected_columns:
+            raise RuntimeError(
+                "Temporal inventory schema drift: "
+                f"{index_name} expected={expected_columns!r} actual={actual_columns!r}"
+            )
 
-    # Existing rows retain their historical meaning as closely as possible.
-    # purchase_date wins over created_at. Both YYYY-MM-DD and DD-MM-YYYY are
-    # normalized because both forms exist in older fixtures/import paths.
-    # Once an event has been linked back to its authoritative source, its
-    # hydrated precision must not be downgraded by a later idempotent schema pass.
-    conn.execute(text(
-        """
-        UPDATE inventory_events
-        SET effective_at = COALESCE(
-                NULLIF(trim(effective_at), ''),
-                CASE
-                    WHEN COALESCE(trim(purchase_date), '') <> '' THEN
-                        CASE
-                            WHEN length(trim(purchase_date)) = 10
-                                 AND substr(trim(purchase_date), 5, 1) = '-'
-                                THEN trim(purchase_date) || 'T00:00:00+00:00'
-                            WHEN length(trim(purchase_date)) = 10
-                                 AND substr(trim(purchase_date), 3, 1) = '-'
-                                THEN substr(trim(purchase_date), 7, 4) || '-' ||
-                                     substr(trim(purchase_date), 4, 2) || '-' ||
-                                     substr(trim(purchase_date), 1, 2) || 'T00:00:00+00:00'
-                            ELSE trim(purchase_date)
-                        END
-                    ELSE created_at
-                END
-            ),
-            recorded_at = COALESCE(NULLIF(trim(recorded_at), ''), created_at),
-            effective_at_precision = CASE
-                WHEN COALESCE(trim(source_reference), '') <> ''
-                    THEN COALESCE(NULLIF(trim(effective_at_precision), ''), 'datetime')
-                WHEN COALESCE(trim(purchase_date), '') <> ''
-                     AND length(trim(purchase_date)) = 10 THEN 'date'
-                WHEN COALESCE(trim(effective_at_precision), '') <> '' THEN effective_at_precision
-                ELSE 'datetime'
-            END,
-            event_priority = CASE lower(COALESCE(event_type, ''))
-                WHEN 'purchase' THEN 10
-                WHEN 'auto_repurchase' THEN 10
-                WHEN 'transfer_in' THEN 20
-                WHEN 'transfer_out' THEN 30
-                WHEN 'consume' THEN 40
-                WHEN 'adjustment' THEN 50
-                ELSE COALESCE(event_priority, 100)
-            END
-        """
-    ))
-    conn.execute(text(
-        "CREATE INDEX IF NOT EXISTS idx_inventory_events_temporal_order "
-        "ON inventory_events (household_id, household_article_id, effective_at, event_priority, id)"
-    ))
-    conn.execute(text(
-        "CREATE INDEX IF NOT EXISTS idx_inventory_events_source_reference "
-        "ON inventory_events (source, source_reference, source_line_id)"
-    ))
+    if conn.dialect.name == "sqlite":
+        incomplete = conn.execute(text(
+            """
+            SELECT id
+            FROM inventory_events
+            WHERE effective_at IS NULL OR trim(CAST(effective_at AS TEXT)) = ''
+               OR recorded_at IS NULL OR trim(CAST(recorded_at AS TEXT)) = ''
+               OR effective_at_precision IS NULL OR trim(effective_at_precision) = ''
+               OR event_priority IS NULL
+            LIMIT 1
+            """
+        )).scalar()
+    else:
+        incomplete = conn.execute(text(
+            """
+            SELECT id
+            FROM inventory_events
+            WHERE effective_at IS NULL
+               OR recorded_at IS NULL
+               OR effective_at_precision IS NULL OR trim(effective_at_precision) = ''
+               OR event_priority IS NULL
+            LIMIT 1
+            """
+        )).scalar()
+    if incomplete is not None:
+        raise RuntimeError(
+            "Temporal inventory historische backfill is incompleet; "
+            f"eerste inventory_event={incomplete}"
+        )
 
 
 @dataclass(frozen=True)
@@ -202,7 +215,7 @@ def ordered_events(conn, *, household_id: str, household_article_id: str) -> lis
         FROM inventory_events
         WHERE household_id = :household_id
           AND COALESCE(household_article_id, article_id) = :household_article_id
-        ORDER BY datetime(effective_at) ASC,
+        ORDER BY effective_at ASC,
                  event_priority ASC,
                  COALESCE(source_reference, '') ASC,
                  COALESCE(source_line_id, '') ASC,
