@@ -203,7 +203,7 @@ def _fresh_revision_02_upgrade() -> None:
             ).fetchone()
             if existing is not None:
                 raise AssertionError("Revision 02 unexpectedly contains SQLite server_sessions")
-        _run_alembic(database, "head")
+        _run_alembic(database, HEAD_REVISION)
         with sqlite3.connect(database) as connection:
             _assert_canonical_server_sessions(connection, expect_seed_row=False)
 
@@ -216,7 +216,7 @@ def _legacy_runtime_table_upgrade() -> None:
             _create_legacy_server_sessions(connection)
             if _revision(connection) != PREVIOUS_REVISION:
                 raise AssertionError("Legacy fixture revision drifted before migration")
-        _run_alembic(database, "head")
+        _run_alembic(database, HEAD_REVISION)
         with sqlite3.connect(database) as connection:
             _assert_canonical_server_sessions(connection, expect_seed_row=True)
 
@@ -237,7 +237,7 @@ def _malformed_runtime_table_is_rejected() -> None:
                 """
             )
             connection.commit()
-        _run_alembic(database, "head", expect_success=False)
+        _run_alembic(database, HEAD_REVISION, expect_success=False)
         with sqlite3.connect(database) as connection:
             if _revision(connection) != PREVIOUS_REVISION:
                 raise AssertionError("Rejected malformed database advanced Alembic revision")
