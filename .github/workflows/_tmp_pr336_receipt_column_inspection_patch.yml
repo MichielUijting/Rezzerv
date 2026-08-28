@@ -1,0 +1,47 @@
+name: Temporary PR336 receipt column inspection patch
+
+on:
+  push:
+    branches:
+      - codex/postgresql-runtime-startup-authority-cutover
+
+permissions:
+  contents: write
+
+jobs:
+  patch-receipt-column-inspection:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/postgresql-runtime-startup-authority-cutover
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply dialect-safe receipt column inspection patch
+        run: python backend/tests/_tmp_pr336_receipt_column_inspection_patch.py
+      - name: Validate exact column inspection contract
+        run: |
+          python -m py_compile backend/app/services/receipt_service.py
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('backend/app/services/receipt_service.py').read_text(encoding='utf-8')
+          start = source.index('def _column_exists(')
+          end = source.index('\ndef _load_line_groups', start)
+          contract = source[start:end]
+          assert 'PRAGMA table_info' not in contract
+          assert 'inspect(conn).get_columns(table_name)' in contract
+          assert 'from sqlalchemy import bindparam, inspect, text' in source
+          print('PR336_RECEIPT_COLUMN_INSPECTION_CONTRACT_GREEN')
+          PY
+          git diff --check
+      - name: Commit dialect-safe receipt column inspection
+        run: |
+          rm backend/tests/_tmp_pr336_receipt_column_inspection_patch.py
+          git config user.name rezzerv-ci-bot
+          git config user.email 169062718+MichielUijting@users.noreply.github.com
+          git add -- backend/app/services/receipt_service.py backend/tests/_tmp_pr336_receipt_column_inspection_patch.py
+          git commit -m 'Use dialect-safe receipt column inspection'
+          git push origin HEAD:codex/postgresql-runtime-startup-authority-cutover
