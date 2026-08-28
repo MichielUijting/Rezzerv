@@ -16,7 +16,7 @@ from app.services.consumer_account_management_service import (
     change_consumer_password,
 )
 from app.services.password_service import is_password_hash, verify_password
-from app.services.server_session_service import ensure_server_session_schema
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _expect_error(error_type, fn) -> None:
@@ -46,7 +46,7 @@ def _prepare_database(engine, now: datetime) -> None:
                 ('consumer-user', 'consumer@example.com', 'LegacyPass123!', NULL, 'active'),
                 ('other-user', 'other@example.com', 'OtherLegacyPass123!', NULL, 'active')
         """))
-        ensure_server_session_schema(conn)
+        create_server_session_contract_schema(conn)
 
         issued_at = now - timedelta(hours=1)
         expires_at = now + timedelta(hours=1)

@@ -27,6 +27,7 @@ from app.services.password_service import is_password_hash
 from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
 from app.services.server_session_service import SESSION_COOKIE_NAME, resolve_server_session
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _route(router, path: str, method: str):
@@ -89,6 +90,7 @@ def _prepare_database(engine) -> None:
         """))
         ensure_roles_v2_account_and_household_foundation(conn)
         ensure_authorization_foundation(conn)
+        create_server_session_contract_schema(conn)
 
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type)

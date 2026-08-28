@@ -23,6 +23,7 @@ from app.services.household_onboarding_service import (
     resolve_household_onboarding_state,
 )
 from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _prepare_database(engine) -> None:
@@ -56,6 +57,7 @@ def _prepare_database(engine) -> None:
         """))
         ensure_roles_v2_account_and_household_foundation(conn)
         ensure_authorization_foundation(conn)
+        create_server_session_contract_schema(conn)
 
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type)

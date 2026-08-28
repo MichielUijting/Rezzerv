@@ -25,6 +25,7 @@ from app.services.server_session_service import (
     public_session_payload,
     resolve_server_session,
 )
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _platform_permissions(role_key: str) -> set[str]:
@@ -156,6 +157,7 @@ def test_ip_owner_only_system_session_projects_exact_platform_union_without_role
         """))
         conn.execute(text("INSERT INTO app_users(id, email) VALUES ('owner', 'owner@example.test')"))
         ensure_authorization_foundation(conn)
+        create_server_session_contract_schema(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES ('owner', 'platform.ip_owner', 1)

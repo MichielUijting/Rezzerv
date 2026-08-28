@@ -17,6 +17,7 @@ on:
       - 'backend/tests/capture_schema_baseline.py'
       - 'backend/tests/migration_foundation_selftest.py'
       - 'backend/tests/schema_authority_cutover_selftest.py'
+      - 'backend/tests/server_session_schema_authority_selftest.py'
       - 'docs/technical/POSTGRESQL-MIGRATIONS.md'
       - 'docs/technical/POSTGRESQL-SCHEMA-AUTHORITY-CUTOVER.md'
       - '.github/workflows/postgresql-migration-foundation-validation.yml'
@@ -56,6 +57,12 @@ jobs:
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
           python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority.log
           grep -F 'SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN' /tmp/schema-authority.log
+          grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority.log
+          python backend/tests/server_session_schema_authority_selftest.py | tee /tmp/server-session-authority.log
+          grep -F 'SERVER_SESSION_FRESH_SQLITE_MIGRATION_GREEN' /tmp/server-session-authority.log
+          grep -F 'SERVER_SESSION_LEGACY_SQLITE_MIGRATION_GREEN' /tmp/server-session-authority.log
+          grep -F 'SERVER_SESSION_MALFORMED_SQLITE_REJECTED_GREEN' /tmp/server-session-authority.log
+          grep -F 'SERVER_SESSION_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/server-session-authority.log
           python -m app.testing.external_article_product_link_contract | tee /tmp/external-link-contract.log
           grep -F 'EXTERNAL_ARTICLE_PRODUCT_LINK_CONTRACT=GREEN' /tmp/external-link-contract.log
           python -m alembic -c backend/alembic.ini current
@@ -116,15 +123,16 @@ jobs:
             rezzerv-migration-runtime \
             sh -lc 'python -m app.schema_migration_preflight && python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /capture/current-runtime.sqlite > /capture/current-schema.sql && python tests/migration_foundation_selftest.py > /capture/migration-adoption.log && python -m alembic -c alembic.ini current > /capture/alembic-current.log && chmod 666 /capture/current-runtime.sqlite /capture/current-schema.sql /capture/migration-adoption.log /capture/alembic-current.log'
 
-      - name: Prove adoption preserved immutable schema
+      - name: Prove adoption preserved immutable baseline plus migration-owned session schema
         run: |
           gzip -dc backend/alembic/baseline_sqlite.sql.gz > "$RUNNER_TEMP/rezzerv-schema/baseline.sql"
-          diff -u "$RUNNER_TEMP/rezzerv-schema/baseline.sql" "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           test "$(sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" | cut -d' ' -f1)" = 'e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7'
+          grep -F -- '-- table: server_sessions (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- index: idx_server_sessions_user_active (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260827_02' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260828_01' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -159,7 +167,7 @@ jobs:
             "$(grep '^alembic==' backend/requirements.txt)" \
             "$(grep '^psycopg\[binary\]==' backend/requirements.txt)"
 
-      - name: Validate PostgreSQL lineage and external-link authority
+      - name: Validate PostgreSQL lineage and schema authority
         env:
           PYTHONPATH: backend
           DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:5432/rezzerv_migrations
@@ -175,6 +183,7 @@ jobs:
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
           python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority-postgresql.log
           grep -F 'EXTERNAL_LINK_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
+          grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
           python - <<'PY'
           from sqlalchemy import inspect
           from app.db import engine
@@ -193,7 +202,23 @@ jobs:
           }
           missing = expected - indexes
           assert not missing, f'PostgreSQL external-link indexes ontbreken: {sorted(missing)}'
+
+          assert 'server_sessions' in inspector.get_table_names()
+          session_indexes = {
+              item['name']: tuple(item.get('column_names') or ())
+              for item in inspector.get_indexes('server_sessions')
+          }
+          assert session_indexes.get('idx_server_sessions_user_active') == (
+              'user_id', 'revoked_at', 'expires_at'
+          )
+          active_household = next(
+              item
+              for item in inspector.get_columns('server_sessions')
+              if item['name'] == 'active_household_id'
+          )
+          assert active_household['nullable'] is True
           print('POSTGRESQL_EXTERNAL_LINK_SCHEMA_AUTHORITY_GREEN')
+          print('POSTGRESQL_SERVER_SESSION_SCHEMA_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current
           python -m alembic -c backend/alembic.ini heads

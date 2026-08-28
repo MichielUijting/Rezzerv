@@ -13,10 +13,23 @@ from capture_schema_baseline import dump_schema
 
 
 SQLITE_BASELINE_REVISION = "20260827_01"
-HEAD_REVISION = "20260827_02"
+HEAD_REVISION = "20260828_01"
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "baseline_sqlite.sql.gz"
 BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 50
+EXPECTED_SERVER_SESSION_COLUMNS = (
+    "id",
+    "session_token_hash",
+    "user_id",
+    "active_household_id",
+    "issued_at",
+    "expires_at",
+    "session_version",
+    "revoked_at",
+    "replaced_by_session_id",
+    "created_at",
+    "updated_at",
+)
 EXPECTED_BOOLEAN_COLUMNS = {
     ("household_permission_policies", "member_allowed"),
     ("product_identities", "is_primary"),
@@ -72,6 +85,72 @@ def _column(inspector, table_name: str, column_name: str) -> dict:
     return columns[column_name]
 
 
+def _strip_server_session_extension(schema: str) -> str:
+    blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
+    retained = [
+        block
+        for block in blocks
+        if "(table=server_sessions)" not in block.splitlines()[0]
+    ]
+    removed = len(blocks) - len(retained)
+    if removed != 2:
+        raise AssertionError(
+            "SQLite head must add exactly the server_sessions table and its explicit index; "
+            f"removed_blocks={removed}"
+        )
+    return "\n\n".join(retained).rstrip() + "\n"
+
+
+def _server_session_unique_sets(connection, inspector) -> set[tuple[str, ...]]:
+    if connection.dialect.name != "sqlite":
+        return {
+            tuple(constraint.get("column_names") or ())
+            for constraint in inspector.get_unique_constraints("server_sessions")
+        }
+
+    unique_sets: set[tuple[str, ...]] = set()
+    indexes = connection.exec_driver_sql(
+        'PRAGMA index_list("server_sessions")'
+    ).mappings()
+    for index in indexes:
+        if not bool(index.get("unique")):
+            continue
+        index_name = str(index.get("name") or "").replace('"', '""')
+        unique_sets.add(tuple(
+            str(column.get("name") or "")
+            for column in connection.exec_driver_sql(
+                f'PRAGMA index_info("{index_name}")'
+            ).mappings()
+        ))
+    return unique_sets
+
+
+def _assert_server_session_schema(connection) -> None:
+    inspector = inspect(connection)
+    if "server_sessions" not in set(inspector.get_table_names()):
+        raise AssertionError("Alembic head is missing server_sessions")
+    columns = inspector.get_columns("server_sessions")
+    column_names = tuple(str(column.get("name") or "") for column in columns)
+    if column_names != EXPECTED_SERVER_SESSION_COLUMNS:
+        raise AssertionError(
+            "Unexpected server_sessions columns: "
+            f"expected={EXPECTED_SERVER_SESSION_COLUMNS!r} actual={column_names!r}"
+        )
+    if not bool(_column(inspector, "server_sessions", "active_household_id")["nullable"]):
+        raise AssertionError("server_sessions.active_household_id must be nullable")
+    unique_sets = _server_session_unique_sets(connection, inspector)
+    if ("session_token_hash",) not in unique_sets:
+        raise AssertionError("server_sessions.session_token_hash must remain unique")
+    server_indexes = {index["name"]: index for index in inspector.get_indexes("server_sessions")}
+    active_index = server_indexes.get("idx_server_sessions_user_active")
+    if not active_index or tuple(active_index.get("column_names") or ()) != (
+        "user_id",
+        "revoked_at",
+        "expires_at",
+    ):
+        raise AssertionError("Invalid idx_server_sessions_user_active contract")
+
+
 def _assert_postgresql_schema(connection) -> None:
     inspector = inspect(connection)
     tables = set(inspector.get_table_names()) - {"alembic_version"}
@@ -80,8 +159,7 @@ def _assert_postgresql_schema(connection) -> None:
             "PR2b PostgreSQL application schema must contain exactly "
             f"{EXPECTED_POSTGRESQL_APPLICATION_TABLES} application tables; actual={len(tables)}"
         )
-    if "server_sessions" not in tables:
-        raise AssertionError("PR2b PostgreSQL schema is missing lazy server_sessions authority")
+    _assert_server_session_schema(connection)
 
     for table_name, column_name in sorted(EXPECTED_BOOLEAN_COLUMNS):
         column = _column(inspector, table_name, column_name)
@@ -135,24 +213,6 @@ def _assert_postgresql_schema(connection) -> None:
                 "Invalid locationless inventory partial unique index: "
                 f"missing={fragment!r} index={locationless_index!r}"
             )
-
-    active_household = _column(inspector, "server_sessions", "active_household_id")
-    if not bool(active_household["nullable"]):
-        raise AssertionError("server_sessions.active_household_id must be nullable")
-    unique_sets = {
-        tuple(constraint.get("column_names") or ())
-        for constraint in inspector.get_unique_constraints("server_sessions")
-    }
-    if ("session_token_hash",) not in unique_sets:
-        raise AssertionError("server_sessions.session_token_hash must remain unique")
-    server_indexes = {index["name"]: index for index in inspector.get_indexes("server_sessions")}
-    active_index = server_indexes.get("idx_server_sessions_user_active")
-    if not active_index or tuple(active_index.get("column_names") or ()) != (
-        "user_id",
-        "revoked_at",
-        "expires_at",
-    ):
-        raise AssertionError("Invalid idx_server_sessions_user_active contract")
 
     constraints = {
         str(row[0])
@@ -244,22 +304,25 @@ def main() -> None:
                     raise AssertionError("SQLite schema-contract validation requires a file database")
                 baseline = _baseline_sql()
                 actual = dump_schema(Path(url.database))
-                if actual != baseline:
+                actual_baseline = _strip_server_session_extension(actual)
+                if actual_baseline != baseline:
                     raise AssertionError(
-                        "SQLite schema differs from immutable migration baseline: "
-                        f"expected_sha256={_sha256(baseline)} actual_sha256={_sha256(actual)}"
+                        "SQLite baseline portion differs from immutable migration baseline: "
+                        f"expected_sha256={_sha256(baseline)} "
+                        f"actual_sha256={_sha256(actual_baseline)}"
                     )
+                _assert_server_session_schema(connection)
                 print(
                     "MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN "
                     f"mode={expected_mode} source_revision={SQLITE_BASELINE_REVISION} "
-                    f"head_revision={HEAD_REVISION} sha256={_sha256(actual)}"
+                    f"head_revision={HEAD_REVISION} baseline_sha256={_sha256(actual_baseline)}"
                 )
             else:
                 if dialect != "postgresql":
                     raise AssertionError(f"Expected PostgreSQL, got {dialect}")
                 _assert_postgresql_schema(connection)
                 # Keep the PR2a marker temporarily so the existing workflow remains
-                # compatible while PR2b strengthens the same job in this branch.
+                # compatible while later PostgreSQL slices strengthen the same job.
                 print("MIGRATION_POSTGRESQL_LINEAGE_GREEN")
     finally:
         engine.dispose()
