@@ -37,6 +37,14 @@ def build_connection():
           ('frontteam', 'Historisch Frontteam', 'regular')
     """))
     conn.execute(text("""
+        CREATE TABLE frontteam_personal_households (
+            user_id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    conn.execute(text("""
         CREATE TABLE app_users (
             id TEXT PRIMARY KEY,
             email TEXT NOT NULL UNIQUE
