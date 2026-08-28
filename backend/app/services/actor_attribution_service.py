@@ -53,22 +53,61 @@ def current_actor_household_id() -> str | None:
 
 
 def ensure_actor_attribution_schema(conn: Connection) -> None:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS actor_object_attributions (
-            object_type TEXT NOT NULL,
-            object_id TEXT NOT NULL,
-            household_id TEXT NOT NULL,
-            actor_user_id TEXT NOT NULL,
-            attribution_source TEXT NOT NULL DEFAULT 'runtime_session',
-            first_attributed_at TEXT NOT NULL,
-            last_attributed_at TEXT NOT NULL,
-            PRIMARY KEY (object_type, object_id)
+    """Validate the Alembic-owned actor-attribution schema without runtime DDL."""
+    inspector = inspect(conn)
+    table_name = "actor_object_attributions"
+    if not inspector.has_table(table_name):
+        raise RuntimeError(
+            "actor_object_attributions ontbreekt; voer eerst Alembic-migraties uit"
         )
-    """))
-    conn.execute(text("""
-        CREATE INDEX IF NOT EXISTS idx_actor_object_attributions_household_actor
-        ON actor_object_attributions (household_id, actor_user_id, object_type)
-    """))
+    columns = {
+        str(column.get("name") or ""): column
+        for column in inspector.get_columns(table_name)
+    }
+    required = {
+        "object_type",
+        "object_id",
+        "household_id",
+        "actor_user_id",
+        "attribution_source",
+        "first_attributed_at",
+        "last_attributed_at",
+    }
+    missing = required - set(columns)
+    if missing:
+        raise RuntimeError(
+            "actor_object_attributions mist canonieke kolommen: "
+            + ", ".join(sorted(missing))
+        )
+    for column_name in required:
+        if bool(columns[column_name].get("nullable")):
+            raise RuntimeError(
+                f"actor_object_attributions.{column_name} moet NOT NULL zijn"
+            )
+    primary_key = tuple(
+        str(column or "")
+        for column in (
+            inspector.get_pk_constraint(table_name).get("constrained_columns") or ()
+        )
+    )
+    if primary_key != ("object_type", "object_id"):
+        raise RuntimeError(
+            "actor_object_attributions heeft een onjuiste primaire sleutel: "
+            f"{primary_key!r}"
+        )
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspector.get_indexes(table_name)
+    }
+    index = indexes.get("idx_actor_object_attributions_household_actor")
+    expected_columns = ("household_id", "actor_user_id", "object_type")
+    actual_columns = tuple((index or {}).get("column_names") or ())
+    if not index or actual_columns != expected_columns or bool(index.get("unique")):
+        raise RuntimeError(
+            "actor_object_attributions indexcontract wijkt af: "
+            f"expected={expected_columns!r} actual={actual_columns!r} "
+            f"unique={bool((index or {}).get('unique'))}"
+        )
 
 
 def backfill_actor_attributions_from_audit(conn: Connection) -> int:
