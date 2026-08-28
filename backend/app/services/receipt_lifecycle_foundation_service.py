@@ -1,15 +1,13 @@
-"""Minimal receipt lifecycle foundation for safe delete/reimport semantics.
+"""Receipt lifecycle business logic for safe delete/reimport semantics.
 
-Release A deliberately extends existing receipt entities instead of introducing
-parallel identity or processing tables. Persisted facts keep one source of truth:
+The database schema and receipt lifecycle invariants are owned by Alembic. This
+module contains only runtime business/data reconciliation and lifecycle actions.
+Persisted facts keep one source of truth:
 
 - receipt_tables: current receipt workflow + stable logical receipt identity
 - receipt_table_lines: stable logical receipt-line identity
 - purchase_import_lines: approval/unpacking work state
 - inventory_events: actual inventory effects
-
-Release B adds explicit disposition actions for receipts that are already in the
-Uitpakken flow. These actions deliberately do not reverse inventory events.
 
 Explicit user approval is a lifecycle fact. Technical parser/status backfills may
 refresh diagnostics, but may not silently invalidate an existing approval. An
@@ -48,48 +46,14 @@ NON_ACTIVE_WORKFLOW_STATES = {
 APPROVAL_GUARD_TRIGGER = "trg_receipt_tables_preserve_explicit_approval"
 
 
-def _columns(conn, table_name: str) -> set[str]:
-    return {
-        str(row[1])
-        for row in conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
-    }
+def ensure_explicit_approval_guard_trigger(conn) -> None:
+    """Compatibility shim; Alembic owns the receipt approval guard trigger."""
+    del conn
 
 
-def _table_exists(conn, table_name: str) -> bool:
-    return bool(
-        conn.execute(
-            text(
-                "SELECT 1 FROM sqlite_master "
-                "WHERE type = 'table' AND name = :name LIMIT 1"
-            ),
-            {"name": table_name},
-        ).scalar()
-    )
-
-
-def _supports_explicit_approval_guard(conn) -> bool:
-    if not _table_exists(conn, "raw_receipts") or not _table_exists(conn, "receipt_tables"):
-        return False
-    receipt_columns = _columns(conn, "receipt_tables")
-    raw_columns = _columns(conn, "raw_receipts")
-    return {
-        "id",
-        "raw_receipt_id",
-        "approved_at",
-        "deleted_at",
-        "parse_status",
-        "workflow_state",
-        "updated_at",
-    }.issubset(receipt_columns) and {"id", "deleted_at"}.issubset(raw_columns)
-
-
-def _approved_parse_status_sql(receipt_columns: set[str]) -> str:
-    if "totals_overridden" in receipt_columns:
-        return (
-            "CASE WHEN COALESCE(totals_overridden, 0) <> 0 "
-            "THEN 'approved_override' ELSE 'approved' END"
-        )
-    return "'approved'"
+def ensure_receipt_lifecycle_foundation_schema(conn) -> None:
+    """Compatibility shim; Alembic owns the receipt lifecycle schema."""
+    del conn
 
 
 def reconcile_explicit_receipt_approvals(
@@ -103,15 +67,11 @@ def reconcile_explicit_receipt_approvals(
     approved/Uitpakken flow. Parser diagnostics are allowed to change later, but a
     background recalculation must never make that explicit approval disappear.
 
-    This reconciliation therefore repairs only active, non-deleted receipts that
-    still have ``approved_at``. It never creates approval, never clears approval,
-    never reactivates archived/removed receipts and never touches inventory facts.
+    This reconciliation repairs only active, non-deleted receipts that still have
+    ``approved_at``. It never creates approval, never clears approval, never
+    reactivates archived/removed receipts and never touches inventory facts.
+    The canonical Alembic contract guarantees the columns used here exist.
     """
-    if not _supports_explicit_approval_guard(conn):
-        return {"reconciled_count": 0, "receipt_table_ids": []}
-
-    receipt_columns = _columns(conn, "receipt_tables")
-    status_sql = _approved_parse_status_sql(receipt_columns)
     params: dict[str, Any] = {
         "approved": APPROVED,
         "approved_override": APPROVED_OVERRIDE,
@@ -151,9 +111,13 @@ def reconcile_explicit_receipt_approvals(
     for candidate_id in receipt_ids:
         conn.execute(
             text(
-                f"""
+                """
                 UPDATE receipt_tables
-                SET parse_status = {status_sql},
+                SET parse_status = CASE
+                        WHEN COALESCE(totals_overridden, FALSE)
+                        THEN 'approved_override'
+                        ELSE 'approved'
+                    END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :receipt_table_id
                 """
@@ -167,113 +131,13 @@ def reconcile_explicit_receipt_approvals(
     }
 
 
-def ensure_explicit_approval_guard_trigger(conn) -> bool:
-    """Enforce the explicit-approval lifecycle boundary in SQLite.
+def reconcile_receipt_lifecycle_foundation_data(conn) -> dict[str, Any]:
+    """Idempotently reconcile persisted lifecycle data on the canonical schema.
 
-    Two transitions are protected atomically:
-    - a technical parse-status refresh cannot downgrade a receipt that still has
-      ``approved_at``;
-    - a new explicit approval on ``returned_to_kassa`` makes the workflow active
-      again, because the user's approval ends the return-to-Kassa state.
-
-    The normal ``return_to_kassa`` action clears ``approved_at`` first, so parser
-    diagnostics remain free to become review/manual while the receipt is in Kassa.
+    This intentionally performs no schema inspection or mutation. Historical rows
+    may still need stable logical keys or a non-ambiguous workflow state, and an
+    explicit user approval remains authoritative over later parser diagnostics.
     """
-    if not _supports_explicit_approval_guard(conn):
-        return False
-
-    receipt_columns = _columns(conn, "receipt_tables")
-    if "totals_overridden" in receipt_columns:
-        trigger_status_sql = (
-            "CASE WHEN COALESCE(NEW.totals_overridden, 0) <> 0 "
-            "THEN 'approved_override' ELSE 'approved' END"
-        )
-    else:
-        trigger_status_sql = "'approved'"
-
-    conn.execute(text(f"DROP TRIGGER IF EXISTS {APPROVAL_GUARD_TRIGGER}"))
-    # Remove the rejected draft-PR trigger if a local PO test installed it.
-    conn.execute(text("DROP TRIGGER IF EXISTS trg_receipt_tables_review_lifecycle"))
-    conn.execute(
-        text(
-            f"""
-            CREATE TRIGGER {APPROVAL_GUARD_TRIGGER}
-            AFTER UPDATE OF parse_status, approved_at ON receipt_tables
-            WHEN NEW.approved_at IS NOT NULL
-             AND NEW.deleted_at IS NULL
-             AND (
-                    lower(trim(COALESCE(NEW.parse_status, ''))) NOT IN (
-                        'approved', 'approved_override'
-                    )
-                    OR lower(trim(COALESCE(NEW.workflow_state, 'active'))) = 'returned_to_kassa'
-             )
-             AND lower(trim(COALESCE(NEW.workflow_state, 'active'))) NOT IN (
-                    'archived', 'removed_reimport_allowed', 'legacy_deleted'
-             )
-             AND EXISTS (
-                    SELECT 1
-                    FROM raw_receipts rr
-                    WHERE rr.id = NEW.raw_receipt_id
-                      AND rr.deleted_at IS NULL
-             )
-            BEGIN
-                UPDATE receipt_tables
-                SET parse_status = {trigger_status_sql},
-                    workflow_state = CASE
-                        WHEN lower(trim(COALESCE(NEW.workflow_state, 'active'))) = 'returned_to_kassa'
-                        THEN 'active'
-                        ELSE NEW.workflow_state
-                    END,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = NEW.id;
-            END
-            """
-        )
-    )
-    return True
-
-
-def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
-    """Idempotently add only non-derivable receipt lifecycle facts.
-
-    Deliberately NOT added:
-    - receipt identity tables;
-    - receipt-line processing tables;
-    - duplicated approved/unpacked flags;
-    - archive copies of receipts;
-    - a second inventory ledger.
-    """
-    required = ("raw_receipts", "receipt_tables", "receipt_table_lines")
-    missing = [name for name in required if not _table_exists(conn, name)]
-    if missing:
-        raise RuntimeError(
-            "Receipt basisdatamodel ontbreekt: " + ", ".join(sorted(missing))
-        )
-
-    raw_columns = _columns(conn, "raw_receipts")
-    receipt_columns = _columns(conn, "receipt_tables")
-    line_columns = _columns(conn, "receipt_table_lines")
-
-    added: list[str] = []
-
-    if "logical_receipt_key" not in receipt_columns:
-        conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN logical_receipt_key TEXT"))
-        added.append("receipt_tables.logical_receipt_key")
-    if "workflow_state" not in receipt_columns:
-        conn.execute(
-            text(
-                "ALTER TABLE receipt_tables "
-                "ADD COLUMN workflow_state TEXT NOT NULL DEFAULT 'active'"
-            )
-        )
-        added.append("receipt_tables.workflow_state")
-    if "logical_line_key" not in line_columns:
-        conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN logical_line_key TEXT"))
-        added.append("receipt_table_lines.logical_line_key")
-
-    # Existing rows receive opaque stable identities. Future reimport/reconciliation
-    # deliberately reuses these keys on a newer import attempt of the same logical
-    # receipt/line; therefore the key columns themselves are indexed, not unique.
     missing_receipts = [
         str(row[0])
         for row in conn.execute(
@@ -310,18 +174,17 @@ def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
             {"id": line_id, "key": uuid.uuid4().hex},
         )
 
-    # Existing deleted_at rows predate the new semantic distinction between
-    # archive and removal. Do not invent intent retrospectively.
-    if "deleted_at" in receipt_columns:
-        conn.execute(
-            text(
-                "UPDATE receipt_tables "
-                "SET workflow_state = :legacy_deleted "
-                "WHERE deleted_at IS NOT NULL "
-                "AND COALESCE(workflow_state, 'active') = 'active'"
-            ),
-            {"legacy_deleted": LEGACY_DELETED},
-        )
+    # Existing deleted_at rows predate the semantic distinction between archive
+    # and removal. Do not invent intent retrospectively.
+    conn.execute(
+        text(
+            "UPDATE receipt_tables "
+            "SET workflow_state = :legacy_deleted "
+            "WHERE deleted_at IS NOT NULL "
+            "AND COALESCE(workflow_state, 'active') = 'active'"
+        ),
+        {"legacy_deleted": LEGACY_DELETED},
+    )
     conn.execute(
         text(
             "UPDATE receipt_tables SET workflow_state = 'active' "
@@ -329,50 +192,11 @@ def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
         )
     )
 
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_receipt_tables_logical_receipt_key "
-            "ON receipt_tables (household_id, logical_receipt_key)"
-        )
-    )
-    # Remove an accidental early Release-A development index if it ever existed.
-    conn.execute(text("DROP INDEX IF EXISTS uq_receipt_table_lines_logical_line_key"))
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_receipt_table_lines_logical_line_key "
-            "ON receipt_table_lines (logical_line_key)"
-        )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS idx_receipt_tables_workflow_state "
-            "ON receipt_tables (household_id, workflow_state)"
-        )
-    )
-
-    # Preserve the original source hash. Reimport of a soft-deleted exact source
-    # must eventually be enabled by active-row uniqueness, not by mutating hashes.
-    # Release A changes only the index contract; current delete behaviour is left
-    # untouched until Release B.
-    if "deleted_at" in raw_columns:
-        conn.execute(text("DROP INDEX IF EXISTS uq_raw_receipts_household_hash"))
-        conn.execute(
-            text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_receipts_household_hash "
-                "ON raw_receipts (household_id, sha256_hash) "
-                "WHERE deleted_at IS NULL"
-            )
-        )
-
-    approval_guard_installed = ensure_explicit_approval_guard_trigger(conn)
     approval_reconciliation = reconcile_explicit_receipt_approvals(conn)
-
     return {
-        "added_columns": added,
         "backfilled_receipts": len(missing_receipts),
         "backfilled_lines": len(missing_lines),
         "workflow_states": sorted(ALLOWED_WORKFLOW_STATES),
-        "explicit_approval_guard_installed": approval_guard_installed,
         "reconciled_explicit_approvals": approval_reconciliation["reconciled_count"],
     }
 
@@ -441,7 +265,11 @@ def apply_unpack_receipt_lifecycle_action(
     expected_household_id = str(household_id or "").strip()
     receipt_household_id = str(receipt.get("household_id") or "").strip()
     batch_household_id = str(receipt.get("batch_household_id") or "").strip()
-    if not expected_household_id or receipt_household_id != expected_household_id or batch_household_id != expected_household_id:
+    if (
+        not expected_household_id
+        or receipt_household_id != expected_household_id
+        or batch_household_id != expected_household_id
+    ):
         raise PermissionError("Kassabon hoort niet bij het actieve huishouden")
 
     receipt_table_id = str(receipt["id"])
@@ -473,10 +301,6 @@ def apply_unpack_receipt_lifecycle_action(
             "inventory_events_reversed": False,
         }
 
-    # Archive retains all receipt/import/inventory facts but hides the receipt from
-    # the active Kassa/Uitpakken queries through receipt_tables.deleted_at. Unlike
-    # full removal, raw_receipts stays active so the original source hash remains
-    # reserved and the exact source cannot be reimported as a new active receipt.
     conn.execute(
         text(
             """
@@ -516,18 +340,12 @@ def apply_unpack_receipt_lifecycle_action(
 
 
 def install_receipt_lifecycle_foundation(app, engine) -> None:
-    """Apply the Release-A foundation once when the loaded runtime is ready.
-
-    app.__init__ already waits until app.main has created the FastAPI app, engine,
-    receipt schema and delete route. Registering another FastAPI startup handler at
-    that late point is unsafe because the startup phase may already have passed.
-    Therefore the same idempotent schema function is executed directly here.
-    """
+    """Reconcile receipt lifecycle data once after Alembic has validated schema."""
     marker = "_rezzerv_receipt_lifecycle_foundation_installed"
     if getattr(app.state, marker, False):
         return
 
     with engine.begin() as conn:
-        ensure_receipt_lifecycle_foundation_schema(conn)
+        reconcile_receipt_lifecycle_foundation_data(conn)
 
     setattr(app.state, marker, True)
