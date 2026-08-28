@@ -213,11 +213,24 @@ def _validate_postgresql(bind: sa.engine.Connection) -> None:
             str(item["name"]): item
             for item in inspector.get_columns("receipt_tables")
         }
+        source_receipt_columns = {
+            item[0]: item
+            for item in _sqlite_columns(source, "receipt_tables")
+        }
+        workflow_source_default = source_receipt_columns["workflow_state"][3]
         workflow_default = _normalize_sql(receipt_columns["workflow_state"].get("default"))
-        if "active" not in workflow_default:
-            raise RuntimeError(
-                "PostgreSQL receipt_tables.workflow_state default must remain active"
-            )
+        if workflow_source_default is None:
+            if workflow_default:
+                raise RuntimeError(
+                    "PostgreSQL receipt_tables.workflow_state unexpectedly gained a server default"
+                )
+        else:
+            expected_workflow_default = str(workflow_source_default).strip("'\"")
+            if expected_workflow_default not in workflow_default:
+                raise RuntimeError(
+                    "PostgreSQL receipt_tables.workflow_state server default drift: "
+                    f"expected={workflow_source_default!r} actual={workflow_default!r}"
+                )
         if not bool(receipt_columns["logical_receipt_key"].get("nullable")):
             raise RuntimeError("receipt_tables.logical_receipt_key must remain nullable")
         line_columns = {
