@@ -88,7 +88,7 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/runtime-startup-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/runtime-startup-migration.log
-          grep -F "'revision': '20260828_03'" /tmp/runtime-startup-migration.log
+          grep -F "'revision': '20260828_04'" /tmp/runtime-startup-migration.log
 
       - name: Prove runtime role has no schema CREATE privilege
         env:
