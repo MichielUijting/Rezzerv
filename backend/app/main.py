@@ -14425,9 +14425,10 @@ def ensure_ui_test_seed_data():
             ).mappings().first()
             if row:
                 return row["id"]
+            space_id = str(uuid.uuid4())
             return conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
-                {"naam": name, "household_id": household_id},
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (:id, :naam, :household_id) RETURNING id"),
+                {"id": space_id, "naam": name, "household_id": household_id},
             ).scalar_one()
 
         def ensure_sublocation(space_id: str, name: str):
@@ -14437,9 +14438,10 @@ def ensure_ui_test_seed_data():
             ).mappings().first()
             if row:
                 return row["id"]
+            sublocation_id = str(uuid.uuid4())
             return conn.execute(
-                text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
-                {"naam": name, "space_id": space_id},
+                text("INSERT INTO sublocations (id, naam, space_id) VALUES (:id, :naam, :space_id) RETURNING id"),
+                {"id": sublocation_id, "naam": name, "space_id": space_id},
             ).scalar_one()
 
         keuken_id = ensure_space('Keuken')
@@ -14472,15 +14474,16 @@ def ensure_ui_test_seed_data():
                 ).mappings().first()
                 if existing:
                     return existing['id']
+                connection_id = str(uuid.uuid4())
                 return conn.execute(
                     text("""
                     INSERT INTO household_store_connections (
                         id, household_id, store_provider_id, connection_status, external_account_ref, linked_at, created_at, updated_at
                     ) VALUES (
-                        lower(hex(randomblob(16))), :household_id, :store_provider_id, 'active', :external_account_ref, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                        :id, :household_id, :store_provider_id, 'active', :external_account_ref, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                     ) RETURNING id
                     """),
-                    {"household_id": household_id, "store_provider_id": provider['id'], "external_account_ref": external_ref},
+                    {"id": connection_id, "household_id": household_id, "store_provider_id": provider['id'], "external_account_ref": external_ref},
                 ).scalar_one()
 
             def insert_batch(provider_code: str, connection_id: str, source_reference: str, import_status: str, batch_metadata: dict, lines: list[dict]):
@@ -14521,17 +14524,19 @@ def ensure_ui_test_seed_data():
                     },
                 )
                 for index, line in enumerate(lines, start=1):
+                    line_id = str(uuid.uuid4())
                     conn.execute(
                         text("""
                         INSERT INTO purchase_import_lines (
                             id, batch_id, external_line_ref, external_article_code, article_name_raw, brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
                             match_status, review_decision, ui_sort_order, matched_household_article_id, target_location_id, processing_status, suggested_household_article_id, suggested_location_id, suggestion_confidence, suggestion_reason, is_auto_prefilled, article_override_mode, location_override_mode, created_at
                         ) VALUES (
-                            lower(hex(randomblob(16))), :batch_id, :external_line_ref, :external_article_code, :article_name_raw, :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
+                            :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw, :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
                             :match_status, :review_decision, :ui_sort_order, :matched_household_article_id, :target_location_id, :processing_status, :suggested_household_article_id, :suggested_location_id, :suggestion_confidence, :suggestion_reason, :is_auto_prefilled, :article_override_mode, :location_override_mode, CURRENT_TIMESTAMP
                         )
                         """),
                         {
+                            'id': line_id,
                             'batch_id': batch_id,
                             'ui_sort_order': index,
                             'external_line_ref': line['external_line_ref'],
@@ -14551,7 +14556,7 @@ def ensure_ui_test_seed_data():
                             'suggested_location_id': line.get('suggested_location_id'),
                             'suggestion_confidence': line.get('suggestion_confidence'),
                             'suggestion_reason': line.get('suggestion_reason'),
-                            'is_auto_prefilled': line.get('is_auto_prefilled', 0),
+                            'is_auto_prefilled': bool(line.get('is_auto_prefilled', False)),
                             'article_override_mode': line.get('article_override_mode', 'auto'),
                             'location_override_mode': line.get('location_override_mode', 'auto'),
                         },
