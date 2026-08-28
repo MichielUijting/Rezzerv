@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from app.services.temporal_inventory_service import (
@@ -77,25 +77,47 @@ def get_inventory_total_by_household_article(conn, household_id: str, household_
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    return bool(conn.execute(text(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name LIMIT 1"
-    ), {"name": str(table_name)}).scalar())
+    return bool(inspect(conn).has_table(str(table_name)))
+
+
+def _table_columns(conn, table_name: str) -> dict[str, dict]:
+    return {
+        str(column.get("name") or ""): column
+        for column in inspect(conn).get_columns(str(table_name))
+    }
+
+
+def _locationless_index_sql(conn) -> str | None:
+    dialect = conn.dialect.name
+    if dialect == "sqlite":
+        return conn.execute(text(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type = 'index' AND name = :name
+            LIMIT 1
+            """
+        ), {"name": LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
+    if dialect == "postgresql":
+        return conn.execute(text(
+            """
+            SELECT indexdef
+            FROM pg_indexes
+            WHERE schemaname = current_schema()
+              AND tablename = 'inventory'
+              AND indexname = :name
+            LIMIT 1
+            """
+        ), {"name": LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
+    raise RuntimeError(f"Unsupported Rezzerv inventory identity dialect: {dialect}")
 
 
 def ensure_locationless_inventory_identity_guard(conn) -> None:
-    """Protect the single active NULL/NULL row per household article in SQLite.
-
-    The duplicate check deliberately runs before creating the partial unique index so
-    an existing inconsistent database fails with a clear error instead of an opaque
-    CREATE INDEX integrity failure.
-    """
+    """Validate the migration-owned active NULL/NULL inventory identity guard."""
     if not _table_exists(conn, "inventory"):
-        return
+        raise RuntimeError("inventory table ontbreekt; voer Alembic migrations uit")
 
-    columns = {
-        str(row[1])
-        for row in conn.execute(text("PRAGMA table_info(inventory)")).fetchall()
-    }
+    columns = _table_columns(conn, "inventory")
     required_columns = {
         "household_id",
         "household_article_id",
@@ -103,8 +125,17 @@ def ensure_locationless_inventory_identity_guard(conn) -> None:
         "sublocation_id",
         "status",
     }
-    if not required_columns.issubset(columns):
-        return
+    missing = required_columns - set(columns)
+    if missing:
+        raise RuntimeError(
+            "Canonical inventory identity schema mist kolommen: "
+            + ", ".join(sorted(missing))
+        )
+    for column_name in ("space_id", "sublocation_id"):
+        if not bool(columns[column_name].get("nullable")):
+            raise RuntimeError(
+                f"inventory.{column_name} moet nullable blijven voor locationless voorraad"
+            )
 
     duplicate = conn.execute(text(
         """
@@ -126,22 +157,45 @@ def ensure_locationless_inventory_identity_guard(conn) -> None:
             f"household_article_id={duplicate['household_article_id']}"
         )
 
-    conn.execute(text(
-        f"""
-        CREATE UNIQUE INDEX IF NOT EXISTS {LOCATIONLESS_ACTIVE_IDENTITY_INDEX}
-        ON inventory (household_id, household_article_id)
-        WHERE COALESCE(status, 'active') = 'active'
-          AND household_article_id IS NOT NULL
-          AND space_id IS NULL
-          AND sublocation_id IS NULL
-        """
-    ))
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspect(conn).get_indexes("inventory")
+    }
+    index = indexes.get(LOCATIONLESS_ACTIVE_IDENTITY_INDEX)
+    if not index:
+        raise RuntimeError(
+            f"Canonical locationless inventory index ontbreekt: {LOCATIONLESS_ACTIVE_IDENTITY_INDEX}"
+        )
+    expected_columns = ("household_id", "household_article_id")
+    if not bool(index.get("unique")) or tuple(index.get("column_names") or ()) != expected_columns:
+        raise RuntimeError(
+            "Canonical locationless inventory index wijkt af in uniqueness/kolommen"
+        )
+
+    index_sql = _locationless_index_sql(conn)
+    if not index_sql:
+        raise RuntimeError(
+            f"Canonical locationless inventory indexdef ontbreekt: {LOCATIONLESS_ACTIVE_IDENTITY_INDEX}"
+        )
+    normalized = " ".join(str(index_sql).lower().replace('"', '').split())
+    for fragment in (
+        "household_article_id is not null",
+        "space_id is null",
+        "sublocation_id is null",
+        "status",
+        "'active'",
+    ):
+        if fragment not in normalized:
+            raise RuntimeError(
+                "Canonical locationless inventory index wijkt af: "
+                f"missing={fragment!r} index={index_sql!r}"
+            )
 
 
 def _temporal_ledger_available_for_article(conn, household_id: str, household_article_id: str) -> bool:
     if not _table_exists(conn, "inventory_events"):
         return False
-    columns = {str(row[1]) for row in conn.execute(text("PRAGMA table_info(inventory_events)")).fetchall()}
+    columns = _table_columns(conn, "inventory_events")
     if "household_article_id" not in columns:
         return False
     event_exists = conn.execute(text(
@@ -198,7 +252,7 @@ def _hydrate_latest_receipt_purchase_event(
           AND COALESCE(trim(source_reference), '') = ''
           AND ABS(COALESCE(quantity, 0) - :quantity) < 0.000001
           AND (:location_id IS NULL OR COALESCE(location_id, '') = COALESCE(:location_id, ''))
-        ORDER BY datetime(created_at) DESC, id DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 1
         """
     ), {
@@ -227,8 +281,8 @@ def _hydrate_latest_receipt_purchase_event(
           AND ABS(COALESCE(pil.quantity_raw, 0) - :quantity) < 0.000001
           AND (:location_id IS NULL OR COALESCE(pil.target_location_id, '') = COALESCE(:location_id, ''))
           AND pib.source_reference LIKE 'receipt:%'
-        ORDER BY datetime(COALESCE(pil.updated_at, pil.created_at)) DESC,
-                 datetime(pib.created_at) DESC,
+        ORDER BY COALESCE(pil.updated_at, pil.created_at) DESC,
+                 pib.created_at DESC,
                  COALESCE(pil.ui_sort_order, 0) DESC,
                  pil.id DESC
         LIMIT 1
@@ -266,7 +320,6 @@ def _hydrate_latest_receipt_purchase_event(
 
     purchase_at = str(receipt.get("purchase_at") or "").strip()
     purchase_at_source = str(receipt.get("purchase_at_source") or "").strip().lower()
-    # Import-default midnight is not a detected time and must remain date-precision.
     precision = "date" if purchase_at_source == "import_default" else "datetime"
     if len(purchase_at) == 10:
         purchase_at = f"{purchase_at}T00:00:00+00:00"
@@ -301,7 +354,6 @@ def _reconcile_if_temporal_event_exists(
     space_id: str | None,
     sublocation_id: str | None,
 ) -> None:
-    # Some deliberately minimal isolated tests do not create inventory_events.
     if not _temporal_ledger_available_for_article(conn, household_id, household_article_id):
         return
     _hydrate_latest_receipt_purchase_event(
@@ -456,8 +508,6 @@ def apply_inventory_purchase_by_identity(
             },
         )
     except IntegrityError:
-        # Only the locationless identity has a database-level race guard in this slice.
-        # If another writer won that race, merge into the canonical row it created.
         if normalized_space_id is not None or normalized_sublocation_id is not None:
             raise
         existing = _find_inventory_identity(
