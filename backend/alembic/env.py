@@ -4,7 +4,8 @@ import importlib
 
 from alembic import context
 
-from app.db import Base, engine
+from app.db import Base
+from app.migration_db import migration_engine
 
 
 _MODEL_MODULES = (
@@ -27,7 +28,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=engine.url.render_as_string(hide_password=False),
+        url=migration_engine.url.render_as_string(hide_password=False),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -39,7 +40,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    with engine.connect() as connection:
+    with migration_engine.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
