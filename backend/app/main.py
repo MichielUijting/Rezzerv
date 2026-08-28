@@ -7181,6 +7181,16 @@ def bootstrap_auth_registry():
         conn.execute(
             text(
                 '''
+                INSERT INTO households (id, naam, created_at)
+                VALUES (:id, :naam, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO NOTHING
+                '''
+            ),
+            {'id': default_household_id, 'naam': default_household_name},
+        )
+        conn.execute(
+            text(
+                '''
                 INSERT INTO household_registry (id, naam, created_at)
                 VALUES (:id, :naam, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO NOTHING
