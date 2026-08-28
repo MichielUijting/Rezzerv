@@ -55,7 +55,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Iterable
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, inspect, text
 
 from app.receipt_ingestion.line_classifier import classify_receipt_text_line
 from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
@@ -241,8 +241,8 @@ def _looks_like_fuzzy_total_label(value: str | None) -> bool:
 
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
-    rows = conn.execute(text(f'PRAGMA table_info({table_name})')).mappings().all()
-    return any(str(row.get('name') or '').lower() == column_name.lower() for row in rows)
+    columns = inspect(conn).get_columns(table_name)
+    return any(str(column.get('name') or '').lower() == column_name.lower() for column in columns)
 
 
 def _load_line_groups(conn, receipt_table_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
