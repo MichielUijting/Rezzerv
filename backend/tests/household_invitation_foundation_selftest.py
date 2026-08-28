@@ -26,6 +26,7 @@ from app.services.server_session_service import (
     create_server_session,
     create_system_server_session,
 )
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _prepare_database(engine) -> None:
@@ -59,6 +60,7 @@ def _prepare_database(engine) -> None:
             )
         """))
         ensure_authorization_foundation(conn)
+        create_server_session_contract_schema(conn)
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type) VALUES
                 ('hh-a', 'Huis A', 'regular'),
