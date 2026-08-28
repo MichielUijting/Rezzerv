@@ -5,9 +5,9 @@ Revises: 20260828_02
 Create Date: 2026-08-28
 
 This revision adds the seven temporal inventory fields, the two canonical
-ordering/source indexes and backfills existing inventory_events rows. It does
-not change inventory location nullability: space_id and sublocation_id remain
-nullable by design.
+ordering/source indexes, adopts the canonical active locationless inventory
+identity index, and backfills existing inventory_events rows. It does not change
+inventory location nullability: space_id and sublocation_id remain nullable by design.
 """
 from __future__ import annotations
 
@@ -45,6 +45,14 @@ _SOURCE_REFERENCE_COLUMNS = (
     "source",
     "source_reference",
     "source_line_id",
+)
+_LOCATIONLESS_ACTIVE_IDENTITY_INDEX = "uq_inventory_active_locationless_household_article"
+_LOCATIONLESS_ACTIVE_IDENTITY_COLUMNS = ("household_id", "household_article_id")
+_LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE = (
+    "COALESCE(status, 'active') = 'active' "
+    "AND household_article_id IS NOT NULL "
+    "AND space_id IS NULL "
+    "AND sublocation_id IS NULL"
 )
 _EVENT_PRIORITY = {
     "purchase": 10,
@@ -214,6 +222,112 @@ def _ensure_indexes(bind: sa.engine.Connection) -> None:
             )
 
 
+def _locationless_index_sql(bind: sa.engine.Connection) -> str | None:
+    if bind.dialect.name == "sqlite":
+        return bind.execute(sa.text(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type = 'index' AND name = :name
+            LIMIT 1
+            """
+        ), {"name": _LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
+    if bind.dialect.name == "postgresql":
+        return bind.execute(sa.text(
+            """
+            SELECT indexdef
+            FROM pg_indexes
+            WHERE schemaname = current_schema()
+              AND tablename = 'inventory'
+              AND indexname = :name
+            LIMIT 1
+            """
+        ), {"name": _LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
+    raise RuntimeError(f"Unsupported Rezzerv migration dialect: {bind.dialect.name}")
+
+
+def _validate_locationless_identity_index(bind: sa.engine.Connection) -> None:
+    inspector = sa.inspect(bind)
+    indexes = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_indexes("inventory")
+    }
+    index = indexes.get(_LOCATIONLESS_ACTIVE_IDENTITY_INDEX)
+    if not index:
+        raise RuntimeError(
+            f"Canonical locationless inventory index ontbreekt: {_LOCATIONLESS_ACTIVE_IDENTITY_INDEX}"
+        )
+    if not bool(index.get("unique")) or tuple(index.get("column_names") or ()) != _LOCATIONLESS_ACTIVE_IDENTITY_COLUMNS:
+        raise RuntimeError("Canonical locationless inventory index wijkt af in uniqueness/kolommen")
+
+    index_sql = _locationless_index_sql(bind)
+    normalized = " ".join(str(index_sql or "").lower().replace('"', '').split())
+    for fragment in (
+        "household_article_id is not null",
+        "space_id is null",
+        "sublocation_id is null",
+        "status",
+        "'active'",
+    ):
+        if fragment not in normalized:
+            raise RuntimeError(
+                "Canonical locationless inventory index wijkt af: "
+                f"missing={fragment!r} index={index_sql!r}"
+            )
+
+
+def _ensure_locationless_identity_index(bind: sa.engine.Connection) -> None:
+    inspector = sa.inspect(bind)
+    if not inspector.has_table("inventory"):
+        raise RuntimeError("inventory table ontbreekt")
+    columns = {
+        str(column.get("name") or ""): column
+        for column in inspector.get_columns("inventory")
+    }
+    required = {"household_id", "household_article_id", "space_id", "sublocation_id", "status"}
+    missing = required - set(columns)
+    if missing:
+        raise RuntimeError(
+            "Canonical locationless inventory schema mist kolommen: " + ", ".join(sorted(missing))
+        )
+
+    duplicate = bind.execute(sa.text(
+        """
+        SELECT household_id, household_article_id, COUNT(*) AS row_count
+        FROM inventory
+        WHERE COALESCE(status, 'active') = 'active'
+          AND household_article_id IS NOT NULL
+          AND space_id IS NULL
+          AND sublocation_id IS NULL
+        GROUP BY household_id, household_article_id
+        HAVING COUNT(*) > 1
+        LIMIT 1
+        """
+    )).mappings().first()
+    if duplicate:
+        raise RuntimeError(
+            "Dubbele actieve locationless voorraadidentiteit gevonden voor "
+            f"household_id={duplicate['household_id']} en "
+            f"household_article_id={duplicate['household_article_id']}"
+        )
+
+    indexes = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_indexes("inventory")
+    }
+    if _LOCATIONLESS_ACTIVE_IDENTITY_INDEX not in indexes:
+        predicate = sa.text(_LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE)
+        op.create_index(
+            _LOCATIONLESS_ACTIVE_IDENTITY_INDEX,
+            "inventory",
+            list(_LOCATIONLESS_ACTIVE_IDENTITY_COLUMNS),
+            unique=True,
+            sqlite_where=predicate,
+            postgresql_where=predicate,
+        )
+    _validate_locationless_identity_index(bind)
+
+
 def _validate_contract(bind: sa.engine.Connection) -> None:
     inspector = sa.inspect(bind)
     if not inspector.has_table("inventory_events"):
@@ -255,6 +369,8 @@ def _validate_contract(bind: sa.engine.Connection) -> None:
                 f"inventory.{column_name} moet nullable blijven voor locationless voorraad"
             )
 
+    _validate_locationless_identity_index(bind)
+
 
 def upgrade() -> None:
     bind = op.get_bind()
@@ -276,6 +392,7 @@ def upgrade() -> None:
 
     _backfill_inventory_events(bind)
     _ensure_indexes(bind)
+    _ensure_locationless_identity_index(bind)
     _validate_contract(bind)
 
 

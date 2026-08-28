@@ -117,6 +117,7 @@ def _strip_migration_extensions(schema: str) -> str:
         "-- table: inventory_events (table=inventory_events)",
         "-- index: idx_inventory_events_temporal_order (table=inventory_events)",
         "-- index: idx_inventory_events_source_reference (table=inventory_events)",
+        "-- index: uq_inventory_active_locationless_household_article (table=inventory)",
     }
     retained = [
         block for block in blocks
@@ -203,6 +204,34 @@ def _assert_temporal_inventory_schema(connection) -> None:
         raise AssertionError("Waar Inhuis requires nullable inventory.space_id")
     if not bool(_column(inspector, "inventory", "sublocation_id")["nullable"]):
         raise AssertionError("Waar Inhuis requires nullable inventory.sublocation_id")
+
+    if connection.dialect.name == "sqlite":
+        inventory_indexes = {
+            str(index.get("name") or ""): index
+            for index in inspector.get_indexes("inventory")
+        }
+        locationless = inventory_indexes.get("uq_inventory_active_locationless_household_article")
+        if not locationless or not bool(locationless.get("unique")) or tuple(locationless.get("column_names") or ()) != (
+            "household_id", "household_article_id"
+        ):
+            raise AssertionError("Invalid SQLite locationless inventory partial unique index")
+        locationless_sql = connection.execute(text(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_inventory_active_locationless_household_article'"
+        )).scalar_one_or_none()
+        normalized_index = " ".join(str(locationless_sql or "").lower().split())
+        for fragment in (
+            "create unique index",
+            "household_article_id is not null",
+            "space_id is null",
+            "sublocation_id is null",
+            "status",
+            "'active'",
+        ):
+            if fragment not in normalized_index:
+                raise AssertionError(
+                    "Invalid SQLite locationless inventory partial unique index: "
+                    f"missing={fragment!r} index={locationless_sql!r}"
+                )
 
     if connection.dialect.name == "postgresql":
         for column_name in ("effective_at", "recorded_at", "replayed_at"):
