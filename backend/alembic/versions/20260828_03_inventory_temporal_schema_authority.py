@@ -273,6 +273,7 @@ def _normalized_predicate_terms(index_sql: str | None) -> frozenset[str]:
     if not where_match:
         return frozenset()
     predicate = raw[where_match.end():].lower().replace('"', '')
+    predicate = re.sub(r"::character\s+varying\b", "", predicate)
     predicate = re.sub(r"::[a-z_][a-z0-9_]*", "", predicate)
     return frozenset(
         re.sub(r"[\s()]+", "", term)
