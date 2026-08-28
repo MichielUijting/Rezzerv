@@ -12,7 +12,6 @@ import tempfile
 from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 
-from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.server_session_service import (
     create_server_session,
     create_system_server_session,
@@ -23,6 +22,7 @@ from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
     SUPERGEBRUIKER_HUISHOUDEN_ID,
 )
+from app.testing.authorization_schema_fixture import install_authorization_schema_for_test
 from app.testing.server_session_contract import create_server_session_contract_schema
 
 
@@ -64,7 +64,7 @@ def _prepare_database(engine) -> None:
             "('user-a', '1', 'owner'), "
             "('user-b', '2', 'member')"
         ))
-        ensure_authorization_foundation(conn)
+        install_authorization_schema_for_test(conn)
         conn.execute(text(
             "INSERT INTO auth_membership_roles "
             "(household_id, membership_id, role_key, active) VALUES "
