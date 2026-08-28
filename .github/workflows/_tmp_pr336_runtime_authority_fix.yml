@@ -22,6 +22,7 @@ jobs:
       - name: Apply migration-first runtime authority patch
         run: |
           python tools/_tmp_pr336_runtime_authority_fix.py
+          git checkout -- .github/workflows/postgresql-runtime-startup-schema-authority.yml
           git diff --check
           python -m py_compile \
             backend/app/services/frontteam_household_provisioning.py \
@@ -36,7 +37,6 @@ jobs:
             backend/app/services/frontteam_household_provisioning.py \
             backend/alembic/versions/20260828_04_runtime_startup_schema_authority.py \
             backend/tests/test_frontteam_household_provisioning.py \
-            backend/tests/migration_foundation_selftest.py \
-            .github/workflows/postgresql-runtime-startup-schema-authority.yml
+            backend/tests/migration_foundation_selftest.py
           git commit -m 'Move Frontteam startup schema authority to Alembic'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
