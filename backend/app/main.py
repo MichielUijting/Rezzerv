@@ -12039,8 +12039,6 @@ async def log_runtime_datastore_configuration():
         logger.warning("Receipt status backfill failed: %s", exc)
 
 
-ensure_release_1221_schema()
-
 @app.post("/api/admin/backfill-purchase-import-live-aliases")
 def run_purchase_import_live_alias_backfill(household_id: Optional[str] = None, limit: Optional[int] = None):
     with engine.begin() as conn:
@@ -14279,8 +14277,7 @@ def update_dev_article_automation_override(article_id: str, payload: ArticleAuto
 
 
 # SQLite datamodel initialization
-from app.db import engine, Base
-
+from app.db import engine
 def ensure_release_1031_schema():
     with engine.begin() as conn:
         household_article_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(household_articles)")).fetchall()}
@@ -14378,36 +14375,9 @@ def ensure_release_1046_schema():
 
 from app.models import household, space, sublocation, inventory, store_provider, store_connection, purchase_import, receipt
 
-Base.metadata.create_all(bind=engine)
-ensure_household_settings_schema()
-ensure_user_settings_schema()
-ensure_household_permission_policies_schema()
-ensure_household_role_change_audit_schema()
-ensure_household_articles_schema()
-ensure_article_group_schema()
-ensure_product_enrichment_schema()
-ensure_global_product_catalog_schema()
-ensure_external_product_candidates_schema()
-ensure_release_b_household_article_global_product_integrity()
-ensure_release_c_product_enrichment_centralization()
-ensure_release_2_schema()
-ensure_release_3_schema()
-ensure_release_4_schema()
-ensure_release_803_schema()
-ensure_release_813_schema()
-ensure_release_814_schema()
-ensure_release_902_schema()
-ensure_release_932_schema()
-ensure_release_933_schema()
-ensure_release_935_schema()
-ensure_release_940_schema()
-ensure_release_941_receipt_edit_schema()
-ensure_release_963_schema()
-ensure_release_965_schema()
-ensure_release_1031_schema()
-ensure_release_1041_schema()
-ensure_release_1046_schema()
-ensure_release_1113_schema()
+# Production schema authority is Alembic-only. Runtime startup must not create,
+# alter, index, or repair schema objects; app.runtime_preflight migrates before
+# Uvicorn imports this module.
 
 with engine.begin() as external_link_cleanup_conn:
     external_link_cleanup_count = (
