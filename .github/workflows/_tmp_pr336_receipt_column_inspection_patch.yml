@@ -1,4 +1,4 @@
-name: Temporary PR336 receipt column inspection patch
+name: Temporary PR336 consumer account fixture patch
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  patch-receipt-column-inspection:
+  patch-consumer-account-fixture:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -20,28 +20,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Apply dialect-safe receipt column inspection patch
-        run: python backend/tests/_tmp_pr336_receipt_column_inspection_patch.py
-      - name: Validate exact column inspection contract
+      - name: Apply consumer account authorization fixture patch
+        run: python backend/tests/_tmp_pr336_consumer_account_fixture_patch.py
+      - name: Validate exact consumer fixture contract
         run: |
-          python -m py_compile backend/app/services/receipt_service.py
+          python -m py_compile backend/tests/consumer_account_registration_selftest.py
           python - <<'PY'
           from pathlib import Path
-          source = Path('backend/app/services/receipt_service.py').read_text(encoding='utf-8')
-          start = source.index('def _column_exists(')
-          end = source.index('\ndef _load_line_groups', start)
-          contract = source[start:end]
-          assert 'PRAGMA table_info' not in contract
-          assert 'inspect(conn).get_columns(table_name)' in contract
-          assert 'from sqlalchemy import bindparam, inspect, text' in source
-          print('PR336_RECEIPT_COLUMN_INSPECTION_CONTRACT_GREEN')
+          source = Path('backend/tests/consumer_account_registration_selftest.py').read_text(encoding='utf-8')
+          assert 'from app.testing.authorization_schema_fixture import install_authorization_schema' in source
+          setup = source[source.index('def _prepare_database(engine)'):source.index('\ndef run()', source.index('def _prepare_database(engine)'))]
+          assert setup.count('install_authorization_schema(conn)') == 1
+          assert setup.index('ensure_roles_v2_account_and_household_foundation(conn)') < setup.index('install_authorization_schema(conn)') < setup.index('ensure_authorization_foundation(conn)')
+          print('PR336_CONSUMER_ACCOUNT_FIXTURE_CONTRACT_GREEN')
           PY
           git diff --check
-      - name: Commit dialect-safe receipt column inspection
+      - name: Commit consumer account fixture migration
         run: |
-          rm backend/tests/_tmp_pr336_receipt_column_inspection_patch.py
+          rm backend/tests/_tmp_pr336_consumer_account_fixture_patch.py
           git config user.name rezzerv-ci-bot
           git config user.email 169062718+MichielUijting@users.noreply.github.com
-          git add -- backend/app/services/receipt_service.py backend/tests/_tmp_pr336_receipt_column_inspection_patch.py
-          git commit -m 'Use dialect-safe receipt column inspection'
+          git add -- backend/tests/consumer_account_registration_selftest.py backend/tests/_tmp_pr336_consumer_account_fixture_patch.py
+          git commit -m 'Use authorization test fixture in consumer account selftest'
           git push origin HEAD:codex/postgresql-runtime-startup-authority-cutover
