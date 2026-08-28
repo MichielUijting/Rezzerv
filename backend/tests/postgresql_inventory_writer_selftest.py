@@ -50,6 +50,8 @@ def _load_migration():
 
 def main() -> None:
     database_url = os.environ["DATABASE_URL"]
+    if database_url.startswith("postgresql://"):
+        database_url = "postgresql+psycopg://" + database_url[len("postgresql://"):]
     engine = create_engine(database_url, future=True)
     resolver = _load_resolver()
     migration = _load_migration()
