@@ -11,7 +11,7 @@ import tempfile
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "backend" / "alembic.ini"
 PREVIOUS_REVISION = "20260828_01"
-HEAD_REVISION = "20260828_02"
+HEAD_REVISION = "20260828_03"
 RECEIPT_TABLES = ("raw_receipts", "receipt_tables", "receipt_table_lines")
 
 
