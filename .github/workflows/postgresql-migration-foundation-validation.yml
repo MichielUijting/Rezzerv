@@ -17,6 +17,7 @@ on:
       - 'backend/requirements.txt'
       - 'backend/tests/capture_schema_baseline.py'
       - 'backend/tests/migration_foundation_selftest.py'
+      - 'backend/tests/postgresql_inventory_writer_selftest.py'
       - 'backend/tests/receipt_lifecycle_schema_authority_selftest.py'
       - 'backend/tests/schema_authority_cutover_selftest.py'
       - 'backend/tests/server_session_schema_authority_selftest.py'
@@ -140,7 +141,7 @@ jobs:
           grep -F -- '-- index: idx_server_sessions_user_active (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260828_02' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260828_03' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -189,6 +190,11 @@ jobs:
           python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-postgresql.log
           grep -F 'MIGRATION_POSTGRESQL_LINEAGE_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
+          python backend/tests/postgresql_inventory_writer_selftest.py | tee /tmp/postgresql-inventory-review.log
+          grep -F 'POSTGRESQL_INVENTORY_WRITER_FALLBACK_GREEN' /tmp/postgresql-inventory-review.log
+          grep -F 'POSTGRESQL_LOCATIONLESS_PREDICATE_DRIFT_REJECTED_GREEN' /tmp/postgresql-inventory-review.log
+          grep -F 'POSTGRESQL_TEMPORAL_UNIQUE_DRIFT_REJECTED_GREEN' /tmp/postgresql-inventory-review.log
+          grep -F 'POSTGRESQL_INVENTORY_REVIEW_SELFTEST_GREEN' /tmp/postgresql-inventory-review.log
           python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority-postgresql.log
           grep -F 'EXTERNAL_LINK_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
           grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log

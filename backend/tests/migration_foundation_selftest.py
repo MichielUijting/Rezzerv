@@ -13,7 +13,7 @@ from capture_schema_baseline import dump_schema
 
 
 SQLITE_BASELINE_REVISION = "20260827_01"
-HEAD_REVISION = "20260828_02"
+HEAD_REVISION = "20260828_03"
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "baseline_sqlite.sql.gz"
 BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 50
@@ -30,6 +30,29 @@ EXPECTED_SERVER_SESSION_COLUMNS = (
     "created_at",
     "updated_at",
 )
+EXPECTED_TEMPORAL_INVENTORY_COLUMNS = (
+    "effective_at",
+    "recorded_at",
+    "effective_at_precision",
+    "event_priority",
+    "source_reference",
+    "source_line_id",
+    "replayed_at",
+)
+EXPECTED_TEMPORAL_INDEXES = {
+    "idx_inventory_events_temporal_order": (
+        "household_id",
+        "household_article_id",
+        "effective_at",
+        "event_priority",
+        "id",
+    ),
+    "idx_inventory_events_source_reference": (
+        "source",
+        "source_reference",
+        "source_line_id",
+    ),
+}
 EXPECTED_BOOLEAN_COLUMNS = {
     ("household_permission_policies", "member_allowed"),
     ("product_identities", "is_primary"),
@@ -85,19 +108,21 @@ def _column(inspector, table_name: str, column_name: str) -> dict:
     return columns[column_name]
 
 
-def _strip_server_session_extension(schema: str) -> str:
+def _strip_migration_extensions(schema: str) -> str:
+    """Remove only schema blocks that postdate the immutable SQLite baseline."""
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
+    excluded_headers = {
+        "-- table: server_sessions (table=server_sessions)",
+        "-- index: idx_server_sessions_user_active (table=server_sessions)",
+        "-- table: inventory_events (table=inventory_events)",
+        "-- index: idx_inventory_events_temporal_order (table=inventory_events)",
+        "-- index: idx_inventory_events_source_reference (table=inventory_events)",
+        "-- index: uq_inventory_active_locationless_household_article (table=inventory)",
+    }
     retained = [
-        block
-        for block in blocks
-        if "(table=server_sessions)" not in block.splitlines()[0]
+        block for block in blocks
+        if block.splitlines()[0].strip() not in excluded_headers
     ]
-    removed = len(blocks) - len(retained)
-    if removed != 2:
-        raise AssertionError(
-            "SQLite head must add exactly the server_sessions table and its explicit index; "
-            f"removed_blocks={removed}"
-        )
     return "\n\n".join(retained).rstrip() + "\n"
 
 
@@ -151,6 +176,78 @@ def _assert_server_session_schema(connection) -> None:
         raise AssertionError("Invalid idx_server_sessions_user_active contract")
 
 
+def _assert_temporal_inventory_schema(connection) -> None:
+    inspector = inspect(connection)
+    columns = {
+        str(column.get("name") or ""): column
+        for column in inspector.get_columns("inventory_events")
+    }
+    missing = set(EXPECTED_TEMPORAL_INVENTORY_COLUMNS) - set(columns)
+    if missing:
+        raise AssertionError(f"Missing temporal inventory columns: {sorted(missing)}")
+    for column_name in ("effective_at_precision", "event_priority"):
+        if bool(columns[column_name].get("nullable")):
+            raise AssertionError(f"inventory_events.{column_name} must be NOT NULL")
+
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspector.get_indexes("inventory_events")
+    }
+    for index_name, expected_columns in EXPECTED_TEMPORAL_INDEXES.items():
+        index = indexes.get(index_name)
+        actual_columns = tuple((index or {}).get("column_names") or ())
+        actual_unique = bool((index or {}).get("unique"))
+        if not index or actual_columns != expected_columns or actual_unique:
+            raise AssertionError(
+                f"Invalid {index_name}: expected_columns={expected_columns!r} "
+                f"expected_unique=False actual_columns={actual_columns!r} "
+                f"actual_unique={actual_unique}"
+            )
+
+    if not bool(_column(inspector, "inventory", "space_id")["nullable"]):
+        raise AssertionError("Waar Inhuis requires nullable inventory.space_id")
+    if not bool(_column(inspector, "inventory", "sublocation_id")["nullable"]):
+        raise AssertionError("Waar Inhuis requires nullable inventory.sublocation_id")
+
+    if connection.dialect.name == "sqlite":
+        inventory_indexes = {
+            str(index.get("name") or ""): index
+            for index in inspector.get_indexes("inventory")
+        }
+        locationless = inventory_indexes.get("uq_inventory_active_locationless_household_article")
+        if not locationless or not bool(locationless.get("unique")) or tuple(locationless.get("column_names") or ()) != (
+            "household_id", "household_article_id"
+        ):
+            raise AssertionError("Invalid SQLite locationless inventory partial unique index")
+        locationless_sql = connection.execute(text(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_inventory_active_locationless_household_article'"
+        )).scalar_one_or_none()
+        normalized_index = " ".join(str(locationless_sql or "").lower().split())
+        for fragment in (
+            "create unique index",
+            "household_article_id is not null",
+            "space_id is null",
+            "sublocation_id is null",
+            "status",
+            "'active'",
+        ):
+            if fragment not in normalized_index:
+                raise AssertionError(
+                    "Invalid SQLite locationless inventory partial unique index: "
+                    f"missing={fragment!r} index={locationless_sql!r}"
+                )
+
+    if connection.dialect.name == "postgresql":
+        for column_name in ("effective_at", "recorded_at", "replayed_at"):
+            column_type = columns[column_name]["type"]
+            if not isinstance(column_type, sa.DateTime) or not bool(getattr(column_type, "timezone", False)):
+                raise AssertionError(
+                    f"Expected TIMESTAMPTZ for inventory_events.{column_name}, got {column_type}"
+                )
+        if not isinstance(columns["event_priority"]["type"], sa.Integer):
+            raise AssertionError("inventory_events.event_priority must be INTEGER")
+
+
 def _assert_postgresql_schema(connection) -> None:
     inspector = inspect(connection)
     tables = set(inspector.get_table_names()) - {"alembic_version"}
@@ -160,6 +257,7 @@ def _assert_postgresql_schema(connection) -> None:
             f"{EXPECTED_POSTGRESQL_APPLICATION_TABLES} application tables; actual={len(tables)}"
         )
     _assert_server_session_schema(connection)
+    _assert_temporal_inventory_schema(connection)
 
     for table_name, column_name in sorted(EXPECTED_BOOLEAN_COLUMNS):
         column = _column(inspector, table_name, column_name)
@@ -182,11 +280,6 @@ def _assert_postgresql_schema(connection) -> None:
             raise AssertionError(
                 f"Expected TIMESTAMPTZ for {table_name}.{column_name}, got {column_type}"
             )
-
-    if not bool(_column(inspector, "inventory", "space_id")["nullable"]):
-        raise AssertionError("Waar Inhuis requires nullable inventory.space_id")
-    if not bool(_column(inspector, "inventory", "sublocation_id")["nullable"]):
-        raise AssertionError("Waar Inhuis requires nullable inventory.sublocation_id")
 
     locationless_index = connection.execute(
         text(
@@ -304,14 +397,16 @@ def main() -> None:
                     raise AssertionError("SQLite schema-contract validation requires a file database")
                 baseline = _baseline_sql()
                 actual = dump_schema(Path(url.database))
-                actual_baseline = _strip_server_session_extension(actual)
-                if actual_baseline != baseline:
+                expected_baseline = _strip_migration_extensions(baseline)
+                actual_baseline = _strip_migration_extensions(actual)
+                if actual_baseline != expected_baseline:
                     raise AssertionError(
-                        "SQLite baseline portion differs from immutable migration baseline: "
-                        f"expected_sha256={_sha256(baseline)} "
+                        "SQLite immutable baseline portion differs after migration extensions: "
+                        f"expected_sha256={_sha256(expected_baseline)} "
                         f"actual_sha256={_sha256(actual_baseline)}"
                     )
                 _assert_server_session_schema(connection)
+                _assert_temporal_inventory_schema(connection)
                 print(
                     "MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN "
                     f"mode={expected_mode} source_revision={SQLITE_BASELINE_REVISION} "
@@ -321,8 +416,6 @@ def main() -> None:
                 if dialect != "postgresql":
                     raise AssertionError(f"Expected PostgreSQL, got {dialect}")
                 _assert_postgresql_schema(connection)
-                # Keep the PR2a marker temporarily so the existing workflow remains
-                # compatible while later PostgreSQL slices strengthen the same job.
                 print("MIGRATION_POSTGRESQL_LINEAGE_GREEN")
     finally:
         engine.dispose()

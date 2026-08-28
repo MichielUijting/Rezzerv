@@ -9085,7 +9085,7 @@ def resolve_or_create_inventory_household_article(
             WHERE household_id = :household_id
               AND lower(trim(COALESCE(custom_name, naam))) = lower(trim(:article_name))
               AND COALESCE(status, 'active') = 'active'
-            ORDER BY datetime(created_at) ASC, id ASC
+            ORDER BY created_at ASC, id ASC
             LIMIT 2
             """
         ),
@@ -9146,6 +9146,24 @@ def create_inventory_event(
         preferred_household_article_id=article_id,
         source=source,
     )
+    normalized_event_type = str(event_type or '').strip().lower()
+    normalized_purchase_date = normalize_purchase_date(purchase_date) if purchase_date else None
+    recorded_at = datetime.now(timezone.utc).isoformat()
+    if normalized_event_type in {'purchase', 'auto_repurchase'} and normalized_purchase_date:
+        effective_at = f'{normalized_purchase_date}T00:00:00+00:00'
+        effective_at_precision = 'date'
+    else:
+        effective_at = recorded_at
+        effective_at_precision = 'datetime'
+    event_priority = {
+        'baseline': 0,
+        'purchase': 10,
+        'auto_repurchase': 10,
+        'transfer_in': 20,
+        'transfer_out': 30,
+        'consume': 40,
+        'adjustment': 50,
+    }.get(normalized_event_type, 100)
     event_id = str(uuid.uuid4())
     conn.execute(
         text(
@@ -9153,34 +9171,42 @@ def create_inventory_event(
             INSERT INTO inventory_events (
                 id, household_id, article_id, household_article_id, article_name, location_id, location_label,
                 event_type, quantity, old_quantity, new_quantity, source, note,
-                purchase_date, supplier_name, article_number, price, currency, barcode, created_at
+                purchase_date, supplier_name, article_number, price, currency, barcode,
+                effective_at, recorded_at, effective_at_precision, event_priority,
+                source_reference, source_line_id, replayed_at, created_at
             ) VALUES (
                 :id, :household_id, :article_id, :household_article_id, :article_name, :location_id, :location_label,
                 :event_type, :quantity, :old_quantity, :new_quantity, :source, :note,
-                :purchase_date, :supplier_name, :article_number, :price, :currency, :barcode, CURRENT_TIMESTAMP
+                :purchase_date, :supplier_name, :article_number, :price, :currency, :barcode,
+                :effective_at, :recorded_at, :effective_at_precision, :event_priority,
+                NULL, NULL, NULL, CURRENT_TIMESTAMP
             )
             """
         ),
         {
-            "id": event_id,
-            "household_id": str(household_id),
-            "article_id": household_article_id,
-            "household_article_id": household_article_id,
-            "article_name": article_name,
-            "location_id": safe_location["location_id"],
-            "location_label": safe_location["location_label"],
-            "event_type": event_type,
-            "quantity": quantity,
-            "old_quantity": old_quantity,
-            "new_quantity": new_quantity,
-            "source": source,
-            "note": note,
-            "purchase_date": purchase_date,
-            "supplier_name": supplier_name,
-            "article_number": article_number,
-            "price": price,
-            "currency": currency,
-            "barcode": barcode,
+            'id': event_id,
+            'household_id': str(household_id),
+            'article_id': household_article_id,
+            'household_article_id': household_article_id,
+            'article_name': article_name,
+            'location_id': safe_location['location_id'],
+            'location_label': safe_location['location_label'],
+            'event_type': normalized_event_type,
+            'quantity': quantity,
+            'old_quantity': old_quantity,
+            'new_quantity': new_quantity,
+            'source': source,
+            'note': note,
+            'purchase_date': normalized_purchase_date,
+            'supplier_name': supplier_name,
+            'article_number': article_number,
+            'price': price,
+            'currency': currency,
+            'barcode': barcode,
+            'effective_at': effective_at,
+            'recorded_at': recorded_at,
+            'effective_at_precision': effective_at_precision,
+            'event_priority': event_priority,
         },
     )
     return event_id

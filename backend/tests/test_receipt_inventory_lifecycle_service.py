@@ -27,8 +27,25 @@ def _engine():
                 new_quantity NUMERIC NOT NULL DEFAULT 0,
                 source TEXT NOT NULL DEFAULT 'system',
                 purchase_date TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                effective_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                effective_at_precision TEXT NOT NULL DEFAULT 'datetime',
+                event_priority INTEGER NOT NULL DEFAULT 100,
+                source_reference TEXT,
+                source_line_id INTEGER,
+                replayed_at TEXT
             )
+        """))
+        conn.execute(text("""
+            CREATE INDEX idx_inventory_events_temporal_order
+            ON inventory_events (
+                household_id, household_article_id, effective_at, event_priority, id
+            )
+        """))
+        conn.execute(text("""
+            CREATE INDEX idx_inventory_events_source_reference
+            ON inventory_events (source, source_reference, source_line_id)
         """))
         conn.execute(text("""
             CREATE TABLE inventory (
