@@ -21,16 +21,13 @@ _REQUIRED_COLUMNS = {
     "object_type",
     "object_id",
     "household_id",
-    "created_by_user_id",
-    "updated_by_user_id",
-    "created_at",
-    "updated_at",
+    "actor_user_id",
+    "attribution_source",
+    "first_attributed_at",
+    "last_attributed_at",
 }
-_INDEXES = {
-    "idx_actor_attribution_household": ("household_id", "object_type"),
-    "idx_actor_attribution_created_by": ("created_by_user_id",),
-    "idx_actor_attribution_updated_by": ("updated_by_user_id",),
-}
+_INDEX = "idx_actor_object_attributions_household_actor"
+_INDEX_COLUMNS = ("household_id", "actor_user_id", "object_type")
 
 
 def _validate_contract(bind: sa.engine.Connection) -> None:
@@ -38,12 +35,15 @@ def _validate_contract(bind: sa.engine.Connection) -> None:
     if not inspector.has_table(_TABLE):
         raise RuntimeError(f"{_TABLE} ontbreekt")
     columns = {
-        str(column.get("name") or "")
+        str(column.get("name") or ""): column
         for column in inspector.get_columns(_TABLE)
     }
-    missing = _REQUIRED_COLUMNS - columns
+    missing = _REQUIRED_COLUMNS - set(columns)
     if missing:
         raise RuntimeError(f"{_TABLE} mist canonieke kolommen: {sorted(missing)}")
+    for column_name in _REQUIRED_COLUMNS:
+        if bool(columns[column_name].get("nullable")):
+            raise RuntimeError(f"{_TABLE}.{column_name} moet NOT NULL zijn")
     primary_key = tuple(
         str(column or "")
         for column in (inspector.get_pk_constraint(_TABLE).get("constrained_columns") or ())
@@ -56,15 +56,13 @@ def _validate_contract(bind: sa.engine.Connection) -> None:
         str(index.get("name") or ""): index
         for index in inspector.get_indexes(_TABLE)
     }
-    for index_name, expected_columns in _INDEXES.items():
-        index = indexes.get(index_name)
-        actual_columns = tuple((index or {}).get("column_names") or ())
-        if not index or actual_columns != expected_columns or bool(index.get("unique")):
-            raise RuntimeError(
-                f"{_TABLE}.{index_name} wijkt af: "
-                f"expected={expected_columns!r} actual={actual_columns!r} "
-                f"unique={bool((index or {}).get('unique'))}"
-            )
+    index = indexes.get(_INDEX)
+    actual_columns = tuple((index or {}).get("column_names") or ())
+    if not index or actual_columns != _INDEX_COLUMNS or bool(index.get("unique")):
+        raise RuntimeError(
+            f"{_TABLE}.{_INDEX} wijkt af: expected={_INDEX_COLUMNS!r} "
+            f"actual={actual_columns!r} unique={bool((index or {}).get('unique'))}"
+        )
 
 
 def upgrade() -> None:
@@ -78,11 +76,16 @@ def upgrade() -> None:
             _TABLE,
             sa.Column("object_type", sa.Text(), nullable=False),
             sa.Column("object_id", sa.Text(), nullable=False),
-            sa.Column("household_id", sa.Text(), nullable=True),
-            sa.Column("created_by_user_id", sa.Text(), nullable=True),
-            sa.Column("updated_by_user_id", sa.Text(), nullable=True),
-            sa.Column("created_at", sa.Text(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
-            sa.Column("updated_at", sa.Text(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+            sa.Column("household_id", sa.Text(), nullable=False),
+            sa.Column("actor_user_id", sa.Text(), nullable=False),
+            sa.Column(
+                "attribution_source",
+                sa.Text(),
+                nullable=False,
+                server_default=sa.text("'runtime_session'"),
+            ),
+            sa.Column("first_attributed_at", sa.Text(), nullable=False),
+            sa.Column("last_attributed_at", sa.Text(), nullable=False),
             sa.PrimaryKeyConstraint("object_type", "object_id"),
         )
 
@@ -91,16 +94,15 @@ def upgrade() -> None:
         str(index.get("name") or ""): index
         for index in inspector.get_indexes(_TABLE)
     }
-    for index_name, columns in _INDEXES.items():
-        existing = existing_indexes.get(index_name)
-        if existing is None:
-            op.create_index(index_name, _TABLE, list(columns), unique=False)
-        else:
-            actual_columns = tuple(existing.get("column_names") or ())
-            if actual_columns != columns or bool(existing.get("unique")):
-                raise RuntimeError(
-                    f"Bestaande {index_name} wijkt af van canonical actor attribution contract"
-                )
+    existing = existing_indexes.get(_INDEX)
+    if existing is None:
+        op.create_index(_INDEX, _TABLE, list(_INDEX_COLUMNS), unique=False)
+    else:
+        actual_columns = tuple(existing.get("column_names") or ())
+        if actual_columns != _INDEX_COLUMNS or bool(existing.get("unique")):
+            raise RuntimeError(
+                f"Bestaande {_INDEX} wijkt af van canonical actor attribution contract"
+            )
 
     _validate_contract(bind)
 
