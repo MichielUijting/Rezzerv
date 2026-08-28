@@ -55,6 +55,12 @@ _LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE = (
     "AND space_id IS NULL "
     "AND sublocation_id IS NULL"
 )
+_LEGACY_LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE = (
+    "status = 'active' "
+    "AND household_article_id IS NOT NULL "
+    "AND space_id IS NULL "
+    "AND sublocation_id IS NULL"
+)
 _EVENT_PRIORITY = {
     "purchase": 10,
     "auto_repurchase": 10,
@@ -342,7 +348,26 @@ def _ensure_locationless_identity_index(bind: sa.engine.Connection) -> None:
         str(item.get("name") or ""): item
         for item in inspector.get_indexes("inventory")
     }
-    if _LOCATIONLESS_ACTIVE_IDENTITY_INDEX not in indexes:
+    existing = indexes.get(_LOCATIONLESS_ACTIVE_IDENTITY_INDEX)
+    if existing is not None:
+        if not bool(existing.get("unique")) or tuple(existing.get("column_names") or ()) != _LOCATIONLESS_ACTIVE_IDENTITY_COLUMNS:
+            raise RuntimeError("Canonical locationless inventory index wijkt af in uniqueness/kolommen")
+        actual_terms = _normalized_predicate_terms(_locationless_index_sql(bind))
+        canonical_terms = _normalized_predicate_terms(
+            f"CREATE INDEX canonical ON inventory (household_id, household_article_id) "
+            f"WHERE {_LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE}"
+        )
+        legacy_terms = _normalized_predicate_terms(
+            f"CREATE INDEX legacy ON inventory (household_id, household_article_id) "
+            f"WHERE {_LEGACY_LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE}"
+        )
+        if actual_terms == legacy_terms:
+            op.drop_index(_LOCATIONLESS_ACTIVE_IDENTITY_INDEX, table_name="inventory")
+            existing = None
+        elif actual_terms != canonical_terms:
+            _validate_locationless_identity_index(bind)
+
+    if existing is None:
         predicate = sa.text(_LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE)
         op.create_index(
             _LOCATIONLESS_ACTIVE_IDENTITY_INDEX,

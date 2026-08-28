@@ -8,7 +8,10 @@ from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, text
 
-from app.services.canonical_inventory_identity_service import apply_inventory_purchase_by_identity
+from app.services.canonical_inventory_identity_service import (
+    apply_inventory_purchase_by_identity,
+    ensure_locationless_inventory_identity_guard,
+)
 from app.services.temporal_inventory_service import (
     TemporalInventoryEvent,
     ensure_temporal_inventory_schema,
@@ -476,4 +479,25 @@ def test_migration_rejects_wrong_locationless_predicate():
     ))
     with pytest.raises(RuntimeError, match="predicate wijkt af"):
         _upgrade_temporal_schema(conn)
+
+def test_migration_normalizes_known_legacy_locationless_predicate():
+    conn = _connection(migrate=False)
+    conn.execute(text("DROP INDEX uq_inventory_active_locationless_household_article"))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX uq_inventory_active_locationless_household_article "
+        "ON inventory (household_id, household_article_id) "
+        "WHERE status = 'active' "
+        "AND household_article_id IS NOT NULL "
+        "AND space_id IS NULL AND sublocation_id IS NULL"
+    ))
+
+    _upgrade_temporal_schema(conn)
+
+    index_sql = conn.execute(text(
+        "SELECT sql FROM sqlite_master "
+        "WHERE type='index' AND name='uq_inventory_active_locationless_household_article'"
+    )).scalar_one()
+    normalized = "".join(str(index_sql).lower().split())
+    assert "coalesce(status,'active')='active'" in normalized
+    ensure_locationless_inventory_identity_guard(conn)
 
