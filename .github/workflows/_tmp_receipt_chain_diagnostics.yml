@@ -35,52 +35,14 @@ jobs:
           from pathlib import Path
           path = Path('backend/app/testing/receipt_inventory_production_chain.py')
           source = path.read_text(encoding='utf-8')
-          needle = '''        almost_out_after_purchase = _almost_out_state(main, ids["household_article_id"])
-        _apply_consume_event(main, ids, quantity_before=5, quantity_after=1)
-'''
-          replacement = '''        almost_out_after_purchase = _almost_out_state(main, ids["household_article_id"])
-        with main.engine.begin() as conn:
-            diagnostic_lines = conn.execute(text("""
-                SELECT pil.id, pil.processing_status, pil.processing_error,
-                       pil.matched_household_article_id, pil.quantity_raw,
-                       pib.id AS batch_id, pib.import_status
-                FROM purchase_import_lines pil
-                JOIN purchase_import_batches pib ON pib.id = pil.batch_id
-                WHERE pil.id IN ('chain-line-1', 'chain-line-2')
-                ORDER BY pil.id
-            """)).mappings().all()
-            diagnostic_events = conn.execute(text("""
-                SELECT id, event_type, source, effective_at, recorded_at,
-                       effective_at_precision, event_priority, source_reference, source_line_id
-                FROM inventory_events
-                WHERE household_id = '0'
-                ORDER BY created_at, id
-            """)).mappings().all()
-            diagnostic_inventory = conn.execute(text("""
-                SELECT id, household_article_id, aantal, space_id, sublocation_id, status
-                FROM inventory
-                WHERE household_id = '0'
-                ORDER BY id
-            """)).mappings().all()
-        print('CHAIN_DIAGNOSTIC_FIRST', first)
-        print('CHAIN_DIAGNOSTIC_SECOND', second)
-        print('CHAIN_DIAGNOSTIC_REPEAT', repeated)
-        print('CHAIN_DIAGNOSTIC_LINES', [dict(row) for row in diagnostic_lines])
-        print('CHAIN_DIAGNOSTIC_EVENTS', [dict(row) for row in diagnostic_events])
-        print('CHAIN_DIAGNOSTIC_INVENTORY', [dict(row) for row in diagnostic_inventory])
-        print('CHAIN_DIAGNOSTIC_COUNTS', quantity_after_first, quantity_after_second, quantity_after_repeat, event_count_after_second, event_count_after_repeat)
-        assert first["processed_count"] == 1, f"first import failed: {first!r}; lines={diagnostic_lines!r}"
-        assert quantity_after_first == 2, f"first inventory mismatch: {quantity_after_first}; lines={diagnostic_lines!r}"
-        assert second["processed_count"] == 1, f"second import failed: {second!r}; lines={diagnostic_lines!r}"
-        assert quantity_after_second == 5, f"second inventory mismatch: {quantity_after_second}; lines={diagnostic_lines!r}"
-        _apply_consume_event(main, ids, quantity_before=5, quantity_after=1)
-'''
+          needle = '        _apply_consume_event(main, ids, quantity_before=5, quantity_after=1)'
+          diagnostic = "        with main.engine.begin() as conn:\n            diagnostic_lines = conn.execute(text(\"SELECT pil.id, pil.processing_status, pil.processing_error, pil.matched_household_article_id, pil.quantity_raw, pib.id AS batch_id, pib.import_status FROM purchase_import_lines pil JOIN purchase_import_batches pib ON pib.id = pil.batch_id WHERE pil.id IN ('chain-line-1', 'chain-line-2') ORDER BY pil.id\")).mappings().all()\n            diagnostic_events = conn.execute(text(\"SELECT id, event_type, source, effective_at, recorded_at, effective_at_precision, event_priority, source_reference, source_line_id FROM inventory_events WHERE household_id = '0' ORDER BY created_at, id\")).mappings().all()\n            diagnostic_inventory = conn.execute(text(\"SELECT id, household_article_id, aantal, space_id, sublocation_id, status FROM inventory WHERE household_id = '0' ORDER BY id\")).mappings().all()\n        print('CHAIN_DIAGNOSTIC_FIRST', first)\n        print('CHAIN_DIAGNOSTIC_SECOND', second)\n        print('CHAIN_DIAGNOSTIC_REPEAT', repeated)\n        print('CHAIN_DIAGNOSTIC_LINES', [dict(row) for row in diagnostic_lines])\n        print('CHAIN_DIAGNOSTIC_EVENTS', [dict(row) for row in diagnostic_events])\n        print('CHAIN_DIAGNOSTIC_INVENTORY', [dict(row) for row in diagnostic_inventory])\n        print('CHAIN_DIAGNOSTIC_COUNTS', quantity_after_first, quantity_after_second, quantity_after_repeat, event_count_after_second, event_count_after_repeat)\n        assert first['processed_count'] == 1, f'first import failed: {first!r}; lines={diagnostic_lines!r}'\n        assert quantity_after_first == 2, f'first inventory mismatch: {quantity_after_first}; lines={diagnostic_lines!r}'\n        assert second['processed_count'] == 1, f'second import failed: {second!r}; lines={diagnostic_lines!r}'\n        assert quantity_after_second == 5, f'second inventory mismatch: {quantity_after_second}; lines={diagnostic_lines!r}'\n" + needle
           if needle not in source:
               raise SystemExit('diagnostic insertion point not found')
-          path.write_text(source.replace(needle, replacement, 1), encoding='utf-8')
+          path.write_text(source.replace(needle, diagnostic, 1), encoding='utf-8')
           PY
       - name: Run diagnosed production chain
         env:
           PYTHONPATH: backend
-          RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts
+          RECEIPT_STORAGE_ROOT: /tmp/rezzerv-receipts
         run: python backend/app/testing/receipt_inventory_production_chain.py
