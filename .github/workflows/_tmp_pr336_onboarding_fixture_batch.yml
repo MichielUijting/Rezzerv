@@ -1,0 +1,92 @@
+name: Temporary PR336 onboarding fixture batch
+
+on:
+  push:
+    branches:
+      - codex/postgresql-runtime-startup-authority-cutover
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-onboarding-selftest-fixtures:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/postgresql-runtime-startup-authority-cutover
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+      - name: Apply guarded fixture migration batch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          files = [
+              Path('tests/onboarding_use_case_foundation_selftest.py'),
+              Path('tests/inhuis_halen_onboarding_selftest.py'),
+              Path('tests/wat_inhuis_onboarding_selftest.py'),
+              Path('tests/waar_inhuis_onboarding_selftest.py'),
+              Path('tests/shared_household_minimum_selftest.py'),
+          ]
+          foundation_import = 'from app.services.authorization_foundation_service import ensure_authorization_foundation\n'
+          fixture_import = 'from app.testing.authorization_schema_fixture import install_authorization_schema\n'
+          setup_old = '        ensure_roles_v2_account_and_household_foundation(conn)\n        ensure_authorization_foundation(conn)\n'
+          setup_new = '        ensure_roles_v2_account_and_household_foundation(conn)\n        install_authorization_schema(conn)\n        ensure_authorization_foundation(conn)\n'
+
+          for path in files:
+              source = path.read_text(encoding='utf-8')
+              if source.count(foundation_import) != 1:
+                  raise SystemExit(f'{path}: expected one foundation import, found {source.count(foundation_import)}')
+              if fixture_import in source:
+                  raise SystemExit(f'{path}: fixture import already present')
+              if source.count(setup_old) != 1:
+                  raise SystemExit(f'{path}: expected one setup block, found {source.count(setup_old)}')
+              source = source.replace(foundation_import, foundation_import + fixture_import, 1)
+              source = source.replace(setup_old, setup_new, 1)
+              path.write_text(source, encoding='utf-8')
+              print(f'PATCHED {path}')
+          PY
+      - name: Validate migrated standalone selftests
+        run: |
+          python -m py_compile \
+            tests/server_session_security_selftest.py \
+            tests/consumer_account_registration_selftest.py \
+            tests/onboarding_use_case_foundation_selftest.py \
+            tests/inhuis_halen_onboarding_selftest.py \
+            tests/wat_inhuis_onboarding_selftest.py \
+            tests/waar_inhuis_onboarding_selftest.py \
+            tests/shared_household_minimum_selftest.py
+          PYTHONPATH=. python tests/server_session_security_selftest.py
+          PYTHONPATH=. python tests/consumer_account_registration_selftest.py
+          PYTHONPATH=. python tests/onboarding_use_case_foundation_selftest.py
+          PYTHONPATH=. python tests/inhuis_halen_onboarding_selftest.py
+          PYTHONPATH=. python tests/wat_inhuis_onboarding_selftest.py
+          PYTHONPATH=. python tests/waar_inhuis_onboarding_selftest.py
+          PYTHONPATH=. python tests/shared_household_minimum_selftest.py
+          git -C .. diff --check
+          echo PR336_STANDALONE_SESSION_ONBOARDING_SELFTESTS_GREEN
+      - name: Commit fixture migration batch
+        run: |
+          git -C .. config user.name rezzerv-ci-bot
+          git -C .. config user.email 169062718+MichielUijting@users.noreply.github.com
+          git -C .. add -- \
+            backend/tests/onboarding_use_case_foundation_selftest.py \
+            backend/tests/inhuis_halen_onboarding_selftest.py \
+            backend/tests/wat_inhuis_onboarding_selftest.py \
+            backend/tests/waar_inhuis_onboarding_selftest.py \
+            backend/tests/shared_household_minimum_selftest.py
+          git -C .. commit -m 'Use authorization fixture in onboarding selftests'
+          git -C .. push origin HEAD:codex/postgresql-runtime-startup-authority-cutover
