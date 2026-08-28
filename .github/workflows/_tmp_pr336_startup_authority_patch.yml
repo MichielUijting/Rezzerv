@@ -1,0 +1,44 @@
+name: Temporary PR336 startup authority patch
+
+on:
+  push:
+    branches:
+      - codex/postgresql-runtime-startup-authority-cutover
+
+permissions:
+  contents: write
+
+jobs:
+  patch-main-startup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/postgresql-runtime-startup-authority-cutover
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply startup authority cutover
+        run: python backend/tests/_tmp_pr336_startup_authority_patch.py
+      - name: Validate static startup contract
+        run: python backend/tests/runtime_startup_schema_authority_selftest.py
+      - name: Compile changed Python modules
+        run: |
+          python -m py_compile \
+            backend/app/main.py \
+            backend/app/migration_db.py \
+            backend/app/schema_migration_preflight.py \
+            backend/alembic/env.py \
+            backend/tests/runtime_startup_schema_authority_selftest.py
+      - name: Check diff whitespace
+        run: git diff --check
+      - name: Remove temporary patch script and commit production changes
+        run: |
+          rm backend/tests/_tmp_pr336_startup_authority_patch.py
+          git config user.name rezzerv-ci-bot
+          git config user.email 169062718+MichielUijting@users.noreply.github.com
+          git add -- backend/app/main.py backend/tests/_tmp_pr336_startup_authority_patch.py
+          git commit -m 'Remove runtime startup schema self-healing'
+          git push origin HEAD:codex/postgresql-runtime-startup-authority-cutover
