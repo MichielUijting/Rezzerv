@@ -177,6 +177,31 @@ def _source_index_contract(source: sqlite3.Connection) -> dict[str, dict[str, An
     return contract
 
 
+def _source_unique_contract(
+    source: sqlite3.Connection,
+) -> dict[str, set[tuple[str, ...]]]:
+    contract: dict[str, set[tuple[str, ...]]] = {}
+    for table_name in _RECEIPT_TABLES:
+        quoted_table = table_name.replace('"', '""')
+        unique_columns: set[tuple[str, ...]] = set()
+        for row in source.execute(f'PRAGMA index_list("{quoted_table}")').fetchall():
+            if not bool(row[2]) or str(row[3] or "") != "u":
+                continue
+            index_name = str(row[1])
+            quoted_index = index_name.replace('"', '""')
+            columns = tuple(
+                str(item[2])
+                for item in source.execute(
+                    f'PRAGMA index_info("{quoted_index}")'
+                ).fetchall()
+                if item[2] is not None
+            )
+            if columns:
+                unique_columns.add(columns)
+        contract[table_name] = unique_columns
+    return contract
+
+
 def _validate_postgresql(bind: sa.engine.Connection) -> None:
     source = _source_connection()
     try:
@@ -240,10 +265,26 @@ def _validate_postgresql(bind: sa.engine.Connection) -> None:
         if not bool(line_columns["logical_line_key"].get("nullable")):
             raise RuntimeError("receipt_table_lines.logical_line_key must remain nullable")
 
+        expected_uniques = _source_unique_contract(source)
+        for table_name in _RECEIPT_TABLES:
+            actual_uniques = {
+                tuple(item.get("column_names") or ())
+                for item in inspector.get_unique_constraints(table_name)
+                if item.get("column_names")
+            }
+            if actual_uniques != expected_uniques[table_name]:
+                raise RuntimeError(
+                    f"PostgreSQL receipt unique constraint drift: table={table_name} "
+                    f"expected={sorted(expected_uniques[table_name])} "
+                    f"actual={sorted(actual_uniques)}"
+                )
+
         expected_indexes = _source_index_contract(source)
         actual_indexes: dict[str, tuple[str, dict[str, Any]]] = {}
         for table_name in _RECEIPT_TABLES:
             for index in inspector.get_indexes(table_name):
+                if index.get("duplicates_constraint"):
+                    continue
                 name = str(index.get("name") or "")
                 actual_indexes[name] = (table_name, index)
         if set(actual_indexes) != set(expected_indexes):
