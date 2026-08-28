@@ -17,13 +17,35 @@ from pathlib import Path
 from sqlalchemy import inspect, text
 
 
+def _purge_app_modules() -> None:
+    for module_name in [
+        name for name in list(sys.modules) if name == "app" or name.startswith("app.")
+    ]:
+        del sys.modules[module_name]
+
+
+def _upgrade_production_schema(database_path: Path) -> None:
+    """Build the temporary production database through the real Alembic head."""
+    from alembic import command
+    from alembic.config import Config
+
+    backend_root = Path(__file__).resolve().parents[2]
+    config = Config(str(backend_root / "alembic.ini"))
+    config.set_main_option("script_location", str(backend_root / "alembic"))
+    command.upgrade(config, "head")
+
+
 def _load_production_module(database_path: Path):
     os.environ["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
     backend_root = Path(__file__).resolve().parents[2]
     if str(backend_root) not in sys.path:
         sys.path.insert(0, str(backend_root))
-    for module_name in [name for name in list(sys.modules) if name == "app" or name.startswith("app.")]:
-        del sys.modules[module_name]
+
+    # Production startup is migration-first. This integration test deliberately
+    # imports app.main directly, so create the same Alembic-owned schema first.
+    _purge_app_modules()
+    _upgrade_production_schema(database_path)
+    _purge_app_modules()
     return importlib.import_module("app.main")
 
 
