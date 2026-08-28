@@ -15,6 +15,7 @@ from app.services.server_session_service import (
     public_session_payload,
     resolve_server_session,
 )
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def build_connection():
@@ -51,6 +52,7 @@ def build_connection():
         )
     """))
     ensure_authorization_foundation(conn)
+    create_server_session_contract_schema(conn)
     conn.execute(text("""
         INSERT INTO app_users(id, email)
         VALUES
