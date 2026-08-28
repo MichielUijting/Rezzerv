@@ -17,11 +17,23 @@ SERVICE_PATH = (
     / "services"
     / "external_article_product_link_service.py"
 )
+SERVER_SESSION_SERVICE_PATH = (
+    BACKEND_ROOT
+    / "app"
+    / "services"
+    / "server_session_service.py"
+)
 MIGRATION_PATH = (
     BACKEND_ROOT
     / "alembic"
     / "versions"
     / "20260827_02_postgresql_application_schema.py"
+)
+SERVER_SESSION_MIGRATION_PATH = (
+    BACKEND_ROOT
+    / "alembic"
+    / "versions"
+    / "20260828_01_server_session_schema_authority.py"
 )
 BASELINE_PATH = BACKEND_ROOT / "alembic" / "baseline_sqlite.sql.gz"
 RUNTIME_PREFLIGHT_PATH = BACKEND_ROOT / "app" / "runtime_preflight.py"
@@ -42,7 +54,9 @@ def _require(condition: bool, message: str) -> None:
 
 def _source_contract() -> None:
     service = SERVICE_PATH.read_text(encoding="utf-8")
+    server_session_service = SERVER_SESSION_SERVICE_PATH.read_text(encoding="utf-8")
     migration = MIGRATION_PATH.read_text(encoding="utf-8")
+    server_session_migration = SERVER_SESSION_MIGRATION_PATH.read_text(encoding="utf-8")
     runtime_preflight = RUNTIME_PREFLIGHT_PATH.read_text(encoding="utf-8")
     schema_preflight = SCHEMA_PREFLIGHT_PATH.read_text(encoding="utf-8")
     dockerfile = DOCKERFILE_PATH.read_text(encoding="utf-8")
@@ -65,6 +79,39 @@ def _source_contract() -> None:
     _require(
         "del conn" in service,
         "Legacy schema-hook is niet aantoonbaar inert",
+    )
+
+    for forbidden in (
+        "CREATE TABLE",
+        "CREATE INDEX",
+        "ALTER TABLE",
+        "DROP TABLE",
+        "PRAGMA ",
+        "SQLITE_MASTER",
+    ):
+        _require(
+            forbidden not in server_session_service.upper(),
+            f"Production server-sessionservice bevat nog runtime schema-authority: {forbidden}",
+        )
+    _require(
+        "def ensure_server_session_schema(conn: Connection) -> None:\n"
+        "    \"\"\"Compatibility shim; Alembic owns the server_sessions schema.\"\"\"\n"
+        "    del conn" in server_session_service,
+        "Legacy server-session schema-hook is niet aantoonbaar inert",
+    )
+    _require(
+        "revision: str = \"20260828_01\"" in server_session_migration
+        and "down_revision: Union[str, None] = \"20260827_02\"" in server_session_migration,
+        "Server-session authority revision heeft onverwachte lineage",
+    )
+    _require(
+        "CREATE TABLE {table_name}" in server_session_migration
+        and "idx_server_sessions_user_active" in server_session_migration,
+        "Server-session Alembic revision bezit niet het volledige schema-contract",
+    )
+    _require(
+        "_validate_postgresql(bind)" in server_session_migration,
+        "Server-session authority revision valideert PostgreSQL niet fail-closed",
     )
 
     _require(
@@ -187,6 +234,8 @@ def main() -> None:
     print("SCHEMA_AUTHORITY_SOURCE_CONTRACT_GREEN")
     print("EXTERNAL_LINK_RUNTIME_DDL_REMOVED_GREEN")
     print("EXTERNAL_LINK_LEGACY_SCHEMA_HOOK_INERT_GREEN")
+    print("SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN")
+    print("SERVER_SESSION_LEGACY_SCHEMA_HOOK_INERT_GREEN")
     print("SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN")
 
 
