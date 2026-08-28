@@ -15,7 +15,7 @@ from app.services.platform_user_suspension_service import (
     require_user_account_active,
     suspend_platform_user,
 )
-from app.services.server_session_service import ensure_server_session_schema
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _engine():
@@ -107,7 +107,7 @@ def test_user_inventory_is_read_only_safe_projection():
         _insert_user(conn, "actor", "actor@example.test")
         _insert_user(conn, "target", "target@example.test")
         ensure_user_account_status_schema(conn)
-        ensure_server_session_schema(conn)
+        create_server_session_contract_schema(conn)
         _insert_active_session(conn, record_id="session-target", user_id="target", now=now)
 
         before = conn.execute(text("SELECT COUNT(*) FROM app_users")).scalar_one()
@@ -145,7 +145,7 @@ def test_suspend_is_atomic_account_authority_and_revokes_all_active_sessions():
         _insert_user(conn, "actor", "actor@example.test")
         _insert_user(conn, "target", "target@example.test")
         ensure_user_account_status_schema(conn)
-        ensure_server_session_schema(conn)
+        create_server_session_contract_schema(conn)
         _insert_active_session(conn, record_id="session-1", user_id="target", now=now)
         _insert_active_session(conn, record_id="session-2", user_id="target", now=now)
 
@@ -181,7 +181,7 @@ def test_suspend_rejects_self_and_already_suspended_target():
         _insert_user(conn, "actor", "actor@example.test")
         _insert_user(conn, "target", "target@example.test")
         ensure_user_account_status_schema(conn)
-        ensure_server_session_schema(conn)
+        create_server_session_contract_schema(conn)
 
         with pytest.raises(PlatformUserConflictError, match="eigen huidige account"):
             suspend_platform_user(conn, "actor", actor_user_id="actor", now=now)
