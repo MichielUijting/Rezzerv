@@ -71,8 +71,8 @@ jobs:
           print('INVENTORY_WRITER_CROSS_DIALECT_ORDERING_GREEN')
           PY
 
-      - name: Remove temporary review runner
-        run: git rm -- tools/_tmp_pr335_review_fix.py .github/workflows/_tmp_pr335_review_fix.yml
+      - name: Exclude permanent workflow mutation from Actions push
+        run: git checkout -- .github/workflows/postgresql-migration-foundation-validation.yml
 
       - name: Commit review fixes
         shell: bash
@@ -80,7 +80,6 @@ jobs:
           git config user.name 'rezzerv-ci-bot'
           git config user.email 'rezzerv-ci-bot@users.noreply.github.com'
           git add -- \
-            .github/workflows/postgresql-migration-foundation-validation.yml \
             backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py \
             backend/app/main.py \
             backend/app/services/canonical_inventory_identity_service.py \
