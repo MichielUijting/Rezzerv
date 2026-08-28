@@ -1,0 +1,144 @@
+name: Temporary inventory temporal writer patch
+
+on:
+  push:
+    branches:
+      - codex/postgresql-inventory-temporal-authority-cutover
+
+permissions:
+  contents: write
+
+jobs:
+  patch-writer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Patch central inventory event writer
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          source = path.read_text(encoding='utf-8')
+          start = source.index('\ndef create_inventory_event(') + 1
+          end = source.index('\ndef apply_inventory_purchase(', start)
+          current = source[start:end]
+          if 'effective_at, recorded_at, effective_at_precision, event_priority' in current:
+              print('central inventory writer already temporal-aware')
+              raise SystemExit(0)
+
+          replacement = '''def create_inventory_event(
+              conn,
+              *,
+              household_id: str,
+              article_id: str,
+              article_name: str,
+              resolved_location: dict,
+              event_type: str,
+              quantity: float,
+              source: str,
+              note: str,
+              old_quantity=None,
+              new_quantity=None,
+              purchase_date: str | None = None,
+              supplier_name: str | None = None,
+              article_number: str | None = None,
+              price: float | None = None,
+              currency: str | None = None,
+              barcode: str | None = None,
+          ):
+              safe_location = require_resolved_location(resolved_location)
+              household_article_id = resolve_or_create_inventory_household_article(
+                  conn,
+                  household_id=household_id,
+                  article_name=article_name,
+                  preferred_household_article_id=article_id,
+                  source=source,
+              )
+              normalized_event_type = str(event_type or '').strip().lower()
+              normalized_purchase_date = normalize_purchase_date(purchase_date) if purchase_date else None
+              recorded_at = datetime.now(timezone.utc).isoformat()
+              if normalized_event_type in {'purchase', 'auto_repurchase'} and normalized_purchase_date:
+                  effective_at = f'{normalized_purchase_date}T00:00:00+00:00'
+                  effective_at_precision = 'date'
+              else:
+                  effective_at = recorded_at
+                  effective_at_precision = 'datetime'
+              event_priority = {
+                  'baseline': 0,
+                  'purchase': 10,
+                  'auto_repurchase': 10,
+                  'transfer_in': 20,
+                  'transfer_out': 30,
+                  'consume': 40,
+                  'adjustment': 50,
+              }.get(normalized_event_type, 100)
+              event_id = str(uuid.uuid4())
+              conn.execute(
+                  text(
+                      """
+                      INSERT INTO inventory_events (
+                          id, household_id, article_id, household_article_id, article_name, location_id, location_label,
+                          event_type, quantity, old_quantity, new_quantity, source, note,
+                          purchase_date, supplier_name, article_number, price, currency, barcode,
+                          effective_at, recorded_at, effective_at_precision, event_priority,
+                          source_reference, source_line_id, replayed_at, created_at
+                      ) VALUES (
+                          :id, :household_id, :article_id, :household_article_id, :article_name, :location_id, :location_label,
+                          :event_type, :quantity, :old_quantity, :new_quantity, :source, :note,
+                          :purchase_date, :supplier_name, :article_number, :price, :currency, :barcode,
+                          :effective_at, :recorded_at, :effective_at_precision, :event_priority,
+                          NULL, NULL, NULL, CURRENT_TIMESTAMP
+                      )
+                      """
+                  ),
+                  {
+                      'id': event_id,
+                      'household_id': str(household_id),
+                      'article_id': household_article_id,
+                      'household_article_id': household_article_id,
+                      'article_name': article_name,
+                      'location_id': safe_location['location_id'],
+                      'location_label': safe_location['location_label'],
+                      'event_type': normalized_event_type,
+                      'quantity': quantity,
+                      'old_quantity': old_quantity,
+                      'new_quantity': new_quantity,
+                      'source': source,
+                      'note': note,
+                      'purchase_date': normalized_purchase_date,
+                      'supplier_name': supplier_name,
+                      'article_number': article_number,
+                      'price': price,
+                      'currency': currency,
+                      'barcode': barcode,
+                      'effective_at': effective_at,
+                      'recorded_at': recorded_at,
+                      'effective_at_precision': effective_at_precision,
+                      'event_priority': event_priority,
+                  },
+              )
+              return event_id
+
+
+          '''
+          path.write_text(source[:start] + replacement + source[end + 1:], encoding='utf-8')
+          PY
+
+      - name: Commit writer cutover
+        shell: bash
+        run: |
+          if git diff --quiet -- backend/app/main.py; then
+            echo 'No writer patch needed'
+            exit 0
+          fi
+          git config user.name 'rezzerv-ci-bot'
+          git config user.email 'rezzerv-ci-bot@users.noreply.github.com'
+          git add backend/app/main.py
+          git commit -m 'Make inventory event writer temporal-aware'
+          git push origin HEAD:${{ github.ref_name }}
