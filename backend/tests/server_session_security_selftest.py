@@ -23,6 +23,7 @@ from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
     SUPERGEBRUIKER_HUISHOUDEN_ID,
 )
+from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _expect_http_status(expected_status: int, fn) -> None:
@@ -74,6 +75,7 @@ def _prepare_database(engine) -> None:
             "INSERT INTO auth_platform_user_roles(user_id, role_key, active) "
             "VALUES ('system-superuser', 'platform.superuser', 1)"
         ))
+        create_server_session_contract_schema(conn)
 
 
 def run() -> int:
