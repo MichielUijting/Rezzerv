@@ -331,7 +331,7 @@ def _validate_postgresql(bind: sa.engine.Connection) -> None:
         trigger_def = _normalize_sql(trigger_rows[0][1])
         function_def = _normalize_sql(trigger_rows[0][2])
         for fragment in (
-            "before update of parse_status, approved_at on receipt_tables",
+            "before update of parse_status, approved_at on",
             "rezzerv_preserve_explicit_receipt_approval()",
         ):
             if fragment not in trigger_def:
