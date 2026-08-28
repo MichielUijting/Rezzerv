@@ -22,7 +22,7 @@ from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
     SUPERGEBRUIKER_HUISHOUDEN_ID,
 )
-from app.testing.authorization_schema_fixture import install_authorization_schema_for_test
+from app.testing.authorization_schema_fixture import install_authorization_schema
 from app.testing.server_session_contract import create_server_session_contract_schema
 
 
@@ -64,7 +64,7 @@ def _prepare_database(engine) -> None:
             "('user-a', '1', 'owner'), "
             "('user-b', '2', 'member')"
         ))
-        install_authorization_schema_for_test(conn)
+        install_authorization_schema(conn)
         conn.execute(text(
             "INSERT INTO auth_membership_roles "
             "(household_id, membership_id, role_key, active) VALUES "
