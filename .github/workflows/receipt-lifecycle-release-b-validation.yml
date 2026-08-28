@@ -3,6 +3,7 @@ name: Receipt lifecycle Release B validation
 on:
   pull_request:
     paths:
+      - 'backend/alembic/**'
       - 'backend/app/main.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/receipt_service.py'
@@ -22,6 +23,7 @@ on:
     branches:
       - main
     paths:
+      - 'backend/alembic/**'
       - 'backend/app/main.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/receipt_service.py'
@@ -35,6 +37,7 @@ on:
       - 'frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.js'
       - 'frontend/tests/e2e/kassa.frontend-regression.spec.js'
       - 'scripts/run-receipt-lifecycle-release-b-premerge.ps1'
+      - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-B.md'
       - '.github/workflows/receipt-lifecycle-release-b-validation.yml'
 
 jobs:
@@ -72,6 +75,7 @@ jobs:
       - name: Enforce Release B source contract
         shell: python
         run: |
+          import gzip
           from pathlib import Path
 
           main = Path('backend/app/main.py').read_text(encoding='utf-8')
@@ -79,6 +83,8 @@ jobs:
           service = Path('backend/app/services/receipt_service.py').read_text(encoding='utf-8')
           lineage = Path('backend/app/services/receipt_reimport_lineage_service.py').read_text(encoding='utf-8')
           foundation = Path('backend/app/services/receipt_lifecycle_foundation_service.py').read_text(encoding='utf-8')
+          with gzip.open('backend/alembic/baseline_sqlite.sql.gz', 'rt', encoding='utf-8') as handle:
+              baseline = handle.read()
           receipts_ui = Path('frontend/src/features/receipts/ReceiptsPage.jsx').read_text(encoding='utf-8')
           kassa_ui = Path('frontend/src/features/receipts/KassaPage.jsx').read_text(encoding='utf-8')
           lifecycle_ui_test = Path('frontend/tests/e2e/receipt-lifecycle-release-b.frontend-regression.js').read_text(encoding='utf-8')
@@ -121,7 +127,9 @@ jobs:
           for token in required_archive_duplicate_tokens:
               assert token in service, f'Archief-dedupecontract ontbreekt: {token}'
           assert "workflow_state = 'removed_reimport_allowed'" not in service[service.index("workflow_state = 'archived'"):service.index("duplicate_reason': 'archived'")], 'Volledig verwijderde bon mag niet door archiefblok worden tegengehouden'
-          assert 'UPDATE raw_receipts' not in foundation[foundation.index('# Archive retains'):foundation.index('return {', foundation.index('# Archive retains'))], 'Archiveren mag raw_receipts niet soft-deleten; hash moet gereserveerd blijven'
+          unpack_start = foundation.index('def apply_unpack_receipt_lifecycle_action(')
+          unpack_end = foundation.index('def install_receipt_lifecycle_foundation(', unpack_start)
+          assert 'UPDATE raw_receipts' not in foundation[unpack_start:unpack_end], 'Archiveren mag raw_receipts niet soft-deleten; hash moet gereserveerd blijven'
 
           required_lineage_tokens = [
               "rt.workflow_state = 'removed_reimport_allowed'",
@@ -211,7 +219,14 @@ jobs:
               create_token = f'CREATE TABLE IF NOT EXISTS {table}'
               assert create_token not in combined, f'Parallelle lifecycle-tabel verboden: {table}'
 
-          assert "WHERE deleted_at IS NULL" in foundation
+          for forbidden in ('CREATE INDEX', 'ALTER TABLE', 'CREATE TRIGGER', 'DROP TRIGGER', 'PRAGMA ', 'sqlite_master'):
+              assert forbidden.lower() not in foundation.lower(), f'Runtime receipt schema-authority teruggekeerd: {forbidden}'
+
+          index_start = baseline.index('CREATE UNIQUE INDEX uq_raw_receipts_household_hash')
+          index_end = baseline.index(';', index_start)
+          active_hash_index = baseline[index_start:index_end]
+          assert 'WHERE deleted_at IS NULL' in active_hash_index, 'Active receipt hash uniqueness hoort in immutable Alembic-baseline'
+          assert 'trg_receipt_tables_preserve_explicit_approval' in baseline, 'Approval guard trigger ontbreekt uit immutable Alembic-baseline'
           print('RECEIPT_LIFECYCLE_RELEASE_B_SOURCE_CONTRACT_GREEN')
 
       - name: Fetch comparison base

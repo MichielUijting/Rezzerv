@@ -6,7 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from app.services.receipt_lifecycle_foundation_service import (
     ensure_receipt_lifecycle_foundation_schema,
     install_receipt_lifecycle_foundation,
+    reconcile_receipt_lifecycle_foundation_data,
 )
+from app.testing.receipt_lifecycle_contract import create_receipt_approval_guard_trigger
 
 
 def _engine():
@@ -23,22 +25,44 @@ def _engine():
         conn.execute(text("""
             CREATE UNIQUE INDEX uq_raw_receipts_household_hash
             ON raw_receipts (household_id, sha256_hash)
+            WHERE deleted_at IS NULL
         """))
         conn.execute(text("""
             CREATE TABLE receipt_tables (
                 id TEXT PRIMARY KEY,
                 raw_receipt_id TEXT NOT NULL UNIQUE,
                 household_id TEXT NOT NULL,
-                deleted_at DATETIME
+                parse_status TEXT,
+                approved_at DATETIME,
+                reviewed_at DATETIME,
+                approved_by_user_email TEXT,
+                totals_overridden INTEGER NOT NULL DEFAULT 0,
+                deleted_at DATETIME,
+                updated_at DATETIME,
+                logical_receipt_key TEXT,
+                workflow_state TEXT NOT NULL DEFAULT 'active'
             )
+        """))
+        conn.execute(text("""
+            CREATE INDEX idx_receipt_tables_logical_receipt_key
+            ON receipt_tables (household_id, logical_receipt_key)
+        """))
+        conn.execute(text("""
+            CREATE INDEX idx_receipt_tables_workflow_state
+            ON receipt_tables (household_id, workflow_state)
         """))
         conn.execute(text("""
             CREATE TABLE receipt_table_lines (
                 id TEXT PRIMARY KEY,
                 receipt_table_id TEXT NOT NULL,
                 line_index INTEGER NOT NULL,
-                raw_label TEXT NOT NULL
+                raw_label TEXT NOT NULL,
+                logical_line_key TEXT
             )
+        """))
+        conn.execute(text("""
+            CREATE INDEX idx_receipt_table_lines_logical_line_key
+            ON receipt_table_lines (logical_line_key)
         """))
         conn.execute(text("""
             CREATE TABLE purchase_import_batches (
@@ -64,65 +88,62 @@ def _engine():
                 source_line_id TEXT
             )
         """))
+        create_receipt_approval_guard_trigger(conn)
     return engine
 
 
-def _columns(conn, table):
-    return {str(row[1]) for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+def _schema(conn):
+    return tuple(
+        conn.execute(
+            text(
+                "SELECT type, name, tbl_name, sql FROM sqlite_master "
+                "WHERE sql IS NOT NULL ORDER BY type, name"
+            )
+        ).all()
+    )
 
 
-def test_release_a_extends_existing_entities_without_parallel_tables():
+def test_legacy_schema_hook_is_inert_on_canonical_schema():
     engine = _engine()
     with engine.begin() as conn:
-        before_tables = {
-            str(row[0])
-            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
-        }
+        before = _schema(conn)
         result = ensure_receipt_lifecycle_foundation_schema(conn)
-        after_tables = {
-            str(row[0])
-            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
-        }
+        after = _schema(conn)
 
-        assert before_tables == after_tables
-        assert "logical_receipt_key" in _columns(conn, "receipt_tables")
-        assert "workflow_state" in _columns(conn, "receipt_tables")
-        assert "logical_line_key" in _columns(conn, "receipt_table_lines")
-        assert result["added_columns"] == [
-            "receipt_tables.logical_receipt_key",
-            "receipt_tables.workflow_state",
-            "receipt_table_lines.logical_line_key",
-        ]
+    assert result is None
+    assert before == after
 
 
-def test_release_a_runtime_installer_applies_schema_immediately_and_once():
+def test_runtime_installer_reconciles_data_immediately_and_once():
     engine = _engine()
     app = SimpleNamespace(state=SimpleNamespace())
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash) VALUES ('raw-1', '0', 'abc')"))
+        conn.execute(text("INSERT INTO receipt_tables (id, raw_receipt_id, household_id) VALUES ('receipt-1', 'raw-1', '0')"))
+        conn.execute(text("INSERT INTO receipt_table_lines (id, receipt_table_id, line_index, raw_label) VALUES ('line-1', 'receipt-1', 1, 'Melk')"))
 
     install_receipt_lifecycle_foundation(app, engine)
 
     with engine.begin() as conn:
-        assert "logical_receipt_key" in _columns(conn, "receipt_tables")
-        assert "workflow_state" in _columns(conn, "receipt_tables")
-        assert "logical_line_key" in _columns(conn, "receipt_table_lines")
+        assert conn.execute(text("SELECT logical_receipt_key FROM receipt_tables WHERE id='receipt-1'")).scalar_one()
+        assert conn.execute(text("SELECT logical_line_key FROM receipt_table_lines WHERE id='line-1'")).scalar_one()
 
-    # A second install is a no-op through the app-state marker.
     install_receipt_lifecycle_foundation(app, engine)
     assert app.state._rezzerv_receipt_lifecycle_foundation_installed is True
 
 
-def test_release_a_backfills_identity_once_and_is_idempotent():
+def test_data_reconciliation_backfills_identity_once_and_is_idempotent():
     engine = _engine()
     with engine.begin() as conn:
         conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash) VALUES ('raw-1', '0', 'abc')"))
         conn.execute(text("INSERT INTO receipt_tables (id, raw_receipt_id, household_id) VALUES ('receipt-1', 'raw-1', '0')"))
         conn.execute(text("INSERT INTO receipt_table_lines (id, receipt_table_id, line_index, raw_label) VALUES ('line-1', 'receipt-1', 1, 'Melk')"))
 
-        first = ensure_receipt_lifecycle_foundation_schema(conn)
+        first = reconcile_receipt_lifecycle_foundation_data(conn)
         receipt_key_1 = conn.execute(text("SELECT logical_receipt_key FROM receipt_tables WHERE id='receipt-1'")).scalar_one()
         line_key_1 = conn.execute(text("SELECT logical_line_key FROM receipt_table_lines WHERE id='line-1'")).scalar_one()
 
-        second = ensure_receipt_lifecycle_foundation_schema(conn)
+        second = reconcile_receipt_lifecycle_foundation_data(conn)
         receipt_key_2 = conn.execute(text("SELECT logical_receipt_key FROM receipt_tables WHERE id='receipt-1'")).scalar_one()
         line_key_2 = conn.execute(text("SELECT logical_line_key FROM receipt_table_lines WHERE id='line-1'")).scalar_one()
 
@@ -137,7 +158,6 @@ def test_release_a_backfills_identity_once_and_is_idempotent():
 def test_logical_keys_may_be_reused_by_future_reimport_attempts():
     engine = _engine()
     with engine.begin() as conn:
-        ensure_receipt_lifecycle_foundation_schema(conn)
         conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash) VALUES ('raw-1', '0', 'hash-1')"))
         conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash) VALUES ('raw-2', '0', 'hash-2')"))
         conn.execute(text("""
@@ -164,7 +184,6 @@ def test_logical_keys_may_be_reused_by_future_reimport_attempts():
 def test_exact_source_hash_can_be_reused_only_after_soft_delete():
     engine = _engine()
     with engine.begin() as conn:
-        ensure_receipt_lifecycle_foundation_schema(conn)
         conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash) VALUES ('raw-active', '0', 'same-hash')"))
 
     with pytest.raises(IntegrityError):
@@ -182,5 +201,5 @@ def test_legacy_deleted_receipt_gets_no_invented_archive_or_remove_meaning():
     with engine.begin() as conn:
         conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash, deleted_at) VALUES ('raw-1', '0', 'abc', CURRENT_TIMESTAMP)"))
         conn.execute(text("INSERT INTO receipt_tables (id, raw_receipt_id, household_id, deleted_at) VALUES ('receipt-1', 'raw-1', '0', CURRENT_TIMESTAMP)"))
-        ensure_receipt_lifecycle_foundation_schema(conn)
+        reconcile_receipt_lifecycle_foundation_data(conn)
         assert conn.execute(text("SELECT workflow_state FROM receipt_tables WHERE id='receipt-1'")).scalar_one() == "legacy_deleted"

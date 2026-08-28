@@ -51,6 +51,7 @@ jobs:
           python -m pip install --quiet \
             fastapi==0.115.0 \
             sqlalchemy==2.0.36 \
+            alembic==1.19.1 \
             pydantic==2.12.5 \
             python-multipart==0.0.20 \
             pypdf==5.4.0 \
