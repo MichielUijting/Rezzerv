@@ -200,35 +200,37 @@ jobs:
               postgres_anchor = '    if connection.dialect.name == "postgresql":\n'
               if postgres_anchor not in section:
                   raise SystemExit('selftest PostgreSQL anchor not found')
-              sqlite_code = '''    if connection.dialect.name == "sqlite":
-                  inventory_indexes = {
-                      str(index.get("name") or ""): index
-                      for index in inspector.get_indexes("inventory")
-                  }
-                  locationless = inventory_indexes.get("uq_inventory_active_locationless_household_article")
-                  if not locationless or not bool(locationless.get("unique")) or tuple(locationless.get("column_names") or ()) != (
-                      "household_id", "household_article_id"
-                  ):
-                      raise AssertionError("Invalid SQLite locationless inventory partial unique index")
-                  locationless_sql = connection.execute(text(
-                      "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_inventory_active_locationless_household_article'"
-                  )).scalar_one_or_none()
-                  normalized_index = " ".join(str(locationless_sql or "").lower().split())
-                  for fragment in (
-                      "create unique index",
-                      "household_article_id is not null",
-                      "space_id is null",
-                      "sublocation_id is null",
-                      "status",
-                      "'active'",
-                  ):
-                      if fragment not in normalized_index:
-                          raise AssertionError(
-                              "Invalid SQLite locationless inventory partial unique index: "
-                              f"missing={fragment!r} index={locationless_sql!r}"
-                          )
-
-              '''
+              sqlite_lines = [
+                  '    if connection.dialect.name == "sqlite":',
+                  '        inventory_indexes = {',
+                  '            str(index.get("name") or ""): index',
+                  '            for index in inspector.get_indexes("inventory")',
+                  '        }',
+                  '        locationless = inventory_indexes.get("uq_inventory_active_locationless_household_article")',
+                  '        if not locationless or not bool(locationless.get("unique")) or tuple(locationless.get("column_names") or ()) != (',
+                  '            "household_id", "household_article_id"',
+                  '        ):',
+                  '            raise AssertionError("Invalid SQLite locationless inventory partial unique index")',
+                  '        locationless_sql = connection.execute(text(',
+                  '            "SELECT sql FROM sqlite_master WHERE type=\'index\' AND name=\'uq_inventory_active_locationless_household_article\'"',
+                  '        )).scalar_one_or_none()',
+                  '        normalized_index = " ".join(str(locationless_sql or "").lower().split())',
+                  '        for fragment in (',
+                  '            "create unique index",',
+                  '            "household_article_id is not null",',
+                  '            "space_id is null",',
+                  '            "sublocation_id is null",',
+                  '            "status",',
+                  '            "\'active\'",',
+                  '        ):',
+                  '            if fragment not in normalized_index:',
+                  '                raise AssertionError(',
+                  '                    "Invalid SQLite locationless inventory partial unique index: "',
+                  '                    f"missing={fragment!r} index={locationless_sql!r}"',
+                  '                )',
+                  '',
+              ]
+              sqlite_code = '\n'.join(sqlite_lines) + '\n'
               section = section.replace(postgres_anchor, sqlite_code + postgres_anchor, 1)
               selftest = selftest[:section_start] + section + selftest[section_end:]
           selftest_path.write_text(selftest, encoding='utf-8')
