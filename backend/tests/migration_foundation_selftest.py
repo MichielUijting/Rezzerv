@@ -101,6 +101,30 @@ def _strip_server_session_extension(schema: str) -> str:
     return "\n\n".join(retained).rstrip() + "\n"
 
 
+def _server_session_unique_sets(connection, inspector) -> set[tuple[str, ...]]:
+    if connection.dialect.name != "sqlite":
+        return {
+            tuple(constraint.get("column_names") or ())
+            for constraint in inspector.get_unique_constraints("server_sessions")
+        }
+
+    unique_sets: set[tuple[str, ...]] = set()
+    indexes = connection.exec_driver_sql(
+        'PRAGMA index_list("server_sessions")'
+    ).mappings()
+    for index in indexes:
+        if not bool(index.get("unique")):
+            continue
+        index_name = str(index.get("name") or "").replace('"', '""')
+        unique_sets.add(tuple(
+            str(column.get("name") or "")
+            for column in connection.exec_driver_sql(
+                f'PRAGMA index_info("{index_name}")'
+            ).mappings()
+        ))
+    return unique_sets
+
+
 def _assert_server_session_schema(connection) -> None:
     inspector = inspect(connection)
     if "server_sessions" not in set(inspector.get_table_names()):
@@ -114,10 +138,7 @@ def _assert_server_session_schema(connection) -> None:
         )
     if not bool(_column(inspector, "server_sessions", "active_household_id")["nullable"]):
         raise AssertionError("server_sessions.active_household_id must be nullable")
-    unique_sets = {
-        tuple(constraint.get("column_names") or ())
-        for constraint in inspector.get_unique_constraints("server_sessions")
-    }
+    unique_sets = _server_session_unique_sets(connection, inspector)
     if ("session_token_hash",) not in unique_sets:
         raise AssertionError("server_sessions.session_token_hash must remain unique")
     server_indexes = {index["name"]: index for index in inspector.get_indexes("server_sessions")}
