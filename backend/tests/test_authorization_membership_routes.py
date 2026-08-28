@@ -9,6 +9,7 @@ from app.api import authorization_membership_routes as routes
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.authorization_membership_service import migrate_legacy_household_memberships
 from app.services.server_session_service import ServerSessionContext
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 USER_IDS = {
@@ -68,6 +69,7 @@ def _client(email: str = 'admin@example.test', household_id: str = 'h1', *, auth
               ('m-member', 'h1', 'member@example.test', 'member', 'active'),
               ('m-outsider', 'h2', 'outsider@example.test', 'owner', 'active')
         """))
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         migrate_legacy_household_memberships(conn)
     routes.engine = engine

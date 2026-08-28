@@ -15,6 +15,7 @@ from app.services.platform_feature_flag_service import (
     set_platform_feature_flag,
 )
 from app.services.server_session_service import ServerSessionContext
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 FEATURE_FLAGS_PERMISSION = "platform.feature_flags.manage"
@@ -28,6 +29,7 @@ def auth_engine():
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         ensure_platform_feature_flag_schema(conn)
         conn.execute(text("""

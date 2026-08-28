@@ -22,6 +22,7 @@ from app.services.server_session_service import (
     rotate_active_household,
 )
 from app.testing.server_session_contract import create_server_session_contract_schema
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 @pytest.fixture()
@@ -60,6 +61,7 @@ def connection():
                 """
             )
         )
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_membership_roles(household_id, membership_id, role_key)

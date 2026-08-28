@@ -22,6 +22,7 @@ from app.services.server_session_service import (
     resolve_server_session,
 )
 from app.testing.server_session_contract import create_server_session_contract_schema
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 @pytest.fixture()
@@ -57,6 +58,7 @@ def connection():
                 PRIMARY KEY(user_id, household_id)
             )
         """))
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         create_server_session_contract_schema(conn)
         conn.execute(text("""
