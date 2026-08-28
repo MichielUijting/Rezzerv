@@ -98,15 +98,18 @@ def ensure_temporal_inventory_schema(conn) -> None:
             )
 
     indexes = {
-        str(index.get("name") or ""): tuple(index.get("column_names") or ())
+        str(index.get("name") or ""): index
         for index in inspector.get_indexes("inventory_events")
     }
     for index_name, expected_columns in _TEMPORAL_INDEX_CONTRACT.items():
-        actual_columns = indexes.get(index_name)
-        if actual_columns != expected_columns:
+        index = indexes.get(index_name)
+        actual_columns = tuple((index or {}).get("column_names") or ())
+        actual_unique = bool((index or {}).get("unique"))
+        if not index or actual_columns != expected_columns or actual_unique:
             raise RuntimeError(
                 "Temporal inventory schema drift: "
-                f"{index_name} expected={expected_columns!r} actual={actual_columns!r}"
+                f"{index_name} expected_columns={expected_columns!r} expected_unique=False "
+                f"actual_columns={actual_columns!r} actual_unique={actual_unique}"
             )
 
     if conn.dialect.name == "sqlite":

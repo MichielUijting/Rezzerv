@@ -190,14 +190,18 @@ def _assert_temporal_inventory_schema(connection) -> None:
             raise AssertionError(f"inventory_events.{column_name} must be NOT NULL")
 
     indexes = {
-        str(index.get("name") or ""): tuple(index.get("column_names") or ())
+        str(index.get("name") or ""): index
         for index in inspector.get_indexes("inventory_events")
     }
     for index_name, expected_columns in EXPECTED_TEMPORAL_INDEXES.items():
-        if indexes.get(index_name) != expected_columns:
+        index = indexes.get(index_name)
+        actual_columns = tuple((index or {}).get("column_names") or ())
+        actual_unique = bool((index or {}).get("unique"))
+        if not index or actual_columns != expected_columns or actual_unique:
             raise AssertionError(
-                f"Invalid {index_name}: expected={expected_columns!r} "
-                f"actual={indexes.get(index_name)!r}"
+                f"Invalid {index_name}: expected_columns={expected_columns!r} "
+                f"expected_unique=False actual_columns={actual_columns!r} "
+                f"actual_unique={actual_unique}"
             )
 
     if not bool(_column(inspector, "inventory", "space_id")["nullable"]):

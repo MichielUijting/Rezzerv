@@ -12,6 +12,7 @@ inventory location nullability: space_id and sublocation_id remain nullable by d
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
+import re
 from typing import Any, Sequence, Union
 
 import sqlalchemy as sa
@@ -197,11 +198,28 @@ def _backfill_inventory_events(bind: sa.engine.Connection) -> None:
         })
 
 
-def _index_contract(inspector: sa.Inspector) -> dict[str, tuple[str, ...]]:
+def _index_contract(inspector: sa.Inspector) -> dict[str, dict[str, Any]]:
     return {
-        str(item.get("name") or ""): tuple(item.get("column_names") or ())
+        str(item.get("name") or ""): item
         for item in inspector.get_indexes("inventory_events")
     }
+
+
+def _validate_temporal_index(
+    index_name: str,
+    index: dict[str, Any] | None,
+    expected_columns: tuple[str, ...],
+) -> None:
+    if not index:
+        raise RuntimeError(f"Inventory temporal index ontbreekt: {index_name}")
+    actual_columns = tuple(index.get("column_names") or ())
+    actual_unique = bool(index.get("unique"))
+    if actual_columns != expected_columns or actual_unique:
+        raise RuntimeError(
+            f"Inventory temporal index drift: {index_name} "
+            f"expected_columns={expected_columns!r} expected_unique=False "
+            f"actual_columns={actual_columns!r} actual_unique={actual_unique}"
+        )
 
 
 def _ensure_indexes(bind: sa.engine.Connection) -> None:
@@ -215,11 +233,8 @@ def _ensure_indexes(bind: sa.engine.Connection) -> None:
         actual = indexes.get(index_name)
         if actual is None:
             op.create_index(index_name, "inventory_events", list(columns), unique=False)
-        elif actual != columns:
-            raise RuntimeError(
-                f"Inventory temporal index drift: {index_name} "
-                f"expected={columns!r} actual={actual!r}"
-            )
+        else:
+            _validate_temporal_index(index_name, actual, columns)
 
 
 def _locationless_index_sql(bind: sa.engine.Connection) -> str | None:
@@ -246,6 +261,20 @@ def _locationless_index_sql(bind: sa.engine.Connection) -> str | None:
     raise RuntimeError(f"Unsupported Rezzerv migration dialect: {bind.dialect.name}")
 
 
+def _normalized_predicate_terms(index_sql: str | None) -> frozenset[str]:
+    raw = str(index_sql or "")
+    where_match = re.search(r"\bwhere\b", raw, flags=re.IGNORECASE)
+    if not where_match:
+        return frozenset()
+    predicate = raw[where_match.end():].lower().replace('"', '')
+    predicate = re.sub(r"::[a-z_][a-z0-9_]*", "", predicate)
+    return frozenset(
+        re.sub(r"[\s()]+", "", term)
+        for term in re.split(r"\s+and\s+", predicate)
+        if term.strip()
+    )
+
+
 def _validate_locationless_identity_index(bind: sa.engine.Connection) -> None:
     inspector = sa.inspect(bind)
     indexes = {
@@ -261,19 +290,17 @@ def _validate_locationless_identity_index(bind: sa.engine.Connection) -> None:
         raise RuntimeError("Canonical locationless inventory index wijkt af in uniqueness/kolommen")
 
     index_sql = _locationless_index_sql(bind)
-    normalized = " ".join(str(index_sql or "").lower().replace('"', '').split())
-    for fragment in (
-        "household_article_id is not null",
-        "space_id is null",
-        "sublocation_id is null",
-        "status",
-        "'active'",
-    ):
-        if fragment not in normalized:
-            raise RuntimeError(
-                "Canonical locationless inventory index wijkt af: "
-                f"missing={fragment!r} index={index_sql!r}"
-            )
+    expected_terms = _normalized_predicate_terms(
+        f"CREATE INDEX canonical ON inventory (household_id, household_article_id) "
+        f"WHERE {_LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE}"
+    )
+    actual_terms = _normalized_predicate_terms(index_sql)
+    if actual_terms != expected_terms:
+        raise RuntimeError(
+            "Canonical locationless inventory index predicate wijkt af: "
+            f"expected={sorted(expected_terms)!r} actual={sorted(actual_terms)!r} "
+            f"index={index_sql!r}"
+        )
 
 
 def _ensure_locationless_identity_index(bind: sa.engine.Connection) -> None:
@@ -349,10 +376,7 @@ def _validate_contract(bind: sa.engine.Connection) -> None:
         _SOURCE_REFERENCE_INDEX: _SOURCE_REFERENCE_COLUMNS,
     }
     for index_name, expected_columns in expected_indexes.items():
-        if indexes.get(index_name) != expected_columns:
-            raise RuntimeError(
-                f"Inventory temporal index ontbreekt of wijkt af: {index_name}"
-            )
+        _validate_temporal_index(index_name, indexes.get(index_name), expected_columns)
 
     if not inspector.has_table("inventory"):
         raise RuntimeError("inventory table ontbreekt")

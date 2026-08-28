@@ -10,6 +10,7 @@ independent from receipt import order while preserving the existing location mod
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from fastapi import HTTPException
@@ -23,6 +24,12 @@ from app.services.temporal_inventory_service import (
 
 
 LOCATIONLESS_ACTIVE_IDENTITY_INDEX = "uq_inventory_active_locationless_household_article"
+LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE = (
+    "COALESCE(status, 'active') = 'active' "
+    "AND household_article_id IS NOT NULL "
+    "AND space_id IS NULL "
+    "AND sublocation_id IS NULL"
+)
 
 
 def _normalize(value: object | None) -> str:
@@ -112,6 +119,20 @@ def _locationless_index_sql(conn) -> str | None:
     raise RuntimeError(f"Unsupported Rezzerv inventory identity dialect: {dialect}")
 
 
+def _normalized_predicate_terms(index_sql: str | None) -> frozenset[str]:
+    raw = str(index_sql or "")
+    where_match = re.search(r"\bwhere\b", raw, flags=re.IGNORECASE)
+    if not where_match:
+        return frozenset()
+    predicate = raw[where_match.end():].lower().replace('"', '')
+    predicate = re.sub(r"::[a-z_][a-z0-9_]*", "", predicate)
+    return frozenset(
+        re.sub(r"[\s()]+", "", term)
+        for term in re.split(r"\s+and\s+", predicate)
+        if term.strip()
+    )
+
+
 def ensure_locationless_inventory_identity_guard(conn) -> None:
     """Validate the migration-owned active NULL/NULL inventory identity guard."""
     if not _table_exists(conn, "inventory"):
@@ -177,19 +198,17 @@ def ensure_locationless_inventory_identity_guard(conn) -> None:
         raise RuntimeError(
             f"Canonical locationless inventory indexdef ontbreekt: {LOCATIONLESS_ACTIVE_IDENTITY_INDEX}"
         )
-    normalized = " ".join(str(index_sql).lower().replace('"', '').split())
-    for fragment in (
-        "household_article_id is not null",
-        "space_id is null",
-        "sublocation_id is null",
-        "status",
-        "'active'",
-    ):
-        if fragment not in normalized:
-            raise RuntimeError(
-                "Canonical locationless inventory index wijkt af: "
-                f"missing={fragment!r} index={index_sql!r}"
-            )
+    expected_terms = _normalized_predicate_terms(
+        f"CREATE INDEX canonical ON inventory (household_id, household_article_id) "
+        f"WHERE {LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE}"
+    )
+    actual_terms = _normalized_predicate_terms(index_sql)
+    if actual_terms != expected_terms:
+        raise RuntimeError(
+            "Canonical locationless inventory index predicate wijkt af: "
+            f"expected={sorted(expected_terms)!r} actual={sorted(actual_terms)!r} "
+            f"index={index_sql!r}"
+        )
 
 
 def _temporal_ledger_available_for_article(conn, household_id: str, household_article_id: str) -> bool:

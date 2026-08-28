@@ -9085,7 +9085,7 @@ def resolve_or_create_inventory_household_article(
             WHERE household_id = :household_id
               AND lower(trim(COALESCE(custom_name, naam))) = lower(trim(:article_name))
               AND COALESCE(status, 'active') = 'active'
-            ORDER BY datetime(created_at) ASC, id ASC
+            ORDER BY created_at ASC, id ASC
             LIMIT 2
             """
         ),

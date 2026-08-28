@@ -140,3 +140,20 @@ def test_missing_locationless_index_fails_closed_without_runtime_schema_mutation
             text("SELECT 1 FROM sqlite_master WHERE type='index' AND name=:name"),
             {"name": LOCATIONLESS_ACTIVE_IDENTITY_INDEX},
         ).scalar() is None
+
+def test_wrong_locationless_predicate_is_rejected_even_with_matching_tokens():
+    engine = _engine()
+    with engine.begin() as conn:
+        _seed_schema(conn, with_identity_index=False)
+        conn.execute(text(f"""
+            CREATE UNIQUE INDEX {LOCATIONLESS_ACTIVE_IDENTITY_INDEX}
+            ON inventory (household_id, household_article_id)
+            WHERE COALESCE(status, 'active') <> 'active'
+              AND household_article_id IS NOT NULL
+              AND space_id IS NULL
+              AND sublocation_id IS NULL
+        """))
+
+        with pytest.raises(RuntimeError, match="predicate wijkt af"):
+            ensure_locationless_inventory_identity_guard(conn)
+

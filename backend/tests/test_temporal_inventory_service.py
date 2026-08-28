@@ -432,3 +432,48 @@ def test_unpacking_uses_exact_receipt_purchase_time_not_batch_date_label():
     assert event['source_line_id'] == 'L1'
     assert int(event['old_quantity']) == 0
     assert int(event['new_quantity']) == 3
+
+def test_runtime_guard_rejects_unique_temporal_index_lookalike():
+    conn = _connection()
+    conn.execute(text("DROP INDEX idx_inventory_events_temporal_order"))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX idx_inventory_events_temporal_order "
+        "ON inventory_events (household_id, household_article_id, effective_at, event_priority, id)"
+    ))
+    with pytest.raises(RuntimeError, match="expected_unique=False"):
+        ensure_temporal_inventory_schema(conn)
+
+
+def test_migration_rejects_existing_unique_temporal_index_lookalike():
+    conn = _connection(migrate=False)
+    for ddl in (
+        "ALTER TABLE inventory_events ADD COLUMN effective_at TEXT",
+        "ALTER TABLE inventory_events ADD COLUMN recorded_at TEXT",
+        "ALTER TABLE inventory_events ADD COLUMN effective_at_precision TEXT NOT NULL DEFAULT 'datetime'",
+        "ALTER TABLE inventory_events ADD COLUMN event_priority INTEGER NOT NULL DEFAULT 100",
+        "ALTER TABLE inventory_events ADD COLUMN source_reference TEXT",
+        "ALTER TABLE inventory_events ADD COLUMN source_line_id TEXT",
+        "ALTER TABLE inventory_events ADD COLUMN replayed_at TEXT",
+    ):
+        conn.execute(text(ddl))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX idx_inventory_events_temporal_order "
+        "ON inventory_events (household_id, household_article_id, effective_at, event_priority, id)"
+    ))
+    with pytest.raises(RuntimeError, match="expected_unique=False"):
+        _upgrade_temporal_schema(conn)
+
+
+def test_migration_rejects_wrong_locationless_predicate():
+    conn = _connection(migrate=False)
+    conn.execute(text("DROP INDEX uq_inventory_active_locationless_household_article"))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX uq_inventory_active_locationless_household_article "
+        "ON inventory (household_id, household_article_id) "
+        "WHERE COALESCE(status, 'active') <> 'active' "
+        "AND household_article_id IS NOT NULL "
+        "AND space_id IS NULL AND sublocation_id IS NULL"
+    ))
+    with pytest.raises(RuntimeError, match="predicate wijkt af"):
+        _upgrade_temporal_schema(conn)
+
