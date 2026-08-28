@@ -27,6 +27,34 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def validate_user_account_status_schema(conn: Connection) -> None:
+    """Fail closed when Alembic has not installed account suspension columns."""
+
+    inspector = inspect(conn)
+    if not inspector.has_table("app_users"):
+        raise RuntimeError("app_users ontbreekt")
+    columns = {
+        str(column.get("name") or "").strip().lower()
+        for column in inspector.get_columns("app_users")
+    }
+    missing_columns = sorted({"account_status", "suspended_at"} - columns)
+    if missing_columns:
+        raise RuntimeError(
+            "app_users schema drift; ontbrekende kolommen: "
+            + ", ".join(missing_columns)
+        )
+
+
+def normalize_user_account_status_data(conn: Connection) -> None:
+    """Normalize legacy empty statuses using DML only after schema validation."""
+
+    conn.execute(text("""
+        UPDATE app_users
+        SET account_status = 'active'
+        WHERE account_status IS NULL OR trim(account_status) = ''
+    """))
+
+
 def ensure_user_account_status_schema(conn: Connection) -> None:
     inspector = inspect(conn)
     if not inspector.has_table("app_users"):

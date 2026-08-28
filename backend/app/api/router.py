@@ -42,10 +42,11 @@ from app.db import engine
 from app.services import receipt_parser_quality_patch
 from app.services import receipt_loyalty_line_patch
 from app.services import receipt_g1_merge
-from app.services.platform_feature_flag_service import ensure_platform_feature_flag_schema
+from app.services.platform_feature_flag_service import validate_platform_feature_flag_schema
 from app.services.platform_user_suspension_service import (
-    ensure_user_account_status_schema,
     install_server_session_suspension_guard,
+    normalize_user_account_status_data,
+    validate_user_account_status_schema,
 )
 
 # app.main imports this module only after its legacy routes have been declared.
@@ -58,16 +59,15 @@ household_invitation_acceptance_router = create_household_invitation_acceptance_
 legacy_household_member_creation_closure_router = create_legacy_household_member_creation_closure_router()
 session_household_router = create_session_household_router(engine)
 
-# Platform feature-flag persistence is initialized once during backend startup.
-# GET requests never create schema or seed default rows.
+# Alembic owns platform feature-flag persistence; runtime startup validates only.
 with engine.begin() as schema_conn:
-    ensure_platform_feature_flag_schema(schema_conn)
+    validate_platform_feature_flag_schema(schema_conn)
 
-# Account suspension is canonical identity authority. Existing accounts are
-# migrated idempotently to active status before requests are accepted, and the
-# cookie-login resolver is guarded without changing household or role state.
+# Account suspension schema is Alembic-owned. Runtime startup validates the
+# columns and may normalize legacy empty values with DML only.
 with engine.begin() as schema_conn:
-    ensure_user_account_status_schema(schema_conn)
+    validate_user_account_status_schema(schema_conn)
+    normalize_user_account_status_data(schema_conn)
 install_server_session_suspension_guard()
 
 api_router = APIRouter()

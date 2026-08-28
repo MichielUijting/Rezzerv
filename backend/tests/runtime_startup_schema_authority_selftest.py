@@ -6,6 +6,7 @@ import re
 
 
 MAIN_PATH = Path(__file__).resolve().parents[1] / "app" / "main.py"
+ROUTER_PATH = Path(__file__).resolve().parents[1] / "app" / "api" / "router.py"
 DDL_PATTERN = re.compile(
     r"\b(?:CREATE\s+(?:TABLE|INDEX)|ALTER\s+TABLE|DROP\s+(?:TABLE|INDEX)|PRAGMA\s+table_info)\b",
     flags=re.IGNORECASE,
@@ -68,6 +69,16 @@ def main() -> None:
             continue
         if short_name in local_schema_mutators or short_name in IMPORTED_SCHEMA_MUTATORS:
             violations.append(call_name or short_name)
+
+    router_source = ROUTER_PATH.read_text(encoding="utf-8")
+    router_module = ast.parse(router_source, filename=str(ROUTER_PATH))
+    for node in _startup_nodes(router_module):
+        if not isinstance(node, ast.Call):
+            continue
+        call_name = _call_name(node.func)
+        short_name = call_name.rsplit(".", 1)[-1]
+        if short_name.startswith("ensure_") and short_name.endswith("_schema"):
+            violations.append(f"router:{call_name or short_name}")
 
     if violations:
         raise AssertionError(
