@@ -40,6 +40,7 @@ jobs:
       RECEIPT_STORAGE_ROOT: /tmp/rezzerv-receipts/raw
       REZZERV_RECEIPT_STARTUP_REMBG_WARMUP: 'false'
       REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
 
     steps:
       - name: Checkout

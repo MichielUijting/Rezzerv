@@ -11,6 +11,7 @@ from app.services.day_article_service import (
     record_direct_consumption,
     set_default_inventory_handling,
 )
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def main() -> None:
@@ -43,6 +44,7 @@ def main() -> None:
             INSERT INTO household_articles (id, household_id, naam)
             VALUES ('article-1', 'household-1', 'Verse broodjes')
         """))
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
 
         initial = get_default_inventory_handling(conn, "household-1", "article-1")
