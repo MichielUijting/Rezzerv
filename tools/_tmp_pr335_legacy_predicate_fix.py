@@ -23,6 +23,14 @@ replace_once(
 
 test_path = Path('backend/tests/test_temporal_inventory_service.py')
 test_source = test_path.read_text(encoding='utf-8')
+old_import = 'from app.services.canonical_inventory_identity_service import apply_inventory_purchase_by_identity\n'
+new_import = '''from app.services.canonical_inventory_identity_service import (\n    apply_inventory_purchase_by_identity,\n    ensure_locationless_inventory_identity_guard,\n)\n'''
+if new_import not in test_source:
+    if test_source.count(old_import) != 1:
+        raise SystemExit(f'test import anchor count={test_source.count(old_import)}')
+    test_source = test_source.replace(old_import, new_import, 1)
+
 addition = '''\n\ndef test_migration_normalizes_known_legacy_locationless_predicate():\n    conn = _connection(migrate=False)\n    conn.execute(text("DROP INDEX uq_inventory_active_locationless_household_article"))\n    conn.execute(text(\n        "CREATE UNIQUE INDEX uq_inventory_active_locationless_household_article "\n        "ON inventory (household_id, household_article_id) "\n        "WHERE status = 'active' "\n        "AND household_article_id IS NOT NULL "\n        "AND space_id IS NULL AND sublocation_id IS NULL"\n    ))\n\n    _upgrade_temporal_schema(conn)\n\n    index_sql = conn.execute(text(\n        "SELECT sql FROM sqlite_master "\n        "WHERE type='index' AND name='uq_inventory_active_locationless_household_article'"\n    )).scalar_one()\n    normalized = "".join(str(index_sql).lower().split())\n    assert "coalesce(status,'active')='active'" in normalized\n    ensure_locationless_inventory_identity_guard(conn)\n'''
 if 'test_migration_normalizes_known_legacy_locationless_predicate' not in test_source:
-    test_path.write_text(test_source.rstrip() + addition + '\n', encoding='utf-8')
+    test_source = test_source.rstrip() + addition + '\n'
+test_path.write_text(test_source, encoding='utf-8')
