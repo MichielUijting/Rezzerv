@@ -37,6 +37,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
       MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
+      RECEIPT_STORAGE_ROOT: /tmp/rezzerv-receipts/raw
       REZZERV_RECEIPT_STARTUP_REMBG_WARMUP: 'false'
       REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP: 'false'
 
