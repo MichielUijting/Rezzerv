@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install minimal dependencies
-        run: python -m pip install --quiet pytest sqlalchemy fastapi pydantic
+        run: python -m pip install --quiet pytest sqlalchemy fastapi pydantic "$(grep '^alembic==' backend/requirements.txt)"
       - name: Compile temporal inventory and scanner-boundary tests
         run: >-
           python -m compileall -q
