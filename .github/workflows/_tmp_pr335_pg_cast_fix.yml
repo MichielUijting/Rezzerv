@@ -1,0 +1,91 @@
+name: Temporary PR335 PostgreSQL cast normalization fix
+
+on:
+  push:
+    branches:
+      - codex/postgresql-inventory-temporal-authority-cutover
+    paths:
+      - '.github/workflows/_tmp_pr335_pg_cast_fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  pg-cast-fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Normalize PostgreSQL multi-word casts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = (
+              Path('backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py'),
+              Path('backend/app/services/canonical_inventory_identity_service.py'),
+          )
+          old = '    predicate = re.sub(r"::[a-z_][a-z0-9_]*", "", predicate)\n'
+          new = (
+              '    predicate = re.sub(r"::character\\s+varying\\b", "", predicate)\n'
+              '    predicate = re.sub(r"::[a-z_][a-z0-9_]*", "", predicate)\n'
+          )
+          for path in paths:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one cast-normalizer anchor, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Compile changed Python
+        run: |
+          python -m py_compile \
+            backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py \
+            backend/app/services/canonical_inventory_identity_service.py
+      - name: Prove exact PostgreSQL predicate serialization normalizes canonically
+        env:
+          PYTHONPATH: backend
+        run: |
+          python - <<'PY'
+          from app.services.canonical_inventory_identity_service import (
+              LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE,
+              _normalized_predicate_terms,
+          )
+
+          actual = """CREATE UNIQUE INDEX uq_inventory_active_locationless_household_article ON public.inventory USING btree (household_id, household_article_id) WHERE (((COALESCE(status, 'active'::character varying))::text = 'active'::text) AND (household_article_id IS NOT NULL) AND (space_id IS NULL) AND (sublocation_id IS NULL))"""
+          expected = (
+              'CREATE INDEX canonical ON inventory (household_id, household_article_id) WHERE '
+              + LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE
+          )
+          assert _normalized_predicate_terms(actual) == _normalized_predicate_terms(expected)
+          print('POSTGRESQL_MULTIWORD_CAST_NORMALIZATION_GREEN')
+          PY
+      - name: Install targeted dependencies
+        run: |
+          python -m pip install --quiet pytest \
+            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
+            "$(grep '^alembic==' backend/requirements.txt)" fastapi pydantic
+      - name: Run targeted inventory regressions
+        env:
+          PYTHONPATH: backend
+        run: |
+          pytest -q \
+            backend/tests/test_locationless_inventory_identity_guard.py \
+            backend/tests/test_temporal_inventory_service.py
+      - name: Prove whitespace diff is clean
+        run: git diff --check
+      - name: Commit code only
+        run: |
+          git config user.name 'rezzerv-ci-bot'
+          git config user.email 'rezzerv-ci-bot@users.noreply.github.com'
+          git add -- \
+            backend/alembic/versions/20260828_03_inventory_temporal_schema_authority.py \
+            backend/app/services/canonical_inventory_identity_service.py
+          git diff --cached --check
+          git commit -m 'Normalize PostgreSQL inventory predicate casts'
+          git push origin HEAD:${{ github.ref_name }}
