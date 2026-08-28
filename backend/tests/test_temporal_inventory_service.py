@@ -1,6 +1,11 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import importlib.util
+from pathlib import Path
 
+import pytest
+from alembic.operations import Operations
+from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, text
 
 from app.services.canonical_inventory_identity_service import apply_inventory_purchase_by_identity
@@ -14,7 +19,25 @@ from app.services.temporal_inventory_service import (
 )
 
 
-def _connection():
+MIGRATION_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "alembic"
+    / "versions"
+    / "20260828_03_inventory_temporal_schema_authority.py"
+)
+
+
+def _upgrade_temporal_schema(conn) -> None:
+    spec = importlib.util.spec_from_file_location("inventory_temporal_authority", MIGRATION_PATH)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    context = MigrationContext.configure(conn)
+    with Operations.context(context):
+        migration.upgrade()
+
+
+def _connection(*, migrate: bool = True):
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     conn = engine.connect()
     conn.execute(text(
@@ -43,6 +66,33 @@ def _connection():
         )
         """
     ))
+    conn.execute(text(
+        """
+        CREATE TABLE inventory (
+            id TEXT PRIMARY KEY,
+            naam TEXT NOT NULL,
+            aantal INTEGER NOT NULL,
+            household_id TEXT NOT NULL,
+            household_article_id TEXT,
+            space_id TEXT,
+            sublocation_id TEXT,
+            status TEXT DEFAULT 'active',
+            updated_at TEXT
+        )
+        """
+    ))
+    conn.execute(text(
+        """
+        CREATE UNIQUE INDEX uq_inventory_active_locationless_household_article
+        ON inventory (household_id, household_article_id)
+        WHERE COALESCE(status, 'active') = 'active'
+          AND household_article_id IS NOT NULL
+          AND space_id IS NULL
+          AND sublocation_id IS NULL
+        """
+    ))
+    if migrate:
+        _upgrade_temporal_schema(conn)
     return conn
 
 
@@ -130,8 +180,8 @@ def test_late_receipt_is_inserted_before_later_consumption():
     ]
 
 
-def test_existing_purchase_date_is_backfilled_as_effective_time():
-    conn = _connection()
+def test_existing_purchase_date_is_backfilled_by_alembic_as_effective_time():
+    conn = _connection(migrate=False)
     conn.execute(text(
         """
         INSERT INTO inventory_events (
@@ -143,7 +193,7 @@ def test_existing_purchase_date_is_backfilled_as_effective_time():
         )
         """
     ))
-    ensure_temporal_inventory_schema(conn)
+    _upgrade_temporal_schema(conn)
     row = conn.execute(text(
         "SELECT effective_at, recorded_at, effective_at_precision, event_priority FROM inventory_events WHERE id='legacy'"
     )).mappings().one()
@@ -153,8 +203,8 @@ def test_existing_purchase_date_is_backfilled_as_effective_time():
     assert int(row["event_priority"]) == 10
 
 
-def test_legacy_dutch_date_is_normalized_for_temporal_ordering():
-    conn = _connection()
+def test_legacy_dutch_date_is_normalized_by_alembic_for_temporal_ordering():
+    conn = _connection(migrate=False)
     conn.execute(text(
         """
         INSERT INTO inventory_events (
@@ -166,12 +216,25 @@ def test_legacy_dutch_date_is_normalized_for_temporal_ordering():
         )
         """
     ))
-    ensure_temporal_inventory_schema(conn)
+    _upgrade_temporal_schema(conn)
     row = conn.execute(text(
         "SELECT effective_at, effective_at_precision FROM inventory_events WHERE id='legacy-nl'"
     )).mappings().one()
     assert str(row["effective_at"]).startswith("2026-08-02T00:00:00")
     assert row["effective_at_precision"] == "date"
+
+
+def test_runtime_temporal_guard_is_validation_only_and_does_not_mutate_legacy_schema():
+    conn = _connection(migrate=False)
+    before = tuple(conn.execute(text(
+        "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name"
+    )).all())
+    with pytest.raises(RuntimeError, match="niet gemigreerd"):
+        ensure_temporal_inventory_schema(conn)
+    after = tuple(conn.execute(text(
+        "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name"
+    )).all())
+    assert after == before
 
 
 def _create_projection_tables(conn):
@@ -182,21 +245,6 @@ def _create_projection_tables(conn):
             household_id TEXT NOT NULL,
             naam TEXT NOT NULL,
             status TEXT DEFAULT 'active'
-        )
-        """
-    ))
-    conn.execute(text(
-        """
-        CREATE TABLE inventory (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            aantal INTEGER NOT NULL,
-            household_id TEXT NOT NULL,
-            household_article_id TEXT,
-            space_id TEXT,
-            sublocation_id TEXT,
-            status TEXT DEFAULT 'active',
-            updated_at TEXT
         )
         """
     ))
@@ -211,15 +259,17 @@ def test_canonical_purchase_flow_reconciles_visible_stock_after_late_receipt():
         "VALUES ('I1','Melk',1,'H1','A1','S1','active')"
     ))
 
-    # The database already reflects a newer purchase (+2) followed by consumption (-1).
     conn.execute(text(
         """
         INSERT INTO inventory_events (
             id, household_id, article_id, household_article_id, article_name,
-            event_type, quantity, source, purchase_date, created_at
+            event_type, quantity, source, purchase_date, created_at,
+            effective_at, recorded_at, effective_at_precision, event_priority
         ) VALUES
-            ('newer', 'H1', 'A1', 'A1', 'Melk', 'purchase', 2, 'receipt', '06-08-2026', '2026-08-06 12:00:00'),
-            ('consume', 'H1', 'A1', 'A1', 'Melk', 'consume', 1, 'usage', NULL, '2026-08-07 08:00:00')
+            ('newer', 'H1', 'A1', 'A1', 'Melk', 'purchase', 2, 'receipt', '06-08-2026', '2026-08-06 12:00:00',
+             '2026-08-06T00:00:00+00:00', '2026-08-06T12:00:00+00:00', 'date', 10),
+            ('consume', 'H1', 'A1', 'A1', 'Melk', 'consume', 1, 'usage', NULL, '2026-08-07 08:00:00',
+             '2026-08-07T08:00:00+00:00', '2026-08-07T08:00:00+00:00', 'datetime', 40)
         """
     ))
 
@@ -227,10 +277,12 @@ def test_canonical_purchase_flow_reconciles_visible_stock_after_late_receipt():
         """
         INSERT INTO inventory_events (
             id, household_id, article_id, household_article_id, article_name,
-            event_type, quantity, source, purchase_date, created_at
+            event_type, quantity, source, purchase_date, created_at,
+            effective_at, recorded_at, effective_at_precision, event_priority
         ) VALUES (
             'late-old', 'H1', 'A1', 'A1', 'Melk', 'purchase', 3,
-            'receipt', '04-08-2026', '2026-08-08 09:00:00'
+            'receipt', '04-08-2026', '2026-08-08 09:00:00',
+            '2026-08-04T00:00:00+00:00', '2026-08-08T09:00:00+00:00', 'date', 10
         )
         """
     ))
@@ -266,21 +318,6 @@ def test_canonical_purchase_flow_reconciles_visible_stock_after_late_receipt():
 
 def test_reconcile_repairs_projection_even_when_import_side_effect_was_wrong():
     conn = _connection()
-    conn.execute(text(
-        """
-        CREATE TABLE inventory (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            aantal INTEGER NOT NULL,
-            household_id TEXT NOT NULL,
-            household_article_id TEXT,
-            space_id TEXT,
-            sublocation_id TEXT,
-            status TEXT DEFAULT 'active',
-            updated_at TEXT
-        )
-        """
-    ))
     conn.execute(text(
         "INSERT INTO inventory (id, naam, aantal, household_id, household_article_id, space_id, status) "
         "VALUES ('I1','Melk',99,'H1','A1','S1','active')"
@@ -360,14 +397,15 @@ def test_unpacking_uses_exact_receipt_purchase_time_not_batch_date_label():
         )
         """
     ))
-    # Existing Uitpakken behavior: event gets only a date label first.
     conn.execute(text(
         """
         INSERT INTO inventory_events (
             id, household_id, article_id, household_article_id, article_name, location_id,
-            event_type, quantity, source, purchase_date, created_at
+            event_type, quantity, source, purchase_date, created_at,
+            effective_at, recorded_at, effective_at_precision, event_priority
         ) VALUES (
-            'E1','H1','A1','A1','Melk','S1','purchase',3,'store_import','2026-08-04','2026-08-08 09:00:01'
+            'E1','H1','A1','A1','Melk','S1','purchase',3,'store_import','2026-08-04','2026-08-08 09:00:01',
+            '2026-08-04T00:00:00+00:00','2026-08-08T09:00:01+00:00','date',10
         )
         """
     ))
