@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.services.external_article_product_link_domain_service import (
     confirm_global_external_article_product_link,
@@ -20,19 +20,7 @@ def _clean(value: Any) -> str:
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    return bool(
-        conn.execute(
-            text(
-                """
-                SELECT 1
-                FROM sqlite_master
-                WHERE type = 'table' AND name = :name
-                LIMIT 1
-                """
-            ),
-            {"name": table_name},
-        ).scalar()
-    )
+    return bool(inspect(conn).has_table(table_name))
 
 
 def _candidate_identity(conn, receipt_item_id: str, source_id: str) -> dict[str, Any] | None:
