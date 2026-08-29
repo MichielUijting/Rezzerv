@@ -2,8 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import text
 
 from app.api import platform_feature_flags_routes
 from app.services import session_request_context
@@ -11,11 +10,10 @@ from app.services.authorization_foundation_service import ensure_authorization_f
 from app.services.external_database_route_authorization import authorize_external_database_request
 from app.services.platform_feature_flag_service import (
     FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH,
-    ensure_platform_feature_flag_schema,
     set_platform_feature_flag,
 )
 from app.services.server_session_service import ServerSessionContext
-from app.testing.authorization_schema_fixture import install_authorization_schema
+from tests.platform_feature_flag_migrated_fixture import migrated_platform_feature_flag_engine
 
 
 FEATURE_FLAGS_PERMISSION = "platform.feature_flags.manage"
@@ -23,15 +21,9 @@ FEATURE_FLAGS_PERMISSION = "platform.feature_flags.manage"
 
 @pytest.fixture
 def auth_engine():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = migrated_platform_feature_flag_engine()
     with engine.begin() as conn:
-        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
-        ensure_platform_feature_flag_schema(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES
