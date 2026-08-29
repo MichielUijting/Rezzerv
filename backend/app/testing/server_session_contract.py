@@ -28,7 +28,7 @@ def create_server_session_contract_schema(conn: Connection) -> None:
     conn.execute(text("UPDATE household_registry SET context_type = 'system' WHERE CAST(id AS TEXT) = '0'"))
 
     conn.execute(text("""
-        CREATE TABLE frontteam_personal_households (
+        CREATE TABLE IF NOT EXISTS frontteam_personal_households (
             user_id TEXT PRIMARY KEY,
             household_id TEXT NOT NULL UNIQUE,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -36,7 +36,7 @@ def create_server_session_contract_schema(conn: Connection) -> None:
         )
     """))
     conn.execute(text("""
-        CREATE TABLE household_onboarding (
+        CREATE TABLE IF NOT EXISTS household_onboarding (
             household_id TEXT PRIMARY KEY,
             onboarding_status TEXT NOT NULL DEFAULT 'not_started',
             onboarding_version INTEGER NOT NULL DEFAULT 2,
