@@ -66,6 +66,7 @@ def _prepare_database(engine) -> None:
             CREATE TABLE household_registry (
                 id TEXT PRIMARY KEY,
                 naam TEXT NOT NULL,
+                context_type TEXT NOT NULL DEFAULT 'regular',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """))
@@ -90,6 +91,8 @@ def _prepare_database(engine) -> None:
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
+                account_status TEXT NOT NULL DEFAULT 'active',
+                password_hash TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -274,7 +277,6 @@ def run() -> int:
             assert int(count) == 1
         checks.append("duplicate_email_case_insensitive_409")
 
-        before_counts = None
         with engine.begin() as conn:
             before_counts = (
                 int(conn.execute(text("SELECT COUNT(*) FROM app_users")).scalar_one()),
@@ -282,10 +284,7 @@ def run() -> int:
                 int(conn.execute(text("SELECT COUNT(*) FROM household_memberships")).scalar_one()),
             )
         try:
-            SessionRegisterRequest(
-                email="zwak@example.com",
-                password="kort",
-            )
+            SessionRegisterRequest(email="zwak@example.com", password="kort")
         except ValidationError:
             pass
         else:
