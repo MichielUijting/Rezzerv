@@ -57,6 +57,7 @@ jobs:
           python -m alembic -c backend/alembic.ini upgrade head
           python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-sqlite.log
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' /tmp/migration-sqlite.log
+          grep -F 'SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
           python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority.log
           grep -F 'SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN' /tmp/schema-authority.log
@@ -74,8 +75,10 @@ jobs:
           grep -F 'RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/receipt-lifecycle-authority.log
           python -m app.testing.external_article_product_link_contract | tee /tmp/external-link-contract.log
           grep -F 'EXTERNAL_ARTICLE_PRODUCT_LINK_CONTRACT=GREEN' /tmp/external-link-contract.log
-          python -m alembic -c backend/alembic.ini current
-          python -m alembic -c backend/alembic.ini heads
+          python -m alembic -c backend/alembic.ini current | tee /tmp/sqlite-current.log
+          grep -F '20260829_07' /tmp/sqlite-current.log
+          python -m alembic -c backend/alembic.ini heads | tee /tmp/sqlite-heads.log
+          grep -F '20260829_07' /tmp/sqlite-heads.log
 
   sqlite-existing-adoption:
     name: Existing SQLite baseline is validated and adopted
@@ -132,16 +135,20 @@ jobs:
             rezzerv-migration-runtime \
             sh -lc 'python -m app.schema_migration_preflight && python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /capture/current-runtime.sqlite > /capture/current-schema.sql && python tests/migration_foundation_selftest.py > /capture/migration-adoption.log && python -m alembic -c alembic.ini current > /capture/alembic-current.log && chmod 666 /capture/current-runtime.sqlite /capture/current-schema.sql /capture/migration-adoption.log /capture/alembic-current.log'
 
-      - name: Prove adoption preserved immutable baseline plus migration-owned session schema
+      - name: Prove adoption preserved immutable baseline plus migration-owned schema
         run: |
           gzip -dc backend/alembic/baseline_sqlite.sql.gz > "$RUNNER_TEMP/rezzerv-schema/baseline.sql"
           sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           test "$(sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" | cut -d' ' -f1)" = 'e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7'
           grep -F -- '-- table: server_sessions (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_server_sessions_user_active (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: external_product_candidates (table=external_product_candidates)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: external_product_index (table=external_product_index)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: external_relation_batch_decisions (table=external_relation_batch_decisions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260829_06' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260829_07' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -189,6 +196,7 @@ jobs:
           python -m alembic -c backend/alembic.ini upgrade head
           python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-postgresql.log
           grep -F 'MIGRATION_POSTGRESQL_LINEAGE_GREEN' /tmp/migration-postgresql.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
           python backend/tests/postgresql_inventory_writer_selftest.py | tee /tmp/postgresql-inventory-review.log
           grep -F 'POSTGRESQL_INVENTORY_WRITER_FALLBACK_GREEN' /tmp/postgresql-inventory-review.log
@@ -217,6 +225,13 @@ jobs:
           }
           missing = expected - indexes
           assert not missing, f'PostgreSQL external-link indexes ontbreken: {sorted(missing)}'
+
+          for table_name in (
+              'external_product_candidates',
+              'external_product_index',
+              'external_relation_batch_decisions',
+          ):
+              assert table_name in inspector.get_table_names(), table_name
 
           assert 'server_sessions' in inspector.get_table_names()
           session_indexes = {
@@ -260,8 +275,11 @@ jobs:
               }
           assert triggers == {'trg_receipt_tables_preserve_explicit_approval'}
           print('POSTGRESQL_EXTERNAL_LINK_SCHEMA_AUTHORITY_GREEN')
+          print('POSTGRESQL_EXTERNAL_CATALOG_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_SERVER_SESSION_SCHEMA_AUTHORITY_GREEN')
           print('POSTGRESQL_RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_GREEN')
           PY
-          python -m alembic -c backend/alembic.ini current
-          python -m alembic -c backend/alembic.ini heads
+          python -m alembic -c backend/alembic.ini current | tee /tmp/postgresql-current.log
+          grep -F '20260829_07' /tmp/postgresql-current.log
+          python -m alembic -c backend/alembic.ini heads | tee /tmp/postgresql-heads.log
+          grep -F '20260829_07' /tmp/postgresql-heads.log
