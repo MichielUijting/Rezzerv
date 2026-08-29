@@ -26,6 +26,7 @@ jobs:
 
           old = '20260829_06'
           new = '20260829_07'
+          self_path = Path('.github/workflows/pr337-head-revision-sync.yml')
           output = subprocess.check_output(
               ['git', 'grep', '-l', old, '--', '.'],
               text=True,
@@ -33,7 +34,7 @@ jobs:
           changed = []
           for raw_path in output.splitlines():
               path = Path(raw_path)
-              if str(path).startswith('backend/alembic/versions/'):
+              if path == self_path or str(path).startswith('backend/alembic/versions/'):
                   continue
               text = path.read_text(encoding='utf-8')
               count = text.count(old)
@@ -52,7 +53,7 @@ jobs:
 
       - name: Remove temporary workflow and commit
         run: |
-          git rm .github/workflows/pr337-head-revision-sync.yml
+          git rm -f .github/workflows/pr337-head-revision-sync.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
