@@ -32,9 +32,11 @@ on:
       - 'backend/app/services/household_product_use_case_service.py'
       - 'backend/app/services/loyalty_stamp_transaction_service.py'
       - 'backend/app/services/platform_authorization_management_service.py'
+      - 'backend/app/services/platform_feature_flag_service.py'
       - 'backend/app/services/product_inventory_group_store.py'
       - 'backend/app/services/product_taxonomy_store.py'
       - 'backend/app/services/shopping_list_service.py'
+      - 'backend/app/services/support_message_service.py'
       - 'backend/app/services/system_superuser_session_provisioning.py'
       - 'backend/app/services/external_*.py'
       - 'backend/app/services/open_food_facts_candidate_store.py'
@@ -53,6 +55,8 @@ on:
       - 'backend/tests/postgresql_household_invitation_dml_only_selftest.py'
       - 'backend/tests/postgresql_onboarding_use_case_sql_portability_selftest.py'
       - 'backend/tests/postgresql_onboarding_use_case_dml_only_selftest.py'
+      - 'backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py'
+      - 'backend/tests/postgresql_platform_feature_support_dml_only_selftest.py'
       - 'backend/tests/runtime_startup_schema_authority_selftest.py'
       - '.github/workflows/postgresql-runtime-startup-schema-authority.yml'
   workflow_dispatch:
@@ -186,12 +190,22 @@ jobs:
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_ALEMBIC_AUTHORITY_GREEN' /tmp/household-invitation-static.log
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/household-invitation-static.log
 
+      - name: Prove platform feature/support runtime SQL is schema-free and portable
+        run: |
+          python backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py | tee /tmp/platform-feature-support-static.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_SQL_PORTABLE_GREEN' /tmp/platform-feature-support-static.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_RUNTIME_DDL_ABSENT_GREEN' /tmp/platform-feature-support-static.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_VALIDATION_ONLY_SCHEMA_GREEN' /tmp/platform-feature-support-static.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_FLAG_FAIL_CLOSED_GREEN' /tmp/platform-feature-support-static.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_ALEMBIC_AUTHORITY_GREEN' /tmp/platform-feature-support-static.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/platform-feature-support-static.log
+
       - name: Migrate with dedicated Alembic role
         working-directory: backend
         run: |
           python -m app.schema_migration_preflight | tee /tmp/runtime-startup-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/runtime-startup-migration.log
-          grep -F "'revision': '20260829_13'" /tmp/runtime-startup-migration.log
+          grep -F "'revision': '20260829_14'" /tmp/runtime-startup-migration.log
 
       - name: Prove runtime role has no schema CREATE privilege
         run: |
@@ -292,6 +306,19 @@ jobs:
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_DELIVERY_DML_ONLY_GREEN' /tmp/household-invitation-dml-only.log
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_REVOKE_DML_ONLY_GREEN' /tmp/household-invitation-dml-only.log
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_AUTHORITY_SELFTEST_GREEN' /tmp/household-invitation-dml-only.log
+
+      - name: Prove platform feature/support request paths work with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_platform_feature_support_dml_only_selftest.py | tee /tmp/platform-feature-support-dml-only.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_RUNTIME_CREATE_DENIED_GREEN' /tmp/platform-feature-support-dml-only.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/platform-feature-support-dml-only.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_TYPES_GREEN' /tmp/platform-feature-support-dml-only.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_FLAG_DML_ONLY_GREEN' /tmp/platform-feature-support-dml-only.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_FLAG_SCHEMA_FAILURE_VISIBLE_GREEN' /tmp/platform-feature-support-dml-only.log
+          grep -F 'POSTGRESQL_SUPPORT_PERSISTENCE_DML_ONLY_GREEN' /tmp/platform-feature-support-dml-only.log
+          grep -F 'POSTGRESQL_SUPPORT_REPLY_ALLOWED_BOOLEAN_GREEN' /tmp/platform-feature-support-dml-only.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_AUTHORITY_SELFTEST_GREEN' /tmp/platform-feature-support-dml-only.log
 
       - name: Import full Rezzerv application without migration credential
         working-directory: backend

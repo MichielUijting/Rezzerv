@@ -3,7 +3,9 @@ name: Support message foundation validation
 on:
   pull_request:
     paths:
+      - 'backend/alembic/**'
       - 'backend/app/services/support_message_service.py'
+      - 'backend/tests/support_message_migrated_fixture.py'
       - 'backend/tests/test_support_message_service.py'
       - '.github/workflows/support-message-foundation-validation.yml'
 
@@ -25,7 +27,7 @@ jobs:
       - name: Install focused test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest sqlalchemy
+          python -m pip install pytest sqlalchemy alembic==1.19.1
 
       - name: Run support message contract tests
         env:

@@ -1,19 +1,18 @@
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.external_database_route_authorization import (
     authorize_external_database_request,
     required_external_database_permission,
 )
-from app.testing.authorization_schema_fixture import install_authorization_schema
+from tests.platform_feature_flag_migrated_fixture import migrated_platform_feature_flag_engine
 
 
 def build_connection():
-    engine = create_engine("sqlite:///:memory:")
+    engine = migrated_platform_feature_flag_engine()
     conn = engine.connect()
-    install_authorization_schema(conn)
     ensure_authorization_foundation(conn)
     conn.execute(text("""
         INSERT INTO auth_platform_user_roles(user_id, role_key, active)

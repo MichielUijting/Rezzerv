@@ -23,6 +23,7 @@ on:
       - 'backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py'
       - 'backend/tests/postgresql_gpc_residual_sql_authority_selftest.py'
       - 'backend/tests/postgresql_household_invitation_sql_authority_selftest.py'
+      - 'backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py'
       - 'backend/tests/postgresql_inventory_writer_selftest.py'
       - 'backend/tests/receipt_lifecycle_schema_authority_selftest.py'
       - 'backend/tests/schema_authority_cutover_selftest.py'
@@ -68,8 +69,9 @@ jobs:
           grep -F 'SQLITE_GPC_RESIDUAL_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
+          grep -F 'SQLITE_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_13_GREEN' /tmp/migration-sqlite.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_14_GREEN' /tmp/migration-sqlite.log
           python backend/tests/postgresql_authorization_sql_portability_selftest.py | tee /tmp/authorization-static.log
           grep -F 'POSTGRESQL_AUTHORIZATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/authorization-static.log
           python backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py | tee /tmp/gpc-barcode-static.log
@@ -80,6 +82,8 @@ jobs:
           grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/day-article-direct-static.log
           python backend/tests/postgresql_household_invitation_sql_authority_selftest.py | tee /tmp/household-invitation-static.log
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/household-invitation-static.log
+          python backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py | tee /tmp/platform-feature-support-static.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/platform-feature-support-static.log
           python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority.log
           grep -F 'SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN' /tmp/schema-authority.log
           grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority.log
@@ -97,9 +101,9 @@ jobs:
           python -m app.testing.external_article_product_link_contract | tee /tmp/external-link-contract.log
           grep -F 'EXTERNAL_ARTICLE_PRODUCT_LINK_CONTRACT=GREEN' /tmp/external-link-contract.log
           python -m alembic -c backend/alembic.ini current | tee /tmp/sqlite-current.log
-          grep -F '20260829_13' /tmp/sqlite-current.log
+          grep -F '20260829_14' /tmp/sqlite-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/sqlite-heads.log
-          grep -F '20260829_13' /tmp/sqlite-heads.log
+          grep -F '20260829_14' /tmp/sqlite-heads.log
 
   sqlite-existing-adoption:
     name: Existing SQLite baseline is validated and adopted
@@ -175,6 +179,10 @@ jobs:
           grep -F -- '-- table: gpc_translation_import_runs (table=gpc_translation_import_runs)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: day_article_processing_events (table=day_article_processing_events)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: household_invitations (table=household_invitations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: platform_feature_flags (table=platform_feature_flags)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: support_threads (table=support_threads)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: support_messages (table=support_messages)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: support_recipients (table=support_recipients)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_gpc_families_segment (table=gpc_families)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_gpc_classes_family (table=gpc_classes)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_gpc_bricks_class (table=gpc_bricks)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
@@ -185,15 +193,20 @@ jobs:
           grep -F -- '-- index: idx_sublocations_space_system_key (table=sublocations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_day_article_events_article (table=day_article_processing_events)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_household_invitations_household_status (table=household_invitations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- index: idx_support_threads_household_updated (table=support_threads)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- index: idx_support_threads_status_updated (table=support_threads)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- index: idx_support_messages_thread_created (table=support_messages)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- index: idx_support_recipients_admin (table=support_recipients)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_GPC_RESIDUAL_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'MIGRATION_FOUNDATION_REVISION_13_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'SQLITE_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'MIGRATION_FOUNDATION_REVISION_14_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260829_13' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260829_14' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -246,9 +259,10 @@ jobs:
           grep -F 'POSTGRESQL_GPC_RESIDUAL_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_AUTHORIZATION_BOOLEAN_SCHEMA_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_13_GREEN' /tmp/migration-postgresql.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_14_GREEN' /tmp/migration-postgresql.log
           python backend/tests/postgresql_authorization_sql_portability_selftest.py | tee /tmp/authorization-static.log
           grep -F 'POSTGRESQL_AUTHORIZATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/authorization-static.log
           python backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py | tee /tmp/gpc-barcode-static.log
@@ -259,6 +273,8 @@ jobs:
           grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/day-article-direct-static.log
           python backend/tests/postgresql_household_invitation_sql_authority_selftest.py | tee /tmp/household-invitation-static.log
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/household-invitation-static.log
+          python backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py | tee /tmp/platform-feature-support-static.log
+          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/platform-feature-support-static.log
           python backend/tests/postgresql_inventory_writer_selftest.py | tee /tmp/postgresql-inventory-review.log
           grep -F 'POSTGRESQL_INVENTORY_WRITER_FALLBACK_GREEN' /tmp/postgresql-inventory-review.log
           grep -F 'POSTGRESQL_LOCATIONLESS_PREDICATE_DRIFT_REJECTED_GREEN' /tmp/postgresql-inventory-review.log
@@ -313,6 +329,10 @@ jobs:
               'gpc_translation_import_runs',
               'day_article_processing_events',
               'household_invitations',
+              'platform_feature_flags',
+              'support_threads',
+              'support_messages',
+              'support_recipients',
           ):
               assert table_name in tables, table_name
 
@@ -330,6 +350,8 @@ jobs:
               ('auth_platform_user_roles', 'active'),
               ('spaces', 'protected'),
               ('sublocations', 'protected'),
+              ('platform_feature_flags', 'enabled'),
+              ('support_threads', 'reply_allowed'),
           ):
               auth_column = next(
                   item for item in inspector.get_columns(table_name)
@@ -356,6 +378,21 @@ jobs:
               'idx_household_invitations_expiry',
           ):
               assert required in invitation_indexes, required
+
+          feature_support_timestamps = {
+              'platform_feature_flags': ('updated_at',),
+              'support_threads': ('created_at', 'updated_at', 'closed_at'),
+              'support_messages': ('created_at',),
+              'support_recipients': ('read_at', 'created_at'),
+          }
+          for table_name, column_names in feature_support_timestamps.items():
+              column_map = {
+                  item['name']: item for item in inspector.get_columns(table_name)
+              }
+              for column_name in column_names:
+                  column_type = column_map[column_name]['type']
+                  assert isinstance(column_type, sa.DateTime), (table_name, column_name, column_type)
+                  assert bool(getattr(column_type, 'timezone', False)), (table_name, column_name, column_type)
 
           inventory_group_columns = {
               item['name'] for item in inspector.get_columns('product_inventory_groups')
@@ -433,11 +470,12 @@ jobs:
           print('POSTGRESQL_GPC_RESIDUAL_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_DAY_ARTICLE_DIRECT_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_HOUSEHOLD_INVITATION_MIGRATION_AUTHORITY_GREEN')
+          print('POSTGRESQL_PLATFORM_FEATURE_SUPPORT_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_AUTHORIZATION_BOOLEAN_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_SERVER_SESSION_SCHEMA_AUTHORITY_GREEN')
           print('POSTGRESQL_RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current | tee /tmp/postgresql-current.log
-          grep -F '20260829_13' /tmp/postgresql-current.log
+          grep -F '20260829_14' /tmp/postgresql-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/postgresql-heads.log
-          grep -F '20260829_13' /tmp/postgresql-heads.log
+          grep -F '20260829_14' /tmp/postgresql-heads.log

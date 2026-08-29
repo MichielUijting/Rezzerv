@@ -6,9 +6,9 @@ Existing permission checks remain authoritative and must run independently.
 
 from __future__ import annotations
 
+import sqlalchemy as sa
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import OperationalError, ProgrammingError
 
 
 FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH = "external_product_search"
@@ -32,33 +32,38 @@ def validate_platform_feature_flag_schema(conn: Connection) -> None:
     if not inspector.has_table("platform_feature_flags"):
         raise RuntimeError("platform_feature_flags is niet gemigreerd")
     required_columns = {"flag_key", "enabled", "updated_by", "updated_at"}
-    actual_columns = {
-        str(column.get("name") or "").strip().lower()
+    columns = {
+        str(column.get("name") or "").strip().lower(): column
         for column in inspector.get_columns("platform_feature_flags")
     }
-    missing_columns = sorted(required_columns - actual_columns)
+    missing_columns = sorted(required_columns - set(columns))
     if missing_columns:
         raise RuntimeError(
             "platform_feature_flags schema drift; ontbrekende kolommen: "
             + ", ".join(missing_columns)
         )
+    primary_key = tuple(
+        inspector.get_pk_constraint("platform_feature_flags").get("constrained_columns") or ()
+    )
+    if primary_key != ("flag_key",):
+        raise RuntimeError(
+            "platform_feature_flags schema drift; onjuiste primary key: "
+            f"{primary_key!r}"
+        )
+    if conn.dialect.name == "postgresql":
+        if not isinstance(columns["enabled"]["type"], sa.Boolean):
+            raise RuntimeError("platform_feature_flags.enabled moet PostgreSQL BOOLEAN zijn")
+        updated_at_type = columns["updated_at"]["type"]
+        if not isinstance(updated_at_type, sa.DateTime) or not bool(
+            getattr(updated_at_type, "timezone", False)
+        ):
+            raise RuntimeError("platform_feature_flags.updated_at moet PostgreSQL TIMESTAMPTZ zijn")
 
 
 def ensure_platform_feature_flag_schema(conn: Connection) -> None:
-    """Create only the platform-wide persistence table; do not seed overrides."""
+    """Validate the Alembic-owned feature-flag schema without mutating it."""
 
-    conn.execute(
-        text(
-            """
-            CREATE TABLE IF NOT EXISTS platform_feature_flags (
-                flag_key VARCHAR(128) PRIMARY KEY,
-                enabled BOOLEAN NOT NULL,
-                updated_by VARCHAR(255),
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-    )
+    validate_platform_feature_flag_schema(conn)
 
 
 def _definition(flag_key: str) -> tuple[str, dict]:
@@ -127,28 +132,20 @@ def get_platform_feature_flag(conn: Connection, flag_key: str) -> dict:
 
 
 def is_platform_feature_enabled(conn: Connection, flag_key: str) -> bool:
-    """Read the effective value without ever creating schema or an override.
-
-    During legacy-focused tests or a pre-migration process where the table is not
-    present yet, the registered default is used. Production startup creates the
-    table before requests are served.
-    """
+    """Read the effective value without creating schema or masking schema drift."""
 
     normalized_key, definition = _definition(flag_key)
-    try:
-        row = conn.execute(
-            text(
-                """
-                SELECT enabled
-                FROM platform_feature_flags
-                WHERE flag_key = :flag_key
-                LIMIT 1
-                """
-            ),
-            {"flag_key": normalized_key},
-        ).mappings().first()
-    except (OperationalError, ProgrammingError):
-        return bool(definition["default_enabled"])
+    row = conn.execute(
+        text(
+            """
+            SELECT enabled
+            FROM platform_feature_flags
+            WHERE flag_key = :flag_key
+            LIMIT 1
+            """
+        ),
+        {"flag_key": normalized_key},
+    ).mappings().first()
     if row is None:
         return bool(definition["default_enabled"])
     return bool(row.get("enabled"))

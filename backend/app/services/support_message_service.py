@@ -6,7 +6,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import text
+import sqlalchemy as sa
+from sqlalchemy import inspect, text
 
 
 STATUS_OPEN = "Open"
@@ -22,6 +23,39 @@ ALLOWED_RECIPIENT_TYPES = frozenset({
     RECIPIENT_SINGLE_ADMIN,
     RECIPIENT_ALL_ADMINS,
 })
+
+_SUPPORT_REQUIRED_COLUMNS = {
+    "support_threads": {
+        "id", "thread_number", "household_id", "created_by_user_id",
+        "created_by_name", "subject", "origin_screen_name", "origin_route",
+        "origin_app_version", "status", "reply_allowed", "recipient_type",
+        "created_at", "updated_at", "closed_at",
+    },
+    "support_messages": {
+        "id", "thread_id", "sender_user_id", "sender_name", "sender_role",
+        "message_text", "created_at",
+    },
+    "support_recipients": {
+        "id", "thread_id", "household_id", "admin_user_id", "read_at", "created_at",
+    },
+}
+_SUPPORT_REQUIRED_INDEXES = {
+    "support_threads": {
+        "idx_support_threads_household_updated": ("household_id", "updated_at"),
+        "idx_support_threads_status_updated": ("status", "updated_at"),
+    },
+    "support_messages": {
+        "idx_support_messages_thread_created": ("thread_id", "created_at"),
+    },
+    "support_recipients": {
+        "idx_support_recipients_admin": ("admin_user_id", "read_at"),
+    },
+}
+_POSTGRES_TIMESTAMP_COLUMNS = {
+    "support_threads": ("created_at", "updated_at", "closed_at"),
+    "support_messages": ("created_at",),
+    "support_recipients": ("read_at", "created_at"),
+}
 
 
 class SupportMessageError(RuntimeError):
@@ -57,60 +91,86 @@ def _clean_message(value: str | None) -> str:
     return normalized
 
 
-def ensure_support_message_foundation(conn) -> None:
-    statements = (
-        """
-        CREATE TABLE IF NOT EXISTS support_threads (
-            id TEXT PRIMARY KEY,
-            thread_number TEXT NOT NULL UNIQUE,
-            household_id TEXT,
-            created_by_user_id TEXT NOT NULL,
-            created_by_name TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            origin_screen_name TEXT NOT NULL,
-            origin_route TEXT,
-            origin_app_version TEXT,
-            status TEXT NOT NULL DEFAULT 'Open'
-                CHECK (status IN ('Open', 'In behandeling', 'Gesloten')),
-            reply_allowed INTEGER NOT NULL DEFAULT 1,
-            recipient_type TEXT NOT NULL
-                CHECK (recipient_type IN ('superuser', 'single_household_admin', 'all_household_admins')),
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            closed_at TEXT
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS support_messages (
-            id TEXT PRIMARY KEY,
-            thread_id TEXT NOT NULL,
-            sender_user_id TEXT NOT NULL,
-            sender_name TEXT NOT NULL,
-            sender_role TEXT NOT NULL,
-            message_text TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(thread_id) REFERENCES support_threads(id) ON DELETE CASCADE
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS support_recipients (
-            id TEXT PRIMARY KEY,
-            thread_id TEXT NOT NULL,
-            household_id TEXT NOT NULL,
-            admin_user_id TEXT NOT NULL,
-            read_at TEXT,
-            created_at TEXT NOT NULL,
-            UNIQUE(thread_id, household_id, admin_user_id),
-            FOREIGN KEY(thread_id) REFERENCES support_threads(id) ON DELETE CASCADE
-        )
-        """,
-        "CREATE INDEX IF NOT EXISTS idx_support_threads_household_updated ON support_threads(household_id, updated_at DESC)",
-        "CREATE INDEX IF NOT EXISTS idx_support_threads_status_updated ON support_threads(status, updated_at DESC)",
-        "CREATE INDEX IF NOT EXISTS idx_support_messages_thread_created ON support_messages(thread_id, created_at)",
-        "CREATE INDEX IF NOT EXISTS idx_support_recipients_admin ON support_recipients(admin_user_id, read_at)",
+def _has_unique(inspector, table_name: str, expected: tuple[str, ...]) -> bool:
+    unique_sets = {
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_unique_constraints(table_name)
+    }
+    unique_sets.update(
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_indexes(table_name)
+        if bool(item.get("unique"))
     )
-    for statement in statements:
-        conn.execute(text(statement))
+    return expected in unique_sets
+
+
+def ensure_support_message_foundation(conn) -> None:
+    """Validate the Alembic-owned support persistence schema without DDL."""
+
+    inspector = inspect(conn)
+    tables = set(inspector.get_table_names())
+    missing_tables = sorted(set(_SUPPORT_REQUIRED_COLUMNS) - tables)
+    if missing_tables:
+        raise RuntimeError(
+            "Canonical support persistence schema ontbreekt: " + ", ".join(missing_tables)
+        )
+
+    column_maps = {}
+    for table_name, required_columns in _SUPPORT_REQUIRED_COLUMNS.items():
+        columns = {
+            str(column.get("name") or ""): column
+            for column in inspector.get_columns(table_name)
+        }
+        column_maps[table_name] = columns
+        missing_columns = sorted(required_columns - set(columns))
+        if missing_columns:
+            raise RuntimeError(
+                f"{table_name} schema drift; ontbrekende kolommen: "
+                + ", ".join(missing_columns)
+            )
+        primary_key = tuple(
+            inspector.get_pk_constraint(table_name).get("constrained_columns") or ()
+        )
+        if primary_key != ("id",):
+            raise RuntimeError(
+                f"{table_name} schema drift; onjuiste primary key: {primary_key!r}"
+            )
+
+    if not _has_unique(inspector, "support_threads", ("thread_number",)):
+        raise RuntimeError("support_threads.thread_number moet uniek zijn")
+    if not _has_unique(
+        inspector,
+        "support_recipients",
+        ("thread_id", "household_id", "admin_user_id"),
+    ):
+        raise RuntimeError("support_recipients mist canonical recipient uniqueness")
+
+    for table_name, expected_indexes in _SUPPORT_REQUIRED_INDEXES.items():
+        indexes = {
+            str(index.get("name") or ""): index
+            for index in inspector.get_indexes(table_name)
+        }
+        for index_name, expected_columns in expected_indexes.items():
+            index = indexes.get(index_name)
+            actual_columns = tuple((index or {}).get("column_names") or ())
+            if index is None or bool(index.get("unique")) or actual_columns != expected_columns:
+                raise RuntimeError(
+                    f"Canonical support index {index_name} wijkt af: "
+                    f"expected={expected_columns!r} actual={actual_columns!r}"
+                )
+
+    if conn.dialect.name == "postgresql":
+        if not isinstance(column_maps["support_threads"]["reply_allowed"]["type"], sa.Boolean):
+            raise RuntimeError("support_threads.reply_allowed moet PostgreSQL BOOLEAN zijn")
+        for table_name, timestamp_columns in _POSTGRES_TIMESTAMP_COLUMNS.items():
+            for column_name in timestamp_columns:
+                column_type = column_maps[table_name][column_name]["type"]
+                if not isinstance(column_type, sa.DateTime) or not bool(
+                    getattr(column_type, "timezone", False)
+                ):
+                    raise RuntimeError(
+                        f"{table_name}.{column_name} moet PostgreSQL TIMESTAMPTZ zijn"
+                    )
 
 
 def _next_thread_number(conn) -> str:
@@ -179,7 +239,7 @@ def create_support_thread(
         "origin_route": str(origin_route or "").strip() or None,
         "origin_app_version": str(origin_app_version or "").strip() or None,
         "status": STATUS_OPEN,
-        "reply_allowed": 1 if reply_allowed else 0,
+        "reply_allowed": bool(reply_allowed),
         "recipient_type": recipient_type,
         "created_at": now,
         "updated_at": now,
@@ -225,7 +285,7 @@ def add_support_message(
     if not is_superuser:
         if str(thread["household_id"] or "") != str(household_id or ""):
             raise SupportMessageError("Melding behoort niet tot het actieve huishouden")
-        if int(thread["reply_allowed"] or 0) != 1:
+        if not bool(thread["reply_allowed"]):
             raise SupportMessageError("Reageren op deze melding is niet toegestaan")
 
     message_id = str(uuid.uuid4())
@@ -261,9 +321,14 @@ def set_support_thread_status(conn, *, thread_id: str, status: str) -> None:
         UPDATE support_threads
         SET status = :status,
             updated_at = :updated_at,
-            closed_at = CASE WHEN :status = 'Gesloten' THEN :updated_at ELSE NULL END
+            closed_at = :closed_at
         WHERE id = :thread_id
-    """), {"status": status, "updated_at": now, "thread_id": str(thread_id)})
+    """), {
+        "status": status,
+        "updated_at": now,
+        "closed_at": now if status == STATUS_CLOSED else None,
+        "thread_id": str(thread_id),
+    })
     if result.rowcount != 1:
         raise SupportMessageError("Melding niet gevonden")
 

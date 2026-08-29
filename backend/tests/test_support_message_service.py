@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from app.services.support_message_service import (
     RECIPIENT_ALL_ADMINS,
@@ -15,10 +15,11 @@ from app.services.support_message_service import (
     list_support_threads,
     set_support_thread_status,
 )
+from support_message_migrated_fixture import migrated_support_engine
 
 
 def make_engine():
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    engine = migrated_support_engine()
     with engine.begin() as conn:
         ensure_support_message_foundation(conn)
     return engine

@@ -5,21 +5,29 @@ from sqlalchemy import create_engine, inspect, text
 
 import migration_foundation_core_selftest as foundation
 
-HEAD_REVISION = "20260829_13"
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 82
+HEAD_REVISION = "20260829_14"
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 85
 DAY_ARTICLE_EVENT_TABLE = "day_article_processing_events"
 INVITATION_TABLE = "household_invitations"
+FEATURE_SUPPORT_TABLES = {
+    "platform_feature_flags",
+    "support_threads",
+    "support_messages",
+    "support_recipients",
+}
 
 
-def _configure_revision_13_contract() -> None:
+def _configure_revision_14_contract() -> None:
     foundation.HEAD_REVISION = HEAD_REVISION
     foundation.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
     foundation.PR2L_GPC_RESIDUAL_SCHEMA_AUTHORITY_TABLES = set(
         foundation.PR2L_GPC_RESIDUAL_SCHEMA_AUTHORITY_TABLES
-    ) | {DAY_ARTICLE_EVENT_TABLE, INVITATION_TABLE}
+    ) | {DAY_ARTICLE_EVENT_TABLE, INVITATION_TABLE} | FEATURE_SUPPORT_TABLES
     foundation.EXPECTED_BOOLEAN_COLUMNS = set(foundation.EXPECTED_BOOLEAN_COLUMNS) | {
         ("spaces", "protected"),
         ("sublocations", "protected"),
+        ("platform_feature_flags", "enabled"),
+        ("support_threads", "reply_allowed"),
     }
 
 
@@ -272,8 +280,123 @@ def _assert_household_invitation_schema(connection) -> None:
         print("SQLITE_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN")
 
 
+def _has_unique(inspector, table_name: str, expected: tuple[str, ...]) -> bool:
+    unique_sets = {
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_unique_constraints(table_name)
+    }
+    unique_sets.update(
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_indexes(table_name)
+        if bool(item.get("unique"))
+    )
+    return expected in unique_sets
+
+
+def _assert_platform_feature_support_schema(connection) -> None:
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    missing_tables = FEATURE_SUPPORT_TABLES - tables
+    if missing_tables:
+        raise AssertionError(
+            f"Platform feature/support persistence tables ontbreken: {sorted(missing_tables)}"
+        )
+
+    required_columns = {
+        "platform_feature_flags": {"flag_key", "enabled", "updated_by", "updated_at"},
+        "support_threads": {
+            "id", "thread_number", "household_id", "created_by_user_id",
+            "created_by_name", "subject", "origin_screen_name", "origin_route",
+            "origin_app_version", "status", "reply_allowed", "recipient_type",
+            "created_at", "updated_at", "closed_at",
+        },
+        "support_messages": {
+            "id", "thread_id", "sender_user_id", "sender_name", "sender_role",
+            "message_text", "created_at",
+        },
+        "support_recipients": {
+            "id", "thread_id", "household_id", "admin_user_id", "read_at", "created_at",
+        },
+    }
+    for table_name, required in required_columns.items():
+        missing = required - set(_column_map(inspector, table_name))
+        if missing:
+            raise AssertionError(f"{table_name} mist canonical kolommen: {sorted(missing)}")
+
+    if tuple(
+        inspector.get_pk_constraint("platform_feature_flags").get("constrained_columns") or ()
+    ) != ("flag_key",):
+        raise AssertionError("platform_feature_flags primary key must be flag_key")
+    for table_name in ("support_threads", "support_messages", "support_recipients"):
+        if tuple(
+            inspector.get_pk_constraint(table_name).get("constrained_columns") or ()
+        ) != ("id",):
+            raise AssertionError(f"{table_name} primary key must be id")
+
+    if not _has_unique(inspector, "support_threads", ("thread_number",)):
+        raise AssertionError("support_threads.thread_number must remain unique")
+    if not _has_unique(
+        inspector,
+        "support_recipients",
+        ("thread_id", "household_id", "admin_user_id"),
+    ):
+        raise AssertionError("support_recipients recipient identity must remain unique")
+
+    for table_name, index_name, columns in (
+        ("support_threads", "idx_support_threads_household_updated", ("household_id", "updated_at")),
+        ("support_threads", "idx_support_threads_status_updated", ("status", "updated_at")),
+        ("support_messages", "idx_support_messages_thread_created", ("thread_id", "created_at")),
+        ("support_recipients", "idx_support_recipients_admin", ("admin_user_id", "read_at")),
+    ):
+        _assert_index(inspector, table_name, index_name, columns, unique=False)
+
+    if connection.dialect.name == "postgresql":
+        feature_enabled = _column_map(inspector, "platform_feature_flags")["enabled"]
+        if not isinstance(feature_enabled["type"], sa.Boolean):
+            raise AssertionError(
+                f"Expected BOOLEAN for platform_feature_flags.enabled, got {feature_enabled['type']}"
+            )
+        reply_allowed = _column_map(inspector, "support_threads")["reply_allowed"]
+        if not isinstance(reply_allowed["type"], sa.Boolean):
+            raise AssertionError(
+                f"Expected BOOLEAN for support_threads.reply_allowed, got {reply_allowed['type']}"
+            )
+        timestamp_columns = {
+            "platform_feature_flags": ("updated_at",),
+            "support_threads": ("created_at", "updated_at", "closed_at"),
+            "support_messages": ("created_at",),
+            "support_recipients": ("read_at", "created_at"),
+        }
+        for table_name, column_names in timestamp_columns.items():
+            columns = _column_map(inspector, table_name)
+            for column_name in column_names:
+                column_type = columns[column_name]["type"]
+                if not isinstance(column_type, sa.DateTime) or not bool(
+                    getattr(column_type, "timezone", False)
+                ):
+                    raise AssertionError(
+                        f"Expected TIMESTAMPTZ for {table_name}.{column_name}, got {column_type}"
+                    )
+        check_names = {
+            str(check.get("name") or "")
+            for check in inspector.get_check_constraints("support_threads")
+        }
+        expected_checks = {
+            "ck_support_threads_status",
+            "ck_support_threads_recipient_type",
+        }
+        if not expected_checks.issubset(check_names):
+            raise AssertionError(
+                "support_threads mist PostgreSQL CHECK constraints: "
+                f"{sorted(expected_checks - check_names)}"
+            )
+        print("POSTGRESQL_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN")
+    else:
+        print("SQLITE_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
-    _configure_revision_13_contract()
+    _configure_revision_14_contract()
     foundation.main()
 
     engine = create_engine(foundation._engine_url())
@@ -286,10 +409,11 @@ def main() -> None:
                 )
             _assert_day_article_direct_schema(connection)
             _assert_household_invitation_schema(connection)
+            _assert_platform_feature_support_schema(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_13_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_14_GREEN")
 
 
 if __name__ == "__main__":
