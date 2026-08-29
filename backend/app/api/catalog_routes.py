@@ -228,6 +228,11 @@ def list_catalog(
         household_article_count,
     )
     order_expression = expressions.get(sort_by, expressions["name"])
+    sortable_expression = (
+        order_expression
+        if sort_by == "household_article_count"
+        else f"lower({order_expression})"
+    )
     direction = "DESC" if sort_direction.lower() == "desc" else "ASC"
     from_sql = f"FROM global_products gp {' '.join(joins)} {where_sql}"
 
@@ -235,7 +240,7 @@ def list_catalog(
     page_sql = f"""
         SELECT {", ".join(select_parts)}
         {from_sql}
-        ORDER BY {order_expression} COLLATE NOCASE {direction}, gp.id ASC
+        ORDER BY {sortable_expression} {direction}, gp.id ASC
         LIMIT :limit OFFSET :offset
     """
     page_params = {**params, "limit": limit, "offset": offset}
@@ -274,7 +279,7 @@ def _identity_rows(global_product_id: str) -> list[dict[str, Any]]:
                 SELECT {", ".join(select_parts)}
                 FROM product_identities
                 WHERE global_product_id = :global_product_id
-                ORDER BY COALESCE(is_primary, 0) DESC,
+                ORDER BY CASE WHEN is_primary THEN 1 ELSE 0 END DESC,
                          identity_type,
                          identity_value
             """), {
@@ -355,7 +360,7 @@ def _receipt_line_rows(global_product_id: str) -> list[dict[str, Any]]:
                 LEFT JOIN global_products gp
                   ON gp.id = COALESCE(pil.matched_global_product_id, ha.global_product_id)
                 WHERE COALESCE(pil.matched_global_product_id, ha.global_product_id) = :global_product_id
-                ORDER BY datetime(pib.created_at) DESC, pil.id DESC
+                ORDER BY pib.created_at DESC, pil.id DESC
             """), {
                 "global_product_id": global_product_id,
             }).mappings().all()
