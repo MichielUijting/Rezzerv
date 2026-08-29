@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.services.barcode_identity_service import lookup_gtin, validate_barcode
 from app.services.gpc_catalog_service import ensure_gpc_catalog_schema, import_gpc_xml
