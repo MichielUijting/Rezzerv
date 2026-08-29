@@ -17,9 +17,30 @@ from app.services.household_product_use_case_service import (
 )
 
 
+def _create_location_fixture(conn) -> None:
+    """Own the isolated SQLite schema instead of asking production runtime to mutate it."""
+    conn.execute(text("""
+        CREATE TABLE spaces (
+            id TEXT PRIMARY KEY,
+            naam TEXT NOT NULL,
+            household_id TEXT,
+            active INTEGER NOT NULL DEFAULT 1
+        )
+    """))
+    conn.execute(text("""
+        CREATE TABLE sublocations (
+            id TEXT PRIMARY KEY,
+            naam TEXT NOT NULL,
+            space_id TEXT,
+            active INTEGER NOT NULL DEFAULT 1
+        )
+    """))
+
+
 def run() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     with engine.begin() as conn:
+        _create_location_fixture(conn)
         initial = save_inhuis_halen_configuration(
             conn,
             household_id="h1",
