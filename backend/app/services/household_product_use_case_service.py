@@ -1,21 +1,31 @@
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 PRODUCT_USE_CASES = ("inhuis_halen", "wat_inhuis", "waar_inhuis")
 PRODUCT_USE_CASE_SET = frozenset(PRODUCT_USE_CASES)
+_REQUIRED_COLUMNS = {"household_id", "use_case", "activated_at"}
 
 
 def ensure_household_product_use_case_foundation(conn) -> None:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS household_product_use_cases (
-            household_id TEXT NOT NULL,
-            use_case TEXT NOT NULL
-                CHECK (use_case IN ('inhuis_halen', 'wat_inhuis', 'waar_inhuis')),
-            activated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (household_id, use_case)
+    """Validate the Alembic-owned use-case schema without runtime mutation."""
+    inspector = inspect(conn)
+    if not inspector.has_table("household_product_use_cases"):
+        raise RuntimeError(
+            "Canonical gebruiksdoelconfiguratie mist household_product_use_cases. "
+            "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
         )
-    """))
+    columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("household_product_use_cases")
+    }
+    missing = _REQUIRED_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            "Canonical gebruiksdoelconfiguratie wijkt af: "
+            f"household_product_use_cases mist {sorted(missing)}. "
+            "Voer Alembic migrations uit."
+        )
 
 
 def activate_household_product_use_case(conn, *, household_id: str, use_case: str) -> None:
@@ -28,7 +38,7 @@ def activate_household_product_use_case(conn, *, household_id: str, use_case: st
 
     ensure_household_product_use_case_foundation(conn)
     conn.execute(text("""
-        INSERT OR IGNORE INTO household_product_use_cases (
+        INSERT INTO household_product_use_cases (
             household_id,
             use_case,
             activated_at
@@ -37,6 +47,7 @@ def activate_household_product_use_case(conn, *, household_id: str, use_case: st
             :use_case,
             CURRENT_TIMESTAMP
         )
+        ON CONFLICT(household_id, use_case) DO NOTHING
     """), {
         "household_id": normalized_household_id,
         "use_case": normalized_use_case,

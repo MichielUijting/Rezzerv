@@ -1,3 +1,11 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
 from sqlalchemy import create_engine, text
 
 from app.services.household_capability_expansion_service import (
@@ -15,17 +23,50 @@ from app.services.household_product_use_case_service import (
     activate_household_product_use_case,
     resolve_active_household_product_use_cases,
 )
-from app.testing.onboarding_request_schema_fixture import (
-    install_household_product_configuration_schema,
-    install_location_schema,
-)
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
+HEAD_REVISION = "20260829_10"
+
+
+def _migrated_sqlite_engine(database_path: Path):
+    env = os.environ.copy()
+    env["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
+    env["PYTHONPATH"] = str(BACKEND_ROOT)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "alembic",
+            "-c",
+            str(ALEMBIC_INI),
+            "upgrade",
+            "head",
+        ],
+        cwd=BACKEND_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "Alembic circular-capability fixture migration failed:\n"
+            + result.stdout
+            + result.stderr
+        )
+    engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
+    with engine.connect() as conn:
+        revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert revision == HEAD_REVISION
+    return engine
 
 
 def run() -> None:
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    temp_dir = tempfile.TemporaryDirectory()
+    engine = _migrated_sqlite_engine(Path(temp_dir.name) / "circular-capability.sqlite")
     with engine.begin() as conn:
-        install_household_product_configuration_schema(conn)
-        install_location_schema(conn)
         initial = save_inhuis_halen_configuration(
             conn,
             household_id="h1",
@@ -161,6 +202,8 @@ def run() -> None:
         assert legacy.location_tracking_level == "none"
         assert legacy.shopping_enabled is False
 
+    engine.dispose()
+    temp_dir.cleanup()
     print("CIRCULAR_CAPABILITY_EXPANSION_BACKEND_GREEN")
 
 
