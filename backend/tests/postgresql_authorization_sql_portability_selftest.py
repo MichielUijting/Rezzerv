@@ -14,6 +14,7 @@ SCOPE_FILES = (
     "authorization_ui_fixture_provisioning.py",
     "system_superuser_session_provisioning.py",
     "beta_superuser_provisioning_service.py",
+    "frontteam_household_provisioning.py",
 )
 
 FORBIDDEN_SQL_PATTERNS = {
