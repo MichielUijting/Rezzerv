@@ -5,17 +5,18 @@ from sqlalchemy import create_engine, inspect, text
 
 import migration_foundation_core_selftest as foundation
 
-HEAD_REVISION = "20260829_12"
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 81
+HEAD_REVISION = "20260829_13"
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 82
 DAY_ARTICLE_EVENT_TABLE = "day_article_processing_events"
+INVITATION_TABLE = "household_invitations"
 
 
-def _configure_revision_12_contract() -> None:
+def _configure_revision_13_contract() -> None:
     foundation.HEAD_REVISION = HEAD_REVISION
     foundation.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
     foundation.PR2L_GPC_RESIDUAL_SCHEMA_AUTHORITY_TABLES = set(
         foundation.PR2L_GPC_RESIDUAL_SCHEMA_AUTHORITY_TABLES
-    ) | {DAY_ARTICLE_EVENT_TABLE}
+    ) | {DAY_ARTICLE_EVENT_TABLE, INVITATION_TABLE}
     foundation.EXPECTED_BOOLEAN_COLUMNS = set(foundation.EXPECTED_BOOLEAN_COLUMNS) | {
         ("spaces", "protected"),
         ("sublocations", "protected"),
@@ -163,8 +164,116 @@ def _assert_day_article_direct_schema(connection) -> None:
         print("SQLITE_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_household_invitation_schema(connection) -> None:
+    inspector = inspect(connection)
+    if INVITATION_TABLE not in set(inspector.get_table_names()):
+        raise AssertionError("Alembic head is missing household_invitations")
+
+    columns = _column_map(inspector, INVITATION_TABLE)
+    required = {
+        "id",
+        "household_id",
+        "invitee_email",
+        "role_key",
+        "token_hash",
+        "status",
+        "expires_at",
+        "created_by_user_id",
+        "accepted_by_user_id",
+        "created_at",
+        "updated_at",
+        "accepted_at",
+        "revoked_at",
+        "delivery_status",
+        "delivery_attempt_count",
+        "last_delivery_attempt_at",
+        "last_delivered_at",
+        "last_delivery_error",
+        "delivery_provider_message_id",
+        "last_delivery_actor_user_id",
+    }
+    missing = required - set(columns)
+    if missing:
+        raise AssertionError(f"household_invitations mist canonical kolommen: {sorted(missing)}")
+
+    primary_key = tuple(
+        inspector.get_pk_constraint(INVITATION_TABLE).get("constrained_columns") or ()
+    )
+    if primary_key != ("id",):
+        raise AssertionError(f"Invalid household_invitations primary key: {primary_key!r}")
+
+    token_unique = any(
+        tuple(item.get("column_names") or ()) == ("token_hash",)
+        for item in inspector.get_unique_constraints(INVITATION_TABLE)
+    )
+    token_unique = token_unique or any(
+        bool(item.get("unique"))
+        and tuple(item.get("column_names") or ()) == ("token_hash",)
+        for item in inspector.get_indexes(INVITATION_TABLE)
+    )
+    if not token_unique:
+        raise AssertionError("household_invitations.token_hash must remain unique")
+
+    _assert_index(
+        inspector,
+        INVITATION_TABLE,
+        "idx_household_invitations_one_pending",
+        ("household_id", "invitee_email"),
+        unique=True,
+    )
+    _assert_index(
+        inspector,
+        INVITATION_TABLE,
+        "idx_household_invitations_household_status",
+        ("household_id", "status", "created_at"),
+        unique=False,
+    )
+    _assert_index(
+        inspector,
+        INVITATION_TABLE,
+        "idx_household_invitations_expiry",
+        ("status", "expires_at"),
+        unique=False,
+    )
+
+    if connection.dialect.name == "postgresql":
+        for column_name in (
+            "expires_at",
+            "created_at",
+            "updated_at",
+            "accepted_at",
+            "revoked_at",
+            "last_delivery_attempt_at",
+            "last_delivered_at",
+        ):
+            column_type = columns[column_name]["type"]
+            if not isinstance(column_type, sa.DateTime) or not bool(
+                getattr(column_type, "timezone", False)
+            ):
+                raise AssertionError(
+                    f"Expected TIMESTAMPTZ for household_invitations.{column_name}, got {column_type}"
+                )
+        check_names = {
+            str(check.get("name") or "")
+            for check in inspector.get_check_constraints(INVITATION_TABLE)
+        }
+        expected_checks = {
+            "ck_household_invitations_role_key",
+            "ck_household_invitations_status",
+            "ck_household_invitations_delivery_status",
+        }
+        if not expected_checks.issubset(check_names):
+            raise AssertionError(
+                "household_invitations mist PostgreSQL CHECK constraints: "
+                f"{sorted(expected_checks - check_names)}"
+            )
+        print("POSTGRESQL_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN")
+    else:
+        print("SQLITE_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
-    _configure_revision_12_contract()
+    _configure_revision_13_contract()
     foundation.main()
 
     engine = create_engine(foundation._engine_url())
@@ -176,10 +285,11 @@ def main() -> None:
                     f"Expected Alembic revision {HEAD_REVISION}, got {revision}"
                 )
             _assert_day_article_direct_schema(connection)
+            _assert_household_invitation_schema(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_12_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_13_GREEN")
 
 
 if __name__ == "__main__":
