@@ -56,28 +56,10 @@ def normalize_user_account_status_data(conn: Connection) -> None:
 
 
 def ensure_user_account_status_schema(conn: Connection) -> None:
-    inspector = inspect(conn)
-    if not inspector.has_table("app_users"):
-        raise RuntimeError("app_users ontbreekt")
+    """Compatibility shim: validate Alembic authority and normalize data only."""
 
-    columns = {
-        str(column.get("name") or "").strip().lower()
-        for column in inspector.get_columns("app_users")
-    }
-    if "account_status" not in columns:
-        conn.execute(text(
-            "ALTER TABLE app_users ADD COLUMN account_status TEXT NOT NULL DEFAULT 'active'"
-        ))
-    if "suspended_at" not in columns:
-        conn.execute(text(
-            "ALTER TABLE app_users ADD COLUMN suspended_at TIMESTAMP NULL"
-        ))
-
-    conn.execute(text("""
-        UPDATE app_users
-        SET account_status = 'active'
-        WHERE account_status IS NULL OR trim(account_status) = ''
-    """))
+    validate_user_account_status_schema(conn)
+    normalize_user_account_status_data(conn)
 
 
 def _normalize_status(value: Any) -> str:
