@@ -7,58 +7,22 @@ import tempfile
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from app.api.household_invitation_acceptance_routes import create_household_invitation_acceptance_router
 from app.api.server_session_routes import SessionApiConfiguration
 from app.api.session_household_routes import create_session_household_router
 from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.testing.authorization_schema_fixture import install_authorization_schema
 from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.household_invitation_service import create_household_invitation
 from app.services.password_service import hash_password
 from app.services.server_session_service import SESSION_COOKIE_NAME, create_server_session
-from app.testing.server_session_contract import create_server_session_contract_schema
+from household_invitation_migrated_fixture import insert_membership, migrated_sqlite_engine
 
 
 def _prepare_database(engine) -> None:
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE household_registry (
-                id TEXT PRIMARY KEY,
-                naam TEXT NOT NULL,
-                context_type TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
-                password_hash TEXT,
-                account_status TEXT NOT NULL DEFAULT 'active',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_memberships (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                user_id TEXT,
-                user_email TEXT NOT NULL,
-                role TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active',
-                active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(household_id, user_email)
-            )
-        """))
-        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
-        create_server_session_contract_schema(conn)
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type) VALUES
                 ('hh-own', 'Eigen huis', 'regular'),
@@ -76,23 +40,25 @@ def _prepare_database(engine) -> None:
                 INSERT INTO app_users(id, email, password, password_hash, account_status)
                 VALUES (:id, :email, :password, :password_hash, 'active')
             """), {'id': user_id, 'email': email, 'password': encoded, 'password_hash': encoded})
-        conn.execute(text("""
-            INSERT INTO household_memberships(
-                id, household_id, user_id, user_email, role, status, active
-            ) VALUES
-                ('membership-existing-own', 'hh-own', 'existing-user', 'existing@example.com', 'admin', 'active', 1),
-                ('membership-wrong-own', 'hh-own', 'wrong-user', 'wrong@example.com', 'member', 'active', 1),
-                ('membership-invite-admin', 'hh-invite', 'invite-admin', 'invite-admin@example.com', 'admin', 'active', 1)
-        """))
-        create_canonical_membership_role(
-            conn, household_id='hh-own', membership_id='membership-existing-own', legacy_role='admin'
-        )
-        create_canonical_membership_role(
-            conn, household_id='hh-own', membership_id='membership-wrong-own', legacy_role='member'
-        )
-        create_canonical_membership_role(
-            conn, household_id='hh-invite', membership_id='membership-invite-admin', legacy_role='admin'
-        )
+        for membership_id, household_id, user_id, email, role in (
+            ('membership-existing-own', 'hh-own', 'existing-user', 'existing@example.com', 'admin'),
+            ('membership-wrong-own', 'hh-own', 'wrong-user', 'wrong@example.com', 'member'),
+            ('membership-invite-admin', 'hh-invite', 'invite-admin', 'invite-admin@example.com', 'admin'),
+        ):
+            insert_membership(
+                conn,
+                membership_id=membership_id,
+                household_id=household_id,
+                user_id=user_id,
+                email=email,
+                role=role,
+            )
+            create_canonical_membership_role(
+                conn,
+                household_id=household_id,
+                membership_id=membership_id,
+                legacy_role=role,
+            )
 
 
 def _application(engine) -> FastAPI:
@@ -125,9 +91,6 @@ def _session(engine, user_id: str, household_id: str) -> str:
 
 
 def _set_test_session_cookie(client: TestClient, raw_session: str) -> None:
-    # TestClient normalizes the single-label host `testserver` to the cookie
-    # domain `testserver.local`. Matching that scope makes a Set-Cookie from
-    # session rotation replace the fixture cookie exactly as a browser does.
     client.cookies.set(
         SESSION_COOKIE_NAME,
         raw_session,
@@ -140,11 +103,7 @@ def run() -> int:
     checks: list[str] = []
     with tempfile.TemporaryDirectory(prefix='rezzerv-invitation-acceptance-') as tmp:
         database_path = Path(tmp) / 'acceptance.db'
-        engine = create_engine(
-            f'sqlite:///{database_path}',
-            future=True,
-            connect_args={'check_same_thread': False},
-        )
+        engine = migrated_sqlite_engine(database_path, check_same_thread=False)
         _prepare_database(engine)
         app = _application(engine)
 
