@@ -48,6 +48,16 @@ DELIVERY_STATUSES = frozenset(
     }
 )
 
+_REQUIRED_DELIVERY_COLUMNS = {
+    "delivery_status",
+    "delivery_attempt_count",
+    "last_delivery_attempt_at",
+    "last_delivered_at",
+    "last_delivery_error",
+    "delivery_provider_message_id",
+    "last_delivery_actor_user_id",
+}
+
 
 @dataclass(frozen=True)
 class InvitationEmailConfiguration:
@@ -97,26 +107,18 @@ def _iso(value: datetime) -> str:
 
 
 def ensure_household_invitation_delivery_foundation(conn: Connection) -> None:
-    """Add I.3 delivery metadata without rewriting the I.1 lifecycle table."""
-
+    """Validate Alembic-owned I.3 delivery metadata without runtime mutation."""
     ensure_household_invitation_foundation(conn)
     columns = {
         str(column.get("name") or "").strip().lower()
         for column in inspect(conn).get_columns("household_invitations")
     }
-    additions = (
-        ("delivery_status", "TEXT NOT NULL DEFAULT 'not_sent'"),
-        ("delivery_attempt_count", "INTEGER NOT NULL DEFAULT 0"),
-        ("last_delivery_attempt_at", "TEXT"),
-        ("last_delivered_at", "TEXT"),
-        ("last_delivery_error", "TEXT"),
-        ("delivery_provider_message_id", "TEXT"),
-        ("last_delivery_actor_user_id", "TEXT"),
-    )
-    for column_name, definition in additions:
-        if column_name not in columns:
-            conn.execute(text(f"ALTER TABLE household_invitations ADD COLUMN {column_name} {definition}"))
-            columns.add(column_name)
+    missing = _REQUIRED_DELIVERY_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            "Canonical invitation delivery schema wijkt af: "
+            f"household_invitations mist {sorted(missing)}. Voer Alembic migrations uit."
+        )
 
 
 def _configuration_problem(configuration: InvitationEmailConfiguration) -> tuple[str | None, str | None]:
