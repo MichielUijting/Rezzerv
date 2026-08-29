@@ -7,7 +7,7 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.product_inventory_group_store import ensure_product_inventory_group_schema
@@ -18,36 +18,28 @@ GS1_GPC_PUBLICATIONS_URL = "https://gpc-api.gs1.org/api/browser/publication?lang
 GS1_GPC_DOWNLOAD_URL = "https://gpc-api.gs1.org/api/blob/download/publication/{publication_id}/json"
 GS1_GPC_DYNAMIC_DOWNLOAD_URL = "https://gpc-api.gs1.org/api/blob/dynamic/download/publication/{publication_id}/json"
 
-GPC_PRODUCT_GROUPS_SQL = """
-CREATE TABLE IF NOT EXISTS gpc_product_groups (
-    gpc_brick_code TEXT PRIMARY KEY,
-    gpc_brick_name TEXT NOT NULL,
-    gpc_class_code TEXT,
-    gpc_class_name TEXT,
-    gpc_family_code TEXT,
-    gpc_family_name TEXT,
-    gpc_segment_code TEXT,
-    gpc_segment_name TEXT,
-    language_code TEXT DEFAULT 'nl',
-    source_version TEXT,
-    active INTEGER DEFAULT 1,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
-
-GPC_PRODUCT_GROUPS_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_gpc_product_groups_hierarchy
-ON gpc_product_groups (gpc_family_code, gpc_class_code, gpc_brick_code)
-"""
-
-PRODUCT_INVENTORY_GROUP_GPC_COLUMNS: dict[str, str] = {
-    "gpc_family_code": "TEXT",
-    "gpc_family_name": "TEXT",
-    "gpc_class_code": "TEXT",
-    "gpc_class_name": "TEXT",
-    "gpc_brick_code": "TEXT",
-    "source": "TEXT",
+GPC_PRODUCT_GROUP_COLUMNS = {
+    "gpc_brick_code",
+    "gpc_brick_name",
+    "gpc_class_code",
+    "gpc_class_name",
+    "gpc_family_code",
+    "gpc_family_name",
+    "gpc_segment_code",
+    "gpc_segment_name",
+    "language_code",
+    "source_version",
+    "active",
+    "created_at",
+    "updated_at",
+}
+PRODUCT_INVENTORY_GROUP_GPC_COLUMNS = {
+    "gpc_family_code",
+    "gpc_family_name",
+    "gpc_class_code",
+    "gpc_class_name",
+    "gpc_brick_code",
+    "source",
 }
 
 
@@ -108,12 +100,44 @@ def _fetch_publication_json(publication_id: int) -> dict[str, Any]:
 
 
 def _ensure_gpc_schema(conn) -> None:
-    conn.execute(text(GPC_PRODUCT_GROUPS_SQL))
-    conn.execute(text(GPC_PRODUCT_GROUPS_INDEX_SQL))
-    existing_columns = {str(row.get("name") or "") for row in conn.execute(text("PRAGMA table_info(product_inventory_groups)")).mappings().all()}
-    for column_name, column_definition in PRODUCT_INVENTORY_GROUP_GPC_COLUMNS.items():
-        if column_name not in existing_columns:
-            conn.execute(text(f"ALTER TABLE product_inventory_groups ADD COLUMN {column_name} {column_definition}"))
+    inspector = inspect(conn)
+    required_tables = {"gpc_product_groups", "product_inventory_groups"}
+    missing_tables = sorted(required_tables - set(inspector.get_table_names()))
+    if missing_tables:
+        raise RuntimeError(
+            "Canonical GPC import schema ontbreekt: "
+            + ", ".join(missing_tables)
+            + ". Voer Alembic migrations uit."
+        )
+    product_group_columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("gpc_product_groups")
+    }
+    missing_product_group_columns = sorted(GPC_PRODUCT_GROUP_COLUMNS - product_group_columns)
+    if missing_product_group_columns:
+        raise RuntimeError(
+            "gpc_product_groups mist canonical kolommen: "
+            + ", ".join(missing_product_group_columns)
+        )
+    inventory_group_columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("product_inventory_groups")
+    }
+    missing_inventory_columns = sorted(
+        PRODUCT_INVENTORY_GROUP_GPC_COLUMNS - inventory_group_columns
+    )
+    if missing_inventory_columns:
+        raise RuntimeError(
+            "product_inventory_groups mist canonical GPC-kolommen: "
+            + ", ".join(missing_inventory_columns)
+        )
+    indexes = {
+        str(index.get("name") or ""): tuple(index.get("column_names") or ())
+        for index in inspector.get_indexes("gpc_product_groups")
+    }
+    expected_index = ("gpc_family_code", "gpc_class_code", "gpc_brick_code")
+    if indexes.get("idx_gpc_product_groups_hierarchy") != expected_index:
+        raise RuntimeError("Canonical GPC hierarchy-index ontbreekt of wijkt af")
 
 
 def _walk_schema(schema: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -163,7 +187,7 @@ def _upsert_gpc_row(conn, row: dict[str, str], language_code: str, source_versio
                 gpc_segment_name = :gpc_segment_name,
                 language_code = :language_code,
                 source_version = :source_version,
-                active = 1,
+                active = TRUE,
                 updated_at = :updated_at
             WHERE gpc_brick_code = :gpc_brick_code
         """), params)
@@ -180,7 +204,7 @@ def _upsert_gpc_row(conn, row: dict[str, str], language_code: str, source_versio
             :gpc_class_code, :gpc_class_name,
             :gpc_family_code, :gpc_family_name,
             :gpc_segment_code, :gpc_segment_name,
-            :language_code, :source_version, 1, :created_at, :updated_at
+            :language_code, :source_version, TRUE, :created_at, :updated_at
         )
     """), params)
     return "created"
