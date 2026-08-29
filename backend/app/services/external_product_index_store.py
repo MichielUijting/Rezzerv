@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.product_taxonomy_store import _seed_payload
@@ -24,53 +24,33 @@ TAXONOMY_INDEX_RETAILERS: tuple[tuple[str, str], ...] = (
     ("plus", "PLUS"),
 )
 
-INDEX_COLUMNS: dict[str, str] = {
-    "id": "TEXT PRIMARY KEY",
-    "source_name": "TEXT",
-    "source_product_code": "TEXT",
-    "gtin": "TEXT",
-    "ean": "TEXT",
-    "code": "TEXT",
-    "product_name": "TEXT",
-    "brand": "TEXT",
-    "brands": "TEXT",
-    "quantity": "TEXT",
-    "net_content": "TEXT",
-    "packaging": "TEXT",
-    "category": "TEXT",
-    "categories": "TEXT",
-    "image_url": "TEXT",
-    "source_url": "TEXT",
-    "retailer_code": "TEXT",
-    "normalized_search_text": "TEXT",
-    "created_at": "TEXT",
-    "updated_at": "TEXT",
+_REQUIRED_INDEX_COLUMNS = {
+    "id",
+    "source_name",
+    "source_product_code",
+    "gtin",
+    "ean",
+    "code",
+    "product_name",
+    "brand",
+    "brands",
+    "quantity",
+    "net_content",
+    "packaging",
+    "category",
+    "categories",
+    "image_url",
+    "source_url",
+    "retailer_code",
+    "normalized_search_text",
+    "created_at",
+    "updated_at",
 }
-
-CREATE_EXTERNAL_PRODUCT_INDEX_SQL = """
-CREATE TABLE IF NOT EXISTS external_product_index (
-    id TEXT PRIMARY KEY,
-    source_name TEXT,
-    source_product_code TEXT,
-    gtin TEXT,
-    ean TEXT,
-    code TEXT,
-    product_name TEXT,
-    brand TEXT,
-    brands TEXT,
-    quantity TEXT,
-    net_content TEXT,
-    packaging TEXT,
-    category TEXT,
-    categories TEXT,
-    image_url TEXT,
-    source_url TEXT,
-    retailer_code TEXT,
-    normalized_search_text TEXT,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
+_REQUIRED_INDEXES = {
+    "idx_external_product_index_gtin": ("gtin",),
+    "idx_external_product_index_source": ("source_name",),
+    "idx_external_product_index_search": ("normalized_search_text",),
+}
 
 
 def now_iso() -> str:
@@ -84,30 +64,32 @@ def normalize_index_text(value: str | None) -> str:
     return " ".join(normalized.split())
 
 
-def _sqlite_columns(conn) -> set[str]:
-    return {str(row.get("name") or "") for row in conn.execute(text("PRAGMA table_info(external_product_index)")).mappings().all()}
-
-
-def _postgres_columns(conn) -> set[str]:
-    rows = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'external_product_index'")).mappings().all()
-    return {str(row.get("column_name") or "") for row in rows}
-
-
-def _add_missing_columns(conn) -> None:
-    existing_columns = _sqlite_columns(conn) if str(engine.dialect.name or "").lower() == "sqlite" else _postgres_columns(conn)
-    for column_name, column_definition in INDEX_COLUMNS.items():
-        if column_name in existing_columns or column_name == "id":
-            continue
-        conn.execute(text(f"ALTER TABLE external_product_index ADD COLUMN {column_name} {column_definition}"))
-
-
 def ensure_external_product_index_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text(CREATE_EXTERNAL_PRODUCT_INDEX_SQL))
-        _add_missing_columns(conn)
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_gtin ON external_product_index (gtin)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_source ON external_product_index (source_name)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_search ON external_product_index (normalized_search_text)"))
+    """Validate the Alembic-owned external product index contract; never mutate schema."""
+    inspector = inspect(engine)
+    if not inspector.has_table("external_product_index"):
+        raise RuntimeError("external_product_index ontbreekt; voer Alembic migrations uit")
+    columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("external_product_index")
+    }
+    missing = _REQUIRED_INDEX_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            "external_product_index schema incompleet: "
+            f"missing={sorted(missing)}"
+        )
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspector.get_indexes("external_product_index")
+    }
+    for index_name, expected_columns in _REQUIRED_INDEXES.items():
+        index = indexes.get(index_name)
+        if not index or tuple(index.get("column_names") or ()) != expected_columns:
+            raise RuntimeError(
+                "external_product_index indexcontract incompleet: "
+                f"{index_name}"
+            )
 
 
 def _catalog_payload() -> dict[str, Any]:
@@ -222,6 +204,7 @@ def _json_seed_rows() -> list[dict[str, Any]]:
 
 
 def ensure_external_product_index_seeded(minimum_rows: int = 1) -> dict[str, Any]:
+    del minimum_rows
     ensure_external_product_index_schema()
     rows = _json_seed_rows()
     with engine.begin() as conn:
