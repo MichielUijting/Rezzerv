@@ -20,6 +20,11 @@ from app.services.household_onboarding_service import (
     resolve_household_onboarding_state,
 )
 from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
+from app.testing.onboarding_request_schema_fixture import (
+    backfill_completed_household_onboarding,
+    install_household_onboarding_schema,
+    install_household_product_configuration_schema,
+)
 from app.testing.server_session_contract import create_server_session_contract_schema
 
 
@@ -56,6 +61,8 @@ def _prepare_database(engine) -> None:
         install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         create_server_session_contract_schema(conn)
+        install_household_onboarding_schema(conn)
+        install_household_product_configuration_schema(conn)
 
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type)
@@ -87,6 +94,7 @@ def _prepare_database(engine) -> None:
             membership_id="shared-member-membership",
             legacy_role="member",
         )
+        backfill_completed_household_onboarding(conn)
         ensure_household_onboarding_foundation(conn)
         conn.execute(text("""
             UPDATE household_onboarding
