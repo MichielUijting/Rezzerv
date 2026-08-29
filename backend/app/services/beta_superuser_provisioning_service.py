@@ -124,9 +124,9 @@ def provision_po_beta_superuser(
     household_changed = old_household_role != "household.admin"
     conn.execute(text("""
         INSERT INTO auth_membership_roles(household_id, membership_id, role_key, active, updated_at)
-        VALUES (:household_id, :membership_id, 'household.admin', 1, CURRENT_TIMESTAMP)
+        VALUES (:household_id, :membership_id, 'household.admin', TRUE, CURRENT_TIMESTAMP)
         ON CONFLICT(household_id, membership_id) DO UPDATE SET
-            role_key = 'household.admin', active = 1, updated_at = CURRENT_TIMESTAMP
+            role_key = 'household.admin', active = TRUE, updated_at = CURRENT_TIMESTAMP
     """), {"household_id": resolved_household_id, "membership_id": membership_id})
 
     old_platform_active = conn.execute(text("""
@@ -134,12 +134,12 @@ def provision_po_beta_superuser(
         WHERE user_id = :user_id AND role_key = 'platform.superuser'
         LIMIT 1
     """), {"user_id": user_id}).scalar()
-    platform_changed = old_platform_active != 1
+    platform_changed = not bool(old_platform_active)
     conn.execute(text("""
         INSERT INTO auth_platform_user_roles(user_id, role_key, active, updated_at)
-        VALUES (:user_id, 'platform.superuser', 1, CURRENT_TIMESTAMP)
+        VALUES (:user_id, 'platform.superuser', TRUE, CURRENT_TIMESTAMP)
         ON CONFLICT(user_id, role_key) DO UPDATE SET
-            active = 1, updated_at = CURRENT_TIMESTAMP
+            active = TRUE, updated_at = CURRENT_TIMESTAMP
     """), {"user_id": user_id})
 
     if household_changed:
@@ -164,7 +164,7 @@ def provision_po_beta_superuser(
             object_type="app_user",
             object_id=user_id,
             old_value={"active": old_platform_active},
-            new_value={"role_key": "platform.superuser", "active": 1},
+            new_value={"role_key": "platform.superuser", "active": True},
             reason=reason,
         )
 
