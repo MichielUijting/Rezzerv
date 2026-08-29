@@ -8,17 +8,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_ROOT = BACKEND_ROOT / "app" / "services"
 MIGRATION = BACKEND_ROOT / "alembic" / "versions" / "20260829_07_external_catalog_request_authority.py"
 
-SCOPE = (
-    "external_article_confirmation_service.py",
-    "external_article_product_link_service.py",
-    "external_article_ui_projection.py",
-    "external_candidate_diagnostics.py",
-    "external_product_candidate_store.py",
-    "external_product_index_store.py",
-    "external_receipt_auto_coverage.py",
-    "external_receipt_item_projection.py",
-    "external_recognition_confirmation.py",
-    "external_relation_batch_store.py",
+EXTRA_SCOPE = (
     "open_food_facts_candidate_store.py",
 )
 
@@ -43,6 +33,15 @@ BOOLEAN_COLUMNS = (
     "is_external_database_override",
     "is_primary",
 )
+
+
+def _scope_paths() -> tuple[Path, ...]:
+    paths = {path for path in SERVICE_ROOT.glob("external_*.py") if path.is_file()}
+    paths.update(SERVICE_ROOT / filename for filename in EXTRA_SCOPE)
+    missing = [str(path) for path in paths if not path.is_file()]
+    if missing:
+        raise AssertionError(f"PR2h static gate scope files ontbreken: {sorted(missing)}")
+    return tuple(sorted(paths, key=lambda path: path.name))
 
 
 def _string_value(node: ast.AST) -> str | None:
@@ -79,17 +78,16 @@ def _text_sql_literals(source: str) -> list[str]:
 
 def _assert_runtime_sql_portable() -> None:
     failures: list[str] = []
-    for filename in SCOPE:
-        path = SERVICE_ROOT / filename
+    for path in _scope_paths():
         source = path.read_text(encoding="utf-8")
         for index, sql in enumerate(_text_sql_literals(source), start=1):
             for label, pattern in FORBIDDEN_SQL_PATTERNS.items():
                 if pattern.search(sql):
-                    failures.append(f"{filename}: SQL#{index}: {label}")
+                    failures.append(f"{path.name}: SQL#{index}: {label}")
             for column in BOOLEAN_COLUMNS:
                 if re.search(rf"\b{re.escape(column)}\s*=\s*[01]\b", sql, re.IGNORECASE):
                     failures.append(
-                        f"{filename}: SQL#{index}: integer comparison against BOOLEAN {column}"
+                        f"{path.name}: SQL#{index}: integer comparison against BOOLEAN {column}"
                     )
                 if re.search(
                     rf"COALESCE\s*\(\s*{re.escape(column)}\s*,\s*[01]\s*\)",
@@ -97,7 +95,7 @@ def _assert_runtime_sql_portable() -> None:
                     re.IGNORECASE,
                 ):
                     failures.append(
-                        f"{filename}: SQL#{index}: integer COALESCE fallback for BOOLEAN {column}"
+                        f"{path.name}: SQL#{index}: integer COALESCE fallback for BOOLEAN {column}"
                     )
     if failures:
         raise AssertionError(
@@ -109,8 +107,8 @@ def _assert_runtime_sql_portable() -> None:
 
 def _assert_runtime_schema_authority_absent() -> None:
     failures: list[str] = []
-    for filename in SCOPE:
-        source = (SERVICE_ROOT / filename).read_text(encoding="utf-8")
+    for path in _scope_paths():
+        source = path.read_text(encoding="utf-8")
         sql_literals = _text_sql_literals(source)
         for index, sql in enumerate(sql_literals, start=1):
             normalized = " ".join(sql.upper().split())
@@ -127,7 +125,7 @@ def _assert_runtime_schema_authority_absent() -> None:
                     "DROP TRIGGER",
                 )
             ):
-                failures.append(f"{filename}: SQL#{index}")
+                failures.append(f"{path.name}: SQL#{index}")
     if failures:
         raise AssertionError(
             "PR2h request paths still own runtime schema mutations: "
@@ -154,6 +152,13 @@ def _assert_alembic_authority_contract() -> None:
 
 
 def main() -> None:
+    scope = _scope_paths()
+    if not scope:
+        raise AssertionError("PR2h static gate resolved an empty external service scope")
+    print(
+        "POSTGRESQL_EXTERNAL_CATALOG_SCOPE_GREEN "
+        f"service_files={len(scope)}"
+    )
     _assert_runtime_sql_portable()
     _assert_runtime_schema_authority_absent()
     _assert_alembic_authority_contract()
