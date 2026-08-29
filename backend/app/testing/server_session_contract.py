@@ -38,7 +38,12 @@ def create_server_session_contract_schema(conn: Connection) -> None:
     conn.execute(text("""
         CREATE TABLE household_onboarding (
             household_id TEXT PRIMARY KEY,
-            status TEXT NOT NULL DEFAULT 'in_progress',
+            onboarding_status TEXT NOT NULL DEFAULT 'not_started',
+            onboarding_version INTEGER NOT NULL DEFAULT 2,
+            primary_use_case TEXT,
+            onboarding_step TEXT,
+            household_usage_mode TEXT,
+            onboarding_completed_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
