@@ -77,23 +77,25 @@ def _resolve_or_create_space(conn, *, household_id: str, name: str) -> Provision
         space_id = str(rows[0].get("id") or "").strip()
         conn.execute(text("""
             UPDATE spaces
-            SET naam = :naam, active = 1
+            SET naam = :naam, active = :active
             WHERE id = :id AND household_id = :household_id
         """), {
             "id": space_id,
             "household_id": household_id,
             "naam": normalized_name,
+            "active": True,
         })
         return ProvisionedSpace(id=space_id, name=normalized_name)
 
     space_id = str(uuid.uuid4())
     conn.execute(text("""
         INSERT INTO spaces (id, naam, household_id, active)
-        VALUES (:id, :naam, :household_id, 1)
+        VALUES (:id, :naam, :household_id, :active)
     """), {
         "id": space_id,
         "naam": normalized_name,
         "household_id": household_id,
+        "active": True,
     })
     return ProvisionedSpace(id=space_id, name=normalized_name)
 
@@ -126,12 +128,13 @@ def _resolve_or_create_sublocation(
         sublocation_id = str(rows[0].get("id") or "").strip()
         conn.execute(text("""
             UPDATE sublocations
-            SET naam = :naam, active = 1
+            SET naam = :naam, active = :active
             WHERE id = :id AND space_id = :space_id
         """), {
             "id": sublocation_id,
             "space_id": space.id,
             "naam": normalized_name,
+            "active": True,
         })
         return ProvisionedSublocation(
             id=sublocation_id,
@@ -143,11 +146,12 @@ def _resolve_or_create_sublocation(
     sublocation_id = str(uuid.uuid4())
     conn.execute(text("""
         INSERT INTO sublocations (id, naam, space_id, active)
-        VALUES (:id, :naam, :space_id, 1)
+        VALUES (:id, :naam, :space_id, :active)
     """), {
         "id": sublocation_id,
         "naam": normalized_name,
         "space_id": space.id,
+        "active": True,
     })
     return ProvisionedSublocation(
         id=sublocation_id,
@@ -261,9 +265,12 @@ def provision_waar_inhuis_expansion_locations(
         SELECT id, naam
         FROM spaces
         WHERE household_id = :household_id
-          AND COALESCE(active, 1) = 1
+          AND COALESCE(active, :active) = :active
         ORDER BY lower(trim(naam)), id
-    """), {"household_id": normalized_household_id}).mappings().all()
+    """), {
+        "household_id": normalized_household_id,
+        "active": True,
+    }).mappings().all()
 
     spaces_by_key: dict[str, ProvisionedSpace] = {
         _normalize_name(row.get("naam"), label="Hoofdlocatie").casefold(): ProvisionedSpace(
