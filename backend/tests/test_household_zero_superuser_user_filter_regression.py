@@ -42,6 +42,22 @@ def _create_household_zero_domain_tables(engine):
                 created_at TEXT
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE actor_object_attributions (
+                object_type TEXT NOT NULL,
+                object_id TEXT NOT NULL,
+                household_id TEXT NOT NULL,
+                actor_user_id TEXT NOT NULL,
+                attribution_source TEXT NOT NULL DEFAULT 'runtime_session',
+                first_attributed_at TEXT NOT NULL,
+                last_attributed_at TEXT NOT NULL,
+                PRIMARY KEY (object_type, object_id)
+            )
+        """))
+        conn.execute(text("""
+            CREATE INDEX idx_actor_object_attributions_household_actor
+            ON actor_object_attributions (household_id, actor_user_id, object_type)
+        """))
 
 
 def _write_user_actions(engine, user_id: str, suffix: str):
