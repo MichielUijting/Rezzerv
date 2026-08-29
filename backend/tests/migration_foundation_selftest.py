@@ -13,7 +13,7 @@ from capture_schema_baseline import dump_schema
 
 
 SQLITE_BASELINE_REVISION = "20260827_01"
-HEAD_REVISION = "20260829_08"
+HEAD_REVISION = "20260829_09"
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "baseline_sqlite.sql.gz"
 BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 75
@@ -153,6 +153,11 @@ EXPECTED_PRODUCT_INVENTORY_GPC_COLUMNS = {
     "gpc_brick_code",
 }
 EXPECTED_BOOLEAN_COLUMNS = {
+    ("auth_membership_roles", "active"),
+    ("auth_permissions", "active"),
+    ("auth_platform_user_roles", "active"),
+    ("auth_roles", "active"),
+    ("auth_roles", "system_role"),
     ("external_product_candidates", "is_probable"),
     ("external_product_candidates", "is_user_confirmed"),
     ("external_product_candidates", "is_external_database_override"),
@@ -495,7 +500,7 @@ def _assert_postgresql_schema(connection) -> None:
     tables = set(inspector.get_table_names()) - {"alembic_version"}
     if len(tables) != EXPECTED_POSTGRESQL_APPLICATION_TABLES:
         raise AssertionError(
-            "PR2i PostgreSQL application schema must contain exactly "
+            "PR2j PostgreSQL application schema must contain exactly "
             f"{EXPECTED_POSTGRESQL_APPLICATION_TABLES} application tables; actual={len(tables)}"
         )
     _assert_server_session_schema(connection)
@@ -508,6 +513,30 @@ def _assert_postgresql_schema(connection) -> None:
         if not isinstance(column["type"], sa.Boolean):
             raise AssertionError(
                 f"Expected BOOLEAN for {table_name}.{column_name}, got {column['type']}"
+            )
+
+    auth_ip_owner_index = connection.execute(
+        text(
+            """
+            SELECT indexdef
+            FROM pg_indexes
+            WHERE schemaname = current_schema()
+              AND tablename = 'auth_platform_user_roles'
+              AND indexname = 'idx_auth_single_active_ip_owner'
+            """
+        )
+    ).scalar_one_or_none()
+    normalized_auth_index = " ".join(str(auth_ip_owner_index or "").lower().split())
+    for fragment in (
+        "create unique index",
+        "role_key",
+        "platform.ip_owner",
+        "active is true",
+    ):
+        if fragment not in normalized_auth_index:
+            raise AssertionError(
+                "Invalid PostgreSQL authorization partial unique index: "
+                f"missing={fragment!r} index={auth_ip_owner_index!r}"
             )
 
     for table_name, column_name in (
@@ -615,6 +644,7 @@ def _assert_postgresql_schema(connection) -> None:
     )
     print("POSTGRESQL_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN")
     print("POSTGRESQL_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN")
+    print("POSTGRESQL_AUTHORIZATION_BOOLEAN_SCHEMA_GREEN")
 
 
 def main() -> None:
