@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 from sqlalchemy import text
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.db import engine
 from app.services.article_group_store import (
