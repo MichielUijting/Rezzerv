@@ -219,7 +219,7 @@ def test_household_and_account_foundation_validates_canonical_schema_idempotentl
 
     assert HOUSEHOLD_CONTEXT_TYPES == {"regular", "system"}
     assert households == {"0": "system", "1": "regular"}
-    assert ACCOUNT_STATUSES == {"active", "disabled"}
+    assert ACCOUNT_STATUSES == {"active", "disabled", "suspended"}
     assert account["account_status"] == "active"
     assert account["password"] == "legacy-value"
     assert account["password_hash"] is None
