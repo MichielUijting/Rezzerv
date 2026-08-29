@@ -48,59 +48,70 @@ STOP_WORDS = {
     "gram", "kilogram", "kg", "g", "ml", "cl", "dl", "liter", "l",
 }
 
+_GPC_PRODUCT_GROUP_COLUMNS = {
+    "gpc_brick_code",
+    "gpc_brick_name",
+    "gpc_brick_name_en",
+    "gpc_class_code",
+    "gpc_class_name",
+    "gpc_class_name_en",
+    "gpc_family_code",
+    "gpc_family_name",
+    "gpc_family_name_en",
+    "gpc_segment_code",
+    "gpc_segment_name",
+    "gpc_segment_name_en",
+    "brick_definition_includes_en",
+    "brick_definition_excludes_en",
+    "language_code",
+    "source_version",
+    "source",
+    "active",
+    "created_at",
+    "updated_at",
+}
+_PRODUCT_INVENTORY_GPC_COLUMNS = {
+    "gpc_family_code",
+    "gpc_family_name",
+    "gpc_class_code",
+    "gpc_class_name",
+    "gpc_brick_code",
+    "source",
+}
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 def _columns(table_name: str) -> set[str]:
-    try:
-        return {str(column.get("name") or "") for column in inspect(engine).get_columns(table_name)}
-    except Exception:
+    inspector = inspect(engine)
+    if not inspector.has_table(table_name):
         return set()
-
-
-def _ensure_column(conn, table_name: str, name: str, definition: str) -> None:
-    if name not in _columns(table_name):
-        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {name} {definition}"))
+    return {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(table_name)
+    }
 
 
 def ensure_local_gpc_schema() -> None:
+    """Fail closed unless Alembic has installed the local GPC catalog contract."""
     ensure_product_inventory_group_schema()
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS gpc_product_groups (
-                gpc_brick_code TEXT PRIMARY KEY,
-                gpc_brick_name TEXT NOT NULL,
-                gpc_class_code TEXT,
-                gpc_class_name TEXT,
-                gpc_family_code TEXT,
-                gpc_family_name TEXT,
-                gpc_segment_code TEXT,
-                gpc_segment_name TEXT,
-                language_code TEXT,
-                source_version TEXT,
-                active INTEGER DEFAULT 1,
-                created_at TEXT,
-                updated_at TEXT
-            )
-        """))
-        for name, definition in {
-            "gpc_brick_name_en": "TEXT",
-            "gpc_class_name_en": "TEXT",
-            "gpc_family_name_en": "TEXT",
-            "gpc_segment_name_en": "TEXT",
-            "brick_definition_includes_en": "TEXT",
-            "brick_definition_excludes_en": "TEXT",
-            "source": "TEXT",
-        }.items():
-            _ensure_column(conn, "gpc_product_groups", name, definition)
-        for name, definition in {
-            "gpc_family_code": "TEXT", "gpc_family_name": "TEXT",
-            "gpc_class_code": "TEXT", "gpc_class_name": "TEXT",
-            "gpc_brick_code": "TEXT", "source": "TEXT",
-        }.items():
-            _ensure_column(conn, "product_inventory_groups", name, definition)
+    inspector = inspect(engine)
+    if not inspector.has_table("gpc_product_groups"):
+        raise RuntimeError("gpc_product_groups ontbreekt; voer Alembic migrations uit")
+    missing_gpc = _GPC_PRODUCT_GROUP_COLUMNS - _columns("gpc_product_groups")
+    if missing_gpc:
+        raise RuntimeError(
+            "gpc_product_groups schema incompleet: "
+            f"missing={sorted(missing_gpc)}"
+        )
+    missing_group = _PRODUCT_INVENTORY_GPC_COLUMNS - _columns("product_inventory_groups")
+    if missing_group:
+        raise RuntimeError(
+            "product_inventory_groups GPC-schema incompleet: "
+            f"missing={sorted(missing_group)}"
+        )
 
 
 def import_bundled_gpc_catalog() -> dict[str, Any]:
