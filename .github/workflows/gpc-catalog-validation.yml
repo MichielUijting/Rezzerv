@@ -54,7 +54,7 @@ jobs:
           rm -f /tmp/rezzerv-gpc-validation.db
           python -m alembic -c alembic.ini upgrade head
           python -m alembic -c alembic.ini current | tee /tmp/gpc-validation-alembic-current.log
-          grep -F '20260829_11' /tmp/gpc-validation-alembic-current.log
+          grep -F '20260829_12' /tmp/gpc-validation-alembic-current.log
 
       - name: Run isolated CLI import
         env:
@@ -105,7 +105,7 @@ jobs:
                   "SELECT language_code, source_version, status FROM gpc_import_runs ORDER BY id DESC LIMIT 1"
               ).fetchone()
 
-          assert revision == ('20260829_11',)
+          assert revision == ('20260829_12',)
           assert brick == ('Mosterdblad', '50101700')
           assert audit == ('nl', 'ci', 'success')
           PY
