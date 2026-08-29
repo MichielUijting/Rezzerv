@@ -10,18 +10,26 @@ on:
       - 'backend/app/schema_migration_preflight.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/article_group_store.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/services/authorization_ui_fixture_provisioning.py'
       - 'backend/app/services/barcode_identity_service.py'
+      - 'backend/app/services/beta_superuser_provisioning_service.py'
       - 'backend/app/services/canonical_direct_location_service.py'
       - 'backend/app/services/gpc_catalog_service.py'
       - 'backend/app/services/gpc_local_catalog_service.py'
       - 'backend/app/services/household_location_onboarding_service.py'
       - 'backend/app/services/household_product_configuration_service.py'
       - 'backend/app/services/loyalty_stamp_transaction_service.py'
+      - 'backend/app/services/platform_authorization_management_service.py'
       - 'backend/app/services/product_inventory_group_store.py'
       - 'backend/app/services/product_taxonomy_store.py'
       - 'backend/app/services/shopping_list_service.py'
+      - 'backend/app/services/system_superuser_session_provisioning.py'
       - 'backend/app/services/external_*.py'
       - 'backend/app/services/open_food_facts_candidate_store.py'
+      - 'backend/tests/postgresql_authorization_sql_portability_selftest.py'
+      - 'backend/tests/postgresql_authorization_dml_only_selftest.py'
       - 'backend/tests/postgresql_core_request_dml_only_selftest.py'
       - 'backend/tests/postgresql_external_catalog_sql_authority_selftest.py'
       - 'backend/tests/postgresql_external_catalog_dml_only_selftest.py'
@@ -101,6 +109,14 @@ jobs:
           python backend/tests/runtime_startup_schema_authority_selftest.py | tee /tmp/runtime-startup-static.log
           grep -F 'RUNTIME_STARTUP_SCHEMA_MUTATION_REMOVED_GREEN' /tmp/runtime-startup-static.log
 
+      - name: Prove authorization/membership runtime SQL is schema-free and portable
+        run: |
+          python backend/tests/postgresql_authorization_sql_portability_selftest.py | tee /tmp/authorization-static.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_SQL_PORTABLE_GREEN' /tmp/authorization-static.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_RUNTIME_DDL_ABSENT_GREEN' /tmp/authorization-static.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_VALIDATION_ONLY_SCHEMA_GREEN' /tmp/authorization-static.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/authorization-static.log
+
       - name: Prove external catalog/link runtime SQL is schema-free and portable
         run: |
           python backend/tests/postgresql_external_catalog_sql_authority_selftest.py | tee /tmp/external-catalog-static.log
@@ -144,6 +160,19 @@ jobs:
           grep -F 'POSTGRESQL_CORE_REQUEST_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/core-request-dml-only.log
           grep -F 'POSTGRESQL_CORE_REQUEST_DML_ONLY_GREEN' /tmp/core-request-dml-only.log
           grep -F 'POSTGRESQL_CORE_REQUEST_AUTHORITY_SELFTEST_GREEN' /tmp/core-request-dml-only.log
+
+      - name: Prove authorization/membership paths work with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_authorization_dml_only_selftest.py | tee /tmp/authorization-dml-only.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_RUNTIME_CREATE_DENIED_GREEN' /tmp/authorization-dml-only.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/authorization-dml-only.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_PLATFORM_READ_GREEN' /tmp/authorization-dml-only.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_MEMBERSHIP_READ_GREEN' /tmp/authorization-dml-only.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_MEMBERSHIP_DML_ONLY_GREEN' /tmp/authorization-dml-only.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_PLATFORM_DML_ONLY_GREEN' /tmp/authorization-dml-only.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_DML_ONLY_GREEN' /tmp/authorization-dml-only.log
+          grep -F 'POSTGRESQL_AUTHORIZATION_AUTHORITY_SELFTEST_GREEN' /tmp/authorization-dml-only.log
 
       - name: Prove external catalog/link request paths work with DML-only runtime role
         working-directory: backend
