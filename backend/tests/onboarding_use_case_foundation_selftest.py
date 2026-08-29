@@ -27,6 +27,7 @@ from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_
 from app.testing.onboarding_request_schema_fixture import (
     backfill_completed_household_onboarding,
     install_household_onboarding_schema,
+    install_household_product_configuration_schema,
 )
 from app.testing.server_session_contract import create_server_session_contract_schema
 
@@ -65,6 +66,7 @@ def _prepare_database(engine) -> None:
         ensure_authorization_foundation(conn)
         create_server_session_contract_schema(conn)
         install_household_onboarding_schema(conn)
+        install_household_product_configuration_schema(conn)
 
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type)
