@@ -1,14 +1,127 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import create_engine, text
 
 from app.services import external_database_matchflow_evidence as matchflow
 from app.services import external_product_candidate_store as candidate_store
 from app.services import external_recognition_confirmation as recognition
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
+HEAD_REVISION = "20260829_07"
+
+
+def _database_url(path: Path) -> str:
+    return f"sqlite:///{path.as_posix()}"
+
+
+def _migrate_database(path: Path) -> None:
+    database_url = _database_url(path)
+    env = os.environ.copy()
+    env["DATABASE_URL"] = database_url
+    env["MIGRATION_DATABASE_URL"] = database_url
+    env["PYTHONPATH"] = str(BACKEND_ROOT)
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],
+        cwd=BACKEND_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "Recognition contract fixture could not migrate through Alembic head:\n"
+            + result.stdout
+            + result.stderr
+        )
+
+
+def _fixture_value(column_name: str, declared_type: str) -> Any:
+    if column_name == "id":
+        return "pil-1"
+    if column_name == "purchase_import_id":
+        return "purchase-import-recognition-contract"
+    if column_name == "receipt_line_index":
+        return 1
+    if column_name in {"raw_text", "normalized_text"}:
+        return "Veldsla"
+    if column_name == "quantity":
+        return 1
+    if column_name == "unit":
+        return "stuk"
+    if column_name == "line_total":
+        return 1.0
+    if column_name == "linked_status":
+        return "unlinked"
+    if column_name.endswith("_at"):
+        return "2026-08-29 12:00:00"
+
+    normalized_type = str(declared_type or "").upper()
+    if "INT" in normalized_type or "BOOL" in normalized_type:
+        return 0
+    if any(token in normalized_type for token in ("REAL", "FLOAT", "DOUBLE", "NUMERIC", "DECIMAL")):
+        return 0.0
+    return f"recognition-contract-{column_name}"
+
+
+def _insert_purchase_import_line_fixture(conn) -> None:
+    rows = conn.exec_driver_sql("PRAGMA table_info(purchase_import_lines)").mappings().all()
+    if not rows:
+        raise AssertionError("Alembic head is missing canonical purchase_import_lines")
+
+    columns = {str(row.get("name") or ""): row for row in rows}
+    required_contract = {
+        "id",
+        "external_article_code",
+        "external_source_name",
+        "external_match_status",
+        "updated_at",
+    }
+    missing = required_contract - set(columns)
+    if missing:
+        raise AssertionError(
+            f"Canonical purchase_import_lines lacks recognition projection columns: {sorted(missing)}"
+        )
+
+    values: dict[str, Any] = {
+        "id": "pil-1",
+        "external_article_code": None,
+        "external_source_name": None,
+        "external_match_status": None,
+    }
+    for column_name, row in columns.items():
+        if column_name in values:
+            continue
+        is_required = bool(row.get("notnull")) and row.get("dflt_value") is None
+        if is_required:
+            values[column_name] = _fixture_value(column_name, str(row.get("type") or ""))
+
+    names = list(values)
+    quoted_names = ", ".join(f'"{name}"' for name in names)
+    parameters = ", ".join(f":{name}" for name in names)
+    conn.execute(
+        text(f"INSERT INTO purchase_import_lines ({quoted_names}) VALUES ({parameters})"),
+        values,
+    )
+
+
+def _assert_head_revision(engine) -> None:
+    with engine.connect() as conn:
+        revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+    if revision != HEAD_REVISION:
+        raise AssertionError(
+            f"Recognition contract fixture expected Alembic {HEAD_REVISION}, got {revision}"
+        )
 
 
 @contextmanager
@@ -18,48 +131,17 @@ def _prepared_database():
 
     with tempfile.TemporaryDirectory(prefix="rezzerv-recognition-") as temp_dir:
         db_path = Path(temp_dir) / "recognition-test.db"
-        engine = create_engine(f"sqlite:///{db_path}", future=True)
+        _migrate_database(db_path)
+        engine = create_engine(_database_url(db_path), future=True)
         candidate_store.engine = engine
         recognition.engine = engine
         try:
+            _assert_head_revision(engine)
+            # Runtime schema helpers are validation-only under PR2h. The fixture must
+            # therefore be migration-first and this call may only validate Alembic's schema.
             candidate_store.ensure_external_product_candidates_schema()
             with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        """
-                        CREATE TABLE purchase_import_lines (
-                            id TEXT PRIMARY KEY,
-                            external_article_code TEXT,
-                            external_source_name TEXT,
-                            external_match_status TEXT,
-                            updated_at TEXT
-                        )
-                        """
-                    )
-                )
-                conn.execute(text("CREATE TABLE global_products (id TEXT PRIMARY KEY, name TEXT)"))
-                conn.execute(
-                    text(
-                        """
-                        CREATE TABLE product_identities (
-                            id TEXT PRIMARY KEY,
-                            identity_type TEXT,
-                            identity_value TEXT,
-                            global_product_id TEXT
-                        )
-                        """
-                    )
-                )
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO purchase_import_lines (
-                            id, external_article_code, external_source_name,
-                            external_match_status, updated_at
-                        ) VALUES ('pil-1', NULL, NULL, NULL, CURRENT_TIMESTAMP)
-                        """
-                    )
-                )
+                _insert_purchase_import_line_fixture(conn)
                 conn.execute(
                     text(
                         """
