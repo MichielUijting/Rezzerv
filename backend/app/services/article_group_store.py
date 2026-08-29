@@ -5,33 +5,31 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 
 
-ARTICLE_GROUPS_SQL = """
-CREATE TABLE IF NOT EXISTS article_groups (
-    id TEXT PRIMARY KEY,
-    household_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    normalized_name TEXT NOT NULL,
-    status TEXT DEFAULT 'active',
-    sort_order INTEGER DEFAULT 0,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
-
-ARTICLE_GROUPS_HOUSEHOLD_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_article_groups_household_name
-ON article_groups (household_id, normalized_name)
-"""
-
-HOUSEHOLD_ARTICLE_GROUP_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_household_articles_article_group
-ON household_articles (article_group_id)
-"""
+_ARTICLE_GROUP_COLUMNS = {
+    "id",
+    "household_id",
+    "name",
+    "normalized_name",
+    "status",
+    "sort_order",
+    "created_at",
+    "updated_at",
+}
+_REQUIRED_INDEXES = {
+    "idx_article_groups_household_name": (
+        "article_groups",
+        ("household_id", "normalized_name"),
+    ),
+    "idx_household_articles_article_group": (
+        "household_articles",
+        ("article_group_id",),
+    ),
+}
 
 
 def now_iso() -> str:
@@ -49,51 +47,60 @@ def display_article_group_name(value: Any) -> str:
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        return conn.execute(
-            text("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :table_name"),
-            {"table_name": table_name},
-        ).mappings().first() is not None
-    return conn.execute(
-        text("""
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_name = :table_name
-            LIMIT 1
-        """),
-        {"table_name": table_name},
-    ).mappings().first() is not None
+    return inspect(conn).has_table(table_name)
 
 
 def _get_columns(conn, table_name: str) -> set[str]:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
-        return {str(row.get("name") or "") for row in rows}
-    rows = conn.execute(
-        text("SELECT column_name FROM information_schema.columns WHERE table_name = :table_name"),
-        {"table_name": table_name},
-    ).mappings().all()
-    return {str(row.get("column_name") or "") for row in rows}
-
-
-def _ensure_missing_column(conn, table_name: str, column_name: str, definition: str) -> None:
-    if not _table_exists(conn, table_name):
-        return
-    if column_name in _get_columns(conn, table_name):
-        return
-    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
+    inspector = inspect(conn)
+    if not inspector.has_table(table_name):
+        return set()
+    return {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(table_name)
+    }
 
 
 def ensure_article_group_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text(ARTICLE_GROUPS_SQL))
-        conn.execute(text(ARTICLE_GROUPS_HOUSEHOLD_INDEX_SQL))
-        conn.execute(text("UPDATE article_groups SET status = 'active' WHERE COALESCE(status, 'active') <> 'active'"))
-        _ensure_missing_column(conn, "household_articles", "article_group_id", "TEXT")
-        if _table_exists(conn, "household_articles"):
-            conn.execute(text(HOUSEHOLD_ARTICLE_GROUP_INDEX_SQL))
+    """Validate the Alembic-owned article-group contract without schema mutation."""
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        if not inspector.has_table("article_groups"):
+            raise RuntimeError(
+                "Canonical article-group schema ontbreekt: article_groups. "
+                "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
+            )
+        columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns("article_groups")
+        }
+        missing = _ARTICLE_GROUP_COLUMNS - columns
+        if missing:
+            raise RuntimeError(
+                f"Canonical article-group schema wijkt af: article_groups mist {sorted(missing)}"
+            )
+        if not inspector.has_table("household_articles"):
+            raise RuntimeError("Canonical article-group schema mist household_articles")
+        household_columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns("household_articles")
+        }
+        if "article_group_id" not in household_columns:
+            raise RuntimeError("Canonical article-group schema mist household_articles.article_group_id")
+
+        for index_name, (table_name, expected_columns) in _REQUIRED_INDEXES.items():
+            indexes = {
+                str(index.get("name") or ""): index
+                for index in inspector.get_indexes(table_name)
+            }
+            index = indexes.get(index_name)
+            actual_columns = tuple(
+                str(column or "") for column in ((index or {}).get("column_names") or ())
+            )
+            if not index or actual_columns != expected_columns or bool(index.get("unique")):
+                raise RuntimeError(
+                    f"Canonical article-group index wijkt af: {index_name}; "
+                    f"expected={expected_columns!r}, actual={actual_columns!r}"
+                )
 
 
 def _normalize_household_id(household_id: Any) -> str:
