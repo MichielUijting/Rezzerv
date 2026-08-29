@@ -4,9 +4,32 @@ import re
 import uuid
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
+
+
+LOYALTY_STAMP_REQUIRED_COLUMNS = {
+    "id",
+    "household_id",
+    "receipt_table_id",
+    "receipt_line_id",
+    "store_name",
+    "stamp_program_code",
+    "quantity",
+    "unit_price",
+    "line_total",
+    "transaction_type",
+    "source",
+    "purchase_at",
+    "created_at",
+    "updated_at",
+}
+LOYALTY_STAMP_REQUIRED_INDEXES = {
+    "idx_loyalty_stamp_transactions_receipt_line",
+    "idx_loyalty_stamp_transactions_household_store",
+    "idx_loyalty_stamp_transactions_receipt_table",
+}
 
 
 def _text(value: Any) -> str:
@@ -35,52 +58,36 @@ def _stamp_program_code(store_name: str | None) -> str:
 
 
 def ensure_loyalty_stamp_transactions_schema(conn) -> None:
-    conn.execute(
-        text(
-            """
-            CREATE TABLE IF NOT EXISTS loyalty_stamp_transactions (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                receipt_table_id TEXT NOT NULL,
-                receipt_line_id TEXT NOT NULL,
-                store_name TEXT,
-                stamp_program_code TEXT NOT NULL,
-                quantity REAL,
-                unit_price REAL,
-                line_total REAL,
-                transaction_type TEXT NOT NULL DEFAULT 'purchase',
-                source TEXT NOT NULL DEFAULT 'receipt_table_line',
-                purchase_at TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
+    """Validate the Alembic-owned loyalty schema without mutating it."""
+    inspector = inspect(conn)
+    if "loyalty_stamp_transactions" not in set(inspector.get_table_names()):
+        raise RuntimeError(
+            "Loyalty-stamp schema is not migrated; missing table "
+            "loyalty_stamp_transactions"
         )
-    )
-    conn.execute(
-        text(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_stamp_transactions_receipt_line
-            ON loyalty_stamp_transactions (receipt_line_id)
-            """
+
+    columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("loyalty_stamp_transactions")
+    }
+    missing_columns = LOYALTY_STAMP_REQUIRED_COLUMNS - columns
+    if missing_columns:
+        raise RuntimeError(
+            "Loyalty-stamp schema is incomplete; missing columns: "
+            + ", ".join(sorted(missing_columns))
         )
-    )
-    conn.execute(
-        text(
-            """
-            CREATE INDEX IF NOT EXISTS idx_loyalty_stamp_transactions_household_store
-            ON loyalty_stamp_transactions (household_id, store_name, purchase_at)
-            """
+
+    indexes = {
+        str(index.get("name") or "")
+        for index in inspector.get_indexes("loyalty_stamp_transactions")
+        if index.get("name")
+    }
+    missing_indexes = LOYALTY_STAMP_REQUIRED_INDEXES - indexes
+    if missing_indexes:
+        raise RuntimeError(
+            "Loyalty-stamp schema is incomplete; missing indexes: "
+            + ", ".join(sorted(missing_indexes))
         )
-    )
-    conn.execute(
-        text(
-            """
-            CREATE INDEX IF NOT EXISTS idx_loyalty_stamp_transactions_receipt_table
-            ON loyalty_stamp_transactions (receipt_table_id)
-            """
-        )
-    )
 
 
 def _spaarzegels_transaction_rows(conn, receipt_table_id: str) -> list[dict[str, Any]]:
