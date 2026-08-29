@@ -40,6 +40,16 @@ from app.services.shopping_list_service import (
 HOUSEHOLD_ID = "__pr337_runtime_dml_only__"
 
 
+def _assert_location_default_introspection_is_portable() -> None:
+    main_source = (BACKEND_ROOT / "app" / "main.py").read_text(encoding="utf-8")
+    forbidden = 'PRAGMA table_info(household_article_settings)'
+    if forbidden in main_source:
+        raise AssertionError(
+            "Location-default request path still uses SQLite-only PRAGMA schema introspection"
+        )
+    print("POSTGRESQL_LOCATION_DEFAULT_INTROSPECTION_PORTABLE_GREEN")
+
+
 def _assert_runtime_has_no_schema_create() -> None:
     with engine.connect() as conn:
         if conn.dialect.name != "postgresql":
@@ -175,6 +185,7 @@ def _exercise_request_dml() -> None:
 
 
 def main() -> None:
+    _assert_location_default_introspection_is_portable()
     _assert_runtime_has_no_schema_create()
     _validate_all_cutover_contracts()
     _exercise_request_dml()
