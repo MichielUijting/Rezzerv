@@ -174,10 +174,13 @@ def provision_po_beta_superuser(
         membership_id=membership_id,
         permission_key="permissions.manage",
     )
+    # Verify a capability that belongs to the canonical platform.superuser role.
+    # platform.permissions.manage intentionally belongs to platform.platform_admin
+    # and must not be used here as an implicit privilege-escalation requirement.
     platform_decision = evaluate_platform_permission(
         conn,
         user_id=user_id,
-        permission_key="platform.permissions.manage",
+        permission_key="platform.support_access.mutate",
     )
     if not household_decision.allowed or not platform_decision.allowed:
         raise BetaSuperuserProvisioningError("Provisioning kon niet end-to-end worden geverifieerd")
