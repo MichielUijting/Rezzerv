@@ -133,9 +133,9 @@ def ensure_system_superuser_for_session_runtime(conn) -> SystemSuperuserSessionP
             INSERT INTO auth_platform_user_roles
                 (user_id, role_key, active, created_at, updated_at)
             VALUES
-                (:user_id, 'platform.superuser', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                (:user_id, 'platform.superuser', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id, role_key) DO UPDATE SET
-                active = 1,
+                active = TRUE,
                 updated_at = CURRENT_TIMESTAMP
             """
         ),
