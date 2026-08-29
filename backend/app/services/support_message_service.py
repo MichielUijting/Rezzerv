@@ -321,9 +321,14 @@ def set_support_thread_status(conn, *, thread_id: str, status: str) -> None:
         UPDATE support_threads
         SET status = :status,
             updated_at = :updated_at,
-            closed_at = CASE WHEN :status = 'Gesloten' THEN :updated_at ELSE NULL END
+            closed_at = :closed_at
         WHERE id = :thread_id
-    """), {"status": status, "updated_at": now, "thread_id": str(thread_id)})
+    """), {
+        "status": status,
+        "updated_at": now,
+        "closed_at": now if status == STATUS_CLOSED else None,
+        "thread_id": str(thread_id),
+    })
     if result.rowcount != 1:
         raise SupportMessageError("Melding niet gevonden")
 
