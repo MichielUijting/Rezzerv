@@ -15,8 +15,8 @@ from capture_schema_baseline import dump_schema
 SQLITE_BASELINE_REVISION = "20260827_01"
 HEAD_REVISION = "20260829_06"
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "baseline_sqlite.sql.gz"
-BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147edc9caa6ad4fc8b7"
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 62
+BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7"
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 63
 PR2G_SCHEMA_AUTHORITY_TABLES = {
     "product_taxonomy",
     "product_taxonomy_synonyms",
