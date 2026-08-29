@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.external_database_matchers import normalize_match_text
@@ -34,22 +34,7 @@ def _safe_float(value: Any) -> float:
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        return conn.execute(
-            text("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :table_name"),
-            {"table_name": table_name},
-        ).first() is not None
-
-    return conn.execute(
-        text("""
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_name = :table_name
-            LIMIT 1
-        """),
-        {"table_name": table_name},
-    ).first() is not None
+    return bool(inspect(conn).has_table(table_name))
 
 
 def _count_table(conn, table_name: str) -> int:

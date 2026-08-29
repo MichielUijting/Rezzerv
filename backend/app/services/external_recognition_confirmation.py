@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.external_product_candidate_store import (
@@ -44,52 +44,17 @@ def _truthy(value: Any) -> bool:
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        return (
-            conn.execute(
-                text(
-                    "SELECT name FROM sqlite_master "
-                    "WHERE type = 'table' AND name = :table_name"
-                ),
-                {"table_name": table_name},
-            ).first()
-            is not None
-        )
-
-    return (
-        conn.execute(
-            text(
-                """
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_name = :table_name
-                LIMIT 1
-                """
-            ),
-            {"table_name": table_name},
-        ).first()
-        is not None
-    )
+    return bool(inspect(conn).has_table(table_name))
 
 
 def _table_columns(conn, table_name: str) -> set[str]:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
-        return {_text(row.get("name")) for row in rows if _text(row.get("name"))}
-
-    rows = conn.execute(
-        text(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = :table_name
-            """
-        ),
-        {"table_name": table_name},
-    ).mappings().all()
-    return {_text(row.get("column_name")) for row in rows if _text(row.get("column_name"))}
+    if not _table_exists(conn, table_name):
+        return set()
+    return {
+        _text(column.get("name"))
+        for column in inspect(conn).get_columns(table_name)
+        if _text(column.get("name"))
+    }
 
 
 def _candidate_external_code(candidate: dict[str, Any]) -> str:
@@ -438,8 +403,8 @@ def confirm_external_recognition(
                             WHEN candidate_status = :recognition_status THEN 'candidate'
                             ELSE candidate_status
                         END,
-                        is_user_confirmed = 0,
-                        is_external_database_override = 0,
+                        is_user_confirmed = FALSE,
+                        is_external_database_override = FALSE,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE context_key = :context_key
                       AND id <> :candidate_id
@@ -462,8 +427,8 @@ def confirm_external_recognition(
                 UPDATE external_product_candidates
                 SET status = :recognition_status,
                     candidate_status = :recognition_status,
-                    is_user_confirmed = 0,
-                    is_external_database_override = 0,
+                    is_user_confirmed = FALSE,
+                    is_external_database_override = FALSE,
                     global_product_id = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :candidate_id

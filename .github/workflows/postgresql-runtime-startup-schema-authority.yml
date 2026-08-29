@@ -17,7 +17,11 @@ on:
       - 'backend/app/services/product_inventory_group_store.py'
       - 'backend/app/services/product_taxonomy_store.py'
       - 'backend/app/services/shopping_list_service.py'
+      - 'backend/app/services/external_*.py'
+      - 'backend/app/services/open_food_facts_candidate_store.py'
       - 'backend/tests/postgresql_core_request_dml_only_selftest.py'
+      - 'backend/tests/postgresql_external_catalog_sql_authority_selftest.py'
+      - 'backend/tests/postgresql_external_catalog_dml_only_selftest.py'
       - 'backend/tests/runtime_startup_schema_authority_selftest.py'
       - '.github/workflows/postgresql-runtime-startup-schema-authority.yml'
   workflow_dispatch:
@@ -92,12 +96,20 @@ jobs:
           python backend/tests/runtime_startup_schema_authority_selftest.py | tee /tmp/runtime-startup-static.log
           grep -F 'RUNTIME_STARTUP_SCHEMA_MUTATION_REMOVED_GREEN' /tmp/runtime-startup-static.log
 
+      - name: Prove external catalog/link runtime SQL is schema-free and portable
+        run: |
+          python backend/tests/postgresql_external_catalog_sql_authority_selftest.py | tee /tmp/external-catalog-static.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_SQL_PORTABLE_GREEN' /tmp/external-catalog-static.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_RUNTIME_DDL_ABSENT_GREEN' /tmp/external-catalog-static.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_ALEMBIC_AUTHORITY_GREEN' /tmp/external-catalog-static.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/external-catalog-static.log
+
       - name: Migrate with dedicated Alembic role
         working-directory: backend
         run: |
           python -m app.schema_migration_preflight | tee /tmp/runtime-startup-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/runtime-startup-migration.log
-          grep -F "'revision': '20260829_06'" /tmp/runtime-startup-migration.log
+          grep -F "'revision': '20260829_07'" /tmp/runtime-startup-migration.log
 
       - name: Prove runtime role has no schema CREATE privilege
         env:
@@ -118,6 +130,19 @@ jobs:
           grep -F 'POSTGRESQL_CORE_REQUEST_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/core-request-dml-only.log
           grep -F 'POSTGRESQL_CORE_REQUEST_DML_ONLY_GREEN' /tmp/core-request-dml-only.log
           grep -F 'POSTGRESQL_CORE_REQUEST_AUTHORITY_SELFTEST_GREEN' /tmp/core-request-dml-only.log
+
+      - name: Prove external catalog/link request paths work with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_external_catalog_dml_only_selftest.py | tee /tmp/external-catalog-dml-only.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_RUNTIME_CREATE_DENIED_GREEN' /tmp/external-catalog-dml-only.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/external-catalog-dml-only.log
+          grep -F 'POSTGRESQL_EXTERNAL_INDEX_REQUEST_READ_GREEN' /tmp/external-catalog-dml-only.log
+          grep -F 'POSTGRESQL_EXTERNAL_CANDIDATE_RECOGNITION_DML_ONLY_GREEN' /tmp/external-catalog-dml-only.log
+          grep -F 'POSTGRESQL_EXTERNAL_RELATION_BATCH_DML_ONLY_GREEN' /tmp/external-catalog-dml-only.log
+          grep -F 'POSTGRESQL_EXTERNAL_LINK_REQUEST_READ_GREEN' /tmp/external-catalog-dml-only.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_DML_ONLY_GREEN' /tmp/external-catalog-dml-only.log
+          grep -F 'POSTGRESQL_EXTERNAL_CATALOG_AUTHORITY_SELFTEST_GREEN' /tmp/external-catalog-dml-only.log
 
       - name: Import full Rezzerv application without migration credential
         working-directory: backend

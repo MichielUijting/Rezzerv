@@ -6,7 +6,7 @@ import sys
 from functools import wraps
 from typing import Any, Callable
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
@@ -26,22 +26,7 @@ def _is_valid_gtin(value: Any) -> bool:
 
 
 def _receipt_table_exists(conn) -> bool:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        return conn.execute(
-            text("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'receipt_table_lines'")
-        ).first() is not None
-
-    return conn.execute(
-        text(
-            """
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_name = 'receipt_table_lines'
-            LIMIT 1
-            """
-        )
-    ).first() is not None
+    return bool(inspect(conn).has_table("receipt_table_lines"))
 
 
 def _is_external_matching_allowed(row: dict[str, Any]) -> bool:

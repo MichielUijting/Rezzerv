@@ -65,13 +65,7 @@ def _off_candidate_from_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str, Any]:
-    """Persist OFF preview results as selectable external candidates.
-
-    This creates external candidate rows only. It does not create global products,
-    household articles or inventory events. A separate explicit user action is still
-    required to link/promote a candidate. Rows that already carry a valid GTIN/EAN
-    are skipped because the external identity is already known.
-    """
+    """Persist OFF preview results as selectable external candidates without schema writes."""
     ensure_external_product_candidates_schema()
 
     receipt_line_text = _text(payload.get("receipt_line_text") or payload.get("query"))
@@ -126,7 +120,6 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
         }
 
     storage_purchase_import_line_id = purchase_import_line_id or build_preview_import_line_fallback(context_key)
-
     preview = search_open_food_facts_preview(payload)
     if not bool(preview.get("ok", True)):
         return {
@@ -138,7 +131,11 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
             "creates_inventory_event": False,
         }
 
-    candidates = [_off_candidate_from_result(result) for result in list(preview.get("results") or []) if isinstance(result, dict)]
+    candidates = [
+        _off_candidate_from_result(result)
+        for result in list(preview.get("results") or [])
+        if isinstance(result, dict)
+    ]
     timestamp = now_iso()
     saved: list[str] = []
     updated: list[str] = []
@@ -146,10 +143,6 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
     saved_rows: list[dict[str, Any]] = []
 
     with engine.begin() as conn:
-        # OFF_ACTUELE_ZOEKRESULTATEN_REPLACE:
-        # Verwijder eerst de nog niet beschermde OFF-kandidaten van deze context.
-        # Hierdoor worden resultaten uit eerdere zoekteksten niet meer vermengd
-        # met de actuele zoekresultaten.
         conn.execute(
             text(
                 """
@@ -160,13 +153,10 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
                         OR lower(replace(COALESCE(source_name, ''), '_', ' ')) = 'open food facts'
                         OR lower(COALESCE(created_by, '')) = 'open_food_facts_search_preview_save_v1'
                       )
-                  AND COALESCE(is_user_confirmed, 0) = 0
-                  AND COALESCE(is_external_database_override, 0) = 0
+                  AND COALESCE(is_user_confirmed, FALSE) IS FALSE
+                  AND COALESCE(is_external_database_override, FALSE) IS FALSE
                   AND lower(COALESCE(candidate_status, 'candidate')) NOT IN (
-                        'linked_to_catalog',
-                        'user_confirmed',
-                        'confirmed',
-                        'linked'
+                        'linked_to_catalog', 'user_confirmed', 'confirmed', 'linked'
                   )
                 """
             ),
@@ -204,9 +194,9 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
                 "score": float(candidate.get("score") or 0),
                 "score_breakdown_json": _serialize_score_breakdown(candidate),
                 "candidate_status": _text(candidate.get("candidate_status")) or "candidate",
-                "is_probable": 1 if bool(candidate.get("is_probable")) else 0,
-                "is_user_confirmed": 0,
-                "is_external_database_override": 0,
+                "is_probable": bool(candidate.get("is_probable")),
+                "is_user_confirmed": False,
+                "is_external_database_override": False,
                 "created_by": _text(candidate.get("created_by")) or "open_food_facts_search_preview_save_v1",
                 "created_at": timestamp,
                 "updated_at": timestamp,

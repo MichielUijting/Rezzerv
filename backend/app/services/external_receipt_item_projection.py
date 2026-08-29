@@ -4,7 +4,7 @@ import sys
 from functools import wraps
 from typing import Any, Callable
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services import external_product_candidate_store as candidate_store
@@ -86,24 +86,7 @@ def _project_best_candidate(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        return conn.execute(
-            text("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :table_name"),
-            {"table_name": table_name},
-        ).first() is not None
-
-    return conn.execute(
-        text(
-            """
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_name = :table_name
-            LIMIT 1
-            """
-        ),
-        {"table_name": table_name},
-    ).first() is not None
+    return bool(inspect(conn).has_table(table_name))
 
 
 def _candidate_context_keys(rows: list[dict[str, Any]]) -> set[str]:

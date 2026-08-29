@@ -13,10 +13,10 @@ from capture_schema_baseline import dump_schema
 
 
 SQLITE_BASELINE_REVISION = "20260827_01"
-HEAD_REVISION = "20260829_06"
+HEAD_REVISION = "20260829_07"
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "baseline_sqlite.sql.gz"
 BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7"
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 63
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 65
 PR2G_SCHEMA_AUTHORITY_TABLES = {
     "product_taxonomy",
     "product_taxonomy_synonyms",
@@ -35,6 +35,11 @@ PR2G_SCHEMA_AUTHORITY_TABLES = {
     "shopping_lists",
     "shopping_list_items",
     "loyalty_stamp_transactions",
+}
+PR2H_SCHEMA_AUTHORITY_TABLES = {
+    "external_product_candidates",
+    "external_product_index",
+    "external_relation_batch_decisions",
 }
 EXPECTED_SERVER_SESSION_COLUMNS = (
     "id",
@@ -72,7 +77,33 @@ EXPECTED_TEMPORAL_INDEXES = {
         "source_line_id",
     ),
 }
+EXPECTED_EXTERNAL_CATALOG_INDEXES = {
+    "external_product_candidates": {
+        "idx_external_product_candidates_context": (
+            "context_key",
+            "retailer_code",
+            "candidate_source_name",
+            "candidate_source_product_code",
+            "variant",
+        ),
+    },
+    "external_product_index": {
+        "idx_external_product_index_gtin": ("gtin",),
+        "idx_external_product_index_source": ("source_name",),
+        "idx_external_product_index_search": ("normalized_search_text",),
+    },
+    "external_relation_batch_decisions": {
+        "idx_external_relation_batch_decisions_candidate": (
+            "candidate_id",
+            "household_article_id",
+            "decision",
+        ),
+    },
+}
 EXPECTED_BOOLEAN_COLUMNS = {
+    ("external_product_candidates", "is_probable"),
+    ("external_product_candidates", "is_user_confirmed"),
+    ("external_product_candidates", "is_external_database_override"),
     ("household_permission_policies", "member_allowed"),
     ("product_identities", "is_primary"),
     ("purchase_import_lines", "is_auto_prefilled"),
@@ -143,6 +174,7 @@ def _strip_migration_extensions(schema: str) -> str:
         "-- trigger: trg_app_users_account_status_insert (table=app_users)",
         "-- trigger: trg_app_users_account_status_update (table=app_users)",
     }
+    migration_owned_tables = PR2G_SCHEMA_AUTHORITY_TABLES | PR2H_SCHEMA_AUTHORITY_TABLES
 
     def _is_migration_owned(block: str) -> bool:
         header = block.splitlines()[0].strip()
@@ -150,7 +182,7 @@ def _strip_migration_extensions(schema: str) -> str:
             return True
         return any(
             f"(table={table_name})" in header
-            for table_name in PR2G_SCHEMA_AUTHORITY_TABLES
+            for table_name in migration_owned_tables
         )
 
     retained = [block for block in blocks if not _is_migration_owned(block)]
@@ -279,16 +311,85 @@ def _assert_temporal_inventory_schema(connection) -> None:
             raise AssertionError("inventory_events.event_priority must be INTEGER")
 
 
+def _assert_external_catalog_schema(connection) -> None:
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    missing_tables = PR2H_SCHEMA_AUTHORITY_TABLES - tables
+    if missing_tables:
+        raise AssertionError(
+            f"PR2h external catalog tables ontbreken: {sorted(missing_tables)}"
+        )
+
+    for table_name, expected_indexes in EXPECTED_EXTERNAL_CATALOG_INDEXES.items():
+        indexes = {
+            str(index.get("name") or ""): index
+            for index in inspector.get_indexes(table_name)
+        }
+        for index_name, expected_columns in expected_indexes.items():
+            index = indexes.get(index_name)
+            actual_columns = tuple((index or {}).get("column_names") or ())
+            if index is None or bool(index.get("unique")) or actual_columns != expected_columns:
+                raise AssertionError(
+                    f"Invalid {index_name}: expected_columns={expected_columns!r} "
+                    f"actual_columns={actual_columns!r} unique={bool((index or {}).get('unique'))}"
+                )
+
+    candidate_columns = {
+        str(column.get("name") or ""): column
+        for column in inspector.get_columns("external_product_candidates")
+    }
+    for column_name in (
+        "candidate_category",
+        "candidate_source_url",
+        "raw_payload",
+        "external_article_code",
+        "is_probable",
+        "is_user_confirmed",
+        "is_external_database_override",
+    ):
+        if column_name not in candidate_columns:
+            raise AssertionError(
+                f"PR2h canonical candidate column ontbreekt: {column_name}"
+            )
+
+    if connection.dialect.name == "postgresql":
+        for column_name in (
+            "is_probable",
+            "is_user_confirmed",
+            "is_external_database_override",
+        ):
+            if not isinstance(candidate_columns[column_name]["type"], sa.Boolean):
+                raise AssertionError(
+                    f"Expected BOOLEAN for external_product_candidates.{column_name}, "
+                    f"got {candidate_columns[column_name]['type']}"
+                )
+
+    seed_count = int(
+        connection.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM external_product_index
+                WHERE source_name IN ('product_taxonomy_seed', 'lidl_catalog_enrichment')
+                """
+            )
+        ).scalar_one()
+    )
+    if seed_count < 1:
+        raise AssertionError("PR2h migration-owned external_product_index seed ontbreekt")
+
+
 def _assert_postgresql_schema(connection) -> None:
     inspector = inspect(connection)
     tables = set(inspector.get_table_names()) - {"alembic_version"}
     if len(tables) != EXPECTED_POSTGRESQL_APPLICATION_TABLES:
         raise AssertionError(
-            "PR2g PostgreSQL application schema must contain exactly "
+            "PR2h PostgreSQL application schema must contain exactly "
             f"{EXPECTED_POSTGRESQL_APPLICATION_TABLES} application tables; actual={len(tables)}"
         )
     _assert_server_session_schema(connection)
     _assert_temporal_inventory_schema(connection)
+    _assert_external_catalog_schema(connection)
 
     for table_name, column_name in sorted(EXPECTED_BOOLEAN_COLUMNS):
         column = _column(inspector, table_name, column_name)
@@ -400,6 +501,7 @@ def _assert_postgresql_schema(connection) -> None:
         "POSTGRESQL_APPLICATION_SCHEMA_GREEN "
         f"revision={HEAD_REVISION} tables={len(tables)}"
     )
+    print("POSTGRESQL_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN")
 
 
 def main() -> None:
@@ -440,11 +542,13 @@ def main() -> None:
                     )
                 _assert_server_session_schema(connection)
                 _assert_temporal_inventory_schema(connection)
+                _assert_external_catalog_schema(connection)
                 print(
                     "MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN "
                     f"mode={expected_mode} source_revision={SQLITE_BASELINE_REVISION} "
                     f"head_revision={HEAD_REVISION} baseline_sha256={_sha256(actual_baseline)}"
                 )
+                print("SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN")
             else:
                 if dialect != "postgresql":
                     raise AssertionError(f"Expected PostgreSQL, got {dialect}")

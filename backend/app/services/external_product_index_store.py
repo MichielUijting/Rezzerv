@@ -7,15 +7,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.product_taxonomy_store import _seed_payload
 
 CATALOG_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "lidl_catalog_enrichment_seed.json"
 
-# M2C2i24S-c: taxonomie-indexrijen zijn generiek per ondersteunde retailer.
-# Productbetekenis komt uit de taxonomie-data, niet uit Python-artikelregels.
 TAXONOMY_INDEX_RETAILERS: tuple[tuple[str, str], ...] = (
     ("lidl", "Lidl"),
     ("jumbo", "Jumbo"),
@@ -24,53 +22,33 @@ TAXONOMY_INDEX_RETAILERS: tuple[tuple[str, str], ...] = (
     ("plus", "PLUS"),
 )
 
-INDEX_COLUMNS: dict[str, str] = {
-    "id": "TEXT PRIMARY KEY",
-    "source_name": "TEXT",
-    "source_product_code": "TEXT",
-    "gtin": "TEXT",
-    "ean": "TEXT",
-    "code": "TEXT",
-    "product_name": "TEXT",
-    "brand": "TEXT",
-    "brands": "TEXT",
-    "quantity": "TEXT",
-    "net_content": "TEXT",
-    "packaging": "TEXT",
-    "category": "TEXT",
-    "categories": "TEXT",
-    "image_url": "TEXT",
-    "source_url": "TEXT",
-    "retailer_code": "TEXT",
-    "normalized_search_text": "TEXT",
-    "created_at": "TEXT",
-    "updated_at": "TEXT",
+_REQUIRED_COLUMNS = {
+    "id",
+    "source_name",
+    "source_product_code",
+    "gtin",
+    "ean",
+    "code",
+    "product_name",
+    "brand",
+    "brands",
+    "quantity",
+    "net_content",
+    "packaging",
+    "category",
+    "categories",
+    "image_url",
+    "source_url",
+    "retailer_code",
+    "normalized_search_text",
+    "created_at",
+    "updated_at",
 }
-
-CREATE_EXTERNAL_PRODUCT_INDEX_SQL = """
-CREATE TABLE IF NOT EXISTS external_product_index (
-    id TEXT PRIMARY KEY,
-    source_name TEXT,
-    source_product_code TEXT,
-    gtin TEXT,
-    ean TEXT,
-    code TEXT,
-    product_name TEXT,
-    brand TEXT,
-    brands TEXT,
-    quantity TEXT,
-    net_content TEXT,
-    packaging TEXT,
-    category TEXT,
-    categories TEXT,
-    image_url TEXT,
-    source_url TEXT,
-    retailer_code TEXT,
-    normalized_search_text TEXT,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
+_REQUIRED_INDEXES: dict[str, tuple[str, ...]] = {
+    "idx_external_product_index_gtin": ("gtin",),
+    "idx_external_product_index_source": ("source_name",),
+    "idx_external_product_index_search": ("normalized_search_text",),
+}
 
 
 def now_iso() -> str:
@@ -84,30 +62,38 @@ def normalize_index_text(value: str | None) -> str:
     return " ".join(normalized.split())
 
 
-def _sqlite_columns(conn) -> set[str]:
-    return {str(row.get("name") or "") for row in conn.execute(text("PRAGMA table_info(external_product_index)")).mappings().all()}
-
-
-def _postgres_columns(conn) -> set[str]:
-    rows = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'external_product_index'")).mappings().all()
-    return {str(row.get("column_name") or "") for row in rows}
-
-
-def _add_missing_columns(conn) -> None:
-    existing_columns = _sqlite_columns(conn) if str(engine.dialect.name or "").lower() == "sqlite" else _postgres_columns(conn)
-    for column_name, column_definition in INDEX_COLUMNS.items():
-        if column_name in existing_columns or column_name == "id":
-            continue
-        conn.execute(text(f"ALTER TABLE external_product_index ADD COLUMN {column_name} {column_definition}"))
-
-
 def ensure_external_product_index_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text(CREATE_EXTERNAL_PRODUCT_INDEX_SQL))
-        _add_missing_columns(conn)
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_gtin ON external_product_index (gtin)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_source ON external_product_index (source_name)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_search ON external_product_index (normalized_search_text)"))
+    """Validate the Alembic-owned external index schema without mutating it."""
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        table_name = "external_product_index"
+        if not inspector.has_table(table_name):
+            raise RuntimeError(
+                "Canonical external_product_index schema ontbreekt. "
+                "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
+            )
+        columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns(table_name)
+        }
+        missing = _REQUIRED_COLUMNS - columns
+        if missing:
+            raise RuntimeError(
+                "Canonical external_product_index schema wijkt af; ontbrekende "
+                f"kolommen: {sorted(missing)}. Voer Alembic migrations uit."
+            )
+        indexes = {
+            str(index.get("name") or ""): index
+            for index in inspector.get_indexes(table_name)
+        }
+        for index_name, expected_columns in _REQUIRED_INDEXES.items():
+            index = indexes.get(index_name)
+            actual_columns = tuple((index or {}).get("column_names") or ())
+            if index is None or actual_columns != expected_columns or bool(index.get("unique")):
+                raise RuntimeError(
+                    f"Canonical external_product_index index wijkt af: {index_name}. "
+                    "Voer Alembic migrations uit."
+                )
 
 
 def _catalog_payload() -> dict[str, Any]:
@@ -125,7 +111,6 @@ def _taxonomy_index_row(
     intent_key = str(item.get("intent_key") or "").strip()
     if not intent_key:
         return None
-
     canonical = str(item.get("canonical_name") or intent_key).strip()
     category = str(item.get("category") or "").strip()
     product_type = str(item.get("product_type") or "").strip()
@@ -170,6 +155,7 @@ def _taxonomy_index_row(
 
 
 def _json_seed_rows() -> list[dict[str, Any]]:
+    """Return the deterministic bootstrap payload; Alembic owns persistence."""
     timestamp = now_iso()
     rows: list[dict[str, Any]] = []
     for retailer_code, retailer_name in TAXONOMY_INDEX_RETAILERS:
@@ -222,56 +208,32 @@ def _json_seed_rows() -> list[dict[str, Any]]:
 
 
 def ensure_external_product_index_seeded(minimum_rows: int = 1) -> dict[str, Any]:
+    """Validate migration-owned bootstrap data; never seed from a request."""
     ensure_external_product_index_schema()
-    rows = _json_seed_rows()
-    with engine.begin() as conn:
-        dialect_name = str(engine.dialect.name or "").lower()
-        inserted = 0
-        for row in rows:
-            if dialect_name == "sqlite":
-                conn.execute(text("""
-                    INSERT OR REPLACE INTO external_product_index (
-                        id, source_name, source_product_code, gtin, ean, code,
-                        product_name, brand, brands, quantity, net_content, packaging,
-                        category, categories, image_url, source_url, retailer_code,
-                        normalized_search_text, created_at, updated_at
-                    ) VALUES (
-                        :id, :source_name, :source_product_code, :gtin, :ean, :code,
-                        :product_name, :brand, :brands, :quantity, :net_content, :packaging,
-                        :category, :categories, :image_url, :source_url, :retailer_code,
-                        :normalized_search_text, :created_at, :updated_at
-                    )
-                """), row)
-            else:
-                conn.execute(text("""
-                    INSERT INTO external_product_index (
-                        id, source_name, source_product_code, gtin, ean, code,
-                        product_name, brand, brands, quantity, net_content, packaging,
-                        category, categories, image_url, source_url, retailer_code,
-                        normalized_search_text, created_at, updated_at
-                    ) VALUES (
-                        :id, :source_name, :source_product_code, :gtin, :ean, :code,
-                        :product_name, :brand, :brands, :quantity, :net_content, :packaging,
-                        :category, :categories, :image_url, :source_url, :retailer_code,
-                        :normalized_search_text, :created_at, :updated_at
-                    )
-                    ON CONFLICT (id) DO UPDATE SET
-                        source_name = EXCLUDED.source_name,
-                        source_product_code = EXCLUDED.source_product_code,
-                        product_name = EXCLUDED.product_name,
-                        brand = EXCLUDED.brand,
-                        quantity = EXCLUDED.quantity,
-                        category = EXCLUDED.category,
-                        retailer_code = EXCLUDED.retailer_code,
-                        normalized_search_text = EXCLUDED.normalized_search_text,
-                        updated_at = EXCLUDED.updated_at
-                """), row)
-            inserted += 1
+    required = max(0, int(minimum_rows or 0))
+    with engine.connect() as conn:
+        count = int(
+            conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM external_product_index
+                    WHERE source_name IN ('product_taxonomy_seed', 'lidl_catalog_enrichment')
+                    """
+                )
+            ).scalar_one()
+        )
+    if count < required:
+        raise RuntimeError(
+            "Canonical external_product_index bootstrapdata ontbreekt of is onvolledig; "
+            "voer Alembic migrations uit."
+        )
     return {
         "ok": True,
-        "seeded": True,
-        "inserted": inserted,
-        "source": "json_seed",
+        "seeded": count >= required,
+        "inserted": 0,
+        "rows": count,
+        "source": "alembic_migration",
         "taxonomy_index_retailers": [retailer_code for retailer_code, _ in TAXONOMY_INDEX_RETAILERS],
         "creates_global_product": False,
         "creates_household_article": False,
@@ -297,6 +259,7 @@ def search_external_product_index_candidates(
         seen_tokens.add(token)
     if not tokens:
         return []
+
     params: dict[str, Any] = {"limit": max(10, min(int(limit or 120), 200))}
     where_parts: list[str] = []
     for index, token in enumerate(tokens[:16]):
@@ -307,12 +270,20 @@ def search_external_product_index_candidates(
     normalized_retailer = normalize_index_text(retailer_code)
     if normalized_retailer:
         params["retailer_code"] = normalized_retailer
-        retailer_filter_sql = " AND (COALESCE(retailer_code, '') = :retailer_code OR COALESCE(retailer_code, '') = '')"
-    with engine.begin() as conn:
-        rows = conn.execute(text(f"""
-            SELECT *
-            FROM external_product_index
-            WHERE ({' OR '.join(where_parts)}){retailer_filter_sql}
-            LIMIT :limit
-        """), params).mappings().all()
+        retailer_filter_sql = (
+            " AND (COALESCE(retailer_code, '') = :retailer_code "
+            "OR COALESCE(retailer_code, '') = '')"
+        )
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT *
+                FROM external_product_index
+                WHERE ({' OR '.join(where_parts)}){retailer_filter_sql}
+                LIMIT :limit
+                """
+            ),
+            params,
+        ).mappings().all()
     return [dict(row) for row in rows]
