@@ -272,12 +272,31 @@ def _ensure_account_status_authority(bind: sa.engine.Connection) -> None:
         )
         return
 
-    # The immutable SQLite baseline already owns the account-status triggers.
-    # Do not rewrite those objects here: validate them below and preserve the
-    # byte-for-byte baseline contract when they are already canonical.
-    if bind.dialect.name == "sqlite":
-        return
-    raise RuntimeError(f"Unsupported Rezzerv migration dialect: {bind.dialect.name}")
+    if bind.dialect.name != "sqlite":
+        raise RuntimeError(f"Unsupported Rezzerv migration dialect: {bind.dialect.name}")
+
+    for trigger_name in (_ACCOUNT_INSERT_TRIGGER, _ACCOUNT_UPDATE_TRIGGER):
+        bind.exec_driver_sql(f'DROP TRIGGER IF EXISTS "{trigger_name}"')
+    bind.exec_driver_sql(f"""
+        CREATE TRIGGER {_ACCOUNT_INSERT_TRIGGER}
+        BEFORE INSERT ON app_users
+        FOR EACH ROW
+        WHEN NEW.account_status IS NULL
+          OR NEW.account_status NOT IN ('active', 'disabled', 'suspended')
+        BEGIN
+            SELECT RAISE(ABORT, 'invalid app_users.account_status');
+        END
+    """)
+    bind.exec_driver_sql(f"""
+        CREATE TRIGGER {_ACCOUNT_UPDATE_TRIGGER}
+        BEFORE UPDATE OF account_status ON app_users
+        FOR EACH ROW
+        WHEN NEW.account_status IS NULL
+          OR NEW.account_status NOT IN ('active', 'disabled', 'suspended')
+        BEGIN
+            SELECT RAISE(ABORT, 'invalid app_users.account_status');
+        END
+    """)
 
 
 def _validate_account_status_authority(bind: sa.engine.Connection) -> None:

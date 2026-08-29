@@ -140,6 +140,8 @@ def _strip_migration_extensions(schema: str) -> str:
         "-- index: idx_inventory_events_temporal_order (table=inventory_events)",
         "-- index: idx_inventory_events_source_reference (table=inventory_events)",
         "-- index: uq_inventory_active_locationless_household_article (table=inventory)",
+        "-- trigger: trg_app_users_account_status_insert (table=app_users)",
+        "-- trigger: trg_app_users_account_status_update (table=app_users)",
     }
 
     def _is_migration_owned(block: str) -> bool:
