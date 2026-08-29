@@ -1,4 +1,4 @@
-"""Complete onboarding product/direct-location request schema authority.
+"""Complete core request-path schema authority closure.
 
 Revision ID: 20260829_06
 Revises: 20260829_05
@@ -22,6 +22,11 @@ _DIRECT_INDEX = "ux_spaces_household_direct"
 _DIRECT_UPDATE_TRIGGER = "trg_spaces_direct_immutable_update"
 _DIRECT_DELETE_TRIGGER = "trg_spaces_direct_immutable_delete"
 _DIRECT_GUARD_FUNCTION = "rezzerv_spaces_direct_immutable_guard"
+_ACCOUNT_TABLE = "app_users"
+_ACCOUNT_CHECK = "ck_app_users_account_status"
+_ACCOUNT_INSERT_TRIGGER = "trg_app_users_account_status_insert"
+_ACCOUNT_UPDATE_TRIGGER = "trg_app_users_account_status_update"
+_ACCOUNT_ALLOWED_STATUSES = ("active", "disabled", "suspended")
 
 _PRODUCT_CONFIG_COLUMNS = {
     "household_id",
@@ -224,6 +229,114 @@ def _ensure_direct_location_schema(bind: sa.engine.Connection) -> None:
         """))
 
 
+def _ensure_account_status_authority(bind: sa.engine.Connection) -> None:
+    inspector = sa.inspect(bind)
+    if not inspector.has_table(_ACCOUNT_TABLE):
+        raise RuntimeError("app_users ontbreekt")
+    account_columns = _columns(bind, _ACCOUNT_TABLE)
+    missing = {"account_status", "suspended_at"} - account_columns
+    if missing:
+        raise RuntimeError(
+            "app_users mist canonical account-suspension kolommen: "
+            f"{sorted(missing)}"
+        )
+
+    invalid_rows = bind.execute(sa.text(
+        """
+        SELECT DISTINCT lower(trim(account_status)) AS account_status
+        FROM app_users
+        WHERE account_status IS NULL
+           OR trim(account_status) = ''
+           OR lower(trim(account_status)) NOT IN ('active', 'disabled', 'suspended')
+        ORDER BY account_status
+        """
+    )).all()
+    if invalid_rows:
+        raise RuntimeError(
+            "app_users bevat niet-canonical account_status waarden: "
+            f"{[row[0] for row in invalid_rows]!r}"
+        )
+
+    if bind.dialect.name == "postgresql":
+        checks = {
+            str(item.get("name") or "")
+            for item in inspector.get_check_constraints(_ACCOUNT_TABLE)
+        }
+        if _ACCOUNT_CHECK not in checks:
+            raise RuntimeError(f"{_ACCOUNT_CHECK} ontbreekt vóór account-status cutover")
+        op.drop_constraint(_ACCOUNT_CHECK, _ACCOUNT_TABLE, type_="check")
+        op.create_check_constraint(
+            _ACCOUNT_CHECK,
+            _ACCOUNT_TABLE,
+            "account_status IN ('active', 'disabled', 'suspended')",
+        )
+        return
+
+    for trigger_name in (_ACCOUNT_INSERT_TRIGGER, _ACCOUNT_UPDATE_TRIGGER):
+        bind.exec_driver_sql(f'DROP TRIGGER IF EXISTS "{trigger_name}"')
+    bind.exec_driver_sql(f"""
+        CREATE TRIGGER {_ACCOUNT_INSERT_TRIGGER}
+        BEFORE INSERT ON app_users
+        FOR EACH ROW
+        WHEN NEW.account_status IS NULL
+          OR NEW.account_status NOT IN ('active', 'disabled', 'suspended')
+        BEGIN
+            SELECT RAISE(ABORT, 'invalid app_users.account_status');
+        END
+    """)
+    bind.exec_driver_sql(f"""
+        CREATE TRIGGER {_ACCOUNT_UPDATE_TRIGGER}
+        BEFORE UPDATE OF account_status ON app_users
+        FOR EACH ROW
+        WHEN NEW.account_status IS NULL
+          OR NEW.account_status NOT IN ('active', 'disabled', 'suspended')
+        BEGIN
+            SELECT RAISE(ABORT, 'invalid app_users.account_status');
+        END
+    """)
+
+
+def _validate_account_status_authority(bind: sa.engine.Connection) -> None:
+    if bind.dialect.name == "postgresql":
+        checks = {
+            str(item.get("name") or ""): str(item.get("sqltext") or "")
+            for item in sa.inspect(bind).get_check_constraints(_ACCOUNT_TABLE)
+        }
+        sqltext = " ".join(checks.get(_ACCOUNT_CHECK, "").lower().split())
+        for status in _ACCOUNT_ALLOWED_STATUSES:
+            if f"'{status}'" not in sqltext:
+                raise RuntimeError(
+                    f"{_ACCOUNT_CHECK} mist canonical status {status!r}: {sqltext!r}"
+                )
+        return
+
+    trigger_rows = bind.execute(sa.text(
+        """
+        SELECT name, sql
+        FROM sqlite_master
+        WHERE type = 'trigger'
+          AND name IN (
+              'trg_app_users_account_status_insert',
+              'trg_app_users_account_status_update'
+          )
+        ORDER BY name
+        """
+    )).all()
+    triggers = {str(row[0]): str(row[1] or "") for row in trigger_rows}
+    if set(triggers) != {_ACCOUNT_INSERT_TRIGGER, _ACCOUNT_UPDATE_TRIGGER}:
+        raise RuntimeError(
+            "SQLite account-status triggers ontbreken na migration: "
+            f"{sorted(triggers)}"
+        )
+    for trigger_name, sqltext in triggers.items():
+        normalized = " ".join(sqltext.lower().split())
+        for status in _ACCOUNT_ALLOWED_STATUSES:
+            if f"'{status}'" not in normalized:
+                raise RuntimeError(
+                    f"{trigger_name} mist canonical status {status!r}"
+                )
+
+
 def _validate_contract(bind: sa.engine.Connection) -> None:
     inspector = sa.inspect(bind)
     if not inspector.has_table(_PRODUCT_CONFIG):
@@ -284,6 +397,7 @@ def _validate_contract(bind: sa.engine.Connection) -> None:
             "Canonical Direct-location immutability guards ontbreken: "
             f"expected={sorted(expected_triggers)} actual={sorted(triggers)}"
         )
+    _validate_account_status_authority(bind)
 
 
 def upgrade() -> None:
@@ -292,11 +406,12 @@ def upgrade() -> None:
         raise RuntimeError(f"Unsupported Rezzerv migration dialect: {bind.dialect.name}")
     _ensure_product_configuration(bind)
     _ensure_direct_location_schema(bind)
+    _ensure_account_status_authority(bind)
     _validate_contract(bind)
 
 
 def downgrade() -> None:
     raise RuntimeError(
-        "The onboarding product/direct-location authority revision is intentionally "
+        "The PR2g core request-path authority revision is intentionally "
         "non-destructive and cannot be downgraded."
     )
