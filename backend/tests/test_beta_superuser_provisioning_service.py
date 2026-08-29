@@ -50,7 +50,10 @@ def make_engine():
 
     engine = create_engine(database_url, future=True)
     with engine.begin() as conn:
-        conn.execute(text("INSERT INTO app_users(id, email) VALUES ('user-po', 'po@rezzerv.local')"))
+        conn.execute(text("""
+            INSERT INTO app_users(id, email, password)
+            VALUES ('user-po', 'po@rezzerv.local', 'po-beta-fixture-password')
+        """))
         conn.execute(text("""
             INSERT INTO household_memberships(id, household_id, user_id)
             VALUES ('membership-po', 'household-beta', 'user-po')
