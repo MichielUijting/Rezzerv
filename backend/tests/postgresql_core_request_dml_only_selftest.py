@@ -72,10 +72,10 @@ def _exercise_request_dml() -> None:
             household_id=HOUSEHOLD_ID,
             main_locations=["PR337 pantry"],
             sublocations=[
-                {"main_location": "PR337 pantry", "name": "PR337 shelf"}
+                {"space_name": "PR337 pantry", "name": "PR337 shelf"}
             ],
         )
-        if len(locations.get("main_locations") or []) != 1:
+        if len(locations.get("spaces") or []) != 1:
             raise AssertionError(f"Location DML failed: {locations}")
 
         item = add_shopping_list_item(
