@@ -29,12 +29,6 @@ def _configure_revision_14_contract() -> None:
         ("platform_feature_flags", "enabled"),
         ("support_threads", "reply_allowed"),
     }
-    foundation.EXPECTED_POSTGRESQL_CHECK_CONSTRAINTS = set(
-        foundation.EXPECTED_POSTGRESQL_CHECK_CONSTRAINTS
-    ) | {
-        "ck_support_threads_status",
-        "ck_support_threads_recipient_type",
-    }
 
 
 def _column_map(inspector, table_name: str) -> dict[str, dict]:
