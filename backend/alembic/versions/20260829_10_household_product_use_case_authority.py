@@ -6,7 +6,7 @@ Create Date: 2026-08-29
 """
 from __future__ import annotations
 
-from typing import Sequence, Union
+from typing import Any, Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
@@ -27,6 +27,12 @@ def _columns(bind: sa.engine.Connection) -> set[str]:
     }
 
 
+def _activated_at_type(dialect_name: str) -> sa.types.TypeEngine[Any]:
+    if dialect_name == "postgresql":
+        return sa.DateTime(timezone=True)
+    return sa.Text()
+
+
 def _validate_contract(bind: sa.engine.Connection) -> None:
     inspector = sa.inspect(bind)
     if not inspector.has_table(_TABLE):
@@ -43,6 +49,19 @@ def _validate_contract(bind: sa.engine.Connection) -> None:
         raise RuntimeError(
             f"{_TABLE} heeft onjuiste primary key: {primary_key!r}"
         )
+    if bind.dialect.name == "postgresql":
+        activated_at = next(
+            column
+            for column in inspector.get_columns(_TABLE)
+            if str(column.get("name") or "") == "activated_at"
+        )
+        activated_at_type = activated_at["type"]
+        if not isinstance(activated_at_type, sa.DateTime) or not bool(
+            getattr(activated_at_type, "timezone", False)
+        ):
+            raise RuntimeError(
+                f"{_TABLE}.activated_at moet TIMESTAMPTZ zijn; actual={activated_at_type}"
+            )
 
 
 def upgrade() -> None:
@@ -58,7 +77,7 @@ def upgrade() -> None:
             sa.Column("use_case", sa.Text(), nullable=False),
             sa.Column(
                 "activated_at",
-                sa.Text(),
+                _activated_at_type(bind.dialect.name),
                 nullable=False,
                 server_default=sa.text("CURRENT_TIMESTAMP"),
             ),
