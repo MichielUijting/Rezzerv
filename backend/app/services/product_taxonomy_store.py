@@ -6,52 +6,71 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 
 TAXONOMY_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "product_taxonomy_seed.json"
 
-CREATE_PRODUCT_TAXONOMY_SQL = """
-CREATE TABLE IF NOT EXISTS product_taxonomy (
-    intent_key TEXT PRIMARY KEY,
-    canonical_name TEXT NOT NULL,
-    category TEXT,
-    product_type TEXT,
-    parent_intent_key TEXT,
-    is_active INTEGER DEFAULT 1,
-    created_by TEXT,
-    updated_by TEXT
-)
-"""
+_REQUIRED_COLUMNS: dict[str, set[str]] = {
+    "product_taxonomy": {
+        "intent_key",
+        "canonical_name",
+        "category",
+        "product_type",
+        "parent_intent_key",
+        "default_base_unit",
+        "is_active",
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by",
+    },
+    "product_taxonomy_synonyms": {
+        "id",
+        "intent_key",
+        "synonym",
+        "normalized_synonym",
+        "priority",
+        "is_active",
+        "source",
+    },
+    "retailer_receipt_terms": {
+        "id",
+        "retailer_code",
+        "receipt_term",
+        "normalized_receipt_term",
+        "normalized_term",
+        "intent_key",
+        "confidence",
+        "is_active",
+        "source",
+    },
+}
 
-CREATE_PRODUCT_TAXONOMY_SYNONYMS_SQL = """
-CREATE TABLE IF NOT EXISTS product_taxonomy_synonyms (
-    id TEXT PRIMARY KEY,
-    intent_key TEXT NOT NULL,
-    synonym TEXT NOT NULL,
-    normalized_synonym TEXT NOT NULL,
-    priority INTEGER DEFAULT 100,
-    is_active INTEGER DEFAULT 1,
-    source TEXT,
-    FOREIGN KEY(intent_key) REFERENCES product_taxonomy(intent_key)
-)
-"""
-
-CREATE_RETAILER_RECEIPT_TERMS_SQL = """
-CREATE TABLE IF NOT EXISTS retailer_receipt_terms (
-    id TEXT PRIMARY KEY,
-    retailer_code TEXT NOT NULL,
-    receipt_term TEXT NOT NULL,
-    normalized_receipt_term TEXT NOT NULL,
-    normalized_term TEXT,
-    intent_key TEXT NOT NULL,
-    confidence REAL DEFAULT 1.0,
-    is_active INTEGER DEFAULT 1,
-    source TEXT,
-    FOREIGN KEY(intent_key) REFERENCES product_taxonomy(intent_key)
-)
-"""
+_REQUIRED_INDEXES: dict[str, tuple[str, tuple[str, ...], bool]] = {
+    "ux_product_taxonomy_intent_key": ("product_taxonomy", ("intent_key",), True),
+    "idx_product_taxonomy_synonyms_norm": (
+        "product_taxonomy_synonyms",
+        ("normalized_synonym",),
+        False,
+    ),
+    "idx_product_taxonomy_synonyms_intent": (
+        "product_taxonomy_synonyms",
+        ("intent_key",),
+        False,
+    ),
+    "idx_retailer_receipt_terms_norm": (
+        "retailer_receipt_terms",
+        ("retailer_code", "normalized_receipt_term"),
+        False,
+    ),
+    "idx_retailer_receipt_terms_intent": (
+        "retailer_receipt_terms",
+        ("intent_key",),
+        False,
+    ),
+}
 
 
 def normalize_taxonomy_text(value: str | None) -> str:
@@ -87,14 +106,45 @@ def _seed_payload() -> dict[str, Any]:
 
 
 def ensure_product_taxonomy_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text(CREATE_PRODUCT_TAXONOMY_SQL))
-        conn.execute(text(CREATE_PRODUCT_TAXONOMY_SYNONYMS_SQL))
-        conn.execute(text(CREATE_RETAILER_RECEIPT_TERMS_SQL))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_product_taxonomy_synonyms_norm ON product_taxonomy_synonyms (normalized_synonym)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_product_taxonomy_synonyms_intent ON product_taxonomy_synonyms (intent_key)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_retailer_receipt_terms_norm ON retailer_receipt_terms (retailer_code, normalized_receipt_term)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_retailer_receipt_terms_intent ON retailer_receipt_terms (intent_key)"))
+    """Validate the Alembic-owned taxonomy schema without mutating it."""
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        for table_name, required_columns in _REQUIRED_COLUMNS.items():
+            if not inspector.has_table(table_name):
+                raise RuntimeError(
+                    f"Canonical product taxonomy schema ontbreekt: tabel {table_name}. "
+                    "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
+                )
+            actual_columns = {
+                str(column.get("name") or "")
+                for column in inspector.get_columns(table_name)
+            }
+            missing = required_columns - actual_columns
+            if missing:
+                raise RuntimeError(
+                    f"Canonical product taxonomy schema wijkt af: {table_name} mist "
+                    f"{sorted(missing)}. Voer Alembic migrations uit."
+                )
+
+        for index_name, (table_name, expected_columns, expected_unique) in _REQUIRED_INDEXES.items():
+            indexes = {
+                str(index.get("name") or ""): index
+                for index in inspector.get_indexes(table_name)
+            }
+            index = indexes.get(index_name)
+            actual_columns = tuple(
+                str(column or "") for column in ((index or {}).get("column_names") or ())
+            )
+            if (
+                index is None
+                or actual_columns != expected_columns
+                or bool(index.get("unique")) != expected_unique
+            ):
+                raise RuntimeError(
+                    f"Canonical product taxonomy index wijkt af: {index_name}; "
+                    f"expected={expected_columns!r}/{expected_unique}, "
+                    f"actual={actual_columns!r}/{bool((index or {}).get('unique'))}."
+                )
 
 
 def _upsert_taxonomy_row(conn, row: dict[str, Any]) -> None:
