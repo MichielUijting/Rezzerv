@@ -75,35 +75,35 @@ def _ensure_product_configuration(bind: sa.engine.Connection) -> None:
             sa.Column("updated_at", sa.Text(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
             sa.CheckConstraint(
                 "inventory_tracking_level IN ('none', 'presence', 'quantity')",
-                name="ck_household_product_configuration_inventory_tracking",
+                name="ck_hpc_inventory_tracking",
             ),
             sa.CheckConstraint(
                 "location_tracking_level IN ('none', 'global', 'exact')",
-                name="ck_household_product_configuration_location_tracking",
+                name="ck_hpc_location_tracking",
             ),
             sa.CheckConstraint(
                 "shopping_enabled IN (0, 1)",
-                name="ck_household_product_configuration_shopping_enabled",
+                name="ck_hpc_shopping",
             ),
             sa.CheckConstraint(
                 "almost_out_enabled IN (0, 1)",
-                name="ck_household_product_configuration_almost_out_enabled",
+                name="ck_hpc_almost_out",
             ),
             sa.CheckConstraint(
                 "almost_out_notifications_enabled IN (0, 1)",
-                name="ck_household_product_configuration_almost_out_notifications_enabled",
+                name="ck_hpc_almost_out_notify",
             ),
             sa.CheckConstraint(
                 "receipt_processing_enabled IN (0, 1)",
-                name="ck_household_product_configuration_receipt_processing_enabled",
+                name="ck_hpc_receipt_processing",
             ),
             sa.CheckConstraint(
                 "recipes_enabled IN (0, 1)",
-                name="ck_household_product_configuration_recipes_enabled",
+                name="ck_hpc_recipes",
             ),
             sa.CheckConstraint(
                 "unpacking_enabled IN (0, 1)",
-                name="ck_household_product_configuration_unpacking_enabled",
+                name="ck_hpc_unpacking",
             ),
         )
         return
