@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 from sqlalchemy import create_engine, text
 
@@ -12,21 +15,48 @@ from app.services.gpc_translation_service import (
 )
 
 
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
+HEAD_REVISION = "20260829_11"
+
+
 def _engine(tmp_path: Path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'gpc.db'}")
+    database_path = tmp_path / "gpc.db"
+    env = os.environ.copy()
+    env["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
+    env["PYTHONPATH"] = str(BACKEND_ROOT)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "alembic",
+            "-c",
+            str(ALEMBIC_INI),
+            "upgrade",
+            "head",
+        ],
+        cwd=BACKEND_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "Alembic GPC translation fixture migration failed:\n"
+            + result.stdout
+            + result.stderr
+        )
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
     with engine.begin() as conn:
-        conn.execute(text("CREATE TABLE gpc_segments (segment_code TEXT PRIMARY KEY, description TEXT NOT NULL)"))
-        conn.execute(text("CREATE TABLE gpc_families (family_code TEXT PRIMARY KEY, description TEXT NOT NULL, segment_code TEXT NOT NULL)"))
-        conn.execute(text("CREATE TABLE gpc_classes (class_code TEXT PRIMARY KEY, description TEXT NOT NULL, family_code TEXT NOT NULL)"))
-        conn.execute(text("CREATE TABLE gpc_bricks (brick_code TEXT PRIMARY KEY, description TEXT NOT NULL, class_code TEXT NOT NULL)"))
-        conn.execute(text("CREATE TABLE gpc_attribute_types (att_type_code TEXT PRIMARY KEY, att_type_text TEXT NOT NULL)"))
-        conn.execute(text("CREATE TABLE gpc_attribute_values (att_value_code TEXT PRIMARY KEY, att_value_text TEXT NOT NULL)"))
-        conn.execute(text("INSERT INTO gpc_segments VALUES ('50000000', 'Food/Beverage/Tobacco')"))
-        conn.execute(text("INSERT INTO gpc_families VALUES ('50100000', 'Fruits/Vegetables/Nuts/Seeds', '50000000')"))
-        conn.execute(text("INSERT INTO gpc_classes VALUES ('50101700', 'Vegetables - Unprepared/Unprocessed', '50100000')"))
-        conn.execute(text("INSERT INTO gpc_bricks VALUES ('10006144', 'Mustard Greens', '50101700')"))
-        conn.execute(text("INSERT INTO gpc_attribute_types VALUES ('20000794', 'Growing Method')"))
-        conn.execute(text("INSERT INTO gpc_attribute_values VALUES ('30002654', 'Conventional')"))
+        revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+        assert revision == HEAD_REVISION
+        conn.execute(text("INSERT OR REPLACE INTO gpc_segments VALUES ('50000000', 'Food/Beverage/Tobacco')"))
+        conn.execute(text("INSERT OR REPLACE INTO gpc_families VALUES ('50100000', 'Fruits/Vegetables/Nuts/Seeds', '50000000')"))
+        conn.execute(text("INSERT OR REPLACE INTO gpc_classes VALUES ('50101700', 'Vegetables - Unprepared/Unprocessed', '50100000')"))
+        conn.execute(text("INSERT OR REPLACE INTO gpc_bricks VALUES ('10006144', 'Mustard Greens', '50101700')"))
+        conn.execute(text("INSERT OR REPLACE INTO gpc_attribute_types VALUES ('20000794', 'Growing Method')"))
+        conn.execute(text("INSERT OR REPLACE INTO gpc_attribute_values VALUES ('30002654', 'Conventional')"))
     return engine
 
 
