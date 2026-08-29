@@ -8,11 +8,10 @@ import tempfile
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from app.api.household_invitation_routes import create_household_invitation_router
 from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.testing.authorization_schema_fixture import install_authorization_schema
 from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.household_invitation_service import (
     InvitationConflictError,
@@ -27,92 +26,53 @@ from app.services.server_session_service import (
     create_server_session,
     create_system_server_session,
 )
-from app.testing.server_session_contract import create_server_session_contract_schema
+from household_invitation_migrated_fixture import (
+    insert_membership,
+    insert_user,
+    migrated_sqlite_engine,
+)
 
 
 def _prepare_database(engine) -> None:
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE household_registry (
-                id TEXT PRIMARY KEY,
-                naam TEXT NOT NULL,
-                context_type TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                account_status TEXT NOT NULL DEFAULT 'active'
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_memberships (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                user_id TEXT,
-                user_email TEXT NOT NULL,
-                role TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(household_id, user_email)
-            )
-        """))
-        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
-        create_server_session_contract_schema(conn)
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type) VALUES
                 ('hh-a', 'Huis A', 'regular'),
                 ('hh-b', 'Huis B', 'regular'),
                 ('0', 'Systeem', 'system')
         """))
-        conn.execute(text("""
-            INSERT INTO app_users(id, email, account_status) VALUES
-                ('admin-a', 'admin-a@example.com', 'active'),
-                ('member-a', 'member-a@example.com', 'active'),
-                ('existing-a', 'existing-a@example.com', 'active'),
-                ('admin-b', 'admin-b@example.com', 'active'),
-                ('system-user', 'system@example.com', 'active')
-        """))
-        conn.execute(text("""
-            INSERT INTO household_memberships(
-                id, household_id, user_id, user_email, role, status
-            ) VALUES
-                ('membership-admin-a', 'hh-a', 'admin-a', 'admin-a@example.com', 'admin', 'active'),
-                ('membership-member-a', 'hh-a', 'member-a', 'member-a@example.com', 'member', 'active'),
-                ('membership-existing-a', 'hh-a', 'existing-a', 'existing-a@example.com', 'member', 'active'),
-                ('membership-admin-b', 'hh-b', 'admin-b', 'admin-b@example.com', 'admin', 'active')
-        """))
-        create_canonical_membership_role(
-            conn,
-            household_id='hh-a',
-            membership_id='membership-admin-a',
-            legacy_role='admin',
-        )
-        create_canonical_membership_role(
-            conn,
-            household_id='hh-a',
-            membership_id='membership-member-a',
-            legacy_role='member',
-        )
-        create_canonical_membership_role(
-            conn,
-            household_id='hh-a',
-            membership_id='membership-existing-a',
-            legacy_role='member',
-        )
-        create_canonical_membership_role(
-            conn,
-            household_id='hh-b',
-            membership_id='membership-admin-b',
-            legacy_role='admin',
-        )
+        for user_id, email in (
+            ('admin-a', 'admin-a@example.com'),
+            ('member-a', 'member-a@example.com'),
+            ('existing-a', 'existing-a@example.com'),
+            ('admin-b', 'admin-b@example.com'),
+            ('system-user', 'system@example.com'),
+        ):
+            insert_user(conn, user_id=user_id, email=email)
+        for membership_id, household_id, user_id, email, role in (
+            ('membership-admin-a', 'hh-a', 'admin-a', 'admin-a@example.com', 'admin'),
+            ('membership-member-a', 'hh-a', 'member-a', 'member-a@example.com', 'member'),
+            ('membership-existing-a', 'hh-a', 'existing-a', 'existing-a@example.com', 'member'),
+            ('membership-admin-b', 'hh-b', 'admin-b', 'admin-b@example.com', 'admin'),
+        ):
+            insert_membership(
+                conn,
+                membership_id=membership_id,
+                household_id=household_id,
+                user_id=user_id,
+                email=email,
+                role=role,
+            )
+            create_canonical_membership_role(
+                conn,
+                household_id=household_id,
+                membership_id=membership_id,
+                legacy_role=role,
+            )
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES ('system-user', 'platform.superuser', 1)
+            VALUES ('system-user', 'platform.superuser', TRUE)
         """))
 
 
@@ -148,11 +108,7 @@ def run() -> int:
     checks: list[str] = []
     with tempfile.TemporaryDirectory(prefix='rezzerv-invitation-foundation-') as tmp:
         database_path = Path(tmp) / 'invitation.db'
-        engine = create_engine(
-            f'sqlite:///{database_path}',
-            future=True,
-            connect_args={'check_same_thread': False},
-        )
+        engine = migrated_sqlite_engine(database_path, check_same_thread=False)
         _prepare_database(engine)
         app = _application(engine)
 
