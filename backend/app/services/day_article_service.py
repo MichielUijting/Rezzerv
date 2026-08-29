@@ -4,6 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Any, Iterable
 
+import sqlalchemy as sa
 from sqlalchemy import inspect, text
 
 from app.services.authorization_foundation_service import write_authorization_audit
@@ -13,59 +14,157 @@ DIRECT_CONSUMPTION = "DIRECT_CONSUMPTION"
 VALID_HANDLING = {STOCK, DIRECT_CONSUMPTION}
 DIRECT_LOCATION_KEY = "system.direct"
 
+_ARTICLE_COLUMNS = {
+    "id",
+    "household_id",
+    "naam",
+    "default_inventory_handling",
+    "inventory_handling_updated_at",
+    "inventory_handling_updated_by_user_id",
+}
+_SPACE_COLUMNS = {"id", "naam", "household_id", "system_key", "protected"}
+_SUBLOCATION_COLUMNS = {"id", "naam", "space_id", "system_key", "protected"}
+_EVENT_COLUMNS = {
+    "id",
+    "household_id",
+    "household_article_id",
+    "idempotency_key",
+    "event_type",
+    "quantity",
+    "space_id",
+    "sublocation_id",
+    "actor_user_id",
+    "created_at",
+}
+
 
 def _columns(conn, table_name: str) -> set[str]:
     inspector = inspect(conn)
-    if table_name not in inspector.get_table_names():
+    if not inspector.has_table(table_name):
         return set()
     return {str(column["name"]) for column in inspector.get_columns(table_name)}
 
 
-def ensure_day_article_schema(conn) -> None:
-    article_columns = _columns(conn, "household_articles")
-    if not article_columns:
-        raise RuntimeError("household_articles ontbreekt")
-    if "default_inventory_handling" not in article_columns:
-        conn.execute(text("ALTER TABLE household_articles ADD COLUMN default_inventory_handling TEXT NOT NULL DEFAULT 'STOCK'"))
-    if "inventory_handling_updated_at" not in article_columns:
-        conn.execute(text("ALTER TABLE household_articles ADD COLUMN inventory_handling_updated_at TEXT"))
-    if "inventory_handling_updated_by_user_id" not in article_columns:
-        conn.execute(text("ALTER TABLE household_articles ADD COLUMN inventory_handling_updated_by_user_id TEXT"))
-
-    space_columns = _columns(conn, "spaces")
-    if not space_columns:
-        raise RuntimeError("spaces ontbreekt")
-    if "system_key" not in space_columns:
-        conn.execute(text("ALTER TABLE spaces ADD COLUMN system_key TEXT"))
-    if "protected" not in space_columns:
-        conn.execute(text("ALTER TABLE spaces ADD COLUMN protected INTEGER NOT NULL DEFAULT 0"))
-
-    sublocation_columns = _columns(conn, "sublocations")
-    if not sublocation_columns:
-        raise RuntimeError("sublocations ontbreekt")
-    if "system_key" not in sublocation_columns:
-        conn.execute(text("ALTER TABLE sublocations ADD COLUMN system_key TEXT"))
-    if "protected" not in sublocation_columns:
-        conn.execute(text("ALTER TABLE sublocations ADD COLUMN protected INTEGER NOT NULL DEFAULT 0"))
-
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS day_article_processing_events (
-            id TEXT PRIMARY KEY,
-            household_id TEXT NOT NULL,
-            household_article_id TEXT NOT NULL,
-            idempotency_key TEXT NOT NULL,
-            event_type TEXT NOT NULL CHECK (event_type IN ('RECEIPT', 'DIRECT_CONSUMPTION')),
-            quantity NUMERIC NOT NULL,
-            space_id TEXT NOT NULL,
-            sublocation_id TEXT NOT NULL,
-            actor_user_id TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE (household_id, idempotency_key, event_type)
+def _require_columns(conn, table_name: str, required: set[str]) -> None:
+    columns = _columns(conn, table_name)
+    if not columns:
+        raise RuntimeError(
+            f"Canonical dagartikel/Direct-schema mist {table_name}. "
+            "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
         )
-    """))
-    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_household_system_key ON spaces (household_id, system_key) WHERE system_key IS NOT NULL"))
-    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_sublocations_space_system_key ON sublocations (space_id, system_key) WHERE system_key IS NOT NULL"))
-    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_day_article_events_article ON day_article_processing_events (household_id, household_article_id, created_at)"))
+    missing = required - columns
+    if missing:
+        raise RuntimeError(
+            f"Canonical dagartikel/Direct-schema wijkt af: {table_name} mist "
+            f"{sorted(missing)}. Voer Alembic migrations uit."
+        )
+
+
+def _require_index(
+    conn,
+    table_name: str,
+    index_name: str,
+    columns: tuple[str, ...],
+    *,
+    unique: bool,
+) -> None:
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspect(conn).get_indexes(table_name)
+    }
+    index = indexes.get(index_name)
+    if (
+        index is None
+        or bool(index.get("unique")) is not unique
+        or tuple(index.get("column_names") or ()) != columns
+    ):
+        raise RuntimeError(
+            f"Canonical dagartikel/Direct-index wijkt af: {index_name}. "
+            "Voer Alembic migrations uit."
+        )
+
+
+def _event_unique_sets(conn) -> set[tuple[str, ...]]:
+    inspector = inspect(conn)
+    unique_sets = {
+        tuple(constraint.get("column_names") or ())
+        for constraint in inspector.get_unique_constraints("day_article_processing_events")
+    }
+    unique_sets.update(
+        tuple(index.get("column_names") or ())
+        for index in inspector.get_indexes("day_article_processing_events")
+        if bool(index.get("unique"))
+    )
+    return unique_sets
+
+
+def ensure_day_article_schema(conn) -> None:
+    """Validate the Alembic-owned day-article/Direct contract without mutation."""
+    _require_columns(conn, "household_articles", _ARTICLE_COLUMNS)
+    _require_columns(conn, "spaces", _SPACE_COLUMNS)
+    _require_columns(conn, "sublocations", _SUBLOCATION_COLUMNS)
+    _require_columns(conn, "day_article_processing_events", _EVENT_COLUMNS)
+
+    _require_index(
+        conn,
+        "spaces",
+        "idx_spaces_household_system_key",
+        ("household_id", "system_key"),
+        unique=True,
+    )
+    _require_index(
+        conn,
+        "sublocations",
+        "idx_sublocations_space_system_key",
+        ("space_id", "system_key"),
+        unique=True,
+    )
+    _require_index(
+        conn,
+        "day_article_processing_events",
+        "idx_day_article_events_article",
+        ("household_id", "household_article_id", "created_at"),
+        unique=False,
+    )
+    if (
+        "household_id",
+        "idempotency_key",
+        "event_type",
+    ) not in _event_unique_sets(conn):
+        raise RuntimeError(
+            "Canonical dagartikel-idempotency constraint ontbreekt. "
+            "Voer Alembic migrations uit."
+        )
+
+    if conn.dialect.name == "postgresql":
+        inspector = inspect(conn)
+        for table_name in ("spaces", "sublocations"):
+            protected = next(
+                column
+                for column in inspector.get_columns(table_name)
+                if str(column.get("name") or "") == "protected"
+            )
+            if not isinstance(protected["type"], sa.Boolean):
+                raise RuntimeError(
+                    f"Canonical {table_name}.protected moet BOOLEAN zijn. "
+                    "Voer Alembic migrations uit."
+                )
+        for table_name, column_name in (
+            ("household_articles", "inventory_handling_updated_at"),
+            ("day_article_processing_events", "created_at"),
+        ):
+            column = next(
+                item
+                for item in inspector.get_columns(table_name)
+                if str(item.get("name") or "") == column_name
+            )
+            if not isinstance(column["type"], sa.DateTime) or not bool(
+                getattr(column["type"], "timezone", False)
+            ):
+                raise RuntimeError(
+                    f"Canonical {table_name}.{column_name} moet TIMESTAMPTZ zijn. "
+                    "Voer Alembic migrations uit."
+                )
 
 
 def ensure_direct_location(conn, household_id: str) -> dict[str, str]:
@@ -78,15 +177,15 @@ def ensure_direct_location(conn, household_id: str) -> dict[str, str]:
     sublocation_id = str(uuid.uuid5(namespace, f"{normalized_household_id}:direct:sublocation"))
     conn.execute(text("""
         INSERT INTO spaces (id, naam, household_id, system_key, protected)
-        VALUES (:id, 'Direct', :household_id, :system_key, 1)
+        VALUES (:id, 'Direct', :household_id, :system_key, TRUE)
         ON CONFLICT(id) DO UPDATE SET naam = 'Direct', household_id = excluded.household_id,
-          system_key = excluded.system_key, protected = 1
+          system_key = excluded.system_key, protected = TRUE
     """), {"id": space_id, "household_id": normalized_household_id, "system_key": DIRECT_LOCATION_KEY})
     conn.execute(text("""
         INSERT INTO sublocations (id, naam, space_id, system_key, protected)
-        VALUES (:id, 'Direct', :space_id, :system_key, 1)
+        VALUES (:id, 'Direct', :space_id, :system_key, TRUE)
         ON CONFLICT(id) DO UPDATE SET naam = 'Direct', space_id = excluded.space_id,
-          system_key = excluded.system_key, protected = 1
+          system_key = excluded.system_key, protected = TRUE
     """), {"id": sublocation_id, "space_id": space_id, "system_key": DIRECT_LOCATION_KEY})
     return {"space_id": space_id, "sublocation_id": sublocation_id, "location": "Direct", "sublocation": "Direct"}
 
