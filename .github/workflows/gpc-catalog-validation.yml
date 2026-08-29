@@ -117,5 +117,5 @@ jobs:
           path: |
             /tmp/gpc-validation/import-result.json
             /tmp/rezzerv-gpc-validation.db
-            /tmp/gpc-validation/alembic-current.log
+            /tmp/gpc-validation-alembic-current.log
           if-no-files-found: error
