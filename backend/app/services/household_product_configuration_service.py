@@ -10,6 +10,20 @@ from app.services.canonical_direct_location_service import ensure_canonical_dire
 INVENTORY_TRACKING_LEVELS = frozenset({"none", "presence", "quantity"})
 LOCATION_TRACKING_LEVELS = frozenset({"none", "global", "exact"})
 
+_REQUIRED_PRODUCT_CONFIGURATION_COLUMNS = {
+    "household_id",
+    "inventory_tracking_level",
+    "location_tracking_level",
+    "shopping_enabled",
+    "almost_out_enabled",
+    "almost_out_notifications_enabled",
+    "receipt_processing_enabled",
+    "recipes_enabled",
+    "unpacking_enabled",
+    "created_at",
+    "updated_at",
+}
+
 
 @dataclass(frozen=True)
 class HouseholdProductConfiguration:
@@ -29,36 +43,23 @@ class HouseholdProductConfiguration:
 
 
 def ensure_household_product_configuration_foundation(conn) -> None:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS household_product_configuration (
-            household_id TEXT PRIMARY KEY,
-            inventory_tracking_level TEXT NOT NULL
-                CHECK (inventory_tracking_level IN ('none', 'presence', 'quantity')),
-            location_tracking_level TEXT NOT NULL
-                CHECK (location_tracking_level IN ('none', 'global', 'exact')),
-            shopping_enabled INTEGER NOT NULL DEFAULT 0 CHECK (shopping_enabled IN (0, 1)),
-            almost_out_enabled INTEGER NOT NULL DEFAULT 0 CHECK (almost_out_enabled IN (0, 1)),
-            almost_out_notifications_enabled INTEGER NOT NULL DEFAULT 0
-                CHECK (almost_out_notifications_enabled IN (0, 1)),
-            receipt_processing_enabled INTEGER NOT NULL DEFAULT 0
-                CHECK (receipt_processing_enabled IN (0, 1)),
-            recipes_enabled INTEGER NOT NULL DEFAULT 0 CHECK (recipes_enabled IN (0, 1)),
-            unpacking_enabled INTEGER NOT NULL DEFAULT 0 CHECK (unpacking_enabled IN (0, 1)),
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    """Validate the Alembic-owned product configuration schema without mutation."""
+    inspector = inspect(conn)
+    if not inspector.has_table("household_product_configuration"):
+        raise RuntimeError(
+            "Canonical productconfiguratie mist household_product_configuration. "
+            "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
         )
-    """))
-
     columns = {
         str(column.get("name") or "")
-        for column in inspect(conn).get_columns("household_product_configuration")
+        for column in inspector.get_columns("household_product_configuration")
     }
-    if "unpacking_enabled" not in columns:
-        conn.execute(text("""
-            ALTER TABLE household_product_configuration
-            ADD COLUMN unpacking_enabled INTEGER NOT NULL DEFAULT 0
-                CHECK (unpacking_enabled IN (0, 1))
-        """))
+    missing = _REQUIRED_PRODUCT_CONFIGURATION_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            "Canonical productconfiguratie wijkt af: household_product_configuration mist "
+            f"{sorted(missing)}. Voer Alembic migrations uit."
+        )
 
 
 def save_inhuis_halen_configuration(
