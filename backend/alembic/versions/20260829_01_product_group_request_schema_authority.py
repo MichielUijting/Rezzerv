@@ -324,14 +324,42 @@ def _ensure_index(bind: sa.engine.Connection, name: str, table: str, columns: tu
         )
 
 
+def _deduplicate_active_product_type_memberships(bind: sa.engine.Connection) -> None:
+    """Preserve one deterministic active product-type membership per global product."""
+    rows = bind.execute(
+        sa.text(
+            "SELECT id, global_product_id "
+            "FROM product_group_memberships "
+            "WHERE COALESCE(active, 1) = 1 "
+            "ORDER BY global_product_id, COALESCE(confirmed_by_user, 0) DESC, "
+            "COALESCE(updated_at, created_at, '') DESC, id DESC"
+        )
+    ).mappings().all()
+    seen: set[str] = set()
+    for row in rows:
+        product_id = str(row.get("global_product_id") or "").strip()
+        membership_id = str(row.get("id") or "").strip()
+        if not product_id or not membership_id:
+            continue
+        if product_id in seen:
+            bind.execute(
+                sa.text(
+                    "UPDATE product_group_memberships "
+                    "SET active = 0, updated_at = CURRENT_TIMESTAMP "
+                    "WHERE id = :id"
+                ),
+                {"id": membership_id},
+            )
+        else:
+            seen.add(product_id)
+
+
 def _ensure_primary_product_membership_index(bind: sa.engine.Connection) -> None:
     name = "idx_product_group_memberships_one_active_product_type"
     inspector = sa.inspect(bind)
     indexes = {str(index.get("name") or ""): index for index in inspector.get_indexes("product_group_memberships")}
     if name in indexes:
         return
-    # The legacy service used a partial unique index. Keep that exact invariant on
-    # PostgreSQL and SQLite; both supported migration dialects accept this predicate.
     op.create_index(
         name,
         "product_group_memberships",
@@ -382,6 +410,7 @@ def upgrade() -> None:
 
     for index_name, (table_name, columns, unique) in _INDEXES.items():
         _ensure_index(bind, index_name, table_name, columns, unique)
+    _deduplicate_active_product_type_memberships(bind)
     _ensure_primary_product_membership_index(bind)
     _validate_contract(bind)
 
