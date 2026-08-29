@@ -9,6 +9,10 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_STORES = (
     BACKEND_ROOT / "app" / "services" / "product_taxonomy_store.py",
     BACKEND_ROOT / "app" / "services" / "product_inventory_group_store.py",
+    BACKEND_ROOT / "app" / "services" / "article_group_store.py",
+    BACKEND_ROOT / "app" / "services" / "household_location_onboarding_service.py",
+    BACKEND_ROOT / "app" / "services" / "shopping_list_service.py",
+    BACKEND_ROOT / "app" / "services" / "loyalty_stamp_transaction_service.py",
 )
 FORBIDDEN_RUNTIME_SCHEMA_SQL = (
     "CREATE TABLE",
@@ -20,7 +24,7 @@ FORBIDDEN_RUNTIME_SCHEMA_SQL = (
 
 
 @pytest.mark.parametrize("store_path", RUNTIME_STORES)
-def test_product_group_request_stores_are_schema_validation_only(store_path: Path) -> None:
+def test_core_request_stores_are_schema_validation_only(store_path: Path) -> None:
     source = store_path.read_text(encoding="utf-8")
     upper_source = source.upper()
 
@@ -35,13 +39,38 @@ def test_product_group_request_stores_are_schema_validation_only(store_path: Pat
         )
 
 
-def test_product_group_schema_authority_revision_is_linear() -> None:
-    migration = (
-        BACKEND_ROOT
-        / "alembic"
-        / "versions"
-        / "20260829_01_product_group_request_schema_authority.py"
-    ).read_text(encoding="utf-8")
+def test_core_request_schema_authority_revisions_are_linear() -> None:
+    revisions = (
+        (
+            "20260829_01_product_group_request_schema_authority.py",
+            "20260829_01",
+            "20260828_05",
+        ),
+        (
+            "20260829_02_article_group_request_schema_authority.py",
+            "20260829_02",
+            "20260829_01",
+        ),
+        (
+            "20260829_03_onboarding_location_request_schema_authority.py",
+            "20260829_03",
+            "20260829_02",
+        ),
+        (
+            "20260829_04_shopping_list_request_schema_authority.py",
+            "20260829_04",
+            "20260829_03",
+        ),
+        (
+            "20260829_05_loyalty_stamp_request_schema_authority.py",
+            "20260829_05",
+            "20260829_04",
+        ),
+    )
 
-    assert 'revision: str = "20260829_01"' in migration
-    assert 'down_revision: Union[str, None] = "20260828_05"' in migration
+    for filename, revision, down_revision in revisions:
+        migration = (
+            BACKEND_ROOT / "alembic" / "versions" / filename
+        ).read_text(encoding="utf-8")
+        assert f'revision: str = "{revision}"' in migration
+        assert f'down_revision: Union[str, None] = "{down_revision}"' in migration
