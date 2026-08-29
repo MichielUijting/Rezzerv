@@ -24,7 +24,10 @@ def _tables() -> set[str]:
 def _columns(table_name: str) -> set[str]:
     if table_name not in _tables():
         return set()
-    return {str(column.get("name") or "") for column in inspect(engine).get_columns(table_name)}
+    return {
+        str(column.get("name") or "")
+        for column in inspect(engine).get_columns(table_name)
+    }
 
 
 def _require_gpc_tables() -> None:
@@ -45,43 +48,52 @@ def _require_gpc_tables() -> None:
 
 
 def _ensure_assignment_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS global_product_gpc_bricks (
-                global_product_id TEXT PRIMARY KEY,
-                brick_code VARCHAR(8) NOT NULL,
-                assignment_source TEXT NOT NULL DEFAULT 'manual_catalog_detail',
-                confidence REAL NOT NULL DEFAULT 1.0,
-                migrated_from TEXT,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (global_product_id) REFERENCES global_products(id),
-                FOREIGN KEY (brick_code) REFERENCES gpc_bricks(brick_code)
-            )
-        """))
-        existing_columns = {
-            str(row[1])
-            for row in conn.execute(text("PRAGMA table_info(global_product_gpc_bricks)")).fetchall()
-        }
-        for column, definition in (
-            ("assignment_source", "TEXT NOT NULL DEFAULT 'manual_catalog_detail'"),
-            ("confidence", "REAL NOT NULL DEFAULT 1.0"),
-            ("migrated_from", "TEXT"),
-        ):
-            if column not in existing_columns:
-                conn.execute(text(
-                    f"ALTER TABLE global_product_gpc_bricks ADD COLUMN {column} {definition}"
-                ))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_global_product_gpc_brick_code "
-            "ON global_product_gpc_bricks(brick_code)"
-        ))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS global_product_gpc_migration_suppressions (
-                global_product_id TEXT PRIMARY KEY,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (global_product_id) REFERENCES global_products(id)
-            )
-        """))
+    """Validate the Alembic-owned assignment contract; never mutate schema or data."""
+    inspector = inspect(engine)
+    required_tables = {
+        "global_product_gpc_bricks",
+        "global_product_gpc_migration_suppressions",
+    }
+    missing_tables = sorted(required_tables - set(inspector.get_table_names()))
+    if missing_tables:
+        raise RuntimeError(
+            "Catalogus GPC-assignment schema ontbreekt; voer Alembic migrations uit: "
+            f"{missing_tables}"
+        )
+
+    assignment_columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("global_product_gpc_bricks")
+    }
+    required_assignment_columns = {
+        "global_product_id",
+        "brick_code",
+        "assignment_source",
+        "confidence",
+        "migrated_from",
+        "updated_at",
+    }
+    missing_columns = required_assignment_columns - assignment_columns
+    if missing_columns:
+        raise RuntimeError(
+            "global_product_gpc_bricks schema incompleet: "
+            f"missing={sorted(missing_columns)}"
+        )
+
+    suppression_columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("global_product_gpc_migration_suppressions")
+    }
+    if {"global_product_id", "created_at"} - suppression_columns:
+        raise RuntimeError("global_product_gpc_migration_suppressions schema incompleet")
+
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspector.get_indexes("global_product_gpc_bricks")
+    }
+    index = indexes.get("idx_global_product_gpc_brick_code")
+    if not index or tuple(index.get("column_names") or ()) != ("brick_code",):
+        raise RuntimeError("idx_global_product_gpc_brick_code ontbreekt of wijkt af")
 
 
 def _global_product_exists(conn, global_product_id: str) -> bool:
@@ -182,37 +194,6 @@ def _legacy_candidate(conn, global_product_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def _migration_suppressed(conn, global_product_id: str) -> bool:
-    return bool(conn.execute(text(
-        "SELECT 1 FROM global_product_gpc_migration_suppressions "
-        "WHERE global_product_id = :id LIMIT 1"
-    ), {"id": global_product_id}).first())
-
-
-def _migrate_confirmed_legacy_assignment(conn, global_product_id: str) -> dict[str, Any] | None:
-    if _assignment_row(conn, global_product_id) or _migration_suppressed(conn, global_product_id):
-        return None
-    candidate = _legacy_candidate(conn, global_product_id)
-    if not candidate or not bool(candidate.get("confirmed_by_user")):
-        return None
-    conn.execute(text("""
-        INSERT INTO global_product_gpc_bricks (
-            global_product_id, brick_code, assignment_source,
-            confidence, migrated_from, updated_at
-        ) VALUES (
-            :global_product_id, :brick_code, 'migrated_confirmed_product_group',
-            :confidence, :migrated_from, CURRENT_TIMESTAMP
-        )
-        ON CONFLICT(global_product_id) DO NOTHING
-    """), {
-        "global_product_id": global_product_id,
-        "brick_code": candidate["brick_code"],
-        "confidence": float(candidate.get("confidence") or 1.0),
-        "migrated_from": str(candidate.get("inventory_group_key") or candidate.get("legacy_source") or ""),
-    })
-    return candidate
-
-
 def _metadata_suggestion(conn, global_product_id: str) -> dict[str, Any] | None:
     legacy = _legacy_candidate(conn, global_product_id)
     if legacy:
@@ -240,15 +221,22 @@ def _metadata_suggestion(conn, global_product_id: str) -> dict[str, Any] | None:
 
     metadata_parts = [product.get("name"), product.get("brand"), product.get("category")]
     if "external_product_index" in _tables() and product.get("primary_gtin"):
-        external = conn.execute(text("""
-            SELECT product_name, brand, category, categories, product_type, search_terms
-            FROM external_product_index
-            WHERE gtin = :gtin OR ean = :gtin OR code = :gtin
-            ORDER BY updated_at DESC
-            LIMIT 1
-        """), {"gtin": product.get("primary_gtin")}).mappings().first()
-        if external:
-            metadata_parts.extend(external.values())
+        external_columns = _columns("external_product_index")
+        optional_columns = [
+            column
+            for column in ("product_name", "brand", "category", "categories", "product_type", "search_terms")
+            if column in external_columns
+        ]
+        if optional_columns:
+            external = conn.execute(text(f"""
+                SELECT {', '.join(optional_columns)}
+                FROM external_product_index
+                WHERE gtin = :gtin OR ean = :gtin OR code = :gtin
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """), {"gtin": product.get("primary_gtin")}).mappings().first()
+            if external:
+                metadata_parts.extend(external.values())
 
     stopwords = {"kids", "pizza", "biologisch", "organic", "the", "and", "voor", "met", "van"}
     tokens = []
@@ -318,15 +306,14 @@ def get_catalog_product_gpc_brick(global_product_id: str):
     with engine.begin() as conn:
         if not _global_product_exists(conn, global_product_id):
             raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
-        migration = _migrate_confirmed_legacy_assignment(conn, global_product_id)
         row = _assignment_row(conn, global_product_id)
         suggestion = None if row else _metadata_suggestion(conn, global_product_id)
     return {
         "assignment": dict(row) if row else None,
         "suggestion": suggestion,
         "migration": {
-            "performed": bool(migration),
-            "source": "bevestigde bestaande productgroep" if migration else None,
+            "performed": False,
+            "source": None,
         },
     }
 
@@ -347,7 +334,10 @@ def set_catalog_product_gpc_brick(
             {"brick_code": brick_code},
         ).first():
             raise HTTPException(status_code=400, detail="Onbekende GPC Brickcode")
-        conn.execute(text("DELETE FROM global_product_gpc_migration_suppressions WHERE global_product_id = :id"), {"id": global_product_id})
+        conn.execute(
+            text("DELETE FROM global_product_gpc_migration_suppressions WHERE global_product_id = :id"),
+            {"id": global_product_id},
+        )
         conn.execute(text("""
             INSERT INTO global_product_gpc_bricks (
                 global_product_id, brick_code, assignment_source,
