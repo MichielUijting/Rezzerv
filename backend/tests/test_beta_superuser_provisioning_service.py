@@ -1,3 +1,11 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
 from sqlalchemy import create_engine, text
 
 from app.services.authorization_foundation_service import (
@@ -10,24 +18,38 @@ from app.services.beta_superuser_provisioning_service import (
 )
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ROOT = REPO_ROOT / "backend"
+ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
+
+
 def make_engine():
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    fd, database_path_raw = tempfile.mkstemp(prefix="rezzerv-po-beta-", suffix=".sqlite")
+    os.close(fd)
+    database_path = Path(database_path_raw)
+    database_path.unlink(missing_ok=True)
+    database_url = f"sqlite:///{database_path.as_posix()}"
+
+    env = os.environ.copy()
+    env["DATABASE_URL"] = database_url
+    env["PYTHONPATH"] = str(BACKEND_ROOT)
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "Alembic-first PO beta fixture kon niet naar head migreren:\n"
+            + result.stdout
+            + result.stderr
+        )
+
+    engine = create_engine(database_url, future=True)
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_memberships (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active',
-                active INTEGER NOT NULL DEFAULT 1
-            )
-        """))
         conn.execute(text("INSERT INTO app_users(id, email) VALUES ('user-po', 'po@rezzerv.local')"))
         conn.execute(text("""
             INSERT INTO household_memberships(id, household_id, user_id)
