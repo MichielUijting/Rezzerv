@@ -81,14 +81,11 @@ def _complete_global_product_link_data(
                     SELECT 1
                     FROM product_group_memberships pgm
                     JOIN product_inventory_groups pig
-                      ON pig.inventory_group_key =
-                         pgm.inventory_group_key
+                      ON pig.inventory_group_key = pgm.inventory_group_key
                     WHERE pgm.global_product_id = gp.id
                       AND pgm.active = 1
-                      AND pgm.inventory_group_key
-                          GLOB 'gpc:[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
-                      AND pig.gpc_brick_code =
-                          substr(pgm.inventory_group_key, 5)
+                      AND length(COALESCE(pig.gpc_brick_code, '')) = 8
+                      AND pgm.inventory_group_key = ('gpc:' || pig.gpc_brick_code)
                       AND pig.source LIKE 'gs1_gpc_%'
                       AND COALESCE(pig.active, 1) = 1
                 ) AS has_active_official_gpc
@@ -446,7 +443,7 @@ def get_confirmed_external_article_product_link(
                   AND link.status = 'confirmed'
                   AND lower(COALESCE(gp.status, 'active')) = 'active'
                 ORDER BY
-                    datetime(link.confirmed_at) DESC,
+                    link.confirmed_at DESC,
                     link.id DESC
                 LIMIT 1
                 """
@@ -471,12 +468,11 @@ def get_confirmed_external_article_product_link(
                 JOIN global_products gp
                   ON gp.id = link.global_product_id
                 WHERE link.retailer_code = :retailer_code
-                  AND link.receipt_text_normalized =
-                      :receipt_text_normalized
+                  AND link.receipt_text_normalized = :receipt_text_normalized
                   AND link.status = 'confirmed'
                   AND lower(COALESCE(gp.status, 'active')) = 'active'
                 ORDER BY
-                    datetime(link.confirmed_at) DESC,
+                    link.confirmed_at DESC,
                     link.id DESC
                 LIMIT 1
                 """
