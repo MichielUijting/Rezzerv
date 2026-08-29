@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'backend/alembic/**'
+      - 'backend/app/api/catalog_gpc_routes.py'
       - 'backend/app/db.py'
       - 'backend/app/main.py'
       - 'backend/app/migration_db.py'
@@ -16,8 +17,11 @@ on:
       - 'backend/app/services/barcode_identity_service.py'
       - 'backend/app/services/beta_superuser_provisioning_service.py'
       - 'backend/app/services/canonical_direct_location_service.py'
+      - 'backend/app/services/gpc_article_assignment_service.py'
       - 'backend/app/services/gpc_catalog_service.py'
+      - 'backend/app/services/gpc_import_service.py'
       - 'backend/app/services/gpc_local_catalog_service.py'
+      - 'backend/app/services/gpc_translation_service.py'
       - 'backend/app/services/household_capability_expansion_service.py'
       - 'backend/app/services/household_location_onboarding_service.py'
       - 'backend/app/services/household_product_configuration_service.py'
@@ -37,6 +41,8 @@ on:
       - 'backend/tests/postgresql_external_catalog_dml_only_selftest.py'
       - 'backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py'
       - 'backend/tests/postgresql_gpc_barcode_dml_only_selftest.py'
+      - 'backend/tests/postgresql_gpc_residual_sql_authority_selftest.py'
+      - 'backend/tests/postgresql_gpc_residual_dml_only_selftest.py'
       - 'backend/tests/postgresql_onboarding_use_case_sql_portability_selftest.py'
       - 'backend/tests/postgresql_onboarding_use_case_dml_only_selftest.py'
       - 'backend/tests/runtime_startup_schema_authority_selftest.py'
@@ -138,6 +144,15 @@ jobs:
           grep -F 'POSTGRESQL_GPC_BARCODE_ALEMBIC_AUTHORITY_GREEN' /tmp/gpc-barcode-static.log
           grep -F 'POSTGRESQL_GPC_BARCODE_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-barcode-static.log
 
+      - name: Prove residual GPC assignment/translation runtime SQL is schema-free and portable
+        run: |
+          python backend/tests/postgresql_gpc_residual_sql_authority_selftest.py | tee /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_SQL_PORTABLE_GREEN' /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_RUNTIME_DDL_ABSENT_GREEN' /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_VALIDATION_ONLY_SCHEMA_GREEN' /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_ALEMBIC_AUTHORITY_GREEN' /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-static.log
+
       - name: Prove onboarding/use-case runtime SQL is schema-free and portable
         run: |
           python backend/tests/postgresql_onboarding_use_case_sql_portability_selftest.py | tee /tmp/onboarding-use-case-static.log
@@ -152,7 +167,7 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/runtime-startup-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/runtime-startup-migration.log
-          grep -F "'revision': '20260829_10'" /tmp/runtime-startup-migration.log
+          grep -F "'revision': '20260829_11'" /tmp/runtime-startup-migration.log
 
       - name: Prove runtime role has no schema CREATE privilege
         env:
@@ -211,6 +226,18 @@ jobs:
           grep -F 'POSTGRESQL_BARCODE_GPC_LOOKUP_PORTABLE_GREEN' /tmp/gpc-barcode-dml-only.log
           grep -F 'POSTGRESQL_GPC_BARCODE_DML_ONLY_GREEN' /tmp/gpc-barcode-dml-only.log
           grep -F 'POSTGRESQL_GPC_BARCODE_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-barcode-dml-only.log
+
+      - name: Prove residual GPC assignment/translation paths work with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_gpc_residual_dml_only_selftest.py | tee /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_RUNTIME_CREATE_DENIED_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_ASSIGNMENT_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_TRANSLATION_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_IMPORT_BOOLEAN_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-dml-only.log
 
       - name: Prove onboarding/use-case request paths work with DML-only runtime role
         working-directory: backend
