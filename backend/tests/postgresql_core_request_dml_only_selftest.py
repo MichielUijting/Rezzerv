@@ -18,6 +18,10 @@ from app.services.household_location_onboarding_service import (
     ensure_location_foundation,
     provision_waar_inhuis_locations,
 )
+from app.services.household_product_configuration_service import (
+    ensure_household_product_configuration_foundation,
+    save_wat_inhuis_configuration,
+)
 from app.services.loyalty_stamp_transaction_service import (
     ensure_loyalty_stamp_transactions_schema,
 )
@@ -62,6 +66,7 @@ def _validate_all_cutover_contracts() -> None:
     ensure_article_group_schema()
     with engine.connect() as conn:
         ensure_location_foundation(conn)
+        ensure_household_product_configuration_foundation(conn)
         ensure_shopping_list_schema(conn)
         ensure_loyalty_stamp_transactions_schema(conn)
     print("POSTGRESQL_CORE_REQUEST_SCHEMA_VALIDATION_ONLY_GREEN")
@@ -74,6 +79,32 @@ def _exercise_request_dml() -> None:
         raise AssertionError(f"Article-group DML failed: {created_group}")
 
     with engine.begin() as conn:
+        product_configuration = save_wat_inhuis_configuration(
+            conn,
+            household_id=HOUSEHOLD_ID,
+            inventory_tracking_level="presence",
+            global_locations_enabled=True,
+            almost_out_enabled=True,
+            shopping_enabled=True,
+        )
+        if product_configuration.location_tracking_level != "global":
+            raise AssertionError(
+                f"Product-configuration DML failed: {product_configuration}"
+            )
+        direct = conn.execute(
+            text(
+                """
+                SELECT id, naam, active, is_direct
+                FROM spaces
+                WHERE household_id = :household_id
+                  AND is_direct = 1
+                """
+            ),
+            {"household_id": HOUSEHOLD_ID},
+        ).mappings().one()
+        if str(direct.get("naam") or "").strip() != "Direct" or not bool(direct.get("active")):
+            raise AssertionError(f"Direct-location DML failed: {direct}")
+
         locations = provision_waar_inhuis_locations(
             conn,
             household_id=HOUSEHOLD_ID,
@@ -106,7 +137,8 @@ def _exercise_request_dml() -> None:
         if not delete_shopping_list_item(conn, HOUSEHOLD_ID, item["id"]):
             raise AssertionError("Shopping-list DML delete failed")
 
-    # Cleanup is also DML and intentionally leaves no PR-specific rows behind.
+    # Cleanup is ordinary DML. The canonical Direct row is intentionally retained:
+    # Alembic-owned immutability guards make that row non-deletable by design.
     with engine.begin() as conn:
         conn.execute(
             text("DELETE FROM shopping_list_items WHERE household_id = :household_id"),
@@ -119,12 +151,19 @@ def _exercise_request_dml() -> None:
         conn.execute(
             text(
                 "DELETE FROM sublocations WHERE space_id IN "
-                "(SELECT id FROM spaces WHERE household_id = :household_id)"
+                "(SELECT id FROM spaces WHERE household_id = :household_id AND is_direct = 0)"
             ),
             {"household_id": HOUSEHOLD_ID},
         )
         conn.execute(
-            text("DELETE FROM spaces WHERE household_id = :household_id"),
+            text(
+                "DELETE FROM spaces "
+                "WHERE household_id = :household_id AND is_direct = 0"
+            ),
+            {"household_id": HOUSEHOLD_ID},
+        )
+        conn.execute(
+            text("DELETE FROM household_product_configuration WHERE household_id = :household_id"),
             {"household_id": HOUSEHOLD_ID},
         )
         conn.execute(
