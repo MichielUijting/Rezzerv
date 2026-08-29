@@ -83,8 +83,6 @@ def _insert_purchase_import_line_fixture(conn) -> None:
     required_contract = {
         "id",
         "external_article_code",
-        "external_source_name",
-        "external_match_status",
         "updated_at",
     }
     missing = required_contract - set(columns)
@@ -96,8 +94,6 @@ def _insert_purchase_import_line_fixture(conn) -> None:
     values: dict[str, Any] = {
         "id": "pil-1",
         "external_article_code": None,
-        "external_source_name": None,
-        "external_match_status": None,
     }
     for column_name, row in columns.items():
         if column_name in values:
@@ -204,6 +200,7 @@ def test_confirm_recognition_does_not_create_catalog_or_inventory_data():
         assert result["confirmed"] is True
         assert result["external_product_code"] == "lidl:groente.veldsla"
         assert result["external_source_name"] == "lidl_catalog_enrichment"
+        assert result["purchase_import_line_updated_count"] == 1
         assert result["creates_global_product"] is False
         assert result["creates_product_identity"] is False
         assert result["creates_household_article"] is False
@@ -221,12 +218,11 @@ def test_confirm_recognition_does_not_create_catalog_or_inventory_data():
 
         assert candidate["status"] == recognition.EXTERNAL_RECOGNITION_STATUS
         assert candidate["candidate_status"] == recognition.EXTERNAL_RECOGNITION_STATUS
+        assert candidate["candidate_source_name"] == "lidl_catalog_enrichment"
         assert int(candidate["is_user_confirmed"] or 0) == 0
         assert int(candidate["is_external_database_override"] or 0) == 0
         assert candidate["global_product_id"] is None
         assert import_line["external_article_code"] == "lidl:groente.veldsla"
-        assert import_line["external_source_name"] == "lidl_catalog_enrichment"
-        assert import_line["external_match_status"] == recognition.EXTERNAL_RECOGNITION_STATUS
         assert global_product_count == 0
         assert product_identity_count == 0
 
@@ -239,6 +235,7 @@ def test_confirm_recognition_does_not_create_catalog_or_inventory_data():
         assert state["resolved"] is True
         assert state["candidate_id"] == "candidate-1"
         assert state["external_product_code"] == "lidl:groente.veldsla"
+        assert state["external_source_name"] == "lidl_catalog_enrichment"
 
 
 def test_recognition_confirmation_is_idempotent_and_requires_explicit_overwrite():
