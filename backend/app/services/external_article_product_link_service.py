@@ -40,28 +40,17 @@ def normalize_external_link_article_code(value: Any) -> str:
 
 
 def normalize_external_link_receipt_text(value: Any) -> str:
-    """
-    Normaliseer bontekst uitsluitend als stabiele sleutel.
-
-    Voorbeeld:
-    7-GRANEN ONTBIJT -> 7 granen ontbijt
-    """
+    """Normaliseer bontekst uitsluitend als stabiele sleutel."""
     normalized = unicodedata.normalize("NFKD", str(value or ""))
     normalized = normalized.encode("ascii", "ignore").decode("ascii")
     normalized = re.sub(r"[^a-zA-Z0-9]+", " ", normalized.lower())
     return " ".join(normalized.split())
 
 
-def _complete_global_product_link_data(
-    conn,
-    global_product_id: str,
-) -> dict[str, Any]:
+def _complete_global_product_link_data(conn, global_product_id: str) -> dict[str, Any]:
     product_id = str(global_product_id or "").strip()
     if not product_id:
-        return {
-            "complete": False,
-            "reason": "global_product_id ontbreekt",
-        }
+        return {"complete": False, "reason": "global_product_id ontbreekt"}
 
     row = conn.execute(
         text(
@@ -81,16 +70,13 @@ def _complete_global_product_link_data(
                     SELECT 1
                     FROM product_group_memberships pgm
                     JOIN product_inventory_groups pig
-                      ON pig.inventory_group_key =
-                         pgm.inventory_group_key
+                      ON pig.inventory_group_key = pgm.inventory_group_key
                     WHERE pgm.global_product_id = gp.id
-                      AND pgm.active = 1
-                      AND pgm.inventory_group_key
-                          GLOB 'gpc:[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
-                      AND pig.gpc_brick_code =
-                          substr(pgm.inventory_group_key, 5)
+                      AND COALESCE(pgm.active, TRUE) IS TRUE
+                      AND pgm.inventory_group_key LIKE 'gpc:%'
+                      AND pig.gpc_brick_code = substr(pgm.inventory_group_key, 5)
                       AND pig.source LIKE 'gs1_gpc_%'
-                      AND COALESCE(pig.active, 1) = 1
+                      AND COALESCE(pig.active, TRUE) IS TRUE
                 ) AS has_active_official_gpc
             FROM global_products gp
             WHERE gp.id = :global_product_id
@@ -101,21 +87,12 @@ def _complete_global_product_link_data(
     ).mappings().first()
 
     if not row:
-        return {
-            "complete": False,
-            "reason": "Het universele artikel bestaat niet",
-        }
+        return {"complete": False, "reason": "Het universele artikel bestaat niet"}
 
     primary_gtin = str(row.get("primary_gtin") or "").strip()
-    has_valid_primary_gtin = bool(
-        re.fullmatch(r"[0-9]{8,14}", primary_gtin)
-    )
-    has_matching_gtin_identity = bool(
-        row.get("has_matching_gtin_identity")
-    )
-    has_active_official_gpc = bool(
-        row.get("has_active_official_gpc")
-    )
+    has_valid_primary_gtin = bool(re.fullmatch(r"[0-9]{8,14}", primary_gtin))
+    has_matching_gtin_identity = bool(row.get("has_matching_gtin_identity"))
+    has_active_official_gpc = bool(row.get("has_active_official_gpc"))
 
     reasons = []
     if not has_valid_primary_gtin:
@@ -135,14 +112,8 @@ def _complete_global_product_link_data(
     }
 
 
-def _require_complete_global_product_link(
-    conn,
-    global_product_id: str,
-) -> dict[str, Any]:
-    result = _complete_global_product_link_data(
-        conn,
-        global_product_id,
-    )
+def _require_complete_global_product_link(conn, global_product_id: str) -> dict[str, Any]:
+    result = _complete_global_product_link_data(conn, global_product_id)
     if not result.get("complete"):
         raise ValueError(
             "Kassabonartikel kan niet worden gekoppeld: "
@@ -167,8 +138,7 @@ def deactivate_incomplete_confirmed_external_links(conn) -> int:
         str(row.get("id") or "")
         for row in rows
         if not _complete_global_product_link_data(
-            conn,
-            str(row.get("global_product_id") or ""),
+            conn, str(row.get("global_product_id") or "")
         ).get("complete")
     ]
 
@@ -177,25 +147,17 @@ def deactivate_incomplete_confirmed_external_links(conn) -> int:
             text(
                 """
                 UPDATE external_article_product_links
-                SET status = 'inactive',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-                  AND status = 'confirmed'
+                SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id AND status = 'confirmed'
                 """
             ),
             {"id": link_id},
         )
-
     return len(invalid_ids)
 
 
 def ensure_external_article_product_link_schema(conn) -> None:
-    """Legacy compatibility shim; schema authority lives exclusively in Alembic.
-
-    `app.main` still calls this historical symbol during direct module imports.
-    It intentionally performs no read, write or DDL. Normal runtime startup is
-    guarded by `app.schema_migration_preflight` before Uvicorn imports the app.
-    """
+    """Legacy compatibility shim; schema authority lives exclusively in Alembic."""
     del conn
 
 
@@ -204,16 +166,11 @@ def _serialize_external_article_product_link(
 ) -> Optional[dict[str, Any]]:
     if not row:
         return None
-
     return {
         "id": str(row.get("id") or ""),
         "retailer_code": str(row.get("retailer_code") or ""),
-        "receipt_text_normalized": str(
-            row.get("receipt_text_normalized") or ""
-        ),
-        "external_article_code": str(
-            row.get("external_article_code") or ""
-        ),
+        "receipt_text_normalized": str(row.get("receipt_text_normalized") or ""),
+        "external_article_code": str(row.get("external_article_code") or ""),
         "global_product_id": str(row.get("global_product_id") or ""),
         "global_product_name": row.get("global_product_name"),
         "status": str(row.get("status") or ""),
@@ -235,40 +192,19 @@ def save_external_article_product_link(
     confirmed_by: Any = None,
     source_candidate_id: Any = None,
 ) -> dict[str, Any]:
-    """
-    Sla één bevestigde koppeling op.
-
-    Een nieuwe bevestiging vervangt een eerdere bevestiging voor:
-    - dezelfde retailer + winkelartikelcode;
-    - dezelfde retailer + genormaliseerde bontekst.
-    """
-    normalized_retailer = normalize_external_link_retailer_code(
-        retailer_code
-    )
-    normalized_code = normalize_external_link_article_code(
-        external_article_code
-    )
-    normalized_text = normalize_external_link_receipt_text(
-        receipt_text
-    )
+    normalized_retailer = normalize_external_link_retailer_code(retailer_code)
+    normalized_code = normalize_external_link_article_code(external_article_code)
+    normalized_text = normalize_external_link_receipt_text(receipt_text)
     normalized_product_id = str(global_product_id or "").strip()
-    normalized_confirmed_by = (
-        str(confirmed_by or "").strip() or None
-    )
-    normalized_candidate_id = (
-        str(source_candidate_id or "").strip() or None
-    )
+    normalized_confirmed_by = str(confirmed_by or "").strip() or None
+    normalized_candidate_id = str(source_candidate_id or "").strip() or None
 
     if not normalized_retailer:
         raise ValueError("retailer_code ontbreekt")
-
     if not normalized_product_id:
         raise ValueError("global_product_id ontbreekt")
-
     if not normalized_code and not normalized_text:
-        raise ValueError(
-            "external_article_code of receipt_text is verplicht"
-        )
+        raise ValueError("external_article_code of receipt_text is verplicht")
 
     product = conn.execute(
         text(
@@ -281,51 +217,30 @@ def save_external_article_product_link(
         ),
         {"global_product_id": normalized_product_id},
     ).mappings().first()
-
     if not product:
         raise ValueError("Het universele artikel bestaat niet")
-
     if str(product.get("status") or "active").strip().lower() != "active":
         raise ValueError("Het universele artikel is niet actief")
 
-    _require_complete_global_product_link(
-        conn,
-        normalized_product_id,
-    )
+    _require_complete_global_product_link(conn, normalized_product_id)
 
     conflict_conditions = []
-
     if normalized_code:
         conflict_conditions.append(
-            """
-            (
-                retailer_code = :retailer_code
-                AND external_article_code = :external_article_code
-            )
-            """
+            "(retailer_code = :retailer_code AND external_article_code = :external_article_code)"
         )
-
     if normalized_text:
         conflict_conditions.append(
-            """
-            (
-                retailer_code = :retailer_code
-                AND receipt_text_normalized = :receipt_text_normalized
-            )
-            """
+            "(retailer_code = :retailer_code AND receipt_text_normalized = :receipt_text_normalized)"
         )
-
     conflict_where = " OR ".join(conflict_conditions)
 
     conn.execute(
         text(
             f"""
             UPDATE external_article_product_links
-            SET
-                status = 'inactive',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE status = 'confirmed'
-              AND ({conflict_where})
+            SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
+            WHERE status = 'confirmed' AND ({conflict_where})
             """
         ),
         {
@@ -336,34 +251,17 @@ def save_external_article_product_link(
     )
 
     link_id = str(uuid.uuid4())
-
     conn.execute(
         text(
             """
             INSERT INTO external_article_product_links (
-                id,
-                retailer_code,
-                receipt_text_normalized,
-                external_article_code,
-                global_product_id,
-                status,
-                confirmed_by,
-                confirmed_at,
-                source_candidate_id,
-                created_at,
-                updated_at
+                id, retailer_code, receipt_text_normalized, external_article_code,
+                global_product_id, status, confirmed_by, confirmed_at,
+                source_candidate_id, created_at, updated_at
             ) VALUES (
-                :id,
-                :retailer_code,
-                :receipt_text_normalized,
-                :external_article_code,
-                :global_product_id,
-                'confirmed',
-                :confirmed_by,
-                CURRENT_TIMESTAMP,
-                :source_candidate_id,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
+                :id, :retailer_code, :receipt_text_normalized, :external_article_code,
+                :global_product_id, 'confirmed', :confirmed_by, CURRENT_TIMESTAMP,
+                :source_candidate_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """
         ),
@@ -381,26 +279,18 @@ def save_external_article_product_link(
     saved = conn.execute(
         text(
             """
-            SELECT
-                link.*,
-                gp.name AS global_product_name
+            SELECT link.*, gp.name AS global_product_name
             FROM external_article_product_links link
-            JOIN global_products gp
-              ON gp.id = link.global_product_id
+            JOIN global_products gp ON gp.id = link.global_product_id
             WHERE link.id = :id
             LIMIT 1
             """
         ),
         {"id": link_id},
     ).mappings().first()
-
     serialized = _serialize_external_article_product_link(saved)
-
     if not serialized:
-        raise RuntimeError(
-            "De bevestigde externe artikelkoppeling kon niet worden gelezen"
-        )
-
+        raise RuntimeError("De bevestigde externe artikelkoppeling kon niet worden gelezen")
     return serialized
 
 
@@ -411,23 +301,9 @@ def get_confirmed_external_article_product_link(
     receipt_text: Any = None,
     external_article_code: Any = None,
 ) -> Optional[dict[str, Any]]:
-    """
-    Lees een bevestigde koppeling.
-
-    Zoekvolgorde:
-    1. retailer + externe artikelcode;
-    2. retailer + genormaliseerde bontekst.
-    """
-    normalized_retailer = normalize_external_link_retailer_code(
-        retailer_code
-    )
-    normalized_code = normalize_external_link_article_code(
-        external_article_code
-    )
-    normalized_text = normalize_external_link_receipt_text(
-        receipt_text
-    )
-
+    normalized_retailer = normalize_external_link_retailer_code(retailer_code)
+    normalized_code = normalize_external_link_article_code(external_article_code)
+    normalized_text = normalize_external_link_receipt_text(receipt_text)
     if not normalized_retailer:
         return None
 
@@ -435,19 +311,14 @@ def get_confirmed_external_article_product_link(
         row = conn.execute(
             text(
                 """
-                SELECT
-                    link.*,
-                    gp.name AS global_product_name
+                SELECT link.*, gp.name AS global_product_name
                 FROM external_article_product_links link
-                JOIN global_products gp
-                  ON gp.id = link.global_product_id
+                JOIN global_products gp ON gp.id = link.global_product_id
                 WHERE link.retailer_code = :retailer_code
                   AND link.external_article_code = :external_article_code
                   AND link.status = 'confirmed'
                   AND lower(COALESCE(gp.status, 'active')) = 'active'
-                ORDER BY
-                    datetime(link.confirmed_at) DESC,
-                    link.id DESC
+                ORDER BY link.confirmed_at DESC, link.id DESC
                 LIMIT 1
                 """
             ),
@@ -456,7 +327,6 @@ def get_confirmed_external_article_product_link(
                 "external_article_code": normalized_code,
             },
         ).mappings().first()
-
         if row:
             return _serialize_external_article_product_link(row)
 
@@ -464,20 +334,14 @@ def get_confirmed_external_article_product_link(
         row = conn.execute(
             text(
                 """
-                SELECT
-                    link.*,
-                    gp.name AS global_product_name
+                SELECT link.*, gp.name AS global_product_name
                 FROM external_article_product_links link
-                JOIN global_products gp
-                  ON gp.id = link.global_product_id
+                JOIN global_products gp ON gp.id = link.global_product_id
                 WHERE link.retailer_code = :retailer_code
-                  AND link.receipt_text_normalized =
-                      :receipt_text_normalized
+                  AND link.receipt_text_normalized = :receipt_text_normalized
                   AND link.status = 'confirmed'
                   AND lower(COALESCE(gp.status, 'active')) = 'active'
-                ORDER BY
-                    datetime(link.confirmed_at) DESC,
-                    link.id DESC
+                ORDER BY link.confirmed_at DESC, link.id DESC
                 LIMIT 1
                 """
             ),
@@ -486,8 +350,6 @@ def get_confirmed_external_article_product_link(
                 "receipt_text_normalized": normalized_text,
             },
         ).mappings().first()
-
         if row:
             return _serialize_external_article_product_link(row)
-
     return None
