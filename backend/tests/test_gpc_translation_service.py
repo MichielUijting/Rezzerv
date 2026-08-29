@@ -17,7 +17,7 @@ from app.services.gpc_translation_service import (
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260829_13"
+HEAD_REVISION = "20260829_14"
 
 
 def _engine(tmp_path: Path):
