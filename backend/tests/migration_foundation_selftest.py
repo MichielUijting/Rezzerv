@@ -16,7 +16,7 @@ SQLITE_BASELINE_REVISION = "20260827_01"
 HEAD_REVISION = "20260829_10"
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "baseline_sqlite.sql.gz"
 BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7"
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 75
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 76
 PR2G_SCHEMA_AUTHORITY_TABLES = {
     "product_taxonomy",
     "product_taxonomy_synonyms",
@@ -53,6 +53,14 @@ PR2I_GPC_SCHEMA_AUTHORITY_TABLES = {
     "gpc_import_runs",
     "gpc_product_groups",
 }
+PR2K_SCHEMA_AUTHORITY_TABLES = {
+    "household_product_use_cases",
+}
+EXPECTED_HOUSEHOLD_PRODUCT_USE_CASE_COLUMNS = (
+    "household_id",
+    "use_case",
+    "activated_at",
+)
 EXPECTED_SERVER_SESSION_COLUMNS = (
     "id",
     "session_token_hash",
@@ -180,6 +188,7 @@ EXPECTED_POSTGRESQL_CHECK_CONSTRAINTS = {
     "ck_auth_support_sessions_access_level",
     "ck_external_article_product_links_identity",
     "ck_external_article_product_links_status",
+    "ck_household_product_use_cases_use_case",
     "ck_household_registry_context_type",
 }
 
@@ -236,6 +245,7 @@ def _strip_migration_extensions(schema: str) -> str:
         PR2G_SCHEMA_AUTHORITY_TABLES
         | PR2H_SCHEMA_AUTHORITY_TABLES
         | PR2I_GPC_SCHEMA_AUTHORITY_TABLES
+        | PR2K_SCHEMA_AUTHORITY_TABLES
     )
 
     def _is_migration_owned(block: str) -> bool:
@@ -495,18 +505,46 @@ def _assert_gpc_catalog_schema(connection) -> None:
         )
 
 
+def _assert_household_product_use_case_schema(connection) -> None:
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    missing_tables = PR2K_SCHEMA_AUTHORITY_TABLES - tables
+    if missing_tables:
+        raise AssertionError(
+            f"PR2k household use-case tables ontbreken: {sorted(missing_tables)}"
+        )
+    columns = tuple(
+        str(column.get("name") or "")
+        for column in inspector.get_columns("household_product_use_cases")
+    )
+    if columns != EXPECTED_HOUSEHOLD_PRODUCT_USE_CASE_COLUMNS:
+        raise AssertionError(
+            "Unexpected household_product_use_cases columns: "
+            f"expected={EXPECTED_HOUSEHOLD_PRODUCT_USE_CASE_COLUMNS!r} actual={columns!r}"
+        )
+    primary_key = tuple(
+        inspector.get_pk_constraint("household_product_use_cases").get("constrained_columns") or ()
+    )
+    if primary_key != ("household_id", "use_case"):
+        raise AssertionError(
+            "Invalid household_product_use_cases primary key: "
+            f"actual={primary_key!r}"
+        )
+
+
 def _assert_postgresql_schema(connection) -> None:
     inspector = inspect(connection)
     tables = set(inspector.get_table_names()) - {"alembic_version"}
     if len(tables) != EXPECTED_POSTGRESQL_APPLICATION_TABLES:
         raise AssertionError(
-            "PR2j PostgreSQL application schema must contain exactly "
+            "PR2k PostgreSQL application schema must contain exactly "
             f"{EXPECTED_POSTGRESQL_APPLICATION_TABLES} application tables; actual={len(tables)}"
         )
     _assert_server_session_schema(connection)
     _assert_temporal_inventory_schema(connection)
     _assert_external_catalog_schema(connection)
     _assert_gpc_catalog_schema(connection)
+    _assert_household_product_use_case_schema(connection)
 
     for table_name, column_name in sorted(EXPECTED_BOOLEAN_COLUMNS):
         column = _column(inspector, table_name, column_name)
@@ -598,6 +636,7 @@ def _assert_postgresql_schema(connection) -> None:
                     'ck_auth_support_sessions_access_level',
                     'ck_external_article_product_links_identity',
                     'ck_external_article_product_links_status',
+                    'ck_household_product_use_cases_use_case',
                     'ck_household_registry_context_type'
                   )
                 """
@@ -645,6 +684,7 @@ def _assert_postgresql_schema(connection) -> None:
     print("POSTGRESQL_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN")
     print("POSTGRESQL_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN")
     print("POSTGRESQL_AUTHORIZATION_BOOLEAN_SCHEMA_GREEN")
+    print("POSTGRESQL_ONBOARDING_USE_CASE_SCHEMA_AUTHORITY_GREEN")
 
 
 def main() -> None:
@@ -687,6 +727,7 @@ def main() -> None:
                 _assert_temporal_inventory_schema(connection)
                 _assert_external_catalog_schema(connection)
                 _assert_gpc_catalog_schema(connection)
+                _assert_household_product_use_case_schema(connection)
                 print(
                     "MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN "
                     f"mode={expected_mode} source_revision={SQLITE_BASELINE_REVISION} "
@@ -694,6 +735,7 @@ def main() -> None:
                 )
                 print("SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN")
                 print("SQLITE_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN")
+                print("SQLITE_ONBOARDING_USE_CASE_SCHEMA_AUTHORITY_GREEN")
             else:
                 if dialect != "postgresql":
                     raise AssertionError(f"Expected PostgreSQL, got {dialect}")
