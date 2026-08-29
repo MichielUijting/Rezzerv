@@ -12,7 +12,7 @@ from app.services.gpc_catalog_service import import_gpc_xml
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260829_10"
+HEAD_REVISION = "20260829_11"
 
 SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <schema>

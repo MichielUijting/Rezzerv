@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import hashlib
 from pathlib import Path
 
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, inspect, text
 
 from app.db import engine as runtime_engine
 
@@ -33,35 +33,42 @@ class TranslationImportCounts:
 
 
 def ensure_gpc_translation_schema(db_engine: Engine = runtime_engine) -> None:
-    with db_engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS gpc_translations (
-                entity_type VARCHAR(30) NOT NULL,
-                entity_code VARCHAR(8) NOT NULL,
-                language_code VARCHAR(12) NOT NULL,
-                translated_text TEXT NOT NULL,
-                translation_source TEXT NOT NULL,
-                reviewed INTEGER NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (entity_type, entity_code, language_code)
+    inspector = inspect(db_engine)
+    required = {
+        "gpc_translations": {
+            "entity_type", "entity_code", "language_code", "translated_text",
+            "translation_source", "reviewed", "updated_at",
+        },
+        "gpc_translation_import_runs": {
+            "id", "source_name", "source_sha256", "language_code", "imported_at",
+            "status", "row_count", "message",
+        },
+    }
+    tables = set(inspector.get_table_names())
+    missing_tables = sorted(set(required) - tables)
+    if missing_tables:
+        raise RuntimeError(
+            "Canonical GPC translation schema ontbreekt: "
+            + ", ".join(missing_tables)
+            + ". Voer Alembic migrations uit."
+        )
+    for table_name, required_columns in required.items():
+        actual_columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns(table_name)
+        }
+        missing_columns = sorted(required_columns - actual_columns)
+        if missing_columns:
+            raise RuntimeError(
+                f"{table_name} mist canonical kolommen: "
+                + ", ".join(missing_columns)
             )
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS gpc_translation_import_runs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source_name TEXT NOT NULL,
-                source_sha256 VARCHAR(64) NOT NULL,
-                language_code VARCHAR(12) NOT NULL,
-                imported_at TEXT NOT NULL,
-                status VARCHAR(20) NOT NULL,
-                row_count INTEGER NOT NULL,
-                message TEXT
-            )
-        """))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_gpc_translation_language "
-            "ON gpc_translations(language_code, entity_type)"
-        ))
+    indexes = {
+        str(index.get("name") or ""): tuple(index.get("column_names") or ())
+        for index in inspector.get_indexes("gpc_translations")
+    }
+    if indexes.get("idx_gpc_translation_language") != ("language_code", "entity_type"):
+        raise RuntimeError("Canonical GPC translation-index ontbreekt of wijkt af")
 
 
 def export_translation_template(

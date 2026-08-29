@@ -3,12 +3,14 @@ name: GPC translation validation
 on:
   pull_request:
     paths:
+      - "backend/alembic/**"
       - "backend/app/services/gpc_translation_service.py"
       - "backend/app/services/gpc_official_translation_source.py"
       - "backend/app/cli/import_gpc_translations.py"
       - "backend/app/cli/download_gpc_translation.py"
       - "backend/tests/test_gpc_translation_service.py"
       - "backend/tests/test_gpc_official_translation_source.py"
+      - "backend/tests/test_gpc_catalog_service.py"
       - ".github/workflows/gpc-translation-validation.yml"
   workflow_dispatch:
 
@@ -30,7 +32,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install minimal dependencies
-        run: pip install sqlalchemy==2.0.36 pytest pytest-asyncio
+        run: pip install sqlalchemy==2.0.36 alembic==1.19.1 pytest pytest-asyncio
       - name: Compile translation modules
         run: |
           python -m py_compile app/services/gpc_translation_service.py

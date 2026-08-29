@@ -14,20 +14,36 @@ class GpcBrickAssignmentRequest(BaseModel):
 
 
 def _ensure_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS global_product_gpc_bricks (
-                global_product_id TEXT PRIMARY KEY,
-                brick_code VARCHAR(8) NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (global_product_id) REFERENCES global_products(id),
-                FOREIGN KEY (brick_code) REFERENCES gpc_bricks(brick_code)
-            )
-        """))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_global_product_gpc_brick_code "
-            "ON global_product_gpc_bricks(brick_code)"
-        ))
+    inspector = inspect(engine)
+    required_tables = {
+        "global_product_gpc_bricks",
+        "gpc_translations",
+    }
+    missing_tables = sorted(required_tables - set(inspector.get_table_names()))
+    if missing_tables:
+        raise RuntimeError(
+            "Canonical GPC assignment schema ontbreekt: "
+            + ", ".join(missing_tables)
+            + ". Voer Alembic migrations uit."
+        )
+    required_columns = {
+        "global_product_id",
+        "brick_code",
+        "assignment_source",
+        "confidence",
+        "migrated_from",
+        "updated_at",
+    }
+    actual_columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("global_product_gpc_bricks")
+    }
+    missing_columns = sorted(required_columns - actual_columns)
+    if missing_columns:
+        raise RuntimeError(
+            "Canonical GPC assignment schema wijkt af; ontbrekende kolommen: "
+            + ", ".join(missing_columns)
+        )
 
 
 def _require_gpc_tables() -> None:

@@ -1,0 +1,103 @@
+name: PostgreSQL GPC residual authority
+
+on:
+  pull_request:
+    paths:
+      - 'backend/alembic/versions/20260829_11_gpc_assignment_translation_authority.py'
+      - 'backend/app/api/catalog_gpc_routes.py'
+      - 'backend/app/services/gpc_article_assignment_service.py'
+      - 'backend/app/services/gpc_import_service.py'
+      - 'backend/app/services/gpc_translation_service.py'
+      - 'backend/tests/postgresql_gpc_residual_sql_authority_selftest.py'
+      - 'backend/tests/postgresql_gpc_residual_dml_only_selftest.py'
+      - '.github/workflows/postgresql-gpc-residual-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gpc-residual-authority:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rezzerv
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d rezzerv"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
+      MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Configure migration and runtime roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d rezzerv -v ON_ERROR_STOP=1 <<'SQL'
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'migration-pass';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'runtime-pass';
+          GRANT CONNECT ON DATABASE rezzerv TO rezzerv_migrator, rezzerv_app;
+          GRANT USAGE, CREATE ON SCHEMA public TO rezzerv_migrator;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Prove residual GPC runtime SQL is schema-free and portable
+        run: |
+          python backend/tests/postgresql_gpc_residual_sql_authority_selftest.py | tee /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_SQL_PORTABLE_GREEN' /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_RUNTIME_DDL_ABSENT_GREEN' /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_VALIDATION_ONLY_SCHEMA_GREEN' /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_ALEMBIC_AUTHORITY_GREEN' /tmp/gpc-residual-static.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-static.log
+
+      - name: Migrate through residual GPC authority revision
+        working-directory: backend
+        run: |
+          python -m app.schema_migration_preflight | tee /tmp/gpc-residual-migration.log
+          grep -F "'dialect': 'postgresql'" /tmp/gpc-residual-migration.log
+          grep -F "'revision': '20260829_11'" /tmp/gpc-residual-migration.log
+
+      - name: Prove residual GPC paths work with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_gpc_residual_dml_only_selftest.py | tee /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_RUNTIME_CREATE_DENIED_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_ASSIGNMENT_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_TRANSLATION_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_IMPORT_BOOLEAN_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_RESIDUAL_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-dml-only.log

@@ -4,8 +4,10 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 from pathlib import Path
 import sqlite3
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
@@ -23,6 +25,9 @@ ENTITY_TAGS = {
     "attribute_type": "attType",
     "attribute_value": "attValue",
 }
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
+HEAD_REVISION = "20260829_11"
 
 
 def _sha256(path: Path) -> str:
@@ -57,6 +62,30 @@ def _schema_snapshot(path: Path) -> list[tuple[str, str, str]]:
             "SELECT type, name, COALESCE(sql, '') FROM sqlite_master "
             "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
         ).fetchall()
+
+
+def _migrate_rehearsal_database(database: Path) -> None:
+    env = os.environ.copy()
+    env["DATABASE_URL"] = f"sqlite:///{database.as_posix()}"
+    env["PYTHONPATH"] = str(BACKEND_ROOT)
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],
+        cwd=BACKEND_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Alembic GPC rehearsal migration failed:\n" + result.stdout + result.stderr
+        )
+    with sqlite3.connect(database) as conn:
+        revision = conn.execute("SELECT version_num FROM alembic_version").fetchone()
+    if revision != (HEAD_REVISION,):
+        raise RuntimeError(
+            f"GPC rehearsal verwacht Alembic {HEAD_REVISION}, kreeg {revision!r}"
+        )
 
 
 def _write_manifest(download: dict, path: Path) -> None:
@@ -110,6 +139,8 @@ def run(output_dir: Path) -> dict:
         raise ValueError("Engelse en Nederlandse publicatieversie verschillen")
 
     database = output_dir / "rezzerv-import-rehearsal.db"
+    database.unlink(missing_ok=True)
+    _migrate_rehearsal_database(database)
     with sqlite3.connect(database) as conn:
         conn.execute("CREATE TABLE rehearsal_baseline (id INTEGER PRIMARY KEY, marker TEXT NOT NULL)")
         conn.execute("INSERT INTO rehearsal_baseline(marker) VALUES ('before-gpc')")
@@ -141,6 +172,7 @@ def run(output_dir: Path) -> dict:
 
     report = {
         "status": "success",
+        "alembic_revision": HEAD_REVISION,
         "publication_version": english["publication_version"],
         "english_sha256": english["file_sha256"],
         "dutch_sha256": dutch["file_sha256"],
