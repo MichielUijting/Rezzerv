@@ -9,6 +9,7 @@ on:
       - 'backend/app/services/external_database_route_authorization.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/session_request_context.py'
+      - 'backend/tests/platform_feature_flag_migrated_fixture.py'
       - 'backend/tests/test_platform_feature_flags_route_authorization.py'
       - 'backend/tests/test_external_database_route_authorization.py'
       - 'frontend/src/features/platform/PlatformFeatureFlagsPage.jsx'
@@ -35,7 +36,7 @@ jobs:
       - name: Install focused test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest fastapi pydantic sqlalchemy httpx
+          python -m pip install pytest fastapi pydantic sqlalchemy alembic httpx
 
       - name: Compile platform Featureflags boundary and tests
         run: |
@@ -44,6 +45,7 @@ jobs:
             app/api/router.py \
             app/services/platform_feature_flag_service.py \
             app/services/external_database_route_authorization.py \
+            tests/platform_feature_flag_migrated_fixture.py \
             tests/test_platform_feature_flags_route_authorization.py \
             tests/test_external_database_route_authorization.py
 
