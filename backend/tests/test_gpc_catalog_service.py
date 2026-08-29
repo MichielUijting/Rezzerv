@@ -1,9 +1,18 @@
+from __future__ import annotations
+
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 from sqlalchemy import create_engine, inspect, text
 
 from app.services.gpc_catalog_service import import_gpc_xml
 
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
+HEAD_REVISION = "20260829_08"
 
 SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <schema>
@@ -22,11 +31,44 @@ SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def test_import_gpc_xml_creates_hierarchy_and_audit(tmp_path: Path):
+def _migrated_sqlite_engine(database_path: Path):
+    env = os.environ.copy()
+    env["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
+    env["PYTHONPATH"] = str(BACKEND_ROOT)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "alembic",
+            "-c",
+            str(ALEMBIC_INI),
+            "upgrade",
+            "head",
+        ],
+        cwd=BACKEND_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "Alembic GPC test fixture migration failed:\n"
+            + result.stdout
+            + result.stderr
+        )
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with engine.connect() as conn:
+        revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert revision == HEAD_REVISION
+    return engine
+
+
+def test_import_gpc_xml_uses_migrated_hierarchy_and_audit(tmp_path: Path):
     database_path = tmp_path / "rezzerv.db"
     xml_path = tmp_path / "nl-v-test.xml"
     xml_path.write_text(SAMPLE_XML, encoding="utf-8")
-    engine = create_engine(f"sqlite:///{database_path}")
+    engine = _migrated_sqlite_engine(database_path)
 
     result = import_gpc_xml(
         xml_path,
@@ -78,9 +120,10 @@ def test_import_gpc_xml_creates_hierarchy_and_audit(tmp_path: Path):
 
 
 def test_reimport_updates_descriptions_without_duplicates(tmp_path: Path):
+    database_path = tmp_path / "rezzerv-reimport.db"
     xml_path = tmp_path / "nl-v-test.xml"
     xml_path.write_text(SAMPLE_XML, encoding="utf-8")
-    engine = create_engine("sqlite:///:memory:")
+    engine = _migrated_sqlite_engine(database_path)
 
     import_gpc_xml(xml_path, db_engine=engine)
     xml_path.write_text(SAMPLE_XML.replace("Mustard Greens", "Mosterdblad"), encoding="utf-8")
@@ -98,7 +141,7 @@ def test_reimport_updates_descriptions_without_duplicates(tmp_path: Path):
     assert import_count == 2
 
 
-def test_invalid_root_is_rejected_before_schema_creation(tmp_path: Path):
+def test_invalid_root_is_rejected_before_schema_validation(tmp_path: Path):
     xml_path = tmp_path / "invalid.xml"
     xml_path.write_text("<not-schema />", encoding="utf-8")
     engine = create_engine("sqlite:///:memory:")

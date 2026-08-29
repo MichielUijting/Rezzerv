@@ -11,11 +11,48 @@ from typing import Any
 from sqlalchemy import inspect, text
 
 from app.db import engine
-from app.services.product_inventory_group_store import ensure_product_inventory_group_schema
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_bricks_2026_05_en.json"
 SOURCE = "gs1_gpc_2026_05_en"
 VERSION = "2026-05-20"
+
+_GPC_PRODUCT_GROUP_COLUMNS = {
+    "gpc_brick_code",
+    "gpc_brick_name",
+    "gpc_class_code",
+    "gpc_class_name",
+    "gpc_family_code",
+    "gpc_family_name",
+    "gpc_segment_code",
+    "gpc_segment_name",
+    "language_code",
+    "source_version",
+    "active",
+    "created_at",
+    "updated_at",
+    "gpc_brick_name_en",
+    "gpc_class_name_en",
+    "gpc_family_name_en",
+    "gpc_segment_name_en",
+    "brick_definition_includes_en",
+    "brick_definition_excludes_en",
+    "source",
+}
+_PRODUCT_INVENTORY_GPC_COLUMNS = {
+    "inventory_group_key",
+    "display_name",
+    "default_base_unit",
+    "aggregation_mode",
+    "active",
+    "gpc_family_code",
+    "gpc_family_name",
+    "gpc_class_code",
+    "gpc_class_name",
+    "gpc_brick_code",
+    "source",
+    "created_at",
+    "updated_at",
+}
 
 DUTCH_DISPLAY_OVERRIDES = {
     "10005895": "Appelbananen",
@@ -53,54 +90,28 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _columns(table_name: str) -> set[str]:
-    try:
-        return {str(column.get("name") or "") for column in inspect(engine).get_columns(table_name)}
-    except Exception:
-        return set()
-
-
-def _ensure_column(conn, table_name: str, name: str, definition: str) -> None:
-    if name not in _columns(table_name):
-        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {name} {definition}"))
-
-
 def ensure_local_gpc_schema() -> None:
-    ensure_product_inventory_group_schema()
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS gpc_product_groups (
-                gpc_brick_code TEXT PRIMARY KEY,
-                gpc_brick_name TEXT NOT NULL,
-                gpc_class_code TEXT,
-                gpc_class_name TEXT,
-                gpc_family_code TEXT,
-                gpc_family_name TEXT,
-                gpc_segment_code TEXT,
-                gpc_segment_name TEXT,
-                language_code TEXT,
-                source_version TEXT,
-                active INTEGER DEFAULT 1,
-                created_at TEXT,
-                updated_at TEXT
+    """Validate Alembic-owned local GPC tables and fail closed on schema drift."""
+    inspector = inspect(engine)
+    for table_name, required_columns in {
+        "gpc_product_groups": _GPC_PRODUCT_GROUP_COLUMNS,
+        "product_inventory_groups": _PRODUCT_INVENTORY_GPC_COLUMNS,
+    }.items():
+        if not inspector.has_table(table_name):
+            raise RuntimeError(
+                f"Canonical GPC-schema ontbreekt: {table_name}. "
+                "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
             )
-        """))
-        for name, definition in {
-            "gpc_brick_name_en": "TEXT",
-            "gpc_class_name_en": "TEXT",
-            "gpc_family_name_en": "TEXT",
-            "gpc_segment_name_en": "TEXT",
-            "brick_definition_includes_en": "TEXT",
-            "brick_definition_excludes_en": "TEXT",
-            "source": "TEXT",
-        }.items():
-            _ensure_column(conn, "gpc_product_groups", name, definition)
-        for name, definition in {
-            "gpc_family_code": "TEXT", "gpc_family_name": "TEXT",
-            "gpc_class_code": "TEXT", "gpc_class_name": "TEXT",
-            "gpc_brick_code": "TEXT", "source": "TEXT",
-        }.items():
-            _ensure_column(conn, "product_inventory_groups", name, definition)
+        actual_columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns(table_name)
+        }
+        missing = sorted(required_columns - actual_columns)
+        if missing:
+            raise RuntimeError(
+                f"Canonical GPC-schema wijkt af: {table_name} mist "
+                + ", ".join(missing)
+            )
 
 
 def import_bundled_gpc_catalog() -> dict[str, Any]:
@@ -139,7 +150,7 @@ def import_bundled_gpc_catalog() -> dict[str, Any]:
                       gpc_segment_name_en=:segment_name,
                       brick_definition_includes_en=:includes,
                       brick_definition_excludes_en=:excludes, source_version=:version,
-                      source=:source, active=1, updated_at=:timestamp
+                      source=:source, active=TRUE, updated_at=:timestamp
                     WHERE gpc_brick_code=:code
                 """), params)
                 updated += 1
@@ -155,7 +166,7 @@ def import_bundled_gpc_catalog() -> dict[str, Any]:
                     ) VALUES (
                       :code,:title,:title_en,:class_code,:class_name,:class_name,
                       :family_code,:family_name,:family_name,:segment_code,:segment_name,:segment_name,
-                      :includes,:excludes,'en',:version,:source,1,:timestamp,:timestamp
+                      :includes,:excludes,'en',:version,:source,TRUE,:timestamp,:timestamp
                     )
                 """), params)
                 created += 1
@@ -232,7 +243,9 @@ def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_
         if re.fullmatch(r"\d{8}", explicit):
             row = conn.execute(text("""
                 SELECT gpc_brick_code,gpc_brick_name,gpc_brick_name_en,source_version,source
-                FROM gpc_product_groups WHERE gpc_brick_code=:code AND COALESCE(active,1)=1 LIMIT 1
+                FROM gpc_product_groups
+                WHERE gpc_brick_code=:code AND COALESCE(active, TRUE) IS TRUE
+                LIMIT 1
             """), {"code": explicit}).mappings().first()
             if row:
                 return {"ok": True, "status": "classified", "classification_source": "explicit_gpc_code",
@@ -242,7 +255,7 @@ def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_
         rows = conn.execute(text("""
             SELECT gpc_brick_code,gpc_brick_name,gpc_brick_name_en,source_version,source
             FROM gpc_product_groups
-            WHERE COALESCE(active,1)=1 AND gpc_segment_code='50000000'
+            WHERE COALESCE(active, TRUE) IS TRUE AND gpc_segment_code='50000000'
               AND upper(COALESCE(gpc_brick_name_en,'')) NOT LIKE '%UNCLASSIFIED%'
         """)).mappings().all()
     ranked = []

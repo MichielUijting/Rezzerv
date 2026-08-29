@@ -135,7 +135,7 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
         }
 
     identity_join = ""
-    identity_columns = "NULL AS identity_id, NULL AS identity_source, 0 AS identity_is_primary"
+    identity_columns = "NULL AS identity_id, NULL AS identity_source, FALSE AS identity_is_primary"
     identity_match_expression = "0 AS has_matching_gtin_identity"
     if "product_identities" in tables:
         identity_join = """
@@ -144,7 +144,7 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
              AND pi.identity_type = 'gtin'
              AND pi.identity_value = :gtin
         """
-        identity_columns = "pi.id AS identity_id, pi.source AS identity_source, COALESCE(pi.is_primary, 0) AS identity_is_primary"
+        identity_columns = "pi.id AS identity_id, pi.source AS identity_source, COALESCE(pi.is_primary, FALSE) AS identity_is_primary"
         identity_match_expression = "CASE WHEN pi.id IS NULL THEN 0 ELSE 1 END AS has_matching_gtin_identity"
 
     gpc_join = ""
@@ -154,7 +154,7 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
             LEFT JOIN product_group_memberships pgm
               ON pgm.global_product_id = gp.id
              AND COALESCE(pgm.active, 1) = 1
-             AND pgm.inventory_group_key GLOB 'gpc:[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+             AND pgm.inventory_group_key LIKE 'gpc:%'
             LEFT JOIN product_inventory_groups pig
               ON pig.inventory_group_key = pgm.inventory_group_key
              AND pig.gpc_brick_code = substr(pgm.inventory_group_key, 5)
@@ -765,7 +765,7 @@ def _resolve_catalog_product_for_save(
                 "identity_value": gtin,
                 "source": "receipt_user_confirmed",
                 "confidence_score": 1.0,
-                "is_primary": 1,
+                "is_primary": True,
             }
 
             _insert_dynamic_row(
@@ -782,7 +782,7 @@ def _resolve_catalog_product_for_save(
                     SET is_primary = CASE
                             WHEN identity_type = 'gtin'
                              AND identity_value = :gtin
-                            THEN 1
+                            THEN TRUE
                             ELSE is_primary
                         END
                     WHERE global_product_id = :product_id

@@ -1,8 +1,7 @@
-"""GS1 GPC reference catalog schema and XML importer.
+"""GS1 GPC reference catalog validation and XML importer.
 
-This module intentionally imports only from a caller-supplied XML file. Normal
-Rezzerv runtime use therefore has no dependency on GS1 availability and keeps
-using the single configured Rezzerv database.
+Alembic owns the GPC reference schema. Runtime code validates that contract and
+performs DML only; it never creates or alters schema objects.
 """
 
 from __future__ import annotations
@@ -10,6 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
+import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -18,84 +18,32 @@ from sqlalchemy import Engine, inspect, text
 from app.db import engine as runtime_engine
 
 
-_SCHEMA_STATEMENTS = (
-    """
-    CREATE TABLE IF NOT EXISTS gpc_segments (
-        segment_code VARCHAR(8) PRIMARY KEY,
-        description TEXT NOT NULL
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS gpc_families (
-        family_code VARCHAR(8) PRIMARY KEY,
-        description TEXT NOT NULL,
-        segment_code VARCHAR(8) NOT NULL,
-        FOREIGN KEY (segment_code) REFERENCES gpc_segments(segment_code)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS gpc_classes (
-        class_code VARCHAR(8) PRIMARY KEY,
-        description TEXT NOT NULL,
-        family_code VARCHAR(8) NOT NULL,
-        FOREIGN KEY (family_code) REFERENCES gpc_families(family_code)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS gpc_bricks (
-        brick_code VARCHAR(8) PRIMARY KEY,
-        description TEXT NOT NULL,
-        class_code VARCHAR(8) NOT NULL,
-        FOREIGN KEY (class_code) REFERENCES gpc_classes(class_code)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS gpc_attribute_types (
-        att_type_code VARCHAR(8) PRIMARY KEY,
-        att_type_text TEXT NOT NULL
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS gpc_attribute_values (
-        att_value_code VARCHAR(8) PRIMARY KEY,
-        att_value_text TEXT NOT NULL
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS gpc_brick_attribute_types (
-        brick_code VARCHAR(8) NOT NULL,
-        att_type_code VARCHAR(8) NOT NULL,
-        PRIMARY KEY (brick_code, att_type_code),
-        FOREIGN KEY (brick_code) REFERENCES gpc_bricks(brick_code),
-        FOREIGN KEY (att_type_code) REFERENCES gpc_attribute_types(att_type_code)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS gpc_attribute_type_values (
-        att_type_code VARCHAR(8) NOT NULL,
-        att_value_code VARCHAR(8) NOT NULL,
-        PRIMARY KEY (att_type_code, att_value_code),
-        FOREIGN KEY (att_type_code) REFERENCES gpc_attribute_types(att_type_code),
-        FOREIGN KEY (att_value_code) REFERENCES gpc_attribute_values(att_value_code)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS gpc_import_runs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source_name TEXT NOT NULL,
-        source_version TEXT,
-        language_code VARCHAR(12) NOT NULL,
-        source_sha256 VARCHAR(64) NOT NULL,
-        imported_at TEXT NOT NULL,
-        status VARCHAR(20) NOT NULL,
-        counts_json TEXT NOT NULL,
-        message TEXT
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_gpc_families_segment ON gpc_families(segment_code)",
-    "CREATE INDEX IF NOT EXISTS idx_gpc_classes_family ON gpc_classes(family_code)",
-    "CREATE INDEX IF NOT EXISTS idx_gpc_bricks_class ON gpc_bricks(class_code)",
-)
+_REQUIRED_COLUMNS: dict[str, set[str]] = {
+    "gpc_segments": {"segment_code", "description"},
+    "gpc_families": {"family_code", "description", "segment_code"},
+    "gpc_classes": {"class_code", "description", "family_code"},
+    "gpc_bricks": {"brick_code", "description", "class_code"},
+    "gpc_attribute_types": {"att_type_code", "att_type_text"},
+    "gpc_attribute_values": {"att_value_code", "att_value_text"},
+    "gpc_brick_attribute_types": {"brick_code", "att_type_code"},
+    "gpc_attribute_type_values": {"att_type_code", "att_value_code"},
+    "gpc_import_runs": {
+        "id",
+        "source_name",
+        "source_version",
+        "language_code",
+        "source_sha256",
+        "imported_at",
+        "status",
+        "counts_json",
+        "message",
+    },
+}
+_REQUIRED_INDEXES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "idx_gpc_families_segment": ("gpc_families", ("segment_code",)),
+    "idx_gpc_classes_family": ("gpc_classes", ("family_code",)),
+    "idx_gpc_bricks_class": ("gpc_bricks", ("class_code",)),
+}
 
 
 @dataclass
@@ -111,12 +59,47 @@ class GpcImportCounts:
 
 
 def ensure_gpc_catalog_schema(db_engine: Engine = runtime_engine) -> None:
-    """Create the GPC reference tables idempotently in the Rezzerv database."""
-    with db_engine.begin() as conn:
-        if db_engine.dialect.name == "sqlite":
-            conn.execute(text("PRAGMA foreign_keys = ON"))
-        for statement in _SCHEMA_STATEMENTS:
-            conn.execute(text(statement))
+    """Validate the Alembic-owned GPC reference schema and fail closed on drift."""
+    inspector = inspect(db_engine)
+    available_tables = set(inspector.get_table_names())
+    missing_tables = sorted(set(_REQUIRED_COLUMNS) - available_tables)
+    if missing_tables:
+        raise RuntimeError(
+            "Canonical GPC-schema ontbreekt; voer Alembic migrations uit: "
+            + ", ".join(missing_tables)
+        )
+
+    for table_name, required_columns in _REQUIRED_COLUMNS.items():
+        actual_columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns(table_name)
+        }
+        missing_columns = sorted(required_columns - actual_columns)
+        if missing_columns:
+            raise RuntimeError(
+                f"Canonical GPC-schema wijkt af: {table_name} mist "
+                + ", ".join(missing_columns)
+            )
+
+    for index_name, (table_name, expected_columns) in _REQUIRED_INDEXES.items():
+        indexes = {
+            str(index.get("name") or ""): index
+            for index in inspector.get_indexes(table_name)
+        }
+        index = indexes.get(index_name)
+        actual_columns = tuple(
+            str(column or "") for column in ((index or {}).get("column_names") or ())
+        )
+        if (
+            index is None
+            or actual_columns != expected_columns
+            or bool(index.get("unique"))
+        ):
+            raise RuntimeError(
+                f"Canonical GPC-index wijkt af: {index_name}; "
+                f"expected={expected_columns!r}/False, "
+                f"actual={actual_columns!r}/{bool((index or {}).get('unique'))}"
+            )
 
 
 def _local_name(tag: str) -> str:
@@ -145,7 +128,14 @@ def _upsert(conn, table: str, key_name: str, key_value: str, values: dict) -> No
         conn.execute(text(f"INSERT INTO {table} ({columns}) VALUES ({parameters})"), payload)
 
 
-def _link(conn, table: str, first_name: str, first_value: str, second_name: str, second_value: str) -> bool:
+def _link(
+    conn,
+    table: str,
+    first_name: str,
+    first_value: str,
+    second_name: str,
+    second_value: str,
+) -> bool:
     existing = conn.execute(
         text(
             f"SELECT 1 FROM {table} WHERE {first_name} = :first_value "
@@ -172,7 +162,7 @@ def import_gpc_xml(
     source_version: str | None = None,
     db_engine: Engine = runtime_engine,
 ) -> dict:
-    """Atomically import one GS1 GPC XML file into the Rezzerv database."""
+    """Atomically import one GS1 GPC XML file into the migrated Rezzerv database."""
     path = Path(xml_path)
     if not path.is_file():
         raise FileNotFoundError(f"GPC XML-bestand niet gevonden: {path}")
@@ -188,15 +178,18 @@ def import_gpc_xml(
     imported_at = datetime.now(timezone.utc).isoformat()
 
     with db_engine.begin() as conn:
-        if db_engine.dialect.name == "sqlite":
-            conn.execute(text("PRAGMA foreign_keys = ON"))
-
         for segment in _children(root, "segment"):
             segment_code = (segment.get("code") or "").strip()
             description = (segment.get("text") or "").strip()
             if not segment_code or not description:
                 raise ValueError("GPC segment zonder code of omschrijving")
-            _upsert(conn, "gpc_segments", "segment_code", segment_code, {"description": description})
+            _upsert(
+                conn,
+                "gpc_segments",
+                "segment_code",
+                segment_code,
+                {"description": description},
+            )
             counts.segments += 1
 
             for family in _children(segment, "family"):
@@ -287,8 +280,6 @@ def import_gpc_xml(
                                 ):
                                     counts.attribute_type_values += 1
 
-        import json
-
         conn.execute(
             text(
                 """
@@ -318,5 +309,7 @@ def import_gpc_xml(
         "source_sha256": source_sha256,
         "imported_at": imported_at,
         "counts": asdict(counts),
-        "tables": sorted(name for name in inspect(db_engine).get_table_names() if name.startswith("gpc_")),
+        "tables": sorted(
+            name for name in inspect(db_engine).get_table_names() if name.startswith("gpc_")
+        ),
     }
