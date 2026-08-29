@@ -127,8 +127,8 @@ def _active_frontteam_users(conn: Connection) -> list[dict[str, str]]:
         JOIN auth_roles r ON r.role_key = ur.role_key
         JOIN app_users u ON u.id = ur.user_id
         WHERE ur.role_key = :role_key
-          AND ur.active = 1
-          AND r.active = 1
+          AND ur.active IS TRUE
+          AND r.active IS TRUE
           AND r.scope = 'platform'
         ORDER BY u.id
     """), {"role_key": FRONTTEAM_PLATFORM_ROLE}).mappings().all()
@@ -349,11 +349,11 @@ def _ensure_frontteam_membership(
         INSERT INTO auth_membership_roles(
             household_id, membership_id, role_key, active, updated_at
         ) VALUES (
-            :household_id, :membership_id, :role_key, 1, CURRENT_TIMESTAMP
+            :household_id, :membership_id, :role_key, TRUE, CURRENT_TIMESTAMP
         )
         ON CONFLICT(household_id, membership_id) DO UPDATE SET
             role_key = excluded.role_key,
-            active = 1,
+            active = TRUE,
             updated_at = CURRENT_TIMESTAMP
     """), {
         "household_id": household_id,
@@ -408,7 +408,7 @@ def _remove_legacy_shared_membership(
         if membership_id:
             conn.execute(text("""
                 UPDATE auth_membership_roles
-                SET active = 0, updated_at = CURRENT_TIMESTAMP
+                SET active = FALSE, updated_at = CURRENT_TIMESTAMP
                 WHERE household_id = :household_id
                   AND membership_id = :membership_id
             """), {
