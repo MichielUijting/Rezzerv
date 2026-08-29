@@ -70,6 +70,22 @@ def _prepare_database(engine) -> None:
             )
         """))
         conn.execute(text("""
+            CREATE TABLE household_onboarding (
+                household_id TEXT PRIMARY KEY,
+                onboarding_status TEXT NOT NULL,
+                onboarding_version INTEGER NOT NULL DEFAULT 2,
+                primary_use_case TEXT,
+                onboarding_step TEXT,
+                household_usage_mode TEXT,
+                onboarding_completed_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (onboarding_status IN ('not_started', 'in_progress', 'completed')),
+                CHECK (primary_use_case IS NULL OR primary_use_case IN ('inhuis_halen', 'wat_inhuis', 'waar_inhuis')),
+                CHECK (household_usage_mode IS NULL OR household_usage_mode IN ('alone', 'together'))
+            )
+        """))
+        conn.execute(text("""
             CREATE TABLE app_users (
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,
