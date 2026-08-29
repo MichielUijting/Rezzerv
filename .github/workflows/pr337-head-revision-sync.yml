@@ -1,0 +1,60 @@
+name: PR337 Alembic head revision sync
+
+on:
+  push:
+    branches:
+      - codex/postgresql-core-request-path-authority-cutover
+
+permissions:
+  contents: write
+
+jobs:
+  sync-head:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/postgresql-core-request-path-authority-cutover
+          fetch-depth: 0
+
+      - name: Synchronize non-migration Alembic head guards
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          old = '20260829_06'
+          new = '20260829_07'
+          output = subprocess.check_output(
+              ['git', 'grep', '-l', old, '--', '.'],
+              text=True,
+          )
+          changed = []
+          for raw_path in output.splitlines():
+              path = Path(raw_path)
+              if str(path).startswith('backend/alembic/versions/'):
+                  continue
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count:
+                  path.write_text(text.replace(old, new), encoding='utf-8')
+                  changed.append((str(path), count))
+          if not changed:
+              raise SystemExit('No non-migration 20260829_06 head guards found')
+          print('Updated head guards:')
+          for path, count in changed:
+              print(f'  {path}: {count}')
+          PY
+          python -m py_compile \
+            backend/alembic/versions/20260829_07_account_suspension_status_authority.py \
+            backend/tests/migration_foundation_selftest.py
+
+      - name: Remove temporary workflow and commit
+        run: |
+          git rm .github/workflows/pr337-head-revision-sync.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'ci: advance PR337 Alembic head guards to 20260829_07'
+          git push origin HEAD:codex/postgresql-core-request-path-authority-cutover
