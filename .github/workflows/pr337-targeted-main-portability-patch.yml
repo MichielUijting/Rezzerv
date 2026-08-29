@@ -1,0 +1,56 @@
+name: PR337 targeted main portability patch
+
+on:
+  push:
+    branches:
+      - codex/postgresql-core-request-path-authority-cutover
+
+permissions:
+  contents: write
+
+jobs:
+  patch-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply exact portability patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          content = path.read_text(encoding='utf-8')
+
+          old_import = 'from sqlalchemy import text, bindparam'
+          new_import = 'from sqlalchemy import inspect as sa_inspect, text, bindparam'
+          old_pragma = '    columns = {row["name"] for row in conn.execute(text("PRAGMA table_info(household_article_settings)")).mappings().all()}'
+          new_pragma = '''    inspector = sa_inspect(conn)\n    columns = (\n        {str(column.get("name") or "") for column in inspector.get_columns("household_article_settings")}\n        if inspector.has_table("household_article_settings")\n        else set()\n    )'''
+
+          if content.count(old_import) != 1:
+              raise SystemExit(f'expected exactly one sqlalchemy import target, got {content.count(old_import)}')
+          if content.count(old_pragma) != 1:
+              raise SystemExit(f'expected exactly one household_article_settings PRAGMA target, got {content.count(old_pragma)}')
+
+          content = content.replace(old_import, new_import, 1)
+          content = content.replace(old_pragma, new_pragma, 1)
+          path.write_text(content, encoding='utf-8')
+          PY
+          python -m py_compile backend/app/main.py
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/pr337-targeted-main-portability-patch.yml
+          git add backend/app/main.py
+          git diff --cached --check
+          git commit -m 'Replace request-time SQLite schema introspection'
+          git push origin HEAD:codex/postgresql-core-request-path-authority-cutover
