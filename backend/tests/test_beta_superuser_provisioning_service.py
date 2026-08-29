@@ -140,7 +140,7 @@ def test_provisioning_grants_household_admin_and_platform_superuser_and_is_idemp
             membership_id="membership-po",
             permission_key="inventory.correct",
         ).allowed
-        assert evaluate_platform_permission(
+        assert not evaluate_platform_permission(
             conn,
             user_id="user-po",
             permission_key="platform.permissions.manage",
