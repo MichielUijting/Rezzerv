@@ -127,7 +127,7 @@ def test_s2_detail_tables_reuse_bulk_export_pagination_and_active_only_scope():
     assert "variant=\"secondary\"" in pagination_source
 
     assert 'type="checkbox"' in checkbox_source
-    assert "accentColor: '#1A3E2B'" in checkbox_source
+    assert "accentColor: 'var(--color-brand-primary)'" in checkbox_source
 
 
 def test_s2_detail_columns_have_explicit_dutch_labels():

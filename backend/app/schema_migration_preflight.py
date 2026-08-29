@@ -1,11 +1,10 @@
 """Fail-closed Alembic adoption/upgrade before Rezzerv runtime imports.
 
-This is the bridge from legacy startup schema mutation to versioned migrations.
 Fresh databases are upgraded to Alembic head. Existing unversioned SQLite
 runtime databases are adopted only after their schema is proven byte-for-byte
-equal to the immutable PR2a baseline.
+equal to the immutable PR2a baseline. Alembic may use MIGRATION_DATABASE_URL,
+while normal runtime access remains bound to DATABASE_URL.
 """
-
 from __future__ import annotations
 
 import gzip
@@ -14,9 +13,11 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 from app.db import engine
+from app.migration_db import migration_engine
 
 
 _SQLITE_BASELINE_REVISION = "20260827_01"
@@ -139,7 +140,7 @@ def _postgresql_has_application_schema(conn) -> bool:
 
 
 def _prepare_sqlite(config: Config) -> str:
-    with engine.connect() as conn:
+    with migration_engine.connect() as conn:
         has_application_schema = _sqlite_has_application_schema(conn)
         has_version = _sqlite_has_alembic_version(conn)
 
@@ -164,7 +165,7 @@ def _prepare_sqlite(config: Config) -> str:
 
 
 def _prepare_postgresql(config: Config) -> str:
-    with engine.connect() as conn:
+    with migration_engine.connect() as conn:
         has_application_schema = _postgresql_has_application_schema(conn)
         has_version = _postgresql_has_alembic_version(conn)
 
@@ -178,10 +179,45 @@ def _prepare_postgresql(config: Config) -> str:
     return "postgresql-upgraded"
 
 
+def _expected_head(config: Config) -> str:
+    heads = tuple(ScriptDirectory.from_config(config).get_heads())
+    if len(heads) != 1:
+        raise RuntimeError(f"Rezzerv vereist exact één Alembic-head; gevonden: {heads!r}")
+    return str(heads[0])
+
+
+def _runtime_revision() -> str:
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
+    revisions = tuple(str(value or "").strip() for value in rows if str(value or "").strip())
+    if len(revisions) != 1:
+        raise RuntimeError(
+            "Runtime-database heeft geen eenduidige Alembic-head: "
+            f"revisions={revisions!r}"
+        )
+    return revisions[0]
+
+
+def validate_runtime_schema_authority(config: Config) -> str:
+    if engine.dialect.name != migration_engine.dialect.name:
+        raise RuntimeError(
+            "Migration- en runtime-datastore gebruiken verschillende dialecten: "
+            f"migration={migration_engine.dialect.name}; runtime={engine.dialect.name}"
+        )
+    expected = _expected_head(config)
+    actual = _runtime_revision()
+    if actual != expected:
+        raise RuntimeError(
+            "Runtime-database staat niet op de canonical Alembic-head: "
+            f"expected={expected}; actual={actual}"
+        )
+    return actual
+
+
 def run_schema_migration_preflight() -> dict[str, str]:
-    """Bring the configured datastore to Alembic head before runtime starts."""
+    """Migrate through the migration connection, then validate runtime access."""
     config = _config()
-    dialect = engine.dialect.name
+    dialect = migration_engine.dialect.name
 
     if dialect == "sqlite":
         action = _prepare_sqlite(config)
@@ -192,7 +228,8 @@ def run_schema_migration_preflight() -> dict[str, str]:
             f"Unsupported Rezzerv migration-preflight dialect: {dialect}"
         )
 
-    result = {"dialect": dialect, "action": action, "revision": "head"}
+    revision = validate_runtime_schema_authority(config)
+    result = {"dialect": dialect, "action": action, "revision": revision}
     print(f"Schema migration preflight: {result}", flush=True)
     return result
 

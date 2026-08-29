@@ -17,8 +17,130 @@ from app.services.authorization_foundation_service import (
 )
 
 
+_AUTHORIZATION_SCHEMA = (
+    """
+    CREATE TABLE auth_permissions (
+        permission_key TEXT PRIMARY KEY,
+        scope TEXT NOT NULL CHECK (scope IN ('household', 'platform')),
+        description TEXT,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE auth_roles (
+        role_key TEXT PRIMARY KEY,
+        scope TEXT NOT NULL CHECK (scope IN ('household', 'platform')),
+        name TEXT NOT NULL,
+        system_role INTEGER NOT NULL DEFAULT 1,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE auth_role_permissions (
+        role_key TEXT NOT NULL,
+        permission_key TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (role_key, permission_key)
+    )
+    """,
+    """
+    CREATE TABLE auth_membership_roles (
+        household_id TEXT NOT NULL,
+        membership_id TEXT NOT NULL,
+        role_key TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (household_id, membership_id)
+    )
+    """,
+    """
+    CREATE TABLE auth_membership_permission_overrides (
+        household_id TEXT NOT NULL,
+        membership_id TEXT NOT NULL,
+        permission_key TEXT NOT NULL,
+        effect TEXT NOT NULL CHECK (effect IN ('allow', 'deny')),
+        reason TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (household_id, membership_id, permission_key)
+    )
+    """,
+    """
+    CREATE TABLE auth_platform_user_roles (
+        user_id TEXT NOT NULL,
+        role_key TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, role_key)
+    )
+    """,
+    """
+    CREATE TABLE auth_support_sessions (
+        id TEXT PRIMARY KEY,
+        support_user_id TEXT NOT NULL,
+        household_id TEXT NOT NULL,
+        access_level TEXT NOT NULL CHECK (access_level IN ('metadata', 'read', 'mutate', 'emergency')),
+        reason TEXT NOT NULL,
+        ticket_reference TEXT NOT NULL,
+        starts_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE auth_audit_log (
+        id TEXT PRIMARY KEY,
+        actor_user_id TEXT NOT NULL,
+        actor_type TEXT NOT NULL,
+        household_id TEXT,
+        support_session_id TEXT,
+        action TEXT NOT NULL,
+        object_type TEXT,
+        object_id TEXT,
+        old_value TEXT,
+        new_value TEXT,
+        reason TEXT,
+        ticket_reference TEXT,
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX idx_auth_single_active_ip_owner
+    ON auth_platform_user_roles(role_key)
+    WHERE role_key = 'platform.ip_owner' AND active = 1
+    """,
+)
+
+
+def _install_migration_owned_authorization_schema(conn) -> None:
+    for statement in _AUTHORIZATION_SCHEMA:
+        conn.execute(text(statement))
+
+
 def make_engine():
-    return create_engine("sqlite+pysqlite:///:memory:")
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as conn:
+        _install_migration_owned_authorization_schema(conn)
+    return engine
+
+
+def test_unmigrated_authorization_schema_fails_closed_without_runtime_ddl():
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as conn:
+        before = tuple(conn.execute(text(
+            "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name"
+        )).all())
+        with pytest.raises(RuntimeError, match="niet gemigreerd"):
+            ensure_authorization_foundation(conn)
+        after = tuple(conn.execute(text(
+            "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name"
+        )).all())
+    assert after == before
 
 
 def test_registry_and_system_roles_are_seeded_idempotently():

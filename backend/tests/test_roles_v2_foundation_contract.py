@@ -28,6 +28,7 @@ from app.services.roles_v2_schema_foundation import (
 )
 from app.services.server_session_service import ServerSessionContext, public_session_payload
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def make_engine():
@@ -50,6 +51,7 @@ def column_contract(columns):
 def test_v2_platform_roles_and_permissions_are_seeded_idempotently():
     engine = make_engine()
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key)
@@ -67,6 +69,7 @@ def test_v2_platform_roles_and_permissions_are_seeded_idempotently():
             "SELECT household_id, membership_id, role_key, active "
             "FROM auth_membership_roles"
         )).all()
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         after_platform = conn.execute(text(
             "SELECT user_id, role_key, active FROM auth_platform_user_roles"
@@ -97,6 +100,7 @@ def test_v2_platform_roles_and_permissions_are_seeded_idempotently():
 def test_only_one_active_ip_owner_can_exist():
     engine = make_engine()
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key)
@@ -112,6 +116,7 @@ def test_only_one_active_ip_owner_can_exist():
 def test_active_platform_role_resolution_uses_only_registered_active_platform_roles():
     engine = make_engine()
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
@@ -336,6 +341,7 @@ def test_fixed_superuser_email_alone_does_not_grant_public_superuser_rights():
 def test_existing_platform_superuser_is_cut_over_to_exact_v2_target_permissions():
     engine = make_engine()
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key)

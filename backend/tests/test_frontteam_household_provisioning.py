@@ -16,6 +16,7 @@ from app.services.server_session_service import (
     resolve_server_session,
 )
 from app.testing.server_session_contract import create_server_session_contract_schema
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def build_connection():
@@ -36,6 +37,14 @@ def build_connection():
           ('frontteam', 'Historisch Frontteam', 'regular')
     """))
     conn.execute(text("""
+        CREATE TABLE frontteam_personal_households (
+            user_id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    conn.execute(text("""
         CREATE TABLE app_users (
             id TEXT PRIMARY KEY,
             email TEXT NOT NULL UNIQUE
@@ -51,6 +60,7 @@ def build_connection():
             PRIMARY KEY(user_id, household_id)
         )
     """))
+    install_authorization_schema(conn)
     ensure_authorization_foundation(conn)
     create_server_session_contract_schema(conn)
     conn.execute(text("""

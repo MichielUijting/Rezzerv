@@ -18,6 +18,7 @@ from app.services.kassa_diagnostic_route_authorization import (
     required_kassa_diagnostic_permission,
 )
 from app.services.server_session_service import ServerSessionContext
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 BACKGROUND_JOB_PERMISSION = "platform.background_jobs.manage"
@@ -49,6 +50,7 @@ def auth_engine():
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)

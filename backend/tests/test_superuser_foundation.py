@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, text
 
 from app.api import superuser_routes
 from app.services.authorization_foundation_service import ensure_authorization_foundation
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def _engine():
@@ -20,6 +21,7 @@ def test_superuser_gate_requires_active_platform_superuser_role(monkeypatch):
     monkeypatch.setattr(superuser_routes, "resolve_server_session", lambda _conn, _raw: context)
 
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         with pytest.raises(HTTPException) as exc:
             superuser_routes._require_platform_superuser(conn, "opaque-cookie")
@@ -39,6 +41,7 @@ def test_inactive_superuser_role_is_denied(monkeypatch):
     monkeypatch.setattr(superuser_routes, "resolve_server_session", lambda _conn, _raw: context)
 
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)

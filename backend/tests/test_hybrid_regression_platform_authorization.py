@@ -22,6 +22,7 @@ from app.services.receipt_export_fixture_route_authorization import (
 )
 from app.services.server_session_service import ServerSessionContext
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 BACKGROUND_JOB_PERMISSION = "platform.background_jobs.manage"
@@ -45,6 +46,7 @@ def auth_engine():
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_roles(role_key, scope, name, system_role, active)

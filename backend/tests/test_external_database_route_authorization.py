@@ -7,11 +7,13 @@ from app.services.external_database_route_authorization import (
     authorize_external_database_request,
     required_external_database_permission,
 )
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def build_connection():
     engine = create_engine("sqlite:///:memory:")
     conn = engine.connect()
+    install_authorization_schema(conn)
     ensure_authorization_foundation(conn)
     conn.execute(text("""
         INSERT INTO auth_platform_user_roles(user_id, role_key, active)

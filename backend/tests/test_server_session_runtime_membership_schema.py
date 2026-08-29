@@ -8,6 +8,7 @@ from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
 )
+from app.testing.authorization_schema_fixture import install_authorization_schema
 from app.testing.server_session_contract import create_server_session_contract_schema
 
 
@@ -56,6 +57,7 @@ def _runtime_schema_client():
                 ('m-inactive', '0', 'admin@rezzerv.local', 'owner', 'inactive'),
                 ('m-active', '1', 'ADMIN@REZZERV.LOCAL', 'owner', 'active')
         """))
+        install_authorization_schema(conn)
         migrate_legacy_household_memberships(conn)
         create_server_session_contract_schema(conn)
 

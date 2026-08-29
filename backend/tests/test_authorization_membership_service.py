@@ -13,10 +13,12 @@ from app.services.authorization_membership_service import (
     set_household_membership_role,
     set_household_permission_override,
 )
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def _connection():
     conn = create_engine("sqlite:///:memory:").connect()
+    install_authorization_schema(conn)
     ensure_authorization_foundation(conn)
     return conn
 

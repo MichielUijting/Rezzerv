@@ -23,6 +23,7 @@ from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_EMAIL,
     SUPERGEBRUIKER_HUISHOUDEN_ID,
 )
+from app.testing.authorization_schema_fixture import install_authorization_schema
 from app.testing.server_session_contract import create_server_session_contract_schema
 
 
@@ -64,6 +65,7 @@ def _prepare_database(engine) -> None:
             "('user-a', '1', 'owner'), "
             "('user-b', '2', 'member')"
         ))
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text(
             "INSERT INTO auth_membership_roles "

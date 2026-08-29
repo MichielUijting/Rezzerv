@@ -55,7 +55,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Iterable
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, inspect, text
 
 from app.receipt_ingestion.line_classifier import classify_receipt_text_line
 from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
@@ -241,8 +241,8 @@ def _looks_like_fuzzy_total_label(value: str | None) -> bool:
 
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
-    rows = conn.execute(text(f'PRAGMA table_info({table_name})')).mappings().all()
-    return any(str(row.get('name') or '').lower() == column_name.lower() for row in rows)
+    columns = inspect(conn).get_columns(table_name)
+    return any(str(column.get('name') or '').lower() == column_name.lower() for column in columns)
 
 
 def _load_line_groups(conn, receipt_table_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
@@ -1913,19 +1913,19 @@ def ensure_default_receipt_sources(engine, receipt_root: Path, household_id: str
             if exists:
                 conn.execute(
                     text(
-                        'UPDATE receipt_sources SET label = :label, source_path = :source_path, is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
+                        'UPDATE receipt_sources SET label = :label, source_path = :source_path, is_active = :is_active, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
                     ),
-                    definition,
+                    {**definition, 'is_active': True},
                 )
             else:
                 conn.execute(
                     text(
                         '''
                         INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
-                        VALUES (:id, :household_id, :type, :label, :source_path, 1)
+                        VALUES (:id, :household_id, :type, :label, :source_path, :is_active)
                         '''
                     ),
-                    {**definition, 'household_id': household_id},
+                    {**definition, 'household_id': household_id, 'is_active': True},
                 )
     return defaults
 

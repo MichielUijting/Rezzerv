@@ -20,6 +20,7 @@ from app.services.frontteam_household_provisioning import (
 from app.services.server_session_service import resolve_server_session
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 from app.testing.server_session_contract import create_server_session_contract_schema
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def build_client():
@@ -55,6 +56,7 @@ def build_client():
                 """
             )
         )
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
@@ -709,6 +711,7 @@ def test_secure_cookie_can_be_enabled_for_non_local_runtime():
         conn.execute(text("CREATE TABLE household_memberships (user_id TEXT, household_id TEXT, role TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
         conn.execute(text("INSERT INTO app_users VALUES ('u1', 'admin@rezzerv.local', 'Rezzerv123')"))
         conn.execute(text("INSERT INTO household_memberships (user_id, household_id, role) VALUES ('u1', '1', 'owner')"))
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_membership_roles(household_id, membership_id, role_key)

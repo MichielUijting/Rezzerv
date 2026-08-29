@@ -19,6 +19,7 @@ from app.services.testing_status_route_authorization import (
     TESTING_STATUS_ROUTES,
     required_testing_status_permission,
 )
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 PERMISSION = "platform.diagnostics.view"
@@ -36,6 +37,7 @@ def auth_engine():
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)

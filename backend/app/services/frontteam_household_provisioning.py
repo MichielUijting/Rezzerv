@@ -88,14 +88,36 @@ def _frontteam_membership_id(user_id: str, household_id: str) -> str:
 
 
 def ensure_frontteam_personal_household_schema(conn: Connection) -> None:
-    conn.execute(text(f"""
-        CREATE TABLE IF NOT EXISTS {FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE} (
-            user_id TEXT PRIMARY KEY,
-            household_id TEXT NOT NULL UNIQUE,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    """Validate the Alembic-owned Frontteam personal-household contract."""
+    inspector = inspect(conn)
+    if not inspector.has_table(FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE):
+        raise RuntimeError(
+            "frontteam_personal_households ontbreekt; voer eerst Alembic-migraties uit"
         )
-    """))
+    columns = _columns(conn, FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE)
+    required = {"user_id", "household_id", "created_at", "updated_at"}
+    missing = required - columns
+    if missing:
+        raise RuntimeError(
+            "frontteam_personal_households mist canonieke kolommen: "
+            + ", ".join(sorted(missing))
+        )
+    primary_key = tuple(
+        str(column or "")
+        for column in (inspector.get_pk_constraint(FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE).get("constrained_columns") or ())
+    )
+    if primary_key != ("user_id",):
+        raise RuntimeError(
+            "frontteam_personal_households.user_id moet de primaire sleutel zijn"
+        )
+    unique_sets = {
+        tuple(str(column or "") for column in (constraint.get("column_names") or ()))
+        for constraint in inspector.get_unique_constraints(FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE)
+    }
+    if ("household_id",) not in unique_sets:
+        raise RuntimeError(
+            "frontteam_personal_households.household_id moet uniek zijn"
+        )
 
 
 def _active_frontteam_users(conn: Connection) -> list[dict[str, str]]:

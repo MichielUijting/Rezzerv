@@ -23,6 +23,7 @@ from app.services.platform_authorization_management_service import (
     list_platform_authorizations,
     revoke_special_role,
 )
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def _engine():
@@ -60,6 +61,7 @@ def _create_schema(conn):
             PRIMARY KEY(user_id, household_id)
         )
     """))
+    install_authorization_schema(conn)
     ensure_authorization_foundation(conn)
 
 

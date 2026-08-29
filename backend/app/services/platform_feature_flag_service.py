@@ -6,7 +6,7 @@ Existing permission checks remain authoritative and must run independently.
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
@@ -23,6 +23,25 @@ FEATURE_FLAG_DEFINITIONS = {
         "default_enabled": True,
     },
 }
+
+
+def validate_platform_feature_flag_schema(conn: Connection) -> None:
+    """Fail closed when Alembic has not installed the feature-flag table."""
+
+    inspector = inspect(conn)
+    if not inspector.has_table("platform_feature_flags"):
+        raise RuntimeError("platform_feature_flags is niet gemigreerd")
+    required_columns = {"flag_key", "enabled", "updated_by", "updated_at"}
+    actual_columns = {
+        str(column.get("name") or "").strip().lower()
+        for column in inspector.get_columns("platform_feature_flags")
+    }
+    missing_columns = sorted(required_columns - actual_columns)
+    if missing_columns:
+        raise RuntimeError(
+            "platform_feature_flags schema drift; ontbrekende kolommen: "
+            + ", ".join(missing_columns)
+        )
 
 
 def ensure_platform_feature_flag_schema(conn: Connection) -> None:

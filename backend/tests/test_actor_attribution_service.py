@@ -8,6 +8,26 @@ from app.services.actor_attribution_service import (
 from app.api.superuser_household_routes import _actor_rows
 
 
+def _create_actor_attribution_schema(engine) -> None:
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE actor_object_attributions (
+                object_type TEXT NOT NULL,
+                object_id TEXT NOT NULL,
+                household_id TEXT NOT NULL,
+                actor_user_id TEXT NOT NULL,
+                attribution_source TEXT NOT NULL DEFAULT 'runtime_session',
+                first_attributed_at TEXT NOT NULL,
+                last_attributed_at TEXT NOT NULL,
+                PRIMARY KEY (object_type, object_id)
+            )
+        """))
+        conn.execute(text("""
+            CREATE INDEX idx_actor_object_attributions_household_actor
+            ON actor_object_attributions (household_id, actor_user_id, object_type)
+        """))
+
+
 def test_two_users_are_attributed_to_their_own_receipts_unpack_batches_and_inventory_events():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as conn:
@@ -34,6 +54,7 @@ def test_two_users_are_attributed_to_their_own_receipts_unpack_batches_and_inven
             )
         """))
 
+    _create_actor_attribution_schema(engine)
     install_actor_attribution_tracking(engine)
 
     bind_current_actor("user-a", "household-1")
@@ -71,6 +92,7 @@ def test_actor_projection_returns_only_selected_users_objects():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE receipt_tables (id TEXT PRIMARY KEY, household_id TEXT NOT NULL, created_at TEXT)"))
+    _create_actor_attribution_schema(engine)
     install_actor_attribution_tracking(engine)
 
     bind_current_actor("user-a", "household-1")

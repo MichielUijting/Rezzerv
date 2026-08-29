@@ -16,6 +16,7 @@ from app.services.authorization_foundation_service import (
 )
 from app.services.server_session_service import ServerSessionContext, public_session_payload
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
+from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 def _engine():
@@ -40,6 +41,7 @@ def test_active_superuser_authority_is_exact_v2_target_and_separate_from_admin()
 def test_foundation_reseeds_existing_superuser_from_v1_style_grants_to_exact_v2():
     engine = _engine()
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
@@ -52,6 +54,7 @@ def test_foundation_reseeds_existing_superuser_from_v1_style_grants_to_exact_v2(
             VALUES ('platform.superuser', 'platform.users.suspend')
         """))
 
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
 
         seeded = set(conn.execute(text("""
@@ -76,6 +79,7 @@ def test_foundation_reseeds_existing_superuser_from_v1_style_grants_to_exact_v2(
 def test_existing_superuser_evaluator_allows_v2_functional_scope_only():
     engine = _engine()
     with engine.begin() as conn:
+        install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)

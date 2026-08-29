@@ -21,12 +21,8 @@ def _assert_central_startup_wiring() -> None:
         and isinstance(node.value.func, ast.Name)
     ]
 
-    assert "from app.services.article_group_store import ensure_article_group_schema" in source
-    assert "ensure_household_articles_schema" in top_level_calls
-    assert "ensure_article_group_schema" in top_level_calls
-    assert top_level_calls.index("ensure_household_articles_schema") < top_level_calls.index(
-        "ensure_article_group_schema"
-    )
+    assert "ensure_household_articles_schema" not in top_level_calls
+    assert "ensure_article_group_schema" not in top_level_calls
 
 
 def _run_startup_probe(temporary_root: Path) -> subprocess.CompletedProcess[str]:
@@ -40,33 +36,21 @@ def _run_startup_probe(temporary_root: Path) -> subprocess.CompletedProcess[str]
             "PYTHONPATH": str(BACKEND_ROOT),
         }
     )
+    environment.pop("MIGRATION_DATABASE_URL", None)
     probe = '''
 from sqlalchemy import inspect, text
 
 from app.db import engine
-from app.services.article_group_store import ensure_article_group_schema
+from app.schema_migration_preflight import run_schema_migration_preflight
 
-with engine.begin() as connection:
-    connection.execute(text("""
-        CREATE TABLE household_articles (
-            id TEXT PRIMARY KEY,
-            household_id TEXT NOT NULL,
-            article_group_id TEXT
-        )
-    """))
-    connection.execute(text("""
-        CREATE TABLE purchase_import_lines (
-            id TEXT PRIMARY KEY,
-            batch_id TEXT NOT NULL,
-            matched_household_article_id TEXT,
-            selected_article_group_id TEXT
-        )
-    """))
-
-ensure_article_group_schema()
+result = run_schema_migration_preflight()
+assert result["dialect"] == "sqlite", result
 
 with engine.connect() as connection:
-    assert "article_groups" in inspect(connection).get_table_names()
+    tables = set(inspect(connection).get_table_names())
+    assert "household_articles" in tables
+    assert "purchase_import_lines" in tables
+    assert "article_groups" in tables
     connection.execute(text("""
         SELECT pil.id, ag.name
         FROM purchase_import_lines pil
@@ -91,7 +75,7 @@ with engine.connect() as connection:
     )
 
 
-def test_central_startup_creates_article_groups_before_purchase_import_query(tmp_path):
+def test_central_startup_uses_migrated_article_group_schema(tmp_path):
     _assert_central_startup_wiring()
     result = _run_startup_probe(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
