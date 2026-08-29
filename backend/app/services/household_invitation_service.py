@@ -26,6 +26,28 @@ INVITATION_STATUSES = frozenset(
 )
 DEFAULT_INVITATION_TTL = timedelta(days=7)
 
+_INVITATION_TABLE = "household_invitations"
+_REQUIRED_LIFECYCLE_COLUMNS = {
+    "id",
+    "household_id",
+    "invitee_email",
+    "role_key",
+    "token_hash",
+    "status",
+    "expires_at",
+    "created_by_user_id",
+    "accepted_by_user_id",
+    "created_at",
+    "updated_at",
+    "accepted_at",
+    "revoked_at",
+}
+_REQUIRED_INDEXES = {
+    "idx_household_invitations_one_pending": ("household_id", "invitee_email"),
+    "idx_household_invitations_household_status": ("household_id", "status", "created_at"),
+    "idx_household_invitations_expiry": ("status", "expires_at"),
+}
+
 
 class InvitationConflictError(ValueError):
     pass
@@ -73,54 +95,44 @@ def hash_invitation_token(raw_token: str) -> str:
 
 
 def ensure_household_invitation_foundation(conn: Connection) -> None:
-    conn.execute(
-        text(
-            """
-            CREATE TABLE IF NOT EXISTS household_invitations (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                invitee_email TEXT NOT NULL,
-                role_key TEXT NOT NULL DEFAULT 'household.member'
-                    CHECK (role_key = 'household.member'),
-                token_hash TEXT NOT NULL UNIQUE,
-                status TEXT NOT NULL DEFAULT 'pending'
-                    CHECK (status IN ('pending', 'accepted', 'revoked', 'expired')),
-                expires_at TEXT NOT NULL,
-                created_by_user_id TEXT NOT NULL,
-                accepted_by_user_id TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                accepted_at TEXT,
-                revoked_at TEXT
+    """Validate the Alembic-owned household invitation lifecycle schema."""
+    inspector = inspect(conn)
+    if not inspector.has_table(_INVITATION_TABLE):
+        raise RuntimeError(
+            "Canonical uitnodigingsschema mist household_invitations. "
+            "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
+        )
+    columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(_INVITATION_TABLE)
+    }
+    missing = _REQUIRED_LIFECYCLE_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            "Canonical uitnodigingsschema wijkt af: "
+            f"household_invitations mist {sorted(missing)}. Voer Alembic migrations uit."
+        )
+    primary_key = tuple(
+        inspector.get_pk_constraint(_INVITATION_TABLE).get("constrained_columns") or ()
+    )
+    if primary_key != ("id",):
+        raise RuntimeError(
+            f"Canonical household_invitations primary key wijkt af: {primary_key!r}"
+        )
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspector.get_indexes(_INVITATION_TABLE)
+    }
+    for index_name, expected_columns in _REQUIRED_INDEXES.items():
+        index = indexes.get(index_name)
+        actual_columns = tuple((index or {}).get("column_names") or ())
+        if index is None or actual_columns != expected_columns:
+            raise RuntimeError(
+                f"Canonical invitation index {index_name} wijkt af: "
+                f"expected={expected_columns!r} actual={actual_columns!r}"
             )
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_household_invitations_one_pending
-            ON household_invitations(household_id, invitee_email)
-            WHERE status = 'pending'
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            CREATE INDEX IF NOT EXISTS idx_household_invitations_household_status
-            ON household_invitations(household_id, status, created_at)
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            CREATE INDEX IF NOT EXISTS idx_household_invitations_expiry
-            ON household_invitations(status, expires_at)
-            """
-        )
-    )
+    if not bool(indexes["idx_household_invitations_one_pending"].get("unique")):
+        raise RuntimeError("Canonical pending invitation index moet uniek zijn")
 
 
 def _membership_exists(conn: Connection, household_id: str, invitee_email: str) -> bool:
