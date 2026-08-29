@@ -23,7 +23,7 @@ def _max_level(current: str, requested: str | None, ranks: dict[str, int]) -> st
 def _ensure_neutral_configuration(conn, household_id: str) -> None:
     ensure_household_product_configuration_foundation(conn)
     conn.execute(text("""
-        INSERT OR IGNORE INTO household_product_configuration (
+        INSERT INTO household_product_configuration (
             household_id,
             inventory_tracking_level,
             location_tracking_level,
@@ -43,6 +43,7 @@ def _ensure_neutral_configuration(conn, household_id: str) -> None:
             CURRENT_TIMESTAMP,
             CURRENT_TIMESTAMP
         )
+        ON CONFLICT(household_id) DO NOTHING
     """), {"household_id": household_id})
 
 
