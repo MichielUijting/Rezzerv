@@ -72,6 +72,12 @@ def _iso(value: datetime) -> str:
     return normalized.astimezone(timezone.utc).isoformat()
 
 
+def _public_timestamp(value: object) -> object:
+    if isinstance(value, datetime):
+        return _iso(value)
+    return value
+
+
 def _normalize_email(value: str) -> str:
     normalized = str(value or "").strip().lower()
     if not normalized or "@" not in normalized:
@@ -216,13 +222,13 @@ def _public_invitation(row) -> dict[str, object]:
         "invitee_email": str(data.get("invitee_email") or ""),
         "role_key": str(data.get("role_key") or INVITATION_ROLE_KEY),
         "status": str(data.get("status") or ""),
-        "expires_at": data.get("expires_at"),
+        "expires_at": _public_timestamp(data.get("expires_at")),
         "created_by_user_id": str(data.get("created_by_user_id") or ""),
         "accepted_by_user_id": data.get("accepted_by_user_id"),
-        "created_at": data.get("created_at"),
-        "updated_at": data.get("updated_at"),
-        "accepted_at": data.get("accepted_at"),
-        "revoked_at": data.get("revoked_at"),
+        "created_at": _public_timestamp(data.get("created_at")),
+        "updated_at": _public_timestamp(data.get("updated_at")),
+        "accepted_at": _public_timestamp(data.get("accepted_at")),
+        "revoked_at": _public_timestamp(data.get("revoked_at")),
     }
 
 
