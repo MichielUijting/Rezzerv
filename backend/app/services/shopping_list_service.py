@@ -11,6 +11,33 @@ from sqlalchemy.engine import Connection
 ALLOWED_UNITS = {"", "stuk", "stuks", "gram", "kilogram", "milliliter", "liter", "verpakking"}
 ALLOWED_SEARCH_SCOPES = {"household_articles", "product_types", "article_groups"}
 
+SHOPPING_LIST_REQUIRED_COLUMNS = {
+    "id",
+    "household_id",
+    "status",
+    "created_at",
+    "completed_at",
+    "completed_by",
+}
+SHOPPING_LIST_ITEM_REQUIRED_COLUMNS = {
+    "id",
+    "shopping_list_id",
+    "household_id",
+    "article_name",
+    "article_group_name",
+    "product_type_name",
+    "source_type",
+    "source_id",
+    "quantity",
+    "volume",
+    "unit",
+    "size",
+    "note",
+    "checked",
+    "created_at",
+    "updated_at",
+}
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -23,56 +50,60 @@ def _table_columns(conn: Connection, table_name: str) -> set[str]:
     return {str(column.get("name") or "") for column in inspector.get_columns(table_name)}
 
 
-def _ensure_column(conn: Connection, table_name: str, column_name: str, declaration: str) -> None:
-    if column_name not in _table_columns(conn, table_name):
-        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {declaration}"))
+def _table_indexes(conn: Connection, table_name: str) -> set[str]:
+    inspector = inspect(conn)
+    if table_name not in inspector.get_table_names():
+        return set()
+    return {
+        str(index.get("name") or "")
+        for index in inspector.get_indexes(table_name)
+        if index.get("name")
+    }
 
 
 def ensure_shopping_list_schema(conn: Connection) -> None:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS shopping_lists (
-            id TEXT PRIMARY KEY,
-            household_id TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('active', 'completed')),
-            created_at TEXT NOT NULL,
-            completed_at TEXT,
-            completed_by TEXT
+    """Validate the Alembic-owned shopping-list schema without mutating it."""
+    inspector = inspect(conn)
+    table_names = set(inspector.get_table_names())
+    missing_tables = {"shopping_lists", "shopping_list_items"} - table_names
+    if missing_tables:
+        raise RuntimeError(
+            "Shopping-list schema is not migrated; missing tables: "
+            + ", ".join(sorted(missing_tables))
         )
-    """))
-    conn.execute(text("""
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_shopping_lists_household_active
-        ON shopping_lists(household_id)
-        WHERE status = 'active'
-    """))
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS shopping_list_items (
-            id TEXT PRIMARY KEY,
-            shopping_list_id TEXT NOT NULL,
-            household_id TEXT NOT NULL,
-            article_name TEXT NOT NULL,
-            article_group_name TEXT,
-            product_type_name TEXT,
-            source_type TEXT NOT NULL DEFAULT 'manual',
-            source_id TEXT,
-            quantity NUMERIC,
-            volume NUMERIC,
-            unit TEXT,
-            size TEXT,
-            note TEXT,
-            checked INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY(shopping_list_id) REFERENCES shopping_lists(id)
+
+    missing_list_columns = SHOPPING_LIST_REQUIRED_COLUMNS - _table_columns(
+        conn, "shopping_lists"
+    )
+    if missing_list_columns:
+        raise RuntimeError(
+            "Shopping-list schema is incomplete; shopping_lists missing columns: "
+            + ", ".join(sorted(missing_list_columns))
         )
-    """))
-    _ensure_column(conn, "shopping_list_items", "article_group_name", "TEXT")
-    _ensure_column(conn, "shopping_list_items", "product_type_name", "TEXT")
-    _ensure_column(conn, "shopping_list_items", "source_id", "TEXT")
-    _ensure_column(conn, "shopping_list_items", "size", "TEXT")
-    conn.execute(text("""
-        CREATE INDEX IF NOT EXISTS idx_shopping_list_items_active
-        ON shopping_list_items(household_id, shopping_list_id, checked, article_name)
-    """))
+
+    missing_item_columns = SHOPPING_LIST_ITEM_REQUIRED_COLUMNS - _table_columns(
+        conn, "shopping_list_items"
+    )
+    if missing_item_columns:
+        raise RuntimeError(
+            "Shopping-list schema is incomplete; shopping_list_items missing columns: "
+            + ", ".join(sorted(missing_item_columns))
+        )
+
+    if "ux_shopping_lists_household_active" not in _table_indexes(
+        conn, "shopping_lists"
+    ):
+        raise RuntimeError(
+            "Shopping-list schema is incomplete; missing index "
+            "ux_shopping_lists_household_active"
+        )
+    if "idx_shopping_list_items_active" not in _table_indexes(
+        conn, "shopping_list_items"
+    ):
+        raise RuntimeError(
+            "Shopping-list schema is incomplete; missing index "
+            "idx_shopping_list_items_active"
+        )
 
 
 def _normalize_decimal(value: Any, field_name: str) -> Decimal | None:

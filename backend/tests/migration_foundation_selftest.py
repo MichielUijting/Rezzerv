@@ -13,10 +13,29 @@ from capture_schema_baseline import dump_schema
 
 
 SQLITE_BASELINE_REVISION = "20260827_01"
-HEAD_REVISION = "20260828_05"
+HEAD_REVISION = "20260829_06"
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "baseline_sqlite.sql.gz"
 BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7"
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 50
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 63
+PR2G_SCHEMA_AUTHORITY_TABLES = {
+    "product_taxonomy",
+    "product_taxonomy_synonyms",
+    "retailer_receipt_terms",
+    "product_taxonomy_terms",
+    "product_inventory_groups",
+    "product_group_memberships",
+    "product_unit_conversions",
+    "inventory_item_group_assignments",
+    "article_groups",
+    "household_articles",
+    "household_onboarding",
+    "household_product_configuration",
+    "spaces",
+    "sublocations",
+    "shopping_lists",
+    "shopping_list_items",
+    "loyalty_stamp_transactions",
+}
 EXPECTED_SERVER_SESSION_COLUMNS = (
     "id",
     "session_token_hash",
@@ -109,7 +128,7 @@ def _column(inspector, table_name: str, column_name: str) -> dict:
 
 
 def _strip_migration_extensions(schema: str) -> str:
-    """Remove only schema blocks that postdate the immutable SQLite baseline."""
+    """Compare only the immutable-baseline portion not owned by later revisions."""
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
     excluded_headers = {
         "-- table: server_sessions (table=server_sessions)",
@@ -121,11 +140,20 @@ def _strip_migration_extensions(schema: str) -> str:
         "-- index: idx_inventory_events_temporal_order (table=inventory_events)",
         "-- index: idx_inventory_events_source_reference (table=inventory_events)",
         "-- index: uq_inventory_active_locationless_household_article (table=inventory)",
+        "-- trigger: trg_app_users_account_status_insert (table=app_users)",
+        "-- trigger: trg_app_users_account_status_update (table=app_users)",
     }
-    retained = [
-        block for block in blocks
-        if block.splitlines()[0].strip() not in excluded_headers
-    ]
+
+    def _is_migration_owned(block: str) -> bool:
+        header = block.splitlines()[0].strip()
+        if header in excluded_headers:
+            return True
+        return any(
+            f"(table={table_name})" in header
+            for table_name in PR2G_SCHEMA_AUTHORITY_TABLES
+        )
+
+    retained = [block for block in blocks if not _is_migration_owned(block)]
     return "\n\n".join(retained).rstrip() + "\n"
 
 
@@ -256,7 +284,7 @@ def _assert_postgresql_schema(connection) -> None:
     tables = set(inspector.get_table_names()) - {"alembic_version"}
     if len(tables) != EXPECTED_POSTGRESQL_APPLICATION_TABLES:
         raise AssertionError(
-            "PR2b PostgreSQL application schema must contain exactly "
+            "PR2g PostgreSQL application schema must contain exactly "
             f"{EXPECTED_POSTGRESQL_APPLICATION_TABLES} application tables; actual={len(tables)}"
         )
     _assert_server_session_schema(connection)
@@ -359,6 +387,8 @@ def _assert_postgresql_schema(connection) -> None:
     expected_triggers = {
         "trg_household_zero_system_insert",
         "trg_receipt_tables_preserve_explicit_approval",
+        "trg_spaces_direct_immutable_update",
+        "trg_spaces_direct_immutable_delete",
     }
     if triggers != expected_triggers:
         raise AssertionError(

@@ -4,20 +4,14 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.services.canonical_direct_location_service import ensure_canonical_direct_location
+from app.testing.onboarding_request_schema_fixture import install_location_schema
 
 
 def run() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
 
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE spaces (
-                id TEXT PRIMARY KEY,
-                naam TEXT NOT NULL,
-                household_id TEXT,
-                active INTEGER NOT NULL DEFAULT 1
-            )
-        """))
+        install_location_schema(conn)
         conn.execute(text("""
             INSERT INTO spaces (id, naam, household_id, active)
             VALUES

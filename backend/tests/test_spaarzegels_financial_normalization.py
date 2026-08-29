@@ -46,6 +46,39 @@ def _classify(_value: str) -> str:
     return "product_candidate"
 
 
+def _create_loyalty_fixture(conn) -> None:
+    conn.execute(text("""
+        CREATE TABLE loyalty_stamp_transactions (
+            id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL,
+            receipt_table_id TEXT NOT NULL,
+            receipt_line_id TEXT NOT NULL,
+            store_name TEXT,
+            stamp_program_code TEXT NOT NULL,
+            quantity REAL,
+            unit_price REAL,
+            line_total REAL,
+            transaction_type TEXT NOT NULL DEFAULT 'purchase',
+            source TEXT NOT NULL DEFAULT 'receipt_table_line',
+            purchase_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    conn.execute(text("""
+        CREATE UNIQUE INDEX idx_loyalty_stamp_transactions_receipt_line
+        ON loyalty_stamp_transactions (receipt_line_id)
+    """))
+    conn.execute(text("""
+        CREATE INDEX idx_loyalty_stamp_transactions_household_store
+        ON loyalty_stamp_transactions (household_id, store_name, purchase_at)
+    """))
+    conn.execute(text("""
+        CREATE INDEX idx_loyalty_stamp_transactions_receipt_table
+        ON loyalty_stamp_transactions (receipt_table_id)
+    """))
+
+
 def _spaarzegels_line() -> dict:
     extracted: list[dict] = []
 
@@ -149,6 +182,7 @@ def test_spaarzegels_are_excluded_from_external_database_items():
 def test_spaarzegels_transactions_are_stored_idempotently():
     db = create_engine("sqlite:///:memory:")
     with db.begin() as conn:
+        _create_loyalty_fixture(conn)
         conn.execute(text("""
             CREATE TABLE receipt_tables (
                 id TEXT PRIMARY KEY,
@@ -206,8 +240,6 @@ def test_spaarzegels_transactions_are_stored_idempotently():
     assert row["line_total"] == 0.20
     assert row["transaction_type"] == "purchase"
     assert row["source"] == "receipt_table_line"
-
-
 
 
 def test_amount_only_spaarzegels_line_is_extracted_as_financial_line():

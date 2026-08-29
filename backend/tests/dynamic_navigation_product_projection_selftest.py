@@ -15,6 +15,10 @@ from app.services.household_product_configuration_service import (
     save_wat_inhuis_configuration,
     save_waar_inhuis_configuration,
 )
+from app.testing.onboarding_request_schema_fixture import (
+    install_household_product_configuration_schema,
+    install_location_schema,
+)
 
 
 def _state(household_id: str, primary_use_case: str | None) -> HouseholdOnboardingState:
@@ -35,6 +39,9 @@ def run() -> int:
     checks: list[str] = []
 
     with engine.begin() as conn:
+        install_household_product_configuration_schema(conn)
+        install_location_schema(conn)
+
         legacy_payload = _public_onboarding_with_product_configuration(
             conn,
             _state("legacy-household", None),

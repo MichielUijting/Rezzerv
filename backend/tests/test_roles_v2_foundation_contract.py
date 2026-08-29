@@ -180,26 +180,32 @@ def test_legacy_and_regular_household_role_mappings_are_preserved():
     assert ROLE_PERMISSIONS["household.member"] <= set(HOUSEHOLD_PERMISSIONS)
 
 
-def test_household_and_account_foundation_is_additive_and_idempotent():
+def test_household_and_account_foundation_validates_canonical_schema_idempotently():
     engine = make_engine()
     with engine.begin() as conn:
         conn.execute(text("""
             CREATE TABLE household_registry (
-                id TEXT PRIMARY KEY, naam TEXT NOT NULL
+                id TEXT PRIMARY KEY,
+                naam TEXT NOT NULL,
+                context_type TEXT NOT NULL DEFAULT 'regular'
             )
         """))
         conn.execute(text("""
             CREATE TABLE app_users (
-                id TEXT PRIMARY KEY, email TEXT NOT NULL, password TEXT NOT NULL
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                password TEXT NOT NULL,
+                account_status TEXT NOT NULL DEFAULT 'active',
+                password_hash TEXT
             )
         """))
         conn.execute(text("""
-            INSERT INTO household_registry(id, naam)
-            VALUES ('0', 'Systeem'), ('1', 'Regulier')
+            INSERT INTO household_registry(id, naam, context_type)
+            VALUES ('0', 'Systeem', 'system'), ('1', 'Regulier', 'regular')
         """))
         conn.execute(text("""
-            INSERT INTO app_users(id, email, password)
-            VALUES ('u1', 'fixture@example.invalid', 'legacy-value')
+            INSERT INTO app_users(id, email, password, account_status, password_hash)
+            VALUES ('u1', 'fixture@example.invalid', 'legacy-value', 'active', NULL)
         """))
 
         ensure_roles_v2_account_and_household_foundation(conn)
@@ -213,44 +219,69 @@ def test_household_and_account_foundation_is_additive_and_idempotent():
 
     assert HOUSEHOLD_CONTEXT_TYPES == {"regular", "system"}
     assert households == {"0": "system", "1": "regular"}
-    assert ACCOUNT_STATUSES == {"active", "disabled"}
+    assert ACCOUNT_STATUSES == {"active", "disabled", "suspended"}
     assert account["account_status"] == "active"
     assert account["password"] == "legacy-value"
     assert account["password_hash"] is None
 
 
-def test_account_and_household_foundation_reject_invalid_status_values():
+def test_account_and_household_foundation_rejects_invalid_canonical_values():
     engine = make_engine()
     with engine.begin() as conn:
-        conn.execute(text("CREATE TABLE household_registry (id TEXT PRIMARY KEY, naam TEXT NOT NULL)"))
         conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY, email TEXT NOT NULL, password TEXT NOT NULL
+            CREATE TABLE household_registry (
+                id TEXT PRIMARY KEY,
+                naam TEXT NOT NULL,
+                context_type TEXT NOT NULL
             )
         """))
-        ensure_roles_v2_account_and_household_foundation(conn)
         conn.execute(text("""
-            INSERT INTO household_registry(id, naam)
-            VALUES ('0', 'Later systeemhuishouden')
+            CREATE TABLE app_users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                password TEXT NOT NULL,
+                account_status TEXT NOT NULL,
+                password_hash TEXT
+            )
         """))
-        assert conn.execute(text(
-            "SELECT context_type FROM household_registry WHERE id = '0'"
-        )).scalar_one() == "system"
-        with pytest.raises(IntegrityError):
-            conn.execute(text("""
-                INSERT INTO household_registry(id, naam, context_type)
-                VALUES ('x', 'Ongeldig', 'private')
-            """))
-        with pytest.raises(IntegrityError):
-            conn.execute(text("""
-                INSERT INTO app_users(id, email, password, account_status)
-                VALUES ('u1', 'invalid@example.invalid', 'legacy', 'blocked')
-            """))
+        conn.execute(text("""
+            INSERT INTO household_registry(id, naam, context_type)
+            VALUES ('x', 'Ongeldig', 'private')
+        """))
+        conn.execute(text("""
+            INSERT INTO app_users(id, email, password, account_status, password_hash)
+            VALUES ('u1', 'invalid@example.invalid', 'legacy', 'blocked', NULL)
+        """))
+
+        with pytest.raises(RuntimeError, match="ongeldige context_type"):
+            ensure_roles_v2_account_and_household_foundation(conn)
+
+        conn.execute(text(
+            "UPDATE household_registry SET context_type = 'regular' WHERE id = 'x'"
+        ))
+        with pytest.raises(RuntimeError, match="ongeldige account_status"):
+            ensure_roles_v2_account_and_household_foundation(conn)
 
 
 def test_roles_v2_foundation_does_not_change_server_session_schema_or_rows():
     engine = make_engine()
     with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE household_registry (
+                id TEXT PRIMARY KEY,
+                naam TEXT NOT NULL,
+                context_type TEXT NOT NULL DEFAULT 'regular'
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE app_users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                password TEXT NOT NULL,
+                account_status TEXT NOT NULL DEFAULT 'active',
+                password_hash TEXT
+            )
+        """))
         conn.execute(text("""
             CREATE TABLE server_sessions (
                 id VARCHAR(64) PRIMARY KEY,

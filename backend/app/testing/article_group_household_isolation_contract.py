@@ -20,6 +20,54 @@ def _expect_failure(result: dict, expected_error: str) -> None:
     assert result.get("error") == expected_error, result
 
 
+def _create_article_group_fixture(conn) -> None:
+    """Own the isolated test schema instead of asking production runtime to mutate it."""
+    conn.execute(
+        text(
+            """
+            CREATE TABLE article_groups (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                normalized_name TEXT NOT NULL,
+                status TEXT DEFAULT 'active',
+                sort_order INTEGER DEFAULT 0,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE TABLE household_articles (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                custom_name TEXT,
+                article_group_id TEXT
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE INDEX idx_article_groups_household_name
+            ON article_groups(household_id, normalized_name)
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE INDEX idx_household_articles_article_group
+            ON household_articles(article_group_id)
+            """
+        )
+    )
+
+
 def run_contract() -> None:
     original_engine = legacy_store.engine
 
@@ -33,18 +81,7 @@ def run_contract() -> None:
 
         try:
             with test_engine.begin() as conn:
-                conn.execute(
-                    text(
-                        """
-                        CREATE TABLE household_articles (
-                            id TEXT PRIMARY KEY,
-                            household_id TEXT NOT NULL,
-                            custom_name TEXT,
-                            article_group_id TEXT
-                        )
-                        """
-                    )
-                )
+                _create_article_group_fixture(conn)
                 conn.execute(
                     text(
                         """

@@ -15,11 +15,17 @@ from app.services.household_product_use_case_service import (
     activate_household_product_use_case,
     resolve_active_household_product_use_cases,
 )
+from app.testing.onboarding_request_schema_fixture import (
+    install_household_product_configuration_schema,
+    install_location_schema,
+)
 
 
 def run() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     with engine.begin() as conn:
+        install_household_product_configuration_schema(conn)
+        install_location_schema(conn)
         initial = save_inhuis_halen_configuration(
             conn,
             household_id="h1",

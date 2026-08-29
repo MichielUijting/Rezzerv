@@ -157,7 +157,7 @@ from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parsedate_to_datetime
 import logging
-from sqlalchemy import text, bindparam
+from sqlalchemy import inspect as sa_inspect, text, bindparam
 
 app = FastAPI()
 # Externe-databases-koppelingen: idempotente schema-initialisatie.
@@ -7961,7 +7961,12 @@ def set_household_article_location_defaults(conn, household_article_id: str | No
         return {"updated": False, "reason": "missing_household_article_id"}
 
     defaults = build_store_location_default_payload(resolved_location)
-    columns = {row["name"] for row in conn.execute(text("PRAGMA table_info(household_article_settings)")).mappings().all()}
+    inspector = sa_inspect(conn)
+    columns = (
+        {str(column.get("name") or "") for column in inspector.get_columns("household_article_settings")}
+        if inspector.has_table("household_article_settings")
+        else set()
+    )
     required = {"household_article_id", "setting_key", "setting_value"}
     if not required.issubset(columns):
         return {"updated": False, "reason": "household_article_settings_schema_incomplete"}

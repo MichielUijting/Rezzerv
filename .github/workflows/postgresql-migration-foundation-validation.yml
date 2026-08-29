@@ -141,7 +141,7 @@ jobs:
           grep -F -- '-- index: idx_server_sessions_user_active (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260828_05' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260829_06' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority

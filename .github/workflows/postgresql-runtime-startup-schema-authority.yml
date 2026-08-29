@@ -9,6 +9,15 @@ on:
       - 'backend/app/migration_db.py'
       - 'backend/app/schema_migration_preflight.py'
       - 'backend/app/session_entrypoint.py'
+      - 'backend/app/services/article_group_store.py'
+      - 'backend/app/services/canonical_direct_location_service.py'
+      - 'backend/app/services/household_location_onboarding_service.py'
+      - 'backend/app/services/household_product_configuration_service.py'
+      - 'backend/app/services/loyalty_stamp_transaction_service.py'
+      - 'backend/app/services/product_inventory_group_store.py'
+      - 'backend/app/services/product_taxonomy_store.py'
+      - 'backend/app/services/shopping_list_service.py'
+      - 'backend/tests/postgresql_core_request_dml_only_selftest.py'
       - 'backend/tests/runtime_startup_schema_authority_selftest.py'
       - '.github/workflows/postgresql-runtime-startup-schema-authority.yml'
   workflow_dispatch:
@@ -88,7 +97,7 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/runtime-startup-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/runtime-startup-migration.log
-          grep -F "'revision': '20260828_05'" /tmp/runtime-startup-migration.log
+          grep -F "'revision': '20260829_06'" /tmp/runtime-startup-migration.log
 
       - name: Prove runtime role has no schema CREATE privilege
         env:
@@ -100,6 +109,15 @@ jobs:
             exit 1
           fi
           echo 'POSTGRESQL_RUNTIME_DDL_DENIED_GREEN'
+
+      - name: Prove core request paths work with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_core_request_dml_only_selftest.py | tee /tmp/core-request-dml-only.log
+          grep -F 'POSTGRESQL_CORE_REQUEST_RUNTIME_CREATE_DENIED_GREEN' /tmp/core-request-dml-only.log
+          grep -F 'POSTGRESQL_CORE_REQUEST_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/core-request-dml-only.log
+          grep -F 'POSTGRESQL_CORE_REQUEST_DML_ONLY_GREEN' /tmp/core-request-dml-only.log
+          grep -F 'POSTGRESQL_CORE_REQUEST_AUTHORITY_SELFTEST_GREEN' /tmp/core-request-dml-only.log
 
       - name: Import full Rezzerv application without migration credential
         working-directory: backend

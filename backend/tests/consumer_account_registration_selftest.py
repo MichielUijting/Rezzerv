@@ -66,7 +66,24 @@ def _prepare_database(engine) -> None:
             CREATE TABLE household_registry (
                 id TEXT PRIMARY KEY,
                 naam TEXT NOT NULL,
+                context_type TEXT NOT NULL DEFAULT 'regular',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE household_onboarding (
+                household_id TEXT PRIMARY KEY,
+                onboarding_status TEXT NOT NULL,
+                onboarding_version INTEGER NOT NULL DEFAULT 2,
+                primary_use_case TEXT,
+                onboarding_step TEXT,
+                household_usage_mode TEXT,
+                onboarding_completed_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (onboarding_status IN ('not_started', 'in_progress', 'completed')),
+                CHECK (primary_use_case IS NULL OR primary_use_case IN ('inhuis_halen', 'wat_inhuis', 'waar_inhuis')),
+                CHECK (household_usage_mode IS NULL OR household_usage_mode IN ('alone', 'together'))
             )
         """))
         conn.execute(text("""
@@ -74,6 +91,8 @@ def _prepare_database(engine) -> None:
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
+                account_status TEXT NOT NULL DEFAULT 'active',
+                password_hash TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -258,7 +277,6 @@ def run() -> int:
             assert int(count) == 1
         checks.append("duplicate_email_case_insensitive_409")
 
-        before_counts = None
         with engine.begin() as conn:
             before_counts = (
                 int(conn.execute(text("SELECT COUNT(*) FROM app_users")).scalar_one()),
@@ -266,10 +284,7 @@ def run() -> int:
                 int(conn.execute(text("SELECT COUNT(*) FROM household_memberships")).scalar_one()),
             )
         try:
-            SessionRegisterRequest(
-                email="zwak@example.com",
-                password="kort",
-            )
+            SessionRegisterRequest(email="zwak@example.com", password="kort")
         except ValidationError:
             pass
         else:

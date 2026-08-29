@@ -27,13 +27,17 @@ def auth_engine():
     with engine.begin() as conn:
         install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
-        create_server_session_contract_schema(conn)
         conn.execute(text("""
             CREATE TABLE app_users (
                 id VARCHAR(64) PRIMARY KEY,
-                email VARCHAR(255) NOT NULL
+                email VARCHAR(255) NOT NULL,
+                password TEXT NOT NULL DEFAULT '',
+                password_hash TEXT,
+                account_status TEXT NOT NULL DEFAULT 'active',
+                suspended_at TIMESTAMP NULL
             )
         """))
+        create_server_session_contract_schema(conn)
         conn.execute(text("""
             INSERT INTO app_users(id, email)
             VALUES

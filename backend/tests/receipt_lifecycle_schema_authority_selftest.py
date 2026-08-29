@@ -11,7 +11,7 @@ import tempfile
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "backend" / "alembic.ini"
 PREVIOUS_REVISION = "20260828_01"
-HEAD_REVISION = "20260828_05"
+HEAD_REVISION = "20260829_06"
 RECEIPT_TABLES = ("raw_receipts", "receipt_tables", "receipt_table_lines")
 
 
@@ -24,15 +24,7 @@ def _run_alembic(path: Path, target: str, *, expect_success: bool = True) -> str
     env["DATABASE_URL"] = _database_url(path)
     env["PYTHONPATH"] = str(REPO_ROOT / "backend")
     result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "alembic",
-            "-c",
-            str(ALEMBIC_INI),
-            "upgrade",
-            target,
-        ],
+        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", target],
         cwd=REPO_ROOT,
         env=env,
         text=True,
@@ -57,12 +49,7 @@ def _revision(connection: sqlite3.Connection) -> str:
 def _receipt_schema_snapshot(connection: sqlite3.Connection) -> tuple[tuple[str, str, str, str], ...]:
     placeholders = ",".join("?" for _ in RECEIPT_TABLES)
     return tuple(
-        (
-            str(row[0]),
-            str(row[1]),
-            str(row[2]),
-            str(row[3]),
-        )
+        (str(row[0]), str(row[1]), str(row[2]), str(row[3]))
         for row in connection.execute(
             f"SELECT type, name, tbl_name, sql FROM sqlite_master "
             f"WHERE tbl_name IN ({placeholders}) AND sql IS NOT NULL "

@@ -5,185 +5,105 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 
 
-PRODUCT_TAXONOMY_SQL = """
-CREATE TABLE IF NOT EXISTS product_taxonomy (
-    id TEXT PRIMARY KEY,
-    intent_key TEXT UNIQUE NOT NULL,
-    canonical_name TEXT NOT NULL,
-    category TEXT,
-    product_type TEXT,
-    default_base_unit TEXT,
-    active INTEGER DEFAULT 1,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
-
-PRODUCT_TAXONOMY_TERMS_SQL = """
-CREATE TABLE IF NOT EXISTS product_taxonomy_terms (
-    id TEXT PRIMARY KEY,
-    intent_key TEXT NOT NULL,
-    term TEXT NOT NULL,
-    term_type TEXT,
-    language TEXT DEFAULT 'nl',
-    confidence REAL DEFAULT 1.0,
-    source TEXT,
-    active INTEGER DEFAULT 1,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
-
-PRODUCT_INVENTORY_GROUPS_SQL = """
-CREATE TABLE IF NOT EXISTS product_inventory_groups (
-    inventory_group_key TEXT PRIMARY KEY,
-    display_name TEXT NOT NULL,
-    default_base_unit TEXT NOT NULL,
-    aggregation_mode TEXT DEFAULT 'sum_quantity',
-    active INTEGER DEFAULT 1,
-    created_at TEXT,
-    updated_at TEXT,
-    source TEXT
-)
-"""
-
-PRODUCT_GROUP_MEMBERSHIPS_SQL = """
-CREATE TABLE IF NOT EXISTS product_group_memberships (
-    id TEXT PRIMARY KEY,
-    global_product_id TEXT NOT NULL,
-    inventory_group_key TEXT NOT NULL,
-    comparison_group_key TEXT,
-    confidence REAL DEFAULT 1.0,
-    source TEXT,
-    confirmed_by_user INTEGER DEFAULT 0,
-    active INTEGER DEFAULT 1,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
-
-PRODUCT_UNIT_CONVERSIONS_SQL = """
-CREATE TABLE IF NOT EXISTS product_unit_conversions (
-    id TEXT PRIMARY KEY,
-    global_product_id TEXT NOT NULL,
-    inventory_group_key TEXT,
-    content_value REAL,
-    content_unit TEXT,
-    base_quantity REAL,
-    base_unit TEXT,
-    confidence REAL DEFAULT 1.0,
-    source TEXT,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
-
-INVENTORY_ITEM_GROUP_ASSIGNMENTS_SQL = """
-CREATE TABLE IF NOT EXISTS inventory_item_group_assignments (
-    inventory_id TEXT PRIMARY KEY,
-    inventory_group_key TEXT NOT NULL,
-    source TEXT,
-    confirmed_by_user INTEGER DEFAULT 1,
-    active INTEGER DEFAULT 1,
-    created_at TEXT,
-    updated_at TEXT
-)
-"""
-
-GROUP_MEMBERSHIP_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_product_group_memberships_product
-ON product_group_memberships (global_product_id, inventory_group_key)
-"""
-
-PRIMARY_GROUP_MEMBERSHIP_INDEX_SQL = """
-CREATE UNIQUE INDEX IF NOT EXISTS idx_product_group_memberships_one_active_product_type
-ON product_group_memberships (global_product_id)
-WHERE COALESCE(active, 1) = 1
-"""
-
-TAXONOMY_TERM_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_product_taxonomy_terms_intent
-ON product_taxonomy_terms (intent_key, active)
-"""
-
-INVENTORY_ITEM_GROUP_ASSIGNMENTS_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_inventory_item_group_assignments_group
-ON inventory_item_group_assignments (inventory_group_key, active)
-"""
-
-SCHEMA_COLUMNS: dict[str, dict[str, str]] = {
+_REQUIRED_COLUMNS: dict[str, set[str]] = {
     "product_taxonomy": {
-        "id": "TEXT",
-        "intent_key": "TEXT",
-        "canonical_name": "TEXT",
-        "category": "TEXT",
-        "product_type": "TEXT",
-        "default_base_unit": "TEXT",
-        "active": "INTEGER DEFAULT 1",
-        "created_at": "TEXT",
-        "updated_at": "TEXT",
+        "intent_key",
+        "canonical_name",
+        "category",
+        "product_type",
+        "parent_intent_key",
+        "default_base_unit",
+        "is_active",
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by",
     },
     "product_taxonomy_terms": {
-        "id": "TEXT",
-        "intent_key": "TEXT",
-        "term": "TEXT",
-        "term_type": "TEXT",
-        "language": "TEXT DEFAULT 'nl'",
-        "confidence": "REAL DEFAULT 1.0",
-        "source": "TEXT",
-        "active": "INTEGER DEFAULT 1",
-        "created_at": "TEXT",
-        "updated_at": "TEXT",
+        "id",
+        "intent_key",
+        "term",
+        "term_type",
+        "language",
+        "confidence",
+        "source",
+        "active",
+        "created_at",
+        "updated_at",
     },
     "product_inventory_groups": {
-        "inventory_group_key": "TEXT",
-        "display_name": "TEXT",
-        "default_base_unit": "TEXT",
-        "aggregation_mode": "TEXT DEFAULT 'sum_quantity'",
-        "active": "INTEGER DEFAULT 1",
-        "created_at": "TEXT",
-        "updated_at": "TEXT",
-        "source": "TEXT",
+        "inventory_group_key",
+        "display_name",
+        "default_base_unit",
+        "aggregation_mode",
+        "active",
+        "created_at",
+        "updated_at",
+        "source",
     },
     "product_group_memberships": {
-        "id": "TEXT",
-        "global_product_id": "TEXT",
-        "inventory_group_key": "TEXT",
-        "comparison_group_key": "TEXT",
-        "confidence": "REAL DEFAULT 1.0",
-        "source": "TEXT",
-        "confirmed_by_user": "INTEGER DEFAULT 0",
-        "active": "INTEGER DEFAULT 1",
-        "created_at": "TEXT",
-        "updated_at": "TEXT",
+        "id",
+        "global_product_id",
+        "inventory_group_key",
+        "comparison_group_key",
+        "confidence",
+        "source",
+        "confirmed_by_user",
+        "active",
+        "created_at",
+        "updated_at",
     },
     "product_unit_conversions": {
-        "id": "TEXT",
-        "global_product_id": "TEXT",
-        "inventory_group_key": "TEXT",
-        "content_value": "REAL",
-        "content_unit": "TEXT",
-        "base_quantity": "REAL",
-        "base_unit": "TEXT",
-        "confidence": "REAL DEFAULT 1.0",
-        "source": "TEXT",
-        "created_at": "TEXT",
-        "updated_at": "TEXT",
+        "id",
+        "global_product_id",
+        "inventory_group_key",
+        "content_value",
+        "content_unit",
+        "base_quantity",
+        "base_unit",
+        "confidence",
+        "source",
+        "created_at",
+        "updated_at",
     },
     "inventory_item_group_assignments": {
-        "inventory_id": "TEXT",
-        "inventory_group_key": "TEXT",
-        "source": "TEXT",
-        "confirmed_by_user": "INTEGER DEFAULT 1",
-        "active": "INTEGER DEFAULT 1",
-        "created_at": "TEXT",
-        "updated_at": "TEXT",
+        "inventory_id",
+        "inventory_group_key",
+        "source",
+        "confirmed_by_user",
+        "active",
+        "created_at",
+        "updated_at",
     },
+}
+
+_REQUIRED_INDEXES: dict[str, tuple[str, tuple[str, ...], bool]] = {
+    "ux_product_taxonomy_intent_key": ("product_taxonomy", ("intent_key",), True),
+    "idx_product_taxonomy_terms_intent": (
+        "product_taxonomy_terms",
+        ("intent_key", "active"),
+        False,
+    ),
+    "idx_product_group_memberships_product": (
+        "product_group_memberships",
+        ("global_product_id", "inventory_group_key"),
+        False,
+    ),
+    "idx_product_group_memberships_one_active_product_type": (
+        "product_group_memberships",
+        ("global_product_id",),
+        True,
+    ),
+    "idx_inventory_item_group_assignments_group": (
+        "inventory_item_group_assignments",
+        ("inventory_group_key", "active"),
+        False,
+    ),
 }
 
 DEFAULT_TAXONOMY = [
@@ -205,79 +125,65 @@ def normalize_text(value: Any) -> str:
 
 
 def _get_columns(conn, table_name: str) -> set[str]:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
-        return {str(row.get("name") or "") for row in rows}
-    rows = conn.execute(
-        text("""SELECT column_name FROM information_schema.columns WHERE table_name = :table_name"""),
-        {"table_name": table_name},
-    ).mappings().all()
-    return {str(row.get("column_name") or "") for row in rows}
+    inspector = inspect(conn)
+    if not inspector.has_table(table_name):
+        return set()
+    return {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(table_name)
+    }
 
 
-def _ensure_missing_columns(conn, table_name: str) -> None:
-    existing_columns = _get_columns(conn, table_name)
-    for column_name, column_definition in SCHEMA_COLUMNS.get(table_name, {}).items():
-        if column_name not in existing_columns:
-            conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"))
+def _validate_product_inventory_group_schema(conn) -> None:
+    inspector = inspect(conn)
+    for table_name, required_columns in _REQUIRED_COLUMNS.items():
+        if not inspector.has_table(table_name):
+            raise RuntimeError(
+                f"Canonical inventory-group schema ontbreekt: tabel {table_name}. "
+                "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
+            )
+        actual_columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns(table_name)
+        }
+        missing = required_columns - actual_columns
+        if missing:
+            raise RuntimeError(
+                f"Canonical inventory-group schema wijkt af: {table_name} mist "
+                f"{sorted(missing)}. Voer Alembic migrations uit."
+            )
 
-
-def _ensure_row_ids(conn, table_name: str) -> None:
-    columns = _get_columns(conn, table_name)
-    if "id" not in columns:
-        return
-    rows = conn.execute(text(f"SELECT rowid FROM {table_name} WHERE id IS NULL OR trim(id) = ''")).mappings().all()
-    for row in rows:
-        conn.execute(text(f"UPDATE {table_name} SET id = :id WHERE rowid = :rowid"), {"id": str(uuid.uuid4()), "rowid": row.get("rowid")})
+    for index_name, (table_name, expected_columns, expected_unique) in _REQUIRED_INDEXES.items():
+        indexes = {
+            str(index.get("name") or ""): index
+            for index in inspector.get_indexes(table_name)
+        }
+        index = indexes.get(index_name)
+        actual_columns = tuple(
+            str(column or "") for column in ((index or {}).get("column_names") or ())
+        )
+        if (
+            index is None
+            or actual_columns != expected_columns
+            or bool(index.get("unique")) != expected_unique
+        ):
+            raise RuntimeError(
+                f"Canonical inventory-group index wijkt af: {index_name}; "
+                f"expected={expected_columns!r}/{expected_unique}, "
+                f"actual={actual_columns!r}/{bool((index or {}).get('unique'))}."
+            )
 
 
 def ensure_product_inventory_group_schema() -> None:
+    """Validate Alembic-owned schema, then seed canonical reference data using DML only."""
+    with engine.connect() as conn:
+        _validate_product_inventory_group_schema(conn)
     with engine.begin() as conn:
-        conn.execute(text(PRODUCT_TAXONOMY_SQL))
-        conn.execute(text(PRODUCT_TAXONOMY_TERMS_SQL))
-        conn.execute(text(PRODUCT_INVENTORY_GROUPS_SQL))
-        conn.execute(text(PRODUCT_GROUP_MEMBERSHIPS_SQL))
-        conn.execute(text(PRODUCT_UNIT_CONVERSIONS_SQL))
-        conn.execute(text(INVENTORY_ITEM_GROUP_ASSIGNMENTS_SQL))
-        for table_name in SCHEMA_COLUMNS:
-            _ensure_missing_columns(conn, table_name)
-            _ensure_row_ids(conn, table_name)
-        conn.execute(text(GROUP_MEMBERSHIP_INDEX_SQL))
-        _deduplicate_active_product_type_memberships(conn)
-        conn.execute(text(PRIMARY_GROUP_MEMBERSHIP_INDEX_SQL))
-        conn.execute(text(TAXONOMY_TERM_INDEX_SQL))
-        conn.execute(text(INVENTORY_ITEM_GROUP_ASSIGNMENTS_INDEX_SQL))
         seed_default_inventory_groups(conn)
 
 
 def _row_exists(conn, sql: str, params: dict[str, Any]) -> bool:
     return conn.execute(text(sql), params).mappings().first() is not None
-
-
-def _deduplicate_active_product_type_memberships(conn) -> None:
-    """Behoud per universeel artikel exact één actieve Producttype-koppeling."""
-    rows = conn.execute(text("""
-        SELECT id, global_product_id
-        FROM product_group_memberships
-        WHERE COALESCE(active, 1) = 1
-        ORDER BY global_product_id, COALESCE(confirmed_by_user, 0) DESC,
-                 COALESCE(updated_at, created_at, '') DESC, id DESC
-    """)).mappings().all()
-    seen: set[str] = set()
-    for row in rows:
-        product_id = str(row.get("global_product_id") or "").strip()
-        membership_id = str(row.get("id") or "").strip()
-        if not product_id or not membership_id:
-            continue
-        if product_id in seen:
-            conn.execute(text("""
-                UPDATE product_group_memberships
-                SET active = 0, updated_at = :updated_at
-                WHERE id = :id
-            """), {"id": membership_id, "updated_at": now_iso()})
-        else:
-            seen.add(product_id)
 
 
 def seed_default_inventory_groups(conn) -> None:
@@ -287,10 +193,15 @@ def seed_default_inventory_groups(conn) -> None:
         if not _row_exists(conn, "SELECT 1 FROM product_taxonomy WHERE intent_key = :intent_key LIMIT 1", {"intent_key": intent_key}):
             conn.execute(
                 text("""
-                    INSERT INTO product_taxonomy (id, intent_key, canonical_name, category, product_type, default_base_unit, active, created_at, updated_at)
-                    VALUES (:id, :intent_key, :canonical_name, :category, :product_type, :default_base_unit, 1, :created_at, :updated_at)
+                    INSERT INTO product_taxonomy (
+                        intent_key, canonical_name, category, product_type,
+                        default_base_unit, is_active, created_at, updated_at
+                    ) VALUES (
+                        :intent_key, :canonical_name, :category, :product_type,
+                        :default_base_unit, 1, :created_at, :updated_at
+                    )
                 """),
-                {"id": str(uuid.uuid4()), "created_at": timestamp, "updated_at": timestamp, **{key: item[key] for key in ["intent_key", "canonical_name", "category", "product_type", "default_base_unit"]}},
+                {"created_at": timestamp, "updated_at": timestamp, **{key: item[key] for key in ["intent_key", "canonical_name", "category", "product_type", "default_base_unit"]}},
             )
         else:
             conn.execute(
@@ -300,7 +211,7 @@ def seed_default_inventory_groups(conn) -> None:
                         category = COALESCE(NULLIF(category, ''), :category),
                         product_type = COALESCE(NULLIF(product_type, ''), :product_type),
                         default_base_unit = COALESCE(NULLIF(default_base_unit, ''), :default_base_unit),
-                        active = COALESCE(active, 1),
+                        is_active = COALESCE(is_active, 1),
                         updated_at = :updated_at
                     WHERE intent_key = :intent_key
                 """),
@@ -576,8 +487,6 @@ def assign_inventory_item_to_group(inventory_id: str, inventory_group_key: str, 
                 VALUES (:inventory_id, :inventory_group_key, :source, 1, 1, :created_at, :updated_at)
             """), params)
     return {"ok": True, "inventory_id": normalized_inventory_id, "inventory_group_key": normalized_group_key, "mutates_inventory": False, "creates_inventory_event": False}
-
-
 
 
 def normalize_product_type_key(value: Any) -> str:

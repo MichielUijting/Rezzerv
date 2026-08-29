@@ -23,6 +23,18 @@ HOUSEHOLD_USAGE_MODES = frozenset({"alone", "together"})
 PROFILE_FOLLOW_UP_STEP = "profile_follow_up"
 SHARED_HOUSEHOLD_MINIMUM_STEP = "shared_household_minimum"
 
+_REQUIRED_ONBOARDING_COLUMNS = {
+    "household_id",
+    "onboarding_status",
+    "onboarding_version",
+    "primary_use_case",
+    "onboarding_step",
+    "household_usage_mode",
+    "onboarding_completed_at",
+    "created_at",
+    "updated_at",
+}
+
 
 class OnboardingAlreadyCompletedError(ValueError):
     pass
@@ -65,7 +77,7 @@ class HouseholdOnboardingState:
 
 def _household_registry_columns(conn) -> set[str]:
     inspector = inspect(conn)
-    if "household_registry" not in inspector.get_table_names():
+    if not inspector.has_table("household_registry"):
         return set()
     return {
         str(column.get("name") or "")
@@ -75,7 +87,7 @@ def _household_registry_columns(conn) -> set[str]:
 
 def _household_onboarding_columns(conn) -> set[str]:
     inspector = inspect(conn)
-    if "household_onboarding" not in inspector.get_table_names():
+    if not inspector.has_table("household_onboarding"):
         return set()
     return {
         str(column.get("name") or "")
@@ -106,84 +118,26 @@ def _normalize_household_name(value: str) -> str:
 
 
 def ensure_household_onboarding_foundation(conn) -> None:
-    """Create onboarding state and mark pre-existing regular households complete.
-
-    The migration is deliberately forward-only: households that already existed
-    before onboarding v2 are never forced through the new flow. A newly created
-    consumer household is explicitly reset to ``not_started`` by
-    ``start_new_household_onboarding`` in the same registration transaction.
-
-    The shared household minimum was added after the first profile slices. It is
-    therefore added as a nullable column and existing completed households are
-    deliberately not reopened.
-    """
-
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS household_onboarding (
-            household_id TEXT PRIMARY KEY,
-            onboarding_status TEXT NOT NULL
-                CHECK (onboarding_status IN ('not_started', 'in_progress', 'completed')),
-            onboarding_version INTEGER NOT NULL DEFAULT 2,
-            primary_use_case TEXT
-                CHECK (
-                    primary_use_case IS NULL
-                    OR primary_use_case IN ('inhuis_halen', 'wat_inhuis', 'waar_inhuis')
-                ),
-            onboarding_step TEXT,
-            household_usage_mode TEXT
-                CHECK (
-                    household_usage_mode IS NULL
-                    OR household_usage_mode IN ('alone', 'together')
-                ),
-            onboarding_completed_at TEXT,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    """Validate the Alembic-owned onboarding foundation without mutating schema/data."""
+    inspector = inspect(conn)
+    if not inspector.has_table("household_registry"):
+        raise RuntimeError(
+            "Canonical onboarding foundation mist household_registry. "
+            "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
         )
-    """))
-
+    if not inspector.has_table("household_onboarding"):
+        raise RuntimeError(
+            "Canonical onboarding foundation mist household_onboarding. "
+            "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
+        )
     onboarding_columns = _household_onboarding_columns(conn)
-    if "household_usage_mode" not in onboarding_columns:
-        conn.execute(text(
-            "ALTER TABLE household_onboarding ADD COLUMN household_usage_mode TEXT"
-        ))
-
-    columns = _household_registry_columns(conn)
-    household_id_column = "id" if "id" in columns else (
-        "household_id" if "household_id" in columns else None
-    )
-    if not household_id_column:
-        raise RuntimeError("household_registry heeft geen bruikbare identificatiekolom")
-
-    if "context_type" in columns:
-        regular_predicate = "lower(trim(COALESCE(context_type, 'regular'))) = 'regular'"
-    else:
-        regular_predicate = f"CAST({household_id_column} AS TEXT) <> '0'"
-
-    conn.execute(text(f"""
-        INSERT OR IGNORE INTO household_onboarding (
-            household_id,
-            onboarding_status,
-            onboarding_version,
-            primary_use_case,
-            onboarding_step,
-            household_usage_mode,
-            onboarding_completed_at,
-            created_at,
-            updated_at
+    missing = _REQUIRED_ONBOARDING_COLUMNS - onboarding_columns
+    if missing:
+        raise RuntimeError(
+            f"Canonical onboarding foundation wijkt af: household_onboarding mist {sorted(missing)}. "
+            "Voer Alembic migrations uit."
         )
-        SELECT
-            CAST({household_id_column} AS TEXT),
-            'completed',
-            :onboarding_version,
-            NULL,
-            NULL,
-            NULL,
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-        FROM household_registry
-        WHERE {regular_predicate}
-    """), {"onboarding_version": ONBOARDING_VERSION})
+    _household_registry_identity_columns(conn)
 
 
 def start_new_household_onboarding(conn, household_id: str) -> HouseholdOnboardingState:

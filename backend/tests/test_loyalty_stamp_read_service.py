@@ -13,11 +13,43 @@ from app.services.loyalty_stamp_read_service import (
     list_loyalty_stamp_programs_for_household,
     list_loyalty_stamp_transactions_for_household,
 )
-from app.services.loyalty_stamp_transaction_service import ensure_loyalty_stamp_transactions_schema
+
+
+def _create_loyalty_fixture(conn) -> None:
+    conn.execute(text("""
+        CREATE TABLE loyalty_stamp_transactions (
+            id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL,
+            receipt_table_id TEXT NOT NULL,
+            receipt_line_id TEXT NOT NULL,
+            store_name TEXT,
+            stamp_program_code TEXT NOT NULL,
+            quantity REAL,
+            unit_price REAL,
+            line_total REAL,
+            transaction_type TEXT NOT NULL DEFAULT 'purchase',
+            source TEXT NOT NULL DEFAULT 'receipt_table_line',
+            purchase_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    conn.execute(text("""
+        CREATE UNIQUE INDEX idx_loyalty_stamp_transactions_receipt_line
+        ON loyalty_stamp_transactions (receipt_line_id)
+    """))
+    conn.execute(text("""
+        CREATE INDEX idx_loyalty_stamp_transactions_household_store
+        ON loyalty_stamp_transactions (household_id, store_name, purchase_at)
+    """))
+    conn.execute(text("""
+        CREATE INDEX idx_loyalty_stamp_transactions_receipt_table
+        ON loyalty_stamp_transactions (receipt_table_id)
+    """))
 
 
 def _seed_transactions(conn) -> None:
-    ensure_loyalty_stamp_transactions_schema(conn)
+    _create_loyalty_fixture(conn)
     conn.execute(
         text(
             """
