@@ -4,35 +4,53 @@ import json
 import uuid
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 
 
-BATCH_DECISIONS_SQL = """
-CREATE TABLE IF NOT EXISTS external_relation_batch_decisions (
-    id TEXT PRIMARY KEY,
-    candidate_id TEXT NOT NULL,
-    household_article_id TEXT,
-    global_product_id TEXT,
-    decision TEXT NOT NULL,
-    decision_reason TEXT,
-    created_by TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT
-)
-"""
-
-BATCH_DECISIONS_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_external_relation_batch_decisions_candidate
-ON external_relation_batch_decisions (candidate_id, household_article_id, decision)
-"""
+_REQUIRED_BATCH_DECISION_COLUMNS = {
+    "id",
+    "candidate_id",
+    "household_article_id",
+    "global_product_id",
+    "decision",
+    "decision_reason",
+    "created_by",
+    "created_at",
+    "updated_at",
+}
+_BATCH_DECISION_INDEX = "idx_external_relation_batch_decisions_candidate"
+_BATCH_DECISION_INDEX_COLUMNS = ("candidate_id", "household_article_id", "decision")
 
 
 def ensure_external_relation_batch_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text(BATCH_DECISIONS_SQL))
-        conn.execute(text(BATCH_DECISIONS_INDEX_SQL))
+    """Fail closed when the Alembic-owned relation-batch contract is incomplete."""
+    inspector = inspect(engine)
+    if not inspector.has_table("external_relation_batch_decisions"):
+        raise RuntimeError(
+            "external_relation_batch_decisions ontbreekt; voer Alembic migrations uit"
+        )
+    columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("external_relation_batch_decisions")
+    }
+    missing = _REQUIRED_BATCH_DECISION_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            "external_relation_batch_decisions schema incompleet: "
+            f"missing={sorted(missing)}"
+        )
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspector.get_indexes("external_relation_batch_decisions")
+    }
+    index = indexes.get(_BATCH_DECISION_INDEX)
+    if not index or tuple(index.get("column_names") or ()) != _BATCH_DECISION_INDEX_COLUMNS:
+        raise RuntimeError(
+            "external_relation_batch_decisions indexcontract incompleet: "
+            f"{_BATCH_DECISION_INDEX}"
+        )
 
 
 def _candidate_source_name(row: dict[str, Any]) -> str:
