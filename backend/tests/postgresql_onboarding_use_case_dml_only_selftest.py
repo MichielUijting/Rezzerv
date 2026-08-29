@@ -57,7 +57,11 @@ def _assert_schema_validation_only(engine) -> None:
         raise AssertionError("PR2k schema validation unexpectedly mutated runtime schema")
     if "household_product_use_cases" not in after_tables:
         raise AssertionError("Alembic head is missing household_product_use_cases")
-    print("POSTGRESQL_ONBOARDING_USE_CASE_SCHEMA_VALIDATION_ONLY_GREEN")
+    application_tables = after_tables - {"alembic_version"}
+    print(
+        "POSTGRESQL_ONBOARDING_USE_CASE_SCHEMA_VALIDATION_ONLY_GREEN "
+        f"application_tables={len(application_tables)}"
+    )
 
 
 def _cleanup(conn) -> None:
