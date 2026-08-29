@@ -83,9 +83,9 @@ jobs:
           python -m app.testing.external_article_product_link_contract | tee /tmp/external-link-contract.log
           grep -F 'EXTERNAL_ARTICLE_PRODUCT_LINK_CONTRACT=GREEN' /tmp/external-link-contract.log
           python -m alembic -c backend/alembic.ini current | tee /tmp/sqlite-current.log
-          grep -F '20260829_09' /tmp/sqlite-current.log
+          grep -F '20260829_10' /tmp/sqlite-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/sqlite-heads.log
-          grep -F '20260829_09' /tmp/sqlite-heads.log
+          grep -F '20260829_10' /tmp/sqlite-heads.log
 
   sqlite-existing-adoption:
     name: Existing SQLite baseline is validated and adopted
@@ -162,7 +162,7 @@ jobs:
           grep -F 'SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260829_09' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260829_10' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -358,6 +358,6 @@ jobs:
           print('POSTGRESQL_RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current | tee /tmp/postgresql-current.log
-          grep -F '20260829_09' /tmp/postgresql-current.log
+          grep -F '20260829_10' /tmp/postgresql-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/postgresql-heads.log
-          grep -F '20260829_09' /tmp/postgresql-heads.log
+          grep -F '20260829_10' /tmp/postgresql-heads.log
