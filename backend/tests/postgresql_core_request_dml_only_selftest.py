@@ -25,6 +25,7 @@ from app.services.household_product_configuration_service import (
 from app.services.loyalty_stamp_transaction_service import (
     ensure_loyalty_stamp_transactions_schema,
 )
+from app.services.platform_user_suspension_service import ensure_user_account_status_schema
 from app.services.product_inventory_group_store import (
     ensure_product_inventory_group_schema,
 )
@@ -48,6 +49,26 @@ def _assert_location_default_introspection_is_portable() -> None:
             "Location-default request path still uses SQLite-only PRAGMA schema introspection"
         )
     print("POSTGRESQL_LOCATION_DEFAULT_INTROSPECTION_PORTABLE_GREEN")
+
+
+def _assert_account_context_runtime_is_schema_mutation_free() -> None:
+    service_root = BACKEND_ROOT / "app" / "services"
+    checks = {
+        "roles_v2_schema_foundation.py": ("ALTER TABLE", "CREATE TRIGGER"),
+        "platform_user_suspension_service.py": (
+            "ALTER TABLE app_users",
+            "CREATE TABLE app_users",
+        ),
+    }
+    for filename, forbidden_tokens in checks.items():
+        source = (service_root / filename).read_text(encoding="utf-8")
+        for token in forbidden_tokens:
+            if token in source:
+                raise AssertionError(
+                    f"Runtime account-context service still contains schema mutation: "
+                    f"{filename}: {token}"
+                )
+    print("POSTGRESQL_ACCOUNT_CONTEXT_SCHEMA_MUTATION_FREE_GREEN")
 
 
 def _assert_runtime_has_no_schema_create() -> None:
@@ -74,11 +95,12 @@ def _validate_all_cutover_contracts() -> None:
     # proving that the runtime role can still perform intended data writes.
     ensure_product_inventory_group_schema()
     ensure_article_group_schema()
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         ensure_location_foundation(conn)
         ensure_household_product_configuration_foundation(conn)
         ensure_shopping_list_schema(conn)
         ensure_loyalty_stamp_transactions_schema(conn)
+        ensure_user_account_status_schema(conn)
     print("POSTGRESQL_CORE_REQUEST_SCHEMA_VALIDATION_ONLY_GREEN")
 
 
@@ -186,6 +208,7 @@ def _exercise_request_dml() -> None:
 
 def main() -> None:
     _assert_location_default_introspection_is_portable()
+    _assert_account_context_runtime_is_schema_mutation_free()
     _assert_runtime_has_no_schema_create()
     _validate_all_cutover_contracts()
     _exercise_request_dml()
