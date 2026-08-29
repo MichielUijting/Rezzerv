@@ -61,10 +61,10 @@ def _prepare_database(engine) -> None:
                 UNIQUE(household_id, user_email)
             )
         """))
+        create_server_session_contract_schema(conn)
         ensure_roles_v2_account_and_household_foundation(conn)
         install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
-        create_server_session_contract_schema(conn)
         install_household_onboarding_schema(conn)
         install_household_product_configuration_schema(conn)
 
