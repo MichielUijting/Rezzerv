@@ -19,10 +19,54 @@ from app.services.shopping_list_service import (
 )
 
 
+def _create_shopping_list_fixture(conn) -> None:
+    conn.execute(text("""
+        CREATE TABLE shopping_lists (
+            id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('active', 'completed')),
+            created_at TEXT NOT NULL,
+            completed_at TEXT,
+            completed_by TEXT
+        )
+    """))
+    conn.execute(text("""
+        CREATE UNIQUE INDEX ux_shopping_lists_household_active
+        ON shopping_lists(household_id)
+        WHERE status = 'active'
+    """))
+    conn.execute(text("""
+        CREATE TABLE shopping_list_items (
+            id TEXT PRIMARY KEY,
+            shopping_list_id TEXT NOT NULL,
+            household_id TEXT NOT NULL,
+            article_name TEXT NOT NULL,
+            article_group_name TEXT,
+            product_type_name TEXT,
+            source_type TEXT NOT NULL DEFAULT 'manual',
+            source_id TEXT,
+            quantity NUMERIC,
+            volume NUMERIC,
+            unit TEXT,
+            size TEXT,
+            note TEXT,
+            checked INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(shopping_list_id) REFERENCES shopping_lists(id)
+        )
+    """))
+    conn.execute(text("""
+        CREATE INDEX idx_shopping_list_items_active
+        ON shopping_list_items(household_id, shopping_list_id, checked, article_name)
+    """))
+
+
 def main() -> int:
     test_engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
 
     with test_engine.begin() as conn:
+        _create_shopping_list_fixture(conn)
         conn.execute(text("""
             CREATE TABLE inventory (
                 id TEXT PRIMARY KEY,
