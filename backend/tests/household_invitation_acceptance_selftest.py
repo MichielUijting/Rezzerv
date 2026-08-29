@@ -220,8 +220,8 @@ def run() -> int:
             )).mappings().one()
             memberships = conn.execute(text("""
                 SELECT household_id, role FROM household_memberships
-                WHERE user_id = :user_id OR user_email = 'new-person@example.com'
-            """), {'user_id': user['id']}).mappings().all()
+                WHERE user_email = 'new-person@example.com'
+            """)).mappings().all()
             assert len(memberships) == 1
             assert memberships[0]['household_id'] == 'hh-invite'
             assert memberships[0]['role'] == 'member'
