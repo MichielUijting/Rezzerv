@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.pool import StaticPool
 
 from app.api.platform_users_routes import PLATFORM_USERS_SUSPEND_PERMISSION
@@ -26,13 +26,15 @@ def _engine():
     )
 
 
-def _create_legacy_users(conn):
+def _create_canonical_users(conn):
     conn.execute(text("""
         CREATE TABLE app_users (
             id TEXT PRIMARY KEY,
             email TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
             password_hash TEXT,
+            account_status TEXT NOT NULL DEFAULT 'active',
+            suspended_at TIMESTAMP NULL,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
@@ -82,14 +84,14 @@ def test_platform_users_permission_matrix_is_existing_canonical_matrix():
     assert PLATFORM_USERS_SUSPEND_PERMISSION not in ROLE_PERMISSIONS["household.owner"]
 
 
-def test_account_status_schema_migrates_existing_users_to_active():
+def test_account_status_schema_validates_canonical_users_as_active():
     engine = _engine()
     with engine.begin() as conn:
-        _create_legacy_users(conn)
+        _create_canonical_users(conn)
         _insert_user(conn, "user-a", "a@example.test")
         ensure_user_account_status_schema(conn)
 
-        columns = {column["name"] for column in conn.exec_driver_sql("PRAGMA table_info('app_users')").mappings()}
+        columns = {column["name"] for column in inspect(conn).get_columns("app_users")}
         assert "account_status" in columns
         assert "suspended_at" in columns
         row = conn.execute(text("""
@@ -103,7 +105,7 @@ def test_user_inventory_is_read_only_safe_projection():
     engine = _engine()
     now = datetime(2026, 8, 24, 19, 30, tzinfo=timezone.utc)
     with engine.begin() as conn:
-        _create_legacy_users(conn)
+        _create_canonical_users(conn)
         _insert_user(conn, "actor", "actor@example.test")
         _insert_user(conn, "target", "target@example.test")
         ensure_user_account_status_schema(conn)
@@ -141,7 +143,7 @@ def test_suspend_is_atomic_account_authority_and_revokes_all_active_sessions():
     engine = _engine()
     now = datetime(2026, 8, 24, 19, 45, tzinfo=timezone.utc)
     with engine.begin() as conn:
-        _create_legacy_users(conn)
+        _create_canonical_users(conn)
         _insert_user(conn, "actor", "actor@example.test")
         _insert_user(conn, "target", "target@example.test")
         ensure_user_account_status_schema(conn)
@@ -177,7 +179,7 @@ def test_suspend_rejects_self_and_already_suspended_target():
     engine = _engine()
     now = datetime(2026, 8, 24, 20, 0, tzinfo=timezone.utc)
     with engine.begin() as conn:
-        _create_legacy_users(conn)
+        _create_canonical_users(conn)
         _insert_user(conn, "actor", "actor@example.test")
         _insert_user(conn, "target", "target@example.test")
         ensure_user_account_status_schema(conn)
@@ -196,7 +198,7 @@ def test_installed_login_guard_rejects_valid_suspended_identity(monkeypatch):
 
     engine = _engine()
     with engine.begin() as conn:
-        _create_legacy_users(conn)
+        _create_canonical_users(conn)
         _insert_user(conn, "target", "target@example.test")
         ensure_user_account_status_schema(conn)
         conn.execute(text("""
