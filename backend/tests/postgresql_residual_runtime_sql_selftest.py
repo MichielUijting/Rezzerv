@@ -83,7 +83,7 @@ def _assert_no_hard_postgresql_blockers(paths: tuple[Path, ...]) -> None:
     failures: list[str] = []
     scanned_literals = 0
     for path in paths:
-        source = path.read_text(encoding="utf-8")
+        source = path.read_text(encoding="utf-8-sig")
         for lineno, sql in _sql_like_literals(source):
             scanned_literals += 1
             for label, pattern in FORBIDDEN_SQL_PATTERNS.items():
