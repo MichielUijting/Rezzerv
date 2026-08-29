@@ -1,0 +1,244 @@
+name: PR2h candidate authority rewrite
+
+on:
+  push:
+    branches:
+      - codex/postgresql-external-catalog-link-request-schema-authority-cutover
+    paths:
+      - .github/workflows/pr2h-candidate-authority-rewrite.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rewrite external candidate store
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("backend/app/services/external_product_candidate_store.py")
+          source = path.read_text(encoding="utf-8")
+
+          old_import = "from sqlalchemy import text"
+          if source.count(old_import) != 1:
+              raise SystemExit(f"expected one sqlalchemy text import, found {source.count(old_import)}")
+          source = source.replace(old_import, "from sqlalchemy import inspect, text", 1)
+
+          schema_pattern = re.compile(
+              r"CANDIDATE_COLUMNS: dict\[str, str\] = \{.*?\n\ndef _candidate_identity",
+              re.DOTALL,
+          )
+          schema_replacement = '''_REQUIRED_CANDIDATE_COLUMNS = {
+              "id",
+              "receipt_line_id",
+              "purchase_import_line_id",
+              "context_key",
+              "retailer_code",
+              "receipt_line_text",
+              "candidate_name",
+              "candidate_brand",
+              "candidate_category",
+              "candidate_source_name",
+              "candidate_source_product_code",
+              "candidate_source_url",
+              "source_name",
+              "source_product_code",
+              "retailer_article_number",
+              "quantity_label",
+              "variant",
+              "source_url",
+              "score",
+              "score_breakdown_json",
+              "raw_payload",
+              "global_product_id",
+              "status",
+              "candidate_status",
+              "is_probable",
+              "is_user_confirmed",
+              "is_external_database_override",
+              "created_by",
+              "created_at",
+              "updated_at",
+          }
+          _CANDIDATE_CONTEXT_INDEX = "idx_external_product_candidates_context"
+          _CANDIDATE_CONTEXT_INDEX_COLUMNS = (
+              "context_key",
+              "retailer_code",
+              "candidate_source_name",
+              "candidate_source_product_code",
+              "variant",
+          )
+
+
+          def now_iso() -> str:
+              return datetime.now(timezone.utc).isoformat()
+
+
+          def normalize_candidate_text(value: str | None) -> str:
+              return " ".join(str(value or "").strip().lower().split())
+
+
+          def build_candidate_context_key(retailer_code: str, receipt_line_text: str, receipt_line_id: str | None = None, purchase_import_line_id: str | None = None) -> str:
+              if receipt_line_id:
+                  return f"receipt-line:{receipt_line_id}"
+              if purchase_import_line_id:
+                  return f"purchase-import-line:{purchase_import_line_id}"
+              return f"external-preview:{normalize_candidate_text(retailer_code)}:{normalize_candidate_text(receipt_line_text)}"
+
+
+          def build_preview_import_line_fallback(context_key: str) -> str:
+              return f"preview:{context_key}"
+
+
+          def ensure_external_product_candidates_schema() -> None:
+              """Validate the Alembic-owned external candidate schema; never mutate it."""
+              inspector = inspect(engine)
+              if not inspector.has_table("external_product_candidates"):
+                  raise RuntimeError(
+                      "external_product_candidates ontbreekt; voer Alembic migrations uit"
+                  )
+              columns = {
+                  str(column.get("name") or "")
+                  for column in inspector.get_columns("external_product_candidates")
+              }
+              missing = _REQUIRED_CANDIDATE_COLUMNS - columns
+              if missing:
+                  raise RuntimeError(
+                      "external_product_candidates schema incompleet: "
+                      f"missing={sorted(missing)}"
+                  )
+              indexes = {
+                  str(index.get("name") or ""): index
+                  for index in inspector.get_indexes("external_product_candidates")
+              }
+              index = indexes.get(_CANDIDATE_CONTEXT_INDEX)
+              if not index or tuple(index.get("column_names") or ()) != _CANDIDATE_CONTEXT_INDEX_COLUMNS:
+                  raise RuntimeError(
+                      "external_product_candidates indexcontract incompleet: "
+                      f"{_CANDIDATE_CONTEXT_INDEX}"
+                  )
+
+
+          def _candidate_identity'''
+          source, count = schema_pattern.subn(schema_replacement, source, count=1)
+          if count != 1:
+              raise SystemExit(f"candidate schema authority block replacement count={count}")
+
+          helper_pattern = re.compile(
+              r"def _table_exists\(conn, table_name: str\) -> bool:.*?\n\ndef _first_existing_column",
+              re.DOTALL,
+          )
+          helper_replacement = '''def _table_exists(conn, table_name: str) -> bool:
+              return bool(inspect(conn).has_table(table_name))
+
+
+          def _table_columns(conn, table_name: str) -> set[str]:
+              inspector = inspect(conn)
+              if not inspector.has_table(table_name):
+                  return set()
+              return {
+                  str(column.get("name") or "")
+                  for column in inspector.get_columns(table_name)
+              }
+
+
+          def _first_existing_column'''
+          source, count = helper_pattern.subn(helper_replacement, source, count=1)
+          if count != 1:
+              raise SystemExit(f"generic inspector helper replacement count={count}")
+
+          m2c2h5_pattern = re.compile(
+              r"def _m2c2h5_table_columns\(conn, table_name: str\) -> set\[str\]:.*?\n\ndef _m2c2h5_col",
+              re.DOTALL,
+          )
+          m2c2h5_replacement = '''def _m2c2h5_table_columns(conn, table_name: str) -> set[str]:
+              inspector = inspect(conn)
+              if not inspector.has_table(table_name):
+                  return set()
+              return {
+                  str(column.get("name") or "")
+                  for column in inspector.get_columns(table_name)
+              }
+
+
+          def _m2c2h5_table_exists(conn, table_name: str) -> bool:
+              return bool(inspect(conn).has_table(table_name))
+
+
+          def _m2c2h5_col'''
+          source, count = m2c2h5_pattern.subn(m2c2h5_replacement, source, count=1)
+          if count != 1:
+              raise SystemExit(f"m2c2h5 inspector helper replacement count={count}")
+
+          exact_replacements = {
+              '"is_probable": 1 if bool(candidate.get("is_probable")) else 0,':
+                  '"is_probable": bool(candidate.get("is_probable")),',
+              '"is_user_confirmed": 0,\n                "is_external_database_override": 0,\n                "created_by"':
+                  '"is_user_confirmed": False,\n                "is_external_database_override": False,\n                "created_by"',
+              ':source, 1.0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :global_product_id':
+                  ':source, 1.0, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :global_product_id',
+          }
+          for old, new in exact_replacements.items():
+              occurrences = source.count(old)
+              if occurrences != 1:
+                  raise SystemExit(f"expected one exact replacement for {old!r}, found {occurrences}")
+              source = source.replace(old, new, 1)
+
+          boolean_sql_replacements = {
+              "is_user_confirmed = 1": "is_user_confirmed = TRUE",
+              "is_user_confirmed = 0": "is_user_confirmed = FALSE",
+              "is_external_database_override = 1": "is_external_database_override = TRUE",
+              "is_external_database_override = 0": "is_external_database_override = FALSE",
+          }
+          replacement_counts = {}
+          for old, new in boolean_sql_replacements.items():
+              replacement_counts[old] = source.count(old)
+              source = source.replace(old, new)
+
+          if replacement_counts["is_user_confirmed = 1"] < 4:
+              raise SystemExit(f"unexpected user-confirmed true replacement count: {replacement_counts}")
+          if replacement_counts["is_user_confirmed = 0"] < 3:
+              raise SystemExit(f"unexpected user-confirmed false replacement count: {replacement_counts}")
+          if replacement_counts["is_external_database_override = 1"] < 2:
+              raise SystemExit(f"unexpected override true replacement count: {replacement_counts}")
+          if replacement_counts["is_external_database_override = 0"] < 3:
+              raise SystemExit(f"unexpected override false replacement count: {replacement_counts}")
+
+          for forbidden in (
+              "CREATE TABLE",
+              "CREATE INDEX",
+              "ALTER TABLE",
+              "PRAGMA",
+              "sqlite_master",
+              "information_schema",
+          ):
+              if forbidden in source:
+                  raise SystemExit(f"forbidden runtime schema/introspection token remains: {forbidden}")
+
+          if re.search(r"is_(?:user_confirmed|external_database_override)\s*=\s*[01]\b", source):
+              raise SystemExit("integer literal remains for PostgreSQL BOOLEAN candidate flag")
+
+          path.write_text(source, encoding="utf-8")
+
+          workflow = Path(".github/workflows/pr2h-candidate-authority-rewrite.yml")
+          workflow.unlink()
+          PY
+
+      - name: Commit candidate authority cutover
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/services/external_product_candidate_store.py .github/workflows/pr2h-candidate-authority-rewrite.yml
+          git diff --cached --check
+          git commit -m "Make external candidate schema authority validation-only"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
