@@ -16,8 +16,10 @@ on:
       - 'backend/app/testing/receipt_lifecycle_contract.py'
       - 'backend/requirements.txt'
       - 'backend/tests/capture_schema_baseline.py'
+      - 'backend/tests/migration_foundation_core_selftest.py'
       - 'backend/tests/migration_foundation_selftest.py'
       - 'backend/tests/postgresql_authorization_sql_portability_selftest.py'
+      - 'backend/tests/postgresql_day_article_direct_sql_authority_selftest.py'
       - 'backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py'
       - 'backend/tests/postgresql_gpc_residual_sql_authority_selftest.py'
       - 'backend/tests/postgresql_inventory_writer_selftest.py'
@@ -63,13 +65,17 @@ jobs:
           grep -F 'SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_GPC_RESIDUAL_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
+          grep -F 'SQLITE_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_12_GREEN' /tmp/migration-sqlite.log
           python backend/tests/postgresql_authorization_sql_portability_selftest.py | tee /tmp/authorization-static.log
           grep -F 'POSTGRESQL_AUTHORIZATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/authorization-static.log
           python backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py | tee /tmp/gpc-barcode-static.log
           grep -F 'POSTGRESQL_GPC_BARCODE_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-barcode-static.log
           python backend/tests/postgresql_gpc_residual_sql_authority_selftest.py | tee /tmp/gpc-residual-static.log
           grep -F 'POSTGRESQL_GPC_RESIDUAL_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-static.log
+          python backend/tests/postgresql_day_article_direct_sql_authority_selftest.py | tee /tmp/day-article-direct-static.log
+          grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/day-article-direct-static.log
           python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority.log
           grep -F 'SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN' /tmp/schema-authority.log
           grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority.log
@@ -87,9 +93,9 @@ jobs:
           python -m app.testing.external_article_product_link_contract | tee /tmp/external-link-contract.log
           grep -F 'EXTERNAL_ARTICLE_PRODUCT_LINK_CONTRACT=GREEN' /tmp/external-link-contract.log
           python -m alembic -c backend/alembic.ini current | tee /tmp/sqlite-current.log
-          grep -F '20260829_11' /tmp/sqlite-current.log
+          grep -F '20260829_12' /tmp/sqlite-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/sqlite-heads.log
-          grep -F '20260829_11' /tmp/sqlite-heads.log
+          grep -F '20260829_12' /tmp/sqlite-heads.log
 
   sqlite-existing-adoption:
     name: Existing SQLite baseline is validated and adopted
@@ -163,18 +169,24 @@ jobs:
           grep -F -- '-- table: global_product_gpc_migration_suppressions (table=global_product_gpc_migration_suppressions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: gpc_translations (table=gpc_translations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: gpc_translation_import_runs (table=gpc_translation_import_runs)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: day_article_processing_events (table=day_article_processing_events)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_gpc_families_segment (table=gpc_families)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_gpc_classes_family (table=gpc_classes)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_gpc_bricks_class (table=gpc_bricks)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_global_product_gpc_brick_code (table=global_product_gpc_bricks)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_gpc_translation_language (table=gpc_translations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- index: idx_gpc_product_groups_hierarchy (table=gpc_product_groups)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- index: idx_spaces_household_system_key (table=spaces)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- index: idx_sublocations_space_system_key (table=sublocations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- index: idx_day_article_events_article (table=day_article_processing_events)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_GPC_RESIDUAL_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'SQLITE_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'MIGRATION_FOUNDATION_REVISION_12_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260829_11' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260829_12' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -225,14 +237,18 @@ jobs:
           grep -F 'POSTGRESQL_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_GPC_RESIDUAL_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
+          grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_AUTHORIZATION_BOOLEAN_SCHEMA_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_12_GREEN' /tmp/migration-postgresql.log
           python backend/tests/postgresql_authorization_sql_portability_selftest.py | tee /tmp/authorization-static.log
           grep -F 'POSTGRESQL_AUTHORIZATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/authorization-static.log
           python backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py | tee /tmp/gpc-barcode-static.log
           grep -F 'POSTGRESQL_GPC_BARCODE_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-barcode-static.log
           python backend/tests/postgresql_gpc_residual_sql_authority_selftest.py | tee /tmp/gpc-residual-static.log
           grep -F 'POSTGRESQL_GPC_RESIDUAL_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-static.log
+          python backend/tests/postgresql_day_article_direct_sql_authority_selftest.py | tee /tmp/day-article-direct-static.log
+          grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/day-article-direct-static.log
           python backend/tests/postgresql_inventory_writer_selftest.py | tee /tmp/postgresql-inventory-review.log
           grep -F 'POSTGRESQL_INVENTORY_WRITER_FALLBACK_GREEN' /tmp/postgresql-inventory-review.log
           grep -F 'POSTGRESQL_LOCATIONLESS_PREDICATE_DRIFT_REJECTED_GREEN' /tmp/postgresql-inventory-review.log
@@ -285,6 +301,7 @@ jobs:
               'global_product_gpc_migration_suppressions',
               'gpc_translations',
               'gpc_translation_import_runs',
+              'day_article_processing_events',
           ):
               assert table_name in tables, table_name
 
@@ -300,6 +317,8 @@ jobs:
               ('auth_roles', 'active'),
               ('auth_membership_roles', 'active'),
               ('auth_platform_user_roles', 'active'),
+              ('spaces', 'protected'),
+              ('sublocations', 'protected'),
           ):
               auth_column = next(
                   item for item in inspector.get_columns(table_name)
@@ -381,11 +400,12 @@ jobs:
           print('POSTGRESQL_EXTERNAL_CATALOG_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_GPC_BARCODE_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_GPC_RESIDUAL_MIGRATION_AUTHORITY_GREEN')
+          print('POSTGRESQL_DAY_ARTICLE_DIRECT_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_AUTHORIZATION_BOOLEAN_MIGRATION_AUTHORITY_GREEN')
           print('POSTGRESQL_SERVER_SESSION_SCHEMA_AUTHORITY_GREEN')
           print('POSTGRESQL_RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current | tee /tmp/postgresql-current.log
-          grep -F '20260829_11' /tmp/postgresql-current.log
+          grep -F '20260829_12' /tmp/postgresql-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/postgresql-heads.log
-          grep -F '20260829_11' /tmp/postgresql-heads.log
+          grep -F '20260829_12' /tmp/postgresql-heads.log
