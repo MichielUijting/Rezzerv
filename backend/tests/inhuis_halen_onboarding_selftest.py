@@ -35,6 +35,7 @@ def _prepare_database(engine) -> None:
             CREATE TABLE household_registry (
                 id TEXT PRIMARY KEY,
                 naam TEXT NOT NULL,
+                context_type TEXT NOT NULL DEFAULT 'regular',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """))
@@ -43,6 +44,8 @@ def _prepare_database(engine) -> None:
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
+                account_status TEXT NOT NULL DEFAULT 'active',
+                password_hash TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -61,9 +64,9 @@ def _prepare_database(engine) -> None:
         ensure_roles_v2_account_and_household_foundation(conn)
         install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
-        create_server_session_contract_schema(conn)
         install_household_onboarding_schema(conn)
         install_household_product_configuration_schema(conn)
+        create_server_session_contract_schema(conn)
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type)
             VALUES ('shared-household', 'Gedeeld huishouden', 'regular')
