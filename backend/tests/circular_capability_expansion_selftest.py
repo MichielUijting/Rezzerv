@@ -23,10 +23,6 @@ from app.services.household_product_use_case_service import (
     activate_household_product_use_case,
     resolve_active_household_product_use_cases,
 )
-from app.testing.onboarding_request_schema_fixture import (
-    install_household_product_configuration_schema,
-    install_location_schema,
-)
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -71,8 +67,6 @@ def run() -> None:
     temp_dir = tempfile.TemporaryDirectory()
     engine = _migrated_sqlite_engine(Path(temp_dir.name) / "circular-capability.sqlite")
     with engine.begin() as conn:
-        install_household_product_configuration_schema(conn)
-        install_location_schema(conn)
         initial = save_inhuis_halen_configuration(
             conn,
             household_id="h1",
