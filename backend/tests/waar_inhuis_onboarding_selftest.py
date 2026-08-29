@@ -22,6 +22,12 @@ from app.services.household_onboarding_service import (
 )
 from app.services.household_product_configuration_service import resolve_household_product_configuration
 from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
+from app.testing.onboarding_request_schema_fixture import (
+    backfill_completed_household_onboarding,
+    install_household_onboarding_schema,
+    install_household_product_configuration_schema,
+    install_location_schema,
+)
 from app.testing.server_session_contract import create_server_session_contract_schema
 
 
@@ -54,24 +60,13 @@ def _prepare_database(engine) -> None:
                 UNIQUE(household_id, user_email)
             )
         """))
-        conn.execute(text("""
-            CREATE TABLE household_product_configuration (
-                household_id TEXT PRIMARY KEY,
-                inventory_tracking_level TEXT NOT NULL,
-                location_tracking_level TEXT NOT NULL,
-                shopping_enabled INTEGER NOT NULL DEFAULT 0,
-                almost_out_enabled INTEGER NOT NULL DEFAULT 0,
-                almost_out_notifications_enabled INTEGER NOT NULL DEFAULT 0,
-                receipt_processing_enabled INTEGER NOT NULL DEFAULT 0,
-                recipes_enabled INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
         ensure_roles_v2_account_and_household_foundation(conn)
         install_authorization_schema(conn)
         ensure_authorization_foundation(conn)
         create_server_session_contract_schema(conn)
+        install_household_onboarding_schema(conn)
+        install_household_product_configuration_schema(conn)
+        install_location_schema(conn)
         conn.execute(text("""
             INSERT INTO household_registry(id, naam, context_type)
             VALUES ('shared-household', 'Gedeeld huishouden', 'regular')
@@ -100,6 +95,7 @@ def _prepare_database(engine) -> None:
             membership_id="shared-member-membership",
             legacy_role="member",
         )
+        backfill_completed_household_onboarding(conn)
         ensure_household_onboarding_foundation(conn)
         conn.execute(text("""
             UPDATE household_onboarding
