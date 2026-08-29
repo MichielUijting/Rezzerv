@@ -1,0 +1,302 @@
+"""Complete onboarding product/direct-location request schema authority.
+
+Revision ID: 20260829_06
+Revises: 20260829_05
+Create Date: 2026-08-29
+"""
+from __future__ import annotations
+
+from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "20260829_06"
+down_revision: Union[str, None] = "20260829_05"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+_PRODUCT_CONFIG = "household_product_configuration"
+_SPACES = "spaces"
+_DIRECT_INDEX = "ux_spaces_household_direct"
+_DIRECT_UPDATE_TRIGGER = "trg_spaces_direct_immutable_update"
+_DIRECT_DELETE_TRIGGER = "trg_spaces_direct_immutable_delete"
+_DIRECT_GUARD_FUNCTION = "rezzerv_spaces_direct_immutable_guard"
+
+_PRODUCT_CONFIG_COLUMNS = {
+    "household_id",
+    "inventory_tracking_level",
+    "location_tracking_level",
+    "shopping_enabled",
+    "almost_out_enabled",
+    "almost_out_notifications_enabled",
+    "receipt_processing_enabled",
+    "recipes_enabled",
+    "unpacking_enabled",
+    "created_at",
+    "updated_at",
+}
+_PRODUCT_CONFIG_LEGACY_COLUMNS = _PRODUCT_CONFIG_COLUMNS - {"unpacking_enabled"}
+_SPACE_DIRECT_COLUMNS = {"id", "naam", "household_id", "active", "is_direct"}
+
+
+def _columns(bind: sa.engine.Connection, table_name: str) -> set[str]:
+    return {
+        str(column.get("name") or "")
+        for column in sa.inspect(bind).get_columns(table_name)
+    }
+
+
+def _ensure_product_configuration(bind: sa.engine.Connection) -> None:
+    inspector = sa.inspect(bind)
+    if not inspector.has_table(_PRODUCT_CONFIG):
+        op.create_table(
+            _PRODUCT_CONFIG,
+            sa.Column("household_id", sa.Text(), primary_key=True),
+            sa.Column("inventory_tracking_level", sa.Text(), nullable=False),
+            sa.Column("location_tracking_level", sa.Text(), nullable=False),
+            sa.Column("shopping_enabled", sa.Integer(), nullable=False, server_default=sa.text("0")),
+            sa.Column("almost_out_enabled", sa.Integer(), nullable=False, server_default=sa.text("0")),
+            sa.Column(
+                "almost_out_notifications_enabled",
+                sa.Integer(),
+                nullable=False,
+                server_default=sa.text("0"),
+            ),
+            sa.Column(
+                "receipt_processing_enabled",
+                sa.Integer(),
+                nullable=False,
+                server_default=sa.text("0"),
+            ),
+            sa.Column("recipes_enabled", sa.Integer(), nullable=False, server_default=sa.text("0")),
+            sa.Column("unpacking_enabled", sa.Integer(), nullable=False, server_default=sa.text("0")),
+            sa.Column("created_at", sa.Text(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+            sa.Column("updated_at", sa.Text(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+            sa.CheckConstraint(
+                "inventory_tracking_level IN ('none', 'presence', 'quantity')",
+                name="ck_household_product_configuration_inventory_tracking",
+            ),
+            sa.CheckConstraint(
+                "location_tracking_level IN ('none', 'global', 'exact')",
+                name="ck_household_product_configuration_location_tracking",
+            ),
+            sa.CheckConstraint(
+                "shopping_enabled IN (0, 1)",
+                name="ck_household_product_configuration_shopping_enabled",
+            ),
+            sa.CheckConstraint(
+                "almost_out_enabled IN (0, 1)",
+                name="ck_household_product_configuration_almost_out_enabled",
+            ),
+            sa.CheckConstraint(
+                "almost_out_notifications_enabled IN (0, 1)",
+                name="ck_household_product_configuration_almost_out_notifications_enabled",
+            ),
+            sa.CheckConstraint(
+                "receipt_processing_enabled IN (0, 1)",
+                name="ck_household_product_configuration_receipt_processing_enabled",
+            ),
+            sa.CheckConstraint(
+                "recipes_enabled IN (0, 1)",
+                name="ck_household_product_configuration_recipes_enabled",
+            ),
+            sa.CheckConstraint(
+                "unpacking_enabled IN (0, 1)",
+                name="ck_household_product_configuration_unpacking_enabled",
+            ),
+        )
+        return
+
+    columns = _columns(bind, _PRODUCT_CONFIG)
+    missing_legacy = _PRODUCT_CONFIG_LEGACY_COLUMNS - columns
+    if missing_legacy:
+        raise RuntimeError(
+            "household_product_configuration legacy contract mist kolommen: "
+            f"{sorted(missing_legacy)}"
+        )
+    if "unpacking_enabled" not in columns:
+        op.add_column(
+            _PRODUCT_CONFIG,
+            sa.Column(
+                "unpacking_enabled",
+                sa.Integer(),
+                nullable=False,
+                server_default=sa.text("0"),
+            ),
+        )
+
+
+def _ensure_direct_location_schema(bind: sa.engine.Connection) -> None:
+    inspector = sa.inspect(bind)
+    if not inspector.has_table(_SPACES):
+        raise RuntimeError("spaces ontbreekt; Direct-location authority kan niet worden geadopteerd")
+
+    columns = _columns(bind, _SPACES)
+    required_legacy = _SPACE_DIRECT_COLUMNS - {"is_direct"}
+    missing_legacy = required_legacy - columns
+    if missing_legacy:
+        raise RuntimeError(f"spaces legacy contract mist kolommen: {sorted(missing_legacy)}")
+    if "is_direct" not in columns:
+        op.add_column(
+            _SPACES,
+            sa.Column("is_direct", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        )
+
+    inspector = sa.inspect(bind)
+    indexes = {str(index.get("name") or ""): index for index in inspector.get_indexes(_SPACES)}
+    direct_index = indexes.get(_DIRECT_INDEX)
+    if direct_index is None:
+        index_kwargs: dict[str, object] = {}
+        if bind.dialect.name == "sqlite":
+            index_kwargs["sqlite_where"] = sa.text("is_direct = 1")
+        elif bind.dialect.name == "postgresql":
+            index_kwargs["postgresql_where"] = sa.text("is_direct = 1")
+        op.create_index(
+            _DIRECT_INDEX,
+            _SPACES,
+            ["household_id"],
+            unique=True,
+            **index_kwargs,
+        )
+    else:
+        if not bool(direct_index.get("unique")) or tuple(direct_index.get("column_names") or ()) != (
+            "household_id",
+        ):
+            raise RuntimeError(f"{_DIRECT_INDEX} wijkt af van het canonical Direct-location contract")
+
+    if bind.dialect.name == "sqlite":
+        bind.execute(sa.text(f"""
+            CREATE TRIGGER IF NOT EXISTS {_DIRECT_UPDATE_TRIGGER}
+            BEFORE UPDATE OF naam, active ON spaces
+            FOR EACH ROW
+            WHEN OLD.is_direct = 1
+              AND (
+                lower(trim(COALESCE(NEW.naam, ''))) <> 'direct'
+                OR COALESCE(NEW.active, 1) <> 1
+              )
+            BEGIN
+                SELECT RAISE(ABORT, 'Direct is een vaste locatie');
+            END
+        """))
+        bind.execute(sa.text(f"""
+            CREATE TRIGGER IF NOT EXISTS {_DIRECT_DELETE_TRIGGER}
+            BEFORE DELETE ON spaces
+            FOR EACH ROW
+            WHEN OLD.is_direct = 1
+            BEGIN
+                SELECT RAISE(ABORT, 'Direct is een vaste locatie');
+            END
+        """))
+    else:
+        bind.execute(sa.text(f"""
+            CREATE OR REPLACE FUNCTION {_DIRECT_GUARD_FUNCTION}()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    RAISE EXCEPTION 'Direct is een vaste locatie';
+                END IF;
+                IF lower(trim(COALESCE(NEW.naam, ''))) <> 'direct'
+                   OR lower(COALESCE(NEW.active::text, 'true')) NOT IN ('1', 't', 'true') THEN
+                    RAISE EXCEPTION 'Direct is een vaste locatie';
+                END IF;
+                RETURN NEW;
+            END;
+            $$
+        """))
+        bind.execute(sa.text(f"DROP TRIGGER IF EXISTS {_DIRECT_UPDATE_TRIGGER} ON spaces"))
+        bind.execute(sa.text(f"""
+            CREATE TRIGGER {_DIRECT_UPDATE_TRIGGER}
+            BEFORE UPDATE OF naam, active ON spaces
+            FOR EACH ROW
+            WHEN (OLD.is_direct = 1)
+            EXECUTE FUNCTION {_DIRECT_GUARD_FUNCTION}()
+        """))
+        bind.execute(sa.text(f"DROP TRIGGER IF EXISTS {_DIRECT_DELETE_TRIGGER} ON spaces"))
+        bind.execute(sa.text(f"""
+            CREATE TRIGGER {_DIRECT_DELETE_TRIGGER}
+            BEFORE DELETE ON spaces
+            FOR EACH ROW
+            WHEN (OLD.is_direct = 1)
+            EXECUTE FUNCTION {_DIRECT_GUARD_FUNCTION}()
+        """))
+
+
+def _validate_contract(bind: sa.engine.Connection) -> None:
+    inspector = sa.inspect(bind)
+    if not inspector.has_table(_PRODUCT_CONFIG):
+        raise RuntimeError("Canonical productconfiguratie ontbreekt")
+    missing_product_columns = _PRODUCT_CONFIG_COLUMNS - _columns(bind, _PRODUCT_CONFIG)
+    if missing_product_columns:
+        raise RuntimeError(
+            "household_product_configuration mist canonical kolommen: "
+            f"{sorted(missing_product_columns)}"
+        )
+
+    if not inspector.has_table(_SPACES):
+        raise RuntimeError("Canonical spaces-tabel ontbreekt")
+    missing_space_columns = _SPACE_DIRECT_COLUMNS - _columns(bind, _SPACES)
+    if missing_space_columns:
+        raise RuntimeError(f"spaces mist Direct-location kolommen: {sorted(missing_space_columns)}")
+
+    indexes = {str(index.get("name") or ""): index for index in inspector.get_indexes(_SPACES)}
+    direct_index = indexes.get(_DIRECT_INDEX)
+    if not direct_index or not bool(direct_index.get("unique")):
+        raise RuntimeError(f"Canonical Direct-location index ontbreekt: {_DIRECT_INDEX}")
+    if tuple(direct_index.get("column_names") or ()) != ("household_id",):
+        raise RuntimeError(f"Canonical Direct-location index wijkt af: {_DIRECT_INDEX}")
+
+    if bind.dialect.name == "sqlite":
+        triggers = {
+            str(row[0])
+            for row in bind.execute(sa.text("""
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'trigger'
+                  AND name IN (
+                    'trg_spaces_direct_immutable_update',
+                    'trg_spaces_direct_immutable_delete'
+                  )
+            """)).all()
+        }
+    else:
+        triggers = {
+            str(row[0])
+            for row in bind.execute(sa.text("""
+                SELECT t.tgname
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = current_schema()
+                  AND c.relname = 'spaces'
+                  AND NOT t.tgisinternal
+                  AND t.tgname IN (
+                    'trg_spaces_direct_immutable_update',
+                    'trg_spaces_direct_immutable_delete'
+                  )
+            """)).all()
+        }
+    expected_triggers = {_DIRECT_UPDATE_TRIGGER, _DIRECT_DELETE_TRIGGER}
+    if triggers != expected_triggers:
+        raise RuntimeError(
+            "Canonical Direct-location immutability guards ontbreken: "
+            f"expected={sorted(expected_triggers)} actual={sorted(triggers)}"
+        )
+
+
+def upgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name not in {"sqlite", "postgresql"}:
+        raise RuntimeError(f"Unsupported Rezzerv migration dialect: {bind.dialect.name}")
+    _ensure_product_configuration(bind)
+    _ensure_direct_location_schema(bind)
+    _validate_contract(bind)
+
+
+def downgrade() -> None:
+    raise RuntimeError(
+        "The onboarding product/direct-location authority revision is intentionally "
+        "non-destructive and cannot be downgraded."
+    )
