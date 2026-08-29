@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import uuid
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
+
+_REQUIRED_SPACE_COLUMNS = {"id", "naam", "household_id", "active"}
+_REQUIRED_SUBLOCATION_COLUMNS = {"id", "naam", "space_id", "active"}
 
 
 @dataclass(frozen=True)
@@ -30,22 +33,27 @@ def _normalize_name(value: str, *, label: str) -> str:
 
 
 def ensure_location_foundation(conn) -> None:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS spaces (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            household_id TEXT,
-            active INTEGER NOT NULL DEFAULT 1
-        )
-    """))
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS sublocations (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            space_id TEXT,
-            active INTEGER NOT NULL DEFAULT 1
-        )
-    """))
+    """Validate the Alembic-owned location foundation without schema mutation."""
+    inspector = inspect(conn)
+    for table_name, required_columns in (
+        ("spaces", _REQUIRED_SPACE_COLUMNS),
+        ("sublocations", _REQUIRED_SUBLOCATION_COLUMNS),
+    ):
+        if not inspector.has_table(table_name):
+            raise RuntimeError(
+                f"Canonical location foundation mist {table_name}. "
+                "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
+            )
+        actual_columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns(table_name)
+        }
+        missing = required_columns - actual_columns
+        if missing:
+            raise RuntimeError(
+                f"Canonical location foundation wijkt af: {table_name} mist {sorted(missing)}. "
+                "Voer Alembic migrations uit."
+            )
 
 
 def _resolve_or_create_space(conn, *, household_id: str, name: str) -> ProvisionedSpace:
