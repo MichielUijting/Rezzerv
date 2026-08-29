@@ -45,43 +45,48 @@ def _require_gpc_tables() -> None:
 
 
 def _ensure_assignment_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS global_product_gpc_bricks (
-                global_product_id TEXT PRIMARY KEY,
-                brick_code VARCHAR(8) NOT NULL,
-                assignment_source TEXT NOT NULL DEFAULT 'manual_catalog_detail',
-                confidence REAL NOT NULL DEFAULT 1.0,
-                migrated_from TEXT,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (global_product_id) REFERENCES global_products(id),
-                FOREIGN KEY (brick_code) REFERENCES gpc_bricks(brick_code)
-            )
-        """))
-        existing_columns = {
-            str(row[1])
-            for row in conn.execute(text("PRAGMA table_info(global_product_gpc_bricks)")).fetchall()
-        }
-        for column, definition in (
-            ("assignment_source", "TEXT NOT NULL DEFAULT 'manual_catalog_detail'"),
-            ("confidence", "REAL NOT NULL DEFAULT 1.0"),
-            ("migrated_from", "TEXT"),
-        ):
-            if column not in existing_columns:
-                conn.execute(text(
-                    f"ALTER TABLE global_product_gpc_bricks ADD COLUMN {column} {definition}"
-                ))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_global_product_gpc_brick_code "
-            "ON global_product_gpc_bricks(brick_code)"
-        ))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS global_product_gpc_migration_suppressions (
-                global_product_id TEXT PRIMARY KEY,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (global_product_id) REFERENCES global_products(id)
-            )
-        """))
+    inspector = inspect(engine)
+    required_tables = {
+        "global_product_gpc_bricks",
+        "global_product_gpc_migration_suppressions",
+    }
+    missing_tables = sorted(required_tables - set(inspector.get_table_names()))
+    if missing_tables:
+        raise RuntimeError(
+            "Canonical catalog GPC assignment schema ontbreekt: "
+            + ", ".join(missing_tables)
+            + ". Voer Alembic migrations uit."
+        )
+    assignment_columns = {
+        "global_product_id",
+        "brick_code",
+        "assignment_source",
+        "confidence",
+        "migrated_from",
+        "updated_at",
+    }
+    actual_assignment_columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("global_product_gpc_bricks")
+    }
+    missing_assignment_columns = sorted(assignment_columns - actual_assignment_columns)
+    if missing_assignment_columns:
+        raise RuntimeError(
+            "global_product_gpc_bricks mist canonical kolommen: "
+            + ", ".join(missing_assignment_columns)
+        )
+    suppression_columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns("global_product_gpc_migration_suppressions")
+    }
+    if not {"global_product_id", "created_at"}.issubset(suppression_columns):
+        raise RuntimeError("global_product_gpc_migration_suppressions wijkt af")
+    indexes = {
+        str(index.get("name") or ""): tuple(index.get("column_names") or ())
+        for index in inspector.get_indexes("global_product_gpc_bricks")
+    }
+    if indexes.get("idx_global_product_gpc_brick_code") != ("brick_code",):
+        raise RuntimeError("Canonical GPC assignment-index ontbreekt of wijkt af")
 
 
 def _global_product_exists(conn, global_product_id: str) -> bool:
