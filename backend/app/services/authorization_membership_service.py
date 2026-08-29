@@ -148,7 +148,7 @@ def resolve_effective_household_role(
         SELECT role_key FROM auth_membership_roles
         WHERE household_id = :household_id
           AND membership_id = :membership_id
-          AND active = 1
+          AND active IS TRUE
         LIMIT 1
     """), {
         "household_id": str(household_id),
@@ -244,7 +244,7 @@ def migrate_legacy_household_memberships(conn) -> LegacyMembershipMigrationResul
             INSERT INTO auth_membership_roles(
                 household_id, membership_id, role_key, active
             ) VALUES (
-                :household_id, :membership_id, :role_key, 1
+                :household_id, :membership_id, :role_key, TRUE
             )
         """), {
             "household_id": str(household_id),
@@ -274,7 +274,7 @@ def create_canonical_membership_role(
         INSERT INTO auth_membership_roles(
             household_id, membership_id, role_key, active
         ) VALUES (
-            :household_id, :membership_id, :role_key, 1
+            :household_id, :membership_id, :role_key, TRUE
         )
         ON CONFLICT(household_id, membership_id) DO NOTHING
     """), {
@@ -312,7 +312,7 @@ def set_household_membership_role(
         SELECT role_key FROM auth_membership_roles
         WHERE household_id = :household_id
           AND membership_id = :membership_id
-          AND active = 1
+          AND active IS TRUE
         LIMIT 1
     """), {
         "household_id": str(household_id),
@@ -330,11 +330,11 @@ def set_household_membership_role(
         INSERT INTO auth_membership_roles(
             household_id, membership_id, role_key, active, updated_at
         ) VALUES (
-            :household_id, :membership_id, :role_key, 1, CURRENT_TIMESTAMP
+            :household_id, :membership_id, :role_key, TRUE, CURRENT_TIMESTAMP
         )
         ON CONFLICT(household_id, membership_id) DO UPDATE SET
             role_key = excluded.role_key,
-            active = 1,
+            active = TRUE,
             updated_at = CURRENT_TIMESTAMP
     """), {
         "household_id": str(household_id),
