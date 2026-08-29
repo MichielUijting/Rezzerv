@@ -13,9 +13,9 @@ from capture_schema_baseline import dump_schema
 
 
 SQLITE_BASELINE_REVISION = "20260827_01"
-HEAD_REVISION = "20260829_05"
+HEAD_REVISION = "20260829_06"
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "baseline_sqlite.sql.gz"
-BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7"
+BASELINE_SQL_SHA256 = "e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147edc9caa6ad4fc8b7"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 62
 PR2G_SCHEMA_AUTHORITY_TABLES = {
     "product_taxonomy",
@@ -29,6 +29,7 @@ PR2G_SCHEMA_AUTHORITY_TABLES = {
     "article_groups",
     "household_articles",
     "household_onboarding",
+    "household_product_configuration",
     "spaces",
     "sublocations",
     "shopping_lists",
@@ -384,6 +385,8 @@ def _assert_postgresql_schema(connection) -> None:
     expected_triggers = {
         "trg_household_zero_system_insert",
         "trg_receipt_tables_preserve_explicit_approval",
+        "trg_spaces_direct_immutable_update",
+        "trg_spaces_direct_immutable_delete",
     }
     if triggers != expected_triggers:
         raise AssertionError(
