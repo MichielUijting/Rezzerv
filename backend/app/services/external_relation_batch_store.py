@@ -4,35 +4,57 @@ import json
 import uuid
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 
 
-BATCH_DECISIONS_SQL = """
-CREATE TABLE IF NOT EXISTS external_relation_batch_decisions (
-    id TEXT PRIMARY KEY,
-    candidate_id TEXT NOT NULL,
-    household_article_id TEXT,
-    global_product_id TEXT,
-    decision TEXT NOT NULL,
-    decision_reason TEXT,
-    created_by TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT
-)
-"""
-
-BATCH_DECISIONS_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_external_relation_batch_decisions_candidate
-ON external_relation_batch_decisions (candidate_id, household_article_id, decision)
-"""
+_REQUIRED_COLUMNS = {
+    "id",
+    "candidate_id",
+    "household_article_id",
+    "global_product_id",
+    "decision",
+    "decision_reason",
+    "created_by",
+    "created_at",
+    "updated_at",
+}
+_REQUIRED_INDEX = "idx_external_relation_batch_decisions_candidate"
+_REQUIRED_INDEX_COLUMNS = ("candidate_id", "household_article_id", "decision")
 
 
 def ensure_external_relation_batch_schema() -> None:
-    with engine.begin() as conn:
-        conn.execute(text(BATCH_DECISIONS_SQL))
-        conn.execute(text(BATCH_DECISIONS_INDEX_SQL))
+    """Validate the Alembic-owned relation-batch schema without mutating it."""
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        table_name = "external_relation_batch_decisions"
+        if not inspector.has_table(table_name):
+            raise RuntimeError(
+                "Canonical external relation-batch schema ontbreekt. "
+                "Voer Alembic migrations uit met MIGRATION_DATABASE_URL."
+            )
+        columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns(table_name)
+        }
+        missing = _REQUIRED_COLUMNS - columns
+        if missing:
+            raise RuntimeError(
+                "Canonical external relation-batch schema wijkt af; ontbrekende "
+                f"kolommen: {sorted(missing)}. Voer Alembic migrations uit."
+            )
+        indexes = {
+            str(index.get("name") or ""): index
+            for index in inspector.get_indexes(table_name)
+        }
+        index = indexes.get(_REQUIRED_INDEX)
+        actual_columns = tuple((index or {}).get("column_names") or ())
+        if index is None or actual_columns != _REQUIRED_INDEX_COLUMNS or bool(index.get("unique")):
+            raise RuntimeError(
+                "Canonical external relation-batch index wijkt af: "
+                f"{_REQUIRED_INDEX}. Voer Alembic migrations uit."
+            )
 
 
 def _candidate_source_name(row: dict[str, Any]) -> str:
