@@ -12,7 +12,10 @@ from sqlalchemy.engine import Connection
 
 ACCOUNT_STATUS_ACTIVE = "active"
 ACCOUNT_STATUS_DISABLED = "disabled"
-ACCOUNT_STATUSES = frozenset({ACCOUNT_STATUS_ACTIVE, ACCOUNT_STATUS_DISABLED})
+ACCOUNT_STATUS_SUSPENDED = "suspended"
+ACCOUNT_STATUSES = frozenset(
+    {ACCOUNT_STATUS_ACTIVE, ACCOUNT_STATUS_DISABLED, ACCOUNT_STATUS_SUSPENDED}
+)
 
 HOUSEHOLD_CONTEXT_REGULAR = "regular"
 HOUSEHOLD_CONTEXT_SYSTEM = "system"
@@ -60,7 +63,8 @@ def ensure_roles_v2_account_and_household_foundation(conn: Connection) -> None:
 
     invalid_user_count = int(conn.execute(text(
         "SELECT COUNT(*) FROM app_users "
-        "WHERE account_status IS NULL OR account_status NOT IN ('active', 'disabled')"
+        "WHERE account_status IS NULL "
+        "OR account_status NOT IN ('active', 'disabled', 'suspended')"
     )).scalar_one())
     if invalid_user_count:
         raise RuntimeError("app_users bevat ongeldige account_status waarden")
