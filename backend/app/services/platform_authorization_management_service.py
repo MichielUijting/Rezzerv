@@ -46,14 +46,14 @@ def _load_platform_role_matrix(conn: Connection) -> list[dict[str, Any]]:
     role_rows = conn.execute(text("""
         SELECT role_key, name
         FROM auth_roles
-        WHERE scope = 'platform' AND active = 1
+        WHERE scope = 'platform' AND active IS TRUE
         ORDER BY role_key
     """)).mappings().all()
     permission_rows = conn.execute(text("""
         SELECT rp.role_key, rp.permission_key
         FROM auth_role_permissions rp
         JOIN auth_permissions p ON p.permission_key = rp.permission_key
-        WHERE p.scope = 'platform' AND p.active = 1
+        WHERE p.scope = 'platform' AND p.active IS TRUE
         ORDER BY rp.role_key, rp.permission_key
     """)).mappings().all()
     permissions_by_role: dict[str, list[str]] = {}
@@ -79,7 +79,7 @@ def _role_keys_by_user(conn: Connection) -> dict[str, list[str]]:
         SELECT ur.user_id, ur.role_key
         FROM auth_platform_user_roles ur
         JOIN auth_roles r ON r.role_key = ur.role_key
-        WHERE ur.active = 1 AND r.active = 1 AND r.scope = 'platform'
+        WHERE ur.active IS TRUE AND r.active IS TRUE AND r.scope = 'platform'
         ORDER BY ur.user_id, ur.role_key
     """)).mappings().all()
     result: dict[str, list[str]] = {}
@@ -95,10 +95,10 @@ def _effective_permissions_by_user(conn: Connection) -> dict[str, list[str]]:
         JOIN auth_roles r ON r.role_key = ur.role_key
         JOIN auth_role_permissions rp ON rp.role_key = ur.role_key
         JOIN auth_permissions p ON p.permission_key = rp.permission_key
-        WHERE ur.active = 1
-          AND r.active = 1
+        WHERE ur.active IS TRUE
+          AND r.active IS TRUE
           AND r.scope = 'platform'
-          AND p.active = 1
+          AND p.active IS TRUE
           AND p.scope = 'platform'
         ORDER BY ur.user_id, rp.permission_key
     """)).mappings().all()
@@ -168,7 +168,7 @@ def _role_assignment_active(conn: Connection, user_id: str, role_key: str) -> bo
     row = conn.execute(text("""
         SELECT 1
         FROM auth_platform_user_roles
-        WHERE user_id = :user_id AND role_key = :role_key AND active = 1
+        WHERE user_id = :user_id AND role_key = :role_key AND active IS TRUE
         LIMIT 1
     """), {"user_id": str(user_id), "role_key": str(role_key)}).first()
     return bool(row)
@@ -368,9 +368,9 @@ def grant_special_role(
 
     conn.execute(text("""
         INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-        VALUES (:user_id, :role_key, 1)
+        VALUES (:user_id, :role_key, TRUE)
         ON CONFLICT(user_id, role_key) DO UPDATE SET
-            active = 1,
+            active = TRUE,
             updated_at = CURRENT_TIMESTAMP
     """), {"user_id": target_user_id, "role_key": normalized_role_key})
 
@@ -414,7 +414,7 @@ def revoke_special_role(
 
     conn.execute(text("""
         UPDATE auth_platform_user_roles
-        SET active = 0, updated_at = CURRENT_TIMESTAMP
+        SET active = FALSE, updated_at = CURRENT_TIMESTAMP
         WHERE user_id = :user_id AND role_key = :role_key
     """), {"user_id": target_user_id, "role_key": normalized_role_key})
 

@@ -189,7 +189,7 @@ def ensure_authorization_ui_fixture_member(conn) -> AuthorizationUiFixtureProvis
         conn.execute(
             text(
                 "UPDATE auth_membership_roles "
-                "SET role_key = :role_key, active = 1 "
+                "SET role_key = :role_key, active = TRUE "
                 "WHERE household_id = :household_id AND membership_id = :membership_id"
             ),
             {
@@ -203,7 +203,7 @@ def ensure_authorization_ui_fixture_member(conn) -> AuthorizationUiFixtureProvis
             text(
                 "INSERT INTO auth_membership_roles "
                 "(household_id, membership_id, role_key, active) "
-                "VALUES (:household_id, :membership_id, :role_key, 1)"
+                "VALUES (:household_id, :membership_id, :role_key, TRUE)"
             ),
             {
                 "household_id": AUTHORIZATION_UI_MEMBER_HOUSEHOLD_ID,

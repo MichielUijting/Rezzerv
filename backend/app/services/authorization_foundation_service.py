@@ -256,8 +256,8 @@ def resolve_active_platform_role_keys(conn, user_id: str) -> frozenset[str]:
         FROM auth_platform_user_roles ur
         JOIN auth_roles r ON r.role_key = ur.role_key
         WHERE ur.user_id = :user_id
-          AND ur.active = 1
-          AND r.active = 1
+          AND ur.active IS TRUE
+          AND r.active IS TRUE
           AND r.scope = 'platform'
         ORDER BY ur.role_key
     """), {"user_id": normalized_user_id}).scalars().all()
@@ -335,13 +335,13 @@ def _seed_registry(conn) -> None:
         conn.execute(text("""
             INSERT INTO auth_permissions(permission_key, scope, description)
             VALUES (:key, 'household', :description)
-            ON CONFLICT(permission_key) DO UPDATE SET active = 1
+            ON CONFLICT(permission_key) DO UPDATE SET active = TRUE
         """), {"key": key, "description": key})
     for key in PLATFORM_PERMISSIONS + V2_PLATFORM_PERMISSIONS:
         conn.execute(text("""
             INSERT INTO auth_permissions(permission_key, scope, description)
             VALUES (:key, 'platform', :description)
-            ON CONFLICT(permission_key) DO UPDATE SET active = 1
+            ON CONFLICT(permission_key) DO UPDATE SET active = TRUE
         """), {"key": key, "description": key})
     role_names = {
         "household.viewer": "Viewer",
@@ -361,7 +361,7 @@ def _seed_registry(conn) -> None:
         conn.execute(text("""
             INSERT INTO auth_roles(role_key, scope, name)
             VALUES (:role_key, :scope, :name)
-            ON CONFLICT(role_key) DO UPDATE SET active = 1, name = excluded.name
+            ON CONFLICT(role_key) DO UPDATE SET active = TRUE, name = excluded.name
         """), {"role_key": role_key, "scope": scope, "name": role_names[role_key]})
         conn.execute(text("DELETE FROM auth_role_permissions WHERE role_key = :role_key"), {"role_key": role_key})
         for permission_key in sorted(permissions):
@@ -386,10 +386,10 @@ def evaluate_household_permission(conn, *, household_id: str, membership_id: str
     role_grant = conn.execute(text("""
         SELECT 1 FROM auth_membership_roles mr
         JOIN auth_role_permissions rp ON rp.role_key = mr.role_key
-        JOIN auth_roles r ON r.role_key = mr.role_key AND r.active = 1
-        JOIN auth_permissions p ON p.permission_key = rp.permission_key AND p.active = 1
+        JOIN auth_roles r ON r.role_key = mr.role_key AND r.active IS TRUE
+        JOIN auth_permissions p ON p.permission_key = rp.permission_key AND p.active IS TRUE
         WHERE mr.household_id = :household_id AND mr.membership_id = :membership_id
-          AND mr.active = 1 AND r.scope = 'household' AND p.scope = 'household'
+          AND mr.active IS TRUE AND r.scope = 'household' AND p.scope = 'household'
           AND rp.permission_key = :permission_key LIMIT 1
     """), {"household_id": str(household_id), "membership_id": str(membership_id), "permission_key": permission_key}).first()
     return AuthorizationDecision(bool(role_grant), "role_grant" if role_grant else "not_granted", permission_key)
@@ -401,9 +401,9 @@ def evaluate_platform_permission(conn, *, user_id: str, permission_key: str) -> 
     granted = conn.execute(text("""
         SELECT 1 FROM auth_platform_user_roles ur
         JOIN auth_role_permissions rp ON rp.role_key = ur.role_key
-        JOIN auth_roles r ON r.role_key = ur.role_key AND r.active = 1
-        JOIN auth_permissions p ON p.permission_key = rp.permission_key AND p.active = 1
-        WHERE ur.user_id = :user_id AND ur.active = 1 AND r.scope = 'platform'
+        JOIN auth_roles r ON r.role_key = ur.role_key AND r.active IS TRUE
+        JOIN auth_permissions p ON p.permission_key = rp.permission_key AND p.active IS TRUE
+        WHERE ur.user_id = :user_id AND ur.active IS TRUE AND r.scope = 'platform'
           AND p.scope = 'platform' AND rp.permission_key = :permission_key LIMIT 1
     """), {"user_id": str(user_id), "permission_key": permission_key}).first()
     return AuthorizationDecision(bool(granted), "role_grant" if granted else "not_granted", permission_key)
@@ -436,14 +436,14 @@ def write_authorization_audit(conn, *, actor_user_id: str, actor_type: str, acti
 def assert_last_household_admin_remains(conn, *, household_id: str, membership_id_to_remove: str) -> None:
     current_role = conn.execute(text("""
         SELECT role_key FROM auth_membership_roles
-        WHERE household_id = :household_id AND membership_id = :membership_id AND active = 1 LIMIT 1
+        WHERE household_id = :household_id AND membership_id = :membership_id AND active IS TRUE LIMIT 1
     """), {"household_id": str(household_id), "membership_id": str(membership_id_to_remove)}).scalar()
     if current_role not in {"household.admin", "household.owner", "household.frontteam"}:
         return
     remaining = conn.execute(text("""
         SELECT COUNT(*) FROM auth_membership_roles
         WHERE household_id = :household_id AND membership_id <> :membership_id
-          AND role_key IN ('household.admin', 'household.owner', 'household.frontteam') AND active = 1
+          AND role_key IN ('household.admin', 'household.owner', 'household.frontteam') AND active IS TRUE
     """), {"household_id": str(household_id), "membership_id": str(membership_id_to_remove)}).scalar_one()
     if int(remaining or 0) < 1:
         raise ValueError("Een huishouden moet minimaal één actieve beheerder behouden.")
