@@ -1,4 +1,4 @@
-"""Test-only SQLite fixture for the canonical server_sessions contract.
+"""Test-only SQLite fixture for canonical server-session/account context schema.
 
 Production schema authority belongs exclusively to Alembic. Tests that build
 small in-memory databases without running the migration chain may opt into this
@@ -7,11 +7,42 @@ fixture explicitly instead of relying on production runtime DDL.
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 
 def create_server_session_contract_schema(conn: Connection) -> None:
+    inspector = inspect(conn)
+    user_columns = {str(column.get("name") or "") for column in inspector.get_columns("app_users")}
+    if "account_status" not in user_columns:
+        conn.execute(text("ALTER TABLE app_users ADD COLUMN account_status TEXT NOT NULL DEFAULT 'active'"))
+    if "password_hash" not in user_columns:
+        conn.execute(text("ALTER TABLE app_users ADD COLUMN password_hash TEXT"))
+
+    household_columns = {
+        str(column.get("name") or "")
+        for column in inspect(conn).get_columns("household_registry")
+    }
+    if "context_type" not in household_columns:
+        conn.execute(text("ALTER TABLE household_registry ADD COLUMN context_type TEXT NOT NULL DEFAULT 'regular'"))
+    conn.execute(text("UPDATE household_registry SET context_type = 'system' WHERE CAST(id AS TEXT) = '0'"))
+
+    conn.execute(text("""
+        CREATE TABLE frontteam_personal_households (
+            user_id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    conn.execute(text("""
+        CREATE TABLE household_onboarding (
+            household_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'in_progress',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
     conn.execute(text("""
         CREATE TABLE server_sessions (
             id VARCHAR(64) PRIMARY KEY,
