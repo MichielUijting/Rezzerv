@@ -20,7 +20,7 @@ EXPLICIT_SQLITE_TEST_DEV_FUNCTIONS = {
 }
 
 # Transitional existing-SQLite adoption and the dedicated production-data
-# migration utility are explicit compatibility boundaries, never request/runtime
+# migration utilities are explicit compatibility boundaries, never request/runtime
 # SQL. Pin their exact SQLite introspection so it cannot silently spread.
 SQLITE_COMPATIBILITY_SQL_ALLOWLIST = {
     Path("schema_migration_preflight.py"): {
@@ -29,6 +29,10 @@ SQLITE_COMPATIBILITY_SQL_ALLOWLIST = {
     Path("maintenance/postgresql_data_migration.py"): {
         "PRAGMA": 3,
         "sqlite_master": 2,
+    },
+    Path("maintenance/postgresql_legacy_production_adoption.py"): {
+        "PRAGMA": 5,
+        "sqlite_master": 3,
     },
 }
 
