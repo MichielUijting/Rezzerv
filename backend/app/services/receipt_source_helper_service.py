@@ -84,8 +84,8 @@ def ensure_household_email_source(household_id: str) -> dict[str, Any]:
         row = conn.execute(
             text(
                 """
-                SELECT id, household_id, type, label, source_path, store_name, account_label,
-                       external_reference, is_active, created_at, updated_at
+                SELECT id, household_id, type, label, source_path, is_active,
+                       last_scan_at, created_at, updated_at
                 FROM receipt_sources
                 WHERE household_id = :household_id AND type = 'email'
                 LIMIT 1
@@ -109,8 +109,8 @@ def ensure_household_email_source(household_id: str) -> dict[str, Any]:
                 row = conn.execute(
                     text(
                         """
-                        SELECT id, household_id, type, label, source_path, store_name, account_label,
-                               external_reference, is_active, created_at, updated_at
+                        SELECT id, household_id, type, label, source_path, is_active,
+                               last_scan_at, created_at, updated_at
                         FROM receipt_sources
                         WHERE id = :id
                         """
@@ -131,8 +131,8 @@ def ensure_household_email_source(household_id: str) -> dict[str, Any]:
             row = conn.execute(
                 text(
                     """
-                    SELECT id, household_id, type, label, source_path, store_name, account_label,
-                           external_reference, is_active, created_at, updated_at
+                    SELECT id, household_id, type, label, source_path, is_active,
+                           last_scan_at, created_at, updated_at
                     FROM receipt_sources
                     WHERE id = :id
                     """
@@ -155,8 +155,8 @@ def ensure_household_gmail_source(household_id: str, label_name: str) -> dict[st
         row = conn.execute(
             text(
                 """
-                SELECT id, household_id, type, label, source_path, store_name, account_label,
-                       external_reference, is_active, created_at, updated_at
+                SELECT id, household_id, type, label, source_path, is_active,
+                       last_scan_at, created_at, updated_at
                 FROM receipt_sources
                 WHERE household_id = :household_id AND type = 'gmail_label'
                 LIMIT 1
@@ -180,8 +180,8 @@ def ensure_household_gmail_source(household_id: str, label_name: str) -> dict[st
                 row = conn.execute(
                     text(
                         """
-                        SELECT id, household_id, type, label, source_path, store_name, account_label,
-                               external_reference, is_active, created_at, updated_at
+                        SELECT id, household_id, type, label, source_path, is_active,
+                               last_scan_at, created_at, updated_at
                         FROM receipt_sources
                         WHERE id = :id
                         """
@@ -202,8 +202,8 @@ def ensure_household_gmail_source(household_id: str, label_name: str) -> dict[st
             row = conn.execute(
                 text(
                     """
-                    SELECT id, household_id, type, label, source_path, store_name, account_label,
-                           external_reference, is_active, created_at, updated_at
+                    SELECT id, household_id, type, label, source_path, is_active,
+                           last_scan_at, created_at, updated_at
                     FROM receipt_sources
                     WHERE id = :id
                     """
