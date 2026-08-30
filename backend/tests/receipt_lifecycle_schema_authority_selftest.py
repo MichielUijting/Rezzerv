@@ -254,6 +254,75 @@ def _household_authority_delta_is_exact() -> None:
                 )
 
 
+def _registry_only_manual_source_recovery_is_executable() -> None:
+    """Reproduce the exact known production drift and prove _02 repairs it."""
+    household_id = "pr352-registry-only"
+    source_id = f"{household_id}-manual-upload"
+    raw_receipt_id = "pr352-legacy-raw-receipt"
+    with tempfile.TemporaryDirectory() as temp_dir:
+        database = Path(temp_dir) / "registry-only-receipt.sqlite"
+        _run_alembic(database, HOUSEHOLD_AUTHORITY_PREVIOUS_REVISION)
+        with sqlite3.connect(database) as connection:
+            connection.execute(
+                "INSERT INTO household_registry (id, naam, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+                (household_id, "PR352 registry-only household"),
+            )
+            connection.execute(
+                """
+                INSERT INTO raw_receipts (
+                    id, household_id, source_id, original_filename, mime_type,
+                    storage_path, sha256_hash, raw_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    raw_receipt_id,
+                    household_id,
+                    source_id,
+                    "pr352.jpg",
+                    "image/jpeg",
+                    "/legacy/pr352.jpg",
+                    "a" * 64,
+                    "imported",
+                ),
+            )
+            connection.commit()
+            if connection.execute(
+                "SELECT 1 FROM receipt_sources WHERE id=?",
+                (source_id,),
+            ).fetchone() is not None:
+                raise AssertionError("Legacy fixture unexpectedly already has manual source")
+            violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+            if not violations:
+                raise AssertionError("Legacy fixture does not reproduce receipt FK drift")
+
+        _run_alembic(database, "head")
+        with sqlite3.connect(database) as connection:
+            if _revision(connection) != HEAD_REVISION:
+                raise AssertionError("Known legacy receipt recovery did not reach _02")
+            source = connection.execute(
+                "SELECT household_id, type, label, is_active FROM receipt_sources WHERE id=?",
+                (source_id,),
+            ).fetchone()
+            if source != (
+                household_id,
+                "manual_upload",
+                "Handmatige upload",
+                1,
+            ):
+                raise AssertionError(f"Canonical manual source was not repaired exactly: {source!r}")
+            raw = connection.execute(
+                "SELECT household_id, source_id FROM raw_receipts WHERE id=?",
+                (raw_receipt_id,),
+            ).fetchone()
+            if raw != (household_id, source_id):
+                raise AssertionError(f"Legacy raw receipt was not preserved exactly: {raw!r}")
+            violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                raise AssertionError(
+                    f"Known legacy receipt recovery left FK violations: {violations[:10]!r}"
+                )
+
+
 def _missing_index_is_rejected() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         database = Path(temp_dir) / "missing-index.sqlite"
@@ -293,6 +362,8 @@ def _missing_trigger_is_rejected() -> None:
 def main() -> None:
     _household_authority_delta_is_exact()
     print("RECEIPT_HOUSEHOLD_AUTHORITY_SQLITE_DELTA_GREEN")
+    _registry_only_manual_source_recovery_is_executable()
+    print("RECEIPT_HOUSEHOLD_AUTHORITY_LEGACY_RECOVERY_GREEN")
     print("RECEIPT_LIFECYCLE_CANONICAL_SQLITE_VALIDATION_GREEN")
     _missing_index_is_rejected()
     print("RECEIPT_LIFECYCLE_MALFORMED_INDEX_REJECTED_GREEN")
