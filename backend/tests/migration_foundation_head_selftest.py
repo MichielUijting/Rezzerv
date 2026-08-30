@@ -8,9 +8,11 @@ import migration_foundation_selftest as foundation_test
 HEAD_REVISION = "20260830_02"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
-_SQLITE_MANUAL_SOURCE_TRIGGER_HEADER = (
-    "-- trigger: trg_raw_receipts_ensure_manual_source (table=raw_receipts)"
-)
+_SQLITE_HEAD_EXTENSION_HEADERS = {
+    "-- table: receipt_sources (table=receipt_sources)",
+    "-- table: raw_receipts (table=raw_receipts)",
+    "-- trigger: trg_raw_receipts_ensure_manual_source (table=raw_receipts)",
+}
 _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS = {
     "trg_household_zero_system_insert",
     "trg_receipt_tables_preserve_explicit_approval",
@@ -40,13 +42,19 @@ def _postgresql_trigger_names(connection) -> set[str]:
     }
 
 
-def _remove_locked_sqlite_trigger_extension(schema: str) -> str:
-    """Remove exactly the 20260830_02 trigger block from baseline comparison."""
+def _remove_locked_sqlite_head_extensions(schema: str) -> str:
+    """Remove only the three SQLite schema blocks owned by 20260830_02.
+
+    The dedicated receipt lifecycle authority selftest proves these two table
+    blocks changed only in their household FK parent and that the new trigger is
+    the sole trigger addition. Everything else remains in the immutable baseline
+    comparison performed by the historical foundation core.
+    """
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
     retained = [
         block
         for block in blocks
-        if block.splitlines()[0].strip() != _SQLITE_MANUAL_SOURCE_TRIGGER_HEADER
+        if block.splitlines()[0].strip() not in _SQLITE_HEAD_EXTENSION_HEADERS
     ]
     return "\n\n".join(retained).rstrip() + "\n"
 
@@ -55,16 +63,17 @@ def _run_foundation_with_locked_head_contract() -> None:
     """Extend only the schema contracts introduced at 20260830_02.
 
     The historical foundation core deliberately keeps its pre-20260830_02
-    trigger and immutable-baseline defaults. The head wrapper treats exactly
-    the new raw-receipt manual-source trigger as a later SQLite migration
-    extension and permits exactly that same fifth trigger in PostgreSQL. Every
-    other baseline, schema or trigger difference remains fail-closed.
+    trigger and immutable-baseline defaults. The head wrapper excludes exactly
+    the two rebuilt receipt table definitions plus the new raw-receipt trigger
+    from that historical byte comparison; a dedicated semantic receipt test
+    proves their exact intended delta. PostgreSQL permits exactly the same new
+    fifth trigger. Every other difference remains fail-closed.
     """
     original_assert = foundation_test.foundation._assert_postgresql_schema
     original_strip = foundation_test.foundation._strip_migration_extensions
 
     def _strip_migration_extensions_at_head(schema: str) -> str:
-        return _remove_locked_sqlite_trigger_extension(original_strip(schema))
+        return _remove_locked_sqlite_head_extensions(original_strip(schema))
 
     def _assert_postgresql_schema_at_head(connection) -> None:
         try:
