@@ -33,6 +33,33 @@ def _ensure_household_zero_parent() -> None:
         )
 
 
+def _seed_regression_kassa_receipts_portably() -> dict:
+    original_uuid_module = main.uuid
+
+    class CompactUuid:
+        def __init__(self, value):
+            self._value = value
+
+        def __str__(self) -> str:
+            return self._value.hex
+
+        def __getattr__(self, name):
+            return getattr(self._value, name)
+
+    class CompactUuidProxy:
+        def uuid4(self):
+            return CompactUuid(original_uuid_module.uuid4())
+
+        def __getattr__(self, name):
+            return getattr(original_uuid_module, name)
+
+    try:
+        main.uuid = CompactUuidProxy()
+        return main.seed_regression_kassa_receipts(authorization=None)
+    finally:
+        main.uuid = original_uuid_module
+
+
 def _portable_ensure_regression_inventory_fixture(household_id: str) -> dict:
     normalized_household_id = str(household_id or "").strip() or "1"
     with main.engine.begin() as conn:
@@ -366,7 +393,7 @@ def prepare() -> dict:
     def action():
         _ensure_household_zero_parent()
         reset = main.reset_regression_fixture_state()
-        receipts = main.seed_regression_kassa_receipts(authorization=None)
+        receipts = _seed_regression_kassa_receipts_portably()
         return {
             "status": "ok",
             "mode": "prepare",
