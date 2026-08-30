@@ -1,0 +1,32 @@
+name: PostgreSQL zero-residual gate
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/**'
+      - 'backend/tests/postgresql_zero_residual_selftest.py'
+      - '.github/workflows/postgresql-zero-residual-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zero-residual-application-sql:
+    name: App-wide PostgreSQL zero-residual SQL gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prove no unaccounted PostgreSQL migration residue remains in backend/app
+        run: |
+          python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/postgresql-zero-residual.log
+          grep -F 'POSTGRESQL_ZERO_RESIDUAL_RUNTIME_DDL_GREEN' /tmp/postgresql-zero-residual.log
+          grep -F 'POSTGRESQL_ZERO_RESIDUAL_SQLITE_SQL_GREEN' /tmp/postgresql-zero-residual.log
+          grep -F 'POSTGRESQL_ZERO_RESIDUAL_BOOLEAN_GREEN' /tmp/postgresql-zero-residual.log
+          grep -F 'POSTGRESQL_ZERO_RESIDUAL_COMPATIBILITY_BOUNDARY_GREEN' /tmp/postgresql-zero-residual.log
+          grep -F 'POSTGRESQL_ZERO_RESIDUAL_GATE_GREEN' /tmp/postgresql-zero-residual.log
