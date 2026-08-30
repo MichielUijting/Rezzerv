@@ -110,10 +110,10 @@ def provision_test_admin(password: str) -> None:
                 INSERT INTO auth_membership_roles
                     (household_id, membership_id, role_key, active, created_at, updated_at)
                 VALUES
-                    ('0', :membership_id, 'household.owner', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ('0', :membership_id, 'household.owner', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(household_id, membership_id) DO UPDATE SET
                     role_key = 'household.owner',
-                    active = 1,
+                    active = TRUE,
                     updated_at = CURRENT_TIMESTAMP
                 """
             ),
