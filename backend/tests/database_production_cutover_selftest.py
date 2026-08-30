@@ -45,6 +45,7 @@ def _expect_success(code: str, *, env: dict[str, str | None], marker: str) -> No
     combined = result.stdout + result.stderr
     assert result.returncode == 0, combined
     assert marker in combined, combined
+    print(marker)
 
 
 def _assert_runtime_policy_contract() -> None:
