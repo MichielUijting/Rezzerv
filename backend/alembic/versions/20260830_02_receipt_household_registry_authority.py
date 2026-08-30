@@ -29,6 +29,10 @@ _SQLITE_NAMING_CONVENTION = {
 }
 
 
+def _quote_sqlite_identifier(value: str) -> str:
+    return '"' + str(value).replace('"', '""') + '"'
+
+
 def _household_fk(bind: sa.engine.Connection, table_name: str) -> dict[str, Any]:
     matches = [
         fk
@@ -139,22 +143,55 @@ def _ensure_manual_sources(bind: sa.engine.Connection) -> int:
     return inserted
 
 
-def _sqlite_trigger_sql(bind: sa.engine.Connection, table_name: str) -> list[str]:
-    return [
-        str(value)
-        for value in bind.exec_driver_sql(
-            """
-            SELECT sql
-            FROM sqlite_master
-            WHERE type = 'trigger'
-              AND tbl_name = ?
-              AND sql IS NOT NULL
-            ORDER BY name
-            """,
-            (table_name,),
-        ).scalars()
-        if str(value or "").strip()
-    ]
+def _sqlite_receipt_dependent_triggers(
+    bind: sa.engine.Connection,
+) -> list[tuple[str, str]]:
+    """Capture only triggers attached to or referencing the rebuilt receipt tables.
+
+    SQLite batch-alter recreates a table under a temporary name. SQLite validates
+    triggers in other tables during the final rename, so a trigger such as the
+    receipt approval guard (owned by receipt_tables but reading raw_receipts)
+    must be removed for the complete multi-table rebuild and restored afterwards.
+    """
+    rows = bind.exec_driver_sql(
+        """
+        SELECT name, tbl_name, sql
+        FROM sqlite_master
+        WHERE type = 'trigger'
+          AND sql IS NOT NULL
+        ORDER BY name
+        """
+    ).all()
+    receipt_tables = set(_RECEIPT_HOUSEHOLD_TABLES)
+    result: list[tuple[str, str]] = []
+    for name, table_name, sql in rows:
+        trigger_name = str(name)
+        trigger_table = str(table_name)
+        statement = str(sql or "").strip()
+        normalized = statement.lower()
+        if trigger_table in receipt_tables or any(
+            table_name.lower() in normalized for table_name in receipt_tables
+        ):
+            result.append((trigger_name, statement))
+    return result
+
+
+def _drop_sqlite_triggers(
+    bind: sa.engine.Connection,
+    triggers: Sequence[tuple[str, str]],
+) -> None:
+    for trigger_name, _statement in triggers:
+        bind.exec_driver_sql(
+            f"DROP TRIGGER IF EXISTS {_quote_sqlite_identifier(trigger_name)}"
+        )
+
+
+def _restore_sqlite_triggers(
+    bind: sa.engine.Connection,
+    triggers: Sequence[tuple[str, str]],
+) -> None:
+    for _trigger_name, statement in triggers:
+        bind.exec_driver_sql(statement)
 
 
 def _replace_sqlite_household_fk(bind: sa.engine.Connection, table_name: str) -> None:
@@ -167,7 +204,6 @@ def _replace_sqlite_household_fk(bind: sa.engine.Connection, table_name: str) ->
             f"Onverwachte legacy household parent voor {table_name}: {referred!r}"
         )
 
-    trigger_sql = _sqlite_trigger_sql(bind, table_name)
     old_name = f"fk_{table_name}_household_id_{_LEGACY_HOUSEHOLDS}"
     new_name = f"fk_{table_name}_household_id_{_HOUSEHOLD_REGISTRY}"
     with op.batch_alter_table(
@@ -182,8 +218,6 @@ def _replace_sqlite_household_fk(bind: sa.engine.Connection, table_name: str) ->
             ["household_id"],
             ["id"],
         )
-    for statement in trigger_sql:
-        bind.exec_driver_sql(statement)
 
 
 def _replace_postgresql_household_fk(bind: sa.engine.Connection, table_name: str) -> None:
@@ -309,10 +343,14 @@ def upgrade() -> None:
     _assert_missing_sources_are_manual_upload_only(bind)
     _ensure_manual_sources(bind)
 
-    for table_name in _RECEIPT_HOUSEHOLD_TABLES:
-        if bind.dialect.name == "sqlite":
+    if bind.dialect.name == "sqlite":
+        dependent_triggers = _sqlite_receipt_dependent_triggers(bind)
+        _drop_sqlite_triggers(bind, dependent_triggers)
+        for table_name in _RECEIPT_HOUSEHOLD_TABLES:
             _replace_sqlite_household_fk(bind, table_name)
-        else:
+        _restore_sqlite_triggers(bind, dependent_triggers)
+    else:
+        for table_name in _RECEIPT_HOUSEHOLD_TABLES:
             _replace_postgresql_household_fk(bind, table_name)
 
     _create_manual_source_trigger(bind)
