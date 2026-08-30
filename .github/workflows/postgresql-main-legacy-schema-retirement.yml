@@ -1,0 +1,119 @@
+name: PostgreSQL main.py legacy schema retirement
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/main.py'
+      - 'backend/app/startup/**'
+      - 'backend/tests/postgresql_main_legacy_schema_retirement_selftest.py'
+      - '.github/workflows/postgresql-main-legacy-schema-retirement.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  main-legacy-schema-retirement:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rezzerv
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d rezzerv"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DATABASE_URL: postgresql://rezzerv_app@127.0.0.1:5432/rezzerv
+      MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator@127.0.0.1:5432/rezzerv
+      RECEIPT_STORAGE_ROOT: /tmp/rezzerv-receipts/raw
+      REZZERV_RECEIPT_STARTUP_REMBG_WARMUP: 'false'
+      REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Prove main.py structure and legacy DDL retirement
+        run: |
+          python backend/tests/postgresql_main_legacy_schema_retirement_selftest.py | tee /tmp/main-legacy-schema-retirement.log
+          grep -F 'POSTGRESQL_MAIN_LEGACY_DDL_ABSENT_GREEN' /tmp/main-legacy-schema-retirement.log
+          grep -F 'POSTGRESQL_MAIN_TABLE_METADATA_PORTABLE_GREEN' /tmp/main-legacy-schema-retirement.log
+          grep -F 'POSTGRESQL_MAIN_TOP_LEVEL_DB_SIDE_EFFECTS_CENTRALIZED_GREEN' /tmp/main-legacy-schema-retirement.log
+          grep -F 'POSTGRESQL_MAIN_STARTUP_STRUCTURE_GREEN' /tmp/main-legacy-schema-retirement.log
+          grep -F 'POSTGRESQL_MAIN_LEGACY_SCHEMA_RETIREMENT_SELFTEST_GREEN' /tmp/main-legacy-schema-retirement.log
+          python -m py_compile backend/app/main.py backend/app/startup/*.py
+
+      - name: Configure migration and runtime roles
+        run: |
+          psql -h 127.0.0.1 -U postgres -d rezzerv -v ON_ERROR_STOP=1 <<'SQL'
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          CREATE ROLE rezzerv_migrator LOGIN;
+          CREATE ROLE rezzerv_app LOGIN;
+          GRANT CONNECT ON DATABASE rezzerv TO rezzerv_migrator, rezzerv_app;
+          GRANT USAGE, CREATE ON SCHEMA public TO rezzerv_migrator;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Migrate with dedicated Alembic role
+        working-directory: backend
+        run: |
+          python -m app.schema_migration_preflight | tee /tmp/main-retirement-migration.log
+          grep -F "'dialect': 'postgresql'" /tmp/main-retirement-migration.log
+          grep -F "'revision': '20260829_15'" /tmp/main-retirement-migration.log
+
+      - name: Prove runtime role has no schema CREATE privilege
+        run: |
+          test "$(psql -h 127.0.0.1 -U postgres -d rezzerv -Atc "SELECT has_schema_privilege('rezzerv_app', 'public', 'CREATE')")" = "f"
+          if psql -h 127.0.0.1 -U rezzerv_app -d rezzerv -v ON_ERROR_STOP=1 -c 'CREATE TABLE main_retirement_runtime_ddl_should_fail(id integer)'; then
+            echo 'Runtime role unexpectedly created a table' >&2
+            exit 1
+          fi
+          echo 'POSTGRESQL_MAIN_RUNTIME_CREATE_DENIED_GREEN'
+
+      - name: Prove refactored app.main starts with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python - <<'PY' | tee /tmp/main-runtime-import.log
+          from sqlalchemy import inspect
+          from app.db import engine
+
+          before_tables = set(inspect(engine).get_table_names())
+          import app.main  # noqa: F401
+          after_tables = set(inspect(engine).get_table_names())
+          if before_tables != after_tables:
+              raise AssertionError(
+                  f'app.main startup mutated table set: before={sorted(before_tables)} after={sorted(after_tables)}'
+              )
+          print('POSTGRESQL_MAIN_DML_ONLY_IMPORT_GREEN')
+          print('POSTGRESQL_MAIN_RUNTIME_SCHEMA_UNCHANGED_GREEN')
+          PY
+          grep -F 'POSTGRESQL_MAIN_DML_ONLY_IMPORT_GREEN' /tmp/main-runtime-import.log
+          grep -F 'POSTGRESQL_MAIN_RUNTIME_SCHEMA_UNCHANGED_GREEN' /tmp/main-runtime-import.log
