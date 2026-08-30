@@ -19,6 +19,7 @@ on:
       - 'backend/tests/capture_schema_baseline.py'
       - 'backend/tests/migration_foundation_core_selftest.py'
       - 'backend/tests/migration_foundation_selftest.py'
+      - 'backend/tests/migration_foundation_head_selftest.py'
       - 'backend/tests/postgresql_*'
       - 'backend/tests/receipt_lifecycle_schema_authority_selftest.py'
       - 'backend/tests/schema_authority_cutover_selftest.py'
@@ -56,7 +57,7 @@ jobs:
         run: |
           rm -f /tmp/rezzerv-migration-baseline.sqlite
           python -m alembic -c backend/alembic.ini upgrade head
-          python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-sqlite.log
+          python backend/tests/migration_foundation_head_selftest.py | tee /tmp/migration-sqlite.log
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
@@ -65,8 +66,9 @@ jobs:
           grep -F 'SQLITE_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_ZERO_RESIDUAL_RUNTIME_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
+          grep -F 'SQLITE_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_01_GREEN' /tmp/migration-sqlite.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_02_GREEN' /tmp/migration-sqlite.log
           python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/zero-residual.log
           grep -F 'POSTGRESQL_ZERO_RESIDUAL_GATE_GREEN' /tmp/zero-residual.log
           python backend/tests/postgresql_authorization_sql_portability_selftest.py
@@ -80,9 +82,9 @@ jobs:
           python backend/tests/receipt_lifecycle_schema_authority_selftest.py
           python -m app.testing.external_article_product_link_contract
           python -m alembic -c backend/alembic.ini current | tee /tmp/sqlite-current.log
-          grep -F '20260830_01' /tmp/sqlite-current.log
+          grep -F '20260830_02' /tmp/sqlite-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/sqlite-heads.log
-          grep -F '20260830_01' /tmp/sqlite-heads.log
+          grep -F '20260830_02' /tmp/sqlite-heads.log
 
   sqlite-existing-adoption:
     name: Existing SQLite baseline is validated and adopted
@@ -129,7 +131,7 @@ jobs:
             -e REZZERV_EXPECT_MIGRATION_MODE=sqlite-stamped-runtime \
             -v "$RUNNER_TEMP/rezzerv-schema:/capture" \
             rezzerv-migration-runtime \
-            sh -lc 'python -m app.schema_migration_preflight && python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /capture/current-runtime.sqlite > /capture/current-schema.sql && python tests/migration_foundation_selftest.py > /capture/migration-adoption.log && python -m alembic -c alembic.ini current > /capture/alembic-current.log && chmod 666 /capture/current-runtime.sqlite /capture/current-schema.sql /capture/migration-adoption.log /capture/alembic-current.log'
+            sh -lc 'python -m app.schema_migration_preflight && python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /capture/current-runtime.sqlite > /capture/current-schema.sql && python tests/migration_foundation_head_selftest.py > /capture/migration-adoption.log && python -m alembic -c alembic.ini current > /capture/alembic-current.log && chmod 666 /capture/current-runtime.sqlite /capture/current-schema.sql /capture/migration-adoption.log /capture/alembic-current.log'
 
       - name: Prove adopted SQLite owns residual runtime schema through Alembic
         run: |
@@ -142,9 +144,10 @@ jobs:
           grep -F -- '-- table: purchase_import_line_inventory_handling_overrides (table=purchase_import_line_inventory_handling_overrides)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: receipt_webhook_deliveries (table=receipt_webhook_deliveries)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F 'SQLITE_ZERO_RESIDUAL_RUNTIME_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_01_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'SQLITE_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_02_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260830_01' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260830_02' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -190,7 +193,7 @@ jobs:
           DATABASE_POOL_TIMEOUT_SECONDS: '10'
         run: |
           python -m alembic -c backend/alembic.ini upgrade head
-          python backend/tests/migration_foundation_selftest.py | tee /tmp/migration-postgresql.log
+          python backend/tests/migration_foundation_head_selftest.py | tee /tmp/migration-postgresql.log
           grep -F 'MIGRATION_POSTGRESQL_LINEAGE_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
@@ -200,8 +203,9 @@ jobs:
           grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_AUTHORIZATION_BOOLEAN_SCHEMA_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_ZERO_RESIDUAL_RUNTIME_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
+          grep -F 'POSTGRESQL_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_01_GREEN' /tmp/migration-postgresql.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_02_GREEN' /tmp/migration-postgresql.log
           python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/zero-residual.log
           grep -F 'POSTGRESQL_ZERO_RESIDUAL_GATE_GREEN' /tmp/zero-residual.log
           python backend/tests/postgresql_authorization_sql_portability_selftest.py
@@ -243,6 +247,6 @@ jobs:
           print('POSTGRESQL_ZERO_RESIDUAL_MIGRATION_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current | tee /tmp/postgresql-current.log
-          grep -F '20260830_01' /tmp/postgresql-current.log
+          grep -F '20260830_02' /tmp/postgresql-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/postgresql-heads.log
-          grep -F '20260830_01' /tmp/postgresql-heads.log
+          grep -F '20260830_02' /tmp/postgresql-heads.log
