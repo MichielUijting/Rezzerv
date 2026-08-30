@@ -23,29 +23,8 @@ jobs:
           python-version: '3.11'
 
       - name: Audit backend/app for PostgreSQL migration residue
-        id: audit
-        continue-on-error: true
         run: |
-          set +e
-          python backend/tests/postgresql_zero_residual_selftest.py > /tmp/postgresql-zero-residual.log 2>&1
-          result=$?
-          set -e
-          cat /tmp/postgresql-zero-residual.log
-          exit "$result"
-
-      - name: Retain zero-residual diagnostic output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: postgresql-zero-residual-diagnostics
-          path: /tmp/postgresql-zero-residual.log
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Enforce zero-residual result
-        if: always()
-        run: |
-          test '${{ steps.audit.outcome }}' = 'success'
+          python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/postgresql-zero-residual.log
           grep -F 'POSTGRESQL_ZERO_RESIDUAL_RUNTIME_DDL_GREEN' /tmp/postgresql-zero-residual.log
           grep -F 'POSTGRESQL_ZERO_RESIDUAL_SQLITE_SQL_GREEN' /tmp/postgresql-zero-residual.log
           grep -F 'POSTGRESQL_ZERO_RESIDUAL_BOOLEAN_GREEN' /tmp/postgresql-zero-residual.log
