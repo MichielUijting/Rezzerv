@@ -1,0 +1,35 @@
+name: Temporary main.py legacy schema refactor v2
+
+on:
+  push:
+    branches:
+      - codex/postgresql-main-legacy-schema-retirement
+    paths:
+      - '.github/workflows/_temporary-main-refactor-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refactor-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/postgresql-main-legacy-schema-retirement
+          fetch-depth: 0
+
+      - name: Execute hardened refactor
+        run: |
+          python .github/scripts/refactor_main_legacy_schema.py
+          python backend/tests/postgresql_main_legacy_schema_retirement_selftest.py
+          python -m py_compile backend/app/main.py backend/app/startup/*.py
+
+      - name: Commit refactor
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/main.py backend/app/startup backend/tests/postgresql_main_legacy_schema_retirement_selftest.py
+          git commit -m 'Retire main.py legacy schema code and centralize startup'
+          git push origin HEAD:codex/postgresql-main-legacy-schema-retirement
