@@ -555,8 +555,8 @@ def _m2c2h5_list_purchase_import_placeholders(
             )
             global_product_expr = f"COALESCE({global_product_expr}, ha.global_product_id)"
 
-    created_expr = _m2c2h5_col("pil", columns, ["created_at"])
-    updated_expr = _m2c2h5_col("pil", columns, ["updated_at"])
+    created_expr = _m2c2h5_col("pil", columns, ["created_at"], "NULL")
+    updated_expr = _m2c2h5_col("pil", columns, ["updated_at"], "NULL")
 
     rows = conn.execute(
         text(
@@ -578,8 +578,10 @@ def _m2c2h5_list_purchase_import_placeholders(
             {household_article_join_sql}
             ORDER BY
                 CASE WHEN COALESCE({global_product_expr}, '') <> '' THEN 0 ELSE 1 END ASC,
-                COALESCE({updated_expr}, {created_expr}, '') DESC,
-                COALESCE({created_expr}, '') DESC,
+                CASE WHEN COALESCE({updated_expr}, {created_expr}) IS NULL THEN 1 ELSE 0 END ASC,
+                COALESCE({updated_expr}, {created_expr}) DESC,
+                CASE WHEN {created_expr} IS NULL THEN 1 ELSE 0 END ASC,
+                {created_expr} DESC,
                 pil.ui_sort_order ASC,
                 pil.id DESC
             LIMIT :limit
@@ -631,7 +633,8 @@ def _m2c2l_enrich_linked_receipt_items(
             f"LEFT JOIN product_inventory_groups pig ON pig.inventory_group_key = pgm.inventory_group_key "
             f"WHERE gp.id IN ({', '.join(bind_names)}) "
             f"ORDER BY gp.id, COALESCE(pgm.confirmed_by_user, FALSE) DESC, "
-            f"COALESCE(pgm.updated_at, '') DESC"
+            f"CASE WHEN pgm.updated_at IS NULL THEN 1 ELSE 0 END ASC, "
+            f"pgm.updated_at DESC"
         ),
         params,
     ).mappings().all()
