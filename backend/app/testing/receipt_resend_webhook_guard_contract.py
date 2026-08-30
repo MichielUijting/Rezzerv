@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import Column, Integer, MetaData, Table, Text, create_engine, text
 from sqlalchemy.pool import StaticPool
 
 from app.services.receipt_resend_webhook_guard import install_receipt_resend_webhook_guard
@@ -36,6 +36,22 @@ def headers(body: bytes, svix_id: str, timestamp: int | None = None) -> dict[str
     }
 
 
+def _provision_delivery_schema_fixture(engine) -> None:
+    """Create the migration-owned table only inside this isolated test fixture."""
+    metadata = MetaData()
+    Table(
+        "receipt_webhook_deliveries",
+        metadata,
+        Column("svix_id", Text, primary_key=True),
+        Column("svix_timestamp", Integer, nullable=False),
+        Column("payload_sha256", Text, nullable=False),
+        Column("status", Text, nullable=False),
+        Column("created_at", Text, nullable=False),
+        Column("updated_at", Text, nullable=False),
+    )
+    metadata.create_all(engine)
+
+
 def build_app():
     app = FastAPI()
     engine = create_engine(
@@ -44,6 +60,7 @@ def build_app():
         poolclass=StaticPool,
         future=True,
     )
+    _provision_delivery_schema_fixture(engine)
     state = {"calls": 0, "fail_once": True}
 
     @app.post("/api/receipts/inbound")
