@@ -100,7 +100,7 @@ def ensure_household_email_source(household_id: str) -> dict[str, Any]:
                     text(
                         """
                         UPDATE receipt_sources
-                        SET source_path = :source_path, is_active = 1, label = COALESCE(label, :label), updated_at = CURRENT_TIMESTAMP
+                        SET source_path = :source_path, is_active = TRUE, label = COALESCE(label, :label), updated_at = CURRENT_TIMESTAMP
                         WHERE id = :id
                         """
                     ),
@@ -123,7 +123,7 @@ def ensure_household_email_source(household_id: str) -> dict[str, Any]:
                 text(
                     """
                     INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
-                    VALUES (:id, :household_id, 'email', :label, :source_path, 1)
+                    VALUES (:id, :household_id, 'email', :label, :source_path, TRUE)
                     """
                 ),
                 {'id': source_id, 'household_id': effective_household_id, 'label': 'E-mail', 'source_path': route_address},
@@ -171,7 +171,7 @@ def ensure_household_gmail_source(household_id: str, label_name: str) -> dict[st
                     text(
                         """
                         UPDATE receipt_sources
-                        SET source_path = :source_path, is_active = 1, label = COALESCE(label, :label), updated_at = CURRENT_TIMESTAMP
+                        SET source_path = :source_path, is_active = TRUE, label = COALESCE(label, :label), updated_at = CURRENT_TIMESTAMP
                         WHERE id = :id
                         """
                     ),
@@ -194,7 +194,7 @@ def ensure_household_gmail_source(household_id: str, label_name: str) -> dict[st
                 text(
                     """
                     INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
-                    VALUES (:id, :household_id, 'gmail_label', :label, :source_path, 1)
+                    VALUES (:id, :household_id, 'gmail_label', :label, :source_path, TRUE)
                     """
                 ),
                 {'id': source_id, 'household_id': effective_household_id, 'label': 'E-mail', 'source_path': effective_label_name},
