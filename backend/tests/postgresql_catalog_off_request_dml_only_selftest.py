@@ -23,7 +23,7 @@ GTIN_BRAVO = "8712345678902"
 NAME_ALPHA = "postgresql catalog off proof alpha"
 NAME_BRAVO = "PostgreSQL Catalog OFF Proof Bravo"
 NAME_FILTER = "postgresql catalog off proof"
-ALEMBIC_HEAD = "20260830_01"
+ALEMBIC_HEAD = "20260830_02"
 
 
 def _assert_runtime_create_denied() -> None:
@@ -86,7 +86,7 @@ def _assert_schema_contract() -> None:
     if before_tables != after_tables:
         raise AssertionError("Catalog/OFF validation unexpectedly mutated runtime schema")
 
-    print("POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_20260830_01_GREEN")
+    print("POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_20260830_02_GREEN")
     print("POSTGRESQL_CATALOG_OFF_BOOLEAN_TYPES_GREEN")
     print("POSTGRESQL_CATALOG_OFF_VALIDATION_ONLY_SCHEMA_GREEN")
 
