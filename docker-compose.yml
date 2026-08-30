@@ -5,7 +5,9 @@ services:
     ports:
       - "8011:8000"
     environment:
-      DATABASE_URL: sqlite:////app/data/rezzerv.db
+      DATABASE_URL: ${DATABASE_URL:-}
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-}
+      REZZERV_DATASTORE_POLICY: postgresql-only
       PYTHONUNBUFFERED: "1"
       REZZERV_SESSION_COOKIE_SECURE: "false"
       REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: "true"
@@ -28,7 +30,6 @@ services:
       REZZERV_GS1_MPM_SHARE_BASE_URL: ${REZZERV_GS1_MPM_SHARE_BASE_URL:-}
       REZZERV_GS1_MPM_SHARE_API_KEY: ${REZZERV_GS1_MPM_SHARE_API_KEY:-}
     volumes:
-      - ./backend/data:/app/data
       - ./tools:/app/tools:ro
       - rezzerv_u2net:/root/.u2net
       - rezzerv_paddlex:/root/.paddlex
