@@ -6603,7 +6603,7 @@ def count_household_admins(conn, household_id: str) -> int:
             SELECT COUNT(*) AS total FROM auth_membership_roles
             WHERE household_id = :household_id
               AND role_key = 'household.admin'
-              AND active = 1
+              AND active = TRUE
         """),
         {'household_id': str(household_id)},
     ).mappings().first()
@@ -7128,8 +7128,8 @@ def resolve_store_storage_target_location(conn, target_location_id: str | None) 
             FROM sublocations sl
             JOIN spaces s ON s.id = sl.space_id
             WHERE sl.id = :id
-              AND COALESCE(sl.active, 1) = 1
-              AND COALESCE(s.active, 1) = 1
+              AND COALESCE(sl.active, TRUE) = TRUE
+              AND COALESCE(s.active, TRUE) = TRUE
             LIMIT 1
             """
         ),
@@ -7158,9 +7158,9 @@ def resolve_store_storage_target_location(conn, target_location_id: str | None) 
             FROM spaces s
             LEFT JOIN sublocations sl
               ON sl.space_id = s.id
-             AND COALESCE(sl.active, 1) = 1
+             AND COALESCE(sl.active, TRUE) = TRUE
             WHERE s.id = :id
-              AND COALESCE(s.active, 1) = 1
+              AND COALESCE(s.active, TRUE) = TRUE
             GROUP BY s.id, s.naam
             LIMIT 1
             """
@@ -8593,7 +8593,7 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
         SELECT COUNT(*)
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
-          AND COALESCE(is_deleted, 0) = 0
+          AND COALESCE(is_deleted, FALSE) = FALSE
           AND TRIM(COALESCE(corrected_raw_label, raw_label, '')) <> ''
         """
         ),
@@ -8609,7 +8609,7 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
         SELECT COALESCE(SUM(COALESCE(corrected_line_total, line_total, 0)), 0)
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
-          AND COALESCE(is_deleted, 0) = 0
+          AND COALESCE(is_deleted, FALSE) = FALSE
         """
         ),
         {'receipt_table_id': receipt_table_id},
@@ -8620,7 +8620,7 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
         SELECT COALESCE(SUM(COALESCE(discount_amount, 0)), 0)
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
-          AND COALESCE(is_deleted, 0) = 0
+          AND COALESCE(is_deleted, FALSE) = FALSE
         """
         ),
         {'receipt_table_id': receipt_table_id},
@@ -8750,7 +8750,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                matched_global_product_id
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
-          AND COALESCE(is_deleted, 0) = 0
+          AND COALESCE(is_deleted, FALSE) = FALSE
         ORDER BY line_index ASC, id ASC
         """),
         {'receipt_table_id': receipt_table_id},
@@ -10739,14 +10739,14 @@ def backfill_receipt_unpack_statuses(conn, household_id: Optional[str] = None, l
                 SELECT COUNT(*)
                 FROM receipt_table_lines rtl_count
                 WHERE rtl_count.receipt_table_id = rt.id
-                  AND COALESCE(rtl_count.is_deleted, 0) = 0
+                  AND COALESCE(rtl_count.is_deleted, FALSE) = FALSE
                   AND TRIM(COALESCE(rtl_count.corrected_raw_label, rtl_count.raw_label, '')) <> ''
             ) AS line_count,
             (
                 SELECT COALESCE(SUM(COALESCE(rtl.corrected_line_total, rtl.line_total, 0)), 0)
                 FROM receipt_table_lines rtl
                 WHERE rtl.receipt_table_id = rt.id
-                  AND COALESCE(rtl.is_deleted, 0) = 0
+                  AND COALESCE(rtl.is_deleted, FALSE) = FALSE
             ) AS line_total_sum
         FROM receipt_tables rt
     """
@@ -11440,7 +11440,7 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                         SELECT COUNT(*)
                         FROM receipt_table_lines rtl_count
                         WHERE rtl_count.receipt_table_id = rt.id
-                          AND COALESCE(rtl_count.is_deleted, 0) = 0
+                          AND COALESCE(rtl_count.is_deleted, FALSE) = FALSE
                     ), rt.line_count, 0) AS line_count,
                     COALESCE(rs.label, 'Manual upload') AS source_label,
                     rr.sha256_hash,
@@ -11449,20 +11449,20 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                         SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) AS line_total_sum,
                     COALESCE((
                         SELECT SUM(COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) AS line_discount_sum,
                     COALESCE(rt.discount_total, 0) AS discount_total_effective,
                     COALESCE((
                         SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0) + COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
@@ -11552,7 +11552,7 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
                         SELECT COUNT(*)
                         FROM receipt_table_lines rtl_count
                         WHERE rtl_count.receipt_table_id = rt.id
-                          AND COALESCE(rtl_count.is_deleted, 0) = 0
+                          AND COALESCE(rtl_count.is_deleted, FALSE) = FALSE
                     ), rt.line_count, 0) AS line_count,
                     COALESCE(rs.label, 'Manual upload') AS source_label,
                     rem.sender_email,
@@ -11566,20 +11566,20 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
                         SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) AS line_total_sum,
                     COALESCE((
                         SELECT SUM(COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) AS line_discount_sum,
                     COALESCE(rt.discount_total, 0) AS discount_total_effective,
                     COALESCE((
                         SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0) + COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
@@ -11652,7 +11652,7 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
                         SELECT COUNT(*)
                         FROM receipt_table_lines rtl_count
                         WHERE rtl_count.receipt_table_id = rt.id
-                          AND COALESCE(rtl_count.is_deleted, 0) = 0
+                          AND COALESCE(rtl_count.is_deleted, FALSE) = FALSE
                     ), rt.line_count, 0) AS line_count,
                     rt.created_at,
                     rt.updated_at,
@@ -11671,20 +11671,20 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
                         SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) AS line_total_sum,
                     COALESCE((
                         SELECT SUM(COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) AS line_discount_sum,
                     COALESCE(rt.discount_total, 0) AS discount_total_effective,
                     COALESCE((
                         SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0) + COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) = FALSE
                     ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
@@ -11728,7 +11728,7 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
                     matched_article_id,
                     matched_global_product_id,
                     confidence_score,
-                    COALESCE(is_deleted, 0) AS is_deleted,
+                    COALESCE(is_deleted, FALSE) AS is_deleted,
                     COALESCE(is_validated, 0) AS is_validated
                 FROM receipt_table_lines
                 WHERE receipt_table_id = :receipt_table_id
@@ -11821,7 +11821,7 @@ def get_receipt_explainability(receipt_table_id: str, authorization: Optional[st
                     discount_amount,
                     article_match_status,
                     confidence_score,
-                    COALESCE(is_deleted, 0) AS is_deleted,
+                    COALESCE(is_deleted, FALSE) AS is_deleted,
                     COALESCE(is_validated, 0) AS is_validated
                 FROM receipt_table_lines
                 WHERE receipt_table_id = :receipt_table_id
@@ -11981,7 +11981,7 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
     with engine.begin() as conn:
         context = require_receipt_write_context(conn, receipt_table_id, authorization)
         row = conn.execute(
-            text("SELECT id, receipt_table_id, raw_label, normalized_label, quantity, unit, unit_price, line_total, matched_article_id, matched_global_product_id, COALESCE(is_deleted, 0) AS is_deleted, COALESCE(is_validated, 0) AS is_validated FROM receipt_table_lines WHERE id = :id AND receipt_table_id = :receipt_table_id LIMIT 1"),
+            text("SELECT id, receipt_table_id, raw_label, normalized_label, quantity, unit, unit_price, line_total, matched_article_id, matched_global_product_id, COALESCE(is_deleted, FALSE) AS is_deleted, COALESCE(is_validated, 0) AS is_validated FROM receipt_table_lines WHERE id = :id AND receipt_table_id = :receipt_table_id LIMIT 1"),
             {'id': line_id, 'receipt_table_id': receipt_table_id},
         ).mappings().first()
         if not row:
@@ -12180,7 +12180,7 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
             SELECT COUNT(*)
             FROM receipt_table_lines
             WHERE receipt_table_id = :receipt_table_id
-              AND COALESCE(is_deleted, 0) = 0
+              AND COALESCE(is_deleted, FALSE) = FALSE
               AND TRIM(COALESCE(corrected_raw_label, raw_label, '')) <> ''
             """),
             {'receipt_table_id': receipt_table_id},
@@ -12188,7 +12188,7 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
         if int(valid_line_count or 0) < 1:
             raise HTTPException(status_code=400, detail='Voeg minimaal één geldige bonregel toe voordat je goedkeurt')
         line_total_sum = conn.execute(
-            text("SELECT COALESCE(SUM(COALESCE(corrected_line_total, line_total, 0)), 0) FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, 0) = 0"),
+            text("SELECT COALESCE(SUM(COALESCE(corrected_line_total, line_total, 0)), 0) FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, FALSE) = FALSE"),
             {'receipt_table_id': receipt_table_id},
         ).scalar()
         discount_total = conn.execute(
@@ -12230,7 +12230,7 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
         line_ids = [
             str(row[0])
             for row in conn.execute(
-                text("SELECT id FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, 0) = 0 ORDER BY line_index ASC, created_at ASC"),
+                text("SELECT id FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, FALSE) = FALSE ORDER BY line_index ASC, created_at ASC"),
                 {'receipt_table_id': receipt_table_id},
             ).fetchall()
             if row[0]
@@ -13701,7 +13701,7 @@ def run_store_location_diagnostic(payload: DiagnosticRequest):
                 FROM spaces s
                 LEFT JOIN sublocations sl ON sl.space_id = s.id
                 WHERE (s.household_id = 'demo-household' OR s.household_id = :household_id)
-                  AND COALESCE(s.active, 1) = 1
+                  AND COALESCE(s.active, TRUE) = TRUE
                 ORDER BY s.naam ASC, sl.naam ASC
                 """
             ),
@@ -15887,14 +15887,14 @@ def list_spaces(householdId: Optional[str] = Query(None), authorization: Optiona
                 SELECT
                     s.id,
                     s.naam,
-                    COALESCE(s.active, 1) AS active,
+                    COALESCE(s.active, TRUE) AS active,
                     COUNT(DISTINCT sl.id) AS sublocation_count,
                     COUNT(DISTINCT i.id) AS inventory_count
                 FROM spaces s
                 LEFT JOIN sublocations sl ON sl.space_id = s.id
                 LEFT JOIN inventory i ON i.space_id = s.id AND i.household_id = s.household_id
                 WHERE s.household_id = :household_id
-                GROUP BY s.id, s.naam, COALESCE(s.active, 1)
+                GROUP BY s.id, s.naam, COALESCE(s.active, TRUE)
                 ORDER BY lower(s.naam) ASC
                 """
             ),
@@ -15931,11 +15931,11 @@ def create_household_space(payload: SpaceCreate, authorization: Optional[str] = 
             text(
                 """
                 INSERT INTO spaces (id, naam, household_id, active)
-                VALUES (lower(hex(randomblob(16))), :naam, :household_id, :active)
-                RETURNING id, naam, COALESCE(active, 1) AS active
+                VALUES (:id, :naam, :household_id, :active)
+                RETURNING id, naam, COALESCE(active, TRUE) AS active
                 """
             ),
-            {"naam": payload.naam, "household_id": household_id, "active": 1 if payload.active else 0},
+            {"id": uuid.uuid4().hex, "naam": payload.naam, "household_id": household_id, "active": bool(payload.active)},
         ).mappings().first()
     return {"space": {"id": row["id"], "naam": row["naam"], "active": bool(row["active"])}, "message": "Ruimte opgeslagen."}
 
@@ -15963,10 +15963,10 @@ def update_household_space(space_id: str, payload: SpaceUpdateRequest, authoriza
                    SET naam = :naam,
                        active = :active
                  WHERE id = :id
-             RETURNING id, naam, COALESCE(active, 1) AS active
+             RETURNING id, naam, COALESCE(active, TRUE) AS active
                 """
             ),
-            {"id": space_id, "naam": payload.naam, "active": 1 if payload.active else 0},
+            {"id": space_id, "naam": payload.naam, "active": bool(payload.active)},
         ).mappings().first()
     return {"space": {"id": row["id"], "naam": row["naam"], "active": bool(row["active"])}, "message": "Ruimte opgeslagen."}
 
@@ -16015,14 +16015,14 @@ def list_sublocations(householdId: Optional[str] = Query(None), authorization: O
                     sl.id,
                     sl.naam,
                     sl.space_id,
-                    COALESCE(sl.active, 1) AS active,
+                    COALESCE(sl.active, TRUE) AS active,
                     s.naam AS space_name,
                     COUNT(DISTINCT i.id) AS inventory_count
                 FROM sublocations sl
                 JOIN spaces s ON s.id = sl.space_id
                 LEFT JOIN inventory i ON i.sublocation_id = sl.id AND i.household_id = s.household_id
                 WHERE s.household_id = :household_id
-                GROUP BY sl.id, sl.naam, sl.space_id, COALESCE(sl.active, 1), s.naam
+                GROUP BY sl.id, sl.naam, sl.space_id, COALESCE(sl.active, TRUE), s.naam
                 ORDER BY lower(s.naam) ASC, lower(sl.naam) ASC
                 """
             ),
@@ -16064,10 +16064,10 @@ def create_household_sublocation(payload: SublocationCreate, authorization: Opti
         row = conn.execute(
             text("""
                 INSERT INTO sublocations (id, naam, space_id, active)
-                VALUES (lower(hex(randomblob(16))), :naam, :space_id, :active)
-                RETURNING id, naam, space_id, COALESCE(active, 1) AS active
+                VALUES (:id, :naam, :space_id, :active)
+                RETURNING id, naam, space_id, COALESCE(active, TRUE) AS active
             """),
-            {"naam": payload.naam, "space_id": payload.space_id, "active": 1 if payload.active else 0},
+            {"id": uuid.uuid4().hex, "naam": payload.naam, "space_id": payload.space_id, "active": bool(payload.active)},
         ).mappings().first()
     return {"sublocation": {"id": row["id"], "naam": row["naam"], "space_id": row["space_id"], "active": bool(row["active"])}, "message": "Sublocatie opgeslagen."}
 
@@ -16104,9 +16104,9 @@ def update_household_sublocation(sublocation_id: str, payload: SublocationUpdate
                        space_id = :space_id,
                        active = :active
                  WHERE id = :id
-             RETURNING id, naam, space_id, COALESCE(active, 1) AS active
+             RETURNING id, naam, space_id, COALESCE(active, TRUE) AS active
             """),
-            {"id": sublocation_id, "naam": payload.naam, "space_id": payload.space_id, "active": 1 if payload.active else 0},
+            {"id": sublocation_id, "naam": payload.naam, "space_id": payload.space_id, "active": bool(payload.active)},
         ).mappings().first()
     return {"sublocation": {"id": row["id"], "naam": row["naam"], "space_id": row["space_id"], "active": bool(row["active"])}, "message": "Sublocatie opgeslagen."}
 
@@ -16156,9 +16156,9 @@ def get_store_location_options(householdId: Optional[str] = Query(None), authori
                     sl.id AS sublocation_id,
                     sl.naam AS sublocation_name
                 FROM spaces s
-                LEFT JOIN sublocations sl ON sl.space_id = s.id AND COALESCE(sl.active, 1) = 1
+                LEFT JOIN sublocations sl ON sl.space_id = s.id AND COALESCE(sl.active, TRUE) = TRUE
                 WHERE s.household_id = :household_id
-                  AND COALESCE(s.active, 1) = 1
+                  AND COALESCE(s.active, TRUE) = TRUE
                 ORDER BY lower(s.naam) ASC, lower(sl.naam) ASC
                 """
             ),
