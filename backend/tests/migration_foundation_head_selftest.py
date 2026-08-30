@@ -8,6 +8,9 @@ import migration_foundation_selftest as foundation_test
 HEAD_REVISION = "20260830_02"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
+_SQLITE_MANUAL_SOURCE_TRIGGER_HEADER = (
+    "-- trigger: trg_raw_receipts_ensure_manual_source (table=raw_receipts)"
+)
 _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS = {
     "trg_household_zero_system_insert",
     "trg_receipt_tables_preserve_explicit_approval",
@@ -37,16 +40,31 @@ def _postgresql_trigger_names(connection) -> set[str]:
     }
 
 
-def _run_foundation_with_locked_trigger_contract() -> None:
-    """Extend only the PostgreSQL trigger expectation introduced at 20260830_02.
+def _remove_locked_sqlite_trigger_extension(schema: str) -> str:
+    """Remove exactly the 20260830_02 trigger block from baseline comparison."""
+    blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
+    retained = [
+        block
+        for block in blocks
+        if block.splitlines()[0].strip() != _SQLITE_MANUAL_SOURCE_TRIGGER_HEADER
+    ]
+    return "\n\n".join(retained).rstrip() + "\n"
+
+
+def _run_foundation_with_locked_head_contract() -> None:
+    """Extend only the schema contracts introduced at 20260830_02.
 
     The historical foundation core deliberately keeps its pre-20260830_02
-    four-trigger default. Its trigger assertion is the final PostgreSQL schema
-    assertion. We permit that exact historical assertion to be superseded only
-    when the complete actual trigger set equals the locked five-trigger head
-    contract; every other failure is re-raised unchanged.
+    trigger and immutable-baseline defaults. The head wrapper treats exactly
+    the new raw-receipt manual-source trigger as a later SQLite migration
+    extension and permits exactly that same fifth trigger in PostgreSQL. Every
+    other baseline, schema or trigger difference remains fail-closed.
     """
     original_assert = foundation_test.foundation._assert_postgresql_schema
+    original_strip = foundation_test.foundation._strip_migration_extensions
+
+    def _strip_migration_extensions_at_head(schema: str) -> str:
+        return _remove_locked_sqlite_trigger_extension(original_strip(schema))
 
     def _assert_postgresql_schema_at_head(connection) -> None:
         try:
@@ -79,11 +97,13 @@ def _run_foundation_with_locked_trigger_contract() -> None:
         print("POSTGRESQL_ONBOARDING_USE_CASE_SCHEMA_AUTHORITY_GREEN")
         print("POSTGRESQL_GPC_RESIDUAL_SCHEMA_AUTHORITY_GREEN")
 
+    foundation_test.foundation._strip_migration_extensions = _strip_migration_extensions_at_head
     foundation_test.foundation._assert_postgresql_schema = _assert_postgresql_schema_at_head
     try:
         foundation_test.main()
     finally:
         foundation_test.foundation._assert_postgresql_schema = original_assert
+        foundation_test.foundation._strip_migration_extensions = original_strip
 
 
 def _assert_receipt_household_authority(connection) -> None:
@@ -132,7 +152,7 @@ def _assert_receipt_household_authority(connection) -> None:
 
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
-    _run_foundation_with_locked_trigger_contract()
+    _run_foundation_with_locked_head_contract()
 
     engine = create_engine(foundation_test.foundation._engine_url())
     try:
