@@ -9,6 +9,7 @@ on:
       - 'frontend/tests/e2e/authorization-disabled-ui.frontend-regression.spec.js'
       - '.github/workflows/authorization-disabled-ui-validation.yml'
       - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
 
 concurrency:
   group: authorization-disabled-ui-${{ github.event.pull_request.number || github.ref }}
@@ -17,6 +18,9 @@ concurrency:
 jobs:
   authorization-disabled-ui:
     runs-on: ubuntu-latest
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
     steps:
       - uses: actions/checkout@v4
       - name: Generate synthetic CI superuser credential

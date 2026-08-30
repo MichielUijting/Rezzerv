@@ -1,10 +1,9 @@
 """Dedicated datastore connection for Alembic schema authority.
 
-Rezzerv runtime uses DATABASE_URL. Schema migrations may use the separately
-privileged MIGRATION_DATABASE_URL so the application role itself does not need
-CREATE/ALTER/DROP rights. When MIGRATION_DATABASE_URL is absent, the historical
-single-credential behavior remains available for SQLite and transitional
-installations.
+Rezzerv runtime uses DATABASE_URL. PostgreSQL schema migrations require the
+separately privileged MIGRATION_DATABASE_URL so the application role itself does
+not need CREATE/ALTER/DROP rights. The historical single-credential behavior is
+retained only for explicit SQLite compatibility/test/adoption runtimes.
 """
 from __future__ import annotations
 
@@ -15,11 +14,45 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
 
-_DEFAULT_DATABASE_URL = "sqlite:////app/data/rezzerv.db"
-MIGRATION_DATABASE_URL = (
-    str(os.getenv("MIGRATION_DATABASE_URL", "") or "").strip()
-    or str(os.getenv("DATABASE_URL", _DEFAULT_DATABASE_URL) or _DEFAULT_DATABASE_URL).strip()
-)
+_DEFAULT_SQLITE_DATABASE_URL = "sqlite:////app/data/rezzerv.db"
+
+
+def _runtime_database_url() -> str:
+    configured = str(os.getenv("DATABASE_URL", "") or "").strip()
+    if configured:
+        return configured
+
+    policy = str(
+        os.getenv("REZZERV_DATASTORE_POLICY", "compatibility") or "compatibility"
+    ).strip().lower()
+    if policy == "postgresql-only":
+        raise RuntimeError(
+            "DATABASE_URL is required when REZZERV_DATASTORE_POLICY=postgresql-only"
+        )
+    return _DEFAULT_SQLITE_DATABASE_URL
+
+
+def _migration_database_url() -> str:
+    configured = str(os.getenv("MIGRATION_DATABASE_URL", "") or "").strip()
+    if configured:
+        return configured
+
+    runtime_url = _runtime_database_url()
+    runtime_backend = make_url(runtime_url).get_backend_name()
+    if runtime_backend == "sqlite":
+        return runtime_url
+    if runtime_backend == "postgresql":
+        raise RuntimeError(
+            "MIGRATION_DATABASE_URL is required for PostgreSQL so schema authority "
+            "does not silently reuse the runtime application credential"
+        )
+    raise RuntimeError(
+        "Unsupported Rezzerv runtime datastore for migration configuration: "
+        f"{runtime_backend!r}"
+    )
+
+
+MIGRATION_DATABASE_URL = _migration_database_url()
 
 
 def _env_int(name: str, default: int, *, minimum: int = 0) -> int:

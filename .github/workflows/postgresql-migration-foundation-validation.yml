@@ -9,6 +9,7 @@ on:
       - 'backend/app/api/**'
       - 'backend/app/db.py'
       - 'backend/app/main.py'
+      - 'backend/app/migration_db.py'
       - 'backend/app/models/**'
       - 'backend/app/runtime_preflight.py'
       - 'backend/app/schema_migration_preflight.py'
@@ -181,6 +182,7 @@ jobs:
         env:
           PYTHONPATH: backend
           DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:5432/rezzerv_migrations
+          MIGRATION_DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:5432/rezzerv_migrations
           REZZERV_EXPECT_MIGRATION_MODE: postgresql-lineage
           DATABASE_CONNECT_TIMEOUT_SECONDS: '5'
           DATABASE_POOL_SIZE: '2'

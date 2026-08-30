@@ -16,6 +16,7 @@ on:
       - 'frontend/package.json'
       - 'frontend/package-lock.json'
       - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
       - '.github/workflows/external-recognition-confirmation-validation.yml'
   workflow_dispatch:
 
@@ -32,6 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
       PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
       PLAYWRIGHT_API_URL: http://host.docker.internal:8011
       PLAYWRIGHT_TEST_ADMIN_EMAIL: test-admin@rezzerv.local

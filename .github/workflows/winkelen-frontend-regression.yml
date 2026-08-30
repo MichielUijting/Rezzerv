@@ -22,6 +22,7 @@ on:
       - 'backend/tests/authorization_role_matrix_selftest.py'
       - 'backend/tests/shopping_list_release1_selftest.py'
       - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
       - '.github/workflows/winkelen-frontend-regression.yml'
   workflow_dispatch:
 
@@ -38,6 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
       PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
       PLAYWRIGHT_API_URL: http://host.docker.internal:8011
       PLAYWRIGHT_TEST_ADMIN_EMAIL: test-admin@rezzerv.local

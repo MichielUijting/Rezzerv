@@ -17,7 +17,7 @@ from app.services import external_recognition_confirmation as recognition
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260829_07"
+HEAD_REVISION = "20260830_01"
 
 
 def _database_url(path: Path) -> str:
@@ -29,6 +29,7 @@ def _migrate_database(path: Path) -> None:
     env = os.environ.copy()
     env["DATABASE_URL"] = database_url
     env["MIGRATION_DATABASE_URL"] = database_url
+    env["REZZERV_DATASTORE_POLICY"] = "compatibility"
     env["PYTHONPATH"] = str(BACKEND_ROOT)
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],

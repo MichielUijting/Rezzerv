@@ -18,5 +18,14 @@ services:
     volumes:
       - rezzerv_postgres:/var/lib/postgresql/data
 
+  backend:
+    environment:
+      DATABASE_URL: postgresql://${REZZERV_POSTGRES_USER:-rezzerv}:${REZZERV_POSTGRES_PASSWORD:-rezzerv-local-only}@postgres:5432/${REZZERV_POSTGRES_DB:-rezzerv}
+      MIGRATION_DATABASE_URL: postgresql://${REZZERV_POSTGRES_USER:-rezzerv}:${REZZERV_POSTGRES_PASSWORD:-rezzerv-local-only}@postgres:5432/${REZZERV_POSTGRES_DB:-rezzerv}
+      REZZERV_DATASTORE_POLICY: postgresql-only
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   rezzerv_postgres:

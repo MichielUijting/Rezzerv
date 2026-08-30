@@ -10,8 +10,11 @@ on:
       - 'frontend/package-lock.json'
       - 'backend/app/api/**'
       - 'backend/app/services/**'
+      - 'backend/app/db.py'
+      - 'backend/app/migration_db.py'
       - 'backend/tests/**'
       - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
       - '.github/workflows/pr253-full-frontend-regression.yml'
   workflow_dispatch:
 
@@ -28,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
       PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
       PLAYWRIGHT_API_URL: http://host.docker.internal:8011
       PLAYWRIGHT_TEST_ADMIN_EMAIL: test-admin@rezzerv.local
@@ -137,7 +142,7 @@ jobs:
                       SELECT user_id
                       FROM auth_platform_user_roles
                       WHERE role_key = 'platform.ip_owner'
-                        AND active = 1
+                        AND active = TRUE
                         AND user_id <> :user_id
                       LIMIT 1
                   """),
@@ -154,9 +159,9 @@ jobs:
                       INSERT INTO auth_platform_user_roles
                           (user_id, role_key, active, created_at, updated_at)
                       VALUES
-                          (:user_id, 'platform.ip_owner', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                          (:user_id, 'platform.ip_owner', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                       ON CONFLICT(user_id, role_key) DO UPDATE SET
-                          active = 1,
+                          active = TRUE,
                           updated_at = CURRENT_TIMESTAMP
                   """),
                   {"user_id": user_id},
