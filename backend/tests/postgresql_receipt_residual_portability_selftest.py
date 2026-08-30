@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import ast
-import gzip
 import re
-import sqlite3
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_ROOT = BACKEND_ROOT / "app" / "services"
-BASELINE_PATH = BACKEND_ROOT / "alembic" / "baseline_sqlite.sql.gz"
+MIGRATION_PATH = (
+    BACKEND_ROOT
+    / "alembic"
+    / "versions"
+    / "20260829_15_receipt_store_chain_schema_authority.py"
+)
 SCOPE_FILES = (
     "receipt_inventory_lifecycle_service.py",
     "receipt_status_sync.py",
@@ -33,6 +36,8 @@ def _scope_paths() -> tuple[Path, ...]:
     missing = [str(path) for path in paths if not path.is_file()]
     if missing:
         raise AssertionError(f"Receipt residual scope files ontbreken: {missing}")
+    if not MIGRATION_PATH.is_file():
+        raise AssertionError(f"Receipt store-chain Alembic authority ontbreekt: {MIGRATION_PATH}")
     return paths
 
 
@@ -112,24 +117,24 @@ def _assert_boolean_contract() -> None:
     print("POSTGRESQL_RECEIPT_RESIDUAL_BOOLEAN_SQL_GREEN")
 
 
-def _assert_store_chain_baseline_authority() -> None:
-    if not BASELINE_PATH.is_file():
-        raise AssertionError(f"Immutable SQLite baseline ontbreekt: {BASELINE_PATH}")
-    with gzip.open(BASELINE_PATH, "rt", encoding="utf-8") as handle:
-        baseline = handle.read()
-    connection = sqlite3.connect(":memory:")
-    try:
-        connection.executescript(baseline)
-        columns = {
-            str(row[1])
-            for row in connection.execute('PRAGMA table_info("receipt_tables")').fetchall()
-        }
-    finally:
-        connection.close()
-    if "store_chain" not in columns:
+def _assert_store_chain_alembic_authority() -> None:
+    migration_source = MIGRATION_PATH.read_text(encoding="utf-8-sig")
+    required_migration_tokens = (
+        'revision: str = "20260829_15"',
+        'down_revision: Union[str, None] = "20260829_14"',
+        '_RECEIPT_TABLE = "receipt_tables"',
+        '"store_chain" not in columns',
+        'sa.Column("store_chain", sa.Text(), nullable=True)',
+        "op.add_column(",
+    )
+    missing_migration = [
+        token for token in required_migration_tokens if token not in migration_source
+    ]
+    if missing_migration:
         raise AssertionError(
-            "Immutable baseline mist receipt_tables.store_chain; Alembic ownership must be extended"
+            f"Receipt store-chain Alembic authority incomplete: {missing_migration}"
         )
+
     status_source = (SERVICE_ROOT / "receipt_status_baseline_service.py").read_text(
         encoding="utf-8-sig"
     )
@@ -137,7 +142,10 @@ def _assert_store_chain_baseline_authority() -> None:
         raise AssertionError("Receipt status baseline does not use portable schema inspection")
     if "Canonical receipt_tables.store_chain schema ontbreekt" not in status_source:
         raise AssertionError("Receipt status baseline is not fail-closed on missing store_chain")
-    print("POSTGRESQL_RECEIPT_STORE_CHAIN_BASELINE_AUTHORITY_GREEN")
+    if "ALTER TABLE receipt_tables ADD COLUMN store_chain" in status_source:
+        raise AssertionError("Receipt status baseline still owns store_chain DDL at runtime")
+
+    print("POSTGRESQL_RECEIPT_STORE_CHAIN_ALEMBIC_AUTHORITY_GREEN")
     print("POSTGRESQL_RECEIPT_STATUS_VALIDATION_ONLY_GREEN")
 
 
@@ -146,7 +154,7 @@ def main() -> None:
     print(f"POSTGRESQL_RECEIPT_RESIDUAL_SCOPE_GREEN service_files={len(scope)}")
     _assert_runtime_sql_portable()
     _assert_boolean_contract()
-    _assert_store_chain_baseline_authority()
+    _assert_store_chain_alembic_authority()
     print("POSTGRESQL_RECEIPT_RESIDUAL_STATIC_SELFTEST_GREEN")
 
 
