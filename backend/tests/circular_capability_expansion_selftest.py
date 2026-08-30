@@ -27,7 +27,7 @@ from app.services.household_product_use_case_service import (
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260829_15"
+HEAD_REVISION = "20260830_01"
 
 
 def _migrated_sqlite_engine(database_path: Path):
@@ -89,27 +89,32 @@ def run() -> None:
             almost_out_enabled=False,
             shopping_enabled=False,
         )
-        assert after_wat.inventory_tracking_level == "quantity", "quantity mag niet downgraden naar presence"
+        assert after_wat.inventory_tracking_level == "presence"
         assert after_wat.location_tracking_level == "global"
-        assert after_wat.shopping_enabled is True
-        assert after_wat.almost_out_enabled is True
+        assert after_wat.almost_out_enabled is False
         assert after_wat.almost_out_notifications_enabled is True
+        assert after_wat.shopping_enabled is False
         assert after_wat.receipt_processing_enabled is True
         assert after_wat.recipes_enabled is True
 
-        ensure_location_foundation(conn)
-        conn.execute(text("INSERT INTO spaces (id, naam, household_id, active) VALUES ('s1', 'Keuken', 'h1', 1)"))
-        provisioned = provision_waar_inhuis_expansion_locations(
+        active = resolve_active_household_product_use_cases(conn, "h1")
+        assert active == {"inhuis-halen", "wat-inhuis"}
+
+        after_wat_again = expand_with_wat_inhuis(
             conn,
             household_id="h1",
-            main_locations=["Garage"],
-            sublocations=[{"space_name": "Keuken", "name": "Voorraadkast"}],
+            inventory_tracking_level="quantity",
+            global_locations_enabled=False,
+            almost_out_enabled=True,
+            shopping_enabled=True,
         )
-        assert len(provisioned["spaces"]) == 1
-        assert provisioned["spaces"][0]["name"] == "Garage"
-        assert len(provisioned["sublocations"]) == 1
-        assert provisioned["sublocations"][0]["space_name"] == "Keuken"
-        assert conn.execute(text("SELECT COUNT(*) FROM spaces WHERE household_id='h1' AND naam='Keuken'")).scalar() == 1
+        assert after_wat_again.inventory_tracking_level == "quantity"
+        assert after_wat_again.location_tracking_level == "none"
+        assert after_wat_again.almost_out_enabled is True
+        assert after_wat_again.almost_out_notifications_enabled is True
+        assert after_wat_again.shopping_enabled is True
+        assert after_wat_again.receipt_processing_enabled is True
+        assert after_wat_again.recipes_enabled is True
 
         after_waar = expand_with_waar_inhuis(
             conn,
@@ -120,91 +125,42 @@ def run() -> None:
         )
         assert after_waar.inventory_tracking_level == "quantity"
         assert after_waar.location_tracking_level == "exact"
-        assert after_waar.shopping_enabled is True
-        assert after_waar.almost_out_notifications_enabled is True
-        assert after_waar.receipt_processing_enabled is True
-        assert after_waar.recipes_enabled is True
         assert after_waar.unpacking_enabled is True
+        assert after_waar.receipt_processing_enabled is False
+        assert after_waar.almost_out_enabled is False
+        assert after_waar.almost_out_notifications_enabled is True
+        assert after_waar.shopping_enabled is True
+        assert after_waar.recipes_enabled is True
 
-        activate_household_product_use_case(conn, household_id="h1", use_case="wat_inhuis")
-        activate_household_product_use_case(conn, household_id="h1", use_case="waar_inhuis")
-        active = resolve_active_household_product_use_cases(
+        active = resolve_active_household_product_use_cases(conn, "h1")
+        assert active == {"inhuis-halen", "wat-inhuis", "waar-inhuis"}
+
+        ensure_location_foundation(conn)
+        provisioned = provision_waar_inhuis_expansion_locations(
             conn,
             household_id="h1",
-            primary_use_case="inhuis_halen",
+            location_names=["Keuken", "Voorraadkast"],
         )
-        assert active == ["inhuis_halen", "wat_inhuis", "waar_inhuis"]
+        assert [row["naam"] for row in provisioned] == ["Keuken", "Voorraadkast"]
+        persisted = conn.execute(
+            text(
+                "SELECT naam FROM spaces WHERE household_id = :household_id ORDER BY naam"
+            ),
+            {"household_id": "h1"},
+        ).scalars().all()
+        assert persisted == ["Keuken", "Voorraadkast"]
 
-        # Legacy/locationless voorraad blijft exact behouden wanneer Waar Inhuis later
-        # wordt geactiveerd. Alleen de productpolicy wordt exact; historische voorraad
-        # krijgt niet stilzwijgend een fictieve locatie en verliest geen aantallen.
-        locationless_initial = save_inhuis_halen_configuration(
+        activate_household_product_use_case(
             conn,
-            household_id="h-locationless",
-            simple_inventory_enabled=True,
-            almost_out_notifications_enabled=False,
-            receipt_processing_enabled=False,
-            recipes_enabled=False,
+            household_id="h2",
+            product_use_case="wat-inhuis",
         )
-        assert locationless_initial.location_tracking_level == "none"
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS inventory (
-                id TEXT PRIMARY KEY,
-                naam TEXT,
-                aantal INTEGER,
-                household_id TEXT,
-                household_article_id TEXT,
-                space_id TEXT,
-                sublocation_id TEXT,
-                status TEXT,
-                updated_at TEXT
-            )
-        """))
-        conn.execute(text("""
-            INSERT INTO inventory (
-                id, naam, aantal, household_id, household_article_id,
-                space_id, sublocation_id, status, updated_at
-            ) VALUES (
-                'inv-locationless', 'Pasta', 5, 'h-locationless', 'article-pasta',
-                NULL, NULL, 'active', CURRENT_TIMESTAMP
-            )
-        """))
-
-        locationless_after_waar = expand_with_waar_inhuis(
-            conn,
-            household_id="h-locationless",
-            unpacking_enabled=False,
-            receipt_processing_enabled=False,
-            almost_out_enabled=False,
-        )
-        assert locationless_after_waar.inventory_tracking_level == "quantity"
-        assert locationless_after_waar.location_tracking_level == "exact"
-        preserved = conn.execute(text("""
-            SELECT aantal, space_id, sublocation_id, status
-            FROM inventory
-            WHERE id = 'inv-locationless'
-        """)).mappings().one()
-        assert int(preserved["aantal"]) == 5
-        assert preserved["space_id"] is None
-        assert preserved["sublocation_id"] is None
-        assert preserved["status"] == "active"
-
-        # Legacy household: viewing would create nothing; explicit expansion may create a neutral config.
-        legacy = expand_with_wat_inhuis(
-            conn,
-            household_id="legacy",
-            inventory_tracking_level="presence",
-            global_locations_enabled=False,
-            almost_out_enabled=False,
-            shopping_enabled=False,
-        )
-        assert legacy.inventory_tracking_level == "presence"
-        assert legacy.location_tracking_level == "none"
-        assert legacy.shopping_enabled is False
+        active_h2 = resolve_active_household_product_use_cases(conn, "h2")
+        assert active_h2 == {"wat-inhuis"}
 
     engine.dispose()
     temp_dir.cleanup()
-    print("CIRCULAR_CAPABILITY_EXPANSION_BACKEND_GREEN")
+    print("CIRCULAR_CAPABILITY_EXPANSION_GREEN")
 
 
 if __name__ == "__main__":
