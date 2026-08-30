@@ -56,7 +56,7 @@ def _table_columns(
     return tuple(
         (
             str(row[1]),
-            str(row[2] or "").upper(),
+            str(row[2] or "").upper().replace(" ", ""),
             int(row[3] or 0),
             row[4],
             int(row[5] or 0),
