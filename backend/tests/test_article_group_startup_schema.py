@@ -32,6 +32,7 @@ def _run_startup_probe(temporary_root: Path) -> subprocess.CompletedProcess[str]
     environment.update(
         {
             "DATABASE_URL": f"sqlite:///{database_path.as_posix()}",
+            "REZZERV_DATASTORE_POLICY": "compatibility",
             "RECEIPT_STORAGE_ROOT": str(receipt_storage_root),
             "PYTHONPATH": str(BACKEND_ROOT),
         }
