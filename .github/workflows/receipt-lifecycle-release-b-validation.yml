@@ -134,7 +134,7 @@ jobs:
           required_lineage_tokens = [
               "rt.workflow_state = 'removed_reimport_allowed'",
               'rr.sha256_hash = :sha256_hash',
-              'COALESCE(is_validated, 0) AS is_validated',
+              'COALESCE(is_validated, FALSE) AS is_validated',
               'purchase_import_lines',
               'processed_event_id',
           ]

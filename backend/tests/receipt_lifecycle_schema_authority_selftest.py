@@ -11,7 +11,7 @@ import tempfile
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "backend" / "alembic.ini"
 PREVIOUS_REVISION = "20260828_01"
-HEAD_REVISION = "20260829_14"
+HEAD_REVISION = "20260829_15"
 RECEIPT_TABLES = ("raw_receipts", "receipt_tables", "receipt_table_lines")
 
 
@@ -53,9 +53,23 @@ def _receipt_schema_snapshot(connection: sqlite3.Connection) -> tuple[tuple[str,
         for row in connection.execute(
             f"SELECT type, name, tbl_name, sql FROM sqlite_master "
             f"WHERE tbl_name IN ({placeholders}) AND sql IS NOT NULL "
+            f"AND NOT (type = 'table' AND name = 'receipt_tables') "
             f"ORDER BY type, name",
             RECEIPT_TABLES,
         ).fetchall()
+    )
+
+
+def _receipt_table_columns(connection: sqlite3.Connection) -> tuple[tuple[str, str, int, object, int], ...]:
+    return tuple(
+        (
+            str(row[1]),
+            str(row[2] or "").upper(),
+            int(row[3] or 0),
+            row[4],
+            int(row[5] or 0),
+        )
+        for row in connection.execute('PRAGMA table_info("receipt_tables")').fetchall()
     )
 
 
@@ -65,13 +79,26 @@ def _canonical_schema_is_validation_only() -> None:
         _run_alembic(database, PREVIOUS_REVISION)
         with sqlite3.connect(database) as connection:
             before = _receipt_schema_snapshot(connection)
+            before_columns = _receipt_table_columns(connection)
+            before_names = tuple(column[0] for column in before_columns)
+            if "store_chain" in before_names:
+                raise AssertionError("Pre-authority receipt fixture unexpectedly contains store_chain")
             if _revision(connection) != PREVIOUS_REVISION:
                 raise AssertionError("Canonical fixture revision drifted before validation")
         _run_alembic(database, "head")
         with sqlite3.connect(database) as connection:
             after = _receipt_schema_snapshot(connection)
+            after_columns = _receipt_table_columns(connection)
             if before != after:
-                raise AssertionError("Receipt authority revision mutated canonical SQLite schema")
+                raise AssertionError(
+                    "Receipt authority revisions mutated canonical SQLite schema outside receipt_tables.store_chain"
+                )
+            expected_columns = before_columns + (("store_chain", "TEXT", 0, None, 0),)
+            if after_columns != expected_columns:
+                raise AssertionError(
+                    "Receipt authority head introduced an unexpected receipt_tables column delta: "
+                    f"expected={expected_columns!r} actual={after_columns!r}"
+                )
             if _revision(connection) != HEAD_REVISION:
                 raise AssertionError(
                     f"Expected revision {HEAD_REVISION}, got {_revision(connection)!r}"

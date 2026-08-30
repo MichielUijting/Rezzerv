@@ -51,7 +51,7 @@ def load_deleted_reimport_lineage(conn, household_id: str, sha256_hash: str) -> 
               AND rt.deleted_at IS NOT NULL
               AND rt.workflow_state = 'removed_reimport_allowed'
               AND COALESCE(TRIM(rt.logical_receipt_key), '') <> ''
-            ORDER BY datetime(rt.deleted_at) DESC, datetime(rt.updated_at) DESC, rt.id DESC
+            ORDER BY rt.deleted_at DESC, rt.updated_at DESC, rt.id DESC
             LIMIT 1
             """
         ),
@@ -65,7 +65,7 @@ def load_deleted_reimport_lineage(conn, household_id: str, sha256_hash: str) -> 
             """
             SELECT line_index, raw_label, normalized_label, quantity, unit,
                    unit_price, line_total, logical_line_key,
-                   COALESCE(is_validated, 0) AS is_validated
+                   COALESCE(is_validated, FALSE) AS is_validated
             FROM receipt_table_lines
             WHERE receipt_table_id = :receipt_table_id
               AND COALESCE(TRIM(logical_line_key), '') <> ''
@@ -152,7 +152,7 @@ def get_prior_processed_line_fact(conn, logical_line_key: str | None, *, current
                     lower(trim(COALESCE(pil.processing_status, ''))) = 'processed'
                  OR COALESCE(trim(pil.processed_event_id), '') <> ''
               )
-            ORDER BY datetime(COALESCE(pil.processed_at, pil.created_at)) DESC, pil.id DESC
+            ORDER BY COALESCE(pil.processed_at, pil.created_at) DESC, pil.id DESC
             LIMIT 1
             """
         ),

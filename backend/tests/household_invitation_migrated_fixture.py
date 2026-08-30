@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, inspect, text
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260829_14"
+HEAD_REVISION = "20260829_15"
 
 
 def migrated_sqlite_engine(database_path: Path, *, check_same_thread: bool = False):
