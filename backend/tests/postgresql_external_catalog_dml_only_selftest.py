@@ -4,12 +4,15 @@ import sys
 import uuid
 from pathlib import Path
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.api.system_routes import router as system_router
 from app.db import engine
 from app.services.external_article_product_link_service import (
     get_confirmed_external_article_product_link,
@@ -74,6 +77,22 @@ def _exercise_external_index_read_path() -> None:
     if not isinstance(rows, list):
         raise AssertionError(f"External index search returned invalid result: {rows!r}")
     print("POSTGRESQL_EXTERNAL_INDEX_REQUEST_READ_GREEN")
+
+
+def _exercise_receipt_items_http_path() -> None:
+    app = FastAPI()
+    app.include_router(system_router)
+    client = TestClient(app)
+    response = client.get("/api/external-databases/receipt-items?limit=500")
+    if response.status_code != 200:
+        raise AssertionError(
+            "External receipt-items PostgreSQL request failed: "
+            f"status={response.status_code} body={response.text}"
+        )
+    payload = response.json()
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        raise AssertionError(f"External receipt-items response shape is invalid: {payload!r}")
+    print("POSTGRESQL_EXTERNAL_RECEIPT_ITEMS_REQUEST_GREEN")
 
 
 def _insert_candidate_fixture() -> None:
@@ -239,6 +258,7 @@ def main() -> None:
     _assert_runtime_has_no_schema_create()
     _validate_alembic_owned_schema()
     _exercise_external_index_read_path()
+    _exercise_receipt_items_http_path()
     try:
         _exercise_candidate_and_recognition_paths()
         _exercise_relation_batch_path()
