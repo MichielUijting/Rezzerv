@@ -169,9 +169,14 @@ def run() -> None:
         provisioned = provision_waar_inhuis_expansion_locations(
             conn,
             household_id="h1",
-            location_names=["Keuken", "Voorraadkast"],
+            main_locations=["Keuken", "Voorraadkast"],
+            sublocations=[],
         )
-        assert [row["naam"] for row in provisioned] == ["Keuken", "Voorraadkast"]
+        assert [row["name"] for row in provisioned["spaces"]] == [
+            "Keuken",
+            "Voorraadkast",
+        ]
+        assert provisioned["sublocations"] == []
         persisted = conn.execute(
             text(
                 "SELECT naam FROM spaces WHERE household_id = :household_id ORDER BY naam"
