@@ -9,6 +9,7 @@ HEAD_REVISION = "20260829_15"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 85
 DAY_ARTICLE_EVENT_TABLE = "day_article_processing_events"
 INVITATION_TABLE = "household_invitations"
+RECEIPT_MIGRATION_EXTENDED_TABLE = "receipt_tables"
 FEATURE_SUPPORT_TABLES = {
     "platform_feature_flags",
     "support_threads",
@@ -22,7 +23,11 @@ def _configure_revision_15_contract() -> None:
     foundation.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
     foundation.PR2L_GPC_RESIDUAL_SCHEMA_AUTHORITY_TABLES = set(
         foundation.PR2L_GPC_RESIDUAL_SCHEMA_AUTHORITY_TABLES
-    ) | {DAY_ARTICLE_EVENT_TABLE, INVITATION_TABLE} | FEATURE_SUPPORT_TABLES
+    ) | {
+        DAY_ARTICLE_EVENT_TABLE,
+        INVITATION_TABLE,
+        RECEIPT_MIGRATION_EXTENDED_TABLE,
+    } | FEATURE_SUPPORT_TABLES
     foundation.EXPECTED_BOOLEAN_COLUMNS = set(foundation.EXPECTED_BOOLEAN_COLUMNS) | {
         ("spaces", "protected"),
         ("sublocations", "protected"),
