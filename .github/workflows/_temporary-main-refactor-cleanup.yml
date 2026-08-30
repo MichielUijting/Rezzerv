@@ -1,0 +1,71 @@
+name: Temporary main.py refactor cleanup
+
+on:
+  push:
+    branches:
+      - codex/postgresql-main-legacy-schema-retirement
+    paths:
+      - '.github/workflows/_temporary-main-refactor-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/postgresql-main-legacy-schema-retirement
+          fetch-depth: 0
+
+      - name: Integrate permanent authority proof and remove temporary tooling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/postgresql-runtime-startup-schema-authority.yml')
+          source = workflow.read_text(encoding='utf-8')
+
+          path_anchor = "      - 'backend/app/main.py'\n"
+          path_replacement = (
+              path_anchor
+              + "      - 'backend/app/startup/**'\n"
+              + "      - 'backend/tests/postgresql_main_legacy_schema_retirement_selftest.py'\n"
+          )
+          if "backend/app/startup/**" not in source:
+              if path_anchor not in source:
+                  raise SystemExit('Could not locate main.py workflow path anchor')
+              source = source.replace(path_anchor, path_replacement, 1)
+
+          static_anchor = '''      - name: Prove production startup has no schema mutator calls\n        run: |\n          python backend/tests/runtime_startup_schema_authority_selftest.py | tee /tmp/runtime-startup-static.log\n          grep -F 'RUNTIME_STARTUP_SCHEMA_MUTATION_REMOVED_GREEN' /tmp/runtime-startup-static.log\n'''
+          static_step = static_anchor + '''\n      - name: Prove main.py legacy schema retirement and startup structure\n        run: |\n          python backend/tests/postgresql_main_legacy_schema_retirement_selftest.py | tee /tmp/main-legacy-schema-retirement.log\n          grep -F 'POSTGRESQL_MAIN_LEGACY_DDL_ABSENT_GREEN' /tmp/main-legacy-schema-retirement.log\n          grep -F 'POSTGRESQL_MAIN_TABLE_METADATA_PORTABLE_GREEN' /tmp/main-legacy-schema-retirement.log\n          grep -F 'POSTGRESQL_MAIN_TOP_LEVEL_DB_SIDE_EFFECTS_CENTRALIZED_GREEN' /tmp/main-legacy-schema-retirement.log\n          grep -F 'POSTGRESQL_MAIN_STARTUP_STRUCTURE_GREEN' /tmp/main-legacy-schema-retirement.log\n          grep -F 'POSTGRESQL_MAIN_LEGACY_SCHEMA_RETIREMENT_SELFTEST_GREEN' /tmp/main-legacy-schema-retirement.log\n'''
+          if 'POSTGRESQL_MAIN_LEGACY_SCHEMA_RETIREMENT_SELFTEST_GREEN' not in source:
+              if static_anchor not in source:
+                  raise SystemExit('Could not locate runtime startup static proof anchor')
+              source = source.replace(static_anchor, static_step, 1)
+
+          ddl_anchor = '''      - name: Prove runtime role has no schema CREATE privilege\n        run: |\n          test "$(psql -h 127.0.0.1 -U postgres -d rezzerv -Atc "SELECT has_schema_privilege('rezzerv_app', 'public', 'CREATE')")" = "f"\n          if psql -h 127.0.0.1 -U rezzerv_app -d rezzerv -v ON_ERROR_STOP=1 -c 'CREATE TABLE runtime_ddl_should_fail(id integer)'; then\n            echo 'Runtime role unexpectedly created a table' >&2\n            exit 1\n          fi\n          echo 'POSTGRESQL_RUNTIME_DDL_DENIED_GREEN'\n'''
+          import_step = ddl_anchor + '''\n      - name: Prove refactored app.main starts with DML-only runtime role\n        working-directory: backend\n        run: |\n          env -u MIGRATION_DATABASE_URL python - <<'PY' | tee /tmp/main-runtime-import.log\n          from sqlalchemy import inspect\n          from app.db import engine\n\n          before_tables = set(inspect(engine).get_table_names())\n          import app.main  # noqa: F401\n          after_tables = set(inspect(engine).get_table_names())\n          if before_tables != after_tables:\n              raise AssertionError(\n                  f'app.main startup mutated table set: before={sorted(before_tables)} after={sorted(after_tables)}'\n              )\n          print('POSTGRESQL_MAIN_DML_ONLY_IMPORT_GREEN')\n          print('POSTGRESQL_MAIN_RUNTIME_SCHEMA_UNCHANGED_GREEN')\n          PY\n          grep -F 'POSTGRESQL_MAIN_DML_ONLY_IMPORT_GREEN' /tmp/main-runtime-import.log\n          grep -F 'POSTGRESQL_MAIN_RUNTIME_SCHEMA_UNCHANGED_GREEN' /tmp/main-runtime-import.log\n'''
+          if 'POSTGRESQL_MAIN_DML_ONLY_IMPORT_GREEN' not in source:
+              if ddl_anchor not in source:
+                  raise SystemExit('Could not locate runtime CREATE privilege proof anchor')
+              source = source.replace(ddl_anchor, import_step, 1)
+
+          workflow.write_text(source, encoding='utf-8')
+          PY
+
+          git rm -f \
+            .github/workflows/_temporary-main-refactor.yml \
+            .github/workflows/_temporary-main-refactor-v2.yml \
+            .github/workflows/_temporary-main-refactor-cleanup.yml \
+            .github/scripts/refactor_main_legacy_schema.py
+
+      - name: Commit permanent refactor proof
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/postgresql-runtime-startup-schema-authority.yml
+          git commit -m 'Add permanent main.py retirement startup proof'
+          git push origin HEAD:codex/postgresql-main-legacy-schema-retirement
