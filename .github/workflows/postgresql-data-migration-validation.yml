@@ -92,6 +92,7 @@ jobs:
                       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                       'processed',
                       '2026-08-30T15:00:00+00:00',
+                      '2026-08-30T15:00:00+00:00',
                       '2026-08-30T15:00:01+00:00',
                   ),
               )
@@ -151,6 +152,7 @@ jobs:
           DATABASE_URL: ${{ env.PG_URL }}
           MIGRATION_DATABASE_URL: ${{ env.PG_URL }}
           REZZERV_DATASTORE_POLICY: postgresql-only
+          REZZERV_EXPECT_MIGRATION_MODE: postgresql-application-schema
           DATABASE_SSLMODE: disable
           MIGRATION_DATABASE_SSLMODE: disable
         run: |
