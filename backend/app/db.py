@@ -18,7 +18,27 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////app/data/rezzerv.db")
+
+_DEFAULT_SQLITE_DATABASE_URL = "sqlite:////app/data/rezzerv.db"
+_ALLOWED_DATASTORE_POLICIES = {"compatibility", "postgresql-only"}
+DATASTORE_POLICY = str(
+    os.getenv("REZZERV_DATASTORE_POLICY", "compatibility") or "compatibility"
+).strip().lower()
+if DATASTORE_POLICY not in _ALLOWED_DATASTORE_POLICIES:
+    raise RuntimeError(
+        "REZZERV_DATASTORE_POLICY must be one of "
+        f"{sorted(_ALLOWED_DATASTORE_POLICIES)!r}"
+    )
+
+_configured_database_url = str(os.getenv("DATABASE_URL", "") or "").strip()
+if not _configured_database_url:
+    if DATASTORE_POLICY == "postgresql-only":
+        raise RuntimeError(
+            "DATABASE_URL is required when REZZERV_DATASTORE_POLICY=postgresql-only"
+        )
+    _configured_database_url = _DEFAULT_SQLITE_DATABASE_URL
+
+DATABASE_URL = _configured_database_url
 SQLITE_RUNTIME_VOLUME = os.getenv("SQLITE_RUNTIME_VOLUME", "sqlite_data").strip() or "sqlite_data"
 
 
@@ -43,6 +63,12 @@ else:
     _engine_url = _database_url
 
 DATASTORE_KIND = _engine_url.get_backend_name()
+if DATASTORE_POLICY == "postgresql-only" and DATASTORE_KIND != "postgresql":
+    raise RuntimeError(
+        "REZZERV_DATASTORE_POLICY=postgresql-only requires a PostgreSQL DATABASE_URL; "
+        f"configured datastore={DATASTORE_KIND!r}"
+    )
+
 SQLITE_DATABASE_PATH = None
 engine_kwargs = {}
 
@@ -82,6 +108,7 @@ def get_runtime_datastore_info() -> dict:
     info = {
         "datastore": DATASTORE_KIND,
         "database_url": _engine_url.render_as_string(hide_password=True),
+        "policy": DATASTORE_POLICY,
     }
     if DATASTORE_KIND == "sqlite":
         info["database"] = SQLITE_DATABASE_PATH or ":memory:"
