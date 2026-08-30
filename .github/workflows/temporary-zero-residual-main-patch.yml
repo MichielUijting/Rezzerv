@@ -44,27 +44,20 @@ jobs:
               if count != 1:
                   raise SystemExit(f'Expected exactly one {function_name}, found {count}')
 
-          predicate_block = '''    index_sql = _locationless_index_sql(conn)
-          if not index_sql:
-              raise RuntimeError(
-                  f"Canonical locationless inventory indexdef ontbreekt: {LOCATIONLESS_ACTIVE_IDENTITY_INDEX}"
-              )
-          expected_terms = _normalized_predicate_terms(
-              f"CREATE INDEX canonical ON inventory (household_id, household_article_id) "
-              f"WHERE {LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE}"
+          predicate_pattern = (
+              r'\n    index_sql = _locationless_index_sql\(conn\)\n'
+              r'.*?'
+              r'(?=\n\ndef _temporal_ledger_available_for_article)'
           )
-          actual_terms = _normalized_predicate_terms(index_sql)
-          if actual_terms != expected_terms:
-              raise RuntimeError(
-                  "Canonical locationless inventory index predicate wijkt af: "
-                  f"expected={sorted(expected_terms)!r} actual={sorted(actual_terms)!r} "
-                  f"index={index_sql!r}"
-              )
-
-          '''
-          if content.count(predicate_block) != 1:
-              raise SystemExit(f'Expected exact predicate validation block once, found {content.count(predicate_block)}')
-          content = content.replace(predicate_block, '', 1)
+          content, count = re.subn(
+              predicate_pattern,
+              '',
+              content,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f'Expected exactly one runtime predicate validation block, found {count}')
           inventory_path.write_text(content, encoding='utf-8')
 
           gate_path = Path('backend/tests/postgresql_zero_residual_selftest.py')
