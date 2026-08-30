@@ -118,6 +118,28 @@ def _assert_boolean_contract() -> None:
     print("POSTGRESQL_RECEIPT_RESIDUAL_BOOLEAN_SQL_GREEN")
 
 
+def _assert_receipt_source_contract() -> None:
+    source_path = SERVICE_ROOT / "receipt_source_helper_service.py"
+    source = source_path.read_text(encoding="utf-8-sig")
+    forbidden_columns = ("store_name", "account_label", "external_reference")
+    present = [column for column in forbidden_columns if column in source]
+    if present:
+        raise AssertionError(
+            "Receipt source helper reads columns outside canonical receipt_sources contract: "
+            f"{present}"
+        )
+    required_columns = (
+        "id, household_id, type, label, source_path, is_active",
+        "last_scan_at, created_at, updated_at",
+    )
+    missing = [token for token in required_columns if token not in source]
+    if missing:
+        raise AssertionError(
+            f"Receipt source helper canonical column contract incomplete: {missing}"
+        )
+    print("POSTGRESQL_RECEIPT_SOURCE_CANONICAL_COLUMNS_GREEN")
+
+
 def _assert_store_chain_alembic_authority() -> None:
     migration_source = MIGRATION_PATH.read_text(encoding="utf-8-sig")
     required_migration_tokens = (
@@ -164,6 +186,7 @@ def main() -> None:
     print(f"POSTGRESQL_RECEIPT_RESIDUAL_SCOPE_GREEN service_files={len(scope)}")
     _assert_runtime_sql_portable()
     _assert_boolean_contract()
+    _assert_receipt_source_contract()
     _assert_store_chain_alembic_authority()
     print("POSTGRESQL_RECEIPT_RESIDUAL_STATIC_SELFTEST_GREEN")
 
