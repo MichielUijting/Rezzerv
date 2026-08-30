@@ -156,14 +156,14 @@ def _upsert_taxonomy_row(conn, row: dict[str, Any]) -> None:
                 is_active, created_by, updated_by
             ) VALUES (
                 :intent_key, :canonical_name, :category, :product_type, :parent_intent_key,
-                1, :created_by, :updated_by
+                TRUE, :created_by, :updated_by
             )
             ON CONFLICT (intent_key) DO UPDATE SET
                 canonical_name = excluded.canonical_name,
                 category = excluded.category,
                 product_type = excluded.product_type,
                 parent_intent_key = excluded.parent_intent_key,
-                is_active = 1,
+                is_active = TRUE,
                 updated_by = excluded.updated_by
             """
         ),
@@ -178,13 +178,13 @@ def _upsert_synonym_row(conn, row: dict[str, Any]) -> None:
             INSERT INTO product_taxonomy_synonyms (
                 id, intent_key, synonym, normalized_synonym, priority, is_active, source
             ) VALUES (
-                :id, :intent_key, :synonym, :normalized_synonym, :priority, 1, :source
+                :id, :intent_key, :synonym, :normalized_synonym, :priority, TRUE, :source
             )
             ON CONFLICT (id) DO UPDATE SET
                 synonym = excluded.synonym,
                 normalized_synonym = excluded.normalized_synonym,
                 priority = excluded.priority,
-                is_active = 1,
+                is_active = TRUE,
                 source = excluded.source
             """
         ),
@@ -201,7 +201,7 @@ def _upsert_retailer_term_row(conn, row: dict[str, Any]) -> None:
                 intent_key, confidence, is_active, source
             ) VALUES (
                 :id, :retailer_code, :receipt_term, :normalized_receipt_term, :normalized_term,
-                :intent_key, :confidence, 1, :source
+                :intent_key, :confidence, TRUE, :source
             )
             ON CONFLICT (id) DO UPDATE SET
                 receipt_term = excluded.receipt_term,
@@ -209,7 +209,7 @@ def _upsert_retailer_term_row(conn, row: dict[str, Any]) -> None:
                 normalized_term = excluded.normalized_term,
                 intent_key = excluded.intent_key,
                 confidence = excluded.confidence,
-                is_active = 1,
+                is_active = TRUE,
                 source = excluded.source
             """
         ),
