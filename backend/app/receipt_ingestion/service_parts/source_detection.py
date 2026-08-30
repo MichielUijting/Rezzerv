@@ -55,13 +55,13 @@ def ensure_share_receipt_source(engine, household_id: str, context: str) -> dict
         ).mappings().first()
         if row:
             conn.execute(
-                text('UPDATE receipt_sources SET label = :label, type = :type, is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
+                text('UPDATE receipt_sources SET label = :label, type = :type, is_active = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
                 {'id': source_id, 'label': label, 'type': 'share_target'},
             )
         else:
             conn.execute(
                 text(
-                    'INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active) VALUES (:id, :household_id, :type, :label, NULL, 1)'
+                    'INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active) VALUES (:id, :household_id, :type, :label, NULL, TRUE)'
                 ),
                 {'id': source_id, 'household_id': household_id, 'type': 'share_target', 'label': label},
             )

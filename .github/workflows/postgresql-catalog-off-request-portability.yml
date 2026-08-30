@@ -92,14 +92,14 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/catalog-off-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/catalog-off-migration.log
-          grep -F "'revision': '20260829_14'" /tmp/catalog-off-migration.log
+          grep -F "'revision': '20260830_01'" /tmp/catalog-off-migration.log
 
       - name: Prove catalog/OFF paths with DML-only runtime role
         working-directory: backend
         run: |
           env -u MIGRATION_DATABASE_URL python tests/postgresql_catalog_off_request_dml_only_selftest.py | tee /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_RUNTIME_CREATE_DENIED_GREEN' /tmp/catalog-off-dml.log
-          grep -F 'POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_14_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_20260830_01_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_BOOLEAN_TYPES_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_VALIDATION_ONLY_SCHEMA_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_IDENTITY_INSERT_UPDATE_BOOLEAN_GREEN' /tmp/catalog-off-dml.log

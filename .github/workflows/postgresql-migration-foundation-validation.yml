@@ -6,25 +6,19 @@ on:
       - 'backend/Dockerfile'
       - 'backend/alembic.ini'
       - 'backend/alembic/**'
+      - 'backend/app/api/**'
       - 'backend/app/db.py'
       - 'backend/app/main.py'
       - 'backend/app/models/**'
       - 'backend/app/runtime_preflight.py'
       - 'backend/app/schema_migration_preflight.py'
       - 'backend/app/services/**'
-      - 'backend/app/testing/external_article_product_link_contract.py'
-      - 'backend/app/testing/receipt_lifecycle_contract.py'
+      - 'backend/app/testing/**'
       - 'backend/requirements.txt'
       - 'backend/tests/capture_schema_baseline.py'
       - 'backend/tests/migration_foundation_core_selftest.py'
       - 'backend/tests/migration_foundation_selftest.py'
-      - 'backend/tests/postgresql_authorization_sql_portability_selftest.py'
-      - 'backend/tests/postgresql_day_article_direct_sql_authority_selftest.py'
-      - 'backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py'
-      - 'backend/tests/postgresql_gpc_residual_sql_authority_selftest.py'
-      - 'backend/tests/postgresql_household_invitation_sql_authority_selftest.py'
-      - 'backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py'
-      - 'backend/tests/postgresql_inventory_writer_selftest.py'
+      - 'backend/tests/postgresql_*'
       - 'backend/tests/receipt_lifecycle_schema_authority_selftest.py'
       - 'backend/tests/schema_authority_cutover_selftest.py'
       - 'backend/tests/server_session_schema_authority_selftest.py'
@@ -42,7 +36,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -54,7 +47,7 @@ jobs:
             "$(grep '^sqlalchemy==' backend/requirements.txt)" \
             "$(grep '^alembic==' backend/requirements.txt)"
 
-      - name: Build fresh SQLite schema through Alembic
+      - name: Build and validate SQLite Alembic head
         env:
           PYTHONPATH: backend
           DATABASE_URL: sqlite:////tmp/rezzerv-migration-baseline.sqlite
@@ -70,57 +63,34 @@ jobs:
           grep -F 'SQLITE_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
+          grep -F 'SQLITE_ZERO_RESIDUAL_RUNTIME_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_15_GREEN' /tmp/migration-sqlite.log
-          python backend/tests/postgresql_authorization_sql_portability_selftest.py | tee /tmp/authorization-static.log
-          grep -F 'POSTGRESQL_AUTHORIZATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/authorization-static.log
-          python backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py | tee /tmp/gpc-barcode-static.log
-          grep -F 'POSTGRESQL_GPC_BARCODE_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-barcode-static.log
-          python backend/tests/postgresql_gpc_residual_sql_authority_selftest.py | tee /tmp/gpc-residual-static.log
-          grep -F 'POSTGRESQL_GPC_RESIDUAL_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-static.log
-          python backend/tests/postgresql_day_article_direct_sql_authority_selftest.py | tee /tmp/day-article-direct-static.log
-          grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/day-article-direct-static.log
-          python backend/tests/postgresql_household_invitation_sql_authority_selftest.py | tee /tmp/household-invitation-static.log
-          grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/household-invitation-static.log
-          python backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py | tee /tmp/platform-feature-support-static.log
-          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/platform-feature-support-static.log
-          python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority.log
-          grep -F 'SCHEMA_AUTHORITY_CUTOVER_SELFTEST_GREEN' /tmp/schema-authority.log
-          grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority.log
-          grep -F 'RECEIPT_LIFECYCLE_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority.log
-          python backend/tests/server_session_schema_authority_selftest.py | tee /tmp/server-session-authority.log
-          grep -F 'SERVER_SESSION_FRESH_SQLITE_MIGRATION_GREEN' /tmp/server-session-authority.log
-          grep -F 'SERVER_SESSION_LEGACY_SQLITE_MIGRATION_GREEN' /tmp/server-session-authority.log
-          grep -F 'SERVER_SESSION_MALFORMED_SQLITE_REJECTED_GREEN' /tmp/server-session-authority.log
-          grep -F 'SERVER_SESSION_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/server-session-authority.log
-          python backend/tests/receipt_lifecycle_schema_authority_selftest.py | tee /tmp/receipt-lifecycle-authority.log
-          grep -F 'RECEIPT_LIFECYCLE_CANONICAL_SQLITE_VALIDATION_GREEN' /tmp/receipt-lifecycle-authority.log
-          grep -F 'RECEIPT_LIFECYCLE_MALFORMED_INDEX_REJECTED_GREEN' /tmp/receipt-lifecycle-authority.log
-          grep -F 'RECEIPT_LIFECYCLE_MALFORMED_TRIGGER_REJECTED_GREEN' /tmp/receipt-lifecycle-authority.log
-          grep -F 'RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/receipt-lifecycle-authority.log
-          python -m app.testing.external_article_product_link_contract | tee /tmp/external-link-contract.log
-          grep -F 'EXTERNAL_ARTICLE_PRODUCT_LINK_CONTRACT=GREEN' /tmp/external-link-contract.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_01_GREEN' /tmp/migration-sqlite.log
+          python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/zero-residual.log
+          grep -F 'POSTGRESQL_ZERO_RESIDUAL_GATE_GREEN' /tmp/zero-residual.log
+          python backend/tests/postgresql_authorization_sql_portability_selftest.py
+          python backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py
+          python backend/tests/postgresql_gpc_residual_sql_authority_selftest.py
+          python backend/tests/postgresql_day_article_direct_sql_authority_selftest.py
+          python backend/tests/postgresql_household_invitation_sql_authority_selftest.py
+          python backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py
+          python backend/tests/schema_authority_cutover_selftest.py
+          python backend/tests/server_session_schema_authority_selftest.py
+          python backend/tests/receipt_lifecycle_schema_authority_selftest.py
+          python -m app.testing.external_article_product_link_contract
           python -m alembic -c backend/alembic.ini current | tee /tmp/sqlite-current.log
-          grep -F '20260829_15' /tmp/sqlite-current.log
+          grep -F '20260830_01' /tmp/sqlite-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/sqlite-heads.log
-          grep -F '20260829_15' /tmp/sqlite-heads.log
+          grep -F '20260830_01' /tmp/sqlite-heads.log
 
   sqlite-existing-adoption:
     name: Existing SQLite baseline is validated and adopted
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Install migration dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install \
-            "$(grep '^sqlalchemy==' backend/requirements.txt)" \
-            "$(grep '^alembic==' backend/requirements.txt)"
 
       - name: Build exact current backend image
         run: docker build -t rezzerv-migration-runtime ./backend
@@ -160,53 +130,20 @@ jobs:
             rezzerv-migration-runtime \
             sh -lc 'python -m app.schema_migration_preflight && python -c "import app.session_entrypoint" && python tests/capture_schema_baseline.py /capture/current-runtime.sqlite > /capture/current-schema.sql && python tests/migration_foundation_selftest.py > /capture/migration-adoption.log && python -m alembic -c alembic.ini current > /capture/alembic-current.log && chmod 666 /capture/current-runtime.sqlite /capture/current-schema.sql /capture/migration-adoption.log /capture/alembic-current.log'
 
-      - name: Prove adoption preserved immutable baseline plus migration-owned schema
+      - name: Prove adopted SQLite owns residual runtime schema through Alembic
         run: |
           gzip -dc backend/alembic/baseline_sqlite.sql.gz > "$RUNNER_TEMP/rezzerv-schema/baseline.sql"
-          sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           test "$(sha256sum "$RUNNER_TEMP/rezzerv-schema/baseline.sql" | cut -d' ' -f1)" = 'e75cb2c16e41cd69fa42d2ffdf98dad7f3af67147ed07289edc9caa6ad4fc8b7'
           grep -F -- '-- table: server_sessions (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_server_sessions_user_active (table=server_sessions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: external_product_candidates (table=external_product_candidates)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: external_product_index (table=external_product_index)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: external_relation_batch_decisions (table=external_relation_batch_decisions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: gpc_segments (table=gpc_segments)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: gpc_import_runs (table=gpc_import_runs)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: gpc_product_groups (table=gpc_product_groups)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: global_product_gpc_bricks (table=global_product_gpc_bricks)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: global_product_gpc_migration_suppressions (table=global_product_gpc_migration_suppressions)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: gpc_translations (table=gpc_translations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: gpc_translation_import_runs (table=gpc_translation_import_runs)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: day_article_processing_events (table=day_article_processing_events)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: household_invitations (table=household_invitations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: platform_feature_flags (table=platform_feature_flags)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: support_threads (table=support_threads)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: support_messages (table=support_messages)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- table: support_recipients (table=support_recipients)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_gpc_families_segment (table=gpc_families)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_gpc_classes_family (table=gpc_classes)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_gpc_bricks_class (table=gpc_bricks)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_global_product_gpc_brick_code (table=global_product_gpc_bricks)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_gpc_translation_language (table=gpc_translations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_gpc_product_groups_hierarchy (table=gpc_product_groups)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_spaces_household_system_key (table=spaces)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_sublocations_space_system_key (table=sublocations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_day_article_events_article (table=day_article_processing_events)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_household_invitations_household_status (table=household_invitations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_support_threads_household_updated (table=support_threads)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_support_threads_status_updated (table=support_threads)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_support_messages_thread_created (table=support_messages)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F -- '-- index: idx_support_recipients_admin (table=support_recipients)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
-          grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'SQLITE_EXTERNAL_CATALOG_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'SQLITE_GPC_BARCODE_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'SQLITE_GPC_RESIDUAL_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'SQLITE_DAY_ARTICLE_DIRECT_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'SQLITE_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'SQLITE_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'MIGRATION_FOUNDATION_REVISION_15_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F -- '-- table: purchase_import_line_inventory_handling_overrides (table=purchase_import_line_inventory_handling_overrides)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: receipt_webhook_deliveries (table=receipt_webhook_deliveries)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F 'SQLITE_ZERO_RESIDUAL_RUNTIME_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_01_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260829_15' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260830_01' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -228,7 +165,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -241,7 +177,7 @@ jobs:
             "$(grep '^alembic==' backend/requirements.txt)" \
             "$(grep '^psycopg\[binary\]==' backend/requirements.txt)"
 
-      - name: Validate PostgreSQL lineage and schema authority
+      - name: Validate PostgreSQL lineage, authority and zero-residual contract
         env:
           PYTHONPATH: backend
           DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:5432/rezzerv_migrations
@@ -261,227 +197,50 @@ jobs:
           grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_AUTHORIZATION_BOOLEAN_SCHEMA_GREEN' /tmp/migration-postgresql.log
+          grep -F 'POSTGRESQL_ZERO_RESIDUAL_RUNTIME_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_15_GREEN' /tmp/migration-postgresql.log
-          python backend/tests/postgresql_authorization_sql_portability_selftest.py | tee /tmp/authorization-static.log
-          grep -F 'POSTGRESQL_AUTHORIZATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/authorization-static.log
-          python backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py | tee /tmp/gpc-barcode-static.log
-          grep -F 'POSTGRESQL_GPC_BARCODE_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-barcode-static.log
-          python backend/tests/postgresql_gpc_residual_sql_authority_selftest.py | tee /tmp/gpc-residual-static.log
-          grep -F 'POSTGRESQL_GPC_RESIDUAL_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-static.log
-          python backend/tests/postgresql_day_article_direct_sql_authority_selftest.py | tee /tmp/day-article-direct-static.log
-          grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/day-article-direct-static.log
-          python backend/tests/postgresql_household_invitation_sql_authority_selftest.py | tee /tmp/household-invitation-static.log
-          grep -F 'POSTGRESQL_HOUSEHOLD_INVITATION_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/household-invitation-static.log
-          python backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py | tee /tmp/platform-feature-support-static.log
-          grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/platform-feature-support-static.log
-          python backend/tests/postgresql_inventory_writer_selftest.py | tee /tmp/postgresql-inventory-review.log
-          grep -F 'POSTGRESQL_INVENTORY_WRITER_FALLBACK_GREEN' /tmp/postgresql-inventory-review.log
-          grep -F 'POSTGRESQL_LOCATIONLESS_PREDICATE_DRIFT_REJECTED_GREEN' /tmp/postgresql-inventory-review.log
-          grep -F 'POSTGRESQL_TEMPORAL_UNIQUE_DRIFT_REJECTED_GREEN' /tmp/postgresql-inventory-review.log
-          grep -F 'POSTGRESQL_INVENTORY_REVIEW_SELFTEST_GREEN' /tmp/postgresql-inventory-review.log
-          python backend/tests/schema_authority_cutover_selftest.py | tee /tmp/schema-authority-postgresql.log
-          grep -F 'EXTERNAL_LINK_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
-          grep -F 'SERVER_SESSION_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
-          grep -F 'RECEIPT_LIFECYCLE_RUNTIME_DDL_REMOVED_GREEN' /tmp/schema-authority-postgresql.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_01_GREEN' /tmp/migration-postgresql.log
+          python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/zero-residual.log
+          grep -F 'POSTGRESQL_ZERO_RESIDUAL_GATE_GREEN' /tmp/zero-residual.log
+          python backend/tests/postgresql_authorization_sql_portability_selftest.py
+          python backend/tests/postgresql_gpc_barcode_sql_authority_selftest.py
+          python backend/tests/postgresql_gpc_residual_sql_authority_selftest.py
+          python backend/tests/postgresql_day_article_direct_sql_authority_selftest.py
+          python backend/tests/postgresql_household_invitation_sql_authority_selftest.py
+          python backend/tests/postgresql_platform_feature_support_sql_authority_selftest.py
+          python backend/tests/postgresql_inventory_writer_selftest.py
+          python backend/tests/schema_authority_cutover_selftest.py
           python - <<'PY'
           import sqlalchemy as sa
-          from sqlalchemy import inspect, text
+          from sqlalchemy import inspect
           from app.db import engine
 
           inspector = inspect(engine)
           tables = set(inspector.get_table_names())
-          assert 'external_article_product_links' in tables
-          indexes = {
-              item['name']
-              for item in inspector.get_indexes('external_article_product_links')
-          }
-          expected = {
-              'idx_external_article_product_links_product',
-              'idx_external_article_product_links_candidate',
-              'uq_external_article_product_links_code_confirmed',
-              'uq_external_article_product_links_text_confirmed',
-          }
-          missing = expected - indexes
-          assert not missing, f'PostgreSQL external-link indexes ontbreken: {sorted(missing)}'
-
           for table_name in (
-              'external_product_candidates',
-              'external_product_index',
-              'external_relation_batch_decisions',
+              'purchase_import_line_inventory_handling_overrides',
+              'receipt_webhook_deliveries',
           ):
               assert table_name in tables, table_name
 
-          for table_name in (
-              'gpc_segments',
-              'gpc_families',
-              'gpc_classes',
-              'gpc_bricks',
-              'gpc_attribute_types',
-              'gpc_attribute_values',
-              'gpc_brick_attribute_types',
-              'gpc_attribute_type_values',
-              'gpc_import_runs',
-              'gpc_product_groups',
-              'global_product_gpc_bricks',
-              'global_product_gpc_migration_suppressions',
-              'gpc_translations',
-              'gpc_translation_import_runs',
-              'day_article_processing_events',
-              'household_invitations',
-              'platform_feature_flags',
-              'support_threads',
-              'support_messages',
-              'support_recipients',
+          line_columns = {
+              item['name']: item
+              for item in inspector.get_columns('purchase_import_line_inventory_handling_overrides')
+          }
+          delivery_columns = {
+              item['name']: item
+              for item in inspector.get_columns('receipt_webhook_deliveries')
+          }
+          for column in (
+              line_columns['updated_at'],
+              delivery_columns['created_at'],
+              delivery_columns['updated_at'],
           ):
-              assert table_name in tables, table_name
-
-          gpc_active = next(
-              item for item in inspector.get_columns('gpc_product_groups')
-              if item['name'] == 'active'
-          )
-          assert isinstance(gpc_active['type'], sa.Boolean), gpc_active
-
-          for table_name, column_name in (
-              ('auth_permissions', 'active'),
-              ('auth_roles', 'system_role'),
-              ('auth_roles', 'active'),
-              ('auth_membership_roles', 'active'),
-              ('auth_platform_user_roles', 'active'),
-              ('spaces', 'protected'),
-              ('sublocations', 'protected'),
-              ('platform_feature_flags', 'enabled'),
-              ('support_threads', 'reply_allowed'),
-          ):
-              auth_column = next(
-                  item for item in inspector.get_columns(table_name)
-                  if item['name'] == column_name
-              )
-              assert isinstance(auth_column['type'], sa.Boolean), auth_column
-
-          invitation_columns = {
-              item['name']: item for item in inspector.get_columns('household_invitations')
-          }
-          for column_name in (
-              'expires_at', 'created_at', 'updated_at', 'accepted_at', 'revoked_at',
-              'last_delivery_attempt_at', 'last_delivered_at'
-          ):
-              column_type = invitation_columns[column_name]['type']
-              assert isinstance(column_type, sa.DateTime), (column_name, column_type)
-              assert bool(getattr(column_type, 'timezone', False)), (column_name, column_type)
-          invitation_indexes = {
-              item['name'] for item in inspector.get_indexes('household_invitations')
-          }
-          for required in (
-              'idx_household_invitations_one_pending',
-              'idx_household_invitations_household_status',
-              'idx_household_invitations_expiry',
-          ):
-              assert required in invitation_indexes, required
-
-          feature_support_timestamps = {
-              'platform_feature_flags': ('updated_at',),
-              'support_threads': ('created_at', 'updated_at', 'closed_at'),
-              'support_messages': ('created_at',),
-              'support_recipients': ('read_at', 'created_at'),
-          }
-          for table_name, column_names in feature_support_timestamps.items():
-              column_map = {
-                  item['name']: item for item in inspector.get_columns(table_name)
-              }
-              for column_name in column_names:
-                  column_type = column_map[column_name]['type']
-                  assert isinstance(column_type, sa.DateTime), (table_name, column_name, column_type)
-                  assert bool(getattr(column_type, 'timezone', False)), (table_name, column_name, column_type)
-
-          inventory_group_columns = {
-              item['name'] for item in inspector.get_columns('product_inventory_groups')
-          }
-          for required in (
-              'gpc_family_code',
-              'gpc_family_name',
-              'gpc_class_code',
-              'gpc_class_name',
-              'gpc_brick_code',
-          ):
-              assert required in inventory_group_columns, required
-
-          gpc_indexes = {
-              item['name']: tuple(item.get('column_names') or ())
-              for table_name in (
-                  'gpc_families', 'gpc_classes', 'gpc_bricks',
-                  'gpc_product_groups', 'global_product_gpc_bricks', 'gpc_translations'
-              )
-              for item in inspector.get_indexes(table_name)
-          }
-          assert gpc_indexes.get('idx_gpc_families_segment') == ('segment_code',)
-          assert gpc_indexes.get('idx_gpc_classes_family') == ('family_code',)
-          assert gpc_indexes.get('idx_gpc_bricks_class') == ('class_code',)
-          assert gpc_indexes.get('idx_gpc_product_groups_hierarchy') == (
-              'gpc_family_code', 'gpc_class_code', 'gpc_brick_code'
-          )
-          assert gpc_indexes.get('idx_global_product_gpc_brick_code') == ('brick_code',)
-          assert gpc_indexes.get('idx_gpc_translation_language') == ('language_code', 'entity_type')
-
-          assert 'server_sessions' in tables
-          session_indexes = {
-              item['name']: tuple(item.get('column_names') or ())
-              for item in inspector.get_indexes('server_sessions')
-          }
-          assert session_indexes.get('idx_server_sessions_user_active') == (
-              'user_id', 'revoked_at', 'expires_at'
-          )
-          active_household = next(
-              item
-              for item in inspector.get_columns('server_sessions')
-              if item['name'] == 'active_household_id'
-          )
-          assert active_household['nullable'] is True
-
-          receipt_indexes = {
-              item['name']
-              for table_name in ('raw_receipts', 'receipt_tables', 'receipt_table_lines')
-              for item in inspector.get_indexes(table_name)
-          }
-          for required in (
-              'uq_raw_receipts_household_hash',
-              'idx_receipt_tables_logical_receipt_key',
-              'idx_receipt_tables_workflow_state',
-              'idx_receipt_table_lines_logical_line_key',
-          ):
-              assert required in receipt_indexes, f'PostgreSQL receipt lifecycle index ontbreekt: {required}'
-          receipt_table_columns = {
-              item['name']: item for item in inspector.get_columns('receipt_tables')
-          }
-          assert 'store_chain' in receipt_table_columns, 'receipt_tables.store_chain ontbreekt op Alembic head'
-          assert isinstance(receipt_table_columns['store_chain']['type'], (sa.Text, sa.String)), receipt_table_columns['store_chain']
-          with engine.connect() as connection:
-              triggers = {
-                  str(row[0])
-                  for row in connection.execute(text("""
-                      SELECT t.tgname
-                      FROM pg_trigger t
-                      JOIN pg_class c ON c.oid = t.tgrelid
-                      JOIN pg_namespace n ON n.oid = c.relnamespace
-                      WHERE n.nspname = current_schema()
-                        AND c.relname = 'receipt_tables'
-                        AND NOT t.tgisinternal
-                  """)).all()
-              }
-          assert triggers == {'trg_receipt_tables_preserve_explicit_approval'}
-          print('POSTGRESQL_EXTERNAL_LINK_SCHEMA_AUTHORITY_GREEN')
-          print('POSTGRESQL_EXTERNAL_CATALOG_MIGRATION_AUTHORITY_GREEN')
-          print('POSTGRESQL_GPC_BARCODE_MIGRATION_AUTHORITY_GREEN')
-          print('POSTGRESQL_GPC_RESIDUAL_MIGRATION_AUTHORITY_GREEN')
-          print('POSTGRESQL_DAY_ARTICLE_DIRECT_MIGRATION_AUTHORITY_GREEN')
-          print('POSTGRESQL_HOUSEHOLD_INVITATION_MIGRATION_AUTHORITY_GREEN')
-          print('POSTGRESQL_PLATFORM_FEATURE_SUPPORT_MIGRATION_AUTHORITY_GREEN')
-          print('POSTGRESQL_AUTHORIZATION_BOOLEAN_MIGRATION_AUTHORITY_GREEN')
-          print('POSTGRESQL_SERVER_SESSION_SCHEMA_AUTHORITY_GREEN')
-          print('POSTGRESQL_RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_GREEN')
-          print('POSTGRESQL_RECEIPT_STORE_CHAIN_SCHEMA_AUTHORITY_GREEN')
+              assert isinstance(column['type'], sa.DateTime), column
+              assert bool(getattr(column['type'], 'timezone', False)), column
+          print('POSTGRESQL_ZERO_RESIDUAL_MIGRATION_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current | tee /tmp/postgresql-current.log
-          grep -F '20260829_15' /tmp/postgresql-current.log
+          grep -F '20260830_01' /tmp/postgresql-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/postgresql-heads.log
-          grep -F '20260829_15' /tmp/postgresql-heads.log
+          grep -F '20260830_01' /tmp/postgresql-heads.log

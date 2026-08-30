@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine, get_runtime_datastore_info
 
@@ -62,7 +62,13 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
 
 
 def _table_columns(conn: Any, table_name: str) -> set[str]:
-    return {str(row[1]) for row in conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()}
+    inspector = inspect(conn)
+    if not inspector.has_table(str(table_name)):
+        return set()
+    return {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(str(table_name))
+    }
 
 
 def _line_select(columns: set[str]) -> str:

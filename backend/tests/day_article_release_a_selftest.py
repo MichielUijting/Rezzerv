@@ -21,7 +21,7 @@ from app.services.day_article_service import (
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260829_12"
+HEAD_REVISION = "20260830_01"
 
 
 def _migrated_sqlite_engine(database_path: Path):

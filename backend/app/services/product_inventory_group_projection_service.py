@@ -2,40 +2,41 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.product_inventory_group_store import ensure_product_inventory_group_schema, list_inventory_groups
 
-GPC_COLUMNS: dict[str, str] = {
-    "gpc_family_code": "TEXT",
-    "gpc_family_name": "TEXT",
-    "gpc_class_code": "TEXT",
-    "gpc_class_name": "TEXT",
-    "gpc_brick_code": "TEXT",
-    "source": "TEXT",
+GPC_COLUMNS = {
+    "gpc_family_code",
+    "gpc_family_name",
+    "gpc_class_code",
+    "gpc_class_name",
+    "gpc_brick_code",
+    "source",
 }
 
 
-def _get_columns(conn, table_name: str) -> set[str]:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
-        return {str(row.get("name") or "") for row in rows}
-    rows = conn.execute(
-        text("""SELECT column_name FROM information_schema.columns WHERE table_name = :table_name"""),
-        {"table_name": table_name},
-    ).mappings().all()
-    return {str(row.get("column_name") or "") for row in rows}
-
-
 def ensure_product_group_hierarchy_columns() -> None:
+    """Validate Alembic-owned GPC projection columns without mutating schema."""
     ensure_product_inventory_group_schema()
-    with engine.begin() as conn:
-        columns = _get_columns(conn, "product_inventory_groups")
-        for column_name, column_definition in GPC_COLUMNS.items():
-            if column_name not in columns:
-                conn.execute(text(f"ALTER TABLE product_inventory_groups ADD COLUMN {column_name} {column_definition}"))
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        table_name = "product_inventory_groups"
+        if not inspector.has_table(table_name):
+            raise RuntimeError(
+                f"Canonical {table_name} ontbreekt. Voer Alembic migrations uit."
+            )
+        columns = {
+            str(column.get("name") or "")
+            for column in inspector.get_columns(table_name)
+        }
+        missing = GPC_COLUMNS - columns
+        if missing:
+            raise RuntimeError(
+                f"Canonical {table_name} mist GPC-kolommen: {sorted(missing)}. "
+                "Voer Alembic migrations uit."
+            )
 
 
 def _hierarchy_options() -> list[dict[str, Any]]:

@@ -8,7 +8,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 
@@ -171,23 +171,7 @@ def _tokens(value: Any) -> set[str]:
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    dialect = str(engine.dialect.name or "").lower()
-    if dialect == "sqlite":
-        return conn.execute(
-            text("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name"),
-            {"name": table_name},
-        ).first() is not None
-    return conn.execute(
-        text(
-            '''
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_name = :name
-            LIMIT 1
-            '''
-        ),
-        {"name": table_name},
-    ).first() is not None
+    return bool(inspect(conn).has_table(str(table_name)))
 
 
 def _resolve_purchase_import_line(conn, source_id: str) -> dict[str, Any] | None:

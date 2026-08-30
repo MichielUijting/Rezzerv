@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import inspect
 
 from app.services.receipt_resend_inbound_source_household_guard import (
     install_receipt_resend_inbound_source_household_guard,
@@ -16,6 +17,15 @@ from app.services.receipt_resend_inbound_source_household_guard import (
 
 INBOUND_PATH = "/api/receipts/inbound"
 MAX_TIMESTAMP_SKEW_SECONDS = 300
+_DELIVERY_TABLE = "receipt_webhook_deliveries"
+_DELIVERY_COLUMNS = {
+    "svix_id",
+    "svix_timestamp",
+    "payload_sha256",
+    "status",
+    "created_at",
+    "updated_at",
+}
 
 
 def _webhook_secret() -> str:
@@ -61,20 +71,31 @@ def verify_resend_webhook(*, body: bytes, svix_id: str, svix_timestamp: str, svi
 
 
 def ensure_delivery_table(module: Any) -> None:
-    with module.engine.begin() as conn:
-        conn.execute(
-            module.text(
-                """
-                CREATE TABLE IF NOT EXISTS receipt_webhook_deliveries (
-                    svix_id TEXT PRIMARY KEY,
-                    svix_timestamp INTEGER NOT NULL,
-                    payload_sha256 TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'processing',
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
+    """Validate the Alembic-owned webhook delivery contract without DDL."""
+    inspector = inspect(module.engine)
+    if not inspector.has_table(_DELIVERY_TABLE):
+        raise RuntimeError(
+            f"Canonical {_DELIVERY_TABLE} ontbreekt. Voer Alembic migrations uit."
+        )
+    columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(_DELIVERY_TABLE)
+    }
+    missing = _DELIVERY_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            f"Canonical {_DELIVERY_TABLE} mist kolommen: {sorted(missing)}. "
+            "Voer Alembic migrations uit."
+        )
+    primary_key = tuple(
+        str(column or "")
+        for column in (
+            inspector.get_pk_constraint(_DELIVERY_TABLE).get("constrained_columns") or ()
+        )
+    )
+    if primary_key != ("svix_id",):
+        raise RuntimeError(
+            f"Canonical {_DELIVERY_TABLE} primary key wijkt af: {primary_key!r}"
         )
 
 

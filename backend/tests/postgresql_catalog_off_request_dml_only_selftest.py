@@ -23,6 +23,7 @@ GTIN_BRAVO = "8712345678902"
 NAME_ALPHA = "postgresql catalog off proof alpha"
 NAME_BRAVO = "PostgreSQL Catalog OFF Proof Bravo"
 NAME_FILTER = "postgresql catalog off proof"
+ALEMBIC_HEAD = "20260830_01"
 
 
 def _assert_runtime_create_denied() -> None:
@@ -56,7 +57,7 @@ def _assert_schema_contract() -> None:
     revision = None
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    if revision != "20260829_14":
+    if revision != ALEMBIC_HEAD:
         raise AssertionError(f"Unexpected Alembic head: {revision}")
 
     identity_columns = {
@@ -85,7 +86,7 @@ def _assert_schema_contract() -> None:
     if before_tables != after_tables:
         raise AssertionError("Catalog/OFF validation unexpectedly mutated runtime schema")
 
-    print("POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_14_GREEN")
+    print("POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_20260830_01_GREEN")
     print("POSTGRESQL_CATALOG_OFF_BOOLEAN_TYPES_GREEN")
     print("POSTGRESQL_CATALOG_OFF_VALIDATION_ONLY_SCHEMA_GREEN")
 

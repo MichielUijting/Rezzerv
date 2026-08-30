@@ -1,3 +1,5 @@
+import gzip
+import sqlite3
 from pathlib import Path
 
 from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
@@ -44,12 +46,29 @@ def test_persisted_semantics_are_authoritative():
     assert result == {'line_role': 'loyalty', 'inventory_eligible': False}
 
 
-def test_semantic_columns_live_in_central_receipt_schema_evolution():
-    source = (Path(__file__).resolve().parents[1] / 'app/main.py').read_text(encoding='utf-8')
-    start = source.index('line_additions = {')
-    block = source[start:start + 1200]
-    assert "'line_role': 'TEXT'" in block
-    assert "'inventory_eligible': 'INTEGER'" in block
+def test_semantic_columns_live_in_migration_owned_receipt_schema():
+    backend_root = Path(__file__).resolve().parents[1]
+    baseline_path = backend_root / 'alembic/baseline_sqlite.sql.gz'
+    authority_path = backend_root / 'alembic/versions/20260828_02_receipt_lifecycle_schema_authority.py'
+
+    connection = sqlite3.connect(':memory:')
+    try:
+        with gzip.open(baseline_path, 'rt', encoding='utf-8') as handle:
+            connection.executescript(handle.read())
+        columns = {
+            str(row[1]): str(row[2] or '').upper()
+            for row in connection.execute('PRAGMA table_info("receipt_table_lines")').fetchall()
+        }
+    finally:
+        connection.close()
+
+    assert columns['line_role'] == 'TEXT'
+    assert columns['inventory_eligible'] == 'INTEGER'
+
+    authority_source = authority_path.read_text(encoding='utf-8')
+    assert 'receipt_table_lines' in authority_source
+    assert '_validate_sqlite' in authority_source
+    assert '_validate_postgresql' in authority_source
 
 
 def test_receipt_service_persists_semantics_on_both_ingest_paths():
