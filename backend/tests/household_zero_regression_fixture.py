@@ -21,10 +21,9 @@ def _ensure_household_zero_parent() -> None:
         conn.execute(
             text(
                 """
-                INSERT INTO households (id, naam, context_type, created_at)
-                VALUES (:id, :naam, 'system', CURRENT_TIMESTAMP)
-                ON CONFLICT(id) DO UPDATE SET
-                    context_type = 'system'
+                INSERT INTO households (id, naam, created_at)
+                VALUES (:id, :naam, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO NOTHING
                 """
             ),
             {
