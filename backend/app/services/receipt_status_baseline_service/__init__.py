@@ -15,7 +15,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import get_runtime_datastore_info
 
@@ -128,13 +128,19 @@ def _store_chain_match(expected: dict[str, Any], actual: dict[str, Any]) -> bool
 
 
 def _column_names(conn, table_name: str) -> set[str]:
-    return {str(row[1]) for row in conn.execute(text(f'PRAGMA table_info({table_name})')).fetchall()}
+    return {
+        str(column.get('name') or '')
+        for column in inspect(conn).get_columns(table_name)
+    }
 
 
 def _ensure_receipt_store_chain_schema(conn) -> None:
     columns = _column_names(conn, 'receipt_tables')
     if 'store_chain' not in columns:
-        conn.execute(text('ALTER TABLE receipt_tables ADD COLUMN store_chain TEXT'))
+        raise RuntimeError(
+            'Canonical receipt_tables.store_chain schema ontbreekt. '
+            'Voer Alembic migrations uit met MIGRATION_DATABASE_URL.'
+        )
     rows = conn.execute(text('SELECT id, store_name, store_chain FROM receipt_tables')).mappings().all()
     updates: list[dict[str, Any]] = []
     for row in rows:
@@ -183,9 +189,9 @@ def _fetch_active_actual_rows(conn, household_id: str | None = None) -> list[dic
             SELECT rt.id AS receipt_table_id, rt.raw_receipt_id, rt.household_id,
                    rt.store_name, rt.store_chain, rt.total_amount, rt.discount_total,
                    rt.line_count, rt.parse_status, rt.deleted_at, rr.original_filename,
-                   COALESCE(SUM(CASE WHEN COALESCE(rtl.is_deleted, 0) = 0 THEN COALESCE({line_total_expr}, 0) ELSE 0 END), 0) AS actual_line_sum,
-                   COALESCE(SUM(CASE WHEN COALESCE(rtl.is_deleted, 0) = 0 THEN COALESCE({line_discount_expr}, 0) ELSE 0 END), 0) AS actual_line_discount_sum,
-                   SUM(CASE WHEN COALESCE(rtl.is_deleted, 0) = 0 AND TRIM(COALESCE(rtl.corrected_raw_label, rtl.raw_label, '')) <> '' THEN 1 ELSE 0 END) AS active_line_count
+                   COALESCE(SUM(CASE WHEN COALESCE(rtl.is_deleted, FALSE) IS FALSE THEN COALESCE({line_total_expr}, 0) ELSE 0 END), 0) AS actual_line_sum,
+                   COALESCE(SUM(CASE WHEN COALESCE(rtl.is_deleted, FALSE) IS FALSE THEN COALESCE({line_discount_expr}, 0) ELSE 0 END), 0) AS actual_line_discount_sum,
+                   SUM(CASE WHEN COALESCE(rtl.is_deleted, FALSE) IS FALSE AND TRIM(COALESCE(rtl.corrected_raw_label, rtl.raw_label, '')) <> '' THEN 1 ELSE 0 END) AS active_line_count
             FROM receipt_tables rt
             JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
             LEFT JOIN receipt_table_lines rtl ON rtl.receipt_table_id = rt.id
