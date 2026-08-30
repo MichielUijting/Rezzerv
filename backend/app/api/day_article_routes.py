@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Body, Header, HTTPException
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.api.authorization_membership_routes import _actor_context, _require
@@ -20,18 +20,32 @@ from app.services.day_article_service import (
 
 router = APIRouter(tags=["unpacking-day-articles"])
 
+_LINE_OVERRIDE_COLUMNS = {
+    "purchase_import_line_id",
+    "household_id",
+    "inventory_handling",
+    "updated_by_user_id",
+    "updated_at",
+}
 
-def _ensure_line_override_table(conn) -> None:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS purchase_import_line_inventory_handling_overrides (
-            purchase_import_line_id TEXT PRIMARY KEY,
-            household_id TEXT NOT NULL,
-            inventory_handling TEXT NULL,
-            updated_by_user_id TEXT NULL,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CHECK (inventory_handling IS NULL OR inventory_handling IN ('STOCK', 'DIRECT_CONSUMPTION'))
+
+def _validate_line_override_table(conn) -> None:
+    inspector = inspect(conn)
+    table_name = "purchase_import_line_inventory_handling_overrides"
+    if not inspector.has_table(table_name):
+        raise RuntimeError(
+            f"Canonical {table_name} ontbreekt. Voer Alembic migrations uit."
         )
-    """))
+    columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(table_name)
+    }
+    missing = _LINE_OVERRIDE_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            f"Canonical {table_name} mist kolommen: {sorted(missing)}. "
+            "Voer Alembic migrations uit."
+        )
 
 
 def _line_household_id(conn, line_id: str) -> str | None:
@@ -87,8 +101,8 @@ def get_article_inventory_handling_batch_route(
         _require(conn, context, "articles.view")
         items = get_default_inventory_handling_batch(conn, household_id, article_ids)
         direct_location = ensure_direct_location(conn, household_id)
-        conn.execute(text("UPDATE spaces SET active = 1 WHERE id = :id"), {"id": direct_location["space_id"]})
-        conn.execute(text("UPDATE sublocations SET active = 1 WHERE id = :id"), {"id": direct_location["sublocation_id"]})
+        conn.execute(text("UPDATE spaces SET active = TRUE WHERE id = :id"), {"id": direct_location["space_id"]})
+        conn.execute(text("UPDATE sublocations SET active = TRUE WHERE id = :id"), {"id": direct_location["sublocation_id"]})
         return {
             "household_id": str(household_id),
             "items": items,
@@ -113,7 +127,7 @@ def get_line_inventory_handling_overrides_batch(
     with engine.begin() as conn:
         context = _actor_context(conn, household_id)
         _require(conn, context, "unpacking.process")
-        _ensure_line_override_table(conn)
+        _validate_line_override_table(conn)
         items: list[dict[str, Any]] = []
         for line_id in normalized_ids:
             line_household_id = _line_household_id(conn, line_id)
@@ -154,7 +168,7 @@ def update_line_inventory_handling_override(
         if line_household_id != str(household_id):
             raise HTTPException(status_code=404, detail="Bonregel niet gevonden")
 
-        _ensure_line_override_table(conn)
+        _validate_line_override_table(conn)
         if override is None:
             conn.execute(text("""
                 DELETE FROM purchase_import_line_inventory_handling_overrides
