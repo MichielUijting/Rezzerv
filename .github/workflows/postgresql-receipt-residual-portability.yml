@@ -3,6 +3,7 @@ name: PostgreSQL receipt residual portability
 on:
   pull_request:
     paths:
+      - 'backend/alembic/versions/20260829_15_receipt_store_chain_schema_authority.py'
       - 'backend/app/services/receipt_inventory_lifecycle_service.py'
       - 'backend/app/services/receipt_status_sync.py'
       - 'backend/app/services/receipt_reimport_lineage_service.py'
@@ -80,7 +81,7 @@ jobs:
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_SQL_PORTABLE_GREEN' /tmp/receipt-residual-static.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_RUNTIME_DDL_ABSENT_GREEN' /tmp/receipt-residual-static.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_BOOLEAN_SQL_GREEN' /tmp/receipt-residual-static.log
-          grep -F 'POSTGRESQL_RECEIPT_STORE_CHAIN_BASELINE_AUTHORITY_GREEN' /tmp/receipt-residual-static.log
+          grep -F 'POSTGRESQL_RECEIPT_STORE_CHAIN_ALEMBIC_AUTHORITY_GREEN' /tmp/receipt-residual-static.log
           grep -F 'POSTGRESQL_RECEIPT_STATUS_VALIDATION_ONLY_GREEN' /tmp/receipt-residual-static.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_STATIC_SELFTEST_GREEN' /tmp/receipt-residual-static.log
 
@@ -89,7 +90,7 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/receipt-residual-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/receipt-residual-migration.log
-          grep -F "'revision': '20260829_14'" /tmp/receipt-residual-migration.log
+          grep -F "'revision': '20260829_15'" /tmp/receipt-residual-migration.log
 
       - name: Prove receipt residual paths with DML-only runtime role
         working-directory: backend
