@@ -8,11 +8,7 @@ import migration_foundation_selftest as foundation_test
 HEAD_REVISION = "20260830_02"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
-_SQLITE_HEAD_EXTENSION_HEADERS = {
-    "-- table: receipt_sources (table=receipt_sources)",
-    "-- table: raw_receipts (table=raw_receipts)",
-    "-- trigger: trg_raw_receipts_ensure_manual_source (table=raw_receipts)",
-}
+_SQLITE_HEAD_EXTENSION_TABLES = {"receipt_sources", "raw_receipts"}
 _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS = {
     "trg_household_zero_system_insert",
     "trg_receipt_tables_preserve_explicit_approval",
@@ -43,19 +39,23 @@ def _postgresql_trigger_names(connection) -> set[str]:
 
 
 def _remove_locked_sqlite_head_extensions(schema: str) -> str:
-    """Remove only the three SQLite schema blocks owned by 20260830_02.
+    """Delegate only rebuilt 20260830_02 receipt objects to semantic validation.
 
-    The dedicated receipt lifecycle authority selftest proves these two table
-    blocks changed only in their household FK parent and that the new trigger is
-    the sole trigger addition. Everything else remains in the immutable baseline
-    comparison performed by the historical foundation core.
+    SQLite batch-alter can rewrite the textual CREATE forms of objects owned by
+    receipt_sources/raw_receipts even when their semantic contract is unchanged.
+    The dedicated receipt lifecycle authority selftest compares columns,
+    indexes, every non-household FK and every existing trigger semantically and
+    proves the exact household-FK delta plus the one new manual-source trigger.
+    Receipt-table objects are already migration-owned by the historical wrapper.
+    Every unrelated schema block remains in the immutable byte comparison.
     """
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
-    retained = [
-        block
-        for block in blocks
-        if block.splitlines()[0].strip() not in _SQLITE_HEAD_EXTENSION_HEADERS
-    ]
+    retained: list[str] = []
+    for block in blocks:
+        header = block.splitlines()[0].strip()
+        if any(f"(table={table_name})" in header for table_name in _SQLITE_HEAD_EXTENSION_TABLES):
+            continue
+        retained.append(block)
     return "\n\n".join(retained).rstrip() + "\n"
 
 
@@ -63,11 +63,10 @@ def _run_foundation_with_locked_head_contract() -> None:
     """Extend only the schema contracts introduced at 20260830_02.
 
     The historical foundation core deliberately keeps its pre-20260830_02
-    trigger and immutable-baseline defaults. The head wrapper excludes exactly
-    the two rebuilt receipt table definitions plus the new raw-receipt trigger
-    from that historical byte comparison; a dedicated semantic receipt test
-    proves their exact intended delta. PostgreSQL permits exactly the same new
-    fifth trigger. Every other difference remains fail-closed.
+    trigger and immutable-baseline defaults. The head wrapper delegates the two
+    SQLite tables physically rebuilt by this revision to their dedicated exact
+    semantic receipt test and permits exactly one new PostgreSQL trigger. Every
+    other baseline, schema or trigger difference remains fail-closed.
     """
     original_assert = foundation_test.foundation._assert_postgresql_schema
     original_strip = foundation_test.foundation._strip_migration_extensions
