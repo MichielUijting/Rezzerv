@@ -16,6 +16,24 @@ from app import main
 HOUSEHOLD_ID = "0"
 
 
+def _ensure_household_zero_parent() -> None:
+    with main.engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO households (id, naam, context_type, created_at)
+                VALUES (:id, :naam, 'system', CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    context_type = 'system'
+                """
+            ),
+            {
+                "id": HOUSEHOLD_ID,
+                "naam": "Regressietest huishouden 0",
+            },
+        )
+
+
 def _portable_ensure_regression_inventory_fixture(household_id: str) -> dict:
     normalized_household_id = str(household_id or "").strip() or "1"
     with main.engine.begin() as conn:
@@ -347,6 +365,7 @@ def _with_household_zero_overrides(action):
 
 def prepare() -> dict:
     def action():
+        _ensure_household_zero_parent()
         reset = main.reset_regression_fixture_state()
         receipts = main.seed_regression_kassa_receipts(authorization=None)
         return {
