@@ -107,9 +107,12 @@ def retime_receipt_inventory_events(
         }
 
     source_reference = _receipt_source_reference(receipt_table_id)
+    normalized_purchase_at = str(purchase_at).strip()
+    purchase_date = normalized_purchase_at[:10] if ("T" in normalized_purchase_at or " " in normalized_purchase_at) else normalized_purchase_at
     params: dict[str, Any] = {
         "source_reference": source_reference,
-        "purchase_at": str(purchase_at),
+        "purchase_at": normalized_purchase_at,
+        "purchase_date": purchase_date,
     }
     household_clause = ""
     if household_id:
@@ -136,17 +139,13 @@ def retime_receipt_inventory_events(
         }
     )
 
-    precision = "datetime" if ("T" in str(purchase_at) or " " in str(purchase_at).strip()) else "date"
+    precision = "datetime" if ("T" in normalized_purchase_at or " " in normalized_purchase_at) else "date"
     conn.execute(
         text(
             f"""
             UPDATE inventory_events
             SET effective_at = :purchase_at,
-                purchase_date = CASE
-                    WHEN instr(:purchase_at, 'T') > 0 THEN substr(:purchase_at, 1, 10)
-                    WHEN instr(:purchase_at, ' ') > 0 THEN substr(:purchase_at, 1, 10)
-                    ELSE :purchase_at
-                END,
+                purchase_date = :purchase_date,
                 effective_at_precision = :precision
             WHERE source_reference = :source_reference
               {household_clause}
