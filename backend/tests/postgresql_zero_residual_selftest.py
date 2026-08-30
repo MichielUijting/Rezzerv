@@ -19,12 +19,16 @@ EXPLICIT_SQLITE_TEST_DEV_FUNCTIONS = {
     Path("api/routes/kassa_regression_routes.py"): {"_init_test_database"},
 }
 
-# Transitional existing-SQLite adoption remains production-cutover debt. Pin
-# its exact runtime introspection so it cannot silently spread before that
-# later cutover removes the compatibility path entirely.
+# Transitional existing-SQLite adoption and the dedicated production-data
+# migration utility are explicit compatibility boundaries, never request/runtime
+# SQL. Pin their exact SQLite introspection so it cannot silently spread.
 SQLITE_COMPATIBILITY_SQL_ALLOWLIST = {
     Path("schema_migration_preflight.py"): {
         "sqlite_master": 3,
+    },
+    Path("maintenance/postgresql_data_migration.py"): {
+        "PRAGMA": 3,
+        "sqlite_master": 2,
     },
 }
 
