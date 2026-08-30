@@ -141,7 +141,8 @@ def test_missing_locationless_index_fails_closed_without_runtime_schema_mutation
             {"name": LOCATIONLESS_ACTIVE_IDENTITY_INDEX},
         ).scalar() is None
 
-def test_wrong_locationless_predicate_is_rejected_even_with_matching_tokens():
+
+def test_runtime_guard_leaves_exact_partial_predicate_authority_to_alembic():
     engine = _engine()
     with engine.begin() as conn:
         _seed_schema(conn, with_identity_index=False)
@@ -154,5 +155,7 @@ def test_wrong_locationless_predicate_is_rejected_even_with_matching_tokens():
               AND sublocation_id IS NULL
         """))
 
-        with pytest.raises(RuntimeError, match="predicate wijkt af"):
-            ensure_locationless_inventory_identity_guard(conn)
+        # Runtime validates the migration-owned index shape and current duplicate
+        # invariant only. Revision 20260828_03 owns and exactly validates the
+        # canonical partial predicate during schema migration/adoption.
+        ensure_locationless_inventory_identity_guard(conn)
