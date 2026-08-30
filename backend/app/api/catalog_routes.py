@@ -229,13 +229,20 @@ def list_catalog(
     )
     order_expression = expressions.get(sort_by, expressions["name"])
     direction = "DESC" if sort_direction.lower() == "desc" else "ASC"
+    if sort_by in {"name", "brand", "primary_gtin", "product_type", "source"}:
+        order_sql = (
+            f"LOWER({order_expression}) {direction}, "
+            f"{order_expression} {direction}"
+        )
+    else:
+        order_sql = f"{order_expression} {direction}"
     from_sql = f"FROM global_products gp {' '.join(joins)} {where_sql}"
 
     count_sql = f"SELECT COUNT(*) {from_sql}"
     page_sql = f"""
         SELECT {", ".join(select_parts)}
         {from_sql}
-        ORDER BY LOWER({order_expression}) {direction}, {order_expression} {direction}, gp.id ASC
+        ORDER BY {order_sql}, gp.id ASC
         LIMIT :limit OFFSET :offset
     """
     page_params = {**params, "limit": limit, "offset": offset}
