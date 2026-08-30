@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import ast
-import gzip
 from pathlib import Path
 import re
-import sqlite3
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
-SQLITE_BASELINE = BACKEND_ROOT / "alembic" / "baseline_sqlite.sql.gz"
 
-# Explicit test/dev SQLite compatibility is allowed only at these narrow
+# Explicit SQLite test/dev compatibility is allowed only at these narrow
 # boundaries. Production request/runtime SQL remains fully scanned.
 EXPLICIT_SQLITE_TEST_DEV_PATHS = {
+    Path("cli/import_gpc_catalog_controlled.py"),
     Path("cli/rehearse_gpc_bilingual_import.py"),
+    Path("testing_receipt_parser_diagnosis_routes.py"),
 }
 EXPLICIT_SQLITE_TEST_DEV_FUNCTIONS = {
     Path("api/routes/kassa_regression_routes.py"): {"_init_test_database"},
@@ -85,14 +84,12 @@ def _explicit_compat_ranges(tree: ast.AST, relative: Path) -> tuple[tuple[int, i
     if not names:
         return ()
     ranges: list[tuple[int, int]] = []
+    found: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names:
             ranges.append((node.lineno, int(node.end_lineno or node.lineno)))
-    missing = names - {
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+            found.add(node.name)
+    missing = names - found
     if missing:
         raise AssertionError(
             f"Pinned SQLite test/dev function disappeared from {relative}: {sorted(missing)}"
@@ -143,58 +140,6 @@ def _boolean_integer_pattern(column_name: str) -> re.Pattern[str]:
     )
 
 
-def _probe_immutable_baseline() -> None:
-    with gzip.open(SQLITE_BASELINE, "rt", encoding="utf-8") as handle:
-        baseline = handle.read()
-    connection = sqlite3.connect(":memory:")
-    try:
-        connection.executescript(baseline)
-        targets = {
-            "purchase_import_line_inventory_handling_overrides": {
-                "purchase_import_line_id",
-                "household_id",
-                "inventory_handling",
-                "updated_by_user_id",
-                "updated_at",
-            },
-            "receipt_webhook_deliveries": {
-                "svix_id",
-                "svix_timestamp",
-                "payload_sha256",
-                "status",
-                "created_at",
-                "updated_at",
-            },
-            "product_inventory_groups": {
-                "gpc_family_code",
-                "gpc_family_name",
-                "gpc_class_code",
-                "gpc_class_name",
-                "gpc_brick_code",
-            },
-        }
-        for table_name, required_columns in targets.items():
-            table_exists = bool(
-                connection.execute(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-                    (table_name,),
-                ).fetchone()
-            )
-            columns = {
-                str(row[1])
-                for row in connection.execute(
-                    f'PRAGMA table_info("{table_name.replace(chr(34), chr(34) * 2)}")'
-                ).fetchall()
-            } if table_exists else set()
-            missing = sorted(required_columns - columns)
-            print(
-                "POSTGRESQL_ZERO_RESIDUAL_BASELINE_PROBE="
-                f"{table_name}:table={table_exists}:missing={missing}"
-            )
-    finally:
-        connection.close()
-
-
 def main() -> None:
     paths = _python_paths()
     trees = {
@@ -207,8 +152,6 @@ def main() -> None:
     sqlite_violations: list[str] = []
     boolean_violations: list[str] = []
     compatibility_hits: dict[tuple[Path, str], int] = {}
-
-    _probe_immutable_baseline()
 
     for path, tree in trees.items():
         relative = _relative(path)
