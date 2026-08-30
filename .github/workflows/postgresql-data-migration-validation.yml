@@ -92,7 +92,6 @@ jobs:
                       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                       'processed',
                       '2026-08-30T15:00:00+00:00',
-                      '2026-08-30T15:00:00+00:00',
                       '2026-08-30T15:00:01+00:00',
                   ),
               )
