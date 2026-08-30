@@ -1,4 +1,4 @@
-name: Temporary zero-residual final portability patch
+name: Temporary zero-residual Boolean patch
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  exact-final-portability-patch:
+  exact-boolean-portability-patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
           ref: codex/postgresql-zero-residual-gate
           fetch-depth: 1
 
-      - name: Apply exact Boolean and revision replacements
+      - name: Apply exact Boolean replacements
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -41,12 +41,11 @@ jobs:
           )
           replace_exact(
               'backend/app/receipt_ingestion/service_parts/source_detection.py',
-              "VALUES (:id, :household_id, :type, :label, NULL, 1)",
-              "VALUES (:id, :household_id, :type, :label, NULL, TRUE)",
+              'VALUES (:id, :household_id, :type, :label, NULL, 1)',
+              'VALUES (:id, :household_id, :type, :label, NULL, TRUE)',
               1,
               'receipt source insert Boolean',
           )
-
           replace_exact(
               'backend/app/services/product_taxonomy_store.py',
               '                1, :created_by, :updated_by',
@@ -75,21 +74,9 @@ jobs:
               1,
               'retailer term insert Boolean',
           )
-
-          for workflow in (
-              '.github/workflows/postgresql-main-legacy-schema-retirement.yml',
-              '.github/workflows/postgresql-runtime-startup-schema-authority.yml',
-          ):
-              replace_exact(
-                  workflow,
-                  "'revision': '20260829_15'",
-                  "'revision': '20260830_01'",
-                  1,
-                  f'{workflow} migration head',
-              )
           PY
 
-      - name: Compile, validate and commit final portability patches
+      - name: Compile, validate and commit Boolean patches
         run: |
           python -m py_compile \
             backend/app/receipt_ingestion/service_parts/source_detection.py \
@@ -98,10 +85,8 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
             backend/app/receipt_ingestion/service_parts/source_detection.py \
-            backend/app/services/product_taxonomy_store.py \
-            .github/workflows/postgresql-main-legacy-schema-retirement.yml \
-            .github/workflows/postgresql-runtime-startup-schema-authority.yml
+            backend/app/services/product_taxonomy_store.py
           git diff --cached --check
           git diff --cached --stat
-          git commit -m 'fix: close final PostgreSQL Boolean and revision residue'
+          git commit -m 'fix: close final PostgreSQL Boolean residue'
           git push origin HEAD:codex/postgresql-zero-residual-gate
