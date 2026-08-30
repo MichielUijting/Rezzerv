@@ -1,4 +1,4 @@
-name: Temporary zero-residual Boolean patch
+name: Temporary zero-residual inventory validation patch
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  exact-boolean-portability-patch:
+  exact-inventory-validation-patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,74 +19,75 @@ jobs:
           ref: codex/postgresql-zero-residual-gate
           fetch-depth: 1
 
-      - name: Apply exact Boolean replacements
+      - name: Narrow runtime inventory validation and pin SQLite adoption boundary
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
-          def replace_exact(path_text: str, old: str, new: str, expected: int, label: str) -> None:
-              path = Path(path_text)
-              content = path.read_text(encoding='utf-8-sig')
-              count = content.count(old)
-              if count != expected:
-                  raise SystemExit(f'{label}: expected {expected} targets, found {count}')
-              path.write_text(content.replace(old, new), encoding='utf-8')
+          inventory_path = Path('backend/app/services/canonical_inventory_identity_service.py')
+          content = inventory_path.read_text(encoding='utf-8-sig')
 
-          replace_exact(
-              'backend/app/receipt_ingestion/service_parts/source_detection.py',
-              'is_active = 1, updated_at = CURRENT_TIMESTAMP',
-              'is_active = TRUE, updated_at = CURRENT_TIMESTAMP',
-              1,
-              'receipt source update Boolean',
+          if content.count('import re\n') != 1:
+              raise SystemExit('Expected exactly one re import')
+          content = content.replace('import re\n', '', 1)
+
+          for function_name in ('_locationless_index_sql', '_normalized_predicate_terms'):
+              pattern = rf'^def {re.escape(function_name)}\([^\n]*\)[^\n]*:\n.*?(?=^def |\Z)'
+              content, count = re.subn(
+                  pattern,
+                  '',
+                  content,
+                  count=1,
+                  flags=re.MULTILINE | re.DOTALL,
+              )
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one {function_name}, found {count}')
+
+          predicate_block = '''    index_sql = _locationless_index_sql(conn)
+          if not index_sql:
+              raise RuntimeError(
+                  f"Canonical locationless inventory indexdef ontbreekt: {LOCATIONLESS_ACTIVE_IDENTITY_INDEX}"
+              )
+          expected_terms = _normalized_predicate_terms(
+              f"CREATE INDEX canonical ON inventory (household_id, household_article_id) "
+              f"WHERE {LOCATIONLESS_ACTIVE_IDENTITY_PREDICATE}"
           )
-          replace_exact(
-              'backend/app/receipt_ingestion/service_parts/source_detection.py',
-              'VALUES (:id, :household_id, :type, :label, NULL, 1)',
-              'VALUES (:id, :household_id, :type, :label, NULL, TRUE)',
-              1,
-              'receipt source insert Boolean',
-          )
-          replace_exact(
-              'backend/app/services/product_taxonomy_store.py',
-              '                1, :created_by, :updated_by',
-              '                TRUE, :created_by, :updated_by',
-              1,
-              'taxonomy insert Boolean',
-          )
-          replace_exact(
-              'backend/app/services/product_taxonomy_store.py',
-              '                is_active = 1,',
-              '                is_active = TRUE,',
-              3,
-              'taxonomy update Booleans',
-          )
-          replace_exact(
-              'backend/app/services/product_taxonomy_store.py',
-              ':normalized_synonym, :priority, 1, :source',
-              ':normalized_synonym, :priority, TRUE, :source',
-              1,
-              'synonym insert Boolean',
-          )
-          replace_exact(
-              'backend/app/services/product_taxonomy_store.py',
-              ':intent_key, :confidence, 1, :source',
-              ':intent_key, :confidence, TRUE, :source',
-              1,
-              'retailer term insert Boolean',
-          )
+          actual_terms = _normalized_predicate_terms(index_sql)
+          if actual_terms != expected_terms:
+              raise RuntimeError(
+                  "Canonical locationless inventory index predicate wijkt af: "
+                  f"expected={sorted(expected_terms)!r} actual={sorted(actual_terms)!r} "
+                  f"index={index_sql!r}"
+              )
+
+          '''
+          if content.count(predicate_block) != 1:
+              raise SystemExit(f'Expected exact predicate validation block once, found {content.count(predicate_block)}')
+          content = content.replace(predicate_block, '', 1)
+          inventory_path.write_text(content, encoding='utf-8')
+
+          gate_path = Path('backend/tests/postgresql_zero_residual_selftest.py')
+          gate = gate_path.read_text(encoding='utf-8-sig')
+          old = '        "sqlite_master": 2,\n'
+          new = '        "sqlite_master": 3,\n'
+          if gate.count(old) != 1:
+              raise SystemExit(f'Expected sqlite_master pinned count once, found {gate.count(old)}')
+          gate_path.write_text(gate.replace(old, new, 1), encoding='utf-8')
           PY
 
-      - name: Compile, validate and commit Boolean patches
+      - name: Compile, validate and commit inventory validation patch
         run: |
           python -m py_compile \
-            backend/app/receipt_ingestion/service_parts/source_detection.py \
-            backend/app/services/product_taxonomy_store.py
+            backend/app/services/canonical_inventory_identity_service.py \
+            backend/tests/postgresql_zero_residual_selftest.py
+          python backend/tests/postgresql_zero_residual_selftest.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            backend/app/receipt_ingestion/service_parts/source_detection.py \
-            backend/app/services/product_taxonomy_store.py
+            backend/app/services/canonical_inventory_identity_service.py \
+            backend/tests/postgresql_zero_residual_selftest.py
           git diff --cached --check
           git diff --cached --stat
-          git commit -m 'fix: close final PostgreSQL Boolean residue'
+          git commit -m 'refactor: keep exact partial-index authority outside runtime'
           git push origin HEAD:codex/postgresql-zero-residual-gate
