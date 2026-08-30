@@ -101,6 +101,16 @@ def _assert_receipt_paths(engine) -> None:
 
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM receipt_sources WHERE id = :id"), {"id": SOURCE_ID})
+        conn.execute(
+            text(
+                """
+                INSERT INTO households (id, naam, created_at)
+                VALUES (:id, :naam, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO NOTHING
+                """
+            ),
+            {"id": HOUSEHOLD_ID, "naam": "PostgreSQL receipt residual proof"},
+        )
         _ensure_receipt_store_chain_schema(conn)
         lineage = load_deleted_reimport_lineage(conn, HOUSEHOLD_ID, "no-such-sha")
         if lineage is not None:
@@ -148,6 +158,7 @@ def _assert_receipt_paths(engine) -> None:
         if "summary" not in validation:
             raise AssertionError(validation)
         conn.execute(text("DELETE FROM receipt_sources WHERE id = :id"), {"id": SOURCE_ID})
+        conn.execute(text("DELETE FROM households WHERE id = :id"), {"id": HOUSEHOLD_ID})
 
     after_tables = set(inspect(engine).get_table_names())
     if before_tables != after_tables:
