@@ -1,0 +1,112 @@
+name: PostgreSQL catalog/OFF request portability
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/catalog_routes.py'
+      - 'backend/app/services/off_product_link_service.py'
+      - 'backend/app/services/open_food_facts_candidate_store.py'
+      - 'backend/app/services/open_food_facts_search_preview.py'
+      - 'backend/app/services/external_database_off_index_matchers.py'
+      - 'backend/app/services/external_product_candidate_store.py'
+      - 'backend/app/services/external_product_catalog_store.py'
+      - 'backend/app/services/external_product_index_store.py'
+      - 'backend/tests/postgresql_catalog_off_request_portability_selftest.py'
+      - 'backend/tests/postgresql_catalog_off_request_dml_only_selftest.py'
+      - '.github/workflows/postgresql-catalog-off-request-portability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-off-request-portability:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rezzerv
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d rezzerv"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
+      MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Configure migration and runtime roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d rezzerv -v ON_ERROR_STOP=1 <<'SQL'
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'migration-pass';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'runtime-pass';
+          GRANT CONNECT ON DATABASE rezzerv TO rezzerv_migrator, rezzerv_app;
+          GRANT USAGE, CREATE ON SCHEMA public TO rezzerv_migrator;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Prove catalog/OFF SQL is schema-free and PostgreSQL portable
+        run: |
+          python backend/tests/postgresql_catalog_off_request_portability_selftest.py | tee /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_RUNTIME_DDL_ABSENT_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_CATALOG_IDENTITY_BOOLEAN_READ_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_ORDER_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_OFF_IDENTITY_BOOLEAN_BIND_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_REQUEST_PORTABILITY_STATIC_SELFTEST_GREEN' /tmp/catalog-off-static.log
+
+      - name: Migrate through current canonical Alembic head
+        working-directory: backend
+        run: |
+          python -m app.schema_migration_preflight | tee /tmp/catalog-off-migration.log
+          grep -F "'dialect': 'postgresql'" /tmp/catalog-off-migration.log
+          grep -F "'revision': '20260829_14'" /tmp/catalog-off-migration.log
+
+      - name: Prove catalog/OFF paths with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_catalog_off_request_dml_only_selftest.py | tee /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_RUNTIME_CREATE_DENIED_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_14_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_BOOLEAN_TYPES_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_VALIDATION_ONLY_SCHEMA_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_OFF_IDENTITY_INSERT_UPDATE_BOOLEAN_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_IDENTITY_BOOLEAN_ORDER_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_NUMERIC_SORT_DML_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_QUERY_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_OFF_INDEX_MATCHER_READ_PATH_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_RUNTIME_SCHEMA_UNCHANGED_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_REQUEST_DML_ONLY_SELFTEST_GREEN' /tmp/catalog-off-dml.log
