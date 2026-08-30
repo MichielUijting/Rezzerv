@@ -41,6 +41,7 @@ jobs:
         run: |
           python tests/receipt_lifecycle_schema_authority_selftest.py | tee /tmp/receipt-lifecycle-schema-authority.log
           grep -F 'RECEIPT_HOUSEHOLD_AUTHORITY_SQLITE_DELTA_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_HOUSEHOLD_AUTHORITY_LEGACY_RECOVERY_GREEN' /tmp/receipt-lifecycle-schema-authority.log
           grep -F 'RECEIPT_LIFECYCLE_MALFORMED_INDEX_REJECTED_GREEN' /tmp/receipt-lifecycle-schema-authority.log
           grep -F 'RECEIPT_LIFECYCLE_MALFORMED_TRIGGER_REJECTED_GREEN' /tmp/receipt-lifecycle-schema-authority.log
           grep -F 'RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/receipt-lifecycle-schema-authority.log
