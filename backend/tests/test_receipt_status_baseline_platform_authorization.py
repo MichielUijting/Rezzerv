@@ -294,9 +294,10 @@ def test_both_runtime_baseline_handlers_exist_without_local_legacy_admin_guard()
 
 def test_dual_permission_requirement_is_justified_by_service_write_capability():
     source = BASELINE_SERVICE_SOURCE_PATH.read_text(encoding="utf-8-sig")
-    assert "ALTER TABLE receipt_tables ADD COLUMN store_chain TEXT" in source
+    assert "ALTER TABLE receipt_tables ADD COLUMN store_chain TEXT" not in source
     assert "UPDATE receipt_tables SET store_chain = :store_chain WHERE id = :id" in source
     assert "_ensure_receipt_store_chain_schema(conn)" in source
+    assert "Voer Alembic migrations uit met MIGRATION_DATABASE_URL" in source
 
 
 def _function_node(path: Path, function_name: str):
