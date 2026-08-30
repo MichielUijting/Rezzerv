@@ -99,19 +99,19 @@ def sync_receipt_statuses(engine, household_id: str | None = None) -> dict[str, 
                         SELECT COUNT(1)
                         FROM receipt_table_lines rtl_count
                         WHERE rtl_count.receipt_table_id = rt.id
-                          AND COALESCE(rtl_count.is_deleted, 0) = 0
+                          AND COALESCE(rtl_count.is_deleted, FALSE) IS FALSE
                     ), rt.line_count, 0) AS line_count,
                     COALESCE((
                         SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) IS FALSE
                     ), 0) AS line_total_sum,
                     COALESCE((
                         SELECT SUM(COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                          AND COALESCE(rtl.is_deleted, 0) = 0
+                          AND COALESCE(rtl.is_deleted, FALSE) IS FALSE
                     ), 0) AS line_discount_sum,
                     rt.parse_status AS current_parse_status
                 FROM receipt_tables rt
