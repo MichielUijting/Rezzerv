@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, inspect, text
 
 import migration_foundation_core_selftest as foundation
 
-HEAD_REVISION = "20260829_14"
+HEAD_REVISION = "20260829_15"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 85
 DAY_ARTICLE_EVENT_TABLE = "day_article_processing_events"
 INVITATION_TABLE = "household_invitations"
@@ -17,7 +17,7 @@ FEATURE_SUPPORT_TABLES = {
 }
 
 
-def _configure_revision_14_contract() -> None:
+def _configure_revision_15_contract() -> None:
     foundation.HEAD_REVISION = HEAD_REVISION
     foundation.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
     foundation.PR2L_GPC_RESIDUAL_SCHEMA_AUTHORITY_TABLES = set(
@@ -396,7 +396,7 @@ def _assert_platform_feature_support_schema(connection) -> None:
 
 
 def main() -> None:
-    _configure_revision_14_contract()
+    _configure_revision_15_contract()
     foundation.main()
 
     engine = create_engine(foundation._engine_url())
@@ -413,7 +413,7 @@ def main() -> None:
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_14_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_15_GREEN")
 
 
 if __name__ == "__main__":
