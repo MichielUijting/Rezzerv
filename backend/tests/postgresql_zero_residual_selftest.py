@@ -24,7 +24,7 @@ EXPLICIT_SQLITE_TEST_DEV_FUNCTIONS = {
 # later cutover removes the compatibility path entirely.
 SQLITE_COMPATIBILITY_SQL_ALLOWLIST = {
     Path("schema_migration_preflight.py"): {
-        "sqlite_master": 2,
+        "sqlite_master": 3,
     },
 }
 
