@@ -1,16 +1,28 @@
 from __future__ import annotations
 
 import ast
+import gzip
 from pathlib import Path
 import re
+import sqlite3
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
+SQLITE_BASELINE = BACKEND_ROOT / "alembic" / "baseline_sqlite.sql.gz"
 
-# Explicit test/dev compatibility lives outside production request paths.  The
-# remaining SQLite adoption SQL in schema_migration_preflight.py is temporary
-# production-cutover debt and is pinned here so it cannot spread unnoticed.
+# Explicit test/dev SQLite compatibility is allowed only at these narrow
+# boundaries. Production request/runtime SQL remains fully scanned.
+EXPLICIT_SQLITE_TEST_DEV_PATHS = {
+    Path("cli/rehearse_gpc_bilingual_import.py"),
+}
+EXPLICIT_SQLITE_TEST_DEV_FUNCTIONS = {
+    Path("api/routes/kassa_regression_routes.py"): {"_init_test_database"},
+}
+
+# Transitional existing-SQLite adoption remains production-cutover debt. Pin
+# its exact runtime introspection so it cannot silently spread before that
+# later cutover removes the compatibility path entirely.
 SQLITE_COMPATIBILITY_SQL_ALLOWLIST = {
     Path("schema_migration_preflight.py"): {
         "sqlite_master": 2,
@@ -32,8 +44,12 @@ SQLITE_SQL_PATTERNS = {
     "GLOB": re.compile(r"\bGLOB\b", re.IGNORECASE),
     "COLLATE NOCASE": re.compile(r"\bCOLLATE\s+NOCASE\b", re.IGNORECASE),
     "last_insert_rowid": re.compile(r"\blast_insert_rowid\s*\(", re.IGNORECASE),
-    "SQLite datetime": re.compile(r"\b(?:datetime|date|time|strftime|julianday)\s*\(\s*['\"](?:now|unixepoch)", re.IGNORECASE),
+    "SQLite datetime": re.compile(
+        r"\b(?:datetime|date|time|strftime|julianday)\s*\(\s*['\"](?:now|unixepoch)",
+        re.IGNORECASE,
+    ),
 }
+EXECUTION_SINKS = {"execute", "exec_driver_sql", "executescript"}
 
 
 def _relative(path: Path) -> Path:
@@ -49,35 +65,6 @@ def _python_paths() -> list[Path]:
     )
 
 
-def _docstring_node_ids(tree: ast.AST) -> set[int]:
-    ids: set[int] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        body = getattr(node, "body", None) or []
-        if not body:
-            continue
-        first = body[0]
-        if (
-            isinstance(first, ast.Expr)
-            and isinstance(first.value, ast.Constant)
-            and isinstance(first.value.value, str)
-        ):
-            ids.add(id(first.value))
-    return ids
-
-
-def _string_literals(tree: ast.AST):
-    docstrings = _docstring_node_ids(tree)
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Constant)
-            and isinstance(node.value, str)
-            and id(node) not in docstrings
-        ):
-            yield node
-
-
 def _call_name(func: ast.expr) -> str:
     if isinstance(func, ast.Name):
         return func.id
@@ -85,6 +72,36 @@ def _call_name(func: ast.expr) -> str:
         prefix = _call_name(func.value)
         return f"{prefix}.{func.attr}" if prefix else func.attr
     return ""
+
+
+def _string_literals(node: ast.AST):
+    for candidate in ast.walk(node):
+        if isinstance(candidate, ast.Constant) and isinstance(candidate.value, str):
+            yield candidate
+
+
+def _explicit_compat_ranges(tree: ast.AST, relative: Path) -> tuple[tuple[int, int], ...]:
+    names = EXPLICIT_SQLITE_TEST_DEV_FUNCTIONS.get(relative, set())
+    if not names:
+        return ()
+    ranges: list[tuple[int, int]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names:
+            ranges.append((node.lineno, int(node.end_lineno or node.lineno)))
+    missing = names - {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    if missing:
+        raise AssertionError(
+            f"Pinned SQLite test/dev function disappeared from {relative}: {sorted(missing)}"
+        )
+    return tuple(ranges)
+
+
+def _inside_ranges(line: int, ranges: tuple[tuple[int, int], ...]) -> bool:
+    return any(start <= line <= end for start, end in ranges)
 
 
 def _boolean_column_names(trees: dict[Path, ast.AST]) -> set[str]:
@@ -100,8 +117,8 @@ def _boolean_column_names(trees: dict[Path, ast.AST]) -> set[str]:
             if call_name not in {"Column", "mapped_column"}:
                 continue
             if not any(
-                isinstance(arg, ast.Name) and arg.id == "Boolean"
-                or isinstance(arg, ast.Attribute) and arg.attr == "Boolean"
+                (isinstance(arg, ast.Name) and arg.id == "Boolean")
+                or (isinstance(arg, ast.Attribute) and arg.attr == "Boolean")
                 for arg in value.args
             ):
                 continue
@@ -120,9 +137,62 @@ def _boolean_integer_pattern(column_name: str) -> re.Pattern[str]:
     escaped = re.escape(column_name)
     return re.compile(
         rf"(?:\b\w+\.)?\b{escaped}\b\s*(?:=|<>|!=)\s*[01]\b|"
-        rf"\b[01]\s*(?:=|<>|!=)\s*(?:\w+\.)?\b{escaped}\b",
+        rf"\b[01]\s*(?:=|<>|!=)\s*(?:\w+\.)?\b{escaped}\b|"
+        rf"\bSET\s+(?:\w+\.)?\b{escaped}\b\s*=\s*[01]\b",
         re.IGNORECASE,
     )
+
+
+def _probe_immutable_baseline() -> None:
+    with gzip.open(SQLITE_BASELINE, "rt", encoding="utf-8") as handle:
+        baseline = handle.read()
+    connection = sqlite3.connect(":memory:")
+    try:
+        connection.executescript(baseline)
+        targets = {
+            "purchase_import_line_inventory_handling_overrides": {
+                "purchase_import_line_id",
+                "household_id",
+                "inventory_handling",
+                "updated_by_user_id",
+                "updated_at",
+            },
+            "receipt_webhook_deliveries": {
+                "svix_id",
+                "svix_timestamp",
+                "payload_sha256",
+                "status",
+                "created_at",
+                "updated_at",
+            },
+            "product_inventory_groups": {
+                "gpc_family_code",
+                "gpc_family_name",
+                "gpc_class_code",
+                "gpc_class_name",
+                "gpc_brick_code",
+            },
+        }
+        for table_name, required_columns in targets.items():
+            table_exists = bool(
+                connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                    (table_name,),
+                ).fetchone()
+            )
+            columns = {
+                str(row[1])
+                for row in connection.execute(
+                    f'PRAGMA table_info("{table_name.replace(chr(34), chr(34) * 2)}")'
+                ).fetchall()
+            } if table_exists else set()
+            missing = sorted(required_columns - columns)
+            print(
+                "POSTGRESQL_ZERO_RESIDUAL_BASELINE_PROBE="
+                f"{table_name}:table={table_exists}:missing={missing}"
+            )
+    finally:
+        connection.close()
 
 
 def main() -> None:
@@ -138,37 +208,53 @@ def main() -> None:
     boolean_violations: list[str] = []
     compatibility_hits: dict[tuple[Path, str], int] = {}
 
+    _probe_immutable_baseline()
+
     for path, tree in trees.items():
         relative = _relative(path)
+        if relative in EXPLICIT_SQLITE_TEST_DEV_PATHS:
+            continue
+        compat_ranges = _explicit_compat_ranges(tree, relative)
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and _call_name(node.func).endswith(".create_all"):
-                ddl_violations.append(f"{relative}:{node.lineno}:create_all")
+            if not isinstance(node, ast.Call):
+                continue
+            line = int(getattr(node, "lineno", 0) or 0)
+            if _inside_ranges(line, compat_ranges):
+                continue
 
-        for node in _string_literals(tree):
-            value = node.value
-            line = getattr(node, "lineno", 0)
+            call_name = _call_name(node.func)
+            short_name = call_name.rsplit(".", 1)[-1]
+            if call_name.endswith(".create_all"):
+                ddl_violations.append(f"{relative}:{line}:create_all")
+                continue
+            if short_name not in EXECUTION_SINKS:
+                continue
 
-            for label, pattern in DDL_PATTERNS.items():
-                if pattern.search(value):
-                    ddl_violations.append(f"{relative}:{line}:{label}")
+            for string_node in _string_literals(node):
+                value = string_node.value
+                string_line = int(getattr(string_node, "lineno", line) or line)
 
-            for label, pattern in SQLITE_SQL_PATTERNS.items():
-                matches = pattern.findall(value)
-                if not matches:
-                    continue
-                expected = SQLITE_COMPATIBILITY_SQL_ALLOWLIST.get(relative, {}).get(label)
-                if expected is not None:
-                    key = (relative, label)
-                    compatibility_hits[key] = compatibility_hits.get(key, 0) + len(matches)
-                    continue
-                sqlite_violations.append(f"{relative}:{line}:{label}")
+                for label, pattern in DDL_PATTERNS.items():
+                    if pattern.search(value):
+                        ddl_violations.append(f"{relative}:{string_line}:{label}")
 
-            for column_name in sorted(boolean_columns):
-                if _boolean_integer_pattern(column_name).search(value):
-                    boolean_violations.append(
-                        f"{relative}:{line}:{column_name}=integer-literal"
-                    )
+                for label, pattern in SQLITE_SQL_PATTERNS.items():
+                    matches = pattern.findall(value)
+                    if not matches:
+                        continue
+                    expected = SQLITE_COMPATIBILITY_SQL_ALLOWLIST.get(relative, {}).get(label)
+                    if expected is not None:
+                        key = (relative, label)
+                        compatibility_hits[key] = compatibility_hits.get(key, 0) + len(matches)
+                        continue
+                    sqlite_violations.append(f"{relative}:{string_line}:{label}")
+
+                for column_name in sorted(boolean_columns):
+                    if _boolean_integer_pattern(column_name).search(value):
+                        boolean_violations.append(
+                            f"{relative}:{string_line}:{column_name}=integer-literal"
+                        )
 
     compatibility_drift: list[str] = []
     for relative, labels in SQLITE_COMPATIBILITY_SQL_ALLOWLIST.items():
