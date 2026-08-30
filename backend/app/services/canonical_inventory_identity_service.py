@@ -95,28 +95,21 @@ def _table_columns(conn, table_name: str) -> dict[str, dict]:
 
 
 def _locationless_index_sql(conn) -> str | None:
-    dialect = conn.dialect.name
-    if dialect == "sqlite":
-        return conn.execute(text(
-            """
-            SELECT sql
-            FROM sqlite_master
-            WHERE type = 'index' AND name = :name
-            LIMIT 1
-            """
-        ), {"name": LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
-    if dialect == "postgresql":
-        return conn.execute(text(
-            """
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE schemaname = current_schema()
-              AND tablename = 'inventory'
-              AND indexname = :name
-            LIMIT 1
-            """
-        ), {"name": LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
-    raise RuntimeError(f"Unsupported Rezzerv inventory identity dialect: {dialect}")
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspect(conn).get_indexes("inventory")
+    }
+    index = indexes.get(LOCATIONLESS_ACTIVE_IDENTITY_INDEX)
+    if not index:
+        return None
+    dialect_options = index.get("dialect_options") or {}
+    predicate = dialect_options.get(f"{conn.dialect.name}_where")
+    if predicate is None:
+        return None
+    return (
+        "CREATE INDEX canonical ON inventory (household_id, household_article_id) "
+        f"WHERE {predicate}"
+    )
 
 
 def _normalized_predicate_terms(index_sql: str | None) -> frozenset[str]:

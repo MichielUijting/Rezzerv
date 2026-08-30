@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.global_product_service import get_or_create_global_product
@@ -57,32 +57,17 @@ def _parse_quantity_label(value: Any) -> tuple[float | None, str | None]:
 
 
 def _table_columns(conn, table_name: str) -> set[str]:
-    dialect = str(engine.dialect.name or "").lower()
-    if dialect == "sqlite":
-        rows = conn.execute(text(f'PRAGMA table_info("{table_name}")')).mappings().all()
-        return {str(row.get("name") or "") for row in rows}
-    rows = conn.execute(
-        text("SELECT column_name FROM information_schema.columns WHERE table_name = :table_name"),
-        {"table_name": table_name},
-    ).mappings().all()
-    return {str(row.get("column_name") or "") for row in rows}
+    inspector = inspect(conn)
+    if not inspector.has_table(str(table_name)):
+        return set()
+    return {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(str(table_name))
+    }
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    dialect = str(engine.dialect.name or "").lower()
-    if dialect == "sqlite":
-        return bool(
-            conn.execute(
-                text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :name LIMIT 1"),
-                {"name": table_name},
-            ).scalar()
-        )
-    return bool(
-        conn.execute(
-            text("SELECT 1 FROM information_schema.tables WHERE table_name = :name LIMIT 1"),
-            {"name": table_name},
-        ).scalar()
-    )
+    return bool(inspect(conn).has_table(str(table_name)))
 
 
 def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str, float | None, str | None]:
