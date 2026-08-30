@@ -341,16 +341,19 @@ def upgrade() -> None:
 
     _assert_household_values_are_registered(bind)
     _assert_missing_sources_are_manual_upload_only(bind)
-    _ensure_manual_sources(bind)
 
     if bind.dialect.name == "sqlite":
         dependent_triggers = _sqlite_receipt_dependent_triggers(bind)
         _drop_sqlite_triggers(bind, dependent_triggers)
-        for table_name in _RECEIPT_HOUSEHOLD_TABLES:
+        _replace_sqlite_household_fk(bind, "receipt_sources")
+        _ensure_manual_sources(bind)
+        for table_name in ("raw_receipts", "receipt_tables"):
             _replace_sqlite_household_fk(bind, table_name)
         _restore_sqlite_triggers(bind, dependent_triggers)
     else:
-        for table_name in _RECEIPT_HOUSEHOLD_TABLES:
+        _replace_postgresql_household_fk(bind, "receipt_sources")
+        _ensure_manual_sources(bind)
+        for table_name in ("raw_receipts", "receipt_tables"):
             _replace_postgresql_household_fk(bind, table_name)
 
     _create_manual_source_trigger(bind)
