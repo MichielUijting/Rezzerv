@@ -17,14 +17,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: codex/postgresql-zero-residual-gate
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Replace dialect SQL introspection with SQLAlchemy inspection
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
-          def replace_once(path_text: str, old: str, new: str, label: str) -> None:
+          def replace_literal(path_text: str, old: str, new: str, label: str) -> None:
               path = Path(path_text)
               content = path.read_text(encoding='utf-8-sig')
               count = content.count(old)
@@ -32,163 +33,117 @@ jobs:
                   raise SystemExit(f'{label}: expected exactly one target, found {count}')
               path.write_text(content.replace(old, new), encoding='utf-8')
 
-          replace_once(
+          def replace_function(path_text: str, function_name: str, replacement: str) -> None:
+              path = Path(path_text)
+              content = path.read_text(encoding='utf-8-sig')
+              pattern = rf'^def {re.escape(function_name)}\([^\n]*\)[^\n]*:\n.*?(?=^def |\Z)'
+              updated, count = re.subn(
+                  pattern,
+                  replacement.rstrip() + '\n\n\n',
+                  content,
+                  count=1,
+                  flags=re.MULTILINE | re.DOTALL,
+              )
+              if count != 1:
+                  raise SystemExit(f'{path_text}:{function_name}: expected exactly one function, found {count}')
+              path.write_text(updated, encoding='utf-8')
+
+          replace_literal(
               'backend/app/services/off_product_link_service.py',
               'from sqlalchemy import text\n',
               'from sqlalchemy import inspect, text\n',
               'off_product import',
           )
-          replace_once(
+          replace_function(
               'backend/app/services/off_product_link_service.py',
-              '''def _table_columns(conn, table_name: str) -> set[str]:
-              dialect = str(engine.dialect.name or "").lower()
-              if dialect == "sqlite":
-                  rows = conn.execute(text(f'PRAGMA table_info("{table_name}")')).mappings().all()
-                  return {str(row.get("name") or "") for row in rows}
-              rows = conn.execute(
-                  text("SELECT column_name FROM information_schema.columns WHERE table_name = :table_name"),
-                  {"table_name": table_name},
-              ).mappings().all()
-              return {str(row.get("column_name") or "") for row in rows}
-
-
-              def _table_exists(conn, table_name: str) -> bool:
-              dialect = str(engine.dialect.name or "").lower()
-              if dialect == "sqlite":
-                  return bool(
-                      conn.execute(
-                          text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :name LIMIT 1"),
-                          {"name": table_name},
-                      ).scalar()
-                  )
-              return bool(
-                  conn.execute(
-                      text("SELECT 1 FROM information_schema.tables WHERE table_name = :name LIMIT 1"),
-                      {"name": table_name},
-                  ).scalar()
-              )
-              ''',
-              '''def _table_columns(conn, table_name: str) -> set[str]:
-              inspector = inspect(conn)
-              if not inspector.has_table(str(table_name)):
-                  return set()
-              return {
-                  str(column.get("name") or "")
-                  for column in inspector.get_columns(str(table_name))
-              }
-
-
-              def _table_exists(conn, table_name: str) -> bool:
-              return bool(inspect(conn).has_table(str(table_name)))
-              ''',
-              'off_product inspection helpers',
+              '_table_columns',
+              (
+                  'def _table_columns(conn, table_name: str) -> set[str]:\n'
+                  '    inspector = inspect(conn)\n'
+                  '    if not inspector.has_table(str(table_name)):\n'
+                  '        return set()\n'
+                  '    return {\n'
+                  '        str(column.get("name") or "")\n'
+                  '        for column in inspector.get_columns(str(table_name))\n'
+                  '    }\n'
+              ),
+          )
+          replace_function(
+              'backend/app/services/off_product_link_service.py',
+              '_table_exists',
+              (
+                  'def _table_exists(conn, table_name: str) -> bool:\n'
+                  '    return bool(inspect(conn).has_table(str(table_name)))\n'
+              ),
           )
 
-          replace_once(
+          replace_literal(
               'backend/app/services/off_search_service.py',
               'from sqlalchemy import text\n',
               'from sqlalchemy import inspect, text\n',
               'off_search import',
           )
-          replace_once(
+          replace_function(
               'backend/app/services/off_search_service.py',
-              '''def _table_exists(conn, table_name: str) -> bool:
-              dialect = str(engine.dialect.name or "").lower()
-              if dialect == "sqlite":
-                  return conn.execute(
-                      text("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name"),
-                      {"name": table_name},
-                  ).first() is not None
-              return conn.execute(
-                  text(
-                      '''
-                      SELECT table_name
-                      FROM information_schema.tables
-                      WHERE table_name = :name
-                      LIMIT 1
-                      '''
-                  ),
-                  {"name": table_name},
-              ).first() is not None
-              ''',
-              '''def _table_exists(conn, table_name: str) -> bool:
-              return bool(inspect(conn).has_table(str(table_name)))
-              ''',
-              'off_search table exists',
+              '_table_exists',
+              (
+                  'def _table_exists(conn, table_name: str) -> bool:\n'
+                  '    return bool(inspect(conn).has_table(str(table_name)))\n'
+              ),
           )
 
-          replace_once(
+          replace_literal(
               'backend/app/api/routes/receipt_parser_diagnosis.py',
               'from sqlalchemy import text\n',
               'from sqlalchemy import inspect, text\n',
               'receipt diagnosis import',
           )
-          replace_once(
+          replace_function(
               'backend/app/api/routes/receipt_parser_diagnosis.py',
-              '''def _table_columns(conn: Any, table_name: str) -> set[str]:
-              return {str(row[1]) for row in conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()}
-              ''',
-              '''def _table_columns(conn: Any, table_name: str) -> set[str]:
-              inspector = inspect(conn)
-              if not inspector.has_table(str(table_name)):
-                  return set()
-              return {
-                  str(column.get("name") or "")
-                  for column in inspector.get_columns(str(table_name))
-              }
-              ''',
-              'receipt diagnosis columns',
+              '_table_columns',
+              (
+                  'def _table_columns(conn: Any, table_name: str) -> set[str]:\n'
+                  '    inspector = inspect(conn)\n'
+                  '    if not inspector.has_table(str(table_name)):\n'
+                  '        return set()\n'
+                  '    return {\n'
+                  '        str(column.get("name") or "")\n'
+                  '        for column in inspector.get_columns(str(table_name))\n'
+                  '    }\n'
+              ),
           )
 
-          replace_once(
+          replace_function(
               'backend/app/services/canonical_inventory_identity_service.py',
-              '''def _locationless_index_sql(conn) -> str | None:
-              dialect = conn.dialect.name
-              if dialect == "sqlite":
-                  return conn.execute(text(
-                      """
-                      SELECT sql
-                      FROM sqlite_master
-                      WHERE type = 'index' AND name = :name
-                      LIMIT 1
-                      """
-                  ), {"name": LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
-              if dialect == "postgresql":
-                  return conn.execute(text(
-                      """
-                      SELECT indexdef
-                      FROM pg_indexes
-                      WHERE schemaname = current_schema()
-                        AND tablename = 'inventory'
-                        AND indexname = :name
-                      LIMIT 1
-                      """
-                  ), {"name": LOCATIONLESS_ACTIVE_IDENTITY_INDEX}).scalar_one_or_none()
-              raise RuntimeError(f"Unsupported Rezzerv inventory identity dialect: {dialect}")
-              ''',
-              '''def _locationless_index_sql(conn) -> str | None:
-              indexes = {
-                  str(index.get("name") or ""): index
-                  for index in inspect(conn).get_indexes("inventory")
-              }
-              index = indexes.get(LOCATIONLESS_ACTIVE_IDENTITY_INDEX)
-              if not index:
-                  return None
-              dialect_options = index.get("dialect_options") or {}
-              predicate = dialect_options.get(f"{conn.dialect.name}_where")
-              if predicate is None:
-                  return None
-              return (
-                  "CREATE INDEX canonical ON inventory (household_id, household_article_id) "
-                  f"WHERE {predicate}"
-              )
-              ''',
-              'inventory partial index inspection',
+              '_locationless_index_sql',
+              (
+                  'def _locationless_index_sql(conn) -> str | None:\n'
+                  '    indexes = {\n'
+                  '        str(index.get("name") or ""): index\n'
+                  '        for index in inspect(conn).get_indexes("inventory")\n'
+                  '    }\n'
+                  '    index = indexes.get(LOCATIONLESS_ACTIVE_IDENTITY_INDEX)\n'
+                  '    if not index:\n'
+                  '        return None\n'
+                  '    dialect_options = index.get("dialect_options") or {}\n'
+                  '    predicate = dialect_options.get(f"{conn.dialect.name}_where")\n'
+                  '    if predicate is None:\n'
+                  '        return None\n'
+                  '    return (\n'
+                  '        "CREATE INDEX canonical ON inventory (household_id, household_article_id) "\n'
+                  '        f"WHERE {predicate}"\n'
+                  '    )\n'
+              ),
           )
           PY
 
-      - name: Commit exact inspection patches to feature branch
+      - name: Compile and commit exact inspection patches
         run: |
+          python -m py_compile \
+            backend/app/services/off_product_link_service.py \
+            backend/app/services/off_search_service.py \
+            backend/app/api/routes/receipt_parser_diagnosis.py \
+            backend/app/services/canonical_inventory_identity_service.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
