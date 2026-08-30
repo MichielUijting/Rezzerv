@@ -65,7 +65,7 @@ jobs:
           echo "::add-mask::$admin_password"
           echo "::add-mask::$superuser_password"
 
-      - name: Build and start Rezzerv on PostgreSQL
+      - name: Build and start Rezzerv
         run: docker compose up -d --build
 
       - name: Wait for backend health
@@ -156,56 +156,57 @@ jobs:
 
               conn.execute(
                   text("""
-                      INSERT INTO auth_platform_user_roles (
-                          user_id, role_key, active, granted_at, granted_by_user_id
-                      ) VALUES (
-                          :user_id, 'platform.ip_owner', 1, CURRENT_TIMESTAMP, :user_id
-                      )
-                      ON CONFLICT (user_id, role_key) DO UPDATE SET
+                      INSERT INTO auth_platform_user_roles
+                          (user_id, role_key, active, created_at, updated_at)
+                      VALUES
+                          (:user_id, 'platform.ip_owner', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                      ON CONFLICT(user_id, role_key) DO UPDATE SET
                           active = 1,
-                          granted_at = CURRENT_TIMESTAMP,
-                          revoked_at = NULL,
-                          granted_by_user_id = excluded.granted_by_user_id
+                          updated_at = CURRENT_TIMESTAMP
                   """),
                   {"user_id": user_id},
               )
+
+          print(f"frontend_test_admin_ip_owner: PASS; user_id={user_id}")
           PY
 
       - name: Prepare household-zero fixtures
-        run: |
-          docker compose exec -T \
-            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
-            backend python /app/tests/frontteam_personal_household_selftest.py --provision-only
+        run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py prepare
 
       - name: Run complete frontend regression set
-        working-directory: frontend
-        env:
-          PLAYWRIGHT_TEST_ADMIN_PASSWORD: ${{ env.PLAYWRIGHT_TEST_ADMIN_PASSWORD }}
+        shell: bash
         run: |
-          npm ci
-          npx playwright install --with-deps chromium
-          npm run test:e2e
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_API_URL="$PLAYWRIGHT_API_URL" \
+            -e PLAYWRIGHT_TEST_ADMIN_EMAIL="$PLAYWRIGHT_TEST_ADMIN_EMAIL" \
+            -e PLAYWRIGHT_TEST_ADMIN_PASSWORD="$PLAYWRIGHT_TEST_ADMIN_PASSWORD" \
+            -e PLAYWRIGHT_HOUSEHOLD_ID="$PLAYWRIGHT_HOUSEHOLD_ID" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "npm ci && npm run test:e2e:frontend-regression"
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr253-full-playwright-report
+          name: pr253-full-frontend-playwright-report
           path: frontend/playwright-report
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
       - name: Cleanup household-zero fixtures
         if: always()
-        run: |
-          docker compose exec -T \
-            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
-            backend python /app/tests/frontteam_personal_household_selftest.py --cleanup-only || true
+        run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py cleanup || true
 
       - name: Show container logs on failure
         if: failure()
-        run: docker compose logs --no-color --tail=500
+        run: |
+          docker compose ps
+          docker compose logs --no-color backend frontend
 
       - name: Stop containers
         if: always()
-        run: docker compose down --volumes --remove-orphans
+        run: docker compose down --volumes
