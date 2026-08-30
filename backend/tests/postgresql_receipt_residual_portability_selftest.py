@@ -18,6 +18,7 @@ SCOPE_FILES = (
     "receipt_reimport_lineage_service.py",
     "receipt_source_helper_service.py",
     "receipt_status_baseline_service.py",
+    "receipt_status_baseline_service/__init__.py",
 )
 
 FORBIDDEN_SQL_PATTERNS = {
@@ -135,15 +136,24 @@ def _assert_store_chain_alembic_authority() -> None:
             f"Receipt store-chain Alembic authority incomplete: {missing_migration}"
         )
 
-    status_source = (SERVICE_ROOT / "receipt_status_baseline_service.py").read_text(
-        encoding="utf-8-sig"
+    status_sources = (
+        SERVICE_ROOT / "receipt_status_baseline_service.py",
+        SERVICE_ROOT / "receipt_status_baseline_service" / "__init__.py",
     )
-    if "inspect(conn).get_columns(table_name)" not in status_source:
-        raise AssertionError("Receipt status baseline does not use portable schema inspection")
-    if "Canonical receipt_tables.store_chain schema ontbreekt" not in status_source:
-        raise AssertionError("Receipt status baseline is not fail-closed on missing store_chain")
-    if "ALTER TABLE receipt_tables ADD COLUMN store_chain" in status_source:
-        raise AssertionError("Receipt status baseline still owns store_chain DDL at runtime")
+    for status_path in status_sources:
+        status_source = status_path.read_text(encoding="utf-8-sig")
+        if "inspect(conn).get_columns(table_name)" not in status_source:
+            raise AssertionError(
+                f"Receipt status baseline does not use portable schema inspection: {status_path}"
+            )
+        if "Canonical receipt_tables.store_chain schema ontbreekt" not in status_source:
+            raise AssertionError(
+                f"Receipt status baseline is not fail-closed on missing store_chain: {status_path}"
+            )
+        if "ALTER TABLE receipt_tables ADD COLUMN store_chain" in status_source:
+            raise AssertionError(
+                f"Receipt status baseline still owns store_chain DDL at runtime: {status_path}"
+            )
 
     print("POSTGRESQL_RECEIPT_STORE_CHAIN_ALEMBIC_AUTHORITY_GREEN")
     print("POSTGRESQL_RECEIPT_STATUS_VALIDATION_ONLY_GREEN")
