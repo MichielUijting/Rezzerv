@@ -1,4 +1,4 @@
-name: Temporary zero-residual inspection patch
+name: Temporary zero-residual final portability patch
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  exact-inspection-patch:
+  exact-final-portability-patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,139 +19,89 @@ jobs:
           ref: codex/postgresql-zero-residual-gate
           fetch-depth: 1
 
-      - name: Replace dialect SQL introspection with SQLAlchemy inspection
+      - name: Apply exact Boolean and revision replacements
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
 
-          def replace_literal(path_text: str, old: str, new: str, label: str) -> None:
+          def replace_exact(path_text: str, old: str, new: str, expected: int, label: str) -> None:
               path = Path(path_text)
               content = path.read_text(encoding='utf-8-sig')
               count = content.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected exactly one target, found {count}')
+              if count != expected:
+                  raise SystemExit(f'{label}: expected {expected} targets, found {count}')
               path.write_text(content.replace(old, new), encoding='utf-8')
 
-          def replace_function(path_text: str, function_name: str, replacement: str) -> None:
-              path = Path(path_text)
-              content = path.read_text(encoding='utf-8-sig')
-              pattern = rf'^def {re.escape(function_name)}\([^\n]*\)[^\n]*:\n.*?(?=^def |\Z)'
-              updated, count = re.subn(
-                  pattern,
-                  replacement.rstrip() + '\n\n\n',
-                  content,
-                  count=1,
-                  flags=re.MULTILINE | re.DOTALL,
+          replace_exact(
+              'backend/app/receipt_ingestion/service_parts/source_detection.py',
+              'is_active = 1, updated_at = CURRENT_TIMESTAMP',
+              'is_active = TRUE, updated_at = CURRENT_TIMESTAMP',
+              1,
+              'receipt source update Boolean',
+          )
+          replace_exact(
+              'backend/app/receipt_ingestion/service_parts/source_detection.py',
+              "VALUES (:id, :household_id, :type, :label, NULL, 1)",
+              "VALUES (:id, :household_id, :type, :label, NULL, TRUE)",
+              1,
+              'receipt source insert Boolean',
+          )
+
+          replace_exact(
+              'backend/app/services/product_taxonomy_store.py',
+              '                1, :created_by, :updated_by',
+              '                TRUE, :created_by, :updated_by',
+              1,
+              'taxonomy insert Boolean',
+          )
+          replace_exact(
+              'backend/app/services/product_taxonomy_store.py',
+              '                is_active = 1,',
+              '                is_active = TRUE,',
+              3,
+              'taxonomy update Booleans',
+          )
+          replace_exact(
+              'backend/app/services/product_taxonomy_store.py',
+              ':normalized_synonym, :priority, 1, :source',
+              ':normalized_synonym, :priority, TRUE, :source',
+              1,
+              'synonym insert Boolean',
+          )
+          replace_exact(
+              'backend/app/services/product_taxonomy_store.py',
+              ':intent_key, :confidence, 1, :source',
+              ':intent_key, :confidence, TRUE, :source',
+              1,
+              'retailer term insert Boolean',
+          )
+
+          for workflow in (
+              '.github/workflows/postgresql-main-legacy-schema-retirement.yml',
+              '.github/workflows/postgresql-runtime-startup-schema-authority.yml',
+          ):
+              replace_exact(
+                  workflow,
+                  "'revision': '20260829_15'",
+                  "'revision': '20260830_01'",
+                  1,
+                  f'{workflow} migration head',
               )
-              if count != 1:
-                  raise SystemExit(f'{path_text}:{function_name}: expected exactly one function, found {count}')
-              path.write_text(updated, encoding='utf-8')
-
-          replace_literal(
-              'backend/app/services/off_product_link_service.py',
-              'from sqlalchemy import text\n',
-              'from sqlalchemy import inspect, text\n',
-              'off_product import',
-          )
-          replace_function(
-              'backend/app/services/off_product_link_service.py',
-              '_table_columns',
-              (
-                  'def _table_columns(conn, table_name: str) -> set[str]:\n'
-                  '    inspector = inspect(conn)\n'
-                  '    if not inspector.has_table(str(table_name)):\n'
-                  '        return set()\n'
-                  '    return {\n'
-                  '        str(column.get("name") or "")\n'
-                  '        for column in inspector.get_columns(str(table_name))\n'
-                  '    }\n'
-              ),
-          )
-          replace_function(
-              'backend/app/services/off_product_link_service.py',
-              '_table_exists',
-              (
-                  'def _table_exists(conn, table_name: str) -> bool:\n'
-                  '    return bool(inspect(conn).has_table(str(table_name)))\n'
-              ),
-          )
-
-          replace_literal(
-              'backend/app/services/off_search_service.py',
-              'from sqlalchemy import text\n',
-              'from sqlalchemy import inspect, text\n',
-              'off_search import',
-          )
-          replace_function(
-              'backend/app/services/off_search_service.py',
-              '_table_exists',
-              (
-                  'def _table_exists(conn, table_name: str) -> bool:\n'
-                  '    return bool(inspect(conn).has_table(str(table_name)))\n'
-              ),
-          )
-
-          replace_literal(
-              'backend/app/api/routes/receipt_parser_diagnosis.py',
-              'from sqlalchemy import text\n',
-              'from sqlalchemy import inspect, text\n',
-              'receipt diagnosis import',
-          )
-          replace_function(
-              'backend/app/api/routes/receipt_parser_diagnosis.py',
-              '_table_columns',
-              (
-                  'def _table_columns(conn: Any, table_name: str) -> set[str]:\n'
-                  '    inspector = inspect(conn)\n'
-                  '    if not inspector.has_table(str(table_name)):\n'
-                  '        return set()\n'
-                  '    return {\n'
-                  '        str(column.get("name") or "")\n'
-                  '        for column in inspector.get_columns(str(table_name))\n'
-                  '    }\n'
-              ),
-          )
-
-          replace_function(
-              'backend/app/services/canonical_inventory_identity_service.py',
-              '_locationless_index_sql',
-              (
-                  'def _locationless_index_sql(conn) -> str | None:\n'
-                  '    indexes = {\n'
-                  '        str(index.get("name") or ""): index\n'
-                  '        for index in inspect(conn).get_indexes("inventory")\n'
-                  '    }\n'
-                  '    index = indexes.get(LOCATIONLESS_ACTIVE_IDENTITY_INDEX)\n'
-                  '    if not index:\n'
-                  '        return None\n'
-                  '    dialect_options = index.get("dialect_options") or {}\n'
-                  '    predicate = dialect_options.get(f"{conn.dialect.name}_where")\n'
-                  '    if predicate is None:\n'
-                  '        return None\n'
-                  '    return (\n'
-                  '        "CREATE INDEX canonical ON inventory (household_id, household_article_id) "\n'
-                  '        f"WHERE {predicate}"\n'
-                  '    )\n'
-              ),
-          )
           PY
 
-      - name: Compile and commit exact inspection patches
+      - name: Compile, validate and commit final portability patches
         run: |
           python -m py_compile \
-            backend/app/services/off_product_link_service.py \
-            backend/app/services/off_search_service.py \
-            backend/app/api/routes/receipt_parser_diagnosis.py \
-            backend/app/services/canonical_inventory_identity_service.py
+            backend/app/receipt_ingestion/service_parts/source_detection.py \
+            backend/app/services/product_taxonomy_store.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            backend/app/services/off_product_link_service.py \
-            backend/app/services/off_search_service.py \
-            backend/app/api/routes/receipt_parser_diagnosis.py \
-            backend/app/services/canonical_inventory_identity_service.py
+            backend/app/receipt_ingestion/service_parts/source_detection.py \
+            backend/app/services/product_taxonomy_store.py \
+            .github/workflows/postgresql-main-legacy-schema-retirement.yml \
+            .github/workflows/postgresql-runtime-startup-schema-authority.yml
           git diff --cached --check
           git diff --cached --stat
-          git commit -m 'refactor: remove dialect SQL introspection from runtime helpers'
+          git commit -m 'fix: close final PostgreSQL Boolean and revision residue'
           git push origin HEAD:codex/postgresql-zero-residual-gate
