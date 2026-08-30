@@ -128,7 +128,7 @@ def _boolean_integer_pattern(column_name: str) -> re.Pattern[str]:
 def main() -> None:
     paths = _python_paths()
     trees = {
-        path: ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        path: ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
         for path in paths
     }
     boolean_columns = _boolean_column_names(trees)
