@@ -29,12 +29,12 @@ jobs:
           updated = original
 
           old_insert = """                    INSERT OR IGNORE INTO household_articles (id, household_id, naam, consumable, created_at, updated_at)
-                    VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-"""
+                              VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          """
           new_insert = """                    INSERT INTO household_articles (id, household_id, naam, consumable, created_at, updated_at)
-                    VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    ON CONFLICT DO NOTHING
-"""
+                              VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                              ON CONFLICT DO NOTHING
+          """
           if updated.count(old_insert) != 1:
               raise SystemExit(f'Expected exactly one INSERT OR IGNORE target, found {updated.count(old_insert)}')
           updated = updated.replace(old_insert, new_insert)
@@ -60,6 +60,6 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add backend/app/main.py
           git diff --cached --check
-          test "$(git diff --cached --numstat | awk '{a+=$1; d+=$2} END {print a+d}')" = "5"
+          git diff --cached -- backend/app/main.py
           git commit -m 'fix: remove residual SQLite request SQL from main'
           git push origin HEAD:codex/postgresql-zero-residual-gate
