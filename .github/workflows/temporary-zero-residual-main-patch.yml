@@ -1,0 +1,65 @@
+name: Temporary zero-residual main patch
+
+on:
+  push:
+    branches:
+      - codex/postgresql-zero-residual-gate
+    paths:
+      - '.github/workflows/temporary-zero-residual-main-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  exact-main-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/postgresql-zero-residual-gate
+          fetch-depth: 0
+
+      - name: Apply exactly two PostgreSQL portability replacements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          original = path.read_text(encoding='utf-8-sig')
+          updated = original
+
+          old_insert = """                    INSERT OR IGNORE INTO household_articles (id, household_id, naam, consumable, created_at, updated_at)
+                    VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+"""
+          new_insert = """                    INSERT INTO household_articles (id, household_id, naam, consumable, created_at, updated_at)
+                    VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT DO NOTHING
+"""
+          if updated.count(old_insert) != 1:
+              raise SystemExit(f'Expected exactly one INSERT OR IGNORE target, found {updated.count(old_insert)}')
+          updated = updated.replace(old_insert, new_insert)
+
+          old_collation = '                    label COLLATE NOCASE ASC\n'
+          new_collation = '                    lower(label) ASC\n'
+          if updated.count(old_collation) != 1:
+              raise SystemExit(f'Expected exactly one COLLATE NOCASE target, found {updated.count(old_collation)}')
+          updated = updated.replace(old_collation, new_collation)
+
+          if updated == original:
+              raise SystemExit('No main.py changes were produced')
+          if 'INSERT OR IGNORE INTO household_articles' in updated:
+              raise SystemExit('SQLite INSERT OR IGNORE target remains')
+          if 'label COLLATE NOCASE ASC' in updated:
+              raise SystemExit('SQLite NOCASE target remains')
+          path.write_text(updated, encoding='utf-8')
+          PY
+
+      - name: Commit exact patch to feature branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/main.py
+          git diff --cached --check
+          test "$(git diff --cached --numstat | awk '{a+=$1; d+=$2} END {print a+d}')" = "5"
+          git commit -m 'fix: remove residual SQLite request SQL from main'
+          git push origin HEAD:codex/postgresql-zero-residual-gate
