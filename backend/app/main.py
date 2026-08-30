@@ -2138,8 +2138,9 @@ def resolve_household_article_reference(conn, household_id: str, article_id: str
             conn.execute(
                 text(
                     """
-                    INSERT OR IGNORE INTO household_articles (id, household_id, naam, consumable, created_at, updated_at)
+                    INSERT INTO household_articles (id, household_id, naam, consumable, created_at, updated_at)
                     VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT DO NOTHING
                     """
                 ),
                 {
@@ -9123,7 +9124,7 @@ def list_receipt_sources_for_household(household_id: str):
                         WHEN 'barcode_fallback' THEN 7
                         ELSE 9
                     END,
-                    label COLLATE NOCASE ASC
+                    lower(label) ASC
                 """
             ),
             {'household_id': household_id},
