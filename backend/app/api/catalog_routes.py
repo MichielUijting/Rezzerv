@@ -229,13 +229,20 @@ def list_catalog(
     )
     order_expression = expressions.get(sort_by, expressions["name"])
     direction = "DESC" if sort_direction.lower() == "desc" else "ASC"
+    if sort_by in {"name", "brand", "primary_gtin", "product_type", "source"}:
+        order_sql = (
+            f"LOWER({order_expression}) {direction}, "
+            f"{order_expression} {direction}"
+        )
+    else:
+        order_sql = f"{order_expression} {direction}"
     from_sql = f"FROM global_products gp {' '.join(joins)} {where_sql}"
 
     count_sql = f"SELECT COUNT(*) {from_sql}"
     page_sql = f"""
         SELECT {", ".join(select_parts)}
         {from_sql}
-        ORDER BY {order_expression} COLLATE NOCASE {direction}, gp.id ASC
+        ORDER BY {order_sql}, gp.id ASC
         LIMIT :limit OFFSET :offset
     """
     page_params = {**params, "limit": limit, "offset": offset}
@@ -274,7 +281,7 @@ def _identity_rows(global_product_id: str) -> list[dict[str, Any]]:
                 SELECT {", ".join(select_parts)}
                 FROM product_identities
                 WHERE global_product_id = :global_product_id
-                ORDER BY COALESCE(is_primary, 0) DESC,
+                ORDER BY COALESCE(is_primary, FALSE) DESC,
                          identity_type,
                          identity_value
             """), {
@@ -355,7 +362,7 @@ def _receipt_line_rows(global_product_id: str) -> list[dict[str, Any]]:
                 LEFT JOIN global_products gp
                   ON gp.id = COALESCE(pil.matched_global_product_id, ha.global_product_id)
                 WHERE COALESCE(pil.matched_global_product_id, ha.global_product_id) = :global_product_id
-                ORDER BY datetime(pib.created_at) DESC, pil.id DESC
+                ORDER BY pib.created_at DESC, pil.id DESC
             """), {
                 "global_product_id": global_product_id,
             }).mappings().all()

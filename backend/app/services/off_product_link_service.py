@@ -147,11 +147,15 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
                 UPDATE product_identities
                 SET global_product_id = :global_product_id,
                     source = 'open_food_facts', confidence_score = 1.0,
-                    is_primary = 1, updated_at = CURRENT_TIMESTAMP
+                    is_primary = :is_primary, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
-            {"id": identity.get("id"), "global_product_id": global_product_id},
+            {
+                "id": identity.get("id"),
+                "global_product_id": global_product_id,
+                "is_primary": True,
+            },
         )
     else:
         conn.execute(
@@ -164,11 +168,16 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
                 ) VALUES (
                     :id, '', :global_product_id,
                     'gtin', :gtin, 'open_food_facts',
-                    1.0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    1.0, :is_primary, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """
             ),
-            {"id": str(uuid.uuid4()), "global_product_id": global_product_id, "gtin": gtin},
+            {
+                "id": str(uuid.uuid4()),
+                "global_product_id": global_product_id,
+                "gtin": gtin,
+                "is_primary": True,
+            },
         )
     return global_product_id, gtin, size_value, size_unit
 
