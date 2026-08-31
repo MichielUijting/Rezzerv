@@ -1,8 +1,9 @@
-"""Shared PostgreSQL DML fixtures for account/onboarding selftests.
+"""Shared PostgreSQL DML fixtures for account/onboarding and integration tests.
 
-Normal application selftests use the canonical Alembic schema. This helper never
-creates or alters schema objects and fails closed when pointed at SQLite or at a
-runtime role that has CREATE authority on the public schema.
+Normal application tests use the canonical Alembic schema. Runtime helpers never
+create or alter schema objects and fail closed when pointed at SQLite or at a
+runtime role that has CREATE authority. Test-database reset is explicitly a
+migrator-only operation and preserves the Alembic version table.
 """
 
 from __future__ import annotations
@@ -18,15 +19,20 @@ from app.services.household_onboarding_service import ensure_household_onboardin
 from app.testing.onboarding_request_schema_fixture import backfill_completed_household_onboarding
 
 
+def _required_database_url(name: str) -> str:
+    value = str(os.getenv(name) or "").strip()
+    if not value:
+        raise RuntimeError(f"{name} ontbreekt voor PostgreSQL application test")
+    return value
+
+
 def create_postgresql_runtime_test_engine() -> Engine:
-    database_url = str(os.getenv("DATABASE_URL") or "").strip()
-    if not database_url:
-        raise RuntimeError("DATABASE_URL ontbreekt voor PostgreSQL application selftest")
+    database_url = _required_database_url("DATABASE_URL")
     engine = create_engine(database_url, future=True)
     if engine.dialect.name != "postgresql":
         engine.dispose()
         raise RuntimeError(
-            "Application selftest vereist PostgreSQL; "
+            "Application test vereist PostgreSQL; "
             f"ontvangen dialect={engine.dialect.name}"
         )
     with engine.connect() as conn:
@@ -35,8 +41,35 @@ def create_postgresql_runtime_test_engine() -> Engine:
         ).scalar_one()
         if bool(can_create):
             engine.dispose()
-            raise RuntimeError("PostgreSQL selftest runtime-role heeft onverwacht CREATE")
+            raise RuntimeError("PostgreSQL test runtime-role heeft onverwacht CREATE")
     return engine
+
+
+def reset_postgresql_test_database() -> None:
+    migration_url = _required_database_url("MIGRATION_DATABASE_URL")
+    migration_engine = create_engine(migration_url, future=True)
+    try:
+        if migration_engine.dialect.name != "postgresql":
+            raise RuntimeError(
+                "PostgreSQL test-reset vereist PostgreSQL migrator; "
+                f"ontvangen dialect={migration_engine.dialect.name}"
+            )
+        with migration_engine.begin() as conn:
+            tables = [
+                name
+                for name in inspect(conn).get_table_names(schema="public")
+                if name != "alembic_version"
+            ]
+            if tables:
+                preparer = conn.dialect.identifier_preparer
+                table_sql = ", ".join(
+                    f"public.{preparer.quote(name)}" for name in sorted(tables)
+                )
+                conn.exec_driver_sql(
+                    f"TRUNCATE TABLE {table_sql} RESTART IDENTITY CASCADE"
+                )
+    finally:
+        migration_engine.dispose()
 
 
 def _columns(conn, table_name: str) -> set[str]:
