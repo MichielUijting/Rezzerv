@@ -12,6 +12,7 @@ on:
       - 'backend/app/services/household_product_configuration_service.py'
       - 'backend/app/services/household_location_onboarding_service.py'
       - 'backend/app/services/password_service.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/main.py'
       - 'backend/tests/server_session_security_selftest.py'
@@ -92,6 +93,15 @@ jobs:
       - name: Initialize canonical PostgreSQL schema through Alembic
         run: python -m alembic upgrade head
 
+      - name: Assert runtime role remains DML-only
+        working-directory: .
+        env:
+          PGPASSWORD: rezzerv_app_ci
+        run: |
+          result=$(psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_server_session_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
+          test "$result" = "f"
+          echo 'SERVER_SESSION_RUNTIME_DML_ONLY_GREEN'
+
       - name: Compile server-side session modules and audits
         run: |
           PYTHONPATH=. python -m py_compile \
@@ -104,6 +114,7 @@ jobs:
             app/services/household_product_configuration_service.py \
             app/services/household_location_onboarding_service.py \
             app/services/password_service.py \
+            app/testing/postgresql_onboarding_selftest_fixture.py \
             app/session_entrypoint.py \
             tests/server_session_security_selftest.py \
             tests/consumer_account_registration_selftest.py \
@@ -116,28 +127,47 @@ jobs:
 
       - name: Run Rezzerv server-side session security selftest on PostgreSQL
         run: |
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
           PYTHONPATH=. python tests/server_session_security_selftest.py | tee /tmp/server-session-security.log
           grep -F 'SERVER_SESSION_SECURITY_POSTGRESQL_GREEN' /tmp/server-session-security.log
           grep -F 'SERVER_SESSION_SECURITY_GREEN' /tmp/server-session-security.log
 
       - name: Run consumer account foundation selftest
         run: |
-          PYTHONPATH=. python tests/consumer_account_registration_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/consumer_account_registration_selftest.py | tee /tmp/consumer-account.log
+          grep -F 'CONSUMER_ACCOUNT_POSTGRESQL_GREEN' /tmp/consumer-account.log
+
       - name: Run onboarding use-case foundation selftest
         run: |
-          PYTHONPATH=. python tests/onboarding_use_case_foundation_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/onboarding_use_case_foundation_selftest.py | tee /tmp/onboarding-foundation.log
+          grep -F 'ONBOARDING_USE_CASE_POSTGRESQL_GREEN' /tmp/onboarding-foundation.log
+
       - name: Run Inhuis halen onboarding selftest
         run: |
-          PYTHONPATH=. python tests/inhuis_halen_onboarding_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/inhuis_halen_onboarding_selftest.py | tee /tmp/inhuis-halen.log
+          grep -F 'INHUIS_HALEN_ONBOARDING_POSTGRESQL_GREEN' /tmp/inhuis-halen.log
+
       - name: Run Wat Inhuis onboarding selftest
         run: |
-          PYTHONPATH=. python tests/wat_inhuis_onboarding_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/wat_inhuis_onboarding_selftest.py | tee /tmp/wat-inhuis.log
+          grep -F 'WAT_INHUIS_ONBOARDING_POSTGRESQL_GREEN' /tmp/wat-inhuis.log
+
       - name: Run Waar Inhuis onboarding selftest
         run: |
-          PYTHONPATH=. python tests/waar_inhuis_onboarding_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/waar_inhuis_onboarding_selftest.py | tee /tmp/waar-inhuis.log
+          grep -F 'WAAR_INHUIS_ONBOARDING_POSTGRESQL_GREEN' /tmp/waar-inhuis.log
+
       - name: Run shared household minimum selftest
         run: |
-          PYTHONPATH=. python tests/shared_household_minimum_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/shared_household_minimum_selftest.py | tee /tmp/shared-household.log
+          grep -F 'SHARED_HOUSEHOLD_MINIMUM_POSTGRESQL_GREEN' /tmp/shared-household.log
+
       - name: Audit legacy route guards
         run: |
           PYTHONPATH=. python tests/server_session_route_guard_audit.py
