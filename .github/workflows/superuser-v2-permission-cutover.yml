@@ -26,6 +26,20 @@ on:
 jobs:
   superuser-v2-permission-cutover:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_superuser_v2_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_superuser_v2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     defaults:
       run:
         working-directory: backend
@@ -41,7 +55,37 @@ jobs:
       - name: Install focused test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest fastapi pydantic sqlalchemy alembic httpx
+          python -m pip install pytest fastapi pydantic sqlalchemy alembic httpx 'psycopg[binary]==3.3.4'
+
+      - name: Bootstrap PostgreSQL migrator and DML-only runtime role
+        working-directory: .
+        env:
+          PGPASSWORD: rezzerv_bootstrap_ci
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
+          GRANT CONNECT ON DATABASE rezzerv_superuser_v2_ci TO rezzerv_migrator, rezzerv_app;
+          ALTER DATABASE rezzerv_superuser_v2_ci OWNER TO rezzerv_migrator;
+          \connect rezzerv_superuser_v2_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Initialize canonical PostgreSQL schema for migrated identity contract
+        env:
+          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
+          MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
+          REZZERV_DATASTORE_POLICY: postgresql-only
+        run: |
+          python -m alembic upgrade head
+          python -m alembic current
 
       - name: Compile authority cutover and contracts
         run: |
@@ -102,10 +146,12 @@ jobs:
             tests/test_external_database_route_authorization.py \
             tests/test_external_relation_batch_decision_platform_authorization.py
 
-      - name: Preserve Superuser identity boundary
+      - name: Preserve Superuser identity boundary on PostgreSQL
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
+          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
+          MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
+          REZZERV_DATASTORE_POLICY: postgresql-only
         run: pytest -q tests/test_superuser_foundation.py
 
       - name: Preserve Platformbeheerder 9.1.7 closure
