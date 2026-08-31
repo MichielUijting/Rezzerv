@@ -25,6 +25,20 @@ concurrency:
 jobs:
   validate-inventory-location-household-isolation:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_inventory_identity_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_inventory_identity_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,13 +48,37 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Installeer minimale backend-afhankelijkheden
+      - name: Installeer minimale backend-afhankelijkheden en PostgreSQL client
         run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
           python -m pip install --quiet \
             fastapi==0.115.0 \
             sqlalchemy==2.0.36 \
             pydantic==2.12.5 \
+            'psycopg[binary]' \
             pytest
+
+      - name: Bootstrap PostgreSQL migrator en DML-only runtime-role
+        env:
+          PGPASSWORD: rezzerv_bootstrap_ci
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
+          GRANT CONNECT ON DATABASE rezzerv_inventory_identity_ci TO rezzerv_migrator;
+          GRANT CONNECT ON DATABASE rezzerv_inventory_identity_ci TO rezzerv_app;
+          ALTER DATABASE rezzerv_inventory_identity_ci OWNER TO rezzerv_migrator;
+          \connect rezzerv_inventory_identity_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          SQL
 
       - name: Compileer gewijzigde modules
         run: |
@@ -65,7 +103,7 @@ jobs:
           python -m app.testing.inventory_location_household_isolation_contract | tee inventory-location-isolation.log
           grep -F 'INVENTORY_LOCATION_HOUSEHOLD_ISOLATION_GREEN' inventory-location-isolation.log
 
-      - name: Test locationless policy, event-write, kassabonadapter en database-identiteit
+      - name: Test locationless policy, event-write en kassabonadapter
         env:
           PYTHONPATH: backend
         run: |
@@ -73,5 +111,15 @@ jobs:
             backend/tests/test_inventory_location_policy_service.py \
             backend/tests/test_inventory_location_event_policy_patch.py \
             backend/tests/test_purchase_import_location_policy_patch.py \
-            backend/tests/test_locationless_inventory_identity_guard.py \
             backend/tests/test_household_article_identity_slice2b4_inventory_contract.py
+
+      - name: Test database-identiteit met PostgreSQL migrator en runtime-role
+        env:
+          PYTHONPATH: backend
+          TEST_SCHEMA_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_inventory_identity_ci
+          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_inventory_identity_ci
+        run: |
+          result=$(PGPASSWORD=rezzerv_app_ci psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_inventory_identity_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
+          test "$result" = "f"
+          python -m pytest -q backend/tests/test_locationless_inventory_identity_guard.py
+          echo 'INVENTORY_IDENTITY_POSTGRESQL_RUNTIME_DML_ONLY_GREEN'
