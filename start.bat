@@ -150,12 +150,26 @@ if %errorlevel% neq 0 (
   pause
   exit /b 1
 )
-docker compose %COMPOSE_ENV% %COMPOSE_ARGS% config --services | findstr /I /X "postgres" >nul
+set "COMPOSE_SERVICES_FILE=%TEMP%\rezzerv-compose-services-%RANDOM%-%RANDOM%.txt"
+if exist "%COMPOSE_SERVICES_FILE%" del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
+docker compose %COMPOSE_ENV% %COMPOSE_ARGS% config --services > "%COMPOSE_SERVICES_FILE%" 2>nul
 if errorlevel 1 (
-  echo [ERROR] PostgreSQL-service ontbreekt in de actieve compose-configuratie.
+  if exist "%COMPOSE_SERVICES_FILE%" del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
+  echo [ERROR] PostgreSQL compose-services konden niet worden uitgelezen.
   pause
   exit /b 1
 )
+findstr /I /X /C:"postgres" "%COMPOSE_SERVICES_FILE%" >nul
+set "POSTGRES_SERVICE_FOUND=%errorlevel%"
+if not "%POSTGRES_SERVICE_FOUND%"=="0" (
+  echo [ERROR] PostgreSQL-service ontbreekt in de actieve compose-configuratie.
+  echo Actieve services:
+  type "%COMPOSE_SERVICES_FILE%"
+  del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
+  pause
+  exit /b 1
+)
+del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
 exit /b 0
 
 :SanitizeRepoRuntimeArtifacts
