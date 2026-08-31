@@ -33,9 +33,9 @@ SQLITE_COMPATIBILITY_SQL_ALLOWLIST = {
     Path("maintenance/postgresql_data_migration_head.py"): {
         "PRAGMA": 1,
     },
-    Path("maintenance/postgresql_legacy_production_adoption.py"): {
-        "PRAGMA": 5,
-        "sqlite_master": 3,
+    Path("maintenance/postgresql_legacy_production_rebuild.py"): {
+        "PRAGMA": 8,
+        "sqlite_master": 4,
     },
 }
 
