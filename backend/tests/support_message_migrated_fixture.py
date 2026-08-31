@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260830_01"
+HEAD_REVISION = "20260830_02"
 
 
 def migrated_support_engine():

@@ -11431,7 +11431,7 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                     rt.notes,
                     rt.approved_at,
                     rt.approved_by_user_email,
-                    COALESCE(rt.totals_overridden, 0) AS totals_overridden,
+                    COALESCE(rt.totals_overridden, FALSE) AS totals_overridden,
                     rt.totals_override_by_user_email,
                     rt.totals_override_at,
                     rt.currency,

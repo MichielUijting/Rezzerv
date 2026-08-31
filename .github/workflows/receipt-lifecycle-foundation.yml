@@ -3,9 +3,12 @@ name: Receipt lifecycle foundation validation
 on:
   pull_request:
     paths:
+      - 'backend/alembic/**'
       - 'backend/app/__init__.py'
       - 'backend/app/models/receipt.py'
+      - 'backend/app/models/household.py'
       - 'backend/app/services/receipt_lifecycle_foundation_service.py'
+      - 'backend/tests/receipt_lifecycle_schema_authority_selftest.py'
       - 'backend/tests/test_receipt_lifecycle_foundation.py'
       - 'backend/tests/test_receipt_explicit_approval_lifecycle.py'
       - 'scripts/run-receipt-lifecycle-release-a.ps1'
@@ -25,10 +28,20 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install test dependencies
-        run: python -m pip install --quiet pytest sqlalchemy fastapi
+        run: python -m pip install --quiet pytest sqlalchemy alembic fastapi
       - name: Compile Release A foundation
-        run: python -m compileall -q app/services/receipt_lifecycle_foundation_service.py app/models/receipt.py tests/test_receipt_lifecycle_foundation.py tests/test_receipt_explicit_approval_lifecycle.py
+        run: python -m compileall -q app/services/receipt_lifecycle_foundation_service.py app/models/receipt.py tests/test_receipt_lifecycle_foundation.py tests/test_receipt_explicit_approval_lifecycle.py tests/receipt_lifecycle_schema_authority_selftest.py
       - name: Validate minimal schema runtime installer and explicit approval invariants
         env:
           PYTHONPATH: .
         run: python -m pytest -q tests/test_receipt_lifecycle_foundation.py tests/test_receipt_explicit_approval_lifecycle.py
+      - name: Validate exact SQLite receipt household authority delta
+        env:
+          PYTHONPATH: .
+        run: |
+          python tests/receipt_lifecycle_schema_authority_selftest.py | tee /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_HOUSEHOLD_AUTHORITY_SQLITE_DELTA_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_HOUSEHOLD_AUTHORITY_LEGACY_RECOVERY_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_MALFORMED_INDEX_REJECTED_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_MALFORMED_TRIGGER_REJECTED_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/receipt-lifecycle-schema-authority.log

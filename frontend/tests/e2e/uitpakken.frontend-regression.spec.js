@@ -8,6 +8,19 @@ import {
 import { apiFetch, resolveAuthorizedHouseholdId } from './helpers/devApi';
 
 test.describe('Uitpakken frontend-regressie', () => {
+  test('PostgreSQL Uitpakken-routes blijven SQL-portabel', async ({ page }) => {
+    const householdId = await resolveAuthorizedHouseholdId(page.request);
+
+    const batches = await apiFetch(
+      page.request,
+      `/api/unpack-start-batches?householdId=${encodeURIComponent(householdId)}`
+    );
+    const reviewArticles = await apiFetch(page.request, '/api/store-review-articles');
+
+    expect(Array.isArray(batches?.items)).toBe(true);
+    expect(Array.isArray(reviewArticles)).toBe(true);
+  });
+
   test('Kassabonnen overzicht laadt zonder frontendcorruptie', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
 

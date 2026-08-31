@@ -4,8 +4,14 @@ on:
   pull_request:
     paths:
       - 'backend/app/maintenance/postgresql_data_migration.py'
+      - 'backend/app/maintenance/postgresql_data_migration_head.py'
+      - 'backend/app/maintenance/postgresql_legacy_production_adoption.py'
+      - 'backend/app/maintenance/postgresql_legacy_production_rebuild.py'
       - 'backend/app/maintenance/__init__.py'
+      - 'backend/app/models/**'
       - 'backend/tests/postgresql_data_migration_selftest.py'
+      - 'backend/tests/postgresql_legacy_production_adoption_selftest.py'
+      - 'backend/tests/migration_foundation_head_selftest.py'
       - 'backend/alembic/**'
       - 'backend/requirements.txt'
       - '.github/workflows/postgresql-data-migration-validation.yml'
@@ -24,18 +30,18 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: rezzerv_pr351
+          POSTGRES_DB: rezzerv_pr352
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d rezzerv_pr351"
+          --health-cmd "pg_isready -U postgres -d rezzerv_pr352"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
 
     env:
       PYTHONPATH: backend
-      PG_URL: postgresql://postgres:postgres@127.0.0.1:5432/rezzerv_pr351
+      PG_URL: postgresql://postgres:postgres@127.0.0.1:5432/rezzerv_pr352
 
     steps:
       - uses: actions/checkout@v4
@@ -52,42 +58,50 @@ jobs:
             "$(grep '^alembic==' backend/requirements.txt)" \
             "$(grep '^psycopg' backend/requirements.txt)"
 
-      - name: Static migration selftest
+      - name: Static migration and legacy-adoption selftests
         run: |
-          python backend/tests/postgresql_data_migration_selftest.py | tee /tmp/pr351-selftest.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_BOOLEAN_GREEN' /tmp/pr351-selftest.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_TYPES_GREEN' /tmp/pr351-selftest.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_FINGERPRINT_GREEN' /tmp/pr351-selftest.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_FK_ORDER_GREEN' /tmp/pr351-selftest.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_SNAPSHOT_SELFTEST_GREEN' /tmp/pr351-selftest.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_SELFTEST_GREEN' /tmp/pr351-selftest.log
+          python backend/tests/postgresql_data_migration_selftest.py | tee /tmp/data-migration-selftest.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_BOOLEAN_GREEN' /tmp/data-migration-selftest.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_TYPES_GREEN' /tmp/data-migration-selftest.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_FINGERPRINT_GREEN' /tmp/data-migration-selftest.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_FK_ORDER_GREEN' /tmp/data-migration-selftest.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_SNAPSHOT_SELFTEST_GREEN' /tmp/data-migration-selftest.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_SELFTEST_GREEN' /tmp/data-migration-selftest.log
+          python backend/tests/postgresql_legacy_production_adoption_selftest.py | tee /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_KNOWN_DRIFT_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_UNKNOWN_SOURCE_REJECTED_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_UNREGISTERED_HOUSEHOLD_REJECTED_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_CANONICAL_REBUILD_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_SOURCE_DATA_PRESERVED_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_MIGRATION_OWNED_DATA_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_SELFTEST_GREEN' /tmp/legacy-adoption-selftest.log
 
       - name: Build canonical SQLite source at locked head
         env:
-          DATABASE_URL: sqlite:////tmp/rezzerv-pr351-source.sqlite
+          DATABASE_URL: sqlite:////tmp/rezzerv-pr352-source.sqlite
           REZZERV_DATASTORE_POLICY: compatibility
         run: |
-          rm -f /tmp/rezzerv-pr351-source.sqlite
+          rm -f /tmp/rezzerv-pr352-source.sqlite
           python -m alembic -c backend/alembic.ini upgrade head
-          python -m alembic -c backend/alembic.ini current | tee /tmp/pr351-sqlite-head.log
-          grep -F '20260830_01' /tmp/pr351-sqlite-head.log
+          python -m alembic -c backend/alembic.ini current | tee /tmp/pr352-sqlite-head.log
+          grep -F '20260830_02' /tmp/pr352-sqlite-head.log
           python - <<'PY'
           import sqlite3
 
-          path = '/tmp/rezzerv-pr351-source.sqlite'
+          path = '/tmp/rezzerv-pr352-source.sqlite'
           connection = sqlite3.connect(path)
           try:
               connection.execute(
                   "INSERT INTO platform_feature_flags (flag_key, enabled, updated_by, updated_at) "
                   "VALUES (?, ?, ?, ?)",
-                  ('pr351-equivalence', 1, 'ci', '2026-08-30T15:00:00+00:00'),
+                  ('pr352-equivalence', 1, 'ci', '2026-08-30T15:00:00+00:00'),
               )
               connection.execute(
                   "INSERT INTO receipt_webhook_deliveries "
                   "(svix_id, svix_timestamp, payload_sha256, status, created_at, updated_at) "
                   "VALUES (?, ?, ?, ?, ?, ?)",
                   (
-                      'msg_pr351_equivalence',
+                      'msg_pr352_equivalence',
                       1788102000,
                       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                       'processed',
@@ -102,11 +116,11 @@ jobs:
 
       - name: Prove consistent SQLite snapshot
         run: |
-          python -m app.maintenance.postgresql_data_migration snapshot \
-            --source /tmp/rezzerv-pr351-source.sqlite \
-            --output /tmp/rezzerv-pr351-snapshot.sqlite \
-            | tee /tmp/pr351-snapshot.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_SNAPSHOT_GREEN' /tmp/pr351-snapshot.log
+          python -m app.maintenance.postgresql_data_migration_head snapshot \
+            --source /tmp/rezzerv-pr352-source.sqlite \
+            --output /tmp/rezzerv-pr352-snapshot.sqlite \
+            | tee /tmp/pr352-snapshot.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_SNAPSHOT_GREEN' /tmp/pr352-snapshot.log
 
       - name: Build fresh PostgreSQL target at locked head
         env:
@@ -117,28 +131,28 @@ jobs:
           MIGRATION_DATABASE_SSLMODE: disable
         run: |
           python -m alembic -c backend/alembic.ini upgrade head
-          python -m alembic -c backend/alembic.ini current | tee /tmp/pr351-pg-head.log
-          grep -F '20260830_01' /tmp/pr351-pg-head.log
+          python -m alembic -c backend/alembic.ini current | tee /tmp/pr352-pg-head.log
+          grep -F '20260830_02' /tmp/pr352-pg-head.log
 
       - name: Migrate all application data and prove equivalence
         env:
           MIGRATION_DATABASE_URL: ${{ env.PG_URL }}
         run: |
-          python -m app.maintenance.postgresql_data_migration migrate \
-            --source /tmp/rezzerv-pr351-snapshot.sqlite \
+          python -m app.maintenance.postgresql_data_migration_head migrate \
+            --source /tmp/rezzerv-pr352-snapshot.sqlite \
             --allow-target-reset \
-            --report-json /tmp/pr351-equivalence.json \
-            | tee /tmp/pr351-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_HEAD_GREEN revision=20260830_01' /tmp/pr351-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_TABLE_SET_GREEN tables=87' /tmp/pr351-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_SEQUENCES_GREEN' /tmp/pr351-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_EQUIVALENCE_GREEN tables=87' /tmp/pr351-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_GREEN' /tmp/pr351-migration.log
+            --report-json /tmp/pr352-equivalence.json \
+            | tee /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_HEAD_GREEN revision=20260830_02' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_TABLE_SET_GREEN tables=87' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_SEQUENCES_GREEN' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_EQUIVALENCE_GREEN tables=87' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_GREEN' /tmp/pr352-migration.log
           python - <<'PY'
           import json
-          report = json.load(open('/tmp/pr351-equivalence.json', encoding='utf-8'))
-          assert report['source_revision'] == '20260830_01'
-          assert report['target_revision'] == '20260830_01'
+          report = json.load(open('/tmp/pr352-equivalence.json', encoding='utf-8'))
+          assert report['source_revision'] == '20260830_02'
+          assert report['target_revision'] == '20260830_02'
           assert report['application_tables'] == 87
           assert len(report['tables']) == 87
           assert all(t['source_rows'] == t['target_rows'] for t in report['tables'])
@@ -146,7 +160,7 @@ jobs:
           print('POSTGRESQL_DATA_MIGRATION_REPORT_GREEN')
           PY
 
-      - name: Re-run canonical PostgreSQL migration foundation on migrated data
+      - name: Re-run locked-head PostgreSQL migration foundation on migrated data
         env:
           DATABASE_URL: ${{ env.PG_URL }}
           MIGRATION_DATABASE_URL: ${{ env.PG_URL }}
@@ -155,22 +169,23 @@ jobs:
           DATABASE_SSLMODE: disable
           MIGRATION_DATABASE_SSLMODE: disable
         run: |
-          python backend/tests/migration_foundation_selftest.py | tee /tmp/pr351-foundation.log
-          grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/pr351-foundation.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_01_GREEN' /tmp/pr351-foundation.log
-          python -m alembic -c backend/alembic.ini current | grep -F '20260830_01'
+          python backend/tests/migration_foundation_head_selftest.py | tee /tmp/pr352-foundation.log
+          grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/pr352-foundation.log
+          grep -F 'POSTGRESQL_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN' /tmp/pr352-foundation.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_02_GREEN' /tmp/pr352-foundation.log
+          python -m alembic -c backend/alembic.ini current | grep -F '20260830_02'
 
       - name: Fail closed when target already has runtime data
         env:
           MIGRATION_DATABASE_URL: ${{ env.PG_URL }}
         run: |
           set +e
-          python -m app.maintenance.postgresql_data_migration migrate \
-            --source /tmp/rezzerv-pr351-snapshot.sqlite \
+          python -m app.maintenance.postgresql_data_migration_head migrate \
+            --source /tmp/rezzerv-pr352-snapshot.sqlite \
             --allow-target-reset \
-            > /tmp/pr351-second-run.log 2>&1
+            > /tmp/pr352-second-run.log 2>&1
           status=$?
           set -e
           test "$status" -ne 0
-          grep -F 'Target is not a fresh migration target' /tmp/pr351-second-run.log
+          grep -F 'Target is not a fresh migration target' /tmp/pr352-second-run.log
           echo 'POSTGRESQL_DATA_MIGRATION_RERUN_REJECTED_GREEN'

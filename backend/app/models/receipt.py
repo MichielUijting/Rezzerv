@@ -21,7 +21,7 @@ class ReceiptSource(Base):
     __tablename__ = "receipt_sources"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    household_id = Column(String, ForeignKey("households.id"), nullable=False)
+    household_id = Column(String, ForeignKey("household_registry.id"), nullable=False)
     type = Column(String, nullable=False)
     label = Column(String, nullable=False)
     source_path = Column(Text, nullable=True)
@@ -35,7 +35,7 @@ class RawReceipt(Base):
     __tablename__ = "raw_receipts"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    household_id = Column(String, ForeignKey("households.id"), nullable=False)
+    household_id = Column(String, ForeignKey("household_registry.id"), nullable=False)
     source_id = Column(String, ForeignKey("receipt_sources.id"), nullable=True)
     original_filename = Column(String, nullable=False)
     mime_type = Column(String, nullable=False)
@@ -52,7 +52,7 @@ class ReceiptTable(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     raw_receipt_id = Column(String, ForeignKey("raw_receipts.id"), nullable=False, unique=True)
-    household_id = Column(String, ForeignKey("households.id"), nullable=False)
+    household_id = Column(String, ForeignKey("household_registry.id"), nullable=False)
     # Release A: opaque business identity reused across future reimports.
     logical_receipt_key = Column(String, nullable=True)
     # Only workflow disposition lives here. Approval/unpacked facts stay in their

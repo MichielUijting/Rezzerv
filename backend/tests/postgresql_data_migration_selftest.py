@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import sqlite3
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
 import sqlalchemy as sa
 
+from app.maintenance import postgresql_data_migration_head
 from app.maintenance.postgresql_data_migration import (
     MigrationError,
     _canonical_value,
@@ -40,11 +41,20 @@ def test_boolean_canonicalization() -> None:
     _expect_failure(lambda: _coerce_boolean("maybe", label="flag"), "invalid legacy Boolean")
 
 
-def test_timestamp_and_numeric_canonicalization() -> None:
+def test_timestamp_date_and_numeric_canonicalization() -> None:
     timestamp_type = sa.DateTime(timezone=True)
     actual = _coerce_value("2026-08-30T12:00:00", timestamp_type, label="created_at")
     assert actual == datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
     assert _canonical_value(actual, timestamp_type, label="created_at") == "2026-08-30T12:00:00.000000Z"
+
+    date_type = sa.Date()
+    assert _canonical_value("2026-08-30", date_type, label="effective_date") == "2026-08-30"
+    assert _canonical_value(date(2026, 8, 30), date_type, label="effective_date") == "2026-08-30"
+    _expect_failure(
+        lambda: _canonical_value("2026-08-30T12:00:00", date_type, label="effective_date"),
+        "invalid date value",
+    )
+
     numeric = sa.Numeric(18, 6)
     assert _coerce_value("0.10", numeric, label="quantity") == Decimal("0.10")
     assert _canonical_value(Decimal("1.000"), numeric, label="quantity") == "1"
@@ -59,18 +69,21 @@ def test_row_fingerprint_semantics() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("enabled", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("effective_date", sa.Date(), nullable=False),
         sa.Column("quantity", sa.Numeric(18, 6), nullable=False),
     )
     source = {
         "id": 7,
         "enabled": 1,
         "created_at": "2026-08-30T12:00:00",
+        "effective_date": "2026-08-30",
         "quantity": "0.1000",
     }
     target = {
         "id": 7,
         "enabled": True,
         "created_at": datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc),
+        "effective_date": date(2026, 8, 30),
         "quantity": Decimal("0.10"),
     }
     source_digest = _row_digest(source, list(table.columns), table_name="example")
@@ -134,10 +147,44 @@ def test_consistent_snapshot() -> None:
         assert value == "before"
 
 
+def test_locked_head_snapshot_preserves_legacy_fk_drift_for_adoption() -> None:
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        source = Path(temporary_directory) / "legacy-source.sqlite"
+        snapshot = Path(temporary_directory) / "legacy-snapshot.sqlite"
+        connection = sqlite3.connect(source)
+        try:
+            connection.execute("PRAGMA foreign_keys=OFF")
+            connection.execute("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            connection.execute(
+                "CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL, "
+                "FOREIGN KEY(parent_id) REFERENCES parent(id))"
+            )
+            connection.execute("INSERT INTO child (id, parent_id) VALUES (1, 999)")
+            connection.commit()
+            assert connection.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+            assert connection.execute("PRAGMA foreign_key_check").fetchall()
+        finally:
+            connection.close()
+
+        digest = postgresql_data_migration_head._create_consistent_snapshot_for_locked_head(
+            source,
+            snapshot,
+        )
+        assert len(digest) == 64
+
+        snapshot_connection = sqlite3.connect(snapshot)
+        try:
+            assert snapshot_connection.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+            violations = snapshot_connection.execute("PRAGMA foreign_key_check").fetchall()
+        finally:
+            snapshot_connection.close()
+        assert violations
+
+
 def main() -> None:
     test_boolean_canonicalization()
     print("POSTGRESQL_DATA_MIGRATION_BOOLEAN_GREEN")
-    test_timestamp_and_numeric_canonicalization()
+    test_timestamp_date_and_numeric_canonicalization()
     print("POSTGRESQL_DATA_MIGRATION_TYPES_GREEN")
     test_row_fingerprint_semantics()
     print("POSTGRESQL_DATA_MIGRATION_FINGERPRINT_GREEN")
@@ -145,6 +192,7 @@ def main() -> None:
     test_self_reference_order()
     print("POSTGRESQL_DATA_MIGRATION_FK_ORDER_GREEN")
     test_consistent_snapshot()
+    test_locked_head_snapshot_preserves_legacy_fk_drift_for_adoption()
     print("POSTGRESQL_DATA_MIGRATION_SNAPSHOT_SELFTEST_GREEN")
     print("POSTGRESQL_DATA_MIGRATION_SELFTEST_GREEN")
 
