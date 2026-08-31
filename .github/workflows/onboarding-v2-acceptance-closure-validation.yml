@@ -103,22 +103,32 @@ jobs:
           echo 'ONBOARDING_V2_RUNTIME_DML_ONLY_GREEN'
 
       - name: Validate A — consumer account foundation on PostgreSQL
-        run: python backend/tests/consumer_account_registration_selftest.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python backend/tests/consumer_account_registration_selftest.py
 
       - name: Validate B — onboarding use-case foundation on PostgreSQL
-        run: python backend/tests/onboarding_use_case_foundation_selftest.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python backend/tests/onboarding_use_case_foundation_selftest.py
 
       - name: Validate C — Inhuis halen on PostgreSQL
-        run: python backend/tests/inhuis_halen_onboarding_selftest.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python backend/tests/inhuis_halen_onboarding_selftest.py
 
       - name: Validate D — Wat Inhuis on PostgreSQL
-        run: python backend/tests/wat_inhuis_onboarding_selftest.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python backend/tests/wat_inhuis_onboarding_selftest.py
 
       - name: Validate E — Waar Inhuis and shared foundations on PostgreSQL
         shell: bash
         run: |
           set -euo pipefail
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
           python backend/tests/waar_inhuis_onboarding_selftest.py
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
           python backend/tests/shared_household_minimum_selftest.py
 
       - name: Validate E — isolated locationless inventory schema guard on PostgreSQL
@@ -128,42 +138,56 @@ jobs:
         run: python -m pytest -q backend/tests/test_locationless_inventory_identity_guard.py
 
       - name: Validate F — dynamic navigation projection
-        run: python backend/tests/dynamic_navigation_product_projection_selftest.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python backend/tests/dynamic_navigation_product_projection_selftest.py
 
       - name: Validate H — circular capability expansion
-        run: python backend/tests/circular_capability_expansion_selftest.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python backend/tests/circular_capability_expansion_selftest.py
 
       - name: Validate I.1 — invitation foundation and target policy
         shell: bash
         run: |
           set -euo pipefail
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
           python backend/tests/household_invitation_foundation_selftest.py
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
           python backend/tests/household_invitation_target_policy_selftest.py
 
       - name: Validate I.2 — invitation acceptance and household context
-        run: python backend/tests/household_invitation_acceptance_selftest.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python backend/tests/household_invitation_acceptance_selftest.py
 
       - name: Validate I.3 — invitation delivery and secret redaction
         shell: bash
         run: |
           set -euo pipefail
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
           python backend/tests/household_invitation_delivery_selftest.py
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
           python backend/tests/household_invitation_delivery_redaction_selftest.py
 
       - name: Validate I.4 — legacy member-create closure
-        run: python backend/tests/household_member_legacy_closure_selftest.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python backend/tests/household_member_legacy_closure_selftest.py
 
       - name: Validate server-session household authority on PostgreSQL
-        run: >-
-          python -m pytest -q
-          backend/tests/test_server_session_routes.py
-          backend/tests/test_server_session_service.py
-          backend/tests/test_session_request_context.py
+        run: |
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+          python -m pytest -q \
+            backend/tests/test_server_session_routes.py \
+            backend/tests/test_server_session_service.py \
+            backend/tests/test_session_request_context.py
 
       - name: Validate I.5 cross-slice closure invariants
         shell: bash
         run: |
           set -euo pipefail
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
           output="$(python backend/tests/onboarding_v2_acceptance_closure_selftest.py)"
           printf '%s\n' "$output"
           grep -Fq 'ONBOARDING_V2_I5_ACCEPTANCE_CLOSURE_SELFTEST_GREEN' <<<"$output"
