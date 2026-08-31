@@ -18,10 +18,26 @@ jobs:
   onboarding-v2-acceptance-closure:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_onboarding_v2_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_onboarding_v2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       PYTHONPATH: backend
       REZZERV_EMAIL_ENABLED: 'false'
-      DATABASE_URL: 'sqlite:////tmp/rezzerv_i5.db'
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_onboarding_v2_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_onboarding_v2_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
       RECEIPT_STORAGE_ROOT: '/tmp/rezzerv_i5_receipts'
       REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
 
@@ -34,38 +50,82 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install backend dependencies
+      - name: Install PostgreSQL client and backend dependencies
         run: |
-          python -m pip install -r backend/requirements.txt
-          python -m pip install pytest
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt pytest
 
-      - name: Initialize backend test schema through Alembic
-        shell: bash
+      - name: Bootstrap PostgreSQL migration/runtime roles and isolated identity database
+        env:
+          PGPASSWORD: rezzerv_bootstrap_ci
         run: |
-          set -euo pipefail
-          rm -f /tmp/rezzerv_i5.db
-          python -m alembic -c backend/alembic.ini upgrade head
-          python -m alembic -c backend/alembic.ini current
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
+          GRANT CONNECT ON DATABASE rezzerv_onboarding_v2_ci TO rezzerv_migrator, rezzerv_app;
+          ALTER DATABASE rezzerv_onboarding_v2_ci OWNER TO rezzerv_migrator;
+          CREATE DATABASE rezzerv_onboarding_identity_guard_ci OWNER rezzerv_migrator;
+          GRANT CONNECT ON DATABASE rezzerv_onboarding_identity_guard_ci TO rezzerv_app;
+          \connect rezzerv_onboarding_v2_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          \connect rezzerv_onboarding_identity_guard_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          SQL
 
-      - name: Validate A — consumer account foundation
+      - name: Initialize canonical backend schema through Alembic on PostgreSQL
+        working-directory: backend
+        run: |
+          python -m alembic upgrade head
+          python -m alembic current
+
+      - name: Assert onboarding runtime role is DML-only
+        env:
+          PGPASSWORD: rezzerv_app_ci
+        run: |
+          result=$(psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_onboarding_v2_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
+          test "$result" = "f"
+          echo 'ONBOARDING_V2_RUNTIME_DML_ONLY_GREEN'
+
+      - name: Validate A — consumer account foundation on PostgreSQL
         run: python backend/tests/consumer_account_registration_selftest.py
 
-      - name: Validate B — onboarding use-case foundation
+      - name: Validate B — onboarding use-case foundation on PostgreSQL
         run: python backend/tests/onboarding_use_case_foundation_selftest.py
 
-      - name: Validate C — Inhuis halen
+      - name: Validate C — Inhuis halen on PostgreSQL
         run: python backend/tests/inhuis_halen_onboarding_selftest.py
 
-      - name: Validate D — Wat Inhuis
+      - name: Validate D — Wat Inhuis on PostgreSQL
         run: python backend/tests/wat_inhuis_onboarding_selftest.py
 
-      - name: Validate E — Waar Inhuis and shared/locationless foundations
+      - name: Validate E — Waar Inhuis and shared foundations on PostgreSQL
         shell: bash
         run: |
           set -euo pipefail
           python backend/tests/waar_inhuis_onboarding_selftest.py
           python backend/tests/shared_household_minimum_selftest.py
-          python -m pytest -q backend/tests/test_locationless_inventory_identity_guard.py
+
+      - name: Validate E — isolated locationless inventory schema guard on PostgreSQL
+        env:
+          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_onboarding_identity_guard_ci
+          TEST_SCHEMA_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_onboarding_identity_guard_ci
+        run: python -m pytest -q backend/tests/test_locationless_inventory_identity_guard.py
 
       - name: Validate F — dynamic navigation projection
         run: python backend/tests/dynamic_navigation_product_projection_selftest.py
@@ -93,7 +153,7 @@ jobs:
       - name: Validate I.4 — legacy member-create closure
         run: python backend/tests/household_member_legacy_closure_selftest.py
 
-      - name: Validate server-session household authority
+      - name: Validate server-session household authority on PostgreSQL
         run: >-
           python -m pytest -q
           backend/tests/test_server_session_routes.py
