@@ -101,12 +101,16 @@ jobs:
           test "$result" = "f"
           echo "AUTHORIZATION_MEMBERSHIP_RUNTIME_DML_ONLY_GREEN"
 
-      - name: Run authorization contract tests on PostgreSQL
+      - name: Run isolated historical schema compatibility contracts
         run: |
           python -m pytest -q \
             tests/test_authorization_foundation_contract.py \
             tests/test_roles_v2_foundation_contract.py \
-            tests/test_authorization_membership_service.py \
+            tests/test_authorization_membership_service.py
+
+      - name: Run canonical PostgreSQL authorization and session integration tests
+        run: |
+          python -m pytest -q \
             tests/test_authorization_membership_routes.py \
             tests/test_server_session_service.py \
             tests/test_server_session_routes.py \
