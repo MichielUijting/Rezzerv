@@ -8,7 +8,7 @@ PR #351 introduced the controlled data-migration layer after the PostgreSQL sche
 - The current locked head is `20260830_02`.
 - SQLite working source and PostgreSQL target must both be at `20260830_02` before data copy.
 - The canonical head still contains exactly 87 application tables.
-- `alembic_version` is never copied; PostgreSQL owns its own migration lineage.
+- `alembic_version` is never copied from the immutable production source; the canonical working copy and PostgreSQL target obtain their own migration lineage from Alembic.
 - Normal Rezzerv runtime startup is not part of the migration runner.
 - No dual-write, SQLite fallback, runtime DDL or target schema creation is introduced.
 - The immutable production snapshot is never stamped or upgraded in place.
@@ -23,6 +23,44 @@ The receipt chain now has one canonical household parent:
 
 The migration repairs the known historical receipt household drift and reconstructs only the deterministic `<household_id>-manual-upload` source parent when that exact historical anomaly is present. Unknown source references, unknown household references or any unrelated foreign-key drift remain fail-closed.
 
+## Canonical rebuild for the unversioned production snapshot
+
+The real production SQLite database is an unversioned historical runtime shape. It must not be assigned an Alembic revision that it never actually had. The maintenance entrypoint therefore performs a canonical rebuild instead of historical revision adoption:
+
+```powershell
+python -m app.maintenance.postgresql_legacy_production_adoption `
+  --source C:\path\to\rezzerv-production-snapshot.sqlite `
+  --working-copy C:\path\to\rezzerv-production-working-copy.sqlite `
+  --allow-working-copy-reset `
+  --report-json C:\path\to\rezzerv-legacy-adoption.json
+```
+
+The established command path remains stable, but its implementation now:
+
+- opens the immutable source read-only;
+- verifies the source SHA-256 before and after the operation;
+- requires SQLite `integrity_check` to pass;
+- classifies only the explicitly known receipt foreign-key drift;
+- rejects unknown source IDs and unregistered household IDs;
+- builds a completely fresh canonical SQLite database from the immutable baseline and the real Alembic history through `20260830_02`;
+- requires exactly 87 canonical application tables;
+- proves that every production table exists in the canonical head;
+- proves that every production column maps to a canonical column;
+- rejects any new target-only required column for which production data would have to be invented;
+- requires shared canonical tables to be empty before production data is overlaid, so migration-owned rows can never be silently replaced;
+- preserves canonical-only migration-owned data, including deterministic Alembic seed data;
+- overlays the production rows only into their canonical shared tables;
+- temporarily suppresses canonical SQLite triggers during the overlay to avoid side-effect rows, then restores the exact canonical trigger definitions;
+- reconstructs only the deterministic manual-upload receipt source boundary;
+- requires `integrity_check` and `foreign_key_check` to be green afterwards;
+- requires the final schema to remain byte-equivalent to the freshly built canonical `20260830_02` schema;
+- fingerprints every source row over its original production columns and verifies that all source rows survive;
+- fingerprints production primary keys and verifies that every source PK survives;
+- permits additional rows only where the canonical receipt recovery deliberately creates the manual-upload source;
+- verifies that canonical-only migration-owned row counts are unchanged.
+
+The production feasibility rehearsal on the frozen real snapshot proved this route with 59 production tables, 736 source rows, 46 known receipt-FK violations, 87 canonical tables, three reconstructed manual-upload sources and 418 Alembic-owned `external_product_index` seed rows. The immutable snapshot SHA remained unchanged throughout that proof.
+
 ## Production rehearsal sequence
 
 1. Stop or otherwise freeze writes to the source SQLite database.
@@ -36,28 +74,21 @@ The migration repairs the known historical receipt household drift and reconstru
 
    Record the emitted SHA-256 and keep this snapshot immutable.
 
-3. If the real production snapshot is unversioned, create and adopt a **separate working copy** through the strict production legacy-adoption runner:
+3. If the real production snapshot is unversioned, create a **separate canonical working copy** through the strict production recovery runner shown above. Never stamp or upgrade the immutable production snapshot itself.
 
-   ```powershell
-   python -m app.maintenance.postgresql_legacy_production_adoption `
-     --source C:\path\to\rezzerv-production-snapshot.sqlite `
-     --working-copy C:\path\to\rezzerv-production-working-copy.sqlite `
-     --allow-working-copy-reset `
-     --report-json C:\path\to\rezzerv-legacy-adoption.json
+   Require these recovery markers:
+
+   ```text
+   POSTGRESQL_LEGACY_ADOPTION_SOURCE_GREEN
+   POSTGRESQL_LEGACY_ADOPTION_FK_DRIFT_GREEN
+   POSTGRESQL_LEGACY_ADOPTION_CANONICAL_REBUILD_GREEN
+   POSTGRESQL_LEGACY_ADOPTION_SOURCE_DATA_PRESERVED_GREEN
+   POSTGRESQL_LEGACY_ADOPTION_MIGRATION_OWNED_DATA_GREEN
+   POSTGRESQL_LEGACY_ADOPTION_HEAD_GREEN revision=20260830_02 tables=87
+   POSTGRESQL_LEGACY_ADOPTION_GREEN
    ```
 
-   The runner:
-
-   - opens the immutable source read-only;
-   - verifies the source SHA-256 before and after the operation;
-   - requires SQLite `integrity_check` to pass;
-   - classifies only the known receipt foreign-key drift patterns;
-   - rejects unknown source IDs and household IDs;
-   - probes disposable copies against the actual Alembic history;
-   - requires one safe historical adoption point to upgrade to a schema byte-equivalent to a canonical SQLite `20260830_02` head;
-   - upgrades only the working copy.
-
-   Require the final working copy to report `20260830_02` and retain the JSON adoption report with the rehearsal artifacts.
+   Retain the JSON recovery report and the canonical working copy with the rehearsal artifacts.
 
 4. If the source is already a valid versioned SQLite database, use only a separate working copy and bring that copy to `20260830_02` through the normal Alembic/schema-preflight route. Never mutate the immutable snapshot.
 
@@ -124,6 +155,6 @@ Canonical hashing treats equivalent SQLite/PostgreSQL representations as equal, 
 
 These tools are deliberately not general synchronization utilities. A second migration into an already populated runtime target is rejected. A source below or above the locked head is rejected by the locked-head importer. A PostgreSQL target below or above the locked head is rejected. Unexpected Boolean/timestamp/numeric data is rejected rather than guessed.
 
-The strict legacy adoption path is only for an **unversioned** immutable production SQLite snapshot. It does not waive integrity checks and does not treat arbitrary foreign-key violations as recoverable.
+The strict legacy recovery path is only for an **unversioned immutable production SQLite snapshot**. It does not waive integrity checks, does not treat arbitrary foreign-key violations as recoverable, and does not infer or stamp a historical Alembic revision onto production. Canonical schema and migration-owned data are always created by Alembic first; only proven production rows are overlaid afterwards.
 
 A real production cutover is approved only after this exact route has succeeded on a newly frozen immutable snapshot of the real SQLite database and the resulting PostgreSQL database has passed the full application acceptance suite. If writes resume after a rehearsal, a later cutover must start from a new final snapshot; the rehearsal snapshot must not be reused as production truth.

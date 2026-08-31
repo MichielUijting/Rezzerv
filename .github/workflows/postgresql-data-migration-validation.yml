@@ -6,6 +6,7 @@ on:
       - 'backend/app/maintenance/postgresql_data_migration.py'
       - 'backend/app/maintenance/postgresql_data_migration_head.py'
       - 'backend/app/maintenance/postgresql_legacy_production_adoption.py'
+      - 'backend/app/maintenance/postgresql_legacy_production_rebuild.py'
       - 'backend/app/maintenance/__init__.py'
       - 'backend/app/models/**'
       - 'backend/tests/postgresql_data_migration_selftest.py'
@@ -70,6 +71,9 @@ jobs:
           grep -F 'POSTGRESQL_LEGACY_ADOPTION_KNOWN_DRIFT_GREEN' /tmp/legacy-adoption-selftest.log
           grep -F 'POSTGRESQL_LEGACY_ADOPTION_UNKNOWN_SOURCE_REJECTED_GREEN' /tmp/legacy-adoption-selftest.log
           grep -F 'POSTGRESQL_LEGACY_ADOPTION_UNREGISTERED_HOUSEHOLD_REJECTED_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_CANONICAL_REBUILD_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_SOURCE_DATA_PRESERVED_GREEN' /tmp/legacy-adoption-selftest.log
+          grep -F 'POSTGRESQL_LEGACY_ADOPTION_MIGRATION_OWNED_DATA_GREEN' /tmp/legacy-adoption-selftest.log
           grep -F 'POSTGRESQL_LEGACY_ADOPTION_SELFTEST_GREEN' /tmp/legacy-adoption-selftest.log
 
       - name: Build canonical SQLite source at locked head
