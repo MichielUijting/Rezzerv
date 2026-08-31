@@ -8,6 +8,7 @@ from pathlib import Path
 
 import sqlalchemy as sa
 
+from app.maintenance import postgresql_data_migration_head
 from app.maintenance.postgresql_data_migration import (
     MigrationError,
     _canonical_value,
@@ -134,6 +135,40 @@ def test_consistent_snapshot() -> None:
         assert value == "before"
 
 
+def test_locked_head_snapshot_preserves_legacy_fk_drift_for_adoption() -> None:
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        source = Path(temporary_directory) / "legacy-source.sqlite"
+        snapshot = Path(temporary_directory) / "legacy-snapshot.sqlite"
+        connection = sqlite3.connect(source)
+        try:
+            connection.execute("PRAGMA foreign_keys=OFF")
+            connection.execute("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            connection.execute(
+                "CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL, "
+                "FOREIGN KEY(parent_id) REFERENCES parent(id))"
+            )
+            connection.execute("INSERT INTO child (id, parent_id) VALUES (1, 999)")
+            connection.commit()
+            assert connection.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+            assert connection.execute("PRAGMA foreign_key_check").fetchall()
+        finally:
+            connection.close()
+
+        digest = postgresql_data_migration_head._create_consistent_snapshot_for_locked_head(
+            source,
+            snapshot,
+        )
+        assert len(digest) == 64
+
+        snapshot_connection = sqlite3.connect(snapshot)
+        try:
+            assert snapshot_connection.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+            violations = snapshot_connection.execute("PRAGMA foreign_key_check").fetchall()
+        finally:
+            snapshot_connection.close()
+        assert violations
+
+
 def main() -> None:
     test_boolean_canonicalization()
     print("POSTGRESQL_DATA_MIGRATION_BOOLEAN_GREEN")
@@ -145,6 +180,7 @@ def main() -> None:
     test_self_reference_order()
     print("POSTGRESQL_DATA_MIGRATION_FK_ORDER_GREEN")
     test_consistent_snapshot()
+    test_locked_head_snapshot_preserves_legacy_fk_drift_for_adoption()
     print("POSTGRESQL_DATA_MIGRATION_SNAPSHOT_SELFTEST_GREEN")
     print("POSTGRESQL_DATA_MIGRATION_SELFTEST_GREEN")
 
