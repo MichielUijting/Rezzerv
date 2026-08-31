@@ -125,11 +125,14 @@ def build_store_review_articles(main_module, household_id: str, query: str) -> l
         inventory_names = conn.execute(
             text(
                 """
-                SELECT DISTINCT naam AS article_name
-                FROM inventory
-                WHERE household_id = :household_id
-                  AND trim(COALESCE(naam, '')) <> ''
-                ORDER BY lower(naam) ASC
+                SELECT article_name
+                FROM (
+                    SELECT DISTINCT naam AS article_name
+                    FROM inventory
+                    WHERE household_id = :household_id
+                      AND trim(COALESCE(naam, '')) <> ''
+                ) inventory_names
+                ORDER BY lower(article_name) ASC, article_name ASC
                 """
             ),
             {"household_id": household_id},
