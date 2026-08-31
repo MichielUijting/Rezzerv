@@ -1,19 +1,12 @@
-"""Self-contained validation for the first Inhuis onboarding implementation slice.
-
-Validates consumer account creation, own regular household, canonical Beheerder
-role, hashed credentials, immediate server-side session and legacy login
-compatibility. Runs without pytest.
-"""
+"""Validation for consumer account creation on the canonical PostgreSQL schema."""
 
 from __future__ import annotations
 
 from http.cookies import SimpleCookie
-from pathlib import Path
-import tempfile
 
 from fastapi import HTTPException, Response
 from pydantic import ValidationError
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from app.api.server_session_routes import (
     SessionApiConfiguration,
@@ -21,14 +14,14 @@ from app.api.server_session_routes import (
     SessionRegisterRequest,
     create_server_session_router,
 )
-from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.testing.authorization_schema_fixture import install_authorization_schema
-from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.password_service import is_password_hash
-from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
 from app.services.server_session_service import SESSION_COOKIE_NAME, resolve_server_session
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
-from app.testing.server_session_contract import create_server_session_contract_schema
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    seed_household,
+    seed_user_membership,
+)
 
 
 def _route(router, path: str, method: str):
@@ -62,82 +55,26 @@ def _expect_http_status(expected_status: int, fn) -> None:
 
 def _prepare_database(engine) -> None:
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE household_registry (
-                id TEXT PRIMARY KEY,
-                naam TEXT NOT NULL,
-                context_type TEXT NOT NULL DEFAULT 'regular',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_onboarding (
-                household_id TEXT PRIMARY KEY,
-                onboarding_status TEXT NOT NULL,
-                onboarding_version INTEGER NOT NULL DEFAULT 2,
-                primary_use_case TEXT,
-                onboarding_step TEXT,
-                household_usage_mode TEXT,
-                onboarding_completed_at TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                CHECK (onboarding_status IN ('not_started', 'in_progress', 'completed')),
-                CHECK (primary_use_case IS NULL OR primary_use_case IN ('inhuis_halen', 'wat_inhuis', 'waar_inhuis')),
-                CHECK (household_usage_mode IS NULL OR household_usage_mode IN ('alone', 'together'))
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
-                account_status TEXT NOT NULL DEFAULT 'active',
-                password_hash TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_memberships (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                user_email TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'member',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(household_id, user_email)
-            )
-        """))
-        ensure_roles_v2_account_and_household_foundation(conn)
-        install_authorization_schema(conn)
-        ensure_authorization_foundation(conn)
-        create_server_session_contract_schema(conn)
-
-        conn.execute(text("""
-            INSERT INTO household_registry(id, naam, context_type)
-            VALUES ('legacy-household', 'Bestaand huishouden', 'regular')
-        """))
-        conn.execute(text("""
-            INSERT INTO app_users(id, email, password, account_status)
-            VALUES ('legacy-user', 'legacy@rezzerv.local', 'LegacyPass123', 'active')
-        """))
-        conn.execute(text("""
-            INSERT INTO household_memberships(id, household_id, user_email, role)
-            VALUES ('legacy-membership', 'legacy-household', 'legacy@rezzerv.local', 'admin')
-        """))
-        create_canonical_membership_role(
+        seed_household(
             conn,
             household_id="legacy-household",
+            name="Bestaand huishouden",
+        )
+        seed_user_membership(
+            conn,
+            household_id="legacy-household",
+            user_id="legacy-user",
+            email="legacy@rezzerv.local",
+            password="LegacyPass123",
             membership_id="legacy-membership",
-            legacy_role="admin",
+            role="admin",
         )
 
 
 def run() -> int:
     checks: list[str] = []
-    with tempfile.TemporaryDirectory(prefix="rezzerv-consumer-account-") as tmp:
-        database_path = Path(tmp) / "consumer-account.db"
-        engine = create_engine(f"sqlite:///{database_path}", future=True)
+    engine = create_postgresql_runtime_test_engine()
+    try:
         _prepare_database(engine)
 
         router = create_server_session_router(
@@ -203,7 +140,7 @@ def run() -> int:
                 FROM auth_membership_roles
                 WHERE household_id = :household_id
                   AND membership_id = :membership_id
-                  AND active = 1
+                  AND active IS TRUE
             """), {
                 "household_id": household_id,
                 "membership_id": str(membership["id"]),
@@ -213,7 +150,7 @@ def run() -> int:
             platform_grants = conn.execute(text("""
                 SELECT COUNT(*)
                 FROM auth_platform_user_roles
-                WHERE user_id = :user_id AND active = 1
+                WHERE user_id = :user_id AND active IS TRUE
             """), {"user_id": str(account["id"])}).scalar_one()
             assert int(platform_grants) == 0
 
@@ -309,10 +246,13 @@ def run() -> int:
             ),
         )
         checks.append("reserved_system_identity_not_consumer_registerable")
+    finally:
+        engine.dispose()
 
     for check in checks:
         print(f"PASS {check}")
     print(f"RESULT {len(checks)}/{len(checks)} checks passed")
+    print("CONSUMER_ACCOUNT_POSTGRESQL_GREEN")
     print("CONSUMER_ACCOUNT_FOUNDATION_GREEN")
     return 0
 
