@@ -78,7 +78,38 @@ def main() -> None:
     )
     _require(start, "if (-not $db)", "non-empty database identity assertion")
 
+    _require(
+        start,
+        'if not defined REZZERV_FRONTEND_PORT set "REZZERV_FRONTEND_PORT=5174"',
+        "frontend port rehearsal override",
+    )
+    _require(
+        start,
+        'if not defined REZZERV_BACKEND_PORT set "REZZERV_BACKEND_PORT=8011"',
+        "backend port rehearsal override",
+    )
+    _require(
+        start,
+        'if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=90"',
+        "startup wait rehearsal override",
+    )
+    _require(
+        start,
+        'if /I "%REZZERV_STARTUP_NO_BROWSER%"=="1"',
+        "non-interactive browser suppression",
+    )
+
     _forbid(base_compose, "./backend/data:/app/data", "SQLite data mount in base compose")
+    _require(
+        base_compose,
+        '"${REZZERV_BACKEND_PORT:-8011}:8000"',
+        "backend host-port isolation boundary",
+    )
+    _require(
+        base_compose,
+        '"${REZZERV_FRONTEND_PORT:-5174}:80"',
+        "frontend host-port isolation boundary",
+    )
     _require(postgres_compose, "postgres:", "PostgreSQL service")
     _require(postgres_compose, "image: postgres:17-alpine", "pinned PostgreSQL runtime image")
     _require(postgres_compose, "- postgresql", "PostgreSQL compose profile")
@@ -116,6 +147,7 @@ def main() -> None:
 
     print("POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_HEALTH_GREEN")
+    print("POSTGRESQL_OPERATIONAL_STARTUP_ISOLATION_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_CI_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_CONTRACT_GREEN")
 
