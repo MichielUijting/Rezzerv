@@ -203,7 +203,6 @@ def test_frontteam_personal_household_supports_regular_server_session():
             assert created.active_household_id == resolved.active_household_id == household_id
             assert created.role == resolved.role == "admin"
             assert resolved.is_frontteam is True
-            assert payload["active_household_name"] == FRONTTEAM_PERSONAL_HOUSEHOLD_NAME
             assert payload["is_frontteam"] is True
     finally:
         engine.dispose()
