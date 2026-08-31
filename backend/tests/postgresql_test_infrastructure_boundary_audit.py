@@ -3,8 +3,8 @@
 The production datastore is PostgreSQL. Normal application, API, session,
 authorization and frontend-regression tests must therefore not silently create
 or select SQLite databases. Explicit historical migration/compatibility tests
-may remain SQLite-backed, but only through this file's exact path+pattern
-allowlist with a documented reason.
+may remain SQLite-backed, but only through this file's exact path allowlist with
+a documented reason.
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ class Pattern:
     description: str
 
 
+# These expressions target execution/harness constructs, not documentation or
+# static PostgreSQL audits that merely mention forbidden SQLite syntax.
 PATTERNS = (
     Pattern(
         "sqlite_url",
@@ -33,19 +35,28 @@ PATTERNS = (
         "SQLite SQLAlchemy URL",
     ),
     Pattern(
-        "sqlite_module",
-        re.compile(r"(?:^|\s)(?:import\s+sqlite3\b|from\s+sqlite3\b)|\bsqlite3\.(?:connect|Connection|Row)\b"),
-        "sqlite3 module/runtime connection",
+        "sqlite_module_import",
+        re.compile(r"(?m)^[ \t]*(?:import\s+sqlite3\b|from\s+sqlite3\b)"),
+        "sqlite3 module import",
     ),
     Pattern(
-        "sqlite_catalog",
-        re.compile(r"\bsqlite_master\b", re.IGNORECASE),
-        "SQLite catalog access",
+        "sqlite_module_runtime",
+        re.compile(r"\bsqlite3\.(?:connect|Connection|Row)\b"),
+        "sqlite3 runtime connection/type",
     ),
     Pattern(
-        "sqlite_pragma",
-        re.compile(r"\bPRAGMA\b", re.IGNORECASE),
-        "SQLite PRAGMA",
+        "sqlite_pragma_runtime",
+        re.compile(
+            r"(?im)^.*(?:execute|exec_driver_sql)\s*\([^\n]*\bPRAGMA\b[^\n]*$"
+        ),
+        "executed SQLite PRAGMA",
+    ),
+    Pattern(
+        "sqlite_catalog_runtime",
+        re.compile(
+            r"(?im)^.*(?:execute|exec_driver_sql)\s*\([^\n]*\bsqlite_master\b[^\n]*$"
+        ),
+        "executed SQLite catalog SQL",
     ),
     Pattern(
         "sqlite_threading",
@@ -71,25 +82,51 @@ PATTERNS = (
 
 
 # Exact compatibility boundaries only. No directory wildcards are permitted.
-# A path may allow only the named pattern classes; any other SQLite construct
-# in that file still fails the audit.
-ALLOWED_BOUNDARIES: dict[str, dict[str, str]] = {
-    "backend/tests/test_authorization_membership_service.py": {
-        "sqlite_url": (
-            "Historical household_memberships layouts are intentionally built "
-            "in isolation to prove legacy-to-canonical role migration semantics."
-        ),
-        "legacy_authorization_schema_fixture": (
-            "The legacy membership migration contract needs the isolated "
-            "authorization target schema before exercising historical source layouts."
-        ),
-    },
-    "backend/tests/platform_feature_flag_migrated_fixture.py": {
-        "sqlite_url": (
-            "Explicit Alembic-on-SQLite compatibility fallback; normal CI selects "
-            "the configured PostgreSQL DATABASE_URL first."
-        ),
-    },
+# These files intentionally exercise historical SQLite source/schema behavior;
+# they are not normal application-runtime test harnesses.
+ALLOWED_COMPATIBILITY_FILES: dict[str, str] = {
+    ".github/workflows/postgresql-data-migration-validation.yml": (
+        "Validates the controlled SQLite production-source to PostgreSQL importer."
+    ),
+    ".github/workflows/postgresql-foundation-validation.yml": (
+        "Validates the immutable SQLite baseline used to build the PostgreSQL foundation."
+    ),
+    ".github/workflows/postgresql-migration-foundation-validation.yml": (
+        "Validates both sides of the SQLite-to-PostgreSQL migration foundation."
+    ),
+    "backend/tests/capture_schema_baseline.py": (
+        "Captures the immutable historical SQLite schema baseline used by migration tests."
+    ),
+    "backend/tests/database_production_cutover_selftest.py": (
+        "Asserts SQLite runtime configuration is rejected by the production cutover policy."
+    ),
+    "backend/tests/migration_foundation_core_selftest.py": (
+        "Checks historical SQLite schema/index contracts as migration-source evidence."
+    ),
+    "backend/tests/migration_foundation_head_selftest.py": (
+        "Checks SQLite compatibility and PostgreSQL head as a dual migration-foundation gate."
+    ),
+    "backend/tests/platform_feature_flag_migrated_fixture.py": (
+        "Keeps an explicit Alembic-on-SQLite compatibility fallback; normal CI uses PostgreSQL."
+    ),
+    "backend/tests/postgresql_data_migration_selftest.py": (
+        "Builds and validates SQLite source snapshots for the production data importer."
+    ),
+    "backend/tests/postgresql_legacy_production_adoption_selftest.py": (
+        "Reconstructs historical production SQLite drift before canonical PostgreSQL adoption."
+    ),
+    "backend/tests/receipt_lifecycle_schema_authority_selftest.py": (
+        "Proves the historical SQLite receipt schema can be migrated without runtime DDL."
+    ),
+    "backend/tests/schema_authority_cutover_selftest.py": (
+        "Exercises historical SQLite schema-authority compatibility during Alembic cutover."
+    ),
+    "backend/tests/server_session_schema_authority_selftest.py": (
+        "Proves historical SQLite server-session schema adoption into Alembic authority."
+    ),
+    "backend/tests/test_authorization_membership_service.py": (
+        "Builds historical household_memberships layouts to prove legacy role migration semantics."
+    ),
 }
 
 
@@ -129,6 +166,7 @@ def main() -> int:
     scanned_files = 0
     allowed_hits: list[tuple[str, int, str, str]] = []
     violations: list[tuple[str, int, str, str]] = []
+    matched_paths: set[str] = set()
 
     for path in sorted(REPO_ROOT.rglob("*")):
         if not _is_scanned_file(path):
@@ -136,28 +174,30 @@ def main() -> int:
         scanned_files += 1
         relative = path.relative_to(REPO_ROOT).as_posix()
         text = path.read_text(encoding="utf-8", errors="strict")
-        allowances = ALLOWED_BOUNDARIES.get(relative, {})
+        compatibility_reason = ALLOWED_COMPATIBILITY_FILES.get(relative)
+        lines = text.splitlines()
 
         for pattern in PATTERNS:
             for match in pattern.regex.finditer(text):
                 line = _line_number(text, match.start())
-                excerpt = text.splitlines()[line - 1].strip()
-                reason = allowances.get(pattern.key)
-                if reason:
-                    allowed_hits.append((relative, line, pattern.key, reason))
+                excerpt = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+                matched_paths.add(relative)
+                if compatibility_reason:
+                    allowed_hits.append(
+                        (relative, line, pattern.key, compatibility_reason)
+                    )
                 else:
                     violations.append((relative, line, pattern.key, excerpt))
 
-    # Prevent stale allowlist entries from silently accumulating.
-    allowed_paths_seen = {item[0] for item in allowed_hits}
-    stale_paths = sorted(set(ALLOWED_BOUNDARIES) - allowed_paths_seen)
+    # Prevent stale compatibility declarations from silently accumulating.
+    stale_paths = sorted(set(ALLOWED_COMPATIBILITY_FILES) - matched_paths)
     for relative in stale_paths:
         violations.append(
             (
                 relative,
                 0,
                 "stale_allowlist",
-                "Allowlisted path has no matching SQLite compatibility boundary anymore",
+                "Compatibility path no longer contains a detected SQLite boundary",
             )
         )
 
