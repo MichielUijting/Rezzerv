@@ -5,18 +5,25 @@ authorization and frontend-regression tests must therefore not silently create
 or select SQLite databases. Explicit historical migration/compatibility tests
 may remain SQLite-backed, but only through this file's exact path allowlist with
 a documented reason.
+
+Default mode is intentionally PR-blocking: scan every relevant file changed from
+the locked PostgreSQL operational-cutover base. Set
+REZZERV_TEST_BOUNDARY_SCAN_ALL=1 for a repository-wide debt inventory.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SELF_PATH = Path(__file__).resolve().relative_to(REPO_ROOT).as_posix()
+LOCKED_BASE_SHA = "4b1cff13b192abbafa03032460d0f88f243d935f"
 
 
 @dataclass(frozen=True)
@@ -143,10 +150,10 @@ SCRIPT_TEST_KEYWORDS = (
 )
 
 
-def _is_scanned_file(path: Path) -> bool:
-    if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
+def _is_relevant_relative_path(relative: str) -> bool:
+    path = Path(relative)
+    if path.suffix.lower() not in TEXT_SUFFIXES:
         return False
-    relative = path.relative_to(REPO_ROOT).as_posix()
     if relative == SELF_PATH:
         return False
     if relative.startswith("backend/tests/"):
@@ -161,20 +168,66 @@ def _is_scanned_file(path: Path) -> bool:
     return False
 
 
+def _all_relevant_files() -> list[Path]:
+    return [
+        path
+        for path in sorted(REPO_ROOT.rglob("*"))
+        if path.is_file()
+        and _is_relevant_relative_path(path.relative_to(REPO_ROOT).as_posix())
+    ]
+
+
+def _changed_relevant_files() -> list[Path]:
+    base_sha = str(os.getenv("REZZERV_TEST_BOUNDARY_BASE_SHA") or LOCKED_BASE_SHA).strip()
+    if not base_sha:
+        raise RuntimeError("Locked boundary base SHA ontbreekt")
+
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", base_sha, "HEAD"],
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        raise RuntimeError(
+            f"Locked boundary base {base_sha} is geen ancestor van HEAD; heraudit vereist"
+        )
+
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=ACMRTUXB", base_sha, "HEAD"],
+        cwd=REPO_ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    files: list[Path] = []
+    for raw in result.stdout.splitlines():
+        relative = raw.strip().replace("\\", "/")
+        if not relative or not _is_relevant_relative_path(relative):
+            continue
+        candidate = REPO_ROOT / relative
+        if candidate.is_file():
+            files.append(candidate)
+    return sorted(set(files))
+
+
 def _line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
 def main() -> int:
-    scanned_files = 0
+    scan_all = str(os.getenv("REZZERV_TEST_BOUNDARY_SCAN_ALL") or "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    candidates = _all_relevant_files() if scan_all else _changed_relevant_files()
+    candidate_relatives = {
+        path.relative_to(REPO_ROOT).as_posix() for path in candidates
+    }
+
     allowed_hits: list[tuple[str, int, str, str]] = []
     violations: list[tuple[str, int, str, str]] = []
     matched_paths: set[str] = set()
 
-    for path in sorted(REPO_ROOT.rglob("*")):
-        if not _is_scanned_file(path):
-            continue
-        scanned_files += 1
+    for path in candidates:
         relative = path.relative_to(REPO_ROOT).as_posix()
         text = path.read_text(encoding="utf-8", errors="strict")
         compatibility_reason = ALLOWED_COMPATIBILITY_FILES.get(relative)
@@ -192,8 +245,11 @@ def main() -> int:
                 else:
                     violations.append((relative, line, pattern.key, excerpt))
 
-    # Prevent stale compatibility declarations from silently accumulating.
-    stale_paths = sorted(set(ALLOWED_COMPATIBILITY_FILES) - matched_paths)
+    # Prevent stale compatibility declarations only when the declared file is
+    # actually in the active scan scope.
+    stale_paths = sorted(
+        (set(ALLOWED_COMPATIBILITY_FILES) & candidate_relatives) - matched_paths
+    )
     for relative in stale_paths:
         violations.append(
             (
@@ -210,6 +266,7 @@ def main() -> int:
             f"path={relative} line={line} pattern={pattern_key} reason={reason}"
         )
 
+    scope = "repo" if scan_all else "changed-from-locked-base"
     if violations:
         print("SQLITE_TEST_INFRASTRUCTURE_RESIDUAL_RED", file=sys.stderr)
         for relative, line, pattern_key, excerpt in violations:
@@ -218,15 +275,16 @@ def main() -> int:
                 file=sys.stderr,
             )
         print(
-            f"RESULT scanned_files={scanned_files} allowed_hits={len(allowed_hits)} "
-            f"violations={len(violations)}",
+            f"RESULT scope={scope} scanned_files={len(candidates)} "
+            f"allowed_hits={len(allowed_hits)} violations={len(violations)}",
             file=sys.stderr,
         )
         return 1
 
     print(
         "POSTGRESQL_TEST_INFRASTRUCTURE_RESIDUAL_SCAN_GREEN "
-        f"scanned_files={scanned_files} allowed_hits={len(allowed_hits)} violations=0"
+        f"scope={scope} scanned_files={len(candidates)} "
+        f"allowed_hits={len(allowed_hits)} violations=0"
     )
     print("POSTGRESQL_TEST_INFRASTRUCTURE_BOUNDARY_GREEN")
     return 0
