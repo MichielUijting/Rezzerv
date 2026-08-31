@@ -63,6 +63,28 @@ def main() -> None:
             + repr(bad_compose_lines)
         )
 
+    _forbid(
+        start,
+        'config --services | findstr',
+        "Windows cmd pipe-based Compose service validation",
+    )
+    _require(
+        start,
+        'set "COMPOSE_SERVICES_FILE=%TEMP%\\rezzerv-compose-services-%RANDOM%-%RANDOM%.txt"',
+        "pipe-safe Compose service temp file",
+    )
+    _require(
+        start,
+        'config --services > "%COMPOSE_SERVICES_FILE%" 2>nul',
+        "pipe-safe Compose service capture",
+    )
+    _require(
+        start,
+        'findstr /I /X /C:"postgres" "%COMPOSE_SERVICES_FILE%" >nul',
+        "PostgreSQL service validation from captured Compose output",
+    )
+    _require(start, "Actieve services:", "diagnostic active-service output")
+
     for legacy in (
         "./backend/data:/app/data",
         "/app/data/rezzerv.db",
@@ -225,6 +247,7 @@ def main() -> None:
     )
 
     print("POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN")
+    print("POSTGRESQL_OPERATIONAL_STARTUP_WINDOWS_PIPE_SAFE_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_HEALTH_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ISOLATION_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ROLE_SPLIT_GREEN")
