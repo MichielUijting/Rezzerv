@@ -53,52 +53,42 @@ def main() -> None:
     if not compose_lines:
         raise AssertionError("start.bat contains no docker compose commands")
     bad_compose_lines = [
-        line
-        for line in compose_lines
-        if "%COMPOSE_ENV% %COMPOSE_ARGS%" not in line
+        line for line in compose_lines if "%COMPOSE_ENV% %COMPOSE_ARGS%" not in line
     ]
     if bad_compose_lines:
         raise AssertionError(
-            "Every start.bat docker compose call must use the locked base+PostgreSQL overlay/profile: "
-            + repr(bad_compose_lines)
+            "Every start.bat docker compose call must use the locked base+PostgreSQL "
+            f"overlay/profile: {bad_compose_lines!r}"
         )
 
-    _forbid(
-        start,
-        'config --services | findstr',
-        "Windows cmd pipe-based Compose service validation",
-    )
+    # Windows service validation must not depend on cmd pipes/findstr encoding behavior.
+    _forbid(start, "config --services | findstr", "Windows cmd pipe service validation")
     _forbid(
         start,
         'findstr /I /X /C:"postgres" "%COMPOSE_SERVICES_FILE%"',
-        "encoding-sensitive findstr Compose service validation",
+        "encoding-sensitive findstr service validation",
     )
-    _require(
-        start,
-        'set "COMPOSE_SERVICES_FILE=%TEMP%\\rezzerv-compose-services-%RANDOM%-%RANDOM%.txt"',
-        "pipe-safe Compose service temp file",
-    )
-    _require(
-        start,
-        'config --services > "%COMPOSE_SERVICES_FILE%" 2>nul',
-        "pipe-safe Compose service capture",
-    )
-    _require(
-        start,
-        'set "REZZERV_COMPOSE_SERVICES_FILE=%COMPOSE_SERVICES_FILE%"',
-        "Compose services file environment handoff",
-    )
-    _require(
-        start,
-        "Get-Content -LiteralPath $env:REZZERV_COMPOSE_SERVICES_FILE",
-        "encoding-aware Compose service read",
-    )
-    _require(
-        start,
-        "$services -contains 'postgres'",
-        "exact PostgreSQL service membership validation",
-    )
-    _require(start, "Actieve services:", "diagnostic active-service output")
+    for needle, label in (
+        (
+            'set "COMPOSE_SERVICES_FILE=%TEMP%\\rezzerv-compose-services-%RANDOM%-%RANDOM%.txt"',
+            "Compose service temp file",
+        ),
+        (
+            'config --services > "%COMPOSE_SERVICES_FILE%" 2>nul',
+            "Compose service capture",
+        ),
+        (
+            'set "REZZERV_COMPOSE_SERVICES_FILE=%COMPOSE_SERVICES_FILE%"',
+            "Compose service environment handoff",
+        ),
+        (
+            "Get-Content -LiteralPath $env:REZZERV_COMPOSE_SERVICES_FILE",
+            "encoding-aware Compose service read",
+        ),
+        ("$services -contains 'postgres'", "exact PostgreSQL service membership"),
+        ("Actieve services:", "diagnostic active services output"),
+    ):
+        _require(start, needle, label)
 
     for legacy in (
         "./backend/data:/app/data",
@@ -108,118 +98,120 @@ def main() -> None:
     ):
         _forbid(start, legacy, "SQLite runtime authority")
 
-    _require(start, "$datastore = [string]$r.datastore;", "health datastore read")
-    _require(start, "$db = [string]$r.database;", "health database identity read")
-    _require(
-        start,
-        "$datastore -ne 'postgresql'",
-        "fail-closed PostgreSQL datastore assertion",
-    )
-    _require(start, "if (-not $db)", "non-empty database identity assertion")
+    for needle, label in (
+        ("$datastore = [string]$r.datastore;", "health datastore read"),
+        ("$db = [string]$r.database;", "health database identity read"),
+        ("$datastore -ne 'postgresql'", "fail-closed PostgreSQL datastore assertion"),
+        ("if (-not $db)", "non-empty database identity assertion"),
+        (
+            'if not defined REZZERV_FRONTEND_PORT set "REZZERV_FRONTEND_PORT=5174"',
+            "frontend port rehearsal override",
+        ),
+        (
+            'if not defined REZZERV_BACKEND_PORT set "REZZERV_BACKEND_PORT=8011"',
+            "backend port rehearsal override",
+        ),
+        (
+            'if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=90"',
+            "startup wait rehearsal override",
+        ),
+        ('if /I "%REZZERV_STARTUP_NO_BROWSER%"=="1"', "browser suppression"),
+    ):
+        _require(start, needle, label)
 
-    _require(
-        start,
-        'if not defined REZZERV_FRONTEND_PORT set "REZZERV_FRONTEND_PORT=5174"',
-        "frontend port rehearsal override",
-    )
-    _require(
-        start,
-        'if not defined REZZERV_BACKEND_PORT set "REZZERV_BACKEND_PORT=8011"',
-        "backend port rehearsal override",
-    )
-    _require(
-        start,
-        'if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=90"',
-        "startup wait rehearsal override",
-    )
-    _require(
-        start,
-        'if /I "%REZZERV_STARTUP_NO_BROWSER%"=="1"',
-        "non-interactive browser suppression",
-    )
-
-    _forbid(base_compose, "./backend/data:/app/data", "SQLite data mount in base compose")
+    _forbid(base_compose, "./backend/data:/app/data", "SQLite data mount")
     _require(
         base_compose,
         '"${REZZERV_BACKEND_PORT:-8011}:8000"',
-        "backend host-port isolation boundary",
+        "backend host-port isolation",
     )
     _require(
         base_compose,
         '"${REZZERV_FRONTEND_PORT:-5174}:80"',
-        "frontend host-port isolation boundary",
+        "frontend host-port isolation",
     )
 
-    _require(postgres_compose, "postgres:", "PostgreSQL service")
-    _require(postgres_compose, "image: postgres:17-alpine", "pinned PostgreSQL runtime image")
-    _require(postgres_compose, "- postgresql", "PostgreSQL compose profile")
-    _require(
-        postgres_compose,
-        '"127.0.0.1:${REZZERV_POSTGRES_PORT:-5432}:5432"',
-        "loopback-only PostgreSQL host binding",
-    )
-    _require(
-        postgres_compose,
-        "POSTGRES_USER: ${REZZERV_POSTGRES_BOOTSTRAP_USER:-rezzerv_bootstrap}",
-        "bootstrap role boundary",
-    )
-    _require(
-        postgres_compose,
-        "REZZERV_POSTGRES_MIGRATION_USER: ${REZZERV_POSTGRES_MIGRATION_USER:-rezzerv_migrator}",
-        "migration role boundary",
-    )
-    _require(
-        postgres_compose,
-        "REZZERV_POSTGRES_RUNTIME_USER: ${REZZERV_POSTGRES_RUNTIME_USER:-rezzerv_app}",
-        "runtime role boundary",
-    )
-    _require(
-        postgres_compose,
-        "DATABASE_URL: postgresql://${REZZERV_POSTGRES_RUNTIME_USER:-rezzerv_app}",
-        "runtime DATABASE_URL role",
-    )
-    _require(
-        postgres_compose,
-        "MIGRATION_DATABASE_URL: postgresql://${REZZERV_POSTGRES_MIGRATION_USER:-rezzerv_migrator}",
-        "migration DATABASE_URL role",
-    )
-    _require(
-        postgres_compose,
-        "./docker/postgresql/init-roles.sh:/docker-entrypoint-initdb.d/10-rezzerv-roles.sh:ro",
-        "PostgreSQL role initialization mount",
-    )
-    _require(
-        postgres_compose,
-        "REZZERV_DATASTORE_POLICY: postgresql-only",
-        "PostgreSQL-only backend policy",
-    )
-    _forbid(
-        postgres_compose,
-        "REZZERV_POSTGRES_PASSWORD:",
-        "single shared PostgreSQL credential",
-    )
+    for needle, label in (
+        ("postgres:", "PostgreSQL service"),
+        ("image: postgres:17-alpine", "pinned PostgreSQL image"),
+        ("- postgresql", "PostgreSQL compose profile"),
+        (
+            '"127.0.0.1:${REZZERV_POSTGRES_PORT:-5432}:5432"',
+            "loopback-only PostgreSQL host binding",
+        ),
+        (
+            "POSTGRES_USER: ${REZZERV_POSTGRES_BOOTSTRAP_USER:-rezzerv_bootstrap}",
+            "bootstrap role boundary",
+        ),
+        (
+            "REZZERV_POSTGRES_MIGRATION_USER: ${REZZERV_POSTGRES_MIGRATION_USER:-rezzerv_migrator}",
+            "migration role boundary",
+        ),
+        (
+            "REZZERV_POSTGRES_RUNTIME_USER: ${REZZERV_POSTGRES_RUNTIME_USER:-rezzerv_app}",
+            "runtime role boundary",
+        ),
+        (
+            "DATABASE_URL: postgresql://${REZZERV_POSTGRES_RUNTIME_USER:-rezzerv_app}",
+            "runtime DATABASE_URL role",
+        ),
+        (
+            "MIGRATION_DATABASE_URL: postgresql://${REZZERV_POSTGRES_MIGRATION_USER:-rezzerv_migrator}",
+            "migration DATABASE_URL role",
+        ),
+        (
+            "./docker/postgresql/init-roles.sh:/docker-entrypoint-initdb.d/10-rezzerv-roles.sh:ro",
+            "PostgreSQL split-role initializer",
+        ),
+        ("REZZERV_DATASTORE_POLICY: postgresql-only", "PostgreSQL-only backend policy"),
+    ):
+        _require(postgres_compose, needle, label)
+    _forbid(postgres_compose, "REZZERV_POSTGRES_PASSWORD:", "shared PostgreSQL credential")
 
-    _require(postgres_init, "REVOKE CREATE ON SCHEMA public FROM PUBLIC;", "public schema CREATE revoke")
-    _require(
-        postgres_init,
-        'GRANT USAGE, CREATE ON SCHEMA public TO :"migration_user";',
-        "migration schema authority",
-    )
-    _require(
-        postgres_init,
-        'GRANT USAGE ON SCHEMA public TO :"runtime_user";',
-        "runtime schema usage only",
-    )
-    _require(
-        postgres_init,
-        'ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public',
-        "runtime DML default grants",
-    )
-    _require(
-        postgres_init,
-        "PostgreSQL bootstrap, migration and runtime roles must be distinct",
-        "distinct role fail-closed guard",
-    )
+    # A fresh official PostgreSQL image runs init scripts against a temporary socket-only
+    # server. Therefore service health must prove the roles over TCP, not merely pg_isready
+    # against the local bootstrap socket.
+    _forbid(postgres_compose, "pg_isready", "bootstrap-only PostgreSQL readiness")
+    for needle, label in (
+        (
+            'PGPASSWORD="$${REZZERV_POSTGRES_MIGRATION_PASSWORD}"',
+            "migration-role health password",
+        ),
+        (
+            'psql -h 127.0.0.1 -U "$${REZZERV_POSTGRES_MIGRATION_USER}"',
+            "migration-role TCP readiness",
+        ),
+        (
+            'PGPASSWORD="$${REZZERV_POSTGRES_RUNTIME_PASSWORD}"',
+            "runtime-role health password",
+        ),
+        (
+            'psql -h 127.0.0.1 -U "$${REZZERV_POSTGRES_RUNTIME_USER}"',
+            "runtime-role TCP readiness",
+        ),
+    ):
+        _require(postgres_compose, needle, label)
+
+    for needle, label in (
+        ("REVOKE CREATE ON SCHEMA public FROM PUBLIC;", "public CREATE revoke"),
+        (
+            'GRANT USAGE, CREATE ON SCHEMA public TO :"migration_user";',
+            "migration schema authority",
+        ),
+        (
+            'GRANT USAGE ON SCHEMA public TO :"runtime_user";',
+            "runtime schema usage only",
+        ),
+        (
+            'ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public',
+            "runtime DML default grants",
+        ),
+        (
+            "PostgreSQL bootstrap, migration and runtime roles must be distinct",
+            "distinct role fail-closed guard",
+        ),
+    ):
+        _require(postgres_init, needle, label)
 
     for workflow_path in (
         "      - 'start.bat'",
@@ -229,40 +221,40 @@ def main() -> None:
         "      - 'tools/postgresql_operational_startup_contract.py'",
         "      - '.github/workflows/postgresql-operational-startup-validation.yml'",
     ):
-        _require(workflow, workflow_path, "operational-startup workflow path trigger")
-    _require(
-        workflow,
-        "python tools/postgresql_operational_startup_contract.py",
-        "operational startup contract CI execution",
-    )
-    _require(
-        workflow,
-        "POSTGRESQL_OPERATIONAL_STARTUP_CONTRACT_GREEN",
-        "operational startup contract CI marker",
-    )
-    _require(
-        workflow,
-        "docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config",
-        "merged PostgreSQL compose-model validation",
-    )
-    _require(
-        workflow,
-        "POSTGRESQL_OPERATIONAL_RUNTIME_CREATE_DENIED_GREEN",
-        "runtime CREATE denial execution marker",
-    )
-    _require(
-        workflow,
-        "POSTGRESQL_OPERATIONAL_RUNTIME_DML_ONLY_GREEN",
-        "runtime DML execution marker",
-    )
-    _require(
-        workflow,
-        "POSTGRESQL_OPERATIONAL_ROLE_SPLIT_GREEN",
-        "split-role execution marker",
-    )
+        _require(workflow, workflow_path, "operational workflow path trigger")
+
+    for needle, label in (
+        (
+            "python tools/postgresql_operational_startup_contract.py",
+            "operational contract CI execution",
+        ),
+        (
+            "docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config",
+            "merged PostgreSQL Compose validation",
+        ),
+        (
+            "docker inspect --format '{{.State.Health.Status}}'",
+            "Docker health-status readiness proof",
+        ),
+        (
+            "POSTGRESQL_OPERATIONAL_ROLE_READY_HEALTH_GREEN",
+            "split-role-ready health marker",
+        ),
+        (
+            "POSTGRESQL_OPERATIONAL_RUNTIME_DML_ONLY_GREEN",
+            "runtime DML marker",
+        ),
+        (
+            "POSTGRESQL_OPERATIONAL_RUNTIME_CREATE_DENIED_GREEN",
+            "runtime CREATE denial marker",
+        ),
+        ("POSTGRESQL_OPERATIONAL_ROLE_SPLIT_GREEN", "split-role marker"),
+    ):
+        _require(workflow, needle, label)
 
     print("POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_WINDOWS_ENCODING_SAFE_GREEN")
+    print("POSTGRESQL_OPERATIONAL_STARTUP_ROLE_READY_HEALTH_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_HEALTH_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ISOLATION_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ROLE_SPLIT_GREEN")
