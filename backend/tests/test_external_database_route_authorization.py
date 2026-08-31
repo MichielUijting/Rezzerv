@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -7,20 +9,24 @@ from app.services.external_database_route_authorization import (
     authorize_external_database_request,
     required_external_database_permission,
 )
+from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database
 from tests.platform_feature_flag_migrated_fixture import migrated_platform_feature_flag_engine
 
 
 def build_connection():
+    configured_url = str(os.getenv("DATABASE_URL") or "").strip().lower()
+    if configured_url.startswith("postgresql"):
+        reset_postgresql_test_database()
     engine = migrated_platform_feature_flag_engine()
     conn = engine.connect()
     ensure_authorization_foundation(conn)
     conn.execute(text("""
         INSERT INTO auth_platform_user_roles(user_id, role_key, active)
         VALUES
-          ('frontteam', 'platform.frontteam', 1),
-          ('platform-admin', 'platform.platform_admin', 1),
-          ('superuser', 'platform.superuser', 1),
-          ('ip-owner', 'platform.ip_owner', 1)
+          ('frontteam', 'platform.frontteam', TRUE),
+          ('platform-admin', 'platform.platform_admin', TRUE),
+          ('superuser', 'platform.superuser', TRUE),
+          ('ip-owner', 'platform.ip_owner', TRUE)
     """))
     conn.commit()
     return engine, conn
@@ -136,7 +142,7 @@ def test_frontteam_permission_revocation_fails_closed_immediately():
     engine, conn = build_connection()
     try:
         conn.execute(text("""
-            UPDATE auth_platform_user_roles SET active = 0
+            UPDATE auth_platform_user_roles SET active = FALSE
             WHERE user_id = 'frontteam' AND role_key = 'platform.frontteam'
         """))
         with pytest.raises(HTTPException) as exc:
