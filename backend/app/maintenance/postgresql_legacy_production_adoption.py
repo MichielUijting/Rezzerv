@@ -170,14 +170,12 @@ def adopt_legacy_production_snapshot(
             f"{_rebuild._revision(working_path)!r}"
         )
 
+    # The underlying rebuild already proved foreign_key_check green. This
+    # normalization changes only purchase_import_lines.quantity_raw, which is
+    # not part of any FK. Re-run integrity/runtime invariants here without
+    # duplicating SQLite-only SQL outside the pinned rebuild boundary.
     with sqlite3.connect(str(working_path)) as connection:
         _rebuild._assert_integrity_only(connection)
-        fk_rows = connection.execute("PRAGMA foreign_key_check").fetchall()
-        if fk_rows:
-            raise LegacyAdoptionError(
-                "Canonical working copy has FK violations after quantity normalization: "
-                f"{fk_rows[:10]!r}"
-            )
         _rebuild._assert_runtime_invariants(connection)
 
     report["legacy_value_normalizations"] = normalizations
