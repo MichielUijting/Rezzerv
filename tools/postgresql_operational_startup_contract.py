@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 START_BAT = ROOT / "start.bat"
 BASE_COMPOSE = ROOT / "docker-compose.yml"
 POSTGRES_COMPOSE = ROOT / "docker-compose.postgresql.yml"
-WORKFLOW = ROOT / ".github" / "workflows" / "postgresql-runtime-startup-schema-authority.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "postgresql-operational-startup-validation.yml"
 
 
 def _read(path: Path) -> str:
@@ -95,8 +95,9 @@ def main() -> None:
         "      - 'docker-compose.yml'",
         "      - 'docker-compose.postgresql.yml'",
         "      - 'tools/postgresql_operational_startup_contract.py'",
+        "      - '.github/workflows/postgresql-operational-startup-validation.yml'",
     ):
-        _require(workflow, workflow_path, "runtime-startup workflow path trigger")
+        _require(workflow, workflow_path, "operational-startup workflow path trigger")
     _require(
         workflow,
         "python tools/postgresql_operational_startup_contract.py",
@@ -106,6 +107,11 @@ def main() -> None:
         workflow,
         "POSTGRESQL_OPERATIONAL_STARTUP_CONTRACT_GREEN",
         "operational startup contract CI marker",
+    )
+    _require(
+        workflow,
+        "docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config",
+        "merged PostgreSQL compose-model validation",
     )
 
     print("POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN")
