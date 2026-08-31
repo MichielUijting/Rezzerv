@@ -14,9 +14,13 @@ concurrency:
 jobs:
   sqlite-residual-audit:
     runs-on: ubuntu-latest
+    env:
+      REZZERV_TEST_BOUNDARY_BASE_SHA: 4b1cff13b192abbafa03032460d0f88f243d935f
     steps:
-      - name: Checkout exact candidate
+      - name: Checkout exact candidate with locked base history
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,8 +30,9 @@ jobs:
       - name: Compile boundary audit
         run: python -m py_compile backend/tests/postgresql_test_infrastructure_boundary_audit.py
 
-      - name: Reject normal SQLite-backed test infrastructure
+      - name: Reject normal SQLite-backed test infrastructure in this cutover
         run: |
           python backend/tests/postgresql_test_infrastructure_boundary_audit.py | tee /tmp/postgresql-test-boundary.log
+          grep -F 'scope=changed-from-locked-base' /tmp/postgresql-test-boundary.log
           grep -F 'POSTGRESQL_TEST_INFRASTRUCTURE_RESIDUAL_SCAN_GREEN' /tmp/postgresql-test-boundary.log
           grep -F 'POSTGRESQL_TEST_INFRASTRUCTURE_BOUNDARY_GREEN' /tmp/postgresql-test-boundary.log
