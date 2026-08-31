@@ -48,12 +48,25 @@ jobs:
 
       - name: Validate merged PostgreSQL Compose model
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config >/tmp/rezzerv-postgresql-compose.yml
+          docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config --format json >/tmp/rezzerv-postgresql-compose.json
           docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config --services >/tmp/rezzerv-postgresql-services.txt
           grep -Fx 'postgres' /tmp/rezzerv-postgresql-services.txt
           grep -Fx 'backend' /tmp/rezzerv-postgresql-services.txt
           grep -Fx 'frontend' /tmp/rezzerv-postgresql-services.txt
-          grep -F '127.0.0.1:55432' /tmp/rezzerv-postgresql-compose.yml
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          model = json.loads(Path('/tmp/rezzerv-postgresql-compose.json').read_text())
+          ports = model['services']['postgres'].get('ports') or []
+          assert any(
+              str(port.get('host_ip') or '') == '127.0.0.1'
+              and str(port.get('published') or '') == '55432'
+              and str(port.get('target') or '') == '5432'
+              for port in ports
+          ), ports
+          print('POSTGRESQL_OPERATIONAL_LOOPBACK_BINDING_GREEN')
+          PY
           echo 'POSTGRESQL_OPERATIONAL_COMPOSE_MODEL_GREEN'
 
       - name: Prove split migration and DML-only runtime roles
