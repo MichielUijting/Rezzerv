@@ -44,7 +44,7 @@ def _resolve_owned_space(conn, household_id: str, space_id: str) -> dict[str, An
             FROM spaces
             WHERE id = :space_id
               AND household_id = :household_id
-              AND COALESCE(active, 1) = 1
+              AND COALESCE(active, TRUE) = TRUE
             LIMIT 1
             """
         ),
@@ -65,8 +65,8 @@ def _resolve_owned_sublocation(conn, household_id: str, sublocation_id: str) -> 
             JOIN spaces s ON s.id = sl.space_id
             WHERE sl.id = :sublocation_id
               AND s.household_id = :household_id
-              AND COALESCE(sl.active, 1) = 1
-              AND COALESCE(s.active, 1) = 1
+              AND COALESCE(sl.active, TRUE) = TRUE
+              AND COALESCE(s.active, TRUE) = TRUE
             LIMIT 1
             """
         ),
@@ -85,8 +85,8 @@ def _space_has_active_sublocations(conn, household_id: str, space_id: str) -> bo
                 JOIN spaces s ON s.id = sl.space_id
                 WHERE sl.space_id = :space_id
                   AND s.household_id = :household_id
-                  AND COALESCE(sl.active, 1) = 1
-                  AND COALESCE(s.active, 1) = 1
+                  AND COALESCE(sl.active, TRUE) = TRUE
+                  AND COALESCE(s.active, TRUE) = TRUE
                 LIMIT 1
                 """
             ),
