@@ -1,0 +1,45 @@
+name: PostgreSQL operational startup validation
+
+on:
+  pull_request:
+    paths:
+      - 'start.bat'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'tools/postgresql_operational_startup_contract.py'
+      - '.github/workflows/postgresql-operational-startup-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operational-startup-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prove PostgreSQL operational startup contract
+        run: |
+          python tools/postgresql_operational_startup_contract.py | tee /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN' /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_HEALTH_GREEN' /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_CI_GREEN' /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_CONTRACT_GREEN' /tmp/postgresql-operational-startup.log
+
+      - name: Validate merged PostgreSQL Compose model
+        env:
+          REZZERV_POSTGRES_PASSWORD: operational-startup-contract-only
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config >/tmp/rezzerv-postgresql-compose.yml
+          docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config --services >/tmp/rezzerv-postgresql-services.txt
+          grep -Fx 'postgres' /tmp/rezzerv-postgresql-services.txt
+          grep -Fx 'backend' /tmp/rezzerv-postgresql-services.txt
+          grep -Fx 'frontend' /tmp/rezzerv-postgresql-services.txt
+          echo 'POSTGRESQL_OPERATIONAL_COMPOSE_MODEL_GREEN'
