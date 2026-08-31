@@ -12,6 +12,7 @@ on:
       - 'backend/app/services/canonical_inventory_identity_service.py'
       - 'backend/app/schemas/inventory.py'
       - 'backend/app/testing/inventory_location_household_isolation_contract.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
       - 'backend/app/api/**/*inventory*'
       - 'backend/tests/**/*inventory*'
       - 'backend/tests/test_purchase_import_location_policy_patch.py'
@@ -39,6 +40,12 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_inventory_identity_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_inventory_identity_ci
+      TEST_SCHEMA_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_inventory_identity_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      PYTHONPATH: backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,26 +55,21 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Installeer minimale backend-afhankelijkheden en PostgreSQL client
+      - name: Install PostgreSQL client and backend dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
-          python -m pip install --quiet \
-            fastapi==0.115.0 \
-            sqlalchemy==2.0.36 \
-            pydantic==2.12.5 \
-            'psycopg[binary]' \
-            pytest
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt pytest
 
-      - name: Bootstrap PostgreSQL migrator en DML-only runtime-role
+      - name: Bootstrap PostgreSQL migrator and DML-only runtime role
         env:
           PGPASSWORD: rezzerv_bootstrap_ci
         run: |
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
           CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
           CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
-          GRANT CONNECT ON DATABASE rezzerv_inventory_identity_ci TO rezzerv_migrator;
-          GRANT CONNECT ON DATABASE rezzerv_inventory_identity_ci TO rezzerv_app;
+          GRANT CONNECT ON DATABASE rezzerv_inventory_identity_ci TO rezzerv_migrator, rezzerv_app;
           ALTER DATABASE rezzerv_inventory_identity_ci OWNER TO rezzerv_migrator;
           \connect rezzerv_inventory_identity_ci
           ALTER SCHEMA public OWNER TO rezzerv_migrator;
@@ -80,46 +82,54 @@ jobs:
             GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
           SQL
 
-      - name: Compileer gewijzigde modules
+      - name: Assert runtime role has no schema CREATE privilege
+        env:
+          PGPASSWORD: rezzerv_app_ci
+        run: |
+          result=$(psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_inventory_identity_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
+          test "$result" = "f"
+          echo 'INVENTORY_LOCATION_RUNTIME_DML_ONLY_GREEN'
+
+      - name: Prove focused locationless identity guard with migrator-owned test schema
+        run: |
+          python -m pytest -q backend/tests/test_locationless_inventory_identity_guard.py
+          echo 'INVENTORY_IDENTITY_POSTGRESQL_RUNTIME_DML_ONLY_GREEN'
+
+      - name: Initialize canonical PostgreSQL schema through Alembic
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      - name: Compile inventory location contract and tests
         run: |
           python -m py_compile \
-            backend/app/__init__.py \
             backend/app/schemas/inventory.py \
             backend/app/services/inventory_location_household_patch.py \
             backend/app/services/inventory_location_policy_service.py \
             backend/app/services/inventory_location_event_policy_patch.py \
             backend/app/services/purchase_import_location_policy_patch.py \
             backend/app/services/canonical_inventory_identity_service.py \
+            backend/app/testing/postgresql_onboarding_selftest_fixture.py \
             backend/app/testing/inventory_location_household_isolation_contract.py \
-            backend/tests/test_inventory_location_policy_service.py \
-            backend/tests/test_inventory_location_event_policy_patch.py \
-            backend/tests/test_locationless_inventory_identity_guard.py \
-            backend/tests/test_purchase_import_location_policy_patch.py
-
-      - name: Voer A-B-locatie-isolatiecontract uit
-        env:
-          PYTHONPATH: backend
-        run: |
-          python -m app.testing.inventory_location_household_isolation_contract | tee inventory-location-isolation.log
-          grep -F 'INVENTORY_LOCATION_HOUSEHOLD_ISOLATION_GREEN' inventory-location-isolation.log
-
-      - name: Test locationless policy, event-write en kassabonadapter
-        env:
-          PYTHONPATH: backend
-        run: |
-          python -m pytest -q \
             backend/tests/test_inventory_location_policy_service.py \
             backend/tests/test_inventory_location_event_policy_patch.py \
             backend/tests/test_purchase_import_location_policy_patch.py \
             backend/tests/test_household_article_identity_slice2b4_inventory_contract.py
 
-      - name: Test database-identiteit met PostgreSQL migrator en runtime-role
-        env:
-          PYTHONPATH: backend
-          TEST_SCHEMA_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_inventory_identity_ci
-          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_inventory_identity_ci
+      - name: Run A-B location isolation contract on PostgreSQL
         run: |
-          result=$(PGPASSWORD=rezzerv_app_ci psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_inventory_identity_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
-          test "$result" = "f"
-          python -m pytest -q backend/tests/test_locationless_inventory_identity_guard.py
-          echo 'INVENTORY_IDENTITY_POSTGRESQL_RUNTIME_DML_ONLY_GREEN'
+          python -m app.testing.inventory_location_household_isolation_contract | tee inventory-location-isolation.log
+          grep -F 'INVENTORY_LOCATION_HOUSEHOLD_ISOLATION_POSTGRESQL_GREEN' inventory-location-isolation.log
+          grep -F 'INVENTORY_LOCATION_HOUSEHOLD_ISOLATION_GREEN' inventory-location-isolation.log
+
+      - name: Run location policy and purchase adapter tests on PostgreSQL
+        run: |
+          python -m pytest -q \
+            backend/tests/test_inventory_location_policy_service.py \
+            backend/tests/test_inventory_location_event_policy_patch.py \
+            backend/tests/test_purchase_import_location_policy_patch.py
+
+      - name: Run household article inventory identity contract on PostgreSQL
+        run: |
+          python backend/tests/test_household_article_identity_slice2b4_inventory_contract.py | tee household-article-identity.log
+          grep -F 'HOUSEHOLD_ARTICLE_IDENTITY_SLICE2B4_INVENTORY_POSTGRESQL_GREEN' household-article-identity.log
+          grep -F 'HOUSEHOLD_ARTICLE_IDENTITY_SLICE2B4_INVENTORY_GREEN' household-article-identity.log
