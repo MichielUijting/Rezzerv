@@ -68,6 +68,11 @@ def main() -> None:
         'config --services | findstr',
         "Windows cmd pipe-based Compose service validation",
     )
+    _forbid(
+        start,
+        'findstr /I /X /C:"postgres" "%COMPOSE_SERVICES_FILE%"',
+        "encoding-sensitive findstr Compose service validation",
+    )
     _require(
         start,
         'set "COMPOSE_SERVICES_FILE=%TEMP%\\rezzerv-compose-services-%RANDOM%-%RANDOM%.txt"',
@@ -80,8 +85,18 @@ def main() -> None:
     )
     _require(
         start,
-        'findstr /I /X /C:"postgres" "%COMPOSE_SERVICES_FILE%" >nul',
-        "PostgreSQL service validation from captured Compose output",
+        'set "REZZERV_COMPOSE_SERVICES_FILE=%COMPOSE_SERVICES_FILE%"',
+        "Compose services file environment handoff",
+    )
+    _require(
+        start,
+        "Get-Content -LiteralPath $env:REZZERV_COMPOSE_SERVICES_FILE",
+        "encoding-aware Compose service read",
+    )
+    _require(
+        start,
+        "$services -contains 'postgres'",
+        "exact PostgreSQL service membership validation",
     )
     _require(start, "Actieve services:", "diagnostic active-service output")
 
@@ -247,7 +262,7 @@ def main() -> None:
     )
 
     print("POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN")
-    print("POSTGRESQL_OPERATIONAL_STARTUP_WINDOWS_PIPE_SAFE_GREEN")
+    print("POSTGRESQL_OPERATIONAL_STARTUP_WINDOWS_ENCODING_SAFE_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_HEALTH_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ISOLATION_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ROLE_SPLIT_GREEN")
