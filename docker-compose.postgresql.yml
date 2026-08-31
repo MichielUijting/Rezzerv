@@ -6,22 +6,27 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${REZZERV_POSTGRES_DB:-rezzerv}
-      POSTGRES_USER: ${REZZERV_POSTGRES_USER:-rezzerv}
-      POSTGRES_PASSWORD: ${REZZERV_POSTGRES_PASSWORD:-rezzerv-local-only}
+      POSTGRES_USER: ${REZZERV_POSTGRES_BOOTSTRAP_USER:-rezzerv_bootstrap}
+      POSTGRES_PASSWORD: ${REZZERV_POSTGRES_BOOTSTRAP_PASSWORD:-rezzerv-bootstrap-local-only}
+      REZZERV_POSTGRES_MIGRATION_USER: ${REZZERV_POSTGRES_MIGRATION_USER:-rezzerv_migrator}
+      REZZERV_POSTGRES_MIGRATION_PASSWORD: ${REZZERV_POSTGRES_MIGRATION_PASSWORD:-rezzerv-migrator-local-only}
+      REZZERV_POSTGRES_RUNTIME_USER: ${REZZERV_POSTGRES_RUNTIME_USER:-rezzerv_app}
+      REZZERV_POSTGRES_RUNTIME_PASSWORD: ${REZZERV_POSTGRES_RUNTIME_PASSWORD:-rezzerv-app-local-only}
     ports:
-      - "${REZZERV_POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${REZZERV_POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${REZZERV_POSTGRES_USER:-rezzerv} -d ${REZZERV_POSTGRES_DB:-rezzerv}"]
+      test: ["CMD-SHELL", "pg_isready -U ${REZZERV_POSTGRES_BOOTSTRAP_USER:-rezzerv_bootstrap} -d ${REZZERV_POSTGRES_DB:-rezzerv}"]
       interval: 5s
       timeout: 5s
       retries: 10
     volumes:
       - rezzerv_postgres:/var/lib/postgresql/data
+      - ./docker/postgresql/init-roles.sh:/docker-entrypoint-initdb.d/10-rezzerv-roles.sh:ro
 
   backend:
     environment:
-      DATABASE_URL: postgresql://${REZZERV_POSTGRES_USER:-rezzerv}:${REZZERV_POSTGRES_PASSWORD:-rezzerv-local-only}@postgres:5432/${REZZERV_POSTGRES_DB:-rezzerv}
-      MIGRATION_DATABASE_URL: postgresql://${REZZERV_POSTGRES_USER:-rezzerv}:${REZZERV_POSTGRES_PASSWORD:-rezzerv-local-only}@postgres:5432/${REZZERV_POSTGRES_DB:-rezzerv}
+      DATABASE_URL: postgresql://${REZZERV_POSTGRES_RUNTIME_USER:-rezzerv_app}:${REZZERV_POSTGRES_RUNTIME_PASSWORD:-rezzerv-app-local-only}@postgres:5432/${REZZERV_POSTGRES_DB:-rezzerv}
+      MIGRATION_DATABASE_URL: postgresql://${REZZERV_POSTGRES_MIGRATION_USER:-rezzerv_migrator}:${REZZERV_POSTGRES_MIGRATION_PASSWORD:-rezzerv-migrator-local-only}@postgres:5432/${REZZERV_POSTGRES_DB:-rezzerv}
       REZZERV_DATASTORE_POLICY: postgresql-only
     depends_on:
       postgres:
