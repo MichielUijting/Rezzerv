@@ -14,9 +14,13 @@ Technical Design Reference:
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+from app.services.purchase_import_quantity_contract import (
+    enforce_purchase_import_quantity_precision_before_execute,
+)
 
 
 _DEFAULT_SQLITE_DATABASE_URL = "sqlite:////app/data/rezzerv.db"
@@ -97,6 +101,11 @@ elif DATASTORE_KIND == "postgresql":
     )
 
 engine = create_engine(_engine_url, **engine_kwargs)
+event.listen(
+    engine,
+    "before_execute",
+    enforce_purchase_import_quantity_precision_before_execute,
+)
 
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
