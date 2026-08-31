@@ -79,16 +79,21 @@ jobs:
           trap cleanup EXIT
 
           "${compose[@]}" up -d postgres
+          postgres_id="$("${compose[@]}" ps -q postgres)"
+          test -n "$postgres_id"
           for attempt in $(seq 1 60); do
-            if "${compose[@]}" exec -T postgres pg_isready -U "$REZZERV_POSTGRES_BOOTSTRAP_USER" -d "$REZZERV_POSTGRES_DB" >/dev/null 2>&1; then
+            health_status="$(docker inspect --format '{{.State.Health.Status}}' "$postgres_id")"
+            if [ "$health_status" = "healthy" ]; then
               break
             fi
             if [ "$attempt" -eq 60 ]; then
+              echo "PostgreSQL did not reach split-role-ready health; status=$health_status" >&2
               "${compose[@]}" logs postgres
               exit 1
             fi
             sleep 1
           done
+          echo 'POSTGRESQL_OPERATIONAL_ROLE_READY_HEALTH_GREEN'
 
           runtime_create=$("${compose[@]}" exec -T postgres psql \
             -U "$REZZERV_POSTGRES_BOOTSTRAP_USER" -d "$REZZERV_POSTGRES_DB" -Atc \
