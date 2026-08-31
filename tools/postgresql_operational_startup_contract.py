@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 START_BAT = ROOT / "start.bat"
 BASE_COMPOSE = ROOT / "docker-compose.yml"
 POSTGRES_COMPOSE = ROOT / "docker-compose.postgresql.yml"
+POSTGRES_INIT = ROOT / "docker" / "postgresql" / "init-roles.sh"
 WORKFLOW = ROOT / ".github" / "workflows" / "postgresql-operational-startup-validation.yml"
 
 
@@ -30,6 +31,7 @@ def main() -> None:
     start = _read(START_BAT)
     base_compose = _read(BASE_COMPOSE)
     postgres_compose = _read(POSTGRES_COMPOSE)
+    postgres_init = _read(POSTGRES_INIT)
     workflow = _read(WORKFLOW)
 
     compose_args = (
@@ -110,21 +112,83 @@ def main() -> None:
         '"${REZZERV_FRONTEND_PORT:-5174}:80"',
         "frontend host-port isolation boundary",
     )
+
     _require(postgres_compose, "postgres:", "PostgreSQL service")
     _require(postgres_compose, "image: postgres:17-alpine", "pinned PostgreSQL runtime image")
     _require(postgres_compose, "- postgresql", "PostgreSQL compose profile")
     _require(
         postgres_compose,
+        '"127.0.0.1:${REZZERV_POSTGRES_PORT:-5432}:5432"',
+        "loopback-only PostgreSQL host binding",
+    )
+    _require(
+        postgres_compose,
+        "POSTGRES_USER: ${REZZERV_POSTGRES_BOOTSTRAP_USER:-rezzerv_bootstrap}",
+        "bootstrap role boundary",
+    )
+    _require(
+        postgres_compose,
+        "REZZERV_POSTGRES_MIGRATION_USER: ${REZZERV_POSTGRES_MIGRATION_USER:-rezzerv_migrator}",
+        "migration role boundary",
+    )
+    _require(
+        postgres_compose,
+        "REZZERV_POSTGRES_RUNTIME_USER: ${REZZERV_POSTGRES_RUNTIME_USER:-rezzerv_app}",
+        "runtime role boundary",
+    )
+    _require(
+        postgres_compose,
+        "DATABASE_URL: postgresql://${REZZERV_POSTGRES_RUNTIME_USER:-rezzerv_app}",
+        "runtime DATABASE_URL role",
+    )
+    _require(
+        postgres_compose,
+        "MIGRATION_DATABASE_URL: postgresql://${REZZERV_POSTGRES_MIGRATION_USER:-rezzerv_migrator}",
+        "migration DATABASE_URL role",
+    )
+    _require(
+        postgres_compose,
+        "./docker/postgresql/init-roles.sh:/docker-entrypoint-initdb.d/10-rezzerv-roles.sh:ro",
+        "PostgreSQL role initialization mount",
+    )
+    _require(
+        postgres_compose,
         "REZZERV_DATASTORE_POLICY: postgresql-only",
         "PostgreSQL-only backend policy",
     )
-    _require(postgres_compose, "MIGRATION_DATABASE_URL:", "migration credential boundary")
-    _require(postgres_compose, "DATABASE_URL:", "runtime database boundary")
+    _forbid(
+        postgres_compose,
+        "REZZERV_POSTGRES_PASSWORD:",
+        "single shared PostgreSQL credential",
+    )
+
+    _require(postgres_init, "REVOKE CREATE ON SCHEMA public FROM PUBLIC;", "public schema CREATE revoke")
+    _require(
+        postgres_init,
+        'GRANT USAGE, CREATE ON SCHEMA public TO :"migration_user";',
+        "migration schema authority",
+    )
+    _require(
+        postgres_init,
+        'GRANT USAGE ON SCHEMA public TO :"runtime_user";',
+        "runtime schema usage only",
+    )
+    _require(
+        postgres_init,
+        'ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA public',
+        "runtime DML default grants",
+    )
+    _require(
+        postgres_init,
+        "PostgreSQL bootstrap, migration and runtime roles must be distinct",
+        "distinct role fail-closed guard",
+    )
 
     for workflow_path in (
         "      - 'start.bat'",
         "      - 'docker-compose.yml'",
         "      - 'docker-compose.postgresql.yml'",
+        "      - 'docker/postgresql/init-roles.sh'",
         "      - 'tools/postgresql_operational_startup_contract.py'",
         "      - '.github/workflows/postgresql-operational-startup-validation.yml'",
     ):
@@ -144,10 +208,26 @@ def main() -> None:
         "docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config",
         "merged PostgreSQL compose-model validation",
     )
+    _require(
+        workflow,
+        "POSTGRESQL_OPERATIONAL_RUNTIME_CREATE_DENIED_GREEN",
+        "runtime CREATE denial execution marker",
+    )
+    _require(
+        workflow,
+        "POSTGRESQL_OPERATIONAL_RUNTIME_DML_ONLY_GREEN",
+        "runtime DML execution marker",
+    )
+    _require(
+        workflow,
+        "POSTGRESQL_OPERATIONAL_ROLE_SPLIT_GREEN",
+        "split-role execution marker",
+    )
 
     print("POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_HEALTH_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ISOLATION_GREEN")
+    print("POSTGRESQL_OPERATIONAL_STARTUP_ROLE_SPLIT_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_CI_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_CONTRACT_GREEN")
 
