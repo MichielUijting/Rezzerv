@@ -1,6 +1,9 @@
 # Rezzerv Release Gate v1.10
 Status: Verplicht procesonderdeel voor alle toekomstige releases
 
+> **PostgreSQL operationele interpretatie — 2026-08-31**
+> De databaseconsistentie- en stopregels in deze Gate blijven verplicht. Voor de actieve PostgreSQL-runtime zijn de letterlijke SQLite-bestands-, pad- en file-mountregels uit de historische tekst vervangen door `docs/project/POSTGRESQL-OPERATIONAL-STARTUP.md`. De blijvende eis is: exact één aantoonbare runtime-database, geen alternatieve/verborgen datastore en een reproduceerbare Docker-koppeling.
+
 Dit document vult het Release Protocol en het QA/QC-handvest aan en maakt de kwaliteitscontrole blokkerend in plaats van adviserend.
 Doel: voorkomen dat een technisch, procedureel of verpakkingsfout ooit nog bij de PO terechtkomt.
 

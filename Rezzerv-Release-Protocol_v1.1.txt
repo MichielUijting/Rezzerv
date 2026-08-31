@@ -1,5 +1,9 @@
 Rezzerv Release Protocol v1.1
 
+POSTGRESQL OPERATIONELE INTERPRETATIE — 2026-08-31
+De blijvende kernregels van dit protocol blijven bindend: binnen één actieve omgeving bestaat exact één aangewezen runtime-database, de koppeling daarvan moet aantoonbaar zijn en onduidelijkheid blokkeert de release.
+Voor de actieve PostgreSQL-runtime zijn de letterlijke SQLite-bestands-, pad- en file-mountregels in dit historische protocol vervangen door docs/project/POSTGRESQL-OPERATIONAL-STARTUP.md. Historische SQLite-bestanden zijn uitsluitend migratie-/rollbackartefacten en geen actieve runtime-database.
+
 DOEL
 Voorkomen dat ongeteste of instabiele releases aan de PO worden geleverd.
 Dit protocol is bindend voor elke release vanaf v01.04.19.

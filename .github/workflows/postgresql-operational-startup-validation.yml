@@ -1,0 +1,154 @@
+name: PostgreSQL operational startup validation
+
+on:
+  pull_request:
+    paths:
+      - '.gitattributes'
+      - 'start.bat'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/init-roles.sh'
+      - 'tools/postgresql_operational_startup_contract.py'
+      - '.github/workflows/postgresql-operational-startup-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-postgresql-init-checkout:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prove PostgreSQL init script LF checkout
+        shell: pwsh
+        run: |
+          $path = 'docker/postgresql/init-roles.sh'
+          $attribute = (git check-attr eol -- $path).Trim()
+          if ($attribute -notmatch ': eol: lf$') {
+            throw "PostgreSQL init script is not protected by eol=lf: $attribute"
+          }
+
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $path))
+          if ($bytes -contains 13) {
+            throw 'PostgreSQL init script contains CR bytes after Windows checkout; Alpine shebang would fail.'
+          }
+          if ($bytes.Length -lt 3 -or $bytes[0] -ne 35 -or $bytes[1] -ne 33) {
+            throw 'PostgreSQL init script does not start with a valid shebang.'
+          }
+          Write-Host 'POSTGRESQL_OPERATIONAL_WINDOWS_LF_CHECKOUT_GREEN'
+
+  operational-startup-contract:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: rezzerv_operational_startup_${{ github.run_id }}
+      REZZERV_POSTGRES_DB: rezzerv_contract
+      REZZERV_POSTGRES_BOOTSTRAP_USER: rezzerv_bootstrap
+      REZZERV_POSTGRES_BOOTSTRAP_PASSWORD: bootstrap-contract-only
+      REZZERV_POSTGRES_MIGRATION_USER: rezzerv_migrator
+      REZZERV_POSTGRES_MIGRATION_PASSWORD: migrator-contract-only
+      REZZERV_POSTGRES_RUNTIME_USER: rezzerv_app
+      REZZERV_POSTGRES_RUNTIME_PASSWORD: runtime-contract-only
+      REZZERV_POSTGRES_PORT: '55432'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prove PostgreSQL operational startup contract
+        run: |
+          python tools/postgresql_operational_startup_contract.py | tee /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_COMPOSE_GREEN' /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_HEALTH_GREEN' /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_ISOLATION_GREEN' /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_ROLE_SPLIT_GREEN' /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_CI_GREEN' /tmp/postgresql-operational-startup.log
+          grep -F 'POSTGRESQL_OPERATIONAL_STARTUP_CONTRACT_GREEN' /tmp/postgresql-operational-startup.log
+
+      - name: Validate merged PostgreSQL Compose model
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config --format json >/tmp/rezzerv-postgresql-compose.json
+          docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql config --services >/tmp/rezzerv-postgresql-services.txt
+          grep -Fx 'postgres' /tmp/rezzerv-postgresql-services.txt
+          grep -Fx 'backend' /tmp/rezzerv-postgresql-services.txt
+          grep -Fx 'frontend' /tmp/rezzerv-postgresql-services.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          model = json.loads(Path('/tmp/rezzerv-postgresql-compose.json').read_text())
+          ports = model['services']['postgres'].get('ports') or []
+          assert any(
+              str(port.get('host_ip') or '') == '127.0.0.1'
+              and str(port.get('published') or '') == '55432'
+              and str(port.get('target') or '') == '5432'
+              for port in ports
+          ), ports
+          print('POSTGRESQL_OPERATIONAL_LOOPBACK_BINDING_GREEN')
+          PY
+          echo 'POSTGRESQL_OPERATIONAL_COMPOSE_MODEL_GREEN'
+
+      - name: Prove split migration and DML-only runtime roles
+        run: |
+          set -euo pipefail
+          compose=(docker compose -f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql)
+          cleanup() {
+            "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          "${compose[@]}" up -d postgres
+          postgres_id="$("${compose[@]}" ps -q postgres)"
+          test -n "$postgres_id"
+          for attempt in $(seq 1 60); do
+            health_status="$(docker inspect --format '{{.State.Health.Status}}' "$postgres_id")"
+            if [ "$health_status" = "healthy" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              echo "PostgreSQL did not reach split-role-ready health; status=$health_status" >&2
+              "${compose[@]}" logs postgres
+              exit 1
+            fi
+            sleep 1
+          done
+          echo 'POSTGRESQL_OPERATIONAL_ROLE_READY_HEALTH_GREEN'
+
+          runtime_create=$("${compose[@]}" exec -T postgres psql \
+            -U "$REZZERV_POSTGRES_BOOTSTRAP_USER" -d "$REZZERV_POSTGRES_DB" -Atc \
+            "SELECT has_schema_privilege('$REZZERV_POSTGRES_RUNTIME_USER', 'public', 'CREATE')")
+          migration_create=$("${compose[@]}" exec -T postgres psql \
+            -U "$REZZERV_POSTGRES_BOOTSTRAP_USER" -d "$REZZERV_POSTGRES_DB" -Atc \
+            "SELECT has_schema_privilege('$REZZERV_POSTGRES_MIGRATION_USER', 'public', 'CREATE')")
+          test "$runtime_create" = "f"
+          test "$migration_create" = "t"
+
+          "${compose[@]}" exec -T postgres sh -ec '
+            PGPASSWORD="$REZZERV_POSTGRES_MIGRATION_PASSWORD" psql \
+              -h 127.0.0.1 -U "$REZZERV_POSTGRES_MIGRATION_USER" -d "$POSTGRES_DB" \
+              -v ON_ERROR_STOP=1 -c "CREATE TABLE public.operational_role_probe(id integer PRIMARY KEY, note text);"
+          '
+
+          "${compose[@]}" exec -T postgres sh -ec '
+            PGPASSWORD="$REZZERV_POSTGRES_RUNTIME_PASSWORD" psql \
+              -h 127.0.0.1 -U "$REZZERV_POSTGRES_RUNTIME_USER" -d "$POSTGRES_DB" \
+              -v ON_ERROR_STOP=1 -c "INSERT INTO public.operational_role_probe(id, note) VALUES (1, '\''runtime'\''); UPDATE public.operational_role_probe SET note='\''runtime-updated'\'' WHERE id=1; SELECT id, note FROM public.operational_role_probe; DELETE FROM public.operational_role_probe WHERE id=1;"
+          '
+          echo 'POSTGRESQL_OPERATIONAL_RUNTIME_DML_ONLY_GREEN'
+
+          if "${compose[@]}" exec -T postgres sh -ec '
+            PGPASSWORD="$REZZERV_POSTGRES_RUNTIME_PASSWORD" psql \
+              -h 127.0.0.1 -U "$REZZERV_POSTGRES_RUNTIME_USER" -d "$POSTGRES_DB" \
+              -v ON_ERROR_STOP=1 -c "CREATE TABLE public.runtime_ddl_must_fail(id integer);"
+          '; then
+            echo 'Runtime role unexpectedly has CREATE authority' >&2
+            exit 1
+          fi
+          echo 'POSTGRESQL_OPERATIONAL_RUNTIME_CREATE_DENIED_GREEN'
+          echo 'POSTGRESQL_OPERATIONAL_ROLE_SPLIT_GREEN'

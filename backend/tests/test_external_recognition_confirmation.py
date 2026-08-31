@@ -17,7 +17,7 @@ from app.services import external_recognition_confirmation as recognition
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260830_01"
+HEAD_REVISION = "20260830_02"
 
 
 def _database_url(path: Path) -> str:

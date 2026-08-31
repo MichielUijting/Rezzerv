@@ -4,8 +4,14 @@ cd /d "%~dp0"
 
 set "REPO_DIR=%CD%"
 set "COMPOSE_ENV="
-set "FRONTEND_PORT=5174"
-set "BACKEND_PORT=8011"
+set "COMPOSE_ARGS=-f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql"
+if not defined REZZERV_FRONTEND_PORT set "REZZERV_FRONTEND_PORT=5174"
+if not defined REZZERV_BACKEND_PORT set "REZZERV_BACKEND_PORT=8011"
+if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=90"
+if not defined REZZERV_APP_BASE_URL set "REZZERV_APP_BASE_URL=http://localhost:%REZZERV_FRONTEND_PORT%"
+set "FRONTEND_PORT=%REZZERV_FRONTEND_PORT%"
+set "BACKEND_PORT=%REZZERV_BACKEND_PORT%"
+set "STARTUP_WAIT_SECONDS=%REZZERV_STARTUP_WAIT_SECONDS%"
 set "BACKEND_HEALTH_URL=http://localhost:%BACKEND_PORT%/api/health"
 set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 set "DOCKER_DESKTOP_EXE=C:\Program Files\Docker\Docker\Docker Desktop.exe"
@@ -20,7 +26,7 @@ echo        Rezzerv Startup Routine
 echo Projectmap: %CD%
 echo Version: %REZZERV_VERSION%
 echo ========================================
-echo Modus: stabiele Docker-opstart ^(zonder git-sync^)
+echo Modus: stabiele PostgreSQL Docker-opstart ^(zonder git-sync^)
 echo.
 
 call :ResolveProjectRoot || exit /b 1
@@ -47,47 +53,51 @@ call :CleanupPortIfRezzerv %FRONTEND_PORT% || exit /b 1
 call :CleanupPortIfRezzerv %BACKEND_PORT% || exit /b 1
 
 echo [1/6] Stopping existing compose stack and removing orphans...
-docker compose %COMPOSE_ENV% down --remove-orphans >nul 2>&1
-docker compose %COMPOSE_ENV% rm -f -s -v >nul 2>&1
+docker compose %COMPOSE_ENV% %COMPOSE_ARGS% down --remove-orphans >nul 2>&1
+docker compose %COMPOSE_ENV% %COMPOSE_ARGS% rm -f -s -v >nul 2>&1
 
 echo [2/6] Building images from projectmap...
-docker compose %COMPOSE_ENV% build --pull
+docker compose %COMPOSE_ENV% %COMPOSE_ARGS% build --pull
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose build failed.
   pause
   exit /b 1
 )
 
-echo [3/6] Starting stack from projectmap...
-docker compose %COMPOSE_ENV% up -d --build --force-recreate
+echo [3/6] Starting PostgreSQL application stack from projectmap...
+docker compose %COMPOSE_ENV% %COMPOSE_ARGS% up -d --build --force-recreate
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose up failed.
-  docker compose %COMPOSE_ENV% ps -a
-  docker compose %COMPOSE_ENV% logs --tail 120
+  docker compose %COMPOSE_ENV% %COMPOSE_ARGS% ps -a
+  docker compose %COMPOSE_ENV% %COMPOSE_ARGS% logs --tail 120
   pause
   exit /b 1
 )
 
 echo [4/6] Forcing frontend container onto the latest image...
-docker compose %COMPOSE_ENV% up -d --force-recreate frontend
+docker compose %COMPOSE_ENV% %COMPOSE_ARGS% up -d --force-recreate frontend
 if %errorlevel% neq 0 (
   echo [ERROR] frontend force-recreate failed.
-  docker compose %COMPOSE_ENV% ps -a
-  docker compose %COMPOSE_ENV% logs frontend --tail 120
+  docker compose %COMPOSE_ENV% %COMPOSE_ARGS% ps -a
+  docker compose %COMPOSE_ENV% %COMPOSE_ARGS% logs frontend --tail 120
   pause
   exit /b 1
 )
 
-echo [5/6] Wachten 90 seconden zodat backend volledig kan opstarten...
-timeout /t 90 /nobreak >nul
-echo     Waiting for backend and frontend...
+echo [5/6] Wachten %STARTUP_WAIT_SECONDS% seconden zodat backend volledig kan opstarten...
+timeout /t %STARTUP_WAIT_SECONDS% /nobreak >nul
+echo     Waiting for PostgreSQL backend and frontend...
 call :WaitForBackendHealth || exit /b 1
 call :VerifyRuntimeDatabase || exit /b 1
 call :WaitForFrontend %FRONTEND_URL% || exit /b 1
 call :VerifyFrontendVersion || exit /b 1
 
-echo [6/6] Opening frontend in browser...
-start "" "%FRONTEND_URL%"
+if /I "%REZZERV_STARTUP_NO_BROWSER%"=="1" (
+  echo [6/6] Browser openen overgeslagen ^(REZZERV_STARTUP_NO_BROWSER=1^).
+) else (
+  echo [6/6] Opening frontend in browser...
+  start "" "%FRONTEND_URL%"
+)
 
 echo Startup complete.
 exit /b 0
@@ -109,14 +119,9 @@ exit /b 1
 :ValidateProjectStructure
 echo Valideren van projectstructuur...
 if not exist "docker-compose.yml" goto :project_error
+if not exist "docker-compose.postgresql.yml" goto :project_error
 if not exist "backend" goto :project_error
 if not exist "frontend" goto :project_error
-if not exist "backend\data" mkdir "backend\data" >nul 2>&1
-if not exist "backend\data" (
-  echo [ERROR] backend\data ontbreekt en kon niet worden aangemaakt.
-  pause
-  exit /b 1
-)
 if exist "rezzerv.db" (
   echo [ERROR] Verboden databasebestand gevonden: rezzerv.db
   pause
@@ -138,21 +143,35 @@ if exist "validate-version-sync.bat" (
 exit /b 0
 
 :ValidateCompose
-echo Validating docker-compose.yml...
-docker compose %COMPOSE_ENV% config >nul 2>&1
+echo Validating PostgreSQL compose stack...
+docker compose %COMPOSE_ENV% %COMPOSE_ARGS% config >nul 2>&1
 if %errorlevel% neq 0 (
-  echo [ERROR] docker-compose.yml is invalid.
-  docker compose %COMPOSE_ENV% config
+  echo [ERROR] PostgreSQL compose-configuratie is ongeldig.
   pause
   exit /b 1
 )
-findstr /I /C:"./backend/data:/app/data" "docker-compose.yml" >nul
+set "COMPOSE_SERVICES_FILE=%TEMP%\rezzerv-compose-services-%RANDOM%-%RANDOM%.txt"
+if exist "%COMPOSE_SERVICES_FILE%" del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
+docker compose %COMPOSE_ENV% %COMPOSE_ARGS% config --services > "%COMPOSE_SERVICES_FILE%" 2>nul
 if errorlevel 1 (
-  echo [ERROR] docker-compose.yml mount niet conform runtime-regel.
-  echo Verwacht: ./backend/data:/app/data
+  if exist "%COMPOSE_SERVICES_FILE%" del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
+  echo [ERROR] PostgreSQL compose-services konden niet worden uitgelezen.
   pause
   exit /b 1
 )
+set "REZZERV_COMPOSE_SERVICES_FILE=%COMPOSE_SERVICES_FILE%"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$services = @(Get-Content -LiteralPath $env:REZZERV_COMPOSE_SERVICES_FILE | ForEach-Object { ([string]$_).Trim() }); if ($services -contains 'postgres') { exit 0 } else { exit 1 }" >nul 2>&1
+set "POSTGRES_SERVICE_FOUND=%errorlevel%"
+set "REZZERV_COMPOSE_SERVICES_FILE="
+if not "%POSTGRES_SERVICE_FOUND%"=="0" (
+  echo [ERROR] PostgreSQL-service ontbreekt in de actieve compose-configuratie.
+  echo Actieve services:
+  type "%COMPOSE_SERVICES_FILE%"
+  del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
+  pause
+  exit /b 1
+)
+del /f /q "%COMPOSE_SERVICES_FILE%" >nul 2>&1
 exit /b 0
 
 :SanitizeRepoRuntimeArtifacts
@@ -260,7 +279,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-RestMe
 if %errorlevel% equ 0 exit /b 0
 if %BACKEND_HEALTH_ATTEMPTS% GEQ 40 (
   echo [ERROR] Backend healthcheck werd niet op tijd groen.
-  docker compose %COMPOSE_ENV% logs backend --tail 120
+  docker compose %COMPOSE_ENV% %COMPOSE_ARGS% logs backend --tail 120
   pause
   exit /b 1
 )
@@ -270,12 +289,13 @@ goto wait_backend_health
 :VerifyRuntimeDatabase
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "try { $r = Invoke-RestMethod -Uri '%BACKEND_HEALTH_URL%' -TimeoutSec 3 } catch { Write-Host '[ERROR] Runtime healthcheck niet leesbaar.'; exit 31 };" ^
+  "$datastore = [string]$r.datastore;" ^
   "$db = [string]$r.database;" ^
-  "if (-not $db) { Write-Host '[ERROR] Backend health geeft geen actief databasepad terug.'; exit 32 };" ^
-  "if ($db -ne '/app/data/rezzerv.db') { Write-Host ('[ERROR] Backend gebruikt onverwachte runtime database: ' + $db); exit 33 };" ^
-  "Write-Host ('    Runtime database bevestigd: ' + $db); exit 0"
+  "if ($datastore -ne 'postgresql') { Write-Host ('[ERROR] Backend gebruikt onverwachte datastore: ' + $datastore); exit 32 };" ^
+  "if (-not $db) { Write-Host '[ERROR] Backend health geeft geen PostgreSQL database-identiteit terug.'; exit 33 };" ^
+  "Write-Host ('    PostgreSQL runtime bevestigd; database: ' + $db); exit 0"
 if %errorlevel% neq 0 (
-  echo [ERROR] Runtime database-validatie gefaald.
+  echo [ERROR] PostgreSQL runtime database-validatie gefaald.
   pause
   exit /b 1
 )
@@ -290,7 +310,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebReq
 if %errorlevel% equ 0 exit /b 0
 if %FRONTEND_WAIT_ATTEMPTS% GEQ 40 (
   echo [ERROR] Frontend werd niet op tijd bereikbaar op %TARGET_FRONTEND_URL%.
-  docker compose %COMPOSE_ENV% logs frontend --tail 120
+  docker compose %COMPOSE_ENV% %COMPOSE_ARGS% logs frontend --tail 120
   pause
   exit /b 1
 )
@@ -312,6 +332,7 @@ if %errorlevel% neq 0 (
 exit /b 0
 
 :project_error
-echo Required project files/folders not found in current folder.
+echo Required PostgreSQL project files/folders not found in current folder.
+echo Verwacht: docker-compose.yml, docker-compose.postgresql.yml, backend en frontend.
 pause
 exit /b 1

@@ -1,9 +1,13 @@
-Rezzerv MVP v01.11.65
+Rezzerv MVP
 
-Voor de PO geldt: start Rezzerv altijd met dubbelklik op start.bat.
-Geen PowerShell, Python of losse scripts nodig voor normaal gebruik.
+Voor de PO geldt: start Rezzerv voor normaal lokaal gebruik altijd met dubbelklik op start.bat.
+Geen PowerShell, Python of losse backend-/frontendstarts nodig voor normaal gebruik.
 
-Alleen voor technische diagnose bestaat backend\start-local-check.bat.
-Die check herbouwt automatisch een ongeldige lokale .venv en laat het venster open met een leesbare melding.
+start.bat is de operationele Docker-opstartroute en start de Rezzerv-stack inclusief PostgreSQL. De routine valideert de projectstructuur, Docker/Compose, PostgreSQL-readiness, backend-health en de actieve frontendversie voordat de applicatie als gestart geldt.
 
-Nieuw in deze release: backend\run-product-catalog-check.bat valideert de geconsolideerde Productcatalogus Release A-basis. Deze check is bedoeld voor het scrumteam, niet voor de PO.
+Historische SQLite-bestanden zijn geen actieve runtime-database meer en worden door de normale startup niet als database aangekoppeld.
+
+Alleen voor technische diagnose bestaan losse checks/scripts. Die zijn bedoeld voor het scrumteam en vervangen start.bat niet als normale PO-route.
+
+Zie voor de actuele database- en startupauthority:
+docs\project\POSTGRESQL-OPERATIONAL-STARTUP.md
