@@ -3,7 +3,7 @@ services:
     build: ./backend
     restart: unless-stopped
     ports:
-      - "8011:8000"
+      - "${REZZERV_BACKEND_PORT:-8011}:8000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-}
       MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-}
