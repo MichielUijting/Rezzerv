@@ -9,7 +9,8 @@ from sqlalchemy import create_engine, text
 from app.api import superuser_routes
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.testing.authorization_schema_fixture import install_authorization_schema
-from tests.support_message_migrated_fixture import migrated_support_engine
+from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database
+from tests.support_message_migrated_fixture import migrated_support_migrator_engine
 
 
 def _engine():
@@ -64,11 +65,11 @@ def test_superuser_foundation_exposes_read_only_tabs():
 
 
 def test_usage_projection_reads_existing_operational_data_without_new_tracking():
-    engine = migrated_support_engine()
+    engine = migrated_support_migrator_engine()
     try:
         with engine.begin() as conn:
-            # Keep the Alembic-owned support foundation intact while narrowing the
-            # unrelated operational sources to the columns this read-only projection uses.
+            # This focused projection fixture intentionally owns temporary DDL.
+            # Use migrator authority; the production/runtime role remains DML-only.
             for table_name in (
                 "household_registry",
                 "household_memberships",
@@ -76,7 +77,7 @@ def test_usage_projection_reads_existing_operational_data_without_new_tracking()
                 "inventory_events",
                 "server_sessions",
             ):
-                conn.execute(text(f"DROP TABLE {table_name}"))
+                conn.execute(text(f"DROP TABLE {table_name} CASCADE"))
 
             conn.execute(text("CREATE TABLE household_registry(id TEXT PRIMARY KEY, naam TEXT, status TEXT)"))
             conn.execute(text("CREATE TABLE household_memberships(household_id TEXT, user_id TEXT, status TEXT)"))
@@ -94,6 +95,7 @@ def test_usage_projection_reads_existing_operational_data_without_new_tracking()
             payload = superuser_routes._platform_usage(conn)
     finally:
         engine.dispose()
+        reset_postgresql_test_database()
 
     assert payload["access"] == "read_only"
     assert payload["tracking"] == "existing_data_only"
