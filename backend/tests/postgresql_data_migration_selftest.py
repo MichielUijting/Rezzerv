@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -41,11 +41,20 @@ def test_boolean_canonicalization() -> None:
     _expect_failure(lambda: _coerce_boolean("maybe", label="flag"), "invalid legacy Boolean")
 
 
-def test_timestamp_and_numeric_canonicalization() -> None:
+def test_timestamp_date_and_numeric_canonicalization() -> None:
     timestamp_type = sa.DateTime(timezone=True)
     actual = _coerce_value("2026-08-30T12:00:00", timestamp_type, label="created_at")
     assert actual == datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
     assert _canonical_value(actual, timestamp_type, label="created_at") == "2026-08-30T12:00:00.000000Z"
+
+    date_type = sa.Date()
+    assert _canonical_value("2026-08-30", date_type, label="effective_date") == "2026-08-30"
+    assert _canonical_value(date(2026, 8, 30), date_type, label="effective_date") == "2026-08-30"
+    _expect_failure(
+        lambda: _canonical_value("2026-08-30T12:00:00", date_type, label="effective_date"),
+        "invalid date value",
+    )
+
     numeric = sa.Numeric(18, 6)
     assert _coerce_value("0.10", numeric, label="quantity") == Decimal("0.10")
     assert _canonical_value(Decimal("1.000"), numeric, label="quantity") == "1"
@@ -60,18 +69,21 @@ def test_row_fingerprint_semantics() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("enabled", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("effective_date", sa.Date(), nullable=False),
         sa.Column("quantity", sa.Numeric(18, 6), nullable=False),
     )
     source = {
         "id": 7,
         "enabled": 1,
         "created_at": "2026-08-30T12:00:00",
+        "effective_date": "2026-08-30",
         "quantity": "0.1000",
     }
     target = {
         "id": 7,
         "enabled": True,
         "created_at": datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc),
+        "effective_date": date(2026, 8, 30),
         "quantity": Decimal("0.10"),
     }
     source_digest = _row_digest(source, list(table.columns), table_name="example")
@@ -172,7 +184,7 @@ def test_locked_head_snapshot_preserves_legacy_fk_drift_for_adoption() -> None:
 def main() -> None:
     test_boolean_canonicalization()
     print("POSTGRESQL_DATA_MIGRATION_BOOLEAN_GREEN")
-    test_timestamp_and_numeric_canonicalization()
+    test_timestamp_date_and_numeric_canonicalization()
     print("POSTGRESQL_DATA_MIGRATION_TYPES_GREEN")
     test_row_fingerprint_semantics()
     print("POSTGRESQL_DATA_MIGRATION_FINGERPRINT_GREEN")

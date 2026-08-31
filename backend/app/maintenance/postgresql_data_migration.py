@@ -251,6 +251,18 @@ def _canonical_value(value: Any, target_type: sa.types.TypeEngine[Any], *, label
             dt = dt.astimezone(timezone.utc)
             return dt.isoformat(timespec="microseconds").replace("+00:00", "Z")
         return dt.isoformat(timespec="microseconds")
+    if isinstance(target_type, sa.Date):
+        if isinstance(coerced, datetime):
+            raise MigrationError(f"{label} contains a datetime value for a date target: {coerced!r}")
+        if isinstance(coerced, date):
+            return coerced.isoformat()
+        raw = str(coerced).strip()
+        if not raw:
+            raise MigrationError(f"{label} contains an empty date value")
+        try:
+            return date.fromisoformat(raw).isoformat()
+        except ValueError as exc:
+            raise MigrationError(f"{label} contains an invalid date value: {value!r}") from exc
     if isinstance(target_type, sa.Numeric):
         return _canonical_decimal(coerced, label=label)
     if isinstance(target_type, LargeBinary):
