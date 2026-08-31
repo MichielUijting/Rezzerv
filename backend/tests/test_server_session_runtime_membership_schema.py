@@ -31,30 +31,12 @@ def _runtime_schema_client():
         )
         seed_membership(
             conn,
-            membership_id='m-inactive',
-            household_id='0',
-            user_id='u-admin',
-            email='admin@rezzerv.local',
-            role='owner',
-        )
-        seed_membership(
-            conn,
             membership_id='m-active',
             household_id='1',
             user_id='u-admin',
             email='ADMIN@REZZERV.LOCAL',
             role='owner',
         )
-        conn.execute(text("""
-            UPDATE household_memberships
-            SET status = 'inactive'
-            WHERE id = 'm-inactive'
-        """))
-        conn.execute(text("""
-            UPDATE auth_membership_roles
-            SET active = FALSE
-            WHERE household_id = '0' AND membership_id = 'm-inactive'
-        """))
 
     app = FastAPI()
     app.include_router(
@@ -83,12 +65,18 @@ def test_login_and_session_resolve_with_user_email_membership_schema():
         engine.dispose()
 
 
-def test_inactive_runtime_membership_is_not_accepted():
+def test_removed_runtime_membership_is_not_accepted():
     client, engine = _runtime_schema_client()
     try:
         with engine.begin() as conn:
-            conn.execute(text("UPDATE household_memberships SET status = 'inactive'"))
-            conn.execute(text("UPDATE auth_membership_roles SET active = FALSE"))
+            conn.execute(text("""
+                DELETE FROM auth_membership_roles
+                WHERE household_id = '1' AND membership_id = 'm-active'
+            """))
+            conn.execute(text("""
+                DELETE FROM household_memberships
+                WHERE id = 'm-active'
+            """))
 
         response = client.post(
             "/api/auth/login",
