@@ -65,18 +65,21 @@ PATTERNS = (
     ),
     Pattern(
         "legacy_authorization_schema_fixture",
-        re.compile(r"app\.testing\.authorization_schema_fixture"),
+        re.compile(r"\binstall_authorization_schema\b"),
         "legacy mini authorization schema fixture",
     ),
     Pattern(
         "legacy_server_session_schema_fixture",
-        re.compile(r"app\.testing\.server_session_contract"),
+        re.compile(r"\bcreate_server_session_contract_schema\b"),
         "legacy mini server-session schema fixture",
     ),
     Pattern(
         "legacy_onboarding_schema_fixture",
-        re.compile(r"app\.testing\.onboarding_request_schema_fixture"),
-        "legacy mini onboarding schema fixture",
+        re.compile(
+            r"\b(?:install_household_onboarding_schema|"
+            r"install_household_product_configuration_schema|install_location_schema)\b"
+        ),
+        "legacy mini onboarding/location schema fixture",
     ),
 )
 
