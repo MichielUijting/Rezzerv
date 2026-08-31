@@ -3,6 +3,7 @@ name: PostgreSQL operational startup validation
 on:
   pull_request:
     paths:
+      - '.gitattributes'
       - 'start.bat'
       - 'docker-compose.yml'
       - 'docker-compose.postgresql.yml'
@@ -15,6 +16,30 @@ permissions:
   contents: read
 
 jobs:
+  windows-postgresql-init-checkout:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prove PostgreSQL init script LF checkout
+        shell: pwsh
+        run: |
+          $path = 'docker/postgresql/init-roles.sh'
+          $attribute = (git check-attr eol -- $path).Trim()
+          if ($attribute -notmatch ': eol: lf$') {
+            throw "PostgreSQL init script is not protected by eol=lf: $attribute"
+          }
+
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $path))
+          if ($bytes -contains 13) {
+            throw 'PostgreSQL init script contains CR bytes after Windows checkout; Alpine shebang would fail.'
+          }
+          if ($bytes.Length -lt 3 -or $bytes[0] -ne 35 -or $bytes[1] -ne 33) {
+            throw 'PostgreSQL init script does not start with a valid shebang.'
+          }
+          Write-Host 'POSTGRESQL_OPERATIONAL_WINDOWS_LF_CHECKOUT_GREEN'
+
   operational-startup-contract:
     runs-on: ubuntu-latest
     env:
