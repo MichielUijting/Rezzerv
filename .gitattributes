@@ -1,0 +1,2 @@
+# Linux container entrypoint/init scripts must retain LF on Windows worktrees.
+docker/postgresql/init-roles.sh text eol=lf
