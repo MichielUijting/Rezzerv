@@ -5,8 +5,13 @@ cd /d "%~dp0"
 set "REPO_DIR=%CD%"
 set "COMPOSE_ENV="
 set "COMPOSE_ARGS=-f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql"
-set "FRONTEND_PORT=5174"
-set "BACKEND_PORT=8011"
+if not defined REZZERV_FRONTEND_PORT set "REZZERV_FRONTEND_PORT=5174"
+if not defined REZZERV_BACKEND_PORT set "REZZERV_BACKEND_PORT=8011"
+if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=90"
+if not defined REZZERV_APP_BASE_URL set "REZZERV_APP_BASE_URL=http://localhost:%REZZERV_FRONTEND_PORT%"
+set "FRONTEND_PORT=%REZZERV_FRONTEND_PORT%"
+set "BACKEND_PORT=%REZZERV_BACKEND_PORT%"
+set "STARTUP_WAIT_SECONDS=%REZZERV_STARTUP_WAIT_SECONDS%"
 set "BACKEND_HEALTH_URL=http://localhost:%BACKEND_PORT%/api/health"
 set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 set "DOCKER_DESKTOP_EXE=C:\Program Files\Docker\Docker\Docker Desktop.exe"
@@ -79,16 +84,20 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo [5/6] Wachten 90 seconden zodat backend volledig kan opstarten...
-timeout /t 90 /nobreak >nul
+echo [5/6] Wachten %STARTUP_WAIT_SECONDS% seconden zodat backend volledig kan opstarten...
+timeout /t %STARTUP_WAIT_SECONDS% /nobreak >nul
 echo     Waiting for PostgreSQL backend and frontend...
 call :WaitForBackendHealth || exit /b 1
 call :VerifyRuntimeDatabase || exit /b 1
 call :WaitForFrontend %FRONTEND_URL% || exit /b 1
 call :VerifyFrontendVersion || exit /b 1
 
-echo [6/6] Opening frontend in browser...
-start "" "%FRONTEND_URL%"
+if /I "%REZZERV_STARTUP_NO_BROWSER%"=="1" (
+  echo [6/6] Browser openen overgeslagen ^(REZZERV_STARTUP_NO_BROWSER=1^).
+) else (
+  echo [6/6] Opening frontend in browser...
+  start "" "%FRONTEND_URL%"
+)
 
 echo Startup complete.
 exit /b 0
