@@ -159,8 +159,10 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-findstr /I /X /C:"postgres" "%COMPOSE_SERVICES_FILE%" >nul
+set "REZZERV_COMPOSE_SERVICES_FILE=%COMPOSE_SERVICES_FILE%"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$services = @(Get-Content -LiteralPath $env:REZZERV_COMPOSE_SERVICES_FILE | ForEach-Object { ([string]$_).Trim() }); if ($services -contains 'postgres') { exit 0 } else { exit 1 }" >nul 2>&1
 set "POSTGRES_SERVICE_FOUND=%errorlevel%"
+set "REZZERV_COMPOSE_SERVICES_FILE="
 if not "%POSTGRES_SERVICE_FOUND%"=="0" (
   echo [ERROR] PostgreSQL-service ontbreekt in de actieve compose-configuratie.
   echo Actieve services:
