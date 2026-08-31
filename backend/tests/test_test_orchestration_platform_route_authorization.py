@@ -4,13 +4,14 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import text
 
 from app.services import session_request_context
-from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.server_session_service import ServerSessionContext
-from app.testing.authorization_schema_fixture import install_authorization_schema
+from app.testing.postgresql_platform_authorization_fixture import (
+    cleanup_platform_authorization_test_engine,
+    create_platform_authorization_test_engine,
+)
 
 
 BACKGROUND_JOB_PERMISSION = "platform.background_jobs.manage"
@@ -33,27 +34,11 @@ LATEST_REPORT_ROUTE = "/api/testing/reports/latest"
 
 @pytest.fixture
 def auth_engine():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    with engine.begin() as conn:
-        install_authorization_schema(conn)
-        ensure_authorization_foundation(conn)
-        conn.execute(text("""
-            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES
-              ('superuser', 'platform.superuser', 1),
-              ('ip-owner', 'platform.ip_owner', 1),
-              ('support-reader', 'platform.support_read', 1),
-              ('platform-admin', 'platform.platform_admin', 1),
-              ('frontteam', 'platform.frontteam', 1)
-        """))
+    engine = create_platform_authorization_test_engine()
     try:
         yield engine
     finally:
-        engine.dispose()
+        cleanup_platform_authorization_test_engine(engine)
 
 
 def _context(user_id: str) -> ServerSessionContext:
@@ -189,7 +174,7 @@ def test_platform_admin_revocation_is_effective_on_next_permission_check(
     with auth_engine.begin() as conn:
         conn.execute(text("""
             UPDATE auth_platform_user_roles
-            SET active = 0
+            SET active = FALSE
             WHERE user_id = 'platform-admin'
               AND role_key = 'platform.platform_admin'
         """))
