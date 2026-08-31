@@ -176,19 +176,10 @@ def _insert_membership(
         insert_columns.append("updated_at")
         insert_values.append("CURRENT_TIMESTAMP")
 
-    identity_column = _membership_identity_column(columns)
-    if identity_column in {"id", "membership_id"}:
-        conflict_target = identity_column
-    elif identity_column == "user_id":
-        conflict_target = "user_id, household_id"
-    else:
-        conflict_target = f"{identity_column}, household_id"
-
     conn.execute(
         text(
             f"INSERT INTO household_memberships ({', '.join(insert_columns)}) "
-            f"VALUES ({', '.join(insert_values)}) "
-            f"ON CONFLICT({conflict_target}) DO NOTHING"
+            f"VALUES ({', '.join(insert_values)})"
         ),
         params,
     )
@@ -246,26 +237,41 @@ def _system_membership_count(conn) -> int:
 
 
 def _cleanup_database(conn) -> None:
-    user_ids = (USER_A_ID, USER_B_ID, SYSTEM_USER_ID)
-    membership_ids = (MEMBERSHIP_A_ID, MEMBERSHIP_B_ID, MEMBERSHIP_A_ZERO_ID)
-    conn.execute(
-        text("DELETE FROM server_sessions WHERE user_id IN :user_ids").bindparams(user_ids=user_ids)
-    )
-    conn.execute(
-        text("DELETE FROM auth_membership_permission_overrides WHERE membership_id IN :membership_ids")
-        .bindparams(membership_ids=membership_ids)
-    )
-    conn.execute(
-        text("DELETE FROM auth_membership_roles WHERE membership_id IN :membership_ids")
-        .bindparams(membership_ids=membership_ids)
-    )
-    conn.execute(
-        text("DELETE FROM auth_platform_user_roles WHERE user_id IN :user_ids").bindparams(user_ids=user_ids)
-    )
+    conn.execute(text("""
+        DELETE FROM server_sessions
+        WHERE user_id IN (
+            'session-security-user-a',
+            'session-security-user-b',
+            'session-security-system-superuser'
+        )
+    """))
+    conn.execute(text("""
+        DELETE FROM auth_membership_permission_overrides
+        WHERE membership_id IN (
+            'session-security-membership-a',
+            'session-security-membership-b',
+            'session-security-membership-a-zero'
+        )
+    """))
+    conn.execute(text("""
+        DELETE FROM auth_membership_roles
+        WHERE membership_id IN (
+            'session-security-membership-a',
+            'session-security-membership-b',
+            'session-security-membership-a-zero'
+        )
+    """))
+    conn.execute(text("""
+        DELETE FROM auth_platform_user_roles
+        WHERE user_id IN (
+            'session-security-user-a',
+            'session-security-user-b',
+            'session-security-system-superuser'
+        )
+    """))
 
     membership_columns = _columns(conn, "household_memberships")
     predicates = []
-    params = {}
     if "id" in membership_columns:
         predicates.append("id IN ('session-security-membership-a', 'session-security-membership-b', 'session-security-membership-a-zero')")
     if "membership_id" in membership_columns:
@@ -277,14 +283,16 @@ def _cleanup_database(conn) -> None:
     if "email" in membership_columns:
         predicates.append("lower(email) IN ('session-security-a@rezzerv.local', 'session-security-b@rezzerv.local', 'supergebruiker@rezzerv.local')")
     if predicates:
-        conn.execute(text("DELETE FROM household_memberships WHERE " + " OR ".join(predicates)), params)
+        conn.execute(text("DELETE FROM household_memberships WHERE " + " OR ".join(predicates)))
 
-    conn.execute(
-        text(
-            "DELETE FROM app_users WHERE id IN "
-            "('session-security-user-a', 'session-security-user-b', 'session-security-system-superuser')"
+    conn.execute(text("""
+        DELETE FROM app_users
+        WHERE id IN (
+            'session-security-user-a',
+            'session-security-user-b',
+            'session-security-system-superuser'
         )
-    )
+    """))
     conn.execute(text("DELETE FROM household_registry WHERE CAST(id AS TEXT) IN ('0', '1', '2')"))
 
 
