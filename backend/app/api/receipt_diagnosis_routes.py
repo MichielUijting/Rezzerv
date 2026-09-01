@@ -265,4 +265,4 @@ def latest_receipt_ingest_debug_download(householdId: str = '1'):
 @router.get('/receipts/{receipt_table_id}/ingest-debug/download')
 def receipt_ingest_debug_download(receipt_table_id: str):
     payload = read_ingest_debug_artifact_for_receipt(engine=engine, receipt_storage_root=RECEIPT_STORAGE_ROOT, receipt_table_id=receipt_table_id)
-    return _download_json(payload, f"ingest-debug-{receipt_table_id}')
+    return _download_json(payload, f"ingest-debug-{receipt_table_id}")
