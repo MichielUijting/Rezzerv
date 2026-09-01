@@ -107,13 +107,11 @@ jobs:
       - name: Run dedicated Superuser v2 cutover contract
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: pytest -q tests/test_superuser_v2_permission_cutover.py
 
       - name: Run roles-v2 and authorization foundation contracts
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: |
           pytest -q \
             tests/test_roles_v2_foundation_contract.py \
@@ -122,13 +120,11 @@ jobs:
       - name: Validate authorization matrix separation
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: python -m app.testing.authorization_matrix_acceptance
 
       - name: Prove technical Platformbeheerder separation
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: |
           pytest -q \
             tests/test_platform_audit_route_authorization.py \
@@ -140,7 +136,6 @@ jobs:
       - name: Prove functional Superuser v2 external-product authority
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: |
           pytest -q \
             tests/test_external_database_route_authorization.py \
@@ -157,7 +152,6 @@ jobs:
       - name: Preserve Platformbeheerder 9.1.7 closure
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: python tests/platform_admin_acceptance_closure_selftest.py
 
       - name: Acceptance marker
