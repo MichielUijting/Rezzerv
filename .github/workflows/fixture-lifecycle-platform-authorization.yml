@@ -99,10 +99,9 @@ jobs:
             tests/test_testing_status_platform_authorization.py \
             tests/test_test_orchestration_platform_route_authorization.py
 
-      - name: Run legacy fixture and testing diagnostics permission tests
+      - name: Run focused fixture and testing diagnostics permission tests
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: |
           pytest -q \
             tests/test_fixture_lifecycle_platform_authorization.py \
@@ -121,5 +120,4 @@ jobs:
       - name: Run server session route guard audit
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: python tests/server_session_route_guard_audit.py
