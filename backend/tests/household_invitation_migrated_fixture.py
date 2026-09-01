@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from sqlalchemy import inspect, text
 
 from app.testing.postgresql_onboarding_selftest_fixture import (
@@ -12,15 +10,8 @@ from app.testing.postgresql_onboarding_selftest_fixture import (
 HEAD_REVISION = "20260830_02"
 
 
-def migrated_sqlite_engine(database_path: Path, *, check_same_thread: bool = False):
-    """Compatibility-named helper backed by the canonical PostgreSQL test database.
-
-    The invitation selftests historically passed a temporary SQLite path. Keep the
-    call signature while the callers are migrated, but do not create or select a
-    SQLite datastore. Schema authority is Alembic; reset is migrator-only and the
-    returned engine uses the DML-only runtime role.
-    """
-    del database_path, check_same_thread
+def migrated_postgresql_engine():
+    """Return a clean canonical PostgreSQL test engine at the locked Alembic head."""
     reset_postgresql_test_database()
     engine = create_postgresql_runtime_test_engine()
     with engine.connect() as conn:
