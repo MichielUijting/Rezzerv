@@ -18,6 +18,10 @@ on:
 jobs:
   hybrid-regression-platform-authorization:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_hybrid_regression_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_hybrid_regression_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
     services:
       postgres:
         image: postgres:17
@@ -73,10 +77,6 @@ jobs:
           SQL
 
       - name: Initialize canonical PostgreSQL schema through Alembic
-        env:
-          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_hybrid_regression_ci
-          MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_hybrid_regression_ci
-          REZZERV_DATASTORE_POLICY: postgresql-only
         run: python -m alembic upgrade head
 
       - name: Compile hybrid authorization boundary and tests
@@ -103,9 +103,6 @@ jobs:
       - name: Run hybrid and orchestration permission cutover tests on PostgreSQL
         env:
           PYTHONPATH: .
-          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_hybrid_regression_ci
-          MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_hybrid_regression_ci
-          REZZERV_DATASTORE_POLICY: postgresql-only
         run: |
           pytest -q \
             tests/test_hybrid_regression_platform_authorization.py \
