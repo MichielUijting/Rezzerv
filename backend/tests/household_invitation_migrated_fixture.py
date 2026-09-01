@@ -1,46 +1,32 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-import subprocess
-import sys
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import inspect, text
 
-BACKEND_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = BACKEND_ROOT.parent
-ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    reset_postgresql_test_database,
+)
+
 HEAD_REVISION = "20260830_02"
 
 
 def migrated_sqlite_engine(database_path: Path, *, check_same_thread: bool = False):
-    database_path.unlink(missing_ok=True)
-    database_url = f"sqlite:///{database_path.as_posix()}"
-    env = os.environ.copy()
-    env["DATABASE_URL"] = database_url
-    env["PYTHONPATH"] = str(BACKEND_ROOT)
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],
-        cwd=REPO_ROOT,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise AssertionError(
-            "Alembic-first invitation fixture kon niet naar head migreren:\n"
-            + result.stdout
-            + result.stderr
-        )
-    engine = create_engine(
-        database_url,
-        future=True,
-        connect_args={"check_same_thread": check_same_thread},
-    )
+    """Compatibility-named helper backed by the canonical PostgreSQL test database.
+
+    The invitation selftests historically passed a temporary SQLite path. Keep the
+    call signature while the callers are migrated, but do not create or select a
+    SQLite datastore. Schema authority is Alembic; reset is migrator-only and the
+    returned engine uses the DML-only runtime role.
+    """
+    del database_path, check_same_thread
+    reset_postgresql_test_database()
+    engine = create_postgresql_runtime_test_engine()
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
     if revision != HEAD_REVISION:
+        engine.dispose()
         raise AssertionError(f"Expected Alembic revision {HEAD_REVISION}, got {revision}")
     return engine
 
@@ -100,7 +86,7 @@ def insert_membership(
     if status_column:
         values[status_column] = "active"
     if active_column:
-        values[active_column] = 1
+        values[active_column] = True
     column_sql = ", ".join(values)
     bind_sql = ", ".join(f":{column}" for column in values)
     conn.execute(text(f"INSERT INTO household_memberships ({column_sql}) VALUES ({bind_sql})"), values)
