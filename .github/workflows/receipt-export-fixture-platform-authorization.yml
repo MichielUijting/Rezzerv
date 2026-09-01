@@ -84,10 +84,9 @@ jobs:
             tests/test_receipt_export_fixture_platform_authorization.py \
             tests/test_test_orchestration_platform_route_authorization.py
 
-      - name: Run receipt export fixture legacy authorization tests
+      - name: Run focused receipt export authorization tests
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: |
           pytest -q \
             tests/test_receipt_export_fixture_platform_authorization.py \
@@ -104,5 +103,4 @@ jobs:
       - name: Run server session route guard audit
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: python tests/server_session_route_guard_audit.py
