@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-import tempfile
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -17,7 +14,7 @@ from app.services.authorization_membership_service import create_canonical_membe
 from app.services.household_invitation_service import create_household_invitation
 from app.services.password_service import hash_password
 from app.services.server_session_service import SESSION_COOKIE_NAME, create_server_session
-from household_invitation_migrated_fixture import insert_membership, migrated_sqlite_engine
+from household_invitation_migrated_fixture import insert_membership, migrated_postgresql_engine
 
 
 def _prepare_database(engine) -> None:
@@ -101,9 +98,8 @@ def _set_test_session_cookie(client: TestClient, raw_session: str) -> None:
 
 def run() -> int:
     checks: list[str] = []
-    with tempfile.TemporaryDirectory(prefix='rezzerv-invitation-acceptance-') as tmp:
-        database_path = Path(tmp) / 'acceptance.db'
-        engine = migrated_sqlite_engine(database_path, check_same_thread=False)
+    engine = migrated_postgresql_engine()
+    try:
         _prepare_database(engine)
         app = _application(engine)
 
@@ -172,7 +168,7 @@ def run() -> int:
             """)).mappings().one()
             canonical = conn.execute(text("""
                 SELECT role_key FROM auth_membership_roles
-                WHERE household_id = 'hh-invite' AND membership_id = :membership_id AND active = 1
+                WHERE household_id = 'hh-invite' AND membership_id = :membership_id AND active = TRUE
             """), {'membership_id': membership['id']}).scalar_one()
             assert membership['role'] == 'member'
             assert canonical == 'household.member'
@@ -265,6 +261,8 @@ def run() -> int:
             assert all('household.member' in str(row['new_value']) for row in audits)
             assert all('token' not in str(row['new_value']).lower() for row in audits)
         checks.append('acceptance_is_audited_without_token_material')
+    finally:
+        engine.dispose()
 
     for check in checks:
         print(f'PASS {check}')
