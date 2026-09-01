@@ -26,6 +26,10 @@ on:
 jobs:
   superuser-v2-permission-cutover:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
     services:
       postgres:
         image: postgres:17
@@ -79,10 +83,6 @@ jobs:
           SQL
 
       - name: Initialize canonical PostgreSQL schema for migrated identity contract
-        env:
-          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
-          MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
-          REZZERV_DATASTORE_POLICY: postgresql-only
         run: |
           python -m alembic upgrade head
           python -m alembic current
@@ -144,9 +144,6 @@ jobs:
       - name: Preserve Superuser identity boundary on PostgreSQL
         env:
           PYTHONPATH: .
-          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
-          MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_superuser_v2_ci
-          REZZERV_DATASTORE_POLICY: postgresql-only
         run: pytest -q tests/test_superuser_foundation.py
 
       - name: Preserve Platformbeheerder 9.1.7 closure
