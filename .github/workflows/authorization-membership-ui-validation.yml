@@ -15,12 +15,15 @@ on:
       - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/tests/e2e/settings-authorization.frontend-regression.spec.js'
       - 'frontend/tests/e2e/auth.setup.js'
+      - 'docker-compose.postgresql.yml'
       - '.github/workflows/authorization-membership-ui-validation.yml'
 
 jobs:
   authorization-membership-ui:
     runs-on: ubuntu-latest
     env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
       PLAYWRIGHT_TEST_ADMIN_EMAIL: test-admin@rezzerv.local
       PLAYWRIGHT_HOUSEHOLD_ID: '0'
       REZZERV_TEST_SUPERUSER_EMAIL: supergebruiker@rezzerv.local
@@ -45,10 +48,8 @@ jobs:
           echo "REZZERV_TEST_SUPERUSER_PASSWORD=$superuser_password" >> "$GITHUB_ENV"
           echo "::add-mask::$admin_password"
           echo "::add-mask::$superuser_password"
-      - name: Build application images
-        run: docker compose build backend frontend
-      - name: Start application
-        run: docker compose up -d backend frontend
+      - name: Build and start PostgreSQL application stack
+        run: docker compose up -d --build
       - name: Wait for backend health
         shell: bash
         run: |
@@ -137,4 +138,4 @@ jobs:
         run: docker compose logs --no-color --tail=500 backend
       - name: Stop application
         if: always()
-        run: docker compose down
+        run: docker compose down --volumes
