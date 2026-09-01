@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.api import platform_feature_flags_routes
 from app.services import session_request_context
@@ -27,11 +27,11 @@ def auth_engine():
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES
-              ('platform-admin', 'platform.platform_admin', 1),
-              ('ip-owner', 'platform.ip_owner', 1),
-              ('superuser', 'platform.superuser', 1),
-              ('support-reader', 'platform.support_read', 1),
-              ('frontteam', 'platform.frontteam', 1)
+              ('platform-admin', 'platform.platform_admin', TRUE),
+              ('ip-owner', 'platform.ip_owner', TRUE),
+              ('superuser', 'platform.superuser', TRUE),
+              ('support-reader', 'platform.support_read', TRUE),
+              ('frontteam', 'platform.frontteam', TRUE)
         """))
     try:
         yield engine
@@ -119,10 +119,7 @@ def test_default_flag_is_enabled_without_seed_or_get_write(monkeypatch, auth_eng
 
     with auth_engine.connect() as conn:
         after = conn.execute(text("SELECT COUNT(*) FROM platform_feature_flags")).scalar_one()
-        columns = {
-            str(row[1])
-            for row in conn.execute(text("PRAGMA table_info(platform_feature_flags)")).all()
-        }
+        columns = {str(column.get("name") or "") for column in inspect(conn).get_columns("platform_feature_flags")}
 
     assert context.context_type == "none"
     assert context.active_household_id is None
@@ -256,7 +253,7 @@ def test_platform_admin_revocation_blocks_next_feature_flag_request(monkeypatch,
     with auth_engine.begin() as conn:
         conn.execute(text("""
             UPDATE auth_platform_user_roles
-            SET active = 0
+            SET active = FALSE
             WHERE user_id = 'platform-admin'
               AND role_key = 'platform.platform_admin'
         """))
