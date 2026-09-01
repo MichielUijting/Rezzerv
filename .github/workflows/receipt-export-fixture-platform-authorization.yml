@@ -17,6 +17,24 @@ on:
 jobs:
   receipt-export-fixture-platform-authorization:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_receipt_export_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_receipt_export_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_receipt_export_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_receipt_export_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     defaults:
       run:
         working-directory: backend
@@ -32,7 +50,29 @@ jobs:
       - name: Install focused test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest fastapi pydantic sqlalchemy httpx
+          python -m pip install pytest fastapi pydantic sqlalchemy alembic httpx 'psycopg[binary]==3.3.4'
+
+      - name: Bootstrap PostgreSQL migrator and DML-only runtime role
+        working-directory: .
+        env:
+          PGPASSWORD: rezzerv_bootstrap_ci
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
+          GRANT CONNECT ON DATABASE rezzerv_receipt_export_ci TO rezzerv_migrator, rezzerv_app;
+          ALTER DATABASE rezzerv_receipt_export_ci OWNER TO rezzerv_migrator;
+          \connect rezzerv_receipt_export_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Initialize canonical PostgreSQL schema for migrated authorization contract
+        run: python -m alembic upgrade head
 
       - name: Compile authorization boundary and focused tests
         run: |
@@ -44,18 +84,20 @@ jobs:
             tests/test_receipt_export_fixture_platform_authorization.py \
             tests/test_test_orchestration_platform_route_authorization.py
 
-      - name: Run receipt export fixture authorization tests
+      - name: Run focused receipt export authorization tests
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: |
           pytest -q \
             tests/test_receipt_export_fixture_platform_authorization.py \
-            tests/test_test_orchestration_platform_route_authorization.py \
             tests/test_authorization_foundation_contract.py
+
+      - name: Run migrated test orchestration authorization contract on PostgreSQL
+        env:
+          PYTHONPATH: .
+        run: pytest -q tests/test_test_orchestration_platform_route_authorization.py
 
       - name: Run server session route guard audit
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
         run: python tests/server_session_route_guard_audit.py

@@ -4,53 +4,61 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from app.api import superuser_routes
-from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.testing.authorization_schema_fixture import install_authorization_schema
-from tests.support_message_migrated_fixture import migrated_support_engine
-
-
-def _engine():
-    return create_engine("sqlite+pysqlite:///:memory:")
+from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database
+from app.testing.postgresql_platform_authorization_fixture import (
+    cleanup_platform_authorization_test_engine,
+    create_platform_authorization_test_engine,
+)
+from tests.support_message_migrated_fixture import migrated_support_migrator_engine
 
 
 def test_superuser_gate_requires_active_platform_superuser_role(monkeypatch):
-    engine = _engine()
-    context = SimpleNamespace(user_id="super-1")
+    engine = create_platform_authorization_test_engine()
+    context = SimpleNamespace(user_id="superuser")
     monkeypatch.setattr(superuser_routes, "resolve_server_session", lambda _conn, _raw: context)
 
-    with engine.begin() as conn:
-        install_authorization_schema(conn)
-        ensure_authorization_foundation(conn)
-        with pytest.raises(HTTPException) as exc:
-            superuser_routes._require_platform_superuser(conn, "opaque-cookie")
-        assert exc.value.status_code == 403
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE auth_platform_user_roles
+                SET active = FALSE
+                WHERE user_id = 'superuser' AND role_key = 'platform.superuser'
+            """))
+            with pytest.raises(HTTPException) as exc:
+                superuser_routes._require_platform_superuser(conn, "opaque-cookie")
+            assert exc.value.status_code == 403
 
-        conn.execute(text("""
-            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES ('super-1', 'platform.superuser', 1)
-        """))
-        granted = superuser_routes._require_platform_superuser(conn, "opaque-cookie")
-        assert granted.user_id == "super-1"
+            conn.execute(text("""
+                UPDATE auth_platform_user_roles
+                SET active = TRUE
+                WHERE user_id = 'superuser' AND role_key = 'platform.superuser'
+            """))
+            granted = superuser_routes._require_platform_superuser(conn, "opaque-cookie")
+            assert granted.user_id == "superuser"
+    finally:
+        cleanup_platform_authorization_test_engine(engine)
 
 
 def test_inactive_superuser_role_is_denied(monkeypatch):
-    engine = _engine()
-    context = SimpleNamespace(user_id="super-2")
+    engine = create_platform_authorization_test_engine()
+    context = SimpleNamespace(user_id="superuser")
     monkeypatch.setattr(superuser_routes, "resolve_server_session", lambda _conn, _raw: context)
 
-    with engine.begin() as conn:
-        install_authorization_schema(conn)
-        ensure_authorization_foundation(conn)
-        conn.execute(text("""
-            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES ('super-2', 'platform.superuser', 0)
-        """))
-        with pytest.raises(HTTPException) as exc:
-            superuser_routes._require_platform_superuser(conn, "opaque-cookie")
-        assert exc.value.status_code == 403
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE auth_platform_user_roles
+                SET active = FALSE
+                WHERE user_id = 'superuser' AND role_key = 'platform.superuser'
+            """))
+            with pytest.raises(HTTPException) as exc:
+                superuser_routes._require_platform_superuser(conn, "opaque-cookie")
+            assert exc.value.status_code == 403
+    finally:
+        cleanup_platform_authorization_test_engine(engine)
 
 
 def test_superuser_foundation_exposes_read_only_tabs():
@@ -64,11 +72,11 @@ def test_superuser_foundation_exposes_read_only_tabs():
 
 
 def test_usage_projection_reads_existing_operational_data_without_new_tracking():
-    engine = migrated_support_engine()
+    engine = migrated_support_migrator_engine()
     try:
         with engine.begin() as conn:
-            # Keep the Alembic-owned support foundation intact while narrowing the
-            # unrelated operational sources to the columns this read-only projection uses.
+            # This focused projection fixture intentionally owns temporary DDL.
+            # Use migrator authority; the production/runtime role remains DML-only.
             for table_name in (
                 "household_registry",
                 "household_memberships",
@@ -76,7 +84,7 @@ def test_usage_projection_reads_existing_operational_data_without_new_tracking()
                 "inventory_events",
                 "server_sessions",
             ):
-                conn.execute(text(f"DROP TABLE {table_name}"))
+                conn.execute(text(f"DROP TABLE {table_name} CASCADE"))
 
             conn.execute(text("CREATE TABLE household_registry(id TEXT PRIMARY KEY, naam TEXT, status TEXT)"))
             conn.execute(text("CREATE TABLE household_memberships(household_id TEXT, user_id TEXT, status TEXT)"))
@@ -94,6 +102,7 @@ def test_usage_projection_reads_existing_operational_data_without_new_tracking()
             payload = superuser_routes._platform_usage(conn)
     finally:
         engine.dispose()
+        reset_postgresql_test_database()
 
     assert payload["access"] == "read_only"
     assert payload["tracking"] == "existing_data_only"

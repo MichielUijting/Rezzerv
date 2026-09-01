@@ -4,11 +4,9 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import text
 
 from app.services import session_request_context
-from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.fixture_lifecycle_route_authorization import FIXTURE_LIFECYCLE_ROUTES
 from app.services.hybrid_regression_route_authorization import (
     HYBRID_REGRESSION_BACKGROUND_JOB_PERMISSION,
@@ -22,7 +20,10 @@ from app.services.receipt_export_fixture_route_authorization import (
 )
 from app.services.server_session_service import ServerSessionContext
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
-from app.testing.authorization_schema_fixture import install_authorization_schema
+from app.testing.postgresql_platform_authorization_fixture import (
+    cleanup_platform_authorization_test_engine,
+    create_platform_authorization_test_engine,
+)
 
 
 BACKGROUND_JOB_PERMISSION = "platform.background_jobs.manage"
@@ -40,41 +41,37 @@ SESSION_ENTRYPOINT_SOURCE_PATH = BACKEND_ROOT / "app" / "session_entrypoint.py"
 
 @pytest.fixture
 def auth_engine():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = create_platform_authorization_test_engine()
     with engine.begin() as conn:
-        install_authorization_schema(conn)
-        ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_roles(role_key, scope, name, system_role, active)
             VALUES
-              ('platform.job_only_test', 'platform', 'Job only test role', 0, 1),
-              ('platform.fixture_only_test', 'platform', 'Fixture only test role', 0, 1)
+              ('platform.job_only_test', 'platform', 'Job only test role', FALSE, TRUE),
+              ('platform.fixture_only_test', 'platform', 'Fixture only test role', FALSE, TRUE)
+            ON CONFLICT(role_key) DO UPDATE SET active = TRUE
         """))
         conn.execute(text("""
             INSERT INTO auth_role_permissions(role_key, permission_key)
             VALUES
               ('platform.job_only_test', 'platform.background_jobs.manage'),
               ('platform.fixture_only_test', 'platform.test_fixtures.manage')
+            ON CONFLICT DO NOTHING
         """))
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES
-              ('superuser', 'platform.superuser', 1),
-              ('ip-owner', 'platform.ip_owner', 1),
-              ('support-reader', 'platform.support_read', 1),
-              ('platform-admin', 'platform.platform_admin', 1),
-              ('frontteam', 'platform.frontteam', 1),
-              ('job-only', 'platform.job_only_test', 1),
-              ('fixture-only', 'platform.fixture_only_test', 1)
+              ('job-only', 'platform.job_only_test', TRUE),
+              ('fixture-only', 'platform.fixture_only_test', TRUE)
+            ON CONFLICT(user_id, role_key) DO UPDATE SET active = TRUE
         """))
     try:
         yield engine
     finally:
-        engine.dispose()
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM auth_platform_user_roles WHERE user_id IN ('job-only', 'fixture-only')"))
+            conn.execute(text("DELETE FROM auth_role_permissions WHERE role_key IN ('platform.job_only_test', 'platform.fixture_only_test')"))
+            conn.execute(text("DELETE FROM auth_roles WHERE role_key IN ('platform.job_only_test', 'platform.fixture_only_test')"))
+        cleanup_platform_authorization_test_engine(engine)
 
 
 def _context(user_id: str) -> ServerSessionContext:
@@ -247,7 +244,7 @@ def test_platform_admin_revocation_is_effective_on_next_dual_check(
     with auth_engine.begin() as conn:
         conn.execute(text("""
             UPDATE auth_platform_user_roles
-            SET active = 0
+            SET active = FALSE
             WHERE user_id = 'platform-admin'
               AND role_key = 'platform.platform_admin'
         """))

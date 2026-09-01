@@ -1,107 +1,41 @@
-"""Self-contained validation for Onboarding v2 step B: use-case foundation."""
+"""Validation for Onboarding v2 use-case foundation on PostgreSQL."""
 
 from __future__ import annotations
 
-from pathlib import Path
-import tempfile
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
 
 from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
 )
-from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.testing.authorization_schema_fixture import install_authorization_schema
-from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.household_onboarding_service import (
     ONBOARDING_STATUS_COMPLETED,
     ONBOARDING_STATUS_IN_PROGRESS,
     ONBOARDING_STATUS_NOT_STARTED,
-    ensure_household_onboarding_foundation,
     resolve_household_onboarding_state,
 )
-from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
-from app.testing.onboarding_request_schema_fixture import (
-    backfill_completed_household_onboarding,
-    install_household_onboarding_schema,
-    install_household_product_configuration_schema,
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    seed_admin_member_household,
 )
-from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _prepare_database(engine) -> None:
+    seed_admin_member_household(
+        engine,
+        household_id="existing-household",
+        household_name="Bestaand huishouden",
+        admin_id="existing-admin",
+        admin_email="existing-admin@rezzerv.local",
+        admin_password="AdminPass123!",
+        admin_membership_id="existing-admin-membership",
+        member_id="existing-member",
+        member_email="existing-member@rezzerv.local",
+        member_password="MemberPass123!",
+        member_membership_id="existing-member-membership",
+    )
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE household_registry (
-                id TEXT PRIMARY KEY,
-                naam TEXT NOT NULL,
-                context_type TEXT NOT NULL DEFAULT 'regular',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
-                account_status TEXT NOT NULL DEFAULT 'active',
-                password_hash TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_memberships (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                user_email TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'member',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(household_id, user_email)
-            )
-        """))
-        ensure_roles_v2_account_and_household_foundation(conn)
-        install_authorization_schema(conn)
-        ensure_authorization_foundation(conn)
-        install_household_onboarding_schema(conn)
-        install_household_product_configuration_schema(conn)
-        create_server_session_contract_schema(conn)
-
-        conn.execute(text("""
-            INSERT INTO household_registry(id, naam, context_type)
-            VALUES ('existing-household', 'Bestaand huishouden', 'regular')
-        """))
-        conn.execute(text("""
-            INSERT INTO app_users(id, email, password, account_status)
-            VALUES
-                ('existing-admin', 'existing-admin@rezzerv.local', 'AdminPass123!', 'active'),
-                ('existing-member', 'existing-member@rezzerv.local', 'MemberPass123!', 'active')
-        """))
-        conn.execute(text("""
-            INSERT INTO household_memberships(id, household_id, user_email, role)
-            VALUES
-                ('existing-admin-membership', 'existing-household', 'existing-admin@rezzerv.local', 'admin'),
-                ('existing-member-membership', 'existing-household', 'existing-member@rezzerv.local', 'member')
-        """))
-        create_canonical_membership_role(
-            conn,
-            household_id="existing-household",
-            membership_id="existing-admin-membership",
-            legacy_role="admin",
-        )
-        create_canonical_membership_role(
-            conn,
-            household_id="existing-household",
-            membership_id="existing-member-membership",
-            legacy_role="member",
-        )
-        backfill_completed_household_onboarding(conn)
-
-        ensure_household_onboarding_foundation(conn)
         existing_state = resolve_household_onboarding_state(conn, "existing-household")
         assert existing_state.onboarding_status == ONBOARDING_STATUS_COMPLETED
         assert existing_state.primary_use_case is None
@@ -120,13 +54,8 @@ def _application(engine) -> FastAPI:
 
 def run() -> int:
     checks: list[str] = []
-    with tempfile.TemporaryDirectory(prefix="rezzerv-onboarding-use-case-") as tmp:
-        database_path = Path(tmp) / "onboarding.db"
-        engine = create_engine(
-            f"sqlite:///{database_path}",
-            future=True,
-            connect_args={"check_same_thread": False},
-        )
+    engine = create_postgresql_runtime_test_engine()
+    try:
         _prepare_database(engine)
         app = _application(engine)
 
@@ -283,10 +212,13 @@ def run() -> int:
             assert state.json()["primary_use_case"] == "inhuis_halen"
             assert state.json()["initial_choice_required"] is False
         checks.append("selected_use_case_survives_new_login")
+    finally:
+        engine.dispose()
 
     for check in checks:
         print(f"PASS {check}")
     print(f"RESULT {len(checks)}/{len(checks)} checks passed")
+    print("ONBOARDING_USE_CASE_POSTGRESQL_GREEN")
     print("ONBOARDING_USE_CASE_FOUNDATION_GREEN")
     return 0
 

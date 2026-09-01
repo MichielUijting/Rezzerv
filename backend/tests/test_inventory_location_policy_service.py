@@ -1,7 +1,6 @@
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import text
 
 from app.schemas.inventory import InventoryCreate
 from app.services.household_product_configuration_service import (
@@ -11,60 +10,36 @@ from app.services.inventory_location_policy_service import (
     resolve_inventory_location,
     resolve_inventory_target_location,
 )
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    reset_postgresql_test_database,
+    seed_household,
+)
 
 
-def _engine():
-    return create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        future=True,
-    )
-
-
-def _create_product_configuration_fixture(conn):
-    conn.execute(text("""
-        CREATE TABLE household_product_configuration (
-            household_id TEXT PRIMARY KEY,
-            inventory_tracking_level TEXT NOT NULL,
-            location_tracking_level TEXT NOT NULL,
-            shopping_enabled INTEGER NOT NULL DEFAULT 1,
-            almost_out_enabled INTEGER NOT NULL DEFAULT 0,
-            almost_out_notifications_enabled INTEGER NOT NULL DEFAULT 0,
-            receipt_processing_enabled INTEGER NOT NULL DEFAULT 0,
-            recipes_enabled INTEGER NOT NULL DEFAULT 0,
-            unpacking_enabled INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    """))
-    ensure_household_product_configuration_foundation(conn)
+@pytest.fixture
+def engine():
+    reset_postgresql_test_database()
+    test_engine = create_postgresql_runtime_test_engine()
+    try:
+        yield test_engine
+    finally:
+        test_engine.dispose()
 
 
 def _seed(conn):
-    conn.execute(text("""
-        CREATE TABLE spaces (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            household_id TEXT NOT NULL,
-            active INTEGER NOT NULL DEFAULT 1
-        )
-    """))
-    conn.execute(text("""
-        CREATE TABLE sublocations (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            space_id TEXT NOT NULL,
-            active INTEGER NOT NULL DEFAULT 1
-        )
-    """))
-    _create_product_configuration_fixture(conn)
-
-    for household_id, location_level in [
-        ("house-none", "none"),
-        ("house-global", "global"),
-        ("house-exact", "exact"),
+    ensure_household_product_configuration_foundation(conn)
+    for household_id, household_name, location_level in [
+        ("house-none", "Zonder locaties", "none"),
+        ("house-global", "Globale locaties", "global"),
+        ("house-exact", "Exacte locaties", "exact"),
+        ("other-house", "Ander huishouden", "global"),
     ]:
+        seed_household(
+            conn,
+            household_id=household_id,
+            name=household_name,
+        )
         conn.execute(text("""
             INSERT INTO household_product_configuration (
                 household_id,
@@ -89,16 +64,16 @@ def _seed(conn):
 
     conn.execute(text("""
         INSERT INTO spaces (id, naam, household_id, active) VALUES
-            ('none-space', 'Verboden ruimte', 'house-none', 1),
-            ('global-space', 'Voorraadkast', 'house-global', 1),
-            ('global-other', 'Andere kast', 'other-house', 1),
-            ('exact-space', 'Keuken', 'house-exact', 1),
-            ('exact-terminal', 'Garage', 'house-exact', 1)
+            ('none-space', 'Verboden ruimte', 'house-none', TRUE),
+            ('global-space', 'Voorraadkast', 'house-global', TRUE),
+            ('global-other', 'Andere kast', 'other-house', TRUE),
+            ('exact-space', 'Keuken', 'house-exact', TRUE),
+            ('exact-terminal', 'Garage', 'house-exact', TRUE)
     """))
     conn.execute(text("""
         INSERT INTO sublocations (id, naam, space_id, active) VALUES
-            ('global-shelf', 'Plank', 'global-space', 1),
-            ('exact-shelf', 'Bovenste plank', 'exact-space', 1)
+            ('global-shelf', 'Plank', 'global-space', TRUE),
+            ('exact-shelf', 'Bovenste plank', 'exact-space', TRUE)
     """))
 
 
@@ -108,8 +83,7 @@ def test_inventory_create_accepts_a_real_locationless_payload():
     assert payload.sublocation_id is None
 
 
-def test_none_policy_returns_real_nulls_and_rejects_supplied_location():
-    engine = _engine()
+def test_none_policy_returns_real_nulls_and_rejects_supplied_location(engine):
     with engine.begin() as conn:
         _seed(conn)
         resolved = resolve_inventory_location(conn, "house-none")
@@ -131,8 +105,7 @@ def test_none_policy_returns_real_nulls_and_rejects_supplied_location():
         assert exc_info.value.status_code == 400
 
 
-def test_global_policy_requires_one_owned_main_space_and_rejects_sublocations():
-    engine = _engine()
+def test_global_policy_requires_one_owned_main_space_and_rejects_sublocations(engine):
     with engine.begin() as conn:
         _seed(conn)
         resolved = resolve_inventory_location(
@@ -177,8 +150,7 @@ def test_global_policy_requires_one_owned_main_space_and_rejects_sublocations():
         assert exc_info.value.status_code == 404
 
 
-def test_exact_policy_preserves_terminal_location_contract():
-    engine = _engine()
+def test_exact_policy_preserves_terminal_location_contract(engine):
     with engine.begin() as conn:
         _seed(conn)
         shelf = resolve_inventory_location(

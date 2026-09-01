@@ -1,65 +1,42 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import text
 
-from app.services.authorization_membership_service import migrate_legacy_household_memberships
 from app.api.server_session_routes import (
     SessionApiConfiguration,
     create_server_session_router,
 )
-from app.testing.authorization_schema_fixture import install_authorization_schema
-from app.testing.server_session_contract import create_server_session_contract_schema
+from app.services.authorization_foundation_service import ensure_authorization_foundation
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    reset_postgresql_test_database,
+    seed_household,
+    seed_membership,
+    seed_user,
+)
 
 
 def _runtime_schema_client():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    reset_postgresql_test_database()
+    engine = create_postgresql_runtime_test_engine()
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE household_registry (
-                id TEXT PRIMARY KEY,
-                context_type TEXT NOT NULL
-            )
-        """))
-        conn.execute(text("""
-            INSERT INTO household_registry(id, context_type)
-            VALUES ('0', 'system'), ('1', 'regular')
-        """))
-        conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_memberships (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                user_email TEXT NOT NULL,
-                role TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active',
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            INSERT INTO app_users(id, email, password)
-            VALUES ('u-admin', 'admin@rezzerv.local', 'Rezzerv123')
-        """))
-        conn.execute(text("""
-            INSERT INTO household_memberships(
-                id, household_id, user_email, role, status
-            ) VALUES
-                ('m-inactive', '0', 'admin@rezzerv.local', 'owner', 'inactive'),
-                ('m-active', '1', 'ADMIN@REZZERV.LOCAL', 'owner', 'active')
-        """))
-        install_authorization_schema(conn)
-        migrate_legacy_household_memberships(conn)
-        create_server_session_contract_schema(conn)
+        ensure_authorization_foundation(conn)
+        seed_household(conn, household_id='0', name='Systeem', context_type='system')
+        seed_household(conn, household_id='1', name='Regulier', context_type='regular')
+        seed_user(
+            conn,
+            user_id='u-admin',
+            email='admin@rezzerv.local',
+            password='Rezzerv123',
+        )
+        seed_membership(
+            conn,
+            membership_id='m-active',
+            household_id='1',
+            user_id='u-admin',
+            email='ADMIN@REZZERV.LOCAL',
+            role='owner',
+        )
 
     app = FastAPI()
     app.include_router(
@@ -72,29 +49,41 @@ def _runtime_schema_client():
 
 
 def test_login_and_session_resolve_with_user_email_membership_schema():
-    client, _ = _runtime_schema_client()
-
-    login = client.post(
-        "/api/auth/login",
-        json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
-    )
-
-    assert login.status_code == 200
-    assert login.json()["user"]["id"] == "u-admin"
-    assert login.json()["active_household_id"] == "1"
-    assert login.json()["role"] == "admin"
-    assert client.get("/api/session").status_code == 200
-
-
-def test_inactive_runtime_membership_is_not_accepted():
     client, engine = _runtime_schema_client()
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE household_memberships SET status = 'inactive'"))
+    try:
+        login = client.post(
+            "/api/auth/login",
+            json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
+        )
 
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
-    )
+        assert login.status_code == 200
+        assert login.json()["user"]["id"] == "u-admin"
+        assert login.json()["active_household_id"] == "1"
+        assert login.json()["role"] == "admin"
+        assert client.get("/api/session").status_code == 200
+    finally:
+        engine.dispose()
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+
+def test_removed_runtime_membership_is_not_accepted():
+    client, engine = _runtime_schema_client()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                DELETE FROM auth_membership_roles
+                WHERE household_id = '1' AND membership_id = 'm-active'
+            """))
+            conn.execute(text("""
+                DELETE FROM household_memberships
+                WHERE id = 'm-active'
+            """))
+
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+    finally:
+        engine.dispose()

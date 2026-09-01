@@ -13,10 +13,32 @@ ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
 HEAD_REVISION = "20260830_02"
 
 
+def _assert_head(engine):
+    with engine.connect() as conn:
+        revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+    if revision != HEAD_REVISION:
+        engine.dispose()
+        raise AssertionError(f"Expected Alembic revision {HEAD_REVISION}, got {revision}")
+    return engine
+
+
 def migrated_platform_feature_flag_engine():
-    database_path = Path(tempfile.mkdtemp(prefix="rezzerv-feature-flags-")) / "feature-flags.sqlite"
+    """Use the canonical PostgreSQL test database when one is configured.
+
+    The SQLite fallback is retained only for explicit migration-compatibility
+    workflows that do not configure a PostgreSQL runtime URL.
+    """
+    configured_url = str(os.getenv("DATABASE_URL") or "").strip()
+    if configured_url:
+        engine = create_engine(configured_url, future=True)
+        if engine.dialect.name == "postgresql":
+            return _assert_head(engine)
+        engine.dispose()
+
+    database_path = Path(tempfile.mkdtemp(prefix="rezzerv-feature-flags-compat-")) / "feature-flags.sqlite"
     env = os.environ.copy()
     env["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
+    env.pop("MIGRATION_DATABASE_URL", None)
     env["PYTHONPATH"] = str(BACKEND_ROOT)
     result = subprocess.run(
         [
@@ -36,13 +58,10 @@ def migrated_platform_feature_flag_engine():
     )
     if result.returncode != 0:
         raise AssertionError(
-            "Alembic feature-flag fixture migration failed:\n"
+            "Alembic feature-flag SQLite compatibility migration failed:\n"
             + result.stdout
             + result.stderr
         )
-    engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
-    with engine.connect() as conn:
-        revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    if revision != HEAD_REVISION:
-        raise AssertionError(f"Expected Alembic revision {HEAD_REVISION}, got {revision}")
-    return engine
+    return _assert_head(
+        create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}", future=True)
+    )

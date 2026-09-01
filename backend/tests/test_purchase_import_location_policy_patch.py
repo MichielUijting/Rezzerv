@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+import pytest
+from sqlalchemy import text
 
 from app.services.household_product_configuration_service import (
     ensure_household_product_configuration_foundation,
@@ -12,54 +12,30 @@ from app.services.purchase_import_location_policy_patch import (
     classify_locationless_ready_line,
     install_purchase_import_location_policy_patch,
 )
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    reset_postgresql_test_database,
+    seed_household,
+)
 
 
-def _engine():
-    return create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        future=True,
-    )
-
-
-def _create_product_configuration_fixture(conn):
-    conn.execute(text("""
-        CREATE TABLE household_product_configuration (
-            household_id TEXT PRIMARY KEY,
-            inventory_tracking_level TEXT NOT NULL,
-            location_tracking_level TEXT NOT NULL,
-            shopping_enabled INTEGER NOT NULL DEFAULT 1,
-            almost_out_enabled INTEGER NOT NULL DEFAULT 0,
-            almost_out_notifications_enabled INTEGER NOT NULL DEFAULT 0,
-            receipt_processing_enabled INTEGER NOT NULL DEFAULT 0,
-            recipes_enabled INTEGER NOT NULL DEFAULT 0,
-            unpacking_enabled INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    """))
-    ensure_household_product_configuration_foundation(conn)
+@pytest.fixture
+def engine():
+    reset_postgresql_test_database()
+    test_engine = create_postgresql_runtime_test_engine()
+    try:
+        yield test_engine
+    finally:
+        test_engine.dispose()
 
 
 def _seed_location_policy(conn):
-    conn.execute(text("""
-        CREATE TABLE spaces (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            household_id TEXT NOT NULL,
-            active INTEGER NOT NULL DEFAULT 1
-        )
-    """))
-    conn.execute(text("""
-        CREATE TABLE sublocations (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            space_id TEXT NOT NULL,
-            active INTEGER NOT NULL DEFAULT 1
-        )
-    """))
-    _create_product_configuration_fixture(conn)
+    ensure_household_product_configuration_foundation(conn)
+    seed_household(
+        conn,
+        household_id="house-none",
+        name="Zonder locaties",
+    )
     conn.execute(text("""
         INSERT INTO household_product_configuration (
             household_id,
@@ -77,7 +53,7 @@ def _seed_location_policy(conn):
     """))
     conn.execute(text("""
         INSERT INTO spaces (id, naam, household_id, active)
-        VALUES ('legacy-space', 'Oude ruimte', 'house-none', 1)
+        VALUES ('legacy-space', 'Oude ruimte', 'house-none', TRUE)
     """))
 
 
@@ -133,8 +109,7 @@ def test_locationless_ready_only_rejects_a_stored_location_instead_of_normalizin
     assert stage == "purchase_event_write"
 
 
-def test_processing_resolver_returns_real_null_location_for_none_policy():
-    engine = _engine()
+def test_processing_resolver_returns_real_null_location_for_none_policy(engine):
     with engine.begin() as conn:
         _seed_location_policy(conn)
         token = _processing_household_id.set("house-none")
@@ -163,8 +138,7 @@ def test_processing_resolver_returns_real_null_location_for_none_policy():
             _processing_household_id.reset(token)
 
 
-def test_processing_resolver_falls_back_to_legacy_without_batch_context():
-    engine = _engine()
+def test_processing_resolver_falls_back_to_legacy_without_batch_context(engine):
     with engine.begin() as conn:
         legacy_result = {"location_id": "legacy-space"}
         resolved = _policy_store_storage_target_location(

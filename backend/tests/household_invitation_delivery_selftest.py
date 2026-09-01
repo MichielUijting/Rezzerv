@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from pathlib import Path
 import re
-import tempfile
 import urllib.parse
 
 from fastapi import FastAPI
@@ -15,9 +13,7 @@ from sqlalchemy import text
 from app.api.household_invitation_routes import create_household_invitation_router
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.authorization_membership_service import create_canonical_membership_role
-from app.services.household_invitation_delivery_service import (
-    InvitationEmailConfiguration,
-)
+from app.services.household_invitation_delivery_service import InvitationEmailConfiguration
 from app.services.household_invitation_service import (
     InvitationNotFoundError,
     create_household_invitation,
@@ -29,7 +25,7 @@ from app.services.server_session_service import SESSION_COOKIE_NAME, create_serv
 from household_invitation_migrated_fixture import (
     insert_membership,
     insert_user,
-    migrated_sqlite_engine,
+    migrated_postgresql_engine,
 )
 
 
@@ -93,7 +89,7 @@ def _prepare_database(engine) -> None:
             )
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES ('platform-target', 'platform.frontteam', 1)
+            VALUES ('platform-target', 'platform.frontteam', TRUE)
         """))
 
 
@@ -131,11 +127,8 @@ def _token_from_payload(payload: dict[str, object]) -> str:
 
 def run() -> int:
     checks: list[str] = []
-    with tempfile.TemporaryDirectory(prefix="rezzerv-invitation-delivery-") as tmp:
-        engine = migrated_sqlite_engine(
-            Path(tmp) / 'delivery.db',
-            check_same_thread=False,
-        )
+    engine = migrated_postgresql_engine()
+    try:
         _prepare_database(engine)
         transport = FakeResendTransport()
         app = _application(engine, transport)
@@ -322,6 +315,8 @@ def run() -> int:
                 assert token not in serialized
             assert "token_hash" not in serialized
         checks.append("delivery_and_rotation_audit_never_contains_bearer_token_material")
+    finally:
+        engine.dispose()
 
     for check in checks:
         print(f"PASS {check}")

@@ -39,7 +39,7 @@ def assert_household_invitation_target_allowed(conn: Connection, invitee_email: 
             FROM app_users u
             JOIN auth_platform_user_roles pur ON pur.user_id = u.id
             WHERE lower(trim(u.email)) = :email
-              AND pur.active = 1
+              AND pur.active = TRUE
             LIMIT 1
             """
         ),

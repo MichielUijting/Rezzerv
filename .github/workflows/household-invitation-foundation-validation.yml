@@ -3,10 +3,13 @@ name: Household invitation foundation validation
 on:
   pull_request:
     paths:
+      - 'backend/alembic/**'
       - 'backend/app/api/household_invitation_routes.py'
       - 'backend/app/api/router.py'
       - 'backend/app/services/household_invitation_service.py'
       - 'backend/app/services/household_invitation_target_policy.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
+      - 'backend/tests/household_invitation_migrated_fixture.py'
       - 'backend/tests/household_invitation_foundation_selftest.py'
       - 'backend/tests/household_invitation_target_policy_selftest.py'
       - '.github/workflows/household-invitation-foundation-validation.yml'
@@ -15,6 +18,24 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_invitation_foundation_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_invitation_foundation_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_invitation_foundation_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_invitation_foundation_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
     steps:
       - uses: actions/checkout@v4
 
@@ -24,9 +45,43 @@ jobs:
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install backend dependencies
+      - name: Install PostgreSQL client and backend dependencies
         working-directory: backend
-        run: pip install -r requirements.txt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          pip install -r requirements.txt
+
+      - name: Bootstrap PostgreSQL migration and runtime roles
+        env:
+          PGPASSWORD: rezzerv_bootstrap_ci
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
+          GRANT CONNECT ON DATABASE rezzerv_invitation_foundation_ci TO rezzerv_migrator, rezzerv_app;
+          ALTER DATABASE rezzerv_invitation_foundation_ci OWNER TO rezzerv_migrator;
+          \connect rezzerv_invitation_foundation_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Initialize canonical PostgreSQL schema through Alembic
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      - name: Assert runtime role is DML-only
+        env:
+          PGPASSWORD: rezzerv_app_ci
+        run: |
+          result=$(psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_invitation_foundation_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
+          test "$result" = "f"
 
       - name: Compile invitation foundation
         working-directory: backend

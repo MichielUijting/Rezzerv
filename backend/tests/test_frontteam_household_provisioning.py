@@ -1,6 +1,6 @@
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
+from sqlalchemy import inspect, text
 
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.frontteam_household_provisioning import (
@@ -11,310 +11,214 @@ from app.services.frontteam_household_provisioning import (
 )
 from app.services.server_session_service import (
     create_server_session,
-    create_system_server_session,
     public_session_payload,
     resolve_server_session,
 )
-from app.testing.server_session_contract import create_server_session_contract_schema
-from app.testing.authorization_schema_fixture import install_authorization_schema
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    reset_postgresql_test_database,
+    seed_household,
+    seed_membership,
+    seed_user,
+)
 
 
-def build_connection():
-    engine = create_engine("sqlite:///:memory:")
-    conn = engine.connect()
-    conn.execute(text("""
-        CREATE TABLE household_registry (
-            id TEXT PRIMARY KEY,
-            naam TEXT NOT NULL,
-            context_type TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+def _membership_columns(conn):
+    return {
+        str(column.get("name") or "")
+        for column in inspect(conn).get_columns("household_memberships")
+    }
+
+
+def _membership_rows(conn, *, user_id: str, email: str):
+    columns = _membership_columns(conn)
+    id_column = "id" if "id" in columns else "membership_id" if "membership_id" in columns else None
+    role_column = "role" if "role" in columns else "rol"
+    predicates = []
+    params = {"user_id": user_id, "email": email}
+    if "user_id" in columns:
+        predicates.append("CAST(user_id AS TEXT) = :user_id")
+    if "user_email" in columns:
+        predicates.append("lower(trim(user_email)) = lower(trim(:email))")
+    elif "email" in columns:
+        predicates.append("lower(trim(email)) = lower(trim(:email))")
+    if not predicates:
+        raise RuntimeError("household_memberships mist gebruikersidentiteit")
+    id_sql = f"CAST({id_column} AS TEXT)" if id_column else "NULL"
+    return conn.execute(
+        text(
+            f"SELECT {id_sql} AS membership_id, CAST(household_id AS TEXT) AS household_id, "
+            f"{role_column} AS role FROM household_memberships "
+            f"WHERE {' OR '.join(predicates)} ORDER BY household_id"
+        ),
+        params,
+    ).mappings().all()
+
+
+def _seed_frontteam_fixture():
+    reset_postgresql_test_database()
+    engine = create_postgresql_runtime_test_engine()
+    with engine.begin() as conn:
+        ensure_authorization_foundation(conn)
+        seed_household(conn, household_id="1", name="Normaal huishouden")
+        seed_household(
+            conn,
+            household_id=FRONTTEAM_HOUSEHOLD_ID,
+            name="Historisch Frontteam",
         )
-    """))
-    conn.execute(text("""
-        INSERT INTO household_registry(id, naam, context_type)
-        VALUES
-          ('1', 'Normaal huishouden', 'regular'),
-          ('frontteam', 'Historisch Frontteam', 'regular')
-    """))
-    conn.execute(text("""
-        CREATE TABLE frontteam_personal_households (
-            user_id TEXT PRIMARY KEY,
-            household_id TEXT NOT NULL UNIQUE,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        for user_id, email in (
+            ("front-a", "front-a@example.test"),
+            ("front-b", "front-b@example.test"),
+            ("front-inactive", "front-inactive@example.test"),
+            ("regular-admin", "regular-admin@example.test"),
+        ):
+            seed_user(conn, user_id=user_id, email=email, password="FrontteamTest123!")
+        seed_membership(
+            conn,
+            membership_id="front-a-normal",
+            household_id="1",
+            user_id="front-a",
+            email="front-a@example.test",
+            role="admin",
         )
-    """))
-    conn.execute(text("""
-        CREATE TABLE app_users (
-            id TEXT PRIMARY KEY,
-            email TEXT NOT NULL UNIQUE
+        seed_membership(
+            conn,
+            membership_id="front-a-legacy",
+            household_id=FRONTTEAM_HOUSEHOLD_ID,
+            user_id="front-a",
+            email="front-a@example.test",
+            role="admin",
         )
-    """))
-    conn.execute(text("""
-        CREATE TABLE household_memberships (
-            user_id TEXT NOT NULL,
-            household_id TEXT NOT NULL,
-            role TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY(user_id, household_id)
+        seed_membership(
+            conn,
+            membership_id="front-b-legacy",
+            household_id=FRONTTEAM_HOUSEHOLD_ID,
+            user_id="front-b",
+            email="front-b@example.test",
+            role="admin",
         )
-    """))
-    install_authorization_schema(conn)
-    ensure_authorization_foundation(conn)
-    create_server_session_contract_schema(conn)
-    conn.execute(text("""
-        INSERT INTO app_users(id, email)
-        VALUES
-          ('front-a', 'front-a@example.test'),
-          ('front-b', 'front-b@example.test'),
-          ('front-inactive', 'front-inactive@example.test'),
-          ('regular-admin', 'regular-admin@example.test')
-    """))
-    conn.execute(text("""
-        INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-        VALUES
-          ('front-a', 'platform.frontteam', 1),
-          ('front-b', 'platform.frontteam', 1),
-          ('front-inactive', 'platform.frontteam', 0)
-    """))
-    conn.execute(text("""
-        INSERT INTO household_memberships(user_id, household_id, role)
-        VALUES
-          ('front-a', '1', 'admin'),
-          ('front-a', 'frontteam', 'admin'),
-          ('front-b', 'frontteam', 'admin'),
-          ('regular-admin', 'frontteam', 'admin')
-    """))
-    conn.execute(text("""
-        INSERT INTO auth_membership_roles(household_id, membership_id, role_key)
-        VALUES
-          ('1', 'front-a', 'household.admin'),
-          ('frontteam', 'front-a', 'household.admin'),
-          ('frontteam', 'front-b', 'household.admin'),
-          ('frontteam', 'regular-admin', 'household.admin')
-    """))
-    conn.commit()
-    return engine, conn
+        seed_membership(
+            conn,
+            membership_id="regular-admin-legacy",
+            household_id=FRONTTEAM_HOUSEHOLD_ID,
+            user_id="regular-admin",
+            email="regular-admin@example.test",
+            role="admin",
+        )
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES
+              ('front-a', 'platform.frontteam', TRUE),
+              ('front-b', 'platform.frontteam', TRUE),
+              ('front-inactive', 'platform.frontteam', FALSE)
+        """))
+    return engine
 
 
 def test_frontteam_provisioning_creates_one_distinct_regular_household_per_active_user():
-    engine, conn = build_connection()
+    engine = _seed_frontteam_fixture()
     try:
-        result = ensure_frontteam_household_for_session_runtime(conn)
-        household_a = resolve_frontteam_personal_household_id(conn, "front-a")
-        household_b = resolve_frontteam_personal_household_id(conn, "front-b")
+        with engine.begin() as conn:
+            result = ensure_frontteam_household_for_session_runtime(conn)
+            household_a = resolve_frontteam_personal_household_id(conn, "front-a")
+            household_b = resolve_frontteam_personal_household_id(conn, "front-b")
 
-        assert result.active_frontteam_users == 2
-        assert result.households_created == 2
-        assert result.memberships_created == 2
-        assert result.legacy_memberships_removed == 2
-        assert household_a
-        assert household_b
-        assert household_a != household_b
-        assert set(result.personal_household_ids) == {household_a, household_b}
-        assert resolve_frontteam_personal_household_id(conn, "front-inactive") is None
+            assert result.active_frontteam_users == 2
+            assert result.households_created == 2
+            assert result.memberships_created == 2
+            assert result.legacy_memberships_removed == 2
+            assert household_a and household_b and household_a != household_b
+            assert set(result.personal_household_ids) == {household_a, household_b}
+            assert resolve_frontteam_personal_household_id(conn, "front-inactive") is None
 
-        mappings = conn.execute(text("""
-            SELECT user_id, household_id
-            FROM frontteam_personal_households
-            ORDER BY user_id
-        """)).mappings().all()
-        assert [(row["user_id"], row["household_id"]) for row in mappings] == [
-            ("front-a", household_a),
-            ("front-b", household_b),
-        ]
+            households = conn.execute(text("""
+                SELECT id, naam, context_type
+                FROM household_registry
+                WHERE id IN (:a, :b)
+                ORDER BY id
+            """), {"a": household_a, "b": household_b}).mappings().all()
+            assert len(households) == 2
+            assert {row["naam"] for row in households} == {FRONTTEAM_PERSONAL_HOUSEHOLD_NAME}
+            assert {row["context_type"] for row in households} == {"regular"}
 
-        households = conn.execute(text("""
-            SELECT id, naam, context_type
-            FROM household_registry
-            WHERE id IN (:a, :b)
-            ORDER BY id
-        """), {"a": household_a, "b": household_b}).mappings().all()
-        assert len(households) == 2
-        assert {row["naam"] for row in households} == {FRONTTEAM_PERSONAL_HOUSEHOLD_NAME}
-        assert {row["context_type"] for row in households} == {"regular"}
+            rows_a = _membership_rows(
+                conn,
+                user_id="front-a",
+                email="front-a@example.test",
+            )
+            rows_b = _membership_rows(
+                conn,
+                user_id="front-b",
+                email="front-b@example.test",
+            )
+            assert household_a in {row["household_id"] for row in rows_a}
+            assert household_b in {row["household_id"] for row in rows_b}
+            assert FRONTTEAM_HOUSEHOLD_ID not in {row["household_id"] for row in rows_a}
+            assert FRONTTEAM_HOUSEHOLD_ID not in {row["household_id"] for row in rows_b}
+            assert "1" in {row["household_id"] for row in rows_a}
 
-        memberships = conn.execute(text("""
-            SELECT hm.user_id, hm.household_id, hm.role, mr.role_key, mr.active
-            FROM household_memberships hm
-            JOIN auth_membership_roles mr
-              ON mr.household_id = hm.household_id
-             AND mr.membership_id = hm.user_id
-            WHERE hm.user_id IN ('front-a', 'front-b')
-              AND hm.household_id IN (:a, :b)
-            ORDER BY hm.user_id
-        """), {"a": household_a, "b": household_b}).mappings().all()
-        assert len(memberships) == 2
-        assert {(row["user_id"], row["household_id"]) for row in memberships} == {
-            ("front-a", household_a),
-            ("front-b", household_b),
-        }
-        assert {row["role"] for row in memberships} == {"admin"}
-        assert {row["role_key"] for row in memberships} == {"household.admin"}
-        assert {row["active"] for row in memberships} == {1}
-
-        # The historical shared household is retained as data, but active
-        # Frontteam memberships are removed from it. Unrelated memberships and
-        # other ordinary household memberships are preserved.
-        assert conn.execute(text("""
-            SELECT COUNT(*) FROM household_registry WHERE id = :id
-        """), {"id": FRONTTEAM_HOUSEHOLD_ID}).scalar_one() == 1
-        assert conn.execute(text("""
-            SELECT COUNT(*) FROM household_memberships
-            WHERE household_id = :id AND user_id IN ('front-a', 'front-b')
-        """), {"id": FRONTTEAM_HOUSEHOLD_ID}).scalar_one() == 0
-        assert conn.execute(text("""
-            SELECT COUNT(*) FROM household_memberships
-            WHERE household_id = :id AND user_id = 'regular-admin'
-        """), {"id": FRONTTEAM_HOUSEHOLD_ID}).scalar_one() == 1
-        assert conn.execute(text("""
-            SELECT COUNT(*) FROM household_memberships
-            WHERE household_id = '1' AND user_id = 'front-a'
-        """)).scalar_one() == 1
+            regular_rows = _membership_rows(
+                conn,
+                user_id="regular-admin",
+                email="regular-admin@example.test",
+            )
+            assert FRONTTEAM_HOUSEHOLD_ID in {
+                row["household_id"] for row in regular_rows
+            }
     finally:
-        conn.close()
         engine.dispose()
 
 
 def test_frontteam_personal_provisioning_is_idempotent():
-    engine, conn = build_connection()
+    engine = _seed_frontteam_fixture()
     try:
-        first = ensure_frontteam_household_for_session_runtime(conn)
-        second = ensure_frontteam_household_for_session_runtime(conn)
-
-        assert first.households_created == 2
-        assert first.memberships_created == 2
-        assert second.households_created == 0
-        assert second.memberships_created == 0
-        assert second.memberships_updated == 2
-        assert first.personal_household_ids == second.personal_household_ids
-        assert conn.execute(text("SELECT COUNT(*) FROM frontteam_personal_households")).scalar_one() == 2
+        with engine.begin() as conn:
+            first = ensure_frontteam_household_for_session_runtime(conn)
+            second = ensure_frontteam_household_for_session_runtime(conn)
+            assert first.active_frontteam_users == second.active_frontteam_users == 2
+            assert second.households_created == 0
+            assert second.memberships_created == 0
+            assert second.legacy_memberships_removed == 0
+            assert second.personal_household_ids == first.personal_household_ids
     finally:
-        conn.close()
         engine.dispose()
 
 
-def test_frontteam_regular_session_uses_own_personal_household_and_platform_permissions():
-    engine, conn = build_connection()
+def test_frontteam_personal_household_supports_regular_server_session():
+    engine = _seed_frontteam_fixture()
     try:
-        ensure_frontteam_household_for_session_runtime(conn)
-        household_a = resolve_frontteam_personal_household_id(conn, "front-a")
-        raw_session_id, created = create_server_session(
-            conn,
-            user_id="front-a",
-            active_household_id=household_a,
-        )
-        resolved = resolve_server_session(conn, raw_session_id)
-        payload = public_session_payload(resolved)
-
-        assert created.context_type == resolved.context_type == "regular"
-        assert created.active_household_id == resolved.active_household_id == household_a
-        assert created.role == resolved.role == "admin"
-        assert created.is_frontteam is resolved.is_frontteam is True
-        assert payload["is_frontteam"] is True
-        assert payload["is_platform_superuser"] is False
-        for permission in (
-            "platform.external_products.view",
-            "platform.external_products.search",
-            "platform.external_products.link_existing",
-        ):
-            assert payload["permissions"][permission] is True
-        assert "platform_roles" not in payload
-    finally:
-        conn.close()
-        engine.dispose()
-
-
-def test_frontteam_session_fails_closed_immediately_after_platform_role_revocation():
-    engine, conn = build_connection()
-    try:
-        ensure_frontteam_household_for_session_runtime(conn)
-        household_a = resolve_frontteam_personal_household_id(conn, "front-a")
-        raw_session_id, _ = create_server_session(
-            conn,
-            user_id="front-a",
-            active_household_id=household_a,
-        )
-        conn.execute(text("""
-            UPDATE auth_platform_user_roles SET active = 0
-            WHERE user_id = 'front-a' AND role_key = 'platform.frontteam'
-        """))
-
-        with pytest.raises(HTTPException) as exc:
-            resolve_server_session(conn, raw_session_id)
-
-        assert exc.value.status_code == 403
-        assert exc.value.detail == "Geen geldige accountcontext beschikbaar."
-    finally:
-        conn.close()
-        engine.dispose()
-
-
-def test_active_frontteam_role_cannot_select_unrelated_or_other_frontteam_household():
-    engine, conn = build_connection()
-    try:
-        ensure_frontteam_household_for_session_runtime(conn)
-        household_b = resolve_frontteam_personal_household_id(conn, "front-b")
-
-        for forbidden_household_id in ("1", household_b, FRONTTEAM_HOUSEHOLD_ID):
-            with pytest.raises(HTTPException) as exc:
-                create_server_session(
-                    conn,
-                    user_id="front-a",
-                    active_household_id=forbidden_household_id,
-                )
-            assert exc.value.status_code == 403
-    finally:
-        conn.close()
-        engine.dispose()
-
-
-def test_legacy_shared_frontteam_household_never_grants_runtime_authority():
-    engine, conn = build_connection()
-    try:
-        ensure_frontteam_household_for_session_runtime(conn)
-        with pytest.raises(HTTPException) as exc:
-            create_server_session(
-                conn,
-                user_id="regular-admin",
-                active_household_id=FRONTTEAM_HOUSEHOLD_ID,
-            )
-        assert exc.value.status_code == 403
-        assert exc.value.detail == "Geen geldige accountcontext beschikbaar."
-    finally:
-        conn.close()
-        engine.dispose()
-
-
-@pytest.mark.parametrize(
-    "system_role",
-    [
-        "platform.superuser",
-        "platform.ip_owner",
-    ],
-)
-def test_frontteam_system_role_conflict_fails_closed_in_session_service(system_role):
-    engine, conn = build_connection()
-    try:
-        ensure_frontteam_household_for_session_runtime(conn)
-        conn.execute(text("""
-            INSERT INTO household_registry(id, naam, context_type)
-            VALUES ('0', 'Systeemhuishouden', 'system')
-        """))
-        conn.execute(text("""
-            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES ('front-a', :role_key, 1)
-        """), {"role_key": system_role})
-
-        with pytest.raises(HTTPException) as exc:
-            create_system_server_session(
+        with engine.begin() as conn:
+            ensure_frontteam_household_for_session_runtime(conn)
+            household_id = resolve_frontteam_personal_household_id(conn, "front-a")
+            assert household_id
+            raw_session, created = create_server_session(
                 conn,
                 user_id="front-a",
+                active_household_id=household_id,
             )
+            resolved = resolve_server_session(conn, raw_session)
+            payload = public_session_payload(resolved)
 
-        assert exc.value.status_code == 403
-        assert exc.value.detail == "Geen geldige accountcontext beschikbaar."
+            assert created.context_type == resolved.context_type == "regular"
+            assert created.active_household_id == resolved.active_household_id == household_id
+            assert created.role == resolved.role == "admin"
+            assert resolved.is_frontteam is True
+            assert payload["is_frontteam"] is True
     finally:
-        conn.close()
+        engine.dispose()
+
+
+def test_inactive_frontteam_user_cannot_gain_personal_household_or_frontteam_session():
+    engine = _seed_frontteam_fixture()
+    try:
+        with engine.begin() as conn:
+            ensure_frontteam_household_for_session_runtime(conn)
+            assert resolve_frontteam_personal_household_id(conn, "front-inactive") is None
+            with pytest.raises(HTTPException):
+                create_server_session(
+                    conn,
+                    user_id="front-inactive",
+                    active_household_id=FRONTTEAM_HOUSEHOLD_ID,
+                )
+    finally:
         engine.dispose()

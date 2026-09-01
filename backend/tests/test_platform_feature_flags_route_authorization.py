@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.api import platform_feature_flags_routes
 from app.services import session_request_context
@@ -17,6 +17,34 @@ from tests.platform_feature_flag_migrated_fixture import migrated_platform_featu
 
 
 FEATURE_FLAGS_PERMISSION = "platform.feature_flags.manage"
+_FIXTURE_PLATFORM_USER_IDS = (
+    "platform-admin",
+    "ip-owner",
+    "superuser",
+    "support-reader",
+    "frontteam",
+)
+
+
+def _reset_feature_flag_fixture_state(conn) -> None:
+    conn.execute(
+        text("DELETE FROM platform_feature_flags WHERE flag_key = :flag_key"),
+        {"flag_key": FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH},
+    )
+    conn.execute(
+        text(
+            """
+            DELETE FROM auth_platform_user_roles
+            WHERE user_id IN (
+                'platform-admin',
+                'ip-owner',
+                'superuser',
+                'support-reader',
+                'frontteam'
+            )
+            """
+        )
+    )
 
 
 @pytest.fixture
@@ -24,19 +52,24 @@ def auth_engine():
     engine = migrated_platform_feature_flag_engine()
     with engine.begin() as conn:
         ensure_authorization_foundation(conn)
+        _reset_feature_flag_fixture_state(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES
-              ('platform-admin', 'platform.platform_admin', 1),
-              ('ip-owner', 'platform.ip_owner', 1),
-              ('superuser', 'platform.superuser', 1),
-              ('support-reader', 'platform.support_read', 1),
-              ('frontteam', 'platform.frontteam', 1)
+              ('platform-admin', 'platform.platform_admin', TRUE),
+              ('ip-owner', 'platform.ip_owner', TRUE),
+              ('superuser', 'platform.superuser', TRUE),
+              ('support-reader', 'platform.support_read', TRUE),
+              ('frontteam', 'platform.frontteam', TRUE)
         """))
     try:
         yield engine
     finally:
-        engine.dispose()
+        try:
+            with engine.begin() as conn:
+                _reset_feature_flag_fixture_state(conn)
+        finally:
+            engine.dispose()
 
 
 def _context(user_id: str) -> ServerSessionContext:
@@ -119,10 +152,7 @@ def test_default_flag_is_enabled_without_seed_or_get_write(monkeypatch, auth_eng
 
     with auth_engine.connect() as conn:
         after = conn.execute(text("SELECT COUNT(*) FROM platform_feature_flags")).scalar_one()
-        columns = {
-            str(row[1])
-            for row in conn.execute(text("PRAGMA table_info(platform_feature_flags)")).all()
-        }
+        columns = {str(column.get("name") or "") for column in inspect(conn).get_columns("platform_feature_flags")}
 
     assert context.context_type == "none"
     assert context.active_household_id is None
@@ -256,7 +286,7 @@ def test_platform_admin_revocation_blocks_next_feature_flag_request(monkeypatch,
     with auth_engine.begin() as conn:
         conn.execute(text("""
             UPDATE auth_platform_user_roles
-            SET active = 0
+            SET active = FALSE
             WHERE user_id = 'platform-admin'
               AND role_key = 'platform.platform_admin'
         """))

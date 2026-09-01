@@ -22,13 +22,32 @@ on:
       - 'backend/tests/test_session_request_context.py'
       - 'backend/app/main.py'
       - '.github/workflows/authorization-membership-api-validation.yml'
+  workflow_dispatch:
 
 jobs:
   authorization-membership-api:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_authorization_membership_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_authorization_membership_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
-      DATABASE_URL: sqlite:///./authorization-membership-api-ci.db
-      SQLITE_RUNTIME_VOLUME: github_actions_workspace
+      TEST_POSTGRES_DB: rezzerv_authorization_membership_ci
+      TEST_MIGRATOR_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_authorization_membership_ci
+      TEST_RUNTIME_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_authorization_membership_ci
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_authorization_membership_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_authorization_membership_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
       RECEIPT_STORAGE_ROOT: /tmp/rezzerv-authorization-membership-receipts/raw
       REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
     defaults:
@@ -39,19 +58,59 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install backend dependencies
+
+      - name: Install PostgreSQL client and backend dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
-      - name: Initialize backend test schema through Alembic
+
+      - name: Bootstrap PostgreSQL migration and runtime roles
+        working-directory: .
+        env:
+          PGPASSWORD: rezzerv_bootstrap_ci
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
+          GRANT CONNECT ON DATABASE rezzerv_authorization_membership_ci TO rezzerv_migrator;
+          GRANT CONNECT ON DATABASE rezzerv_authorization_membership_ci TO rezzerv_app;
+          ALTER DATABASE rezzerv_authorization_membership_ci OWNER TO rezzerv_migrator;
+          \connect rezzerv_authorization_membership_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Initialize backend test schema through Alembic on PostgreSQL
         run: python -m alembic upgrade head
-      - name: Run authorization contract tests
+
+      - name: Assert runtime role has no schema CREATE privilege
+        working-directory: .
+        env:
+          PGPASSWORD: rezzerv_app_ci
+        run: |
+          result=$(psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_authorization_membership_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
+          test "$result" = "f"
+          echo "AUTHORIZATION_MEMBERSHIP_RUNTIME_DML_ONLY_GREEN"
+
+      - name: Run isolated historical schema compatibility contracts
         run: |
           python -m pytest -q \
             tests/test_authorization_foundation_contract.py \
             tests/test_roles_v2_foundation_contract.py \
-            tests/test_authorization_membership_service.py \
+            tests/test_authorization_membership_service.py
+
+      - name: Run canonical PostgreSQL authorization and session integration tests
+        run: |
+          python -m pytest -q \
             tests/test_authorization_membership_routes.py \
             tests/test_server_session_service.py \
             tests/test_server_session_routes.py \

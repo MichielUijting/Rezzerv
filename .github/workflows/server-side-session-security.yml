@@ -12,6 +12,7 @@ on:
       - 'backend/app/services/household_product_configuration_service.py'
       - 'backend/app/services/household_location_onboarding_service.py'
       - 'backend/app/services/password_service.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/main.py'
       - 'backend/tests/server_session_security_selftest.py'
@@ -29,6 +30,26 @@ on:
 jobs:
   server-session-security:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_server_session_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_server_session_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_server_session_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_server_session_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
     defaults:
       run:
         working-directory: backend
@@ -39,10 +60,48 @@ jobs:
           python-version: '3.11'
           cache: pip
           cache-dependency-path: backend/requirements.txt
-      - name: Install backend dependencies
+
+      - name: Install PostgreSQL client and backend dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Bootstrap PostgreSQL migration and runtime roles
+        working-directory: .
+        env:
+          PGPASSWORD: rezzerv_bootstrap_ci
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
+          GRANT CONNECT ON DATABASE rezzerv_server_session_ci TO rezzerv_migrator;
+          GRANT CONNECT ON DATABASE rezzerv_server_session_ci TO rezzerv_app;
+          ALTER DATABASE rezzerv_server_session_ci OWNER TO rezzerv_migrator;
+          \connect rezzerv_server_session_ci
+          ALTER SCHEMA public OWNER TO rezzerv_migrator;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Initialize canonical PostgreSQL schema through Alembic
+        run: python -m alembic upgrade head
+
+      - name: Assert runtime role remains DML-only
+        working-directory: .
+        env:
+          PGPASSWORD: rezzerv_app_ci
+        run: |
+          result=$(psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_server_session_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
+          test "$result" = "f"
+          echo 'SERVER_SESSION_RUNTIME_DML_ONLY_GREEN'
+
       - name: Compile server-side session modules and audits
         run: |
           PYTHONPATH=. python -m py_compile \
@@ -55,6 +114,7 @@ jobs:
             app/services/household_product_configuration_service.py \
             app/services/household_location_onboarding_service.py \
             app/services/password_service.py \
+            app/testing/postgresql_onboarding_selftest_fixture.py \
             app/session_entrypoint.py \
             tests/server_session_security_selftest.py \
             tests/consumer_account_registration_selftest.py \
@@ -64,42 +124,50 @@ jobs:
             tests/waar_inhuis_onboarding_selftest.py \
             tests/shared_household_minimum_selftest.py \
             tests/server_session_route_guard_audit.py
-      - name: Run Rezzerv server-side session security selftest
-        env:
-          DATABASE_URL: sqlite:////tmp/rezzerv-server-session-tests.db
-          REZZERV_SESSION_COOKIE_SECURE: 'false'
+
+      - name: Run Rezzerv server-side session security selftest on PostgreSQL
         run: |
-          PYTHONPATH=. python tests/server_session_security_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/server_session_security_selftest.py | tee /tmp/server-session-security.log
+          grep -F 'SERVER_SESSION_SECURITY_POSTGRESQL_GREEN' /tmp/server-session-security.log
+          grep -F 'SERVER_SESSION_SECURITY_GREEN' /tmp/server-session-security.log
+
       - name: Run consumer account foundation selftest
-        env:
-          REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
-          PYTHONPATH=. python tests/consumer_account_registration_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/consumer_account_registration_selftest.py | tee /tmp/consumer-account.log
+          grep -F 'CONSUMER_ACCOUNT_POSTGRESQL_GREEN' /tmp/consumer-account.log
+
       - name: Run onboarding use-case foundation selftest
-        env:
-          REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
-          PYTHONPATH=. python tests/onboarding_use_case_foundation_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/onboarding_use_case_foundation_selftest.py | tee /tmp/onboarding-foundation.log
+          grep -F 'ONBOARDING_USE_CASE_POSTGRESQL_GREEN' /tmp/onboarding-foundation.log
+
       - name: Run Inhuis halen onboarding selftest
-        env:
-          REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
-          PYTHONPATH=. python tests/inhuis_halen_onboarding_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/inhuis_halen_onboarding_selftest.py | tee /tmp/inhuis-halen.log
+          grep -F 'INHUIS_HALEN_ONBOARDING_POSTGRESQL_GREEN' /tmp/inhuis-halen.log
+
       - name: Run Wat Inhuis onboarding selftest
-        env:
-          REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
-          PYTHONPATH=. python tests/wat_inhuis_onboarding_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/wat_inhuis_onboarding_selftest.py | tee /tmp/wat-inhuis.log
+          grep -F 'WAT_INHUIS_ONBOARDING_POSTGRESQL_GREEN' /tmp/wat-inhuis.log
+
       - name: Run Waar Inhuis onboarding selftest
-        env:
-          REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
-          PYTHONPATH=. python tests/waar_inhuis_onboarding_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/waar_inhuis_onboarding_selftest.py | tee /tmp/waar-inhuis.log
+          grep -F 'WAAR_INHUIS_ONBOARDING_POSTGRESQL_GREEN' /tmp/waar-inhuis.log
+
       - name: Run shared household minimum selftest
-        env:
-          REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
-          PYTHONPATH=. python tests/shared_household_minimum_selftest.py
+          PYTHONPATH=. python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
+          PYTHONPATH=. python tests/shared_household_minimum_selftest.py | tee /tmp/shared-household.log
+          grep -F 'SHARED_HOUSEHOLD_MINIMUM_POSTGRESQL_GREEN' /tmp/shared-household.log
+
       - name: Audit legacy route guards
         run: |
           PYTHONPATH=. python tests/server_session_route_guard_audit.py

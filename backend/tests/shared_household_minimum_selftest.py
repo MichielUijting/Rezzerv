@@ -1,113 +1,46 @@
-"""Self-contained validation for the shared household minimum in Onboarding v2."""
+"""Validation for the shared household minimum in Onboarding v2 on PostgreSQL."""
 
 from __future__ import annotations
 
-from pathlib import Path
-import tempfile
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import inspect, text
 
 from app.api.server_session_routes import SessionApiConfiguration, create_server_session_router
-from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.testing.authorization_schema_fixture import install_authorization_schema
-from app.services.authorization_membership_service import create_canonical_membership_role
 from app.services.household_onboarding_service import (
     ONBOARDING_STATUS_COMPLETED,
     ONBOARDING_STATUS_IN_PROGRESS,
     ensure_household_onboarding_foundation,
     resolve_household_onboarding_state,
 )
-from app.services.roles_v2_schema_foundation import ensure_roles_v2_account_and_household_foundation
-from app.testing.onboarding_request_schema_fixture import (
-    backfill_completed_household_onboarding,
-    install_household_onboarding_schema,
-    install_household_product_configuration_schema,
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    seed_admin_member_household,
+    seed_completed_legacy_household,
 )
-from app.testing.server_session_contract import create_server_session_contract_schema
 
 
 def _prepare_database(engine) -> None:
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE household_registry (
-                id TEXT PRIMARY KEY,
-                naam TEXT NOT NULL,
-                context_type TEXT NOT NULL DEFAULT 'regular',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
-                account_status TEXT NOT NULL DEFAULT 'active',
-                password_hash TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            CREATE TABLE household_memberships (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                user_email TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'member',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(household_id, user_email)
-            )
-        """))
-        ensure_roles_v2_account_and_household_foundation(conn)
-        install_authorization_schema(conn)
-        ensure_authorization_foundation(conn)
-        install_household_onboarding_schema(conn)
-        install_household_product_configuration_schema(conn)
-        create_server_session_contract_schema(conn)
-
-        conn.execute(text("""
-            INSERT INTO household_registry(id, naam, context_type)
-            VALUES
-                ('shared-household', 'Tijdelijk huishouden', 'regular'),
-                ('legacy-household', 'Bestaand huishouden', 'regular')
-        """))
-        conn.execute(text("""
-            INSERT INTO app_users(id, email, password, account_status)
-            VALUES
-                ('shared-admin', 'shared-admin@rezzerv.local', 'AdminPass123!', 'active'),
-                ('shared-member', 'shared-member@rezzerv.local', 'MemberPass123!', 'active')
-        """))
-        conn.execute(text("""
-            INSERT INTO household_memberships(id, household_id, user_email, role)
-            VALUES
-                ('shared-admin-membership', 'shared-household', 'shared-admin@rezzerv.local', 'admin'),
-                ('shared-member-membership', 'shared-household', 'shared-member@rezzerv.local', 'member')
-        """))
-        create_canonical_membership_role(
-            conn,
-            household_id="shared-household",
-            membership_id="shared-admin-membership",
-            legacy_role="admin",
-        )
-        create_canonical_membership_role(
-            conn,
-            household_id="shared-household",
-            membership_id="shared-member-membership",
-            legacy_role="member",
-        )
-        backfill_completed_household_onboarding(conn)
-        ensure_household_onboarding_foundation(conn)
-        conn.execute(text("""
-            UPDATE household_onboarding
-            SET onboarding_status = 'in_progress',
-                primary_use_case = 'inhuis_halen',
-                onboarding_step = 'shared_household_minimum',
-                household_usage_mode = NULL,
-                onboarding_completed_at = NULL
-            WHERE household_id = 'shared-household'
-        """))
+    seed_admin_member_household(
+        engine,
+        household_id="shared-household",
+        household_name="Tijdelijk huishouden",
+        admin_id="shared-admin",
+        admin_email="shared-admin@rezzerv.local",
+        admin_password="AdminPass123!",
+        admin_membership_id="shared-admin-membership",
+        member_id="shared-member",
+        member_email="shared-member@rezzerv.local",
+        member_password="MemberPass123!",
+        member_membership_id="shared-member-membership",
+        onboarding_use_case="inhuis_halen",
+        onboarding_step="shared_household_minimum",
+    )
+    seed_completed_legacy_household(
+        engine,
+        household_id="legacy-household",
+        household_name="Bestaand huishouden",
+    )
 
 
 def _application(engine) -> FastAPI:
@@ -147,15 +80,17 @@ def _register_select_and_profile(client: TestClient, *, email: str) -> str:
     return household_id
 
 
+def _invitation_count(engine) -> int:
+    with engine.begin() as conn:
+        if "household_invitations" not in inspect(conn).get_table_names():
+            return 0
+        return int(conn.execute(text("SELECT COUNT(*) FROM household_invitations")).scalar_one())
+
+
 def run() -> int:
     checks: list[str] = []
-    with tempfile.TemporaryDirectory(prefix="rezzerv-shared-household-minimum-") as tmp:
-        database_path = Path(tmp) / "shared-household-minimum.db"
-        engine = create_engine(
-            f"sqlite:///{database_path}",
-            future=True,
-            connect_args={"check_same_thread": False},
-        )
+    engine = create_postgresql_runtime_test_engine()
+    try:
         _prepare_database(engine)
         app = _application(engine)
 
@@ -254,12 +189,12 @@ def run() -> int:
             assert session.json()["active_household_name"] == "Huis Alleen"
         checks.append("alone_mode_updates_household_name_and_completes_onboarding")
 
+        invitations_before = _invitation_count(engine)
         with TestClient(app) as together:
             together_household_id = _register_select_and_profile(
                 together,
                 email="shared-minimum-together@example.com",
             )
-            before_members = None
             with engine.begin() as conn:
                 before_members = int(conn.execute(text("""
                     SELECT COUNT(*) FROM household_memberships
@@ -277,7 +212,7 @@ def run() -> int:
                     WHERE household_id = :household_id
                 """), {"household_id": together_household_id}).scalar_one())
                 assert after_members == before_members == 1
-                assert "household_invitations" not in inspect(conn).get_table_names()
+        assert _invitation_count(engine) == invitations_before
         checks.append("together_mode_can_finish_without_fake_or_implicit_invitation")
 
         with TestClient(app) as returning:
@@ -297,10 +232,13 @@ def run() -> int:
             )
             assert duplicate.status_code == 409
         checks.append("shared_minimum_survives_login_and_cannot_be_repeated")
+    finally:
+        engine.dispose()
 
     for check in checks:
         print(f"PASS {check}")
     print(f"RESULT {len(checks)}/{len(checks)} checks passed")
+    print("SHARED_HOUSEHOLD_MINIMUM_POSTGRESQL_GREEN")
     print("SHARED_HOUSEHOLD_MINIMUM_GREEN")
     return 0
 

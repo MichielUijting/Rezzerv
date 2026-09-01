@@ -11,6 +11,13 @@ Write-Host "=== Rezzerv centrale frontendregressie ===" -ForegroundColor Cyan
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
+$previousComposeFile = [Environment]::GetEnvironmentVariable("COMPOSE_FILE", "Process")
+$previousComposeProfiles = [Environment]::GetEnvironmentVariable("COMPOSE_PROFILES", "Process")
+$composeSeparator = [IO.Path]::PathSeparator
+$env:COMPOSE_FILE = "docker-compose.yml${composeSeparator}docker-compose.postgresql.yml"
+$env:COMPOSE_PROFILES = "postgresql"
+Write-Host "PostgreSQL teststack actief: COMPOSE_FILE=$env:COMPOSE_FILE; COMPOSE_PROFILES=$env:COMPOSE_PROFILES" -ForegroundColor Cyan
+
 $fixturesPrepared = $false
 $runFailed = $false
 $promptedSuperuserPassword = $false
@@ -213,6 +220,18 @@ finally {
   }
   if ($superuserPasswordBstr -ne [IntPtr]::Zero) {
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($superuserPasswordBstr)
+  }
+  if ($null -eq $previousComposeFile) {
+    Remove-Item Env:\COMPOSE_FILE -ErrorAction SilentlyContinue
+  }
+  else {
+    $env:COMPOSE_FILE = $previousComposeFile
+  }
+  if ($null -eq $previousComposeProfiles) {
+    Remove-Item Env:\COMPOSE_PROFILES -ErrorAction SilentlyContinue
+  }
+  else {
+    $env:COMPOSE_PROFILES = $previousComposeProfiles
   }
   Pop-Location
 }

@@ -153,7 +153,7 @@ def list_authorization_members(
             LEFT JOIN auth_membership_roles ar
               ON ar.household_id = hm.household_id
              AND ar.membership_id = CAST(hm.{id_column} AS TEXT)
-             AND ar.active = 1
+             AND ar.active = TRUE
             LEFT JOIN auth_roles r ON r.role_key = ar.role_key
             WHERE hm.household_id = :household_id
             ORDER BY lower(COALESCE(hm.{email_column}, '')), hm.{id_column}
@@ -198,7 +198,7 @@ def list_authorization_roles(
                    END AS name
             FROM auth_roles
             WHERE scope = 'household'
-              AND active = 1
+              AND active = TRUE
               AND role_key IN (
                   'household.member',
                   'household.admin',
@@ -219,7 +219,7 @@ def list_authorization_roles(
                 FROM auth_role_permissions rp
                 JOIN auth_permissions p
                   ON p.permission_key = rp.permission_key
-                 AND p.active = 1
+                 AND p.active = TRUE
                  AND p.scope = 'household'
                 WHERE rp.role_key = :role_key
                 ORDER BY rp.permission_key
@@ -244,7 +244,7 @@ def list_authorization_permissions(
         rows = conn.execute(text("""
             SELECT permission_key, description
             FROM auth_permissions
-            WHERE scope = 'household' AND active = 1
+            WHERE scope = 'household' AND active = TRUE
             ORDER BY permission_key
         """)).mappings().all()
         return {"household_id": str(household_id), "items": [dict(row) for row in rows]}
