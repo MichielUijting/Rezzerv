@@ -24,6 +24,10 @@ on:
 jobs:
   fixture-lifecycle-platform-authorization:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_fixture_lifecycle_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_fixture_lifecycle_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
     services:
       postgres:
         image: postgres:17
@@ -77,10 +81,6 @@ jobs:
           SQL
 
       - name: Initialize canonical PostgreSQL schema for migrated authorization contract
-        env:
-          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_fixture_lifecycle_ci
-          MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_fixture_lifecycle_ci
-          REZZERV_DATASTORE_POLICY: postgresql-only
         run: python -m alembic upgrade head
 
       - name: Compile fixture authorization boundary and tests
@@ -112,9 +112,6 @@ jobs:
       - name: Run migrated test orchestration authorization contract on PostgreSQL
         env:
           PYTHONPATH: .
-          DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_fixture_lifecycle_ci
-          MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_fixture_lifecycle_ci
-          REZZERV_DATASTORE_POLICY: postgresql-only
         run: pytest -q tests/test_test_orchestration_platform_route_authorization.py
 
       - name: Run server session route guard audit
