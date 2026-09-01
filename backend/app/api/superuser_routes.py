@@ -31,7 +31,7 @@ def _require_platform_superuser(conn, raw_session_id: str | None):
             FROM auth_platform_user_roles
             WHERE user_id = :user_id
               AND role_key = :role_key
-              AND active = 1
+              AND active = TRUE
             LIMIT 1
             """
         ),
