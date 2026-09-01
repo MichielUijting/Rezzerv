@@ -92,6 +92,9 @@ jobs:
           assert detail.get('replacement') == '/api/household/invitations', payload
           print('legacy_member_create_runtime_closure: PASS')
           PY
+      - name: Run authorization API contract
+        run: |
+          docker compose run --rm --no-deps --entrypoint sh backend -lc "pip install --quiet pytest && python -m pytest -q tests/test_authorization_membership_routes.py"
       - name: Provision authorization test session
         shell: bash
         run: |
@@ -120,9 +123,6 @@ jobs:
             -e REZZERV_TEST_ADMIN_EMAIL="$REZZERV_TEST_ADMIN_EMAIL" \
             -e REZZERV_TEST_ADMIN_PASSWORD="$REZZERV_TEST_ADMIN_PASSWORD" \
             backend python /app/tests/authorization_role_matrix_selftest.py
-      - name: Run authorization API contract
-        run: |
-          docker compose run --rm --no-deps --entrypoint sh backend -lc "pip install --quiet pytest && python -m pytest -q tests/test_authorization_membership_routes.py"
       - name: Run authorization UI regression
         working-directory: frontend
         env:
