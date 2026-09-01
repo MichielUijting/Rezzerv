@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from pathlib import Path
-import tempfile
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -29,7 +27,7 @@ from app.services.server_session_service import (
 from household_invitation_migrated_fixture import (
     insert_membership,
     insert_user,
-    migrated_sqlite_engine,
+    migrated_postgresql_engine,
 )
 
 
@@ -106,9 +104,8 @@ def _client_with_cookie(app: FastAPI, raw_session: str) -> TestClient:
 
 def run() -> int:
     checks: list[str] = []
-    with tempfile.TemporaryDirectory(prefix='rezzerv-invitation-foundation-') as tmp:
-        database_path = Path(tmp) / 'invitation.db'
-        engine = migrated_sqlite_engine(database_path, check_same_thread=False)
+    engine = migrated_postgresql_engine()
+    try:
         _prepare_database(engine)
         app = _application(engine)
 
@@ -312,6 +309,8 @@ def run() -> int:
             else:
                 raise AssertionError('revoked token unexpectedly remained valid')
         checks.append('raw_token_is_hash_only_at_rest_and_revocation_invalidates_resolution')
+    finally:
+        engine.dispose()
 
     for check in checks:
         print(f'PASS {check}')
