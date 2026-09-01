@@ -17,6 +17,34 @@ from tests.platform_feature_flag_migrated_fixture import migrated_platform_featu
 
 
 FEATURE_FLAGS_PERMISSION = "platform.feature_flags.manage"
+_FIXTURE_PLATFORM_USER_IDS = (
+    "platform-admin",
+    "ip-owner",
+    "superuser",
+    "support-reader",
+    "frontteam",
+)
+
+
+def _reset_feature_flag_fixture_state(conn) -> None:
+    conn.execute(
+        text("DELETE FROM platform_feature_flags WHERE flag_key = :flag_key"),
+        {"flag_key": FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH},
+    )
+    conn.execute(
+        text(
+            """
+            DELETE FROM auth_platform_user_roles
+            WHERE user_id IN (
+                'platform-admin',
+                'ip-owner',
+                'superuser',
+                'support-reader',
+                'frontteam'
+            )
+            """
+        )
+    )
 
 
 @pytest.fixture
@@ -24,6 +52,7 @@ def auth_engine():
     engine = migrated_platform_feature_flag_engine()
     with engine.begin() as conn:
         ensure_authorization_foundation(conn)
+        _reset_feature_flag_fixture_state(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES
@@ -36,7 +65,11 @@ def auth_engine():
     try:
         yield engine
     finally:
-        engine.dispose()
+        try:
+            with engine.begin() as conn:
+                _reset_feature_flag_fixture_state(conn)
+        finally:
+            engine.dispose()
 
 
 def _context(user_id: str) -> ServerSessionContext:
