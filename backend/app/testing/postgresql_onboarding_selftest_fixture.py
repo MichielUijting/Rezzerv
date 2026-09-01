@@ -23,6 +23,8 @@ def _required_database_url(name: str) -> str:
     value = str(os.getenv(name) or "").strip()
     if not value:
         raise RuntimeError(f"{name} ontbreekt voor PostgreSQL application test")
+    if value.startswith("postgresql://"):
+        value = "postgresql+psycopg://" + value[len("postgresql://"):]
     return value
 
 
