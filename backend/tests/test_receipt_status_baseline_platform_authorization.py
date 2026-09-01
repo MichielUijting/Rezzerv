@@ -4,11 +4,9 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import text
 
 from app.services import session_request_context
-from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.maintenance_recompute_route_authorization import MAINTENANCE_RECOMPUTE_ROUTES
 from app.services.receipt_status_baseline_route_authorization import (
     RECEIPT_STATUS_BASELINE_DIAGNOSTICS_PERMISSION,
@@ -19,7 +17,8 @@ from app.services.receipt_status_baseline_route_authorization import (
 )
 from app.services.server_session_service import ServerSessionContext
 from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
-from app.testing.authorization_schema_fixture import install_authorization_schema
+from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database
+from app.testing.postgresql_platform_authorization_fixture import create_platform_authorization_test_engine
 
 
 DIAGNOSTICS_PERMISSION = "platform.diagnostics.view"
@@ -38,19 +37,14 @@ BASELINE_SERVICE_SOURCE_PATH = BACKEND_ROOT / "app" / "services" / "receipt_stat
 
 @pytest.fixture
 def auth_engine():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    reset_postgresql_test_database()
+    engine = create_platform_authorization_test_engine()
     with engine.begin() as conn:
-        install_authorization_schema(conn)
-        ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_roles(role_key, scope, name, system_role, active)
             VALUES
-              ('platform.diagnostics_only_test', 'platform', 'Diagnostics only test role', 0, 1),
-              ('platform.technical_only_test', 'platform', 'Technical only test role', 0, 1)
+              ('platform.diagnostics_only_test', 'platform', 'Diagnostics only test role', FALSE, TRUE),
+              ('platform.technical_only_test', 'platform', 'Technical only test role', FALSE, TRUE)
         """))
         conn.execute(text("""
             INSERT INTO auth_role_permissions(role_key, permission_key)
@@ -61,13 +55,8 @@ def auth_engine():
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES
-              ('superuser', 'platform.superuser', 1),
-              ('ip-owner', 'platform.ip_owner', 1),
-              ('support-reader', 'platform.support_read', 1),
-              ('platform-admin', 'platform.platform_admin', 1),
-              ('frontteam', 'platform.frontteam', 1),
-              ('diagnostics-only', 'platform.diagnostics_only_test', 1),
-              ('technical-only', 'platform.technical_only_test', 1)
+              ('diagnostics-only', 'platform.diagnostics_only_test', TRUE),
+              ('technical-only', 'platform.technical_only_test', TRUE)
         """))
     try:
         yield engine
@@ -249,7 +238,7 @@ def test_platform_admin_revocation_is_effective_on_next_baseline_check(
     with auth_engine.begin() as conn:
         conn.execute(text("""
             UPDATE auth_platform_user_roles
-            SET active = 0
+            SET active = FALSE
             WHERE user_id = 'platform-admin'
               AND role_key = 'platform.platform_admin'
         """))
