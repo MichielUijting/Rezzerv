@@ -7,6 +7,7 @@ on:
       - 'backend/app/api/legacy_household_member_creation_closure.py'
       - 'backend/app/api/router.py'
       - 'backend/tests/test_authorization_membership_routes.py'
+      - 'backend/tests/household_zero_regression_fixture.py'
       - 'frontend/src/features/settings/SettingsAuthorizationPage.jsx'
       - 'frontend/src/features/settings/settingsAuthorization.css'
       - 'frontend/src/features/settings/services/authorizationMembershipService.js'
@@ -123,6 +124,8 @@ jobs:
             -e REZZERV_TEST_ADMIN_EMAIL="$REZZERV_TEST_ADMIN_EMAIL" \
             -e REZZERV_TEST_ADMIN_PASSWORD="$REZZERV_TEST_ADMIN_PASSWORD" \
             backend python /app/tests/authorization_role_matrix_selftest.py
+      - name: Prepare household-zero fixtures
+        run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py prepare
       - name: Run authorization UI regression
         working-directory: frontend
         env:
@@ -136,6 +139,9 @@ jobs:
       - name: Print backend logs after failure
         if: failure()
         run: docker compose logs --no-color --tail=500 backend
+      - name: Cleanup household-zero fixtures
+        if: always()
+        run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py cleanup || true
       - name: Stop application
         if: always()
         run: docker compose down --volumes
