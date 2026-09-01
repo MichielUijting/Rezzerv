@@ -19,7 +19,6 @@ jobs:
         working-directory: backend
     env:
       PYTHONPATH: .
-      DATABASE_URL: sqlite:////tmp/rezzerv-gpc-live-validation.db
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -10,11 +10,7 @@ APP_ROOT = BACKEND_ROOT / "app"
 
 # Explicit SQLite test/dev compatibility is allowed only at these narrow
 # boundaries. Production request/runtime SQL remains fully scanned.
-EXPLICIT_SQLITE_TEST_DEV_PATHS = {
-    Path("cli/import_gpc_catalog_controlled.py"),
-    Path("cli/rehearse_gpc_bilingual_import.py"),
-    Path("testing_receipt_parser_diagnosis_routes.py"),
-}
+EXPLICIT_SQLITE_TEST_DEV_PATHS: set[Path] = set()
 EXPLICIT_SQLITE_TEST_DEV_FUNCTIONS = {
     Path("api/routes/kassa_regression_routes.py"): {"_init_test_database"},
 }

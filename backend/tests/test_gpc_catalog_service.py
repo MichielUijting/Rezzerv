@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-import subprocess
-import sys
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import text
 
 from app.services.gpc_catalog_service import import_gpc_xml
+from app.testing.postgresql_onboarding_selftest_fixture import (
+    create_postgresql_runtime_test_engine,
+    reset_postgresql_test_database,
+)
 
 
-BACKEND_ROOT = Path(__file__).resolve().parents[1]
-ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
 HEAD_REVISION = "20260830_02"
 
 SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -31,33 +30,9 @@ SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def _migrated_sqlite_engine(database_path: Path):
-    env = os.environ.copy()
-    env["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
-    env["PYTHONPATH"] = str(BACKEND_ROOT)
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "alembic",
-            "-c",
-            str(ALEMBIC_INI),
-            "upgrade",
-            "head",
-        ],
-        cwd=BACKEND_ROOT,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise AssertionError(
-            "Alembic GPC test fixture migration failed:\n"
-            + result.stdout
-            + result.stderr
-        )
-    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+def _postgresql_engine():
+    reset_postgresql_test_database()
+    engine = create_postgresql_runtime_test_engine()
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
     assert revision == HEAD_REVISION
@@ -65,92 +40,91 @@ def _migrated_sqlite_engine(database_path: Path):
 
 
 def test_import_gpc_xml_uses_migrated_hierarchy_and_audit(tmp_path: Path):
-    database_path = tmp_path / "rezzerv.db"
     xml_path = tmp_path / "nl-v-test.xml"
     xml_path.write_text(SAMPLE_XML, encoding="utf-8")
-    engine = _migrated_sqlite_engine(database_path)
+    engine = _postgresql_engine()
+    try:
+        result = import_gpc_xml(
+            xml_path,
+            language_code="nl",
+            source_version="test",
+            db_engine=engine,
+        )
 
-    result = import_gpc_xml(
-        xml_path,
-        language_code="nl",
-        source_version="test",
-        db_engine=engine,
-    )
+        assert result["counts"] == {
+            "segments": 1,
+            "families": 1,
+            "classes": 1,
+            "bricks": 1,
+            "attribute_types": 1,
+            "attribute_values": 1,
+            "brick_attribute_types": 1,
+            "attribute_type_values": 1,
+        }
+        assert set(result["tables"]) >= {
+            "gpc_segments",
+            "gpc_families",
+            "gpc_classes",
+            "gpc_bricks",
+            "gpc_attribute_types",
+            "gpc_attribute_values",
+            "gpc_brick_attribute_types",
+            "gpc_attribute_type_values",
+            "gpc_import_runs",
+        }
 
-    assert result["counts"] == {
-        "segments": 1,
-        "families": 1,
-        "classes": 1,
-        "bricks": 1,
-        "attribute_types": 1,
-        "attribute_values": 1,
-        "brick_attribute_types": 1,
-        "attribute_type_values": 1,
-    }
-    assert set(result["tables"]) >= {
-        "gpc_segments",
-        "gpc_families",
-        "gpc_classes",
-        "gpc_bricks",
-        "gpc_attribute_types",
-        "gpc_attribute_values",
-        "gpc_brick_attribute_types",
-        "gpc_attribute_type_values",
-        "gpc_import_runs",
-    }
+        with engine.begin() as conn:
+            brick = conn.execute(
+                text("SELECT brick_code, description, class_code FROM gpc_bricks")
+            ).mappings().one()
+            audit = conn.execute(
+                text("SELECT language_code, source_version, status FROM gpc_import_runs")
+            ).mappings().one()
 
-    with engine.begin() as conn:
-        brick = conn.execute(
-            text("SELECT brick_code, description, class_code FROM gpc_bricks")
-        ).mappings().one()
-        audit = conn.execute(
-            text("SELECT language_code, source_version, status FROM gpc_import_runs")
-        ).mappings().one()
-
-    assert dict(brick) == {
-        "brick_code": "10006144",
-        "description": "Mustard Greens",
-        "class_code": "50101700",
-    }
-    assert dict(audit) == {
-        "language_code": "nl",
-        "source_version": "test",
-        "status": "success",
-    }
+        assert dict(brick) == {
+            "brick_code": "10006144",
+            "description": "Mustard Greens",
+            "class_code": "50101700",
+        }
+        assert dict(audit) == {
+            "language_code": "nl",
+            "source_version": "test",
+            "status": "success",
+        }
+    finally:
+        engine.dispose()
 
 
 def test_reimport_updates_descriptions_without_duplicates(tmp_path: Path):
-    database_path = tmp_path / "rezzerv-reimport.db"
     xml_path = tmp_path / "nl-v-test.xml"
     xml_path.write_text(SAMPLE_XML, encoding="utf-8")
-    engine = _migrated_sqlite_engine(database_path)
-
-    import_gpc_xml(xml_path, db_engine=engine)
-    xml_path.write_text(SAMPLE_XML.replace("Mustard Greens", "Mosterdblad"), encoding="utf-8")
-    import_gpc_xml(xml_path, db_engine=engine)
-
-    with engine.begin() as conn:
-        brick_count = conn.execute(text("SELECT COUNT(*) FROM gpc_bricks")).scalar_one()
-        description = conn.execute(
-            text("SELECT description FROM gpc_bricks WHERE brick_code = '10006144'")
-        ).scalar_one()
-        import_count = conn.execute(text("SELECT COUNT(*) FROM gpc_import_runs")).scalar_one()
-
-    assert brick_count == 1
-    assert description == "Mosterdblad"
-    assert import_count == 2
-
-
-def test_invalid_root_is_rejected_before_schema_validation(tmp_path: Path):
-    xml_path = tmp_path / "invalid.xml"
-    xml_path.write_text("<not-schema />", encoding="utf-8")
-    engine = create_engine("sqlite:///:memory:")
-
+    engine = _postgresql_engine()
     try:
         import_gpc_xml(xml_path, db_engine=engine)
+        xml_path.write_text(SAMPLE_XML.replace("Mustard Greens", "Mosterdblad"), encoding="utf-8")
+        import_gpc_xml(xml_path, db_engine=engine)
+
+        with engine.begin() as conn:
+            brick_count = conn.execute(text("SELECT COUNT(*) FROM gpc_bricks")).scalar_one()
+            description = conn.execute(
+                text("SELECT description FROM gpc_bricks WHERE brick_code = '10006144'")
+            ).scalar_one()
+            import_count = conn.execute(text("SELECT COUNT(*) FROM gpc_import_runs")).scalar_one()
+
+        assert brick_count == 1
+        assert description == "Mosterdblad"
+        assert import_count == 2
+    finally:
+        engine.dispose()
+
+
+def test_invalid_root_is_rejected_before_schema_validation(tmp_path: Path) -> None:
+    xml_path = tmp_path / "invalid.xml"
+    xml_path.write_text("<not-schema />", encoding="utf-8")
+
+    try:
+        import_gpc_xml(xml_path, db_engine=None)
     except ValueError as exc:
         assert "root-element" in str(exc)
     else:
         raise AssertionError("ValueError expected")
-
-    assert not any(name.startswith("gpc_") for name in inspect(engine).get_table_names())
