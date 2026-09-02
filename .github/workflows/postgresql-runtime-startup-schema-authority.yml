@@ -173,12 +173,6 @@ jobs:
           grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_ALEMBIC_AUTHORITY_GREEN' /tmp/platform-feature-support-static.log
           grep -F 'POSTGRESQL_PLATFORM_FEATURE_SUPPORT_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/platform-feature-support-static.log
 
-      - name: Prove password reset service security contract
-        working-directory: backend
-        run: |
-          python tests/password_reset_security_selftest.py | tee /tmp/password-reset-security.log
-          grep -F 'PASSWORD_RESET_SECURITY_GREEN' /tmp/password-reset-security.log
-
       - name: Migrate with dedicated Alembic role
         working-directory: backend
         run: |
@@ -194,6 +188,12 @@ jobs:
             exit 1
           fi
           echo 'POSTGRESQL_RUNTIME_DDL_DENIED_GREEN'
+
+      - name: Prove password reset service security contract on migrated runtime schema
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/password_reset_security_selftest.py | tee /tmp/password-reset-security.log
+          grep -F 'PASSWORD_RESET_SECURITY_GREEN' /tmp/password-reset-security.log
 
       - name: Prove password recovery works with DML-only runtime role
         working-directory: backend
