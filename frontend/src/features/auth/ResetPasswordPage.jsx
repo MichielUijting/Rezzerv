@@ -128,9 +128,6 @@ export default function ResetPasswordPage() {
                 >
                   {loading ? 'Bezig...' : 'Wachtwoord opslaan'}
                 </Button>
-                <div style={{ textAlign: 'center' }}>
-                  <Link to="/login">Terug naar inloggen</Link>
-                </div>
                 {error ? <div className="rz-alert" data-testid="reset-password-error">{error}</div> : null}
               </form>
             )}
