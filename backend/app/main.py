@@ -3994,7 +3994,7 @@ def get_household_product_event_rows(conn, household_id: str, household_article_
                 article_id IN :article_ids
                 OR lower(trim(article_name)) IN :article_names
               )
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC, id DESC
             """
         ).bindparams(
             bindparam('article_ids', expanding=True),
