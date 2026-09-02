@@ -18,6 +18,10 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+from app.services.postgresql_boolean_contract import (
+    enforce_postgresql_boolean_parameters_before_execute,
+    enforce_postgresql_boolean_sql_before_cursor_execute,
+)
 from app.services.purchase_import_quantity_contract import (
     enforce_purchase_import_quantity_precision_before_execute,
 )
@@ -105,6 +109,18 @@ event.listen(
     engine,
     "before_execute",
     enforce_purchase_import_quantity_precision_before_execute,
+)
+event.listen(
+    engine,
+    "before_execute",
+    enforce_postgresql_boolean_parameters_before_execute,
+    retval=True,
+)
+event.listen(
+    engine,
+    "before_cursor_execute",
+    enforce_postgresql_boolean_sql_before_cursor_execute,
+    retval=True,
 )
 
 SessionLocal = sessionmaker(bind=engine)
