@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 from urllib.parse import quote
 
-HEAD_REVISION = "20260830_02"
+HEAD_REVISION = "20260902_01"
 BASELINE_REVISION = "20260827_01"
 EXPECTED_APPLICATION_TABLES = 87
 SYSTEM_TABLES = frozenset({"alembic_version", "sqlite_sequence"})
