@@ -14,7 +14,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from sqlalchemy import inspect, text
+from sqlalchemy import Boolean, Integer, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 
@@ -49,16 +49,32 @@ def _load_production_module():
     return importlib.import_module("app.main")
 
 
-def _column_names(conn, table_name: str) -> set[str]:
+def _column_map(conn, table_name: str) -> dict[str, dict]:
     return {
-        str(column.get("name") or "")
+        str(column.get("name") or ""): column
         for column in inspect(conn).get_columns(table_name)
     }
 
 
+def _coerce_fixture_value(column: dict, value):
+    column_type = column.get("type")
+    if isinstance(column_type, Boolean):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return bool(value)
+    if isinstance(column_type, Integer) and isinstance(value, bool):
+        return int(value)
+    return value
+
+
 def _insert_row(conn, table_name: str, values: dict) -> None:
-    available = _column_names(conn, table_name)
-    selected = {key: value for key, value in values.items() if key in available}
+    available = _column_map(conn, table_name)
+    selected = {
+        key: _coerce_fixture_value(available[key], value)
+        for key, value in values.items()
+        if key in available
+    }
     if not selected:
         raise AssertionError(f"Geen bruikbare kolommen voor {table_name}")
     columns = ", ".join(selected)
