@@ -188,7 +188,9 @@ def _household_authority_delta_is_exact() -> None:
             ).fetchone() is not None:
                 raise AssertionError("Manual-source trigger already existed before _02")
 
-        _run_alembic(database, "head")
+        # This test owns the exact 20260830_01 -> 20260830_02 receipt delta.
+        # Do not bind its semantic contract to unrelated later Alembic heads.
+        _run_alembic(database, HEAD_REVISION)
         with sqlite3.connect(database) as connection:
             if _revision(connection) != HEAD_REVISION:
                 raise AssertionError(
@@ -295,7 +297,9 @@ def _registry_only_manual_source_recovery_is_executable() -> None:
             if not violations:
                 raise AssertionError("Legacy fixture does not reproduce receipt FK drift")
 
-        _run_alembic(database, "head")
+        # Recovery is the responsibility of 20260830_02 itself; later migrations
+        # must not become a hidden requirement for this historical proof.
+        _run_alembic(database, HEAD_REVISION)
         with sqlite3.connect(database) as connection:
             if _revision(connection) != HEAD_REVISION:
                 raise AssertionError("Known legacy receipt recovery did not reach _02")
