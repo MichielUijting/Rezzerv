@@ -6,6 +6,7 @@ import migration_foundation_selftest as foundation_test
 
 
 HEAD_REVISION = "20260902_01"
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 88
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
@@ -194,6 +195,7 @@ def _assert_password_reset_authority(connection) -> None:
 
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
+    foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
     _run_foundation_with_locked_head_contract()
 
     engine = create_engine(foundation_test.foundation._engine_url())
