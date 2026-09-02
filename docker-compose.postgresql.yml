@@ -19,10 +19,10 @@ services:
         - CMD-SHELL
         - >-
           PGPASSWORD="$${REZZERV_POSTGRES_MIGRATION_PASSWORD}"
-          psql -h 127.0.0.1 -U "$${REZZERV_POSTGRES_MIGRATION_USER}" -d "$${POSTGRES_DB}" -Atqc "SELECT 1" >/dev/null 2>&1
+          psql -h postgres -U "$${REZZERV_POSTGRES_MIGRATION_USER}" -d "$${POSTGRES_DB}" -Atqc "SELECT 1" >/dev/null 2>&1
           &&
           PGPASSWORD="$${REZZERV_POSTGRES_RUNTIME_PASSWORD}"
-          psql -h 127.0.0.1 -U "$${REZZERV_POSTGRES_RUNTIME_USER}" -d "$${POSTGRES_DB}" -Atqc "SELECT 1" >/dev/null 2>&1
+          psql -h postgres -U "$${REZZERV_POSTGRES_RUNTIME_USER}" -d "$${POSTGRES_DB}" -Atqc "SELECT 1" >/dev/null 2>&1
       interval: 5s
       timeout: 5s
       retries: 10

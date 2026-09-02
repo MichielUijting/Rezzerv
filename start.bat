@@ -74,15 +74,7 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo [4/6] Forcing frontend container onto the latest image...
-docker compose %COMPOSE_ENV% %COMPOSE_ARGS% up -d --force-recreate frontend
-if %errorlevel% neq 0 (
-  echo [ERROR] frontend force-recreate failed.
-  docker compose %COMPOSE_ENV% %COMPOSE_ARGS% ps -a
-  docker compose %COMPOSE_ENV% %COMPOSE_ARGS% logs frontend --tail 120
-  pause
-  exit /b 1
-)
+echo [4/6] Application containers started from freshly built images.
 
 echo [5/6] Wachten %STARTUP_WAIT_SECONDS% seconden zodat backend volledig kan opstarten...
 timeout /t %STARTUP_WAIT_SECONDS% /nobreak >nul
