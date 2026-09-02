@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
 
 from app.services import external_database_matchflow_evidence as matchflow
@@ -17,11 +19,21 @@ from app.services import external_recognition_confirmation as recognition
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260830_02"
 
 
 def _database_url(path: Path) -> str:
     return f"sqlite:///{path.as_posix()}"
+
+
+def _canonical_head_revision() -> str:
+    config = Config(str(ALEMBIC_INI))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
+    heads = ScriptDirectory.from_config(config).get_heads()
+    if len(heads) != 1:
+        raise AssertionError(
+            f"Recognition contract fixture requires one canonical Alembic head, got {heads}"
+        )
+    return heads[0]
 
 
 def _migrate_database(path: Path) -> None:
@@ -113,11 +125,12 @@ def _insert_purchase_import_line_fixture(conn) -> None:
 
 
 def _assert_head_revision(engine) -> None:
+    expected_revision = _canonical_head_revision()
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    if revision != HEAD_REVISION:
+    if revision != expected_revision:
         raise AssertionError(
-            f"Recognition contract fixture expected Alembic {HEAD_REVISION}, got {revision}"
+            f"Recognition contract fixture expected Alembic {expected_revision}, got {revision}"
         )
 
 
