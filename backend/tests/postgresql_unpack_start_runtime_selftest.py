@@ -28,6 +28,15 @@ def _assert_postgresql_runtime() -> None:
         raise RuntimeError("MIGRATION_DATABASE_URL must be absent during the DML-only runtime proof")
 
 
+def _configure_test_runtime_paths() -> None:
+    # app.main performs its normal runtime initialization at import time. GitHub
+    # runners cannot create the container-only /app/data path, so keep this proof
+    # on a writable isolated path without changing production startup semantics.
+    os.environ["RECEIPT_STORAGE_ROOT"] = "/tmp/rezzerv-postgresql-unpack/receipts/raw"
+    os.environ["REZZERV_RECEIPT_STARTUP_OCR_WARMUP"] = "false"
+    os.environ["REZZERV_RECEIPT_STARTUP_REMBG_WARMUP"] = "false"
+
+
 def _insert_approved_receipt_fixture(conn) -> None:
     conn.execute(
         text(
@@ -117,6 +126,7 @@ def _insert_approved_receipt_fixture(conn) -> None:
 
 def main() -> None:
     _assert_postgresql_runtime()
+    _configure_test_runtime_paths()
 
     import app.main as legacy_main
 
