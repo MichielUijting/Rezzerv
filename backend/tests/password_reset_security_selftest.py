@@ -1,31 +1,37 @@
-"""Security contract for forgotten-password recovery.
+"""Security contract for forgotten-password recovery on migration-owned schema.
 
-This service-level test is deliberately self-contained. Alembic ownership and
-PostgreSQL type/index authority are covered by migration_foundation_head_selftest.
+The test performs DML only against the database configured by DATABASE_URL.
+Schema creation and ownership remain exclusively with Alembic. In normal
+PostgreSQL CI this therefore proves the security lifecycle on canonical schema;
+in the explicit SQLite migration-compatibility job it exercises the same DML
+contract on the already migrated compatibility database without creating any
+SQLite test infrastructure itself.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 from pathlib import Path
 import sys
-import tempfile
+import uuid
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import inspect, text
 
+from app.db import engine
 from app.services.password_reset_service import (
     PASSWORD_RESET_EMAIL_LIMIT,
     PasswordResetTokenInvalidError,
     confirm_password_reset,
     hash_password_reset_token,
     issue_password_reset,
+    validate_password_reset_schema,
 )
-from app.services.password_service import is_password_hash, verify_password
-from app.testing.server_session_contract import create_server_session_contract_schema
+from app.services.password_service import hash_password, is_password_hash, verify_password
 
 
 def _expect_invalid(fn) -> None:
@@ -36,91 +42,139 @@ def _expect_invalid(fn) -> None:
     raise AssertionError("Ongeldige/verlopen/hergebruikte reset-token werd geaccepteerd")
 
 
-def _prepare_database(engine, now: datetime) -> None:
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE app_users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
-                password_hash TEXT NULL,
-                account_status TEXT NOT NULL DEFAULT 'active',
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.execute(text("""
-            INSERT INTO app_users(id, email, password, password_hash, account_status)
-            VALUES
-                ('consumer-user', 'consumer@example.com', 'LegacyPass123!', NULL, 'active'),
-                ('other-user', 'other@example.com', 'OtherLegacyPass123!', NULL, 'active')
-        """))
-        create_server_session_contract_schema(conn)
-        conn.execute(text("""
-            CREATE TABLE account_password_reset_tokens (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NULL,
-                request_email_hash TEXT NOT NULL,
-                request_ip_hash TEXT NOT NULL,
-                token_hash TEXT NULL UNIQUE,
-                requested_at TIMESTAMP NOT NULL,
-                expires_at TIMESTAMP NULL,
-                used_at TIMESTAMP NULL,
-                invalidated_at TIMESTAMP NULL,
-                FOREIGN KEY(user_id) REFERENCES app_users(id) ON DELETE CASCADE
-            )
-        """))
+def _user_insert(conn, *, user_id: str, email: str, password: str) -> None:
+    columns = {item["name"] for item in inspect(conn).get_columns("app_users")}
+    encoded = hash_password(password)
+    names = ["id", "email", "password"]
+    values = [":id", ":email", ":password"]
+    params = {"id": user_id, "email": email, "password": encoded}
+    if "password_hash" in columns:
+        names.append("password_hash")
+        values.append(":password_hash")
+        params["password_hash"] = encoded
+    if "account_status" in columns:
+        names.append("account_status")
+        values.append("'active'")
+    if "created_at" in columns:
+        names.append("created_at")
+        values.append("CURRENT_TIMESTAMP")
+    if "updated_at" in columns:
+        names.append("updated_at")
+        values.append("CURRENT_TIMESTAMP")
+    conn.execute(
+        text(f"INSERT INTO app_users ({', '.join(names)}) VALUES ({', '.join(values)})"),
+        params,
+    )
 
-        issued_at = now - timedelta(minutes=10)
-        expires_at = now + timedelta(hours=1)
-        rows = [
-            ('session-current', 'a' * 64, 'consumer-user'),
-            ('session-other', 'b' * 64, 'consumer-user'),
-            ('session-other-user', 'c' * 64, 'other-user'),
-        ]
-        for session_id, token_hash, user_id in rows:
-            conn.execute(text("""
-                INSERT INTO server_sessions(
-                    id, session_token_hash, user_id, active_household_id,
-                    issued_at, expires_at, session_version, revoked_at,
-                    replaced_by_session_id, created_at, updated_at
-                ) VALUES (
-                    :id, :token_hash, :user_id, NULL,
-                    :issued_at, :expires_at, 1, NULL,
-                    NULL, :issued_at, :issued_at
-                )
-            """), {
-                "id": session_id,
-                "token_hash": token_hash,
-                "user_id": user_id,
-                "issued_at": issued_at,
-                "expires_at": expires_at,
-            })
+
+def _session_insert(
+    conn,
+    *,
+    session_id: str,
+    token_hash: str,
+    user_id: str,
+    now: datetime,
+) -> None:
+    conn.execute(
+        text("""
+            INSERT INTO server_sessions(
+                id, session_token_hash, user_id, active_household_id,
+                issued_at, expires_at, session_version, revoked_at,
+                replaced_by_session_id, created_at, updated_at
+            ) VALUES (
+                :id, :token_hash, :user_id, NULL,
+                :issued_at, :expires_at, 1, NULL,
+                NULL, :issued_at, :issued_at
+            )
+        """),
+        {
+            "id": session_id,
+            "token_hash": token_hash,
+            "user_id": user_id,
+            "issued_at": now,
+            "expires_at": now + timedelta(hours=1),
+        },
+    )
+
+
+def _email_hash(email: str) -> str:
+    return hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
 
 
 def run() -> int:
     checks: list[str] = []
-    now = datetime(2026, 9, 2, 10, 0, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    suffix = uuid.uuid4().hex
+    consumer_user_id = f"password-reset-security-consumer-{suffix}"
+    other_user_id = f"password-reset-security-other-{suffix}"
+    consumer_email = f"password-reset-security-{suffix}@example.invalid"
+    other_email = f"password-reset-security-other-{suffix}@example.invalid"
+    unknown_email = f"password-reset-security-unknown-{suffix}@example.invalid"
+    original_password = "OrigineelSterkWachtwoord123!"
+    other_password = "AnderSterkWachtwoord123!"
+    new_password = "NieuwSterkWachtwoord456!"
+    session_ids = [
+        f"password-reset-security-{suffix[:18]}-a",
+        f"password-reset-security-{suffix[:18]}-b",
+        f"password-reset-security-{suffix[:18]}-other",
+    ]
+    cleanup_hashes = [_email_hash(consumer_email), _email_hash(other_email), _email_hash(unknown_email)]
 
-    with tempfile.TemporaryDirectory(prefix="rezzerv-password-reset-") as tmp:
-        engine = create_engine(f"sqlite:///{Path(tmp) / 'password-reset.db'}", future=True)
-        _prepare_database(engine, now)
+    try:
+        with engine.begin() as conn:
+            validate_password_reset_schema(conn)
+            _user_insert(
+                conn,
+                user_id=consumer_user_id,
+                email=consumer_email,
+                password=original_password,
+            )
+            _user_insert(
+                conn,
+                user_id=other_user_id,
+                email=other_email,
+                password=other_password,
+            )
+            _session_insert(
+                conn,
+                session_id=session_ids[0],
+                token_hash=uuid.uuid4().hex * 2,
+                user_id=consumer_user_id,
+                now=now - timedelta(minutes=10),
+            )
+            _session_insert(
+                conn,
+                session_id=session_ids[1],
+                token_hash=uuid.uuid4().hex * 2,
+                user_id=consumer_user_id,
+                now=now - timedelta(minutes=10),
+            )
+            _session_insert(
+                conn,
+                session_id=session_ids[2],
+                token_hash=uuid.uuid4().hex * 2,
+                user_id=other_user_id,
+                now=now - timedelta(minutes=10),
+            )
 
         with engine.begin() as conn:
             first = issue_password_reset(
                 conn,
-                email=" Consumer@Example.com ",
+                email=f"  {consumer_email.upper()}  ",
                 request_ip="203.0.113.10",
                 now=now,
             )
             assert first.should_deliver
             assert first.raw_token
-            assert first.email == "consumer@example.com"
-            stored = conn.execute(text("""
-                SELECT token_hash, request_email_hash, request_ip_hash
-                FROM account_password_reset_tokens
-                WHERE user_id = 'consumer-user'
-            """)).mappings().one()
+            assert first.email == consumer_email
+            stored = conn.execute(
+                text("""
+                    SELECT token_hash, request_email_hash, request_ip_hash
+                    FROM account_password_reset_tokens
+                    WHERE user_id = :user_id
+                """),
+                {"user_id": consumer_user_id},
+            ).mappings().one()
             assert stored["token_hash"] == hash_password_reset_token(first.raw_token)
             assert stored["token_hash"] != first.raw_token
             assert len(stored["request_email_hash"]) == 64
@@ -131,88 +185,102 @@ def run() -> int:
         with engine.begin() as conn:
             second = issue_password_reset(
                 conn,
-                email="consumer@example.com",
+                email=consumer_email,
                 request_ip="203.0.113.10",
                 now=now + timedelta(seconds=5),
             )
             assert second.should_deliver and second.raw_token
-            invalidated = conn.execute(text("""
-                SELECT invalidated_at
-                FROM account_password_reset_tokens
-                WHERE token_hash = :token_hash
-            """), {"token_hash": hash_password_reset_token(first.raw_token)}).scalar_one()
+            invalidated = conn.execute(
+                text("""
+                    SELECT invalidated_at
+                    FROM account_password_reset_tokens
+                    WHERE token_hash = :token_hash
+                """),
+                {"token_hash": hash_password_reset_token(first.raw_token)},
+            ).scalar_one()
             assert invalidated is not None
-            _expect_invalid(lambda: confirm_password_reset(
-                conn,
-                raw_token=first.raw_token,
-                new_password="NieuwSterkWachtwoord456!",
-                now=now + timedelta(seconds=10),
-            ))
+            _expect_invalid(
+                lambda: confirm_password_reset(
+                    conn,
+                    raw_token=first.raw_token,
+                    new_password=new_password,
+                    now=now + timedelta(seconds=10),
+                )
+            )
         checks.append("new_request_invalidates_previous_token")
 
         with engine.begin() as conn:
             result = confirm_password_reset(
                 conn,
                 raw_token=second.raw_token,
-                new_password="NieuwSterkWachtwoord456!",
+                new_password=new_password,
                 now=now + timedelta(seconds=15),
             )
-            assert result.user_id == "consumer-user"
+            assert result.user_id == consumer_user_id
             assert result.revoked_sessions == 2
 
-            account = conn.execute(text("""
-                SELECT password, password_hash FROM app_users WHERE id = 'consumer-user'
-            """)).mappings().one()
+            user_columns = {item["name"] for item in inspect(conn).get_columns("app_users")}
+            selected = "password, password_hash" if "password_hash" in user_columns else "password"
+            account = conn.execute(
+                text(f"SELECT {selected} FROM app_users WHERE id = :user_id"),
+                {"user_id": consumer_user_id},
+            ).mappings().one()
+            stored_password_hash = account.get("password_hash") if "password_hash" in account else None
             assert is_password_hash(account["password"])
-            assert account["password_hash"] == account["password"]
+            if stored_password_hash is not None:
+                assert stored_password_hash == account["password"]
             assert verify_password(
                 account["password"],
-                "NieuwSterkWachtwoord456!",
-                stored_password_hash=account["password_hash"],
+                new_password,
+                stored_password_hash=stored_password_hash,
             )
             assert not verify_password(
                 account["password"],
-                "LegacyPass123!",
-                stored_password_hash=account["password_hash"],
+                original_password,
+                stored_password_hash=stored_password_hash,
             )
 
             sessions = {
                 row["id"]: row["revoked_at"]
-                for row in conn.execute(text("""
-                    SELECT id, revoked_at FROM server_sessions ORDER BY id
-                """)).mappings().all()
+                for row in conn.execute(
+                    text("SELECT id, revoked_at FROM server_sessions WHERE id IN (:a, :b, :other)"),
+                    {"a": session_ids[0], "b": session_ids[1], "other": session_ids[2]},
+                ).mappings().all()
             }
-            assert sessions["session-current"] is not None
-            assert sessions["session-other"] is not None
-            assert sessions["session-other-user"] is None
+            assert sessions[session_ids[0]] is not None
+            assert sessions[session_ids[1]] is not None
+            assert sessions[session_ids[2]] is None
         checks.append("confirmed_reset_uses_canonical_password_hash")
         checks.append("confirmed_reset_revokes_all_user_sessions")
         checks.append("other_user_sessions_remain_valid")
 
         with engine.begin() as conn:
-            _expect_invalid(lambda: confirm_password_reset(
-                conn,
-                raw_token=second.raw_token,
-                new_password="NogEenSterkWachtwoord789!",
-                now=now + timedelta(seconds=20),
-            ))
+            _expect_invalid(
+                lambda: confirm_password_reset(
+                    conn,
+                    raw_token=second.raw_token,
+                    new_password="NogEenSterkWachtwoord789!",
+                    now=now + timedelta(seconds=20),
+                )
+            )
         checks.append("reset_token_is_single_use")
 
         with engine.begin() as conn:
             unknown = issue_password_reset(
                 conn,
-                email="unknown@example.com",
+                email=unknown_email,
                 request_ip="203.0.113.20",
                 now=now,
             )
             assert not unknown.should_deliver
-            ledger = conn.execute(text("""
-                SELECT user_id, token_hash
-                FROM account_password_reset_tokens
-                WHERE request_email_hash = :email_hash
-            """), {
-                "email_hash": __import__('hashlib').sha256(b'unknown@example.com').hexdigest()
-            }).mappings().one()
+            ledger = conn.execute(
+                text("""
+                    SELECT user_id, token_hash
+                    FROM account_password_reset_tokens
+                    WHERE request_email_hash = :email_hash
+                """),
+                {"email_hash": _email_hash(unknown_email)},
+            ).mappings().one()
             assert ledger["user_id"] is None
             assert ledger["token_hash"] is None
         checks.append("unknown_account_gets_no_secret_token")
@@ -222,14 +290,14 @@ def run() -> int:
             for offset in range(1, PASSWORD_RESET_EMAIL_LIMIT):
                 attempt = issue_password_reset(
                     conn,
-                    email="unknown@example.com",
+                    email=unknown_email,
                     request_ip=f"203.0.113.{20 + offset}",
                     now=now + timedelta(seconds=offset),
                 )
                 assert not attempt.rate_limited
             limited = issue_password_reset(
                 conn,
-                email="unknown@example.com",
+                email=unknown_email,
                 request_ip="203.0.113.99",
                 now=now + timedelta(seconds=30),
             )
@@ -240,18 +308,44 @@ def run() -> int:
         with engine.begin() as conn:
             expiring = issue_password_reset(
                 conn,
-                email="other@example.com",
+                email=other_email,
                 request_ip="203.0.113.30",
                 now=now,
             )
             assert expiring.raw_token
-            _expect_invalid(lambda: confirm_password_reset(
-                conn,
-                raw_token=expiring.raw_token,
-                new_password="VerlopenLinkWachtwoord123!",
-                now=now + timedelta(minutes=31),
-            ))
+            _expect_invalid(
+                lambda: confirm_password_reset(
+                    conn,
+                    raw_token=expiring.raw_token,
+                    new_password="VerlopenLinkWachtwoord123!",
+                    now=now + timedelta(minutes=31),
+                )
+            )
         checks.append("reset_token_expires_after_thirty_minutes")
+    finally:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM server_sessions WHERE user_id IN (:consumer, :other)"),
+                {"consumer": consumer_user_id, "other": other_user_id},
+            )
+            conn.execute(
+                text("""
+                    DELETE FROM account_password_reset_tokens
+                    WHERE user_id IN (:consumer, :other)
+                       OR request_email_hash IN (:consumer_hash, :other_hash, :unknown_hash)
+                """),
+                {
+                    "consumer": consumer_user_id,
+                    "other": other_user_id,
+                    "consumer_hash": cleanup_hashes[0],
+                    "other_hash": cleanup_hashes[1],
+                    "unknown_hash": cleanup_hashes[2],
+                },
+            )
+            conn.execute(
+                text("DELETE FROM app_users WHERE id IN (:consumer, :other)"),
+                {"consumer": consumer_user_id, "other": other_user_id},
+            )
 
     for check in checks:
         print(f"PASS {check}")
