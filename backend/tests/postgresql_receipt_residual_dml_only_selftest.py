@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 import sqlalchemy as sa
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 
@@ -13,6 +13,9 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.services.postgresql_boolean_contract import (
+    enforce_postgresql_boolean_parameters_before_execute,
+)
 from app.services.receipt_inventory_lifecycle_service import retime_receipt_inventory_events
 from app.services.receipt_reimport_lineage_service import (
     get_prior_processed_line_fact,
@@ -81,6 +84,51 @@ def _assert_schema_contract(engine) -> None:
                 )
     print("POSTGRESQL_RECEIPT_RESIDUAL_SCHEMA_CONTRACT_GREEN")
     print("POSTGRESQL_RECEIPT_RESIDUAL_BOOLEAN_TYPES_GREEN")
+
+
+def _assert_receipt_approve_nullable_string_bind(engine) -> None:
+    event.listen(
+        engine,
+        "before_execute",
+        enforce_postgresql_boolean_parameters_before_execute,
+        retval=True,
+    )
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    """
+                    UPDATE receipt_table_lines
+                    SET matched_global_product_id = :matched_global_product_id,
+                        matched_article_id = CASE
+                            WHEN :matched_household_article_id IS NOT NULL THEN :matched_household_article_id
+                            ELSE matched_article_id
+                        END,
+                        article_match_status = CASE
+                            WHEN :matched_household_article_id IS NOT NULL THEN 'matched'
+                            WHEN :matched_global_product_id IS NOT NULL THEN 'product_matched'
+                            ELSE 'unmatched'
+                        END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :line_id AND receipt_table_id = :receipt_table_id
+                    """
+                ),
+                {
+                    "line_id": "no-such-receipt-line",
+                    "receipt_table_id": "no-such-receipt",
+                    "matched_global_product_id": None,
+                    "matched_household_article_id": None,
+                },
+            )
+            if result.rowcount not in (0, -1):
+                raise AssertionError(result.rowcount)
+    finally:
+        event.remove(
+            engine,
+            "before_execute",
+            enforce_postgresql_boolean_parameters_before_execute,
+        )
+    print("POSTGRESQL_RECEIPT_APPROVE_NULLABLE_STRING_BIND_GREEN")
 
 
 def _serialize_source(row) -> dict:
@@ -180,6 +228,7 @@ def main() -> None:
     try:
         _assert_runtime_create_denied(engine)
         _assert_schema_contract(engine)
+        _assert_receipt_approve_nullable_string_bind(engine)
         _assert_receipt_paths(engine)
     finally:
         engine.dispose()
