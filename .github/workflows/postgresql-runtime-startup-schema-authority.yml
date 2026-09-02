@@ -4,42 +4,15 @@ on:
   pull_request:
     paths:
       - 'backend/alembic/**'
-      - 'backend/app/api/catalog_gpc_routes.py'
+      - 'backend/app/api/**'
       - 'backend/app/db.py'
       - 'backend/app/main.py'
       - 'backend/app/migration_db.py'
       - 'backend/app/schema_migration_preflight.py'
       - 'backend/app/session_entrypoint.py'
-      - 'backend/app/services/article_group_store.py'
-      - 'backend/app/services/authorization_foundation_service.py'
-      - 'backend/app/services/authorization_membership_service.py'
-      - 'backend/app/services/authorization_ui_fixture_provisioning.py'
-      - 'backend/app/services/barcode_identity_service.py'
-      - 'backend/app/services/beta_superuser_provisioning_service.py'
-      - 'backend/app/services/canonical_direct_location_service.py'
-      - 'backend/app/services/day_article_service.py'
-      - 'backend/app/services/gpc_article_assignment_service.py'
-      - 'backend/app/services/gpc_catalog_service.py'
-      - 'backend/app/services/gpc_import_service.py'
-      - 'backend/app/services/gpc_local_catalog_service.py'
-      - 'backend/app/services/gpc_translation_service.py'
-      - 'backend/app/services/household_capability_expansion_service.py'
-      - 'backend/app/services/household_invitation_acceptance_service.py'
-      - 'backend/app/services/household_invitation_delivery_service.py'
-      - 'backend/app/services/household_invitation_service.py'
-      - 'backend/app/services/household_location_onboarding_service.py'
-      - 'backend/app/services/household_product_configuration_service.py'
-      - 'backend/app/services/household_product_use_case_service.py'
-      - 'backend/app/services/loyalty_stamp_transaction_service.py'
-      - 'backend/app/services/platform_authorization_management_service.py'
-      - 'backend/app/services/platform_feature_flag_service.py'
-      - 'backend/app/services/product_inventory_group_store.py'
-      - 'backend/app/services/product_taxonomy_store.py'
-      - 'backend/app/services/shopping_list_service.py'
-      - 'backend/app/services/support_message_service.py'
-      - 'backend/app/services/system_superuser_session_provisioning.py'
-      - 'backend/app/services/external_*.py'
-      - 'backend/app/services/open_food_facts_candidate_store.py'
+      - 'backend/app/services/**'
+      - 'backend/tests/password_reset_security_selftest.py'
+      - 'backend/tests/postgresql_password_reset_dml_only_selftest.py'
       - 'backend/tests/postgresql_authorization_sql_portability_selftest.py'
       - 'backend/tests/postgresql_authorization_dml_only_selftest.py'
       - 'backend/tests/postgresql_core_request_dml_only_selftest.py'
@@ -205,7 +178,7 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/runtime-startup-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/runtime-startup-migration.log
-          grep -F "'revision': '20260830_02'" /tmp/runtime-startup-migration.log
+          grep -F "'revision': '20260902_01'" /tmp/runtime-startup-migration.log
 
       - name: Prove runtime role has no schema CREATE privilege
         run: |
@@ -215,6 +188,22 @@ jobs:
             exit 1
           fi
           echo 'POSTGRESQL_RUNTIME_DDL_DENIED_GREEN'
+
+      - name: Prove password reset service security contract on migrated runtime schema
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/password_reset_security_selftest.py | tee /tmp/password-reset-security.log
+          grep -F 'PASSWORD_RESET_SECURITY_GREEN' /tmp/password-reset-security.log
+
+      - name: Prove password recovery works with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_password_reset_dml_only_selftest.py | tee /tmp/password-reset-dml-only.log
+          grep -F 'POSTGRESQL_PASSWORD_RESET_RUNTIME_CREATE_DENIED_GREEN' /tmp/password-reset-dml-only.log
+          grep -F 'POSTGRESQL_PASSWORD_RESET_HASHED_TOKEN_GREEN' /tmp/password-reset-dml-only.log
+          grep -F 'POSTGRESQL_PASSWORD_RESET_ALL_SESSIONS_REVOKED_GREEN' /tmp/password-reset-dml-only.log
+          grep -F 'POSTGRESQL_PASSWORD_RESET_DML_ONLY_GREEN' /tmp/password-reset-dml-only.log
+          grep -F 'POSTGRESQL_PASSWORD_RESET_AUTHORITY_SELFTEST_GREEN' /tmp/password-reset-dml-only.log
 
       - name: Prove core request paths work with DML-only runtime role
         working-directory: backend

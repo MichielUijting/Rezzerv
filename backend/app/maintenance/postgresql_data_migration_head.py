@@ -8,7 +8,8 @@ from typing import Sequence
 
 from app.maintenance import postgresql_data_migration as migration
 
-HEAD_REVISION = "20260830_02"
+HEAD_REVISION = "20260902_01"
+EXPECTED_APPLICATION_TABLES = 88
 
 
 def _assert_snapshot_storage_integrity(connection: sqlite3.Connection) -> None:
@@ -49,6 +50,7 @@ def _create_consistent_snapshot_for_locked_head(source: Path, output: Path) -> s
 
 def _configure_locked_head() -> None:
     migration.HEAD_REVISION = HEAD_REVISION
+    migration.EXPECTED_APPLICATION_TABLES = EXPECTED_APPLICATION_TABLES
     migration.create_consistent_snapshot = _create_consistent_snapshot_for_locked_head
 
 

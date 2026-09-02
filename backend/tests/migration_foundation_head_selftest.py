@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect, text
 
 import migration_foundation_selftest as foundation_test
 
 
-HEAD_REVISION = "20260830_02"
+HEAD_REVISION = "20260902_01"
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 88
+PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
-_SQLITE_HEAD_EXTENSION_TABLES = {"receipt_sources", "raw_receipts"}
+_SQLITE_HEAD_EXTENSION_TABLES = {"receipt_sources", "raw_receipts", PASSWORD_RESET_TABLE}
 _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS = {
     "trg_household_zero_system_insert",
     "trg_receipt_tables_preserve_explicit_approval",
@@ -39,15 +42,12 @@ def _postgresql_trigger_names(connection) -> set[str]:
 
 
 def _remove_locked_sqlite_head_extensions(schema: str) -> str:
-    """Delegate only rebuilt 20260830_02 receipt objects to semantic validation.
+    """Delegate migration-owned head objects to exact semantic validation.
 
-    SQLite batch-alter can rewrite the textual CREATE forms of objects owned by
-    receipt_sources/raw_receipts even when their semantic contract is unchanged.
-    The dedicated receipt lifecycle authority selftest compares columns,
-    indexes, every non-household FK and every existing trigger semantically and
-    proves the exact household-FK delta plus the one new manual-source trigger.
-    Receipt-table objects are already migration-owned by the historical wrapper.
-    Every unrelated schema block remains in the immutable byte comparison.
+    The receipt objects rebuilt at 20260830_02 and the new password-reset table
+    at 20260902_01 are migration-owned extensions to the immutable SQLite
+    baseline. Their contracts are validated semantically below. Every unrelated
+    schema block remains in the immutable byte comparison.
     """
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
     retained: list[str] = []
@@ -60,14 +60,7 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
 
 
 def _run_foundation_with_locked_head_contract() -> None:
-    """Extend only the schema contracts introduced at 20260830_02.
-
-    The historical foundation core deliberately keeps its pre-20260830_02
-    trigger and immutable-baseline defaults. The head wrapper delegates the two
-    SQLite tables physically rebuilt by this revision to their dedicated exact
-    semantic receipt test and permits exactly one new PostgreSQL trigger. Every
-    other baseline, schema or trigger difference remains fail-closed.
-    """
+    """Layer current head contracts over the historical migration foundation."""
     original_assert = foundation_test.foundation._assert_postgresql_schema
     original_strip = foundation_test.foundation._strip_migration_extensions
 
@@ -91,9 +84,6 @@ def _run_foundation_with_locked_head_contract() -> None:
                 f"actual={sorted(actual)}"
             )
 
-        # The historical core reaches its trigger assertion only after every
-        # preceding PostgreSQL schema check has passed. Emit the markers that
-        # immediately follow that final assertion in the core contract.
         print(
             "POSTGRESQL_APPLICATION_SCHEMA_GREEN "
             f"revision={foundation_test.foundation.HEAD_REVISION} "
@@ -158,8 +148,100 @@ def _assert_receipt_household_authority(connection) -> None:
     print("POSTGRESQL_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN")
 
 
+def _assert_password_reset_authority(connection) -> None:
+    inspector = inspect(connection)
+    if PASSWORD_RESET_TABLE not in set(inspector.get_table_names()):
+        raise AssertionError("Alembic head is missing account_password_reset_tokens")
+
+    columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns(PASSWORD_RESET_TABLE)
+    }
+    expected_columns = {
+        "id",
+        "user_id",
+        "request_email_hash",
+        "request_ip_hash",
+        "token_hash",
+        "requested_at",
+        "expires_at",
+        "used_at",
+        "invalidated_at",
+    }
+    missing = expected_columns - set(columns)
+    if missing:
+        raise AssertionError(f"Password-reset schema mist kolommen: {sorted(missing)}")
+    for column_name in ("id", "request_email_hash", "request_ip_hash", "requested_at"):
+        if bool(columns[column_name].get("nullable")):
+            raise AssertionError(f"{PASSWORD_RESET_TABLE}.{column_name} must be NOT NULL")
+
+    if tuple(inspector.get_pk_constraint(PASSWORD_RESET_TABLE).get("constrained_columns") or ()) != ("id",):
+        raise AssertionError("Password-reset primary key must be id")
+
+    unique_sets = {
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_unique_constraints(PASSWORD_RESET_TABLE)
+    }
+    unique_sets.update(
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_indexes(PASSWORD_RESET_TABLE)
+        if bool(item.get("unique"))
+    )
+    if ("token_hash",) not in unique_sets:
+        raise AssertionError("Password-reset token_hash must remain unique")
+
+    indexes = {
+        str(item.get("name") or ""): tuple(item.get("column_names") or ())
+        for item in inspector.get_indexes(PASSWORD_RESET_TABLE)
+    }
+    expected_indexes = {
+        "ix_account_password_reset_tokens_email_requested": (
+            "request_email_hash",
+            "requested_at",
+        ),
+        "ix_account_password_reset_tokens_ip_requested": (
+            "request_ip_hash",
+            "requested_at",
+        ),
+        "ix_account_password_reset_tokens_user_state": (
+            "user_id",
+            "used_at",
+            "invalidated_at",
+            "expires_at",
+        ),
+    }
+    for index_name, expected in expected_indexes.items():
+        if indexes.get(index_name) != expected:
+            raise AssertionError(
+                f"Password-reset index drift {index_name}: expected={expected} actual={indexes.get(index_name)}"
+            )
+
+    user_fks = [
+        fk
+        for fk in inspector.get_foreign_keys(PASSWORD_RESET_TABLE)
+        if tuple(fk.get("constrained_columns") or ()) == ("user_id",)
+    ]
+    if len(user_fks) != 1:
+        raise AssertionError(f"Password-reset user FK drift: {user_fks!r}")
+    fk = user_fks[0]
+    if str(fk.get("referred_table") or "") != "app_users" or tuple(fk.get("referred_columns") or ()) != ("id",):
+        raise AssertionError(f"Password-reset user FK must reference app_users.id: {fk!r}")
+
+    if connection.dialect.name == "postgresql":
+        for column_name in ("requested_at", "expires_at", "used_at", "invalidated_at"):
+            column_type = columns[column_name]["type"]
+            if not isinstance(column_type, sa.DateTime) or not bool(getattr(column_type, "timezone", False)):
+                raise AssertionError(
+                    f"Expected TIMESTAMPTZ for {PASSWORD_RESET_TABLE}.{column_name}, got {column_type}"
+                )
+        print("POSTGRESQL_PASSWORD_RESET_SCHEMA_AUTHORITY_GREEN")
+    else:
+        print("SQLITE_PASSWORD_RESET_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
+    foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
     _run_foundation_with_locked_head_contract()
 
     engine = create_engine(foundation_test.foundation._engine_url())
@@ -171,10 +253,11 @@ def main() -> None:
                     f"Expected Alembic revision {HEAD_REVISION}, got {revision}"
                 )
             _assert_receipt_household_authority(connection)
+            _assert_password_reset_authority(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260830_02_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_20260902_01_GREEN")
 
 
 if __name__ == "__main__":
