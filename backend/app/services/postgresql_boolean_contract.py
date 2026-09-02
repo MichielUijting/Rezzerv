@@ -36,7 +36,9 @@ _STATEMENT_PARAMETER_RULES = {
     "sublocations": ("active",),
 }
 
-_RECEIPT_LINE_NULLABLE_STRING_PARAMETER = "matched_household_article_id"
+_RECEIPT_LINE_NULLABLE_STRING_PARAMETERS = frozenset(
+    {"matched_global_product_id", "matched_household_article_id"}
+)
 
 
 def _tables_in_statement(statement: str) -> set[str]:
@@ -161,26 +163,30 @@ def normalize_postgresql_boolean_parameters(statement: str, multiparams: Any, pa
     return normalized_multi, normalized_params
 
 
-def _bind_receipt_line_nullable_string_parameter(clauseelement: Any) -> Any:
+def _bind_receipt_line_nullable_string_parameters(clauseelement: Any) -> Any:
     statement = str(clauseelement)
     if "receipt_table_lines" not in _tables_in_statement(statement):
         return clauseelement
     bindparams = getattr(clauseelement, "_bindparams", {})
     bind_parameter_types = getattr(clauseelement, "bindparams", None)
-    if (
-        _RECEIPT_LINE_NULLABLE_STRING_PARAMETER not in bindparams
-        or not callable(bind_parameter_types)
-    ):
+    if not callable(bind_parameter_types):
+        return clauseelement
+    matching_parameters = tuple(
+        name
+        for name in _RECEIPT_LINE_NULLABLE_STRING_PARAMETERS
+        if name in bindparams
+    )
+    if not matching_parameters:
         return clauseelement
     return bind_parameter_types(
-        bindparam(_RECEIPT_LINE_NULLABLE_STRING_PARAMETER, type_=String())
+        *(bindparam(name, type_=String()) for name in matching_parameters)
     )
 
 
 def enforce_postgresql_boolean_parameters_before_execute(conn: Any, clauseelement: Any, multiparams: Any, params: Any, execution_options: Any):
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         return clauseelement, multiparams, params
-    typed_clauseelement = _bind_receipt_line_nullable_string_parameter(clauseelement)
+    typed_clauseelement = _bind_receipt_line_nullable_string_parameters(clauseelement)
     normalized_multi, normalized_params = normalize_postgresql_boolean_parameters(str(typed_clauseelement), multiparams, params)
     return typed_clauseelement, normalized_multi, normalized_params
 
