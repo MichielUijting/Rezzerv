@@ -2,9 +2,11 @@ import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
+import ForgotPasswordPage from '../../features/auth/ForgotPasswordPage.jsx'
 import InvitationAcceptancePage from '../../features/auth/InvitationAcceptancePage.jsx'
 import LoginPage from '../../features/auth/LoginPage'
 import RegisterPage from '../../features/auth/RegisterPage'
+import ResetPasswordPage from '../../features/auth/ResetPasswordPage.jsx'
 import HomePage from '../../features/home/HomePage'
 import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
 import PlatformCapabilityPage from '../../features/platform/PlatformCapabilityPage.jsx'
@@ -153,6 +155,8 @@ const platformRoutes = PLATFORM_NAVIGATION_ITEMS.map((item) => ({
 const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   { path: '/registreren', element: <RegisterRoute /> },
+  { path: '/wachtwoord-vergeten', element: <ForgotPasswordPage /> },
+  { path: '/wachtwoord-herstellen', element: <ResetPasswordPage /> },
   { path: '/uitnodiging/:token', element: <InvitationAcceptancePage /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
