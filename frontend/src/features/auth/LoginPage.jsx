@@ -69,6 +69,10 @@ export default function LoginPage({ onLoggedIn }) {
                 <span>Wachtwoord tonen</span>
               </label>
 
+              <div style={{ textAlign: 'center' }}>
+                <Link to="/wachtwoord-vergeten" data-testid="forgot-password-link">Wachtwoord vergeten?</Link>
+              </div>
+
               <Button type="submit" variant="primary" disabled={loading} className="rz-btn-center" data-testid="login-submit">
                 {loading ? 'Bezig...' : 'Inloggen'}
               </Button>
