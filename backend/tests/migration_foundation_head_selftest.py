@@ -5,10 +5,28 @@ from sqlalchemy import create_engine, inspect, text
 import migration_foundation_selftest as foundation_test
 
 
-HEAD_REVISION = "20260830_02"
+HEAD_REVISION = "20260902_01"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
-_SQLITE_HEAD_EXTENSION_TABLES = {"receipt_sources", "raw_receipts"}
+PASSWORD_RESET_TABLE = "account_password_reset_tokens"
+PASSWORD_RESET_COLUMNS = {
+    "id",
+    "user_id",
+    "token_hash",
+    "request_ip_hash",
+    "requested_at",
+    "expires_at",
+    "used_at",
+    "revoked_at",
+    "created_at",
+    "updated_at",
+}
+PASSWORD_RESET_INDEXES = {
+    "idx_account_password_reset_user_requested",
+    "idx_account_password_reset_ip_requested",
+    "idx_account_password_reset_active",
+}
+_SQLITE_HEAD_EXTENSION_TABLES = {"receipt_sources", "raw_receipts", PASSWORD_RESET_TABLE}
 _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS = {
     "trg_household_zero_system_insert",
     "trg_receipt_tables_preserve_explicit_approval",
@@ -39,16 +57,7 @@ def _postgresql_trigger_names(connection) -> set[str]:
 
 
 def _remove_locked_sqlite_head_extensions(schema: str) -> str:
-    """Delegate only rebuilt 20260830_02 receipt objects to semantic validation.
-
-    SQLite batch-alter can rewrite the textual CREATE forms of objects owned by
-    receipt_sources/raw_receipts even when their semantic contract is unchanged.
-    The dedicated receipt lifecycle authority selftest compares columns,
-    indexes, every non-household FK and every existing trigger semantically and
-    proves the exact household-FK delta plus the one new manual-source trigger.
-    Receipt-table objects are already migration-owned by the historical wrapper.
-    Every unrelated schema block remains in the immutable byte comparison.
-    """
+    """Delegate migration-owned head extensions to semantic validation."""
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
     retained: list[str] = []
     for block in blocks:
@@ -60,14 +69,7 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
 
 
 def _run_foundation_with_locked_head_contract() -> None:
-    """Extend only the schema contracts introduced at 20260830_02.
-
-    The historical foundation core deliberately keeps its pre-20260830_02
-    trigger and immutable-baseline defaults. The head wrapper delegates the two
-    SQLite tables physically rebuilt by this revision to their dedicated exact
-    semantic receipt test and permits exactly one new PostgreSQL trigger. Every
-    other baseline, schema or trigger difference remains fail-closed.
-    """
+    """Keep the historical core fail-closed while extending the current head."""
     original_assert = foundation_test.foundation._assert_postgresql_schema
     original_strip = foundation_test.foundation._strip_migration_extensions
 
@@ -91,9 +93,6 @@ def _run_foundation_with_locked_head_contract() -> None:
                 f"actual={sorted(actual)}"
             )
 
-        # The historical core reaches its trigger assertion only after every
-        # preceding PostgreSQL schema check has passed. Emit the markers that
-        # immediately follow that final assertion in the core contract.
         print(
             "POSTGRESQL_APPLICATION_SCHEMA_GREEN "
             f"revision={foundation_test.foundation.HEAD_REVISION} "
@@ -158,6 +157,41 @@ def _assert_receipt_household_authority(connection) -> None:
     print("POSTGRESQL_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN")
 
 
+def _assert_password_reset_authority(connection) -> None:
+    inspector = inspect(connection)
+    if PASSWORD_RESET_TABLE not in set(inspector.get_table_names()):
+        raise AssertionError("Password-reset table ontbreekt op Alembic head")
+    columns = {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(PASSWORD_RESET_TABLE)
+    }
+    if columns != PASSWORD_RESET_COLUMNS:
+        raise AssertionError(
+            "Password-reset column contract wijkt af: "
+            f"expected={sorted(PASSWORD_RESET_COLUMNS)} actual={sorted(columns)}"
+        )
+    indexes = {
+        str(index.get("name") or "")
+        for index in inspector.get_indexes(PASSWORD_RESET_TABLE)
+        if str(index.get("name") or "")
+    }
+    if not PASSWORD_RESET_INDEXES.issubset(indexes):
+        raise AssertionError(
+            "Password-reset index contract wijkt af: "
+            f"expected={sorted(PASSWORD_RESET_INDEXES)} actual={sorted(indexes)}"
+        )
+    unique_sets = {
+        tuple(str(column) for column in (constraint.get("column_names") or ()))
+        for constraint in inspector.get_unique_constraints(PASSWORD_RESET_TABLE)
+    }
+    if ("token_hash",) not in unique_sets:
+        raise AssertionError("Password-reset token_hash is niet uniek")
+    print(
+        "PASSWORD_RESET_SCHEMA_AUTHORITY_GREEN "
+        f"dialect={connection.dialect.name}"
+    )
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     _run_foundation_with_locked_head_contract()
@@ -171,10 +205,11 @@ def main() -> None:
                     f"Expected Alembic revision {HEAD_REVISION}, got {revision}"
                 )
             _assert_receipt_household_authority(connection)
+            _assert_password_reset_authority(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260830_02_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_20260902_01_GREEN")
 
 
 if __name__ == "__main__":
