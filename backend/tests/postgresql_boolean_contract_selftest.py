@@ -1,5 +1,8 @@
+from sqlalchemy import String, text
+
 from app.services.postgresql_boolean_contract import (
     MIGRATED_BOOLEAN_COLUMNS_BY_TABLE,
+    enforce_postgresql_boolean_parameters_before_execute,
     normalize_postgresql_boolean_parameters,
     normalize_postgresql_boolean_statement,
 )
@@ -139,3 +142,44 @@ def test_non_migrated_table_values_are_not_globally_coerced():
         {"value": 1, "id": "row-1"},
     )
     assert params == {"value": 1, "id": "row-1"}
+
+
+def test_purchase_import_nullable_match_ids_are_bound_as_strings():
+    class _PostgresqlDialect:
+        name = "postgresql"
+
+    class _Connection:
+        dialect = _PostgresqlDialect()
+
+    clause = text(
+        """
+        UPDATE purchase_import_lines
+        SET matched_global_product_id = :matched_global_product_id,
+            matched_household_article_id = CASE
+                WHEN COALESCE(article_override_mode, 'auto') = 'auto'
+                THEN :matched_household_article_id
+                ELSE matched_household_article_id
+            END,
+            match_status = CASE
+                WHEN :matched_global_product_id IS NOT NULL THEN 'matched'
+                ELSE 'unmatched'
+            END
+        WHERE id = :id
+        """
+    )
+    typed_clause, _, params = enforce_postgresql_boolean_parameters_before_execute(
+        _Connection(),
+        clause,
+        (),
+        {
+            "matched_global_product_id": None,
+            "matched_household_article_id": None,
+            "id": "line-1",
+        },
+        {},
+    )
+
+    assert isinstance(typed_clause._bindparams["matched_global_product_id"].type, String)
+    assert isinstance(typed_clause._bindparams["matched_household_article_id"].type, String)
+    assert params["matched_global_product_id"] is None
+    assert params["matched_household_article_id"] is None
