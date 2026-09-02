@@ -36,7 +36,10 @@ _STATEMENT_PARAMETER_RULES = {
     "sublocations": ("active",),
 }
 
-_RECEIPT_LINE_NULLABLE_STRING_PARAMETERS = frozenset(
+_NULLABLE_MATCH_ID_TABLES = frozenset(
+    {"receipt_table_lines", "purchase_import_lines"}
+)
+_NULLABLE_MATCH_ID_STRING_PARAMETERS = frozenset(
     {"matched_global_product_id", "matched_household_article_id"}
 )
 
@@ -163,9 +166,10 @@ def normalize_postgresql_boolean_parameters(statement: str, multiparams: Any, pa
     return normalized_multi, normalized_params
 
 
-def _bind_receipt_line_nullable_string_parameters(clauseelement: Any) -> Any:
+def _bind_nullable_match_id_string_parameters(clauseelement: Any) -> Any:
     statement = str(clauseelement)
-    if "receipt_table_lines" not in _tables_in_statement(statement):
+    active_tables = _tables_in_statement(statement)
+    if not (_NULLABLE_MATCH_ID_TABLES & active_tables):
         return clauseelement
     bindparams = getattr(clauseelement, "_bindparams", {})
     bind_parameter_types = getattr(clauseelement, "bindparams", None)
@@ -173,7 +177,7 @@ def _bind_receipt_line_nullable_string_parameters(clauseelement: Any) -> Any:
         return clauseelement
     matching_parameters = tuple(
         name
-        for name in _RECEIPT_LINE_NULLABLE_STRING_PARAMETERS
+        for name in _NULLABLE_MATCH_ID_STRING_PARAMETERS
         if name in bindparams
     )
     if not matching_parameters:
@@ -186,7 +190,7 @@ def _bind_receipt_line_nullable_string_parameters(clauseelement: Any) -> Any:
 def enforce_postgresql_boolean_parameters_before_execute(conn: Any, clauseelement: Any, multiparams: Any, params: Any, execution_options: Any):
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         return clauseelement, multiparams, params
-    typed_clauseelement = _bind_receipt_line_nullable_string_parameters(clauseelement)
+    typed_clauseelement = _bind_nullable_match_id_string_parameters(clauseelement)
     normalized_multi, normalized_params = normalize_postgresql_boolean_parameters(str(typed_clauseelement), multiparams, params)
     return typed_clauseelement, normalized_multi, normalized_params
 
