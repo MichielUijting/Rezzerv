@@ -105,8 +105,8 @@ def run() -> int:
     checks: list[str] = []
     now = datetime.now(timezone.utc)
     suffix = uuid.uuid4().hex
-    consumer_user_id = f"password-reset-security-consumer-{suffix}"
-    other_user_id = f"password-reset-security-other-{suffix}"
+    consumer_user_id = f"pr-sec-c-{suffix}"
+    other_user_id = f"pr-sec-o-{suffix}"
     consumer_email = f"password-reset-security-{suffix}@example.invalid"
     other_email = f"password-reset-security-other-{suffix}@example.invalid"
     unknown_email = f"password-reset-security-unknown-{suffix}@example.invalid"
@@ -114,9 +114,9 @@ def run() -> int:
     other_password = "AnderSterkWachtwoord123!"
     new_password = "NieuwSterkWachtwoord456!"
     session_ids = [
-        f"password-reset-security-{suffix[:18]}-a",
-        f"password-reset-security-{suffix[:18]}-b",
-        f"password-reset-security-{suffix[:18]}-other",
+        f"pr-sec-{suffix[:20]}-a",
+        f"pr-sec-{suffix[:20]}-b",
+        f"pr-sec-{suffix[:20]}-other",
     ]
     cleanup_hashes = [_email_hash(consumer_email), _email_hash(other_email), _email_hash(unknown_email)]
 
