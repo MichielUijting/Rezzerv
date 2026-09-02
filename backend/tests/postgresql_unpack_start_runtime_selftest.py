@@ -107,11 +107,13 @@ def _insert_approved_receipt_fixture(conn) -> None:
             INSERT INTO receipt_table_lines (
                 id, receipt_table_id, line_index, raw_label, normalized_label,
                 quantity, unit, line_total, article_match_status,
+                line_role, inventory_eligible,
                 matched_global_product_id, matched_article_id,
                 created_at, updated_at
             ) VALUES (
                 :id, :receipt_table_id, 1, 'HALFVOLLE MELK', 'halfvolle melk',
                 1, 'st', 2.50, 'unmatched',
+                'product', 1,
                 NULL, NULL,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
@@ -185,8 +187,25 @@ def main() -> None:
                 text("SELECT COUNT(*) FROM purchase_import_lines WHERE batch_id = :batch_id"),
                 {"batch_id": batch_id},
             ).scalar_one()
-            if int(line_count or 0) < 1:
-                raise AssertionError("Approved receipt produced no Uitpakken purchase-import lines")
+            if int(line_count or 0) != 1:
+                raise AssertionError(f"Approved receipt produced unexpected Uitpakken line count: {line_count!r}")
+
+            # Opening the same Uitpakken inbox again must exercise the existing
+            # batch UPDATE path with both nullable product/article identifiers.
+            second_batch_id = legacy_main.ensure_unpack_batch_for_receipt(conn, receipt)
+            if second_batch_id != batch_id:
+                raise AssertionError(
+                    f"Repeated Uitpakken open created another batch: {batch_id!r} -> {second_batch_id!r}"
+                )
+
+            second_line_count = conn.execute(
+                text("SELECT COUNT(*) FROM purchase_import_lines WHERE batch_id = :batch_id"),
+                {"batch_id": batch_id},
+            ).scalar_one()
+            if int(second_line_count or 0) != 1:
+                raise AssertionError(
+                    f"Repeated Uitpakken open changed line count unexpectedly: {second_line_count!r}"
+                )
 
             print("POSTGRESQL_RECEIPT_UNPACK_START_BATCH_GREEN")
         finally:
