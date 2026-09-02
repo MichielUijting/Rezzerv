@@ -100,6 +100,27 @@ def _normalize_simple_insert_boolean_literals(statement: str, active_tables: set
     return pattern.sub(replace, statement)
 
 
+def _normalize_boolean_parameter_comparisons(statement: str, active_tables: set[str]) -> str:
+    normalized = statement
+    for table in active_tables:
+        for name in _STATEMENT_PARAMETER_RULES[table]:
+            escaped_name = re.escape(name)
+            placeholder = rf"(?P<param>%\({escaped_name}\)s|:{escaped_name}\b)"
+            normalized = re.sub(
+                rf"{placeholder}\s*=\s*1\b",
+                r"\g<param>",
+                normalized,
+                flags=re.IGNORECASE,
+            )
+            normalized = re.sub(
+                rf"{placeholder}\s*=\s*0\b",
+                r"(NOT \g<param>)",
+                normalized,
+                flags=re.IGNORECASE,
+            )
+    return normalized
+
+
 def normalize_postgresql_boolean_statement(statement: str) -> str:
     normalized = str(statement)
     active_tables = _tables_in_statement(normalized)
@@ -117,6 +138,7 @@ def normalize_postgresql_boolean_statement(statement: str) -> str:
             normalized,
             flags=re.IGNORECASE,
         )
+    normalized = _normalize_boolean_parameter_comparisons(normalized, active_tables)
     return _normalize_simple_insert_boolean_literals(normalized, active_tables)
 
 

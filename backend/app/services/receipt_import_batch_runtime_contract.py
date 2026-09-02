@@ -6,7 +6,9 @@ string/number-like values. Receipt ZIP batches persist their incremental result
 list as JSON, so these values must be normalized at the batch boundary.
 
 The contract also guards the background worker so an unexpected exception can
-never leave a batch permanently marked as ``running``.
+never leave a batch permanently marked as ``running``. The ZIP runtime uses
+the extracted receipt-source helper for EML members, so its dependencies are
+configured from the actual application entrypoint at the same boundary.
 """
 
 from __future__ import annotations
@@ -16,6 +18,10 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from functools import wraps
 from typing import Any
+
+from app.services.receipt_source_helper_service import (
+    configure_receipt_source_helper_service,
+)
 
 
 def json_safe_receipt_import_value(value: Any) -> Any:
@@ -35,8 +41,50 @@ def json_safe_receipt_import_value(value: Any) -> Any:
     return value
 
 
+def _normalize_receipt_source_household_id(value: Any) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise ValueError("household_id is verplicht")
+    return normalized
+
+
+def _serialize_receipt_source_row(row: Any) -> dict[str, Any]:
+    data = dict(row or {})
+    if "is_active" in data:
+        data["is_active"] = bool(data.get("is_active"))
+    for key in ("last_scan_at", "created_at", "updated_at"):
+        current = data.get(key)
+        if isinstance(current, (datetime, date, time)):
+            data[key] = current.isoformat()
+    return data
+
+
+def _configure_receipt_source_helper_runtime(legacy_main: Any) -> None:
+    engine = getattr(legacy_main, "engine", None)
+    text = getattr(legacy_main, "text", None)
+    if engine is None or text is None:
+        return
+
+    normalize_household_id = getattr(legacy_main, "normalize_household_id", None)
+    if not callable(normalize_household_id):
+        normalize_household_id = _normalize_receipt_source_household_id
+
+    serialize_receipt_source = getattr(legacy_main, "serialize_receipt_source", None)
+    if not callable(serialize_receipt_source):
+        serialize_receipt_source = _serialize_receipt_source_row
+
+    configure_receipt_source_helper_service(
+        engine=engine,
+        text=text,
+        normalize_household_id=normalize_household_id,
+        serialize_receipt_source=serialize_receipt_source,
+    )
+
+
 def install_receipt_import_batch_runtime_contract(legacy_main: Any) -> None:
-    """Install the JSON boundary and fail-closed worker guard on ``app.main``."""
+    """Install receipt batch JSON, source-helper and worker runtime contracts."""
+
+    _configure_receipt_source_helper_runtime(legacy_main)
 
     importer = legacy_main.import_uploaded_receipt_payload
     if not getattr(importer, "_rezzerv_receipt_batch_json_safe", False):
