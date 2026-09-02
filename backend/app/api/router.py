@@ -25,6 +25,7 @@ from app.api.legacy_household_member_creation_closure import (
     retire_legacy_household_member_create_route_from_loaded_main,
 )
 from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
+from app.api.password_reset_routes import router as password_reset_router
 from app.api.platform_audit_routes import router as platform_audit_router
 from app.api.platform_authorizations_routes import router as platform_authorizations_router
 from app.api.platform_feature_flags_routes import router as platform_feature_flags_router
@@ -74,6 +75,7 @@ api_router = APIRouter()
 api_router.include_router(article_group_router)
 api_router.include_router(barcode_router)
 api_router.include_router(consumer_account_router)
+api_router.include_router(password_reset_router)
 api_router.include_router(day_article_router)
 api_router.include_router(household_capability_expansion_router)
 api_router.include_router(household_invitation_router)
