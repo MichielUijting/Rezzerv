@@ -13,8 +13,8 @@ Set-Location $root
 
 $steps = @(
     'Controleer projectmap en uitvoeromgeving',
-    'Valideer testconfiguratie',
-    'Maak geisoleerde testomgeving gereed',
+    'Valideer PostgreSQL-testconfiguratie',
+    'Maak geisoleerde PostgreSQL-testomgeving gereed',
     'Start productie-ketentest voor huishouden 0',
     'Verwerk kassabon 1: voorraad 0 naar 2',
     'Verwerk kassabon 2: voorraad 2 naar 5',
@@ -23,9 +23,17 @@ $steps = @(
     'Controleer producttypekoppeling',
     'Controleer dat koopzegels buiten fysieke voorraad blijven',
     'Verbruik voorraad 5 naar 1 en controleer Bijna op',
-    'Controleer groene eindmarker'
+    'Controleer PostgreSQL/DML-only eindbewijs'
 )
 $total = $steps.Count
+$composeProject = 'rezzerv-receipt-chain-test'
+$isolatedStackStarted = $false
+$composeArguments = @(
+    '-p', $composeProject,
+    '-f', 'docker-compose.yml',
+    '-f', 'docker-compose.postgresql.yml',
+    '--profile', 'postgresql'
+)
 
 function Show-Step {
     param([int]$Number, [string]$Text, [string]$State = 'RUNNING')
@@ -69,9 +77,27 @@ function Invoke-CapturedCommand {
     }
 }
 
+function Get-FreeLocalTcpPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    try {
+        $listener.Start()
+        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
+function Invoke-ComposeChecked {
+    param([string[]]$Arguments)
+    Invoke-Checked 'docker' (@('compose') + $composeArguments + $Arguments)
+}
+
 Write-Host ''
 Write-Host '================================================================='
 Write-Host ' REZZERV KETENTEST: KASSABON -> VOORRAAD -> BIJNA OP'
+Write-Host ' Datastore: GEISOLEERDE POSTGRESQL'
+Write-Host ' Runtime: rezzerv_app / DML-only'
 Write-Host ' Huishouden: 0'
 Write-Host ' Verwacht voorraadpad: 0 -> 2 -> 5 -> 5 -> 1'
 Write-Host ' Verwacht Bijna-op-pad: NEE -> JA'
@@ -81,8 +107,12 @@ Write-Host ''
 try {
     Show-Step 1 $steps[0]
     if (-not (Test-Path 'docker-compose.yml')) { throw 'docker-compose.yml ontbreekt.' }
+    if (-not (Test-Path 'docker-compose.postgresql.yml')) { throw 'docker-compose.postgresql.yml ontbreekt.' }
+    if (-not (Test-Path 'backend/app/testing/postgresql_receipt_inventory_production_chain.py')) {
+        throw 'PostgreSQL productie-ketentest ontbreekt.'
+    }
     if ($DisplayValidatedResult) {
-        Write-Host 'De inhoudelijke ketentest is in de voorafgaande CI-job groen gevalideerd.'
+        Write-Host 'De inhoudelijke PostgreSQL-ketentest is in de voorafgaande CI-job groen gevalideerd.'
     } elseif ($CiMode) {
         Invoke-Checked 'python' @('--version')
     } else {
@@ -92,56 +122,74 @@ try {
 
     Show-Step 2 $steps[1]
     if ($DisplayValidatedResult -or $CiMode) {
-        if (-not (Test-Path 'backend/app/testing/receipt_inventory_production_chain.py')) {
-            throw 'Productie-ketentest ontbreekt.'
-        }
+        Write-Host 'CI/presentatiemodus gebruikt de vooraf ingerichte PostgreSQL-runtime.'
     } else {
-        Invoke-Checked 'docker' @('compose', 'config', '--quiet')
+        $env:REZZERV_POSTGRES_PORT = [string](Get-FreeLocalTcpPort)
+        $env:REZZERV_POSTGRES_DB = 'rezzerv_chain_test'
+        Invoke-ComposeChecked @('config', '--quiet')
     }
     Show-Step 2 $steps[1] 'PASS'
 
     Show-Step 3 $steps[2]
     if ($DisplayValidatedResult) {
-        Write-Host 'Presentatiecontrole gebruikt het reeds gevalideerde ketenresultaat.'
+        Write-Host 'Presentatiecontrole gebruikt het reeds gevalideerde PostgreSQL-ketenresultaat.'
     } elseif ($CiMode) {
-        Write-Host 'CI gebruikt een tijdelijke Python-runtime en tijdelijke kassabonopslag.'
-    } elseif (-not $SkipBackendBuild) {
-        Invoke-Checked 'docker' @('compose', 'build', 'backend')
+        Write-Host 'CI gebruikt een eigen PostgreSQL-service en vooraf uitgevoerde Alembic-migraties.'
     } else {
-        Write-Host 'Backendbuild overgeslagen op expliciet verzoek.'
+        # Deze Compose-projectnaam en dit volume zijn uitsluitend voor de ketentest.
+        # Een oude, afgebroken ketentestruntime wordt veilig verwijderd; de normale
+        # Rezzerv Compose-stack/volume heeft een andere projectnaam en wordt niet geraakt.
+        & docker compose @composeArguments down -v --remove-orphans *> $null
+        $isolatedStackStarted = $true
+        if (-not $SkipBackendBuild) {
+            Invoke-ComposeChecked @('build', 'backend')
+        } else {
+            Write-Host 'Backendbuild overgeslagen op expliciet verzoek.'
+        }
+        Invoke-ComposeChecked @('up', '-d', '--wait', 'postgres')
+
+        Write-Host 'Alembic migreert de geisoleerde database met rezzerv_migrator...'
+        Invoke-ComposeChecked @(
+            'run', '--rm', '--no-deps',
+            '-e', 'PYTHONPATH=/app',
+            'backend', 'python', '-m', 'app.schema_migration_preflight'
+        )
     }
     Show-Step 3 $steps[2] 'PASS'
 
     Show-Step 4 $steps[3]
     if ($DisplayValidatedResult) {
         $output = @(
-            "{'status': 'passed', 'household_id': '0', 'inventory_path': [0, 2, 5, 5, 1], 'purchase_event_path': [0, 1, 2, 2], 'household_product_link_count': 1, 'product_type_link_count': 1, 'loyalty_excluded_from_physical_stock': True, 'almost_out_path': [False, True], 'production_endpoint': True}",
-            'RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN'
+            "{'status': 'passed', 'datastore': 'postgresql', 'runtime_user': 'rezzerv_app', 'migration_credential_available': False, 'household_id': '0', 'inventory_path': [0, 2, 5, 5, 1], 'purchase_event_path': [0, 1, 2, 2], 'household_product_link_count': 1, 'product_type_link_count': 1, 'loyalty_excluded_from_physical_stock': True, 'almost_out_path': [False, True], 'production_endpoint': True}",
+            'POSTGRESQL_RECEIPT_CHAIN_RUNTIME_CREATE_DENIED_GREEN',
+            'POSTGRESQL_RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN'
         )
         $exitCode = 0
     } elseif ($CiMode) {
         $env:PYTHONPATH = 'backend'
-        $env:RECEIPT_STORAGE_ROOT = Join-Path ([System.IO.Path]::GetTempPath()) 'rezzerv-receipts'
+        $env:MIGRATION_DATABASE_URL = ''
         $result = Invoke-CapturedCommand {
-            & python backend/app/testing/receipt_inventory_production_chain.py
+            & python backend/app/testing/postgresql_receipt_inventory_production_chain.py
         }
         $output = $result.Output
         $exitCode = $result.ExitCode
     } else {
         $result = Invoke-CapturedCommand {
-            & docker compose run --rm --no-deps `
+            & docker compose @composeArguments run --rm --no-deps `
                 -e PYTHONPATH=/app `
+                -e MIGRATION_DATABASE_URL= `
                 -e RECEIPT_STORAGE_ROOT=/tmp/rezzerv-receipts `
-                backend python /app/app/testing/receipt_inventory_production_chain.py
+                backend python /app/app/testing/postgresql_receipt_inventory_production_chain.py
         }
         $output = $result.Output
         $exitCode = $result.ExitCode
     }
     $output | ForEach-Object { Write-Host $_ }
-    if ($exitCode -ne 0) { throw "Productie-ketentest eindigde met exitcode $exitCode." }
+    if ($exitCode -ne 0) { throw "PostgreSQL productie-ketentest eindigde met exitcode $exitCode." }
     Show-Step 4 $steps[3] 'PASS'
 
     $joined = $output -join "`n"
+    if ($joined -notmatch "datastore.*postgresql") { throw 'PostgreSQL-datastore is niet aangetoond.' }
     if ($joined -notmatch 'inventory_path') { throw 'Voorraadpad ontbreekt in testuitvoer.' }
     if ($joined -notmatch "household_id.*0") { throw 'Huishouden 0 is niet aangetoond.' }
 
@@ -175,14 +223,23 @@ try {
     Show-Step 11 $steps[10] 'PASS'
 
     Show-Step 12 $steps[11]
-    if ($joined -notmatch 'RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN') {
-        throw 'Groene eindmarker ontbreekt.'
+    if ($joined -notmatch "migration_credential_available.*False") {
+        throw 'Afwezigheid van migratiecredential tijdens runtime-keten niet aangetoond.'
+    }
+    if ($joined -notmatch 'POSTGRESQL_RECEIPT_CHAIN_RUNTIME_CREATE_DENIED_GREEN') {
+        throw 'DML-only runtimegrens niet aangetoond.'
+    }
+    if ($joined -notmatch 'POSTGRESQL_RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN') {
+        throw 'Groene PostgreSQL-eindmarker ontbreekt.'
     }
     Show-Step 12 $steps[11] 'PASS'
 
     Write-Host ''
     Write-Host '================================================================='
     Write-Host ' KETENTEST GESLAAGD - 12/12 STAPPEN GROEN - 100%'
+    Write-Host ' Datastore: PostgreSQL'
+    Write-Host ' Runtime CREATE-recht: GEWEIGERD'
+    Write-Host ' Migratiecredential tijdens keten: AFWEZIG'
     Write-Host ' Huishouden: 0'
     Write-Host ' Voorraadpad: 0 -> 2 -> 5 -> 5 -> 1'
     Write-Host ' Bijna-op-pad: NEE -> JA'
@@ -191,13 +248,20 @@ try {
     Write-Host ' Koopzegels buiten fysieke voorraad: JA'
     Write-Host '================================================================='
     Write-Host ''
-    exit 0
 }
 catch {
     Write-Host ''
     Write-Host '[ROOD] KETENTEST MISLUKT'
     Write-Host ("Oorzaak: {0}" -f $_.Exception.Message)
-    Write-Host 'Verwacht: huishouden 0, voorraadpad 0 -> 2 -> 5 -> 5 -> 1 en Bijna-op NEE -> JA.'
+    Write-Host 'Verwacht: PostgreSQL, huishouden 0, voorraadpad 0 -> 2 -> 5 -> 5 -> 1 en Bijna-op NEE -> JA.'
     Write-Host ''
     exit 1
 }
+finally {
+    if ($isolatedStackStarted -and -not $CiMode -and -not $DisplayValidatedResult) {
+        Write-Host '[OPRUIMEN] Geisoleerde PostgreSQL-ketenteststack en testvolume worden verwijderd...'
+        & docker compose @composeArguments down -v --remove-orphans 2>&1 | ForEach-Object { Write-Host $_ }
+    }
+}
+
+exit 0
