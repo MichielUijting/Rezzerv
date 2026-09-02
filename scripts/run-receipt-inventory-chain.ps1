@@ -28,6 +28,7 @@ $steps = @(
 $total = $steps.Count
 $composeProject = 'rezzerv-receipt-chain-test'
 $isolatedStackStarted = $false
+$cleanupExitCode = 0
 $composeArguments = @(
     '-p', $composeProject,
     '-f', 'docker-compose.yml',
@@ -260,8 +261,21 @@ catch {
 finally {
     if ($isolatedStackStarted -and -not $CiMode -and -not $DisplayValidatedResult) {
         Write-Host '[OPRUIMEN] Geisoleerde PostgreSQL-ketenteststack en testvolume worden verwijderd...'
-        & docker compose @composeArguments down -v --remove-orphans 2>&1 | ForEach-Object { Write-Host $_ }
+        $cleanupResult = Invoke-CapturedCommand {
+            & docker compose @composeArguments down -v --remove-orphans
+        }
+        $cleanupResult.Output | ForEach-Object { Write-Host $_ }
+        if ($cleanupResult.ExitCode -ne 0) {
+            $cleanupExitCode = $cleanupResult.ExitCode
+            Write-Host ("[ROOD] Cleanup van de geisoleerde ketentestomgeving eindigde met exitcode {0}." -f $cleanupResult.ExitCode)
+        } else {
+            Write-Host '[GROEN] Geisoleerde PostgreSQL-ketenteststack en testvolume zijn verwijderd.'
+        }
     }
+}
+
+if ($cleanupExitCode -ne 0) {
+    exit $cleanupExitCode
 }
 
 exit 0
