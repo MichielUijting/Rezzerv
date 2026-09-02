@@ -19,25 +19,35 @@ jobs:
           ref: codex/postgresql-receipt-inventory-chain
           fetch-depth: 0
 
-      - name: Replace one SQLite datetime ordering expression
+      - name: Replace SQLite ordering only inside receipt event query
         shell: python
         run: |
           from pathlib import Path
 
           path = Path('backend/app/main.py')
           text = path.read_text(encoding='utf-8')
+          function_marker = 'def get_household_product_event_rows('
+          start = text.find(function_marker)
+          if start < 0:
+              raise SystemExit('Target function not found')
+          end = text.find('\ndef ', start + len(function_marker))
+          if end < 0:
+              raise SystemExit('Could not determine target function boundary')
+          block = text[start:end]
           old = 'ORDER BY datetime(created_at) DESC, id DESC'
           new = 'ORDER BY created_at DESC, id DESC'
-          count = text.count(old)
+          count = block.count(old)
           if count != 1:
-              raise SystemExit(f'Expected exactly one target occurrence, found {count}')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              raise SystemExit(f'Expected exactly one target occurrence inside function, found {count}')
+          new_block = block.replace(old, new, 1)
+          path.write_text(text[:start] + new_block + text[end:], encoding='utf-8')
 
       - name: Commit exact one-line portability fix
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
+          test "$(git diff --numstat -- backend/app/main.py | awk '{print $1 ":" $2}')" = "1:1"
           git diff -- backend/app/main.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
