@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Input from '../../ui/Input.jsx'
@@ -60,9 +59,6 @@ export default function ForgotPasswordPage() {
               >
                 {loading ? 'Bezig...' : 'Herstellink versturen'}
               </Button>
-              <div style={{ textAlign: 'center' }}>
-                <Link to="/login">Terug naar inloggen</Link>
-              </div>
               {message ? <div className="rz-alert" data-testid="forgot-password-message">{message}</div> : null}
               {error ? <div className="rz-alert" data-testid="forgot-password-error">{error}</div> : null}
             </form>
