@@ -84,7 +84,7 @@ jobs:
           rm -f /tmp/rezzerv-pr352-source.sqlite
           python -m alembic -c backend/alembic.ini upgrade head
           python -m alembic -c backend/alembic.ini current | tee /tmp/pr352-sqlite-head.log
-          grep -F '20260830_02' /tmp/pr352-sqlite-head.log
+          grep -F '20260902_01' /tmp/pr352-sqlite-head.log
           python - <<'PY'
           import sqlite3
 
@@ -132,7 +132,7 @@ jobs:
         run: |
           python -m alembic -c backend/alembic.ini upgrade head
           python -m alembic -c backend/alembic.ini current | tee /tmp/pr352-pg-head.log
-          grep -F '20260830_02' /tmp/pr352-pg-head.log
+          grep -F '20260902_01' /tmp/pr352-pg-head.log
 
       - name: Migrate all application data and prove equivalence
         env:
@@ -143,18 +143,18 @@ jobs:
             --allow-target-reset \
             --report-json /tmp/pr352-equivalence.json \
             | tee /tmp/pr352-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_HEAD_GREEN revision=20260830_02' /tmp/pr352-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_TABLE_SET_GREEN tables=87' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_HEAD_GREEN revision=20260902_01' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_TABLE_SET_GREEN tables=88' /tmp/pr352-migration.log
           grep -F 'POSTGRESQL_DATA_MIGRATION_SEQUENCES_GREEN' /tmp/pr352-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_EQUIVALENCE_GREEN tables=87' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_EQUIVALENCE_GREEN tables=88' /tmp/pr352-migration.log
           grep -F 'POSTGRESQL_DATA_MIGRATION_GREEN' /tmp/pr352-migration.log
           python - <<'PY'
           import json
           report = json.load(open('/tmp/pr352-equivalence.json', encoding='utf-8'))
-          assert report['source_revision'] == '20260830_02'
-          assert report['target_revision'] == '20260830_02'
-          assert report['application_tables'] == 87
-          assert len(report['tables']) == 87
+          assert report['source_revision'] == '20260902_01'
+          assert report['target_revision'] == '20260902_01'
+          assert report['application_tables'] == 88
+          assert len(report['tables']) == 88
           assert all(t['source_rows'] == t['target_rows'] for t in report['tables'])
           assert all(t['source_sha256'] == t['target_sha256'] for t in report['tables'])
           print('POSTGRESQL_DATA_MIGRATION_REPORT_GREEN')
@@ -172,8 +172,8 @@ jobs:
           python backend/tests/migration_foundation_head_selftest.py | tee /tmp/pr352-foundation.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/pr352-foundation.log
           grep -F 'POSTGRESQL_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN' /tmp/pr352-foundation.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260830_02_GREEN' /tmp/pr352-foundation.log
-          python -m alembic -c backend/alembic.ini current | grep -F '20260830_02'
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260902_01_GREEN' /tmp/pr352-foundation.log
+          python -m alembic -c backend/alembic.ini current | grep -F '20260902_01'
 
       - name: Fail closed when target already has runtime data
         env:
