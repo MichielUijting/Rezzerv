@@ -17052,7 +17052,7 @@ def count_history_events_for_article(conn, household_id: str, household_article_
             FROM inventory_events
             WHERE household_id = :household_id
               AND household_article_id = :household_article_id
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC, id DESC
             """
         ),
         {"household_id": resolved_household_id, "household_article_id": resolved_article_id},
