@@ -90,6 +90,17 @@ def main() -> None:
     ):
         _require(start, needle, label)
 
+    _forbid(
+        start,
+        "up -d --force-recreate frontend",
+        "redundant frontend-only force recreate",
+    )
+    _require(
+        start,
+        "[4/6] Application containers started from freshly built images.",
+        "single-stack startup completion marker",
+    )
+
     for legacy in (
         "./backend/data:/app/data",
         "/app/data/rezzerv.db",
@@ -168,26 +179,30 @@ def main() -> None:
         _require(postgres_compose, needle, label)
     _forbid(postgres_compose, "REZZERV_POSTGRES_PASSWORD:", "shared PostgreSQL credential")
 
-    # A fresh official PostgreSQL image runs init scripts against a temporary socket-only
-    # server. Therefore service health must prove the roles over TCP, not merely pg_isready
-    # against the local bootstrap socket.
+    # Health must use the same Compose-network TCP route as backend connections. Loopback
+    # can follow different pg_hba rules and can hide credential drift in a persisted volume.
     _forbid(postgres_compose, "pg_isready", "bootstrap-only PostgreSQL readiness")
+    _forbid(
+        postgres_compose,
+        "psql -h 127.0.0.1",
+        "loopback-only split-role health authentication",
+    )
     for needle, label in (
         (
             'PGPASSWORD="$${REZZERV_POSTGRES_MIGRATION_PASSWORD}"',
             "migration-role health password",
         ),
         (
-            'psql -h 127.0.0.1 -U "$${REZZERV_POSTGRES_MIGRATION_USER}"',
-            "migration-role TCP readiness",
+            'psql -h postgres -U "$${REZZERV_POSTGRES_MIGRATION_USER}"',
+            "migration-role Compose-network readiness",
         ),
         (
             'PGPASSWORD="$${REZZERV_POSTGRES_RUNTIME_PASSWORD}"',
             "runtime-role health password",
         ),
         (
-            'psql -h 127.0.0.1 -U "$${REZZERV_POSTGRES_RUNTIME_USER}"',
-            "runtime-role TCP readiness",
+            'psql -h postgres -U "$${REZZERV_POSTGRES_RUNTIME_USER}"',
+            "runtime-role Compose-network readiness",
         ),
     ):
         _require(postgres_compose, needle, label)
@@ -236,6 +251,7 @@ def main() -> None:
             "docker inspect --format '{{.State.Health.Status}}'",
             "Docker health-status readiness proof",
         ),
+        ("psql -h postgres", "Compose-network PostgreSQL auth proof"),
         (
             "POSTGRESQL_OPERATIONAL_ROLE_READY_HEALTH_GREEN",
             "split-role-ready health marker",
@@ -248,6 +264,14 @@ def main() -> None:
             "POSTGRESQL_OPERATIONAL_RUNTIME_CREATE_DENIED_GREEN",
             "runtime CREATE denial marker",
         ),
+        (
+            "POSTGRESQL_OPERATIONAL_CREDENTIAL_DRIFT_DETECTED_GREEN",
+            "credential drift detection marker",
+        ),
+        (
+            "POSTGRESQL_OPERATIONAL_CREDENTIAL_DRIFT_RECOVERY_GREEN",
+            "credential drift recovery marker",
+        ),
         ("POSTGRESQL_OPERATIONAL_ROLE_SPLIT_GREEN", "split-role marker"),
     ):
         _require(workflow, needle, label)
@@ -258,6 +282,7 @@ def main() -> None:
     print("POSTGRESQL_OPERATIONAL_STARTUP_HEALTH_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ISOLATION_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_ROLE_SPLIT_GREEN")
+    print("POSTGRESQL_OPERATIONAL_STARTUP_CREDENTIAL_DRIFT_GUARD_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_CI_GREEN")
     print("POSTGRESQL_OPERATIONAL_STARTUP_CONTRACT_GREEN")
 
