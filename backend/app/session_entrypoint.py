@@ -53,6 +53,9 @@ from app.services.membership_user_identity_service import backfill_membership_us
 from app.services.receipt_export_fixture_route_authorization import (
     required_receipt_export_fixture_permission,
 )
+from app.services.receipt_import_batch_runtime_contract import (
+    install_receipt_import_batch_runtime_contract,
+)
 from app.services.receipt_lifecycle_foundation_service import (
     apply_unpack_receipt_lifecycle_action,
     install_receipt_lifecycle_foundation,
@@ -436,6 +439,7 @@ def activate_server_side_session_routes() -> None:
 # Release A must be applied from the actual uvicorn entrypoint. Importing app.main
 # from here is deterministic; relying on app.__init__ background threads is not,
 # because package initialisation can still be in progress while those threads poll.
+install_receipt_import_batch_runtime_contract(legacy_main)
 install_receipt_lifecycle_foundation(app, legacy_main.engine)
 
 with legacy_main.engine.begin() as provisioning_conn:
