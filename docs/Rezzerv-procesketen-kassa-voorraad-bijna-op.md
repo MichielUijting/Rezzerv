@@ -217,53 +217,108 @@ De totale keten is functioneel geborgd wanneer:
 - Bijna op dezelfde voorraadprojectie en huishoudinstellingen gebruikt;
 - elk signaal doorklikbaar en uitlegbaar blijft tot huishoudartikel, locatie en mutatiebron.
 
-## 16. Technische regressieborging vanaf Rezzerv-MVP-v01.12.94
+## 16. Canonical technische regressieborging — PostgreSQL
 
-Deze aanvulling **vervangt de Rezzerv Development Stack niet**. De bestaande Development-Stack-mainvalidatie blijft het startpunt en de volgorde blijft leidend. De nieuwe v01.12.94-contracttests worden uitsluitend als aanvullende officiële Rezzerv-runner in die bestaande flow opgenomen.
+De actuele technische authority voor deze keten is PostgreSQL-only. De oude route met `run-receipt-inventory-chain-v2.ps1` en een tijdelijke SQLite-runtime is **geen officiële ketenrunner meer**.
 
-De lokale main-validatie voor deze keten is daarom:
+De normale operationele start en de volledige ketentest zijn twee afzonderlijke bewijsroutes:
 
-1. actuele `main` ophalen en een schone werkmap bevestigen;
-2. `docker compose down`;
-3. `docker compose up -d --build`;
-4. backend-health op `/api/health` bevestigen;
-5. de bestaande centrale frontendregressie uitvoeren:
-   `./scripts/run-frontend-regression-report.ps1 -SkipDockerBuild`;
-6. de aanvullende officiële receipt/status/loyalty/scanner-regressie uitvoeren:
-   `./scripts/run-receipt-status-loyalty-regression.ps1 -SkipBackendBuild`;
-7. de bestaande Kassabon → Voorraad → Bijna-op ketentest V2 uitvoeren:
-   `./scripts/run-receipt-inventory-chain-v2.ps1 -SkipBackendBuild`;
-8. opnieuw bevestigen dat de Git-werkmap schoon is.
+- `start.bat` bewijst dat de normale PostgreSQL-stack operationeel start;
+- `scripts/run-receipt-inventory-chain.ps1` bewijst de volledige Kassabon → Voorraad → Bijna-op-keten.
 
-### 16.1 Aanvullende v01.12.94 receipt-regressie
+Een groene `start.bat` mag daarom niet als vervanging voor de ketentest worden gerapporteerd.
 
-`run-receipt-status-loyalty-regression.ps1` borgt dezelfde contracten als de bestaande CI-gates voor:
+### 16.1 Officiële lokale ketenrunner
 
-- de echte AH/Picnic-supermarktfixtures;
-- Kassa-status en summary/detail-SSOT;
-- `spaarzegels -> loyalty`;
-- uitsluiting van loyalty/spaarcomponenten uit fysieke voorraad;
-- scannercontract en persistence-compatibiliteit;
-- scannerdependency- en caller-boundary.
+Voer vanuit de repositoryroot uit:
 
-Deze runner gebruikt een disposable backendcontainer met een tijdelijke SQLite-database in `/tmp`. De normale Rezzerv-runtime-database wordt niet als datamount aangekoppeld.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run-receipt-inventory-chain.ps1
+```
 
-### 16.2 Bestaande ketentest V2
+Gebruik voor een echte lokale ketenrun geen `-DisplayValidatedResult`. Die switch is alleen bedoeld voor de CI-presentatiecheck en voert de echte geïsoleerde testomgeving niet uit.
 
-`run-receipt-inventory-chain-v2.ps1` blijft de officiële ketenrunner voor Kassabon → Uitpakken → Voorraad → Bijna op. De onderliggende productieketentest gebruikt een tijdelijke SQLite-runtime en bewijst onder meer:
+De runner gebruikt:
 
-- idempotente voorraadmutaties;
-- universele productkoppeling;
-- producttypekoppeling;
-- Bijna-op-pad;
-- uitsluiting van koopzegels uit fysieke voorraad.
+- Compose-project `rezzerv-receipt-chain-test`;
+- PostgreSQL 17;
+- een eigen geïsoleerde PostgreSQL-testdatabase en named volume;
+- `rezzerv_migrator` voor Alembic/schema-preflight;
+- `rezzerv_app` als DML-only business-runtime;
+- canonical Alembic-head `20260902_01` voor de huidige baseline.
 
-De ketentest verandert de normale lokale PO-database niet.
+De normale operationele `rezzerv_postgres`-volume wordt niet als testdatabase gebruikt en wordt door deze runner niet verwijderd.
 
-### 16.3 Windows/PowerShell-portabiliteit
+### 16.2 De twaalf verplichte stappen
 
-De receipt/status/loyalty-runner normaliseert PowerShell here-string-regelafbrekingen vóór overdracht aan de Linux-shell van CRLF/CR naar LF. De eigen runner-validatie voert daarom bewust ook een CRLF-bronbestand uit. Hiermee is Windows-regelafbreking onderdeel van het officiële testcontract en geen aparte lokale werkwijze.
+De runner rapporteert exact twaalf stappen:
 
-### 16.4 Acceptatie
+1. **Controleer projectmap en uitvoeromgeving** — Docker en repositorycontext zijn bruikbaar.
+2. **Valideer PostgreSQL-testconfiguratie** — de geïsoleerde Compose-/roleconfiguratie is geldig.
+3. **Maak geisoleerde PostgreSQL-testomgeving gereed** — PostgreSQL wordt opgebouwd, split roles authenticeren via de servicenaam `postgres`, en Alembic migreert naar de canonical head.
+4. **Start productie-ketentest voor huishouden 0** — de echte productie-keten draait als `rezzerv_app`, zonder migration credential.
+5. **Verwerk kassabon 1: voorraad 0 naar 2**.
+6. **Verwerk kassabon 2: voorraad 2 naar 5**.
+7. **Herhaal kassabon 2: voorraad blijft 5** — idempotentie voorkomt een dubbele voorraadmutatie.
+8. **Controleer universeel product en huishoudartikel**.
+9. **Controleer producttypekoppeling**.
+10. **Controleer dat koopzegels buiten fysieke voorraad blijven**.
+11. **Verbruik voorraad 5 naar 1 en controleer Bijna op** — signaal verandert van `NEE` naar `JA`.
+12. **Controleer PostgreSQL/DML-only eindbewijs** — runtime-`CREATE` is geweigerd en de migration credential is tijdens de businessketen afwezig.
 
-De lokale main-validatie is alleen groen wanneer **alle** bovenstaande bestaande en aanvullende officiële runners groen eindigen en de werkmap schoon blijft. Een rode of onduidelijke stap stopt de validatie; de oorzaak wordt eerst technisch vastgesteld en hersteld voordat de keten opnieuw groen kan worden verklaard.
+### 16.3 Verplicht groen eindbewijs
+
+De keten is alleen technisch groen wanneer de runner eindigt met:
+
+```text
+KETENTEST GESLAAGD - 12/12 STAPPEN GROEN - 100%
+Datastore: PostgreSQL
+Runtime CREATE-recht: GEWEIGERD
+Migratiecredential tijdens keten: AFWEZIG
+Huishouden: 0
+Voorraadpad: 0 -> 2 -> 5 -> 5 -> 1
+Bijna-op-pad: NEE -> JA
+Dubbele voorraadmutatie voorkomen: JA
+Universeel product en producttype gekoppeld: JA
+Koopzegels buiten fysieke voorraad: JA
+```
+
+Deze markers zijn onderdeel van het testcontract. Een gedeeltelijke run, een geserveerde frontend of alleen een groene healthcheck is geen 12/12-ketenbewijs.
+
+### 16.4 Cleanup en Windows/PowerShell-contract
+
+Na het inhoudelijke 12/12-bewijs ruimt de runner uitsluitend zijn eigen geïsoleerde Compose-project, testnetwerk en testvolumes op.
+
+Een succesvolle cleanup eindigt zichtbaar met:
+
+```text
+[GROEN] Geisoleerde PostgreSQL-ketenteststack en testvolume zijn verwijderd.
+```
+
+De uiteindelijke PowerShell-exitcode is `0`.
+
+Docker schrijft normale stop/remove-progress deels naar stderr. Die normale progress mag niet als `NativeCommandError` worden behandeld. Een echte non-zero `docker compose down`-exitcode blijft daarentegen wel een fout en wordt door de runner als non-zero scriptexitcode doorgegeven.
+
+### 16.5 CI-borging
+
+De workflow `.github/workflows/receipt-inventory-chain-post-merge.yml` is de verplichte Receipt inventory chain merge gate voor relevante receipt-/inventorywijzigingen.
+
+De merge-gate bewijst onder meer:
+
+- PostgreSQL 17;
+- aparte migrator- en DML-only runtime-role;
+- canonical Alembic-migratie;
+- de volledige productie-keten;
+- geweigerde runtime-`CREATE`;
+- voorraadpad `0 -> 2 -> 5 -> 5 -> 1`;
+- Bijna-op-pad `NEE -> JA`;
+- locationless legacycontract waar dat expliciet wordt getest;
+- zichtbare PowerShell-runneroutput.
+
+De CI-PowerShelljob gebruikt `-DisplayValidatedResult` voor de presentatiecheck. Wanneer de Windows/native-command- of cleanupimplementatie zelf wijzigt, moet daarnaast de echte runner op Windows worden uitgevoerd.
+
+### 16.6 Relatie met overige regressies
+
+Frontend-, autorisatie-, recognition-, onboarding- en overige regressiegates blijven van toepassing volgens hun eigen wijzigingsscope. Zij vervangen de canonical receipt/inventory-keten niet, en de ketentest vervangt die andere gates evenmin.
+
+Historische SQLite-tests mogen alleen blijven bestaan wanneer zij expliciet een historische migration/adoption/compatibilitygrens bewijzen. Zij zijn geen alternatieve runtime- of ketenauthority.
