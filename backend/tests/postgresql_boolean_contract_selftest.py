@@ -1,20 +1,20 @@
 from app.services.postgresql_boolean_contract import (
-    MIGRATED_BOOLEAN_COLUMNS,
+    MIGRATED_BOOLEAN_COLUMNS_BY_TABLE,
     normalize_postgresql_boolean_parameters,
     normalize_postgresql_boolean_statement,
 )
 
 
 def test_explicit_migration_boolean_set_is_covered():
-    assert MIGRATED_BOOLEAN_COLUMNS == {
-        "member_allowed",
-        "is_primary",
-        "is_auto_prefilled",
-        "is_active",
-        "is_deleted",
-        "is_validated",
-        "totals_overridden",
-        "active",
+    assert MIGRATED_BOOLEAN_COLUMNS_BY_TABLE == {
+        "household_permission_policies": frozenset({"member_allowed"}),
+        "product_identities": frozenset({"is_primary"}),
+        "purchase_import_lines": frozenset({"is_auto_prefilled"}),
+        "receipt_sources": frozenset({"is_active"}),
+        "receipt_table_lines": frozenset({"is_deleted", "is_validated"}),
+        "receipt_tables": frozenset({"totals_overridden"}),
+        "spaces": frozenset({"active"}),
+        "sublocations": frozenset({"active"}),
     }
 
 
@@ -32,7 +32,7 @@ def test_receipt_detail_boolean_coalesce_is_postgresql_native():
     assert "COALESCE(is_validated, 0)" not in normalized
 
 
-def test_boolean_comparisons_are_native_for_migrated_columns_only():
+def test_boolean_comparisons_are_scoped_to_migrated_table_column_pairs():
     sql = """
         SELECT * FROM product_identities
         WHERE is_primary = 0
@@ -41,8 +41,11 @@ def test_boolean_comparisons_are_native_for_migrated_columns_only():
     """
     normalized = normalize_postgresql_boolean_statement(sql)
     assert "is_primary = FALSE" in normalized
-    assert "active = TRUE" in normalized
     assert "unrelated_counter = 0" in normalized
+    assert "active = 1" in normalized
+
+    spaces_sql = "SELECT * FROM spaces WHERE active = 1"
+    assert "active = TRUE" in normalize_postgresql_boolean_statement(spaces_sql)
 
 
 def test_receipt_line_insert_literal_boolean_is_normalized():
@@ -88,7 +91,7 @@ def test_boolean_write_parameters_are_python_bools():
     assert params == {"value": False, "id": "policy-1"}
 
 
-def test_non_postgresql_boolean_like_values_are_not_globally_coerced():
+def test_non_migrated_table_values_are_not_globally_coerced():
     _, params = normalize_postgresql_boolean_parameters(
         "UPDATE unrelated_table SET value = :value WHERE id = :id",
         (),
