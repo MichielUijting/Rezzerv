@@ -3921,7 +3921,7 @@ def get_household_product_inventory_rows(conn, household_id: str, household_arti
               AND lower(trim(i.naam)) IN :article_names
               AND COALESCE(i.status, 'active') = 'active'
               AND COALESCE(i.aantal, 0) > 0
-            ORDER BY datetime(COALESCE(i.updated_at, i.created_at)) DESC, i.id ASC
+            ORDER BY COALESCE(i.updated_at, i.created_at) DESC, i.id ASC
             """
         ).bindparams(bindparam('article_names', expanding=True)),
         {
@@ -3994,7 +3994,7 @@ def get_household_product_event_rows(conn, household_id: str, household_article_
                 article_id IN :article_ids
                 OR lower(trim(article_name)) IN :article_names
               )
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC, id DESC
             """
         ).bindparams(
             bindparam('article_ids', expanding=True),
@@ -17052,7 +17052,7 @@ def count_history_events_for_article(conn, household_id: str, household_article_
             FROM inventory_events
             WHERE household_id = :household_id
               AND household_article_id = :household_article_id
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC, id DESC
             """
         ),
         {"household_id": resolved_household_id, "household_article_id": resolved_article_id},
