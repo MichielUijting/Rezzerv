@@ -3921,7 +3921,7 @@ def get_household_product_inventory_rows(conn, household_id: str, household_arti
               AND lower(trim(i.naam)) IN :article_names
               AND COALESCE(i.status, 'active') = 'active'
               AND COALESCE(i.aantal, 0) > 0
-            ORDER BY datetime(COALESCE(i.updated_at, i.created_at)) DESC, i.id ASC
+            ORDER BY COALESCE(i.updated_at, i.created_at) DESC, i.id ASC
             """
         ).bindparams(bindparam('article_names', expanding=True)),
         {
