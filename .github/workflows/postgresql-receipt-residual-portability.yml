@@ -11,6 +11,7 @@ on:
       - 'backend/app/services/receipt_status_baseline_service.py'
       - 'backend/tests/postgresql_receipt_residual_portability_selftest.py'
       - 'backend/tests/postgresql_receipt_residual_dml_only_selftest.py'
+      - 'backend/tests/postgresql_unpack_start_runtime_selftest.py'
       - '.github/workflows/postgresql-receipt-residual-portability.yml'
   workflow_dispatch:
 
@@ -107,3 +108,9 @@ jobs:
           grep -F 'POSTGRESQL_RECEIPT_STATUS_SYNC_DML_ONLY_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_SCHEMA_UNCHANGED_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_DML_ONLY_SELFTEST_GREEN' /tmp/receipt-residual-dml-only.log
+
+      - name: Prove approved receipt reaches Uitpakken with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_unpack_start_runtime_selftest.py | tee /tmp/receipt-unpack-start.log
+          grep -F 'POSTGRESQL_RECEIPT_UNPACK_START_BATCH_GREEN' /tmp/receipt-unpack-start.log
