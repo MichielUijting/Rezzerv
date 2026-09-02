@@ -404,7 +404,7 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
         assert report["source_unversioned_tables"] > 0, report
         assert report["source_rows"] > 0, report
         assert report["target_revision"] == HEAD_REVISION, report
-        assert report["application_tables"] == 87, report
+        assert report["application_tables"] == 88, report
         assert len(report["source_data_proofs"]) == report["source_unversioned_tables"], report
         assert report["manual_sources_added"] >= 1, report
         assert report["canonical_only_seeded_tables"].get("external_product_index", 0) > 0, report
@@ -429,7 +429,7 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
                 if not str(row[0]).startswith("sqlite_")
                 and str(row[0]) != "alembic_version"
             }
-            assert len(tables) == 87, len(tables)
+            assert len(tables) == 88, len(tables)
             manual = connection.execute(
                 """
                 SELECT household_id, type
