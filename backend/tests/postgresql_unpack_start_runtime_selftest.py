@@ -85,11 +85,11 @@ def _insert_approved_receipt_fixture(conn) -> None:
             """
             INSERT INTO receipt_tables (
                 id, raw_receipt_id, household_id, store_name, purchase_at,
-                total_amount, currency, parse_status, line_count,
+                total_amount, currency, parse_status, workflow_state, line_count,
                 approved_at, approved_by_user_email, created_at, updated_at
             ) VALUES (
                 :id, :raw_receipt_id, :household_id, 'PostgreSQL Testwinkel', CURRENT_TIMESTAMP,
-                2.50, 'EUR', 'approved', 1,
+                2.50, 'EUR', 'approved', 'active', 1,
                 CURRENT_TIMESTAMP, 'postgresql-selftest@rezzerv.local', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """
@@ -150,6 +150,7 @@ def main() -> None:
                 "line_total_sum": 2.50,
                 "net_line_total_sum": 2.50,
                 "parse_status": "approved",
+                "workflow_state": "active",
                 "approved_at": "2026-09-03T09:31:00+00:00",
             }
 
