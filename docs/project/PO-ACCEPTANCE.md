@@ -15,6 +15,29 @@
 - alle teksten en bediening zijn gebruiksvriendelijk;
 - alle rollen sluiten al aan op de uiteindelijke bedrijfsregels.
 
+## Operationele PO-start
+
+Voor normale lokale PO-acceptatie wordt Rezzerv gestart met `start.bat`.
+
+Een geldige operationele startup bewijst minimaal:
+
+- PostgreSQL 17 is role-ready;
+- backend-health meldt `status == ok`, `datastore == postgresql` en een PostgreSQL database-identiteit;
+- frontend is bereikbaar en toont de juiste repositoryversie;
+- de routine eindigt zelfstandig met `Startup complete.`.
+
+`start.bat` is een startup-/smokebewijs en **geen volledige ketentest**.
+
+Wanneer een PR de Kassabon → Uitpakken → Voorraad → Bijna-op-keten, inventory-gedrag, PostgreSQL-ketenrunner of relevante databasegrens raakt, hoort daarnaast de officiële technische ketentest groen te zijn:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run-receipt-inventory-chain.ps1
+```
+
+Het technische ketenbewijs is pas volledig bij `12/12 STAPPEN GROEN`, PostgreSQL, DML-only runtime, geweigerde runtime-`CREATE`, afwezige migration credential tijdens de businessketen, voorraadpad `0 -> 2 -> 5 -> 5 -> 1`, Bijna-op-pad `NEE -> JA`, groene geïsoleerde cleanup en exitcode `0`.
+
+Deze technische ketentest is geen vervanging voor de functionele PO-beoordeling hieronder; beide bewijzen beantwoorden een andere vraag.
+
 ## PO-vinklijst
 
 De rollen- en accountcriteria hieronder beschrijven het functionele doelcontract
