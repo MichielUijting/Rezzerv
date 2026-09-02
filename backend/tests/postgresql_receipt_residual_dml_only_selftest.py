@@ -152,6 +152,16 @@ def _assert_receipt_paths(engine) -> None:
         conn.execute(
             text(
                 """
+                INSERT INTO household_registry (id, naam, created_at)
+                VALUES (:id, :naam, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO NOTHING
+                """
+            ),
+            {"id": HOUSEHOLD_ID, "naam": "PostgreSQL receipt residual proof"},
+        )
+        conn.execute(
+            text(
+                """
                 INSERT INTO households (id, naam, created_at)
                 VALUES (:id, :naam, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO NOTHING
@@ -207,6 +217,7 @@ def _assert_receipt_paths(engine) -> None:
             raise AssertionError(validation)
         conn.execute(text("DELETE FROM receipt_sources WHERE id = :id"), {"id": SOURCE_ID})
         conn.execute(text("DELETE FROM households WHERE id = :id"), {"id": HOUSEHOLD_ID})
+        conn.execute(text("DELETE FROM household_registry WHERE id = :id"), {"id": HOUSEHOLD_ID})
 
     after_tables = set(inspect(engine).get_table_names())
     if before_tables != after_tables:
