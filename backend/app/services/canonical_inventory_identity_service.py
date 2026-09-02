@@ -213,7 +213,7 @@ def _hydrate_latest_receipt_purchase_event(
           AND lower(COALESCE(source, '')) = 'store_import'
           AND COALESCE(trim(source_reference), '') = ''
           AND ABS(COALESCE(quantity, 0) - :quantity) < 0.000001
-          AND (:location_id IS NULL OR COALESCE(location_id, '') = COALESCE(:location_id, ''))
+          AND (CAST(:location_id AS TEXT) IS NULL OR COALESCE(location_id, '') = COALESCE(CAST(:location_id AS TEXT), ''))
         ORDER BY created_at DESC, id DESC
         LIMIT 1
         """
@@ -241,7 +241,7 @@ def _hydrate_latest_receipt_purchase_event(
           AND pil.matched_household_article_id = :household_article_id
           AND COALESCE(pil.processing_status, 'pending') <> 'processed'
           AND ABS(COALESCE(pil.quantity_raw, 0) - :quantity) < 0.000001
-          AND (:location_id IS NULL OR COALESCE(pil.target_location_id, '') = COALESCE(:location_id, ''))
+          AND (CAST(:location_id AS TEXT) IS NULL OR COALESCE(pil.target_location_id, '') = COALESCE(CAST(:location_id AS TEXT), ''))
           AND pib.source_reference LIKE 'receipt:%'
         ORDER BY COALESCE(pil.updated_at, pil.created_at) DESC,
                  pib.created_at DESC,
