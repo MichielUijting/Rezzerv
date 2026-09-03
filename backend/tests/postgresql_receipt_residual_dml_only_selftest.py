@@ -131,6 +131,63 @@ def _assert_receipt_approve_nullable_string_bind(engine) -> None:
     print("POSTGRESQL_RECEIPT_APPROVE_NULLABLE_STRING_BIND_GREEN")
 
 
+def _assert_unpack_nullable_review_decision_bind(engine) -> None:
+    event.listen(
+        engine,
+        "before_execute",
+        enforce_postgresql_boolean_parameters_before_execute,
+        retval=True,
+    )
+    try:
+        with engine.begin() as conn:
+            target_location_result = conn.execute(
+                text(
+                    """
+                    UPDATE purchase_import_lines
+                    SET target_location_id = :target_location_id,
+                        location_override_mode = :location_override_mode,
+                        review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "target_location_id": "no-such-target-location",
+                    "location_override_mode": "manual",
+                    "next_review_decision": None,
+                    "id": "no-such-purchase-import-line",
+                },
+            )
+            if target_location_result.rowcount not in (0, -1):
+                raise AssertionError(target_location_result.rowcount)
+
+            article_link_result = conn.execute(
+                text(
+                    """
+                    UPDATE purchase_import_lines
+                    SET matched_household_article_id = :article_id,
+                        review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "article_id": "no-such-household-article",
+                    "next_review_decision": None,
+                    "id": "no-such-purchase-import-line",
+                },
+            )
+            if article_link_result.rowcount not in (0, -1):
+                raise AssertionError(article_link_result.rowcount)
+    finally:
+        event.remove(
+            engine,
+            "before_execute",
+            enforce_postgresql_boolean_parameters_before_execute,
+        )
+    print("POSTGRESQL_UNPACK_NULLABLE_REVIEW_DECISION_BIND_GREEN")
+
+
 def _serialize_source(row) -> dict:
     item = dict(row)
     item["is_active"] = bool(item.get("is_active"))
@@ -240,6 +297,7 @@ def main() -> None:
         _assert_runtime_create_denied(engine)
         _assert_schema_contract(engine)
         _assert_receipt_approve_nullable_string_bind(engine)
+        _assert_unpack_nullable_review_decision_bind(engine)
         _assert_receipt_paths(engine)
     finally:
         engine.dispose()
