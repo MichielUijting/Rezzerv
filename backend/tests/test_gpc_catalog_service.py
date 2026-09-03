@@ -11,7 +11,7 @@ from app.testing.postgresql_onboarding_selftest_fixture import (
 )
 
 
-HEAD_REVISION = "20260902_01"
+HEAD_REVISION = "20260903_01"
 
 SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <schema>
