@@ -431,13 +431,17 @@ def install_inventory_location_household_patch(main_module) -> None:
         if str(context.get("display_role") or "").strip().lower() == "viewer":
             return location_policy_endpoint(batch_id, payload, authorization)
 
-        _clear_selected_locationless_targets(main_module, batch_id)
-        return _process_locationless_ready_only_batch(
-            main_module,
-            batch_id,
-            payload,
-            authorization,
-        )
+        token = _processing_household_id.set(household_id)
+        try:
+            _clear_selected_locationless_targets(main_module, batch_id)
+            return _process_locationless_ready_only_batch(
+                main_module,
+                batch_id,
+                payload,
+                authorization,
+            )
+        finally:
+            _processing_household_id.reset(token)
 
     def process_resolver_with_global_legacy_compat(conn, target_location_id):
         resolved = strict_process_resolver(conn, target_location_id)
