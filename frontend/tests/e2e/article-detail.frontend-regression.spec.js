@@ -5,7 +5,7 @@ import {
 } from './helpers/rezzervAssertions.js';
 
 test.describe('Artikeldetail frontend-regressie', () => {
-  test('Stabiele artikelroute gebruikt de universele naam en toont Locaties alleen voor Waar Inhuis', async ({ page }) => {
+  test('Stabiele artikelroute gebruikt de universele naam, conditionele Locaties en standaard meldingoverlay', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     const failedResponses = [];
     page.on('response', (response) => {
@@ -17,6 +17,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     const universalArticleName = 'Mosterd fijne Dijon extra lange universele artikelnaam';
     const receiptArticleText = 'MOSTERD DIJON 250G';
     let primaryUseCase = 'waar_inhuis';
+    let historyShouldFail = false;
 
     await page.route('**/api/onboarding', async (route) => {
       await route.fulfill({
@@ -92,6 +93,14 @@ test.describe('Artikeldetail frontend-regressie', () => {
     });
 
     await page.route(`**/api/household-articles/${articleId}/events`, async (route) => {
+      if (historyShouldFail) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'Historiebron tijdelijk niet beschikbaar' }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -138,7 +147,18 @@ test.describe('Artikeldetail frontend-regressie', () => {
       await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
     }
 
-    expect(failedResponses).toEqual([]);
+    historyShouldFail = true;
+    await page.reload();
+    const feedback = page.getByTestId('app-feedback-error');
+    await expect(feedback).toBeVisible();
+    await expect(feedback.getByText('Melding', { exact: true })).toBeVisible();
+    await expect(feedback.getByText(/Live artikelhistorie kon niet worden geladen/)).toBeVisible();
+    await expect(
+      page.locator('.rz-article-detail-alert').filter({ hasText: 'Live artikelhistorie kon niet worden geladen.' }),
+    ).toHaveCount(0);
+
+    expect(failedResponses.filter((entry) => entry.startsWith('503 GET '))).toHaveLength(1);
+    expect(failedResponses.filter((entry) => !entry.startsWith('503 GET '))).toEqual([]);
     await expectNoConsoleErrors(consoleErrors);
   });
 });
