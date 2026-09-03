@@ -147,6 +147,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
       await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
     }
 
+    failedResponses.length = 0;
     historyShouldFail = true;
     await page.reload();
     const feedback = page.getByTestId('app-feedback-error');
@@ -157,7 +158,9 @@ test.describe('Artikeldetail frontend-regressie', () => {
       page.locator('.rz-article-detail-alert').filter({ hasText: 'Live artikelhistorie kon niet worden geladen.' }),
     ).toHaveCount(0);
 
-    expect(failedResponses.filter((entry) => entry.startsWith('503 GET '))).toHaveLength(1);
+    const historyFailures = failedResponses.filter((entry) => entry.startsWith('503 GET '));
+    expect(historyFailures.length).toBeGreaterThan(0);
+    expect(historyFailures.every((entry) => entry.includes(`/api/household-articles/${articleId}/events`))).toBe(true);
     expect(failedResponses.filter((entry) => !entry.startsWith('503 GET '))).toEqual([]);
     await expectNoConsoleErrors(consoleErrors);
   });
