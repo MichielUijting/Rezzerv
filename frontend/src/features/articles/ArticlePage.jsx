@@ -12,7 +12,8 @@ import ArticleHistoryTab from './tabs/ArticleHistoryTab'
 import ArticleAnalyticsSubtabs from './tabs/ArticleAnalyticsSubtabs'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
-const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
+const TABS_WITH_LOCATIONS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
+const TABS_WITHOUT_LOCATIONS = ['Overzicht', 'Voorraad', 'Historie', 'Analyse']
 
 function PlaceholderTab({ text }) {
   return <div style={{ color: '#667085' }}>{text}</div>
@@ -96,6 +97,13 @@ async function fetchInventoryPreview() {
   if (!response.ok) throw new Error('Live artikelvoorraad kon niet worden geladen')
   const data = await response.json()
   return Array.isArray(data?.rows) ? data.rows : []
+}
+
+async function fetchArticlePrimaryUseCase() {
+  const response = await fetchJsonWithAuth('/api/onboarding')
+  if (!response.ok) return ''
+  const data = await response.json().catch(() => ({}))
+  return String(data?.primary_use_case || '').trim().toLowerCase()
 }
 
 function mapEventTypeLabel(eventType) {
@@ -299,6 +307,7 @@ export default function ArticlePage() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [inventoryRefreshVersion, setInventoryRefreshVersion] = useState(0)
   const [householdDetails, setHouseholdDetails] = useState(null)
+  const [primaryUseCase, setPrimaryUseCase] = useState('')
 
   useEffect(() => {
     function handleAutomationChange() {
@@ -311,6 +320,20 @@ export default function ArticlePage() {
     return () => {
       window.removeEventListener('rezzerv-household-automation-updated', handleAutomationChange)
       window.removeEventListener('rezzerv-article-auto-consume-overrides-updated', handleAutomationChange)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchArticlePrimaryUseCase()
+      .then((value) => {
+        if (!cancelled) setPrimaryUseCase(value)
+      })
+      .catch(() => {
+        if (!cancelled) setPrimaryUseCase('')
+      })
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -446,15 +469,21 @@ export default function ArticlePage() {
   }, [activeArticle, automationVersion, householdDetails, liveHistoryRows, hasLiveInventoryMatch, isPureDemoArticle])
 
   const pageTitle = `Artikel details: ${articleData?.name || resolvedArticleName || 'Onbekend artikel'}`
+  const tabs = useMemo(
+    () => primaryUseCase === 'waar_inhuis' ? TABS_WITH_LOCATIONS : TABS_WITHOUT_LOCATIONS,
+    [primaryUseCase],
+  )
 
   const [activeTab, setActiveTab] = useState('Overzicht')
 
   useEffect(() => {
     const requestedTab = String(searchParams.get('tab') || '').trim()
-    if (TABS.includes(requestedTab)) {
+    if (tabs.includes(requestedTab)) {
       setActiveTab(requestedTab)
+    } else if (!tabs.includes(activeTab)) {
+      setActiveTab('Overzicht')
     }
-  }, [searchParams])
+  }, [searchParams, tabs, activeTab])
 
   const tabContent = {
     Overzicht: articleData ? <ArticleOverviewSubtabs articleData={articleData} visibilityMap={visibilityMap} visibilityLoading={visibilityLoading} visibilityError={visibilityError} onDetailsSaved={(details) => { setHouseholdDetails((current) => ({ ...(current || {}), ...(details || {}) })); refreshArticleLiveData() }} /> : null,
@@ -487,7 +516,7 @@ export default function ArticlePage() {
               }
             />
           ) : articleData ? (
-            <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} tabTestIdMap={{ Historie: "article-history-tab", Analyse: "article-analysis-tab" }}>
+            <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} tabTestIdMap={{ Historie: "article-history-tab", Analyse: "article-analysis-tab" }}>
               {(currentTab) => {
                 const content = tabContent[currentTab]
                 return content || <PlaceholderTab text="Deze tab volgt later." />
