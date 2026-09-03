@@ -434,6 +434,8 @@ def install_inventory_location_household_patch(main_module) -> None:
         token = _processing_household_id.set(household_id)
         try:
             _clear_selected_locationless_targets(main_module, batch_id)
+            if mode == "selected_only":
+                return location_policy_endpoint(batch_id, payload, authorization)
             return _process_locationless_ready_only_batch(
                 main_module,
                 batch_id,
