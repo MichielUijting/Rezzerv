@@ -22,7 +22,7 @@ def load_household_article_events(conn, household_id: str, household_article_id:
     article = conn.execute(
         text(
             """
-            SELECT id, name
+            SELECT id, naam
             FROM household_articles
             WHERE id = :household_article_id
               AND household_id = :household_id
@@ -38,7 +38,7 @@ def load_household_article_events(conn, household_id: str, household_article_id:
     if not article:
         raise HTTPException(status_code=404, detail="Artikel niet gevonden")
 
-    article_name = str(article.get("name") or "").strip()
+    article_name = str(article.get("naam") or "").strip()
     rows = conn.execute(
         text(
             """
