@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Tabs from '../../ui/Tabs'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import demoData from '../../demo-articles.json'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility'
 import ArticleOverviewSubtabs from './tabs/ArticleOverviewSubtabs'
@@ -297,6 +298,7 @@ function ArticleDetailState({ title, message }) {
 export default function ArticlePage() {
   const { articleId } = useParams()
   const [searchParams] = useSearchParams()
+  const { showFeedback } = useAppFeedback()
   const { visibilityMap, isLoading: visibilityLoading, error: visibilityError } = useArticleFieldVisibility()
   const [automationVersion, setAutomationVersion] = useState(0)
   const [liveInventoryRows, setLiveInventoryRows] = useState([])
@@ -402,14 +404,21 @@ export default function ArticlePage() {
           setLiveHistoryRows(rows)
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
+          const message = hasLiveInventoryMatch
+            ? 'Live artikelhistorie kon niet worden geladen.'
+            : 'Live artikelhistorie kon niet worden geladen. Demo-historie wordt getoond waar beschikbaar.'
           setLiveHistoryRows([])
-          setHistoryLoadError(
-            hasLiveInventoryMatch
-              ? 'Live artikelhistorie kon niet worden geladen.'
-              : 'Live artikelhistorie kon niet worden geladen. Demo-historie wordt getoond waar beschikbaar.',
-          )
+          setHistoryLoadError(message)
+          showFeedback({
+            variant: 'error',
+            message,
+            detail: 'De overige artikelgegevens blijven beschikbaar.',
+            technicalDetail: String(error?.message || '').trim(),
+            showTechnicalToggle: Boolean(String(error?.message || '').trim()),
+            key: `article-history-load-error:${stableArticleId || articleNameForHistory}`,
+          })
         }
       })
       .finally(() => {
@@ -421,7 +430,7 @@ export default function ArticlePage() {
     return () => {
       cancelled = true
     }
-  }, [articleId, householdDetails?.article_id, householdDetails?.article_name, resolvedArticleName, hasLiveInventoryMatch, inventoryRefreshVersion])
+  }, [articleId, householdDetails?.article_id, householdDetails?.article_name, resolvedArticleName, hasLiveInventoryMatch, inventoryRefreshVersion, showFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -502,7 +511,6 @@ export default function ArticlePage() {
           <div data-testid="article-detail-title" style={{ display: 'none' }}>{pageTitle}</div>
 
           {inventoryLoadError ? <div className="rz-article-detail-alert">{inventoryLoadError}</div> : null}
-          {historyLoadError && !historyLoading && articleData ? <div className="rz-article-detail-alert">{historyLoadError}</div> : null}
 
           {inventoryLoading ? (
             <ArticleDetailState title="Artikeldetail laden" message="De live artikelgegevens worden geladen. Als live data niet beschikbaar is, wordt beschikbare demo-informatie gebruikt." />
