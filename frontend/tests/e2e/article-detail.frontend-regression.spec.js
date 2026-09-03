@@ -5,7 +5,7 @@ import {
 } from './helpers/rezzervAssertions.js';
 
 test.describe('Artikeldetail frontend-regressie', () => {
-  test('Stabiele artikelroute gebruikt overal de universele huishoudartikelnaam', async ({ page }) => {
+  test('Stabiele artikelroute gebruikt de universele naam en toont Locaties alleen voor Waar Inhuis', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     const failedResponses = [];
     page.on('response', (response) => {
@@ -16,6 +16,15 @@ test.describe('Artikeldetail frontend-regressie', () => {
     const articleId = 'household-article-mosterd';
     const universalArticleName = 'Mosterd fijne Dijon extra lange universele artikelnaam';
     const receiptArticleText = 'MOSTERD DIJON 250G';
+    let primaryUseCase = 'waar_inhuis';
+
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ primary_use_case: primaryUseCase }),
+      });
+    });
 
     await page.route('**/api/settings/article-field-visibility', async (route) => {
       await route.fulfill({
@@ -116,6 +125,14 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await expect(page.getByText(receiptArticleText, { exact: true })).toHaveCount(0);
 
     for (const tabName of ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']) {
+      await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
+    }
+
+    primaryUseCase = 'wat_inhuis';
+    await page.reload();
+    await expect(page.getByTestId('article-detail-page')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Locaties', exact: true })).toHaveCount(0);
+    for (const tabName of ['Overzicht', 'Voorraad', 'Historie', 'Analyse']) {
       await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
     }
 
