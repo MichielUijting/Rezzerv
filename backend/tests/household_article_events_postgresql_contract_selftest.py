@@ -26,7 +26,7 @@ class _FakeConnection:
         sql = str(statement)
         self.calls.append((sql, dict(params)))
         if "FROM household_articles" in sql:
-            return _MappingsResult(first={"id": "article-1", "name": "SOEPGR BASIS"})
+            return _MappingsResult(first={"id": "article-1", "naam": "SOEPGR BASIS"})
         if "FROM inventory_events" in sql:
             return _MappingsResult(rows=[{
                 "id": "event-1",
@@ -44,6 +44,21 @@ class _FakeConnection:
                 "created_at": "2026-09-03T20:00:00+00:00",
             }])
         raise AssertionError(sql)
+
+
+def test_article_history_query_uses_canonical_household_article_name_column():
+    conn = _FakeConnection()
+
+    load_household_article_events(conn, "household-1", "article-1")
+
+    article_sql, params = conn.calls[0]
+    normalized = " ".join(article_sql.split())
+    assert "SELECT id, naam FROM household_articles" in normalized
+    assert "SELECT id, name FROM household_articles" not in normalized
+    assert params == {
+        "household_article_id": "article-1",
+        "household_id": "household-1",
+    }
 
 
 def test_article_history_query_is_postgresql_native_and_locationless_safe():
