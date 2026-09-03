@@ -43,7 +43,7 @@ class PurchaseImportLine(Base):
     external_article_code = Column(String, nullable=True)
     article_name_raw = Column(String, nullable=False)
     brand_raw = Column(String, nullable=True)
-    quantity_raw = Column(Numeric(10, 2), nullable=False)
+    quantity_raw = Column(Numeric(), nullable=False)
     unit_raw = Column(String, nullable=True)
     line_price_raw = Column(Numeric(10, 2), nullable=True)
     currency_code = Column(String, nullable=True)
