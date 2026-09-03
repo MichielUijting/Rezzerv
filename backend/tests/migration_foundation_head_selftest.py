@@ -6,12 +6,18 @@ from sqlalchemy import create_engine, inspect, text
 import migration_foundation_selftest as foundation_test
 
 
-HEAD_REVISION = "20260902_01"
+HEAD_REVISION = "20260903_01"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 88
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
-_SQLITE_HEAD_EXTENSION_TABLES = {"receipt_sources", "raw_receipts", PASSWORD_RESET_TABLE}
+QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
+_SQLITE_HEAD_EXTENSION_TABLES = {
+    "receipt_sources",
+    "raw_receipts",
+    PASSWORD_RESET_TABLE,
+    *QUANTITY_CONTRACT_TABLES,
+}
 _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS = {
     "trg_household_zero_system_insert",
     "trg_receipt_tables_preserve_explicit_approval",
@@ -44,10 +50,11 @@ def _postgresql_trigger_names(connection) -> set[str]:
 def _remove_locked_sqlite_head_extensions(schema: str) -> str:
     """Delegate migration-owned head objects to exact semantic validation.
 
-    The receipt objects rebuilt at 20260830_02 and the new password-reset table
-    at 20260902_01 are migration-owned extensions to the immutable SQLite
-    baseline. Their contracts are validated semantically below. Every unrelated
-    schema block remains in the immutable byte comparison.
+    The receipt objects rebuilt at 20260830_02, the password-reset table at
+    20260902_01 and the quantity-column rebuilds at 20260903_01 are
+    migration-owned extensions to the immutable SQLite baseline. Their
+    contracts are validated semantically below. Every unrelated schema block
+    remains in the immutable byte comparison.
     """
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
     retained: list[str] = []
@@ -146,6 +153,49 @@ def _assert_receipt_household_authority(connection) -> None:
             f"actual={sorted(actual_triggers)}"
         )
     print("POSTGRESQL_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN")
+
+
+def _assert_quantity_precision_authority(connection) -> None:
+    inspector = inspect(connection)
+
+    purchase_columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns("purchase_import_lines")
+    }
+    receipt_columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns("receipt_table_lines")
+    }
+
+    for table_name, column_name, column in (
+        ("purchase_import_lines", "quantity_raw", purchase_columns["quantity_raw"]),
+        ("receipt_table_lines", "quantity", receipt_columns["quantity"]),
+    ):
+        column_type = column["type"]
+        if not isinstance(column_type, sa.Numeric):
+            raise AssertionError(
+                f"Expected NUMERIC for {table_name}.{column_name}, got {column_type}"
+            )
+        if getattr(column_type, "precision", None) is not None or getattr(column_type, "scale", None) is not None:
+            raise AssertionError(
+                f"Quantity scale must be unbounded for {table_name}.{column_name}; got {column_type}"
+            )
+
+    for table_name, column_name, column in (
+        ("purchase_import_lines", "line_price_raw", purchase_columns["line_price_raw"]),
+        ("receipt_table_lines", "line_total", receipt_columns["line_total"]),
+        ("receipt_table_lines", "discount_amount", receipt_columns["discount_amount"]),
+    ):
+        column_type = column["type"]
+        if not isinstance(column_type, sa.Numeric) or getattr(column_type, "scale", None) != 2:
+            raise AssertionError(
+                f"Financial scale drift for {table_name}.{column_name}: got {column_type}"
+            )
+
+    if connection.dialect.name == "postgresql":
+        print("POSTGRESQL_QUANTITY_PRECISION_SCHEMA_AUTHORITY_GREEN")
+    else:
+        print("SQLITE_QUANTITY_PRECISION_SCHEMA_AUTHORITY_GREEN")
 
 
 def _assert_password_reset_authority(connection) -> None:
@@ -253,11 +303,12 @@ def main() -> None:
                     f"Expected Alembic revision {HEAD_REVISION}, got {revision}"
                 )
             _assert_receipt_household_authority(connection)
+            _assert_quantity_precision_authority(connection)
             _assert_password_reset_authority(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260902_01_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_20260903_01_GREEN")
 
 
 if __name__ == "__main__":

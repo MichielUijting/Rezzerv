@@ -17,34 +17,34 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "purchase_import_lines",
-        "quantity_raw",
-        existing_type=sa.Numeric(precision=10, scale=2),
-        type_=sa.Numeric(),
-        existing_nullable=False,
-    )
-    op.alter_column(
-        "receipt_table_lines",
-        "quantity",
-        existing_type=sa.Numeric(precision=12, scale=3),
-        type_=sa.Numeric(),
-        existing_nullable=True,
-    )
+    with op.batch_alter_table("purchase_import_lines") as batch_op:
+        batch_op.alter_column(
+            "quantity_raw",
+            existing_type=sa.Numeric(precision=10, scale=2),
+            type_=sa.Numeric(),
+            existing_nullable=False,
+        )
+    with op.batch_alter_table("receipt_table_lines") as batch_op:
+        batch_op.alter_column(
+            "quantity",
+            existing_type=sa.Numeric(precision=12, scale=3),
+            type_=sa.Numeric(),
+            existing_nullable=True,
+        )
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "receipt_table_lines",
-        "quantity",
-        existing_type=sa.Numeric(),
-        type_=sa.Numeric(precision=12, scale=3),
-        existing_nullable=True,
-    )
-    op.alter_column(
-        "purchase_import_lines",
-        "quantity_raw",
-        existing_type=sa.Numeric(),
-        type_=sa.Numeric(precision=10, scale=2),
-        existing_nullable=False,
-    )
+    with op.batch_alter_table("receipt_table_lines") as batch_op:
+        batch_op.alter_column(
+            "quantity",
+            existing_type=sa.Numeric(),
+            type_=sa.Numeric(precision=12, scale=3),
+            existing_nullable=True,
+        )
+    with op.batch_alter_table("purchase_import_lines") as batch_op:
+        batch_op.alter_column(
+            "quantity_raw",
+            existing_type=sa.Numeric(),
+            type_=sa.Numeric(precision=10, scale=2),
+            existing_nullable=False,
+        )
