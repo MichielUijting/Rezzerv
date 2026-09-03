@@ -40,6 +40,9 @@ from app.services.fixture_lifecycle_route_authorization import (
 from app.services.frontteam_household_provisioning import (
     ensure_frontteam_household_for_session_runtime,
 )
+from app.services.household_article_events_postgresql_contract import (
+    install_household_article_events_postgresql_contract,
+)
 from app.services.hybrid_regression_route_authorization import (
     required_hybrid_regression_permissions,
 )
@@ -441,6 +444,7 @@ def activate_server_side_session_routes() -> None:
 # because package initialisation can still be in progress while those threads poll.
 install_receipt_import_batch_runtime_contract(legacy_main)
 install_receipt_lifecycle_foundation(app, legacy_main.engine)
+install_household_article_events_postgresql_contract(legacy_main)
 
 with legacy_main.engine.begin() as provisioning_conn:
     ensure_system_superuser_for_session_runtime(provisioning_conn)
