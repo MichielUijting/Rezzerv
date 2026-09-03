@@ -57,6 +57,15 @@ def test_locationless_process_contract_covers_ui_selected_only_and_ready_only():
     assert "route.endpoint = process_purchase_import_batch_with_locationless_legacy_compat" in source
 
 
+def test_locationless_selected_only_preserves_regular_selected_only_semantics():
+    source = inspect.getsource(install_inventory_location_household_patch)
+
+    assert 'if mode == "selected_only":' in source
+    selected_branch = source.split('if mode == "selected_only":', 1)[1]
+    selected_branch = selected_branch.split("return _process_locationless_ready_only_batch(", 1)[0]
+    assert "return location_policy_endpoint(batch_id, payload, authorization)" in selected_branch
+
+
 def test_locationless_compat_keeps_policy_context_active_during_inventory_writes():
     source = inspect.getsource(install_inventory_location_household_patch)
 
