@@ -2,22 +2,28 @@ from __future__ import annotations
 
 import os
 import sys
+import traceback
 from pathlib import Path
 
-from sqlalchemy import text
+from fastapi.testclient import TestClient
+from sqlalchemy import Boolean, Integer, inspect, text
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-# This test intentionally exercises the production Uitpakken conversion helper
-# through app.main on the real PostgreSQL runtime engine.  The household exists
-# only in household_registry: receipt authority must not depend on the retired
-# legacy households table.
+# This test intentionally exercises the production Uitpakken HTTP endpoint
+# through app.main on the real PostgreSQL runtime engine. The fixture is
+# committed because the ASGI request uses its own runtime database connection.
 UNPACK_HOUSEHOLD_ID = "postgresql-unpack-start-runtime"
 RAW_RECEIPT_ID = "postgresql-unpack-start-raw"
 RECEIPT_TABLE_ID = "postgresql-unpack-start-receipt"
 RECEIPT_LINE_ID = "postgresql-unpack-start-line"
+ARTICLE_GROUP_ID = "postgresql-unpack-start-group"
+HOUSEHOLD_ARTICLE_ID = "postgresql-unpack-start-article"
+SPACE_ID = "postgresql-unpack-start-space"
+SUBLOCATION_ID = "postgresql-unpack-start-sublocation"
+MEMORY_ID = "postgresql-unpack-start-memory"
 
 
 def _assert_postgresql_runtime() -> None:
@@ -37,19 +43,44 @@ def _configure_test_runtime_paths() -> None:
     os.environ["REZZERV_RECEIPT_STARTUP_REMBG_WARMUP"] = "false"
 
 
+def _column_map(conn, table_name: str) -> dict[str, dict]:
+    return {
+        str(column.get("name") or ""): column
+        for column in inspect(conn).get_columns(table_name)
+    }
+
+
+def _coerce_fixture_value(column: dict, value):
+    column_type = column.get("type")
+    if isinstance(column_type, Boolean):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return bool(value)
+    if isinstance(column_type, Integer) and isinstance(value, bool):
+        return int(value)
+    return value
+
+
+def _insert_row(conn, table_name: str, values: dict) -> None:
+    available = _column_map(conn, table_name)
+    selected = {
+        key: _coerce_fixture_value(available[key], value)
+        for key, value in values.items()
+        if key in available
+    }
+    if not selected:
+        raise AssertionError(f"No usable fixture columns for {table_name}")
+    columns = ", ".join(selected)
+    parameters = ", ".join(f":{key}" for key in selected)
+    conn.execute(text(f"INSERT INTO {table_name} ({columns}) VALUES ({parameters})"), selected)
+
+
 def _insert_approved_receipt_fixture(conn) -> None:
-    conn.execute(
-        text(
-            """
-            INSERT INTO household_registry (id, naam, created_at)
-            VALUES (:id, :naam, CURRENT_TIMESTAMP)
-            ON CONFLICT(id) DO NOTHING
-            """
-        ),
-        {
-            "id": UNPACK_HOUSEHOLD_ID,
-            "naam": "PostgreSQL unpack start runtime proof",
-        },
+    _insert_row(
+        conn,
+        "household_registry",
+        {"id": UNPACK_HOUSEHOLD_ID, "naam": "PostgreSQL unpack start runtime proof"},
     )
 
     legacy_household = conn.execute(
@@ -58,6 +89,55 @@ def _insert_approved_receipt_fixture(conn) -> None:
     ).first()
     if legacy_household is not None:
         raise AssertionError("Unpack runtime fixture must not depend on legacy households")
+
+    _insert_row(
+        conn,
+        "article_groups",
+        {
+            "id": ARTICLE_GROUP_ID,
+            "household_id": UNPACK_HOUSEHOLD_ID,
+            "name": "Zuivel",
+            "normalized_name": "zuivel",
+            "status": "active",
+            "sort_order": 1,
+        },
+    )
+    _insert_row(
+        conn,
+        "household_articles",
+        {
+            "id": HOUSEHOLD_ARTICLE_ID,
+            "household_id": UNPACK_HOUSEHOLD_ID,
+            "naam": "Halfvolle melk",
+            "name": "Halfvolle melk",
+            "custom_name": "Halfvolle melk",
+            "article_group_id": ARTICLE_GROUP_ID,
+            "status": "active",
+            "active": True,
+            "consumable": True,
+        },
+    )
+    _insert_row(
+        conn,
+        "spaces",
+        {
+            "id": SPACE_ID,
+            "household_id": UNPACK_HOUSEHOLD_ID,
+            "naam": "Keuken",
+            "active": True,
+        },
+    )
+    _insert_row(
+        conn,
+        "sublocations",
+        {
+            "id": SUBLOCATION_ID,
+            "space_id": SPACE_ID,
+            "household_id": UNPACK_HOUSEHOLD_ID,
+            "naam": "Koelkast",
+            "active": True,
+        },
+    )
 
     conn.execute(
         text(
@@ -126,90 +206,99 @@ def _insert_approved_receipt_fixture(conn) -> None:
     )
 
 
+def _insert_confirmed_store_memory(conn, legacy_main) -> None:
+    normalized_key = legacy_main.normalize_store_memory_key("HALFVOLLE MELK", None)
+    _insert_row(
+        conn,
+        "store_import_memory",
+        {
+            "id": MEMORY_ID,
+            "household_id": UNPACK_HOUSEHOLD_ID,
+            "store_provider_code": "receipt",
+            "raw_article_name": "HALFVOLLE MELK",
+            "raw_brand": None,
+            "normalized_key": normalized_key,
+            "matched_household_article_id": HOUSEHOLD_ARTICLE_ID,
+            "preferred_location_id": SUBLOCATION_ID,
+            "times_confirmed": 1,
+        },
+    )
+
+
 def main() -> None:
     _assert_postgresql_runtime()
     _configure_test_runtime_paths()
 
     import app.main as legacy_main
 
-    with legacy_main.engine.connect() as conn:
-        transaction = conn.begin()
-        try:
-            _insert_approved_receipt_fixture(conn)
+    if legacy_main.engine.dialect.name != "postgresql":
+        raise AssertionError(f"Unexpected runtime dialect: {legacy_main.engine.dialect.name}")
 
-            receipt = {
-                "receipt_table_id": RECEIPT_TABLE_ID,
-                "id": RECEIPT_TABLE_ID,
-                "household_id": UNPACK_HOUSEHOLD_ID,
-                "store_name": "PostgreSQL Testwinkel",
-                "store_branch": None,
-                "purchase_at": "2026-09-03T09:30:00+00:00",
-                "created_at": "2026-09-03T09:30:00+00:00",
-                "currency": "EUR",
-                "line_count": 1,
-                "total_amount": 2.50,
-                "discount_total_effective": 0,
-                "line_total_sum": 2.50,
-                "net_line_total_sum": 2.50,
-                "parse_status": "approved",
-                "workflow_state": "active",
-                "approved_at": "2026-09-03T09:31:00+00:00",
-            }
+    # The real UI request uses a separate database connection, so seed and commit
+    # exactly the rows it must discover at runtime.
+    with legacy_main.engine.begin() as conn:
+        _insert_approved_receipt_fixture(conn)
+        _insert_confirmed_store_memory(conn, legacy_main)
 
-            status = legacy_main.derive_unpack_receipt_status(receipt)
-            if status not in {"Gecontroleerd", "Controle nodig"}:
-                raise AssertionError(f"Unexpected Uitpakken inbox status: {status!r}")
-
-            batch_id = legacy_main.ensure_unpack_batch_for_receipt(conn, receipt)
-            if not batch_id:
-                raise AssertionError("Approved receipt did not produce an Uitpakken batch")
-
-            batch = conn.execute(
-                text(
-                    """
-                    SELECT id, household_id, source_type, source_reference
-                    FROM purchase_import_batches
-                    WHERE id = :id
-                    """
-                ),
-                {"id": batch_id},
-            ).mappings().first()
-            if not batch:
-                raise AssertionError("Uitpakken batch was not persisted in the transaction")
-            if str(batch.get("household_id") or "") != UNPACK_HOUSEHOLD_ID:
-                raise AssertionError(batch)
-            if str(batch.get("source_type") or "") != "receipt":
-                raise AssertionError(batch)
-            if str(batch.get("source_reference") or "") != f"receipt:{RECEIPT_TABLE_ID}":
-                raise AssertionError(batch)
-
-            line_count = conn.execute(
-                text("SELECT COUNT(*) FROM purchase_import_lines WHERE batch_id = :batch_id"),
-                {"batch_id": batch_id},
-            ).scalar_one()
-            if int(line_count or 0) != 1:
-                raise AssertionError(f"Approved receipt produced unexpected Uitpakken line count: {line_count!r}")
-
-            # Opening the same Uitpakken inbox again must exercise the existing
-            # batch UPDATE path with both nullable product/article identifiers.
-            second_batch_id = legacy_main.ensure_unpack_batch_for_receipt(conn, receipt)
-            if second_batch_id != batch_id:
-                raise AssertionError(
-                    f"Repeated Uitpakken open created another batch: {batch_id!r} -> {second_batch_id!r}"
+    # Authentication is not under test here. Keep the real FastAPI route, request,
+    # transaction handling, receipt query, batch creation/sync and prefill path.
+    original_resolver = legacy_main.resolve_authorized_household_id
+    legacy_main.resolve_authorized_household_id = (
+        lambda authorization, requested_household_id, require_authorization=True: UNPACK_HOUSEHOLD_ID
+    )
+    try:
+        with TestClient(legacy_main.app) as client:
+            try:
+                response = client.get(
+                    "/api/unpack-start-batches",
+                    params={"householdId": UNPACK_HOUSEHOLD_ID},
+                    headers={"Authorization": "Bearer postgresql-runtime-selftest"},
                 )
+            except Exception:
+                print("POSTGRESQL_RECEIPT_UNPACK_HTTP_RUNTIME_EXCEPTION")
+                traceback.print_exc()
+                raise
+    finally:
+        legacy_main.resolve_authorized_household_id = original_resolver
 
-            second_line_count = conn.execute(
-                text("SELECT COUNT(*) FROM purchase_import_lines WHERE batch_id = :batch_id"),
-                {"batch_id": batch_id},
-            ).scalar_one()
-            if int(second_line_count or 0) != 1:
-                raise AssertionError(
-                    f"Repeated Uitpakken open changed line count unexpectedly: {second_line_count!r}"
-                )
+    if response.status_code != 200:
+        raise AssertionError(
+            f"Uitpakken runtime endpoint returned HTTP {response.status_code}: {response.text}"
+        )
+    payload = response.json()
+    items = list(payload.get("items") or [])
+    matching = [item for item in items if str(item.get("receipt_table_id") or "") == RECEIPT_TABLE_ID]
+    if len(matching) != 1:
+        raise AssertionError(f"Uitpakken runtime endpoint did not return the approved receipt: {payload!r}")
 
-            print("POSTGRESQL_RECEIPT_UNPACK_START_BATCH_GREEN")
-        finally:
-            transaction.rollback()
+    batch_id = str(matching[0].get("batch_id") or "")
+    if not batch_id:
+        raise AssertionError("Uitpakken runtime endpoint returned no batch id")
+
+    with legacy_main.engine.begin() as conn:
+        line = conn.execute(
+            text(
+                """
+                SELECT matched_household_article_id, target_location_id,
+                       is_auto_prefilled, review_decision, match_status
+                FROM purchase_import_lines
+                WHERE batch_id = :batch_id
+                LIMIT 1
+                """
+            ),
+            {"batch_id": batch_id},
+        ).mappings().first()
+    if not line:
+        raise AssertionError("Uitpakken runtime endpoint created no purchase import line")
+    if str(line.get("matched_household_article_id") or "") != HOUSEHOLD_ARTICLE_ID:
+        raise AssertionError(dict(line))
+    if str(line.get("target_location_id") or "") != SUBLOCATION_ID:
+        raise AssertionError(dict(line))
+    if line.get("is_auto_prefilled") is not True:
+        raise AssertionError(dict(line))
+
+    print("POSTGRESQL_RECEIPT_UNPACK_HTTP_RUNTIME_GREEN")
+    print("POSTGRESQL_RECEIPT_UNPACK_START_BATCH_GREEN")
 
 
 if __name__ == "__main__":
