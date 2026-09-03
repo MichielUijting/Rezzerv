@@ -172,9 +172,11 @@ test.describe('Uitpakken zonder locaties', () => {
     await page.goto(`/kassabonnen?batch=${batchId}`);
 
     const lineRow = page.getByTestId(`receipt-line-${lineId}`);
+    const receiptLinesTable = page.getByTestId('receipt-lines-table');
     await expect(lineRow).toBeVisible();
     await expect(page.getByTestId('receipt-bulk-location-button')).toBeHidden();
-    await expect(page.getByTestId('receipt-lines-table').locator('th').filter({ hasText: 'Locatie' })).toBeHidden();
+    await expect(receiptLinesTable.locator('th[aria-label="Locatie sorteren"]')).toBeHidden();
+    await expect(receiptLinesTable.locator('select[aria-label="Filter op locatie"]')).toBeHidden();
 
     await page.getByTestId(`receipt-line-select-${lineId}`).check();
     await expect(page.getByText(/Klaar:\s*1/)).toBeVisible();
