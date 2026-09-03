@@ -64,6 +64,11 @@ async function syncLocationTrackingLevel(householdData) {
     return setActiveLocationTrackingLevel(inlineLevel)
   }
 
+  const householdId = String(householdData?.active_household_id ?? householdData?.id ?? '').trim()
+  if (householdId === '0') {
+    return setActiveLocationTrackingLevel('')
+  }
+
   const capabilityLevel = await fetchLocationTrackingLevel()
   return setActiveLocationTrackingLevel(capabilityLevel)
 }
