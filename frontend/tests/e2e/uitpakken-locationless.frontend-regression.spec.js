@@ -77,7 +77,7 @@ test.describe('Uitpakken zonder locaties', () => {
     await page.route('**/api/article-groups*', async (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ items: [{ id: 'group-vlees', name: 'Vlees' }] }),
+      body: JSON.stringify({ items: [] }),
     }));
 
     await page.route('**/api/spaces*', async (route) => route.fulfill({
@@ -163,7 +163,7 @@ test.describe('Uitpakken zonder locaties', () => {
             matched_household_article_id: 'article-gehakt',
             suggested_household_article_id: 'article-gehakt',
             resolved_household_article_name: 'M Gehakt',
-            selected_article_group_id: 'group-vlees',
+            selected_article_group_id: null,
             target_location_id: 'voorraadkast',
             processing_status: processed ? 'processed' : 'failed',
             processing_error: processed ? null : 'oude locatie-instelling',
