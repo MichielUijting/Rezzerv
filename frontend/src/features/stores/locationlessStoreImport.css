@@ -1,0 +1,18 @@
+html[data-rezzerv-location-tracking-level='none'] [data-testid='receipt-bulk-location-button'] {
+  display: none !important;
+}
+
+html[data-rezzerv-location-tracking-level='none'] [data-testid='receipt-lines-table'] {
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+html[data-rezzerv-location-tracking-level='none'] [data-testid='receipt-lines-table'] col:nth-child(4),
+html[data-rezzerv-location-tracking-level='none'] [data-testid='receipt-lines-table'] th:nth-child(4),
+html[data-rezzerv-location-tracking-level='none'] [data-testid='receipt-lines-table'] td:nth-child(4) {
+  display: none !important;
+}
+
+html[data-rezzerv-location-tracking-level='none'] .rz-receipt-line-detail__wide:has([data-testid^='receipt-line-location-select-']) {
+  display: none !important;
+}
