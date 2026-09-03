@@ -5,6 +5,7 @@ test.describe('Uitpakken zonder locaties', () => {
     const batchId = 'locationless-uitpakken-batch';
     const lineId = 'locationless-uitpakken-line';
     let processed = false;
+    let reviewDecision = 'pending';
     let processPayload = null;
 
     await page.route('**/api/session', async (route) => route.fulfill({
@@ -118,11 +119,15 @@ test.describe('Uitpakken zonder locaties', () => {
       }),
     }));
 
-    await page.route(`**/api/purchase-import-lines/${lineId}/review`, async (route) => route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true }),
-    }));
+    await page.route(`**/api/purchase-import-lines/${lineId}/review`, async (route) => {
+      const payload = await route.request().postDataJSON();
+      reviewDecision = String(payload?.review_decision || 'pending');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, review_decision: reviewDecision }),
+      });
+    });
 
     await page.route(`**/api/purchase-import-batches/${batchId}/process`, async (route) => {
       processPayload = await route.request().postDataJSON();
@@ -162,7 +167,7 @@ test.describe('Uitpakken zonder locaties', () => {
             target_location_id: 'voorraadkast',
             processing_status: processed ? 'processed' : 'failed',
             processing_error: processed ? null : 'oude locatie-instelling',
-            review_decision: 'pending',
+            review_decision: reviewDecision,
             match_status: 'matched',
           }],
         }),
@@ -178,12 +183,14 @@ test.describe('Uitpakken zonder locaties', () => {
     await expect(receiptLinesTable.locator('th[aria-label="Locatie sorteren"]')).toBeHidden();
     await expect(receiptLinesTable.locator('select[aria-label="Filter op locatie"]')).toBeHidden();
 
-    await page.getByTestId(`receipt-line-select-${lineId}`).check();
-    await expect(page.getByText(/Klaar:\s*1/)).toBeVisible();
+    const lineSelection = page.getByTestId(`receipt-line-select-${lineId}`);
+    await lineSelection.check();
+    await expect(lineSelection).toBeChecked();
 
     await page.getByTestId('receipt-process-button').click();
 
     await expect(page.getByRole('dialog', { name: 'Niet alle geselecteerde regels zijn compleet' })).toHaveCount(0);
+    await expect.poll(() => reviewDecision).toBe('selected');
     await expect.poll(() => processPayload).not.toBeNull();
     expect(processPayload).toEqual({ processed_by: 'ui', mode: 'selected_only' });
     await expect(lineRow).toHaveCount(0);
