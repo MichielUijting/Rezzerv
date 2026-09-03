@@ -36,12 +36,18 @@ _STATEMENT_PARAMETER_RULES = {
     "sublocations": ("active",),
 }
 
-_NULLABLE_MATCH_ID_TABLES = frozenset(
-    {"receipt_table_lines", "purchase_import_lines"}
-)
-_NULLABLE_MATCH_ID_STRING_PARAMETERS = frozenset(
-    {"matched_global_product_id", "matched_household_article_id"}
-)
+_NULLABLE_STRING_PARAMETERS_BY_TABLE = {
+    "receipt_table_lines": frozenset(
+        {"matched_global_product_id", "matched_household_article_id"}
+    ),
+    "purchase_import_lines": frozenset(
+        {
+            "matched_global_product_id",
+            "matched_household_article_id",
+            "next_review_decision",
+        }
+    ),
+}
 
 
 def _tables_in_statement(statement: str) -> set[str]:
@@ -166,19 +172,21 @@ def normalize_postgresql_boolean_parameters(statement: str, multiparams: Any, pa
     return normalized_multi, normalized_params
 
 
-def _bind_nullable_match_id_string_parameters(clauseelement: Any) -> Any:
+def _bind_nullable_string_parameters(clauseelement: Any) -> Any:
     statement = str(clauseelement)
     active_tables = _tables_in_statement(statement)
-    if not (_NULLABLE_MATCH_ID_TABLES & active_tables):
-        return clauseelement
     bindparams = getattr(clauseelement, "_bindparams", {})
     bind_parameter_types = getattr(clauseelement, "bindparams", None)
     if not callable(bind_parameter_types):
         return clauseelement
-    matching_parameters = tuple(
-        name
-        for name in _NULLABLE_MATCH_ID_STRING_PARAMETERS
-        if name in bindparams
+
+    matching_parameters = sorted(
+        {
+            name
+            for table in active_tables
+            for name in _NULLABLE_STRING_PARAMETERS_BY_TABLE.get(table, ())
+            if name in bindparams
+        }
     )
     if not matching_parameters:
         return clauseelement
@@ -190,7 +198,7 @@ def _bind_nullable_match_id_string_parameters(clauseelement: Any) -> Any:
 def enforce_postgresql_boolean_parameters_before_execute(conn: Any, clauseelement: Any, multiparams: Any, params: Any, execution_options: Any):
     if getattr(getattr(conn, "dialect", None), "name", None) != "postgresql":
         return clauseelement, multiparams, params
-    typed_clauseelement = _bind_nullable_match_id_string_parameters(clauseelement)
+    typed_clauseelement = _bind_nullable_string_parameters(clauseelement)
     normalized_multi, normalized_params = normalize_postgresql_boolean_parameters(str(typed_clauseelement), multiparams, params)
     return typed_clauseelement, normalized_multi, normalized_params
 
