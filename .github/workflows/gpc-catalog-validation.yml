@@ -143,7 +143,7 @@ jobs:
           finally:
               engine.dispose()
 
-          assert revision == '20260902_01'
+          assert revision == '20260903_01'
           assert tuple(brick) == ('Mosterdblad', '50101700')
           assert tuple(audit) == ('nl', 'ci', 'success')
           print('GPC_CATALOG_POSTGRESQL_VALIDATION_GREEN')
