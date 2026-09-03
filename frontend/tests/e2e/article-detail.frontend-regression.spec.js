@@ -129,7 +129,9 @@ test.describe('Artikeldetail frontend-regressie', () => {
     }
 
     primaryUseCase = 'wat_inhuis';
+    const onboardingRequest = page.waitForRequest((request) => request.url().includes('/api/onboarding'));
     await page.reload();
+    await onboardingRequest;
     await expect(page.getByTestId('article-detail-page')).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Locaties', exact: true })).toHaveCount(0);
     for (const tabName of ['Overzicht', 'Voorraad', 'Historie', 'Analyse']) {
