@@ -91,7 +91,7 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/receipt-residual-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/receipt-residual-migration.log
-          grep -F "'revision': '20260902_01'" /tmp/receipt-residual-migration.log
+          grep -F "'revision': '20260903_01'" /tmp/receipt-residual-migration.log
 
       - name: Prove receipt residual paths with DML-only runtime role
         working-directory: backend
