@@ -11,8 +11,12 @@ from app.services.household_product_configuration_service import (
 )
 from app.services.inventory_location_policy_service import (
     LOCATION_GLOBAL,
+    LOCATION_NONE,
     resolve_inventory_target_location,
 )
+
+
+_PROCESS_PATH = "/api/purchase-import-batches/{batch_id}/process"
 
 
 def _required_household_id(household_id: Any) -> str:
@@ -333,6 +337,52 @@ def validate_purchase_import_target_location_for_policy(
     return None, detail
 
 
+def _batch_household_configuration(main_module, batch_id: str):
+    with main_module.engine.begin() as conn:
+        household_id = conn.execute(
+            text(
+                """
+                SELECT household_id
+                FROM purchase_import_batches
+                WHERE id = :batch_id
+                LIMIT 1
+                """
+            ),
+            {"batch_id": str(batch_id)},
+        ).scalar()
+        if not household_id:
+            return None, None
+        try:
+            configuration = resolve_household_product_configuration(
+                conn,
+                str(household_id),
+            )
+        except LookupError:
+            return str(household_id), None
+    return str(household_id), configuration
+
+
+def _clear_selected_locationless_targets(main_module, batch_id: str) -> int:
+    """Remove stale target locations from selected lines for a locationless household."""
+
+    with main_module.engine.begin() as conn:
+        result = conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET target_location_id = NULL,
+                    location_override_mode = 'cleared',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE batch_id = :batch_id
+                  AND COALESCE(review_decision, 'pending') = 'selected'
+                  AND target_location_id IS NOT NULL
+                """
+            ),
+            {"batch_id": str(batch_id)},
+        )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
 def install_inventory_location_household_patch(main_module) -> None:
     """Replace legacy inventory location helpers after app.main is loaded."""
 
@@ -340,6 +390,7 @@ def install_inventory_location_household_patch(main_module) -> None:
     main_module._dev_resolve_sublocation_id = resolve_sublocation_id
 
     from .purchase_import_location_policy_patch import (
+        _process_locationless_ready_only_batch,
         _processing_household_id,
         install_purchase_import_location_policy_patch,
     )
@@ -349,8 +400,44 @@ def install_inventory_location_household_patch(main_module) -> None:
 
     install_purchase_import_location_policy_patch(main_module)
 
+    location_policy_endpoint = main_module.process_purchase_import_batch
     strict_process_resolver = main_module.resolve_store_storage_target_location
     original_target_validator = main_module.validate_purchase_import_storage_target_location
+
+    def process_purchase_import_batch_with_locationless_legacy_compat(
+        batch_id: str,
+        payload,
+        authorization: str | None = None,
+    ):
+        mode = str(getattr(payload, "mode", "") or "").strip()
+        if mode not in {"ready_only", "selected_only"}:
+            return location_policy_endpoint(batch_id, payload, authorization)
+
+        household_id, configuration = _batch_household_configuration(
+            main_module,
+            batch_id,
+        )
+        if (
+            not household_id
+            or configuration is None
+            or configuration.location_tracking_level != LOCATION_NONE
+        ):
+            return location_policy_endpoint(batch_id, payload, authorization)
+
+        context = main_module.require_household_context(
+            authorization,
+            household_id,
+        )
+        if str(context.get("display_role") or "").strip().lower() == "viewer":
+            return location_policy_endpoint(batch_id, payload, authorization)
+
+        _clear_selected_locationless_targets(main_module, batch_id)
+        return _process_locationless_ready_only_batch(
+            main_module,
+            batch_id,
+            payload,
+            authorization,
+        )
 
     def process_resolver_with_global_legacy_compat(conn, target_location_id):
         resolved = strict_process_resolver(conn, target_location_id)
@@ -400,11 +487,28 @@ def install_inventory_location_household_patch(main_module) -> None:
         )
         return None, line_ref
 
+    main_module.process_purchase_import_batch = (
+        process_purchase_import_batch_with_locationless_legacy_compat
+    )
     main_module.resolve_store_storage_target_location = (
         process_resolver_with_global_legacy_compat
     )
     main_module.validate_purchase_import_storage_target_location = (
         validate_target_location_with_household_policy
     )
+
+    patched_route = False
+    for route in main_module.app.routes:
+        if (
+            getattr(route, "path", None) == _PROCESS_PATH
+            and "POST" in (getattr(route, "methods", set()) or set())
+        ):
+            route.endpoint = process_purchase_import_batch_with_locationless_legacy_compat
+            if getattr(route, "dependant", None) is not None:
+                route.dependant.call = process_purchase_import_batch_with_locationless_legacy_compat
+            patched_route = True
+            break
+    if not patched_route:
+        raise RuntimeError("Purchase-import processroute niet gevonden voor locationless compat")
 
     install_inventory_location_event_policy_patch(main_module)
