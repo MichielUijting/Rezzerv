@@ -6,6 +6,14 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy import text
 
+from app.services.household_product_configuration_service import (
+    resolve_household_product_configuration,
+)
+from app.services.inventory_location_policy_service import (
+    LOCATION_GLOBAL,
+    resolve_inventory_target_location,
+)
+
 
 def _required_household_id(household_id: Any) -> str:
     normalized = str(household_id or "").strip()
@@ -187,6 +195,144 @@ def resolve_sublocation_id(
     return new_sublocation_id
 
 
+def _owned_active_sublocation_parent(
+    conn,
+    household_id: Any,
+    target_location_id: Any,
+) -> dict[str, str] | None:
+    normalized_household_id = _required_household_id(household_id)
+    normalized_target_id = str(target_location_id or "").strip()
+    if not normalized_target_id:
+        return None
+
+    row = conn.execute(
+        text(
+            """
+            SELECT
+                s.id AS space_id,
+                s.naam AS space_name,
+                sl.id AS sublocation_id,
+                sl.naam AS sublocation_name
+            FROM sublocations sl
+            JOIN spaces s ON s.id = sl.space_id
+            WHERE sl.id = :target_location_id
+              AND s.household_id = :household_id
+              AND COALESCE(sl.active, TRUE) = TRUE
+              AND COALESCE(s.active, TRUE) = TRUE
+            LIMIT 1
+            """
+        ),
+        {
+            "target_location_id": normalized_target_id,
+            "household_id": normalized_household_id,
+        },
+    ).mappings().first()
+    if not row:
+        return None
+    return {
+        "space_id": str(row["space_id"]),
+        "space_name": str(row.get("space_name") or ""),
+        "sublocation_id": str(row["sublocation_id"]),
+        "sublocation_name": str(row.get("sublocation_name") or ""),
+    }
+
+
+def normalize_persisted_purchase_import_target_location(
+    conn,
+    household_id: Any,
+    target_location_id: Any,
+) -> dict[str, Any] | None:
+    """Resolve persisted targets while repairing the old global/sublocation mismatch.
+
+    The canonical global-location policy remains strict: new input must be a main
+    space. This compatibility path exists only for purchase-import rows that were
+    persisted by the older Uitpakken endpoint before that endpoint consulted the
+    household product configuration. If such a stored id points to an owned active
+    sublocation, processing safely degrades it to the parent main space.
+    """
+
+    normalized_household_id = _required_household_id(household_id)
+    normalized_target_id = str(target_location_id or "").strip()
+
+    try:
+        return resolve_inventory_target_location(
+            conn,
+            normalized_household_id,
+            normalized_target_id or None,
+        )
+    except HTTPException:
+        pass
+
+    configuration = resolve_household_product_configuration(
+        conn,
+        normalized_household_id,
+    )
+    if configuration.location_tracking_level != LOCATION_GLOBAL:
+        return None
+
+    parent = _owned_active_sublocation_parent(
+        conn,
+        normalized_household_id,
+        normalized_target_id,
+    )
+    if not parent:
+        return None
+
+    try:
+        return resolve_inventory_target_location(
+            conn,
+            normalized_household_id,
+            parent["space_id"],
+        )
+    except HTTPException:
+        return None
+
+
+def validate_purchase_import_target_location_for_policy(
+    conn,
+    household_id: Any,
+    target_location_id: Any,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Validate new Uitpakken location choices against the household policy."""
+
+    normalized_household_id = _required_household_id(household_id)
+    normalized_target_id = str(target_location_id or "").strip()
+    if not normalized_target_id:
+        return None, None
+
+    try:
+        return (
+            resolve_inventory_target_location(
+                conn,
+                normalized_household_id,
+                normalized_target_id,
+            ),
+            None,
+        )
+    except HTTPException as exc:
+        detail = str(exc.detail or "Ongeldige locatie gekozen")
+
+    configuration = resolve_household_product_configuration(
+        conn,
+        normalized_household_id,
+    )
+    if configuration.location_tracking_level == LOCATION_GLOBAL:
+        parent = _owned_active_sublocation_parent(
+            conn,
+            normalized_household_id,
+            normalized_target_id,
+        )
+        if parent:
+            return (
+                None,
+                "Dit huishouden gebruikt alleen hoofdlocaties. "
+                f"Kies {parent['space_name']} in plaats van "
+                f"{parent['space_name']} / {parent['sublocation_name']}.",
+            )
+
+    return None, detail
+
+
 def install_inventory_location_household_patch(main_module) -> None:
     """Replace legacy inventory location helpers after app.main is loaded."""
 
@@ -194,6 +340,7 @@ def install_inventory_location_household_patch(main_module) -> None:
     main_module._dev_resolve_sublocation_id = resolve_sublocation_id
 
     from .purchase_import_location_policy_patch import (
+        _processing_household_id,
         install_purchase_import_location_policy_patch,
     )
     from .inventory_location_event_policy_patch import (
@@ -201,4 +348,63 @@ def install_inventory_location_household_patch(main_module) -> None:
     )
 
     install_purchase_import_location_policy_patch(main_module)
+
+    strict_process_resolver = main_module.resolve_store_storage_target_location
+    original_target_validator = main_module.validate_purchase_import_storage_target_location
+
+    def process_resolver_with_global_legacy_compat(conn, target_location_id):
+        resolved = strict_process_resolver(conn, target_location_id)
+        if resolved is not None:
+            return resolved
+
+        household_id = _processing_household_id.get()
+        if not household_id:
+            return None
+        return normalize_persisted_purchase_import_target_location(
+            conn,
+            household_id,
+            target_location_id,
+        )
+
+    def validate_target_location_with_household_policy(conn, line_id, target_location_id):
+        line_ref = main_module.build_purchase_import_line_reference(conn, line_id)
+        if not target_location_id:
+            return None, line_ref
+
+        household_id = conn.execute(
+            text(
+                """
+                SELECT pib.household_id
+                FROM purchase_import_lines pil
+                JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+                WHERE pil.id = :line_id
+                LIMIT 1
+                """
+            ),
+            {"line_id": str(line_id)},
+        ).scalar()
+        if not household_id:
+            return original_target_validator(conn, line_id, target_location_id)
+
+        resolved, error_message = validate_purchase_import_target_location_for_policy(
+            conn,
+            str(household_id),
+            target_location_id,
+        )
+        if resolved is not None:
+            return resolved, line_ref
+
+        line_ref["location_error_reason"] = "invalid_for_household_location_policy"
+        line_ref["location_error_message"] = (
+            error_message or "Ongeldige locatie voor de instellingen van dit huishouden."
+        )
+        return None, line_ref
+
+    main_module.resolve_store_storage_target_location = (
+        process_resolver_with_global_legacy_compat
+    )
+    main_module.validate_purchase_import_storage_target_location = (
+        validate_target_location_with_household_policy
+    )
+
     install_inventory_location_event_policy_patch(main_module)
