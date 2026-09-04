@@ -324,6 +324,11 @@ def run() -> int:
             assert foreign_approve.status_code == 403, foreign_approve.text
             checks.append("cross_household_kassa_read_write_and_approval_are_blocked")
 
+            with engine.begin() as conn:
+                inventory_event_count_before_approval = int(
+                    conn.execute(text("SELECT COUNT(*) FROM inventory_events")).scalar_one()
+                )
+
             approved = client.post(f"/api/receipts/{normal['receipt_table_id']}/approve", headers=owner_headers)
             assert approved.status_code == 200, approved.text
             with engine.begin() as conn:
@@ -341,8 +346,10 @@ def run() -> int:
                     {"household_id": TARGET_HOUSEHOLD, "ref": f"receipt:{normal['receipt_table_id']}"},
                 ).mappings().all()
                 assert len(batch_rows) == 1, batch_rows
-                event_count = int(conn.execute(text("SELECT COUNT(*) FROM inventory_events WHERE receipt_table_id = :receipt_id"), {"receipt_id": normal["receipt_table_id"]}).scalar_one())
-                assert event_count == 0
+                inventory_event_count_after_approval = int(
+                    conn.execute(text("SELECT COUNT(*) FROM inventory_events")).scalar_one()
+                )
+                assert inventory_event_count_after_approval == inventory_event_count_before_approval
             checks.append("approval_persists_state_and_creates_unpack_boundary_without_inventory_mutation")
 
             loyalty_approved = client.post(f"/api/receipts/{loyalty['receipt_table_id']}/approve", headers=owner_headers)
