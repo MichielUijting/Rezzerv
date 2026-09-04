@@ -1,0 +1,62 @@
+name: F3-04 Kassa nullable article PostgreSQL patch
+
+on:
+  push:
+    branches:
+      - codex/integral-test-foundation-phase-0
+    paths:
+      - '.github/workflows/f3-04-kassa-nullable-article-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-kassa-nullable-article:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/integral-test-foundation-phase-0
+          fetch-depth: 0
+
+      - name: Type nullable receipt article parameter for PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+          old = """                matched_article_id = CASE
+                              WHEN :matched_household_article_id IS NOT NULL THEN :matched_household_article_id
+                              ELSE matched_article_id
+                          END,
+                          article_match_status = CASE
+                              WHEN :matched_household_article_id IS NOT NULL THEN 'matched'
+          """
+          new = """                matched_article_id = COALESCE(CAST(:matched_household_article_id AS TEXT), matched_article_id),
+                          article_match_status = CASE
+                              WHEN CAST(:matched_household_article_id AS TEXT) IS NOT NULL THEN 'matched'
+          """
+          actual = text.count(old)
+          if actual != 1:
+              raise SystemExit(f'Expected exactly 1 nullable receipt article CASE block, found {actual}')
+          text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+          PY
+          python -m py_compile backend/app/main.py
+          git diff --check
+          git diff -- backend/app/main.py
+
+      - name: Commit product repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'rezzerv-ci'
+          git config user.email 'rezzerv-ci@users.noreply.github.com'
+          git add backend/app/main.py
+          git diff --cached --check
+          git commit -m 'Type nullable Kassa article link for PostgreSQL'
+          git push origin HEAD:codex/integral-test-foundation-phase-0
