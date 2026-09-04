@@ -1,9 +1,9 @@
 """Canonical PostgreSQL foundation for Rezzerv integral acceptance tests.
 
 This module is test infrastructure only. It deliberately reuses the Alembic-owned
-schema and the existing PostgreSQL onboarding fixtures. Schema creation/migration
-remains migrator authority; all scenario seeding is performed through the
-DML-only runtime role.
+schema, the shared PostgreSQL acceptance boundary and existing onboarding seed
+helpers. Schema creation/migration remains migrator authority; all scenario
+seeding is performed through the DML-only runtime role.
 
 The foundation provides three deterministic regular-household contexts:
 
@@ -20,12 +20,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
 from typing import Any
 
-from alembic.config import Config
-from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.household_location_onboarding_service import (
@@ -35,14 +32,16 @@ from app.services.household_location_onboarding_service import (
 from app.services.household_onboarding_service import ensure_household_onboarding_foundation
 from app.services.password_service import hash_password
 from app.testing.onboarding_request_schema_fixture import backfill_completed_household_onboarding
-from app.testing.postgresql_onboarding_selftest_fixture import (
+from app.testing.postgresql_acceptance_foundation import (
     create_postgresql_runtime_test_engine,
+    postgresql_acceptance_snapshot,
     reset_postgresql_test_database,
+)
+from app.testing.postgresql_onboarding_selftest_fixture import (
     seed_household,
     seed_user_membership,
 )
 
-BACKEND_ROOT = Path(__file__).resolve().parents[2]
 TEST_PASSWORD_ENV = "REZZERV_ACCEPTANCE_TEST_PASSWORD"
 
 LOCATIONS_ON_HOUSEHOLD_ID = "acceptance-locations-on"
@@ -131,79 +130,6 @@ def _required_env(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} ontbreekt voor canonical acceptance foundation")
     return value
-
-
-def _migration_database_url() -> str:
-    value = _required_env("MIGRATION_DATABASE_URL")
-    if value.startswith("postgresql://"):
-        value = "postgresql+psycopg://" + value[len("postgresql://"):]
-    return value
-
-
-def _expected_alembic_head() -> str:
-    config = Config(str(BACKEND_ROOT / "alembic.ini"))
-    config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
-    heads = ScriptDirectory.from_config(config).get_heads()
-    if len(heads) != 1:
-        raise RuntimeError(f"Canonical Alembic verwacht exact één head, ontvangen={heads}")
-    return str(heads[0])
-
-
-def _database_authority_snapshot() -> dict[str, Any]:
-    expected_head = _expected_alembic_head()
-    migration_engine = create_engine(_migration_database_url(), future=True)
-    runtime_engine = create_postgresql_runtime_test_engine()
-    try:
-        with migration_engine.connect() as conn:
-            if conn.dialect.name != "postgresql":
-                raise RuntimeError(
-                    "Canonical acceptance migrator vereist PostgreSQL; "
-                    f"ontvangen dialect={conn.dialect.name}"
-                )
-            migrator_user = str(conn.execute(text("SELECT current_user")).scalar_one())
-            current_heads = [
-                str(row[0])
-                for row in conn.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num"))
-            ]
-            migrator_can_create = bool(
-                conn.execute(
-                    text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")
-                ).scalar_one()
-            )
-
-        with runtime_engine.connect() as conn:
-            runtime_user = str(conn.execute(text("SELECT current_user")).scalar_one())
-            database_name = str(conn.execute(text("SELECT current_database()" )).scalar_one())
-            runtime_can_create = bool(
-                conn.execute(
-                    text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")
-                ).scalar_one()
-            )
-
-        if current_heads != [expected_head]:
-            raise RuntimeError(
-                "Canonical acceptance schemahead wijkt af: "
-                f"database={current_heads}, repository={[expected_head]}"
-            )
-        if runtime_user == migrator_user:
-            raise RuntimeError("Runtime- en migrator-role mogen niet dezelfde databasegebruiker zijn")
-        if runtime_can_create:
-            raise RuntimeError("Canonical acceptance runtime-role heeft onverwacht schema CREATE")
-        if not migrator_can_create:
-            raise RuntimeError("Canonical acceptance migrator mist schema CREATE authority")
-
-        return {
-            "datastore": "postgresql",
-            "database": database_name,
-            "alembic_head": expected_head,
-            "runtime_user": runtime_user,
-            "migrator_user": migrator_user,
-            "runtime_create": runtime_can_create,
-            "migrator_create": migrator_can_create,
-        }
-    finally:
-        runtime_engine.dispose()
-        migration_engine.dispose()
 
 
 def _set_completed_use_case(conn, household: AcceptanceHousehold) -> None:
@@ -407,7 +333,7 @@ def _scenario_snapshot() -> dict[str, Any]:
 
 
 def run_foundation_contract() -> dict[str, Any]:
-    authority = _database_authority_snapshot()
+    authority = postgresql_acceptance_snapshot()
     seed_result = seed_canonical_acceptance_scenarios()
     scenarios = _scenario_snapshot()
     candidate_sha = str(
@@ -415,13 +341,12 @@ def run_foundation_contract() -> dict[str, Any]:
         or os.getenv("GITHUB_SHA")
         or "local"
     ).strip()
-    result = {
+    return {
         "candidate_sha": candidate_sha,
         **authority,
         **seed_result,
         **scenarios,
     }
-    return result
 
 
 def main() -> int:
