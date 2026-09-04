@@ -109,8 +109,9 @@ jobs:
           grep -F 'PASS platform_admin_uses_none_context_and_safe_platform_projection' platform-authority-api.log
           grep -F 'PASS platform_admin_cannot_mutate_ip_owner_only_special_roles' platform-authority-api.log
           grep -F 'PASS platform_admin_revokes_target_session_without_revoking_self' platform-authority-api.log
-          grep -F 'PASS ip_owner_grants_special_role_through_real_api' platform-authority-api.log
-          grep -F 'PASS platform_role_change_is_audited_and_does_not_change_household_membership' platform-authority-api.log
+          grep -F 'PASS ip_owner_cannot_stack_platform_role_on_regular_household_member' platform-authority-api.log
+          grep -F 'PASS ip_owner_grants_special_role_to_standalone_user' platform-authority-api.log
+          grep -F 'PASS platform_role_change_is_audited_without_household_membership_mutation' platform-authority-api.log
           grep -F 'PASS platform_role_does_not_create_cross_household_access' platform-authority-api.log
           grep -F 'PLATFORM_AUTHORITY_API_POSTGRESQL_GREEN' platform-authority-api.log
 
