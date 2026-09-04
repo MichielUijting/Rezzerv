@@ -41,28 +41,30 @@ Daarnaast kent ieder scenario een auditstatus:
 
 Deze scheiding voorkomt dat het bestaan van een workflow automatisch als functionele dekking wordt geïnterpreteerd.
 
-## 4. Huidige kernbevinding
+## 4. Huidige kernbevindingen
 
 Rezzerv heeft al veel regressie- en acceptatiechecks. De huidige kwaliteitssignalen zijn echter historisch gegroeid en verdeeld over veel feature-, release- en migratiegerichte workflows. Daardoor kan een groot aantal groene workflows nog steeds samengaan met een gat in een complete gebruikersketen.
 
-Twee onderdelen zijn in deze eerste audit al inhoudelijk als sterke technische evidence bevestigd:
+In deze eerste audit zijn inmiddels vier P0-gebieden inhoudelijk gecontroleerd:
 
-1. **Kassabon → Voorraad → Bijna-op** heeft een canonical PostgreSQL 12/12 ketenrunner met DML-only runtime, idempotentie, voorraadpad `0 -> 2 -> 5 -> 5 -> 1` en Bijna-op `NEE -> JA`.
-2. **PostgreSQL migratie/startup** heeft expliciete migrator/runtime-scheiding en operationele startupgates.
+1. **Account & sessie** heeft sterk PostgreSQL L2/L3-bewijs. `backend/tests/test_server_session_routes.py` gebruikt een echte FastAPI `TestClient` met PostgreSQL en controleert onder andere login, 401/403, sessiecontext, logout en invalidatie. De ontbrekende laag is de echte browsergestuurde L4-reis.
+2. **Locatiebeleid** bevat sterk PostgreSQL service/isolation-bewijs, maar de bestaande workflow `unpacking-household-location-isolation.yml` voert zijn Uitpakken-locatiecontract uit op **in-memory SQLite**. Dit telt daarom niet als PostgreSQL L3-bewijs. API- en L4-dekking voor locaties aan/uit blijven open.
+3. **Kassabon → Voorraad → Bijna-op** heeft een canonical PostgreSQL 12/12 ketenrunner met DML-only runtime, idempotentie, voorraadpad `0 -> 2 -> 5 -> 5 -> 1` en Bijna-op `NEE -> JA`. De browsergestuurde L4-keten ontbreekt nog.
+4. **PostgreSQL migratie/startup** heeft expliciete migrator/runtime-scheiding en operationele startupgates.
 
-Beide zijn belangrijk, maar het receipt/inventorybewijs is nog geen volledige browsergestuurde L4-keten. Dat gat blijft daarom zichtbaar.
+Dit bevestigt de kernwaarde van de matrix: de naam van een workflow is geen bewijs van de laag, datastore of gebruikersketen die hij werkelijk test.
 
 ## 5. Eerste integrale scenario-inventaris
 
 | ID | Domein / keten | Prioriteit | Audit | Belangrijkste resterende gat |
 |---|---|---:|---|---|
-| P0-ACCOUNT-SESSION | Account & sessie | P0 | inventory | Volledige echte account/session L4-reis |
-| P0-ONBOARDING | Onboarding naar bruikbare app | P0 | inventory | Eén canonieke L4-run met configuratievarianten |
+| P0-ACCOUNT-SESSION | Account & sessie | P0 | **verified** | Echte browsergestuurde L4-reis |
+| P0-ONBOARDING | Onboarding naar bruikbare app | P0 | inventory | Browsergestuurde registratie-tot-app-keten |
 | P0-HOUSEHOLD-MEMBERSHIP | Huishouden / uitnodiging / rol | P0 | inventory | UI + runtime + huishoudwissel integraal |
 | P0-AUTHORIZATION-ISOLATION | Rollen en huishoudisolatie | P0 | inventory | 190-check runtime en v2.0 doelcontract zichtbaar koppelen |
 | P0-SETTINGS-PROJECTION | Instellingen naar werkelijk gedrag | P0 | inventory | Cross-layer instellingseffecten |
-| P0-LOCATIONS-POLICY | Locaties aan/uit | P0 | inventory | Vaste L4-variant voor huishoudens zonder locaties |
-| P0-RECEIPT-INVENTORY-ALMOSTOUT | Kassa → Uitpakken → Voorraad → Bijna-op | P0 | verified | Echte browserketen + locaties-uit variant |
+| P0-LOCATIONS-POLICY | Locaties aan/uit | P0 | **verified** | Echte API + L4; bestaand Uitpakken-contract is SQLite-only |
+| P0-RECEIPT-INVENTORY-ALMOSTOUT | Kassa → Uitpakken → Voorraad → Bijna-op | P0 | **verified** | Echte browserketen + locaties-uit variant |
 | P0-KASSA-REVIEW | Kassa review / goedkeuring | P0 | inventory | UI aan canonical fixture en DB-eindstaat koppelen |
 | P0-UNPACKING | Uitpakken / verwerken | P0 | inventory | Losse varianten onder één ketenautoriteit brengen |
 | P0-INVENTORY | Voorraadmutaties / historie | P0 | inventory | Browsercontrole + exact quantity-contract |
@@ -73,7 +75,7 @@ Beide zijn belangrijk, maar het receipt/inventorybewijs is nog geen volledige br
 | P1-DAY-ARTICLE | Dagartikelen | P1 | inventory | Echte browserketen |
 | P1-SUPPORT-MESSAGES | Support / berichten | P1 | inventory | Actuele workflows exact koppelen aan scenario |
 | P0-PLATFORM-AUTHORITY | Platformrollen | P0 | inventory | Runtime-v1.1 en doel-v2.0 expliciet scheiden/testen |
-| P0-MIGRATION-STARTUP | Migratie & startup | P0 | verified | Opnemen in één integrale release acceptance gate |
+| P0-MIGRATION-STARTUP | Migratie & startup | P0 | **verified** | Opnemen in één integrale release acceptance gate |
 
 De details en evidencepaden staan uitsluitend in de machineleesbare matrix om dubbele administraties te voorkomen.
 
