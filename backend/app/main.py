@@ -34,6 +34,7 @@ import zipfile
 import re
 import math
 import mimetypes
+import sys
 from typing import Any, List, Mapping, Optional
 from dataclasses import dataclass
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
@@ -100,6 +101,7 @@ from app.services.authorization_membership_service import (
     set_household_membership_role,
 )
 from app.services.article_group_store import ensure_article_group_schema
+from app.services.unpacking_household_object_guard import install_unpacking_household_object_guard
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -162,6 +164,7 @@ import logging
 from sqlalchemy import inspect as sa_inspect, text, bindparam
 
 app = FastAPI()
+install_unpacking_household_object_guard(sys.modules[__name__])
 # Runtime schema validation is centralized; Alembic remains exclusive schema authority.
 validate_runtime_schema(engine)
 
