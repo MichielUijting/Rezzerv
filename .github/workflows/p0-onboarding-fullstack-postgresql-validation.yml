@@ -84,7 +84,7 @@ jobs:
       - name: Prove production-like PostgreSQL runtime boundary
         shell: bash
         run: |
-          docker compose exec -T backend python - <<'PY' | tee p0-l4-01-postgresql-boundary.log
+          docker compose exec -T backend python -u - <<'PY' | tee p0-l4-01-postgresql-boundary.log
           from sqlalchemy import text
           from app.db import engine
 
@@ -100,7 +100,7 @@ jobs:
                   ).scalar_one()
               )
               alembic_head = str(
-                  conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                  conn.execute(text("SELECT version_num FROM public.alembic_version")).scalar_one()
               )
               registry_columns = [
                   str(value)
@@ -108,7 +108,7 @@ jobs:
                       text("""
                           SELECT column_name
                           FROM information_schema.columns
-                          WHERE table_schema = current_schema()
+                          WHERE table_schema = 'public'
                             AND table_name = 'household_registry'
                           ORDER BY ordinal_position
                       """)
@@ -120,12 +120,23 @@ jobs:
                       text("""
                           SELECT column_name
                           FROM information_schema.columns
-                          WHERE table_schema = current_schema()
+                          WHERE table_schema = 'public'
                             AND table_name = 'household_product_configuration'
                           ORDER BY ordinal_position
                       """)
                   ).scalars().all()
               ]
+              configuration_relation = conn.execute(
+                  text("""
+                      SELECT n.nspname AS schema_name,
+                             c.relname AS relation_name,
+                             c.oid::text AS relation_oid
+                      FROM pg_class c
+                      JOIN pg_namespace n ON n.oid = c.relnamespace
+                      WHERE n.nspname = 'public'
+                        AND c.relname = 'household_product_configuration'
+                  """)
+              ).mappings().one()
           expected_configuration_columns = {
               "household_id",
               "inventory_tracking_level",
@@ -134,20 +145,22 @@ jobs:
               "shopping_enabled",
           }
           assert current_user == "rezzerv_app", current_user
+          assert current_schema == "public", current_schema
           assert runtime_create is False
           assert alembic_head
           assert "naam" in registry_columns, registry_columns
           assert expected_configuration_columns.issubset(set(configuration_columns)), configuration_columns
-          print("datastore=postgresql")
-          print(f"database={current_database}")
-          print(f"schema={current_schema}")
-          print(f"search_path={search_path}")
-          print(f"runtime_user={current_user}")
-          print(f"runtime_create={runtime_create}")
-          print(f"alembic_head={alembic_head}")
-          print(f"household_registry_columns={','.join(registry_columns)}")
-          print(f"household_product_configuration_columns={','.join(configuration_columns)}")
-          print("P0_L4_01_POSTGRESQL_BOUNDARY_GREEN")
+          print("datastore=postgresql", flush=True)
+          print(f"database={current_database}", flush=True)
+          print(f"schema={current_schema}", flush=True)
+          print(f"search_path={search_path}", flush=True)
+          print(f"runtime_user={current_user}", flush=True)
+          print(f"runtime_create={runtime_create}", flush=True)
+          print(f"alembic_head={alembic_head}", flush=True)
+          print(f"household_registry_columns={','.join(registry_columns)}", flush=True)
+          print(f"household_product_configuration_relation={configuration_relation['schema_name']}.{configuration_relation['relation_name']}@{configuration_relation['relation_oid']}", flush=True)
+          print(f"household_product_configuration_columns={','.join(configuration_columns)}", flush=True)
+          print("P0_L4_01_POSTGRESQL_BOUNDARY_GREEN", flush=True)
           PY
 
       - name: Guard L4 browser authority against core route mocks
@@ -181,7 +194,7 @@ jobs:
           docker compose exec -T \
             -e L4_EMAIL="$PLAYWRIGHT_L4_ONBOARDING_EMAIL" \
             -e L4_HOUSEHOLD_NAME="$PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD" \
-            backend python - <<'PY' | tee p0-l4-01-postgresql-end-state.log
+            backend python -u - <<'PY' | tee p0-l4-01-postgresql-end-state.log
           import os
           from sqlalchemy import text
           from app.db import engine
@@ -193,8 +206,12 @@ jobs:
               current_database = str(conn.execute(text("SELECT current_database() ")).scalar_one())
               current_schema = str(conn.execute(text("SELECT current_schema() ")).scalar_one())
               search_path = str(conn.execute(text("SHOW search_path")).scalar_one())
+              current_schemas = [
+                  str(value)
+                  for value in conn.execute(text("SELECT unnest(current_schemas(true))")).scalars().all()
+              ]
               alembic_head = str(
-                  conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                  conn.execute(text("SELECT version_num FROM public.alembic_version")).scalar_one()
               )
               registry_columns = [
                   str(value)
@@ -202,7 +219,7 @@ jobs:
                       text("""
                           SELECT column_name
                           FROM information_schema.columns
-                          WHERE table_schema = current_schema()
+                          WHERE table_schema = 'public'
                             AND table_name = 'household_registry'
                           ORDER BY ordinal_position
                       """)
@@ -214,12 +231,23 @@ jobs:
                       text("""
                           SELECT column_name
                           FROM information_schema.columns
-                          WHERE table_schema = current_schema()
+                          WHERE table_schema = 'public'
                             AND table_name = 'household_product_configuration'
                           ORDER BY ordinal_position
                       """)
                   ).scalars().all()
               ]
+              configuration_relation = conn.execute(
+                  text("""
+                      SELECT n.nspname AS schema_name,
+                             c.relname AS relation_name,
+                             c.oid::text AS relation_oid
+                      FROM pg_class c
+                      JOIN pg_namespace n ON n.oid = c.relnamespace
+                      WHERE n.nspname = 'public'
+                        AND c.relname = 'household_product_configuration'
+                  """)
+              ).mappings().one()
               expected_configuration_columns = {
                   "household_id",
                   "inventory_tracking_level",
@@ -227,14 +255,24 @@ jobs:
                   "almost_out_enabled",
                   "shopping_enabled",
               }
+              assert current_schema == "public", current_schema
               assert "naam" in registry_columns, registry_columns
               assert expected_configuration_columns.issubset(set(configuration_columns)), configuration_columns
+
+              print(f"database={current_database}", flush=True)
+              print(f"schema={current_schema}", flush=True)
+              print(f"search_path={search_path}", flush=True)
+              print(f"current_schemas={','.join(current_schemas)}", flush=True)
+              print(f"alembic_head={alembic_head}", flush=True)
+              print(f"household_registry_columns={','.join(registry_columns)}", flush=True)
+              print(f"household_product_configuration_relation={configuration_relation['schema_name']}.{configuration_relation['relation_name']}@{configuration_relation['relation_oid']}", flush=True)
+              print(f"household_product_configuration_columns={','.join(configuration_columns)}", flush=True)
 
               memberships = conn.execute(
                   text("""
                       SELECT hm.id AS membership_id, hm.household_id, hm.role, hr.naam AS household_name
-                      FROM household_memberships hm
-                      JOIN household_registry hr ON hr.id = hm.household_id
+                      FROM public.household_memberships hm
+                      JOIN public.household_registry hr ON hr.id = hm.household_id
                       WHERE lower(trim(hm.user_email)) = :email
                       ORDER BY hm.household_id
                   """),
@@ -250,7 +288,7 @@ jobs:
                   text("""
                       SELECT inventory_tracking_level, location_tracking_level,
                              almost_out_enabled, shopping_enabled
-                      FROM household_product_configuration
+                      FROM public.household_product_configuration
                       WHERE household_id = :household_id
                   """),
                   {"household_id": household_id},
@@ -265,7 +303,7 @@ jobs:
                   for row in conn.execute(
                       text("""
                           SELECT use_case
-                          FROM household_product_use_cases
+                          FROM public.household_product_use_cases
                           WHERE household_id = :household_id
                           ORDER BY use_case
                       """),
@@ -276,26 +314,22 @@ jobs:
 
               location_count = int(
                   conn.execute(
-                      text("SELECT COUNT(*) FROM spaces WHERE household_id = :household_id"),
+                      text("SELECT COUNT(*) FROM public.spaces WHERE household_id = :household_id"),
                       {"household_id": household_id},
                   ).scalar_one()
               )
               assert location_count == 0, location_count
 
-          print(f"database={current_database}")
-          print(f"schema={current_schema}")
-          print(f"search_path={search_path}")
-          print(f"alembic_head={alembic_head}")
-          print(f"household_registry_columns={','.join(registry_columns)}")
-          print(f"household_product_configuration_columns={','.join(configuration_columns)}")
-          print(f"email={email}")
-          print(f"household_id={household_id}")
-          print(f"household_name={expected_household_name}")
-          print("inventory_tracking_level=quantity")
-          print("location_tracking_level=none")
-          print("active_use_cases=wat_inhuis")
-          print("spaces=0")
-          print("P0_L4_01_POSTGRESQL_END_STATE_GREEN")
+          print(f"email={email}", flush=True)
+          print(f"household_id={household_id}", flush=True)
+          print(f"household_name={expected_household_name}", flush=True)
+          print("inventory_tracking_level=quantity", flush=True)
+          print("location_tracking_level=none", flush=True)
+          print("almost_out_enabled=true", flush=True)
+          print("shopping_enabled=true", flush=True)
+          print("active_use_cases=wat_inhuis", flush=True)
+          print("spaces=0", flush=True)
+          print("P0_L4_01_POSTGRESQL_END_STATE_GREEN", flush=True)
           PY
 
       - name: L4-01 gate marker
