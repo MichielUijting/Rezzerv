@@ -27,17 +27,17 @@
       "domain": "Account & session",
       "chain": "registreren -> inloggen -> geldige sessie -> uitloggen/invalideren",
       "priority": "P0",
-      "runtime_labels": ["postgresql-api"],
-      "variants": ["nieuwe gebruiker", "ongeldige sessie", "logout"],
+      "runtime_labels": ["postgresql-service", "postgresql-api"],
+      "variants": ["nieuwe gebruiker", "ongeldige sessie", "logout", "sessie-invalidatie"],
       "manual_po_acceptance": true,
-      "audit_status": "inventory",
+      "audit_status": "verified",
       "layers": {
-        "L1": {"status": "partial", "evidence": ["backend/tests/consumer_account_registration_selftest.py", "backend/tests/consumer_account_management_selftest.py"]},
-        "L2": {"status": "partial", "evidence": [".github/workflows/server-side-session-security.yml"]},
-        "L3": {"status": "partial", "evidence": [".github/workflows/frontend-cookie-session.yml"]},
+        "L1": {"status": "partial", "evidence": ["backend/tests/consumer_account_registration_selftest.py", "backend/tests/server_session_security_selftest.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/server-side-session-security.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/test_server_session_routes.py", ".github/workflows/onboarding-v2-acceptance-closure-validation.yml"]},
         "L4": {"status": "gap", "evidence": []}
       },
-      "gap": "Geen centraal geverifieerde end-to-end account/sessionreis op de production-like PostgreSQL-stack."
+      "gap": "Login/logout/session is sterk op PostgreSQL L2/L3 bewezen; een echte browsergestuurde account/sessionreis ontbreekt nog als L4-authority."
     },
     {
       "id": "P0-ONBOARDING",
@@ -50,11 +50,11 @@
       "audit_status": "inventory",
       "layers": {
         "L1": {"status": "partial", "evidence": ["frontend/tests/onboarding-choice-visibility.contract.mjs"]},
-        "L2": {"status": "partial", "evidence": [".github/workflows/postgresql-onboarding-use-case-portability.yml"]},
+        "L2": {"status": "partial", "evidence": [".github/workflows/postgresql-onboarding-use-case-portability.yml", ".github/workflows/server-side-session-security.yml"]},
         "L3": {"status": "partial", "evidence": [".github/workflows/onboarding-v2-acceptance-closure-validation.yml"]},
-        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e"]}
+        "L4": {"status": "gap", "evidence": []}
       },
-      "gap": "Bestaande onboarding-evidence moet nog tegen één canonieke L4-scenario-run worden geverifieerd."
+      "gap": "Backend/onboarding-evidence draait uitgebreid op PostgreSQL, maar een browsergestuurde registratie-tot-bruikbare-app-keten is nog niet aangetoond."
     },
     {
       "id": "P0-HOUSEHOLD-MEMBERSHIP",
@@ -69,7 +69,7 @@
         "L1": {"status": "partial", "evidence": ["backend/tests/household_invitation_acceptance_selftest.py", "backend/tests/household_invitation_delivery_redaction_selftest.py"]},
         "L2": {"status": "partial", "evidence": [".github/workflows/household-invitation-acceptance-validation.yml"]},
         "L3": {"status": "partial", "evidence": [".github/workflows/postgresql-household-invitation-authority.yml"]},
-        "L4": {"status": "partial", "evidence": ["frontend/tests/invitation-acceptance.contract.mjs"]}
+        "L4": {"status": "gap", "evidence": []}
       },
       "gap": "Volledige uitnodigingsreis inclusief echte UI, runtime en huishoudwissel nog centraal verifiëren."
     },
@@ -112,17 +112,17 @@
       "domain": "Locations",
       "chain": "huishoudinstelling -> locatiebeleid -> UI/validatie -> voorraadgedrag",
       "priority": "P0",
-      "runtime_labels": ["postgresql-api", "postgresql-fullstack"],
+      "runtime_labels": ["sqlite-test-only", "postgresql-service", "postgresql-fullstack"],
       "variants": ["locaties aan", "locaties uit", "ander huishouden"],
       "manual_po_acceptance": true,
-      "audit_status": "inventory",
+      "audit_status": "verified",
       "layers": {
-        "L1": {"status": "partial", "evidence": ["backend/tests/canonical_direct_location_selftest.py"]},
+        "L1": {"status": "partial", "evidence": ["backend/app/testing/unpacking_household_location_isolation_contract.py", "backend/tests/canonical_direct_location_selftest.py"]},
         "L2": {"status": "partial", "evidence": [".github/workflows/inventory-location-household-isolation.yml"]},
-        "L3": {"status": "partial", "evidence": [".github/workflows/unpacking-household-location-isolation.yml"]},
+        "L3": {"status": "gap", "evidence": []},
         "L4": {"status": "gap", "evidence": []}
       },
-      "gap": "Locaties-aan/uit moet als vaste L4-configuratievariant worden toegevoegd; huidige PO-defectklasse is nog geen centrale scenario-autoriteit."
+      "gap": "De inventory-location service/isolation gate gebruikt echte PostgreSQL, maar de bestaande Uitpakken-locatiecontractworkflow gebruikt in-memory SQLite en is geen L3-bewijs. Locaties-aan/uit mist nog echte API- en browserketendekking."
     },
     {
       "id": "P0-RECEIPT-INVENTORY-ALMOSTOUT",
