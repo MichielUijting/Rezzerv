@@ -32,8 +32,8 @@ jobs:
           old = "review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,"
           new = "review_decision = COALESCE(CAST(:next_review_decision AS TEXT), review_decision),"
           count = source.count(old)
-          if count != 1:
-              raise SystemExit(f'Expected exactly one target-location review decision expression, found {count}')
+          if count != 2:
+              raise SystemExit(f'Expected exactly two nullable unpacking review decision expressions, found {count}')
           main_path.write_text(source.replace(old, new), encoding='utf-8')
 
           docs = [
