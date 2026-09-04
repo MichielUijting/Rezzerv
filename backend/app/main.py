@@ -1470,7 +1470,7 @@ def resolve_global_product_id_for_article(conn, household_article_id: str, barco
         SELECT global_product_id, identity_value, identity_type
         FROM product_identities
         WHERE household_article_id = :household_article_id AND global_product_id IS NOT NULL
-        ORDER BY is_primary DESC, datetime(created_at) DESC, id DESC
+        ORDER BY is_primary DESC, created_at DESC, id DESC
         LIMIT 1
         """
     ), {'household_article_id': str(household_article_id)}).mappings().first()
@@ -1533,7 +1533,7 @@ def get_household_article_ids_for_global_product(conn, global_product_id: str | 
         SELECT id
         FROM household_articles
         WHERE global_product_id = :global_product_id
-        ORDER BY datetime(created_at) ASC, id ASC
+        ORDER BY created_at ASC, id ASC
         """
     ), {'global_product_id': normalized_global_product_id}).mappings().all()
     return [str(row.get('id')) for row in rows if row.get('id')]
@@ -2718,7 +2718,7 @@ def get_primary_product_identity(conn, household_article_id: str):
             SELECT id, household_article_id, global_product_id, identity_type, identity_value, source, confidence_score, is_primary, created_at, updated_at
             FROM product_identities
             WHERE household_article_id = :household_article_id
-            ORDER BY is_primary DESC, datetime(created_at) DESC, id DESC
+            ORDER BY is_primary DESC, created_at DESC, id DESC
             LIMIT 1
             """
         ),
@@ -5912,7 +5912,7 @@ def resolve_existing_inventory_household_article_id(conn, household_id: str, art
             WHERE household_id = :household_id
               AND lower(trim(COALESCE(custom_name, naam))) = lower(trim(:article_name))
               AND COALESCE(status, 'active') = 'active'
-            ORDER BY datetime(created_at) ASC, id ASC
+            ORDER BY created_at ASC, id ASC
             LIMIT 2
             """
         ),
