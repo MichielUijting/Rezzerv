@@ -1,0 +1,51 @@
+name: F3-04 Kassa event count test patch
+
+on:
+  push:
+    branches:
+      - codex/integral-test-foundation-phase-0
+    paths:
+      - '.github/workflows/f3-04-kassa-event-count-test-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/integral-test-foundation-phase-0
+          fetch-depth: 0
+      - name: Patch F3-04 inventory event assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/tests/kassa_review_api_selftest.py')
+          text = path.read_text(encoding='utf-8')
+
+          old_before = '''            approved = client.post(f"/api/receipts/{normal['receipt_table_id']}/approve", headers=owner_headers)\n'''
+          new_before = '''            with engine.begin() as conn:\n                inventory_event_count_before_approval = int(\n                    conn.execute(text("SELECT COUNT(*) FROM inventory_events")).scalar_one()\n                )\n\n            approved = client.post(f"/api/receipts/{normal['receipt_table_id']}/approve", headers=owner_headers)\n'''
+          assert text.count(old_before) == 1, text.count(old_before)
+          text = text.replace(old_before, new_before)
+
+          old_after = '''                event_count = int(conn.execute(text("SELECT COUNT(*) FROM inventory_events WHERE receipt_table_id = :receipt_id"), {"receipt_id": normal["receipt_table_id"]}).scalar_one())\n                assert event_count == 0\n'''
+          new_after = '''                inventory_event_count_after_approval = int(\n                    conn.execute(text("SELECT COUNT(*) FROM inventory_events")).scalar_one()\n                )\n                assert inventory_event_count_after_approval == inventory_event_count_before_approval\n'''
+          assert text.count(old_after) == 1, text.count(old_after)
+          text = text.replace(old_after, new_after)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+          python -m py_compile backend/tests/kassa_review_api_selftest.py
+          git diff --check
+          git diff -- backend/tests/kassa_review_api_selftest.py
+          git config user.name 'rezzerv-ci'
+          git config user.email 'rezzerv-ci@users.noreply.github.com'
+          git add backend/tests/kassa_review_api_selftest.py
+          git diff --cached --check
+          git commit -m 'Fix F3-04 inventory event boundary assertion'
+          git push origin HEAD:codex/integral-test-foundation-phase-0
