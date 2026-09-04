@@ -139,11 +139,8 @@ test('L4-02 admin invite -> accept -> permissions -> household switch -> isolati
     expect(memberInAdminHousehold.active_household_name).toBe(expectedAdminHousehold)
 
     await memberPage.goto('/instellingen/huishouden')
-    await expect(memberPage.getByTestId('household-settings-page')).toBeVisible()
-    await expect(memberPage.getByText('Alleen een beheerder kan de huishoudnaam, leden en rollen wijzigen.')).toBeVisible()
-    await expect(memberPage.getByTestId('household-invitation-email-input')).toBeDisabled()
-    await expect(memberPage.getByTestId(`household-member-${expectedAdminEmail}`)).toBeVisible()
-    await expect(memberPage.getByTestId(`household-member-${expectedMemberEmail}`)).toBeVisible()
+    await expect(memberPage).toHaveURL(/\/home$/)
+    await expect(memberPage.getByTestId('household-settings-page')).toHaveCount(0)
 
     const switcherInAdminHousehold = memberPage.getByTestId('household-switcher')
     await expect(switcherInAdminHousehold).toBeVisible()
@@ -157,6 +154,7 @@ test('L4-02 admin invite -> accept -> permissions -> household switch -> isolati
     expect(memberBackInOwnHousehold.active_household_name).toBe(expectedMemberHousehold)
 
     await memberPage.goto('/instellingen/huishouden')
+    await expect(memberPage.getByTestId('household-settings-page')).toBeVisible()
     await expect(memberPage.getByTestId('household-invitation-email-input')).toBeEnabled()
     await expect(memberPage.getByTestId(`household-member-${expectedMemberEmail}`)).toBeVisible()
     await expect(memberPage.getByTestId(`household-member-${expectedAdminEmail}`)).toHaveCount(0)
