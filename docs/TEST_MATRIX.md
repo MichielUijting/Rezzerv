@@ -1,14 +1,12 @@
 # Rezzerv Integral Functional Acceptance Matrix
 
 Statusdatum: 4 september 2026  
-Roadmapfase: **Fase 0 — Test Trust Audit afgerond**  
+Roadmapfase: **Fase 0 afgerond; Fase 1 in uitvoering**  
 Auditbaseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
 
 ## 1. Doel
 
-Dit document is de leesbare ingang van de integrale test- en acceptatiebasis van Rezzerv. De machineleesbare bron staat in:
-
-`quality/acceptance/functional_acceptance_matrix.json`
+Dit document is de leesbare ingang van de integrale test- en acceptatiebasis van Rezzerv. De machineleesbare bron staat in `quality/acceptance/functional_acceptance_matrix.json`.
 
 De centrale vraag is niet hoeveel losse workflows groen zijn, maar:
 
@@ -29,127 +27,148 @@ Production-relevante integrale acceptance gebruikt PostgreSQL als authority. SQL
 
 ## 3. Betekenis van dekkingsstatus
 
-- **covered** — de laag is inhoudelijk bekeken en het opgegeven bewijs dekt het bedoelde scenario voldoende;
-- **partial** — er bestaat relevante automatisering, maar die bewijst nog niet de volledige laag of alle noodzakelijke varianten;
+- **covered** — de laag is inhoudelijk bekeken en het bewijs dekt het bedoelde scenario voldoende;
+- **partial** — er bestaat relevante automatisering, maar niet voor de volledige laag/varianten;
 - **gap** — de vereiste laag is nog niet aantoonbaar afgedekt;
-- **na** — deze laag is voor het specifieke scenario aantoonbaar niet van toepassing.
+- **na** — aantoonbaar niet van toepassing.
 
 Ieder scenario heeft daarnaast `inventory` of `verified` als auditstatus.
 
-**Belangrijk:** 100% `verified` betekent dat de audit compleet is, niet dat de testdekking 100% is. Een geverifieerd scenario kan bewust L2/L3/L4-gaten bevatten.
+**100% `verified` betekent dat de audit compleet is, niet dat de testdekking 100% is.**
 
-## 4. Fase-0 resultaat
+## 4. Fase-0 resultaat — AFGEROND
 
-De eerste integrale kwaliteitsinventaris bevat nu **22 scenario's**:
+De eerste integrale kwaliteitsinventaris bevat **22 geverifieerde scenario's**:
 
-- **14 P0** — alle 14 inhoudelijk geverifieerd;
-- **7 P1** — alle 7 kernscenario's uit de huidige productscope inhoudelijk geverifieerd;
-- **1 P2** — de belangrijkste cross-cutting navigation/capability-UX doorsnede geverifieerd.
+- **14 P0**;
+- **7 P1**;
+- **1 P2** cross-cutting navigation/capability-UX.
 
-### 4.1 P0 — 14/14 geverifieerd
+### P0-gaten die de bouwvolgorde bepalen
 
-| ID | P0-domein | Belangrijkste resterende gat |
-|---|---|---|
-| P0-ACCOUNT-SESSION | Account & sessie | Echte browsergestuurde L4-reis |
-| P0-ONBOARDING | Onboarding naar bruikbare app | Echte API/browser registratie-tot-app-keten |
-| P0-HOUSEHOLD-MEMBERSHIP | Huishouden / uitnodiging / rol | Echte API/browser uitnodigingsreis + huishoudwissel |
-| P0-AUTHORIZATION-ISOLATION | Rollen en huishoudisolatie | Niet-gemockte L4-keten |
-| P0-SETTINGS-PROJECTION | Instellingen naar werkelijk gedrag | Backendopslag + PostgreSQL + gedragsprojectie |
-| P0-LOCATIONS-POLICY | Locaties aan/uit | Echte PostgreSQL API + L4-configuratievarianten |
-| P0-RECEIPT-INVENTORY-ALMOSTOUT | Kassa → Uitpakken → Voorraad → Bijna-op | Echte browserketen + locaties-uit variant |
-| P0-KASSA-REVIEW | Kassa review / goedkeuring | Canonical fixture via echte UI naar PostgreSQL-eindstaat |
-| P0-UNPACKING | Uitpakken / verwerken | Echte PostgreSQL API en L4 voor kernvarianten |
-| P0-INVENTORY | Voorraadmutaties / historie | Echte API/browsercontrole + quantity-precisie/historie |
-| P0-ALMOST-OUT | Bijna-op | Gebruikersweergave onderdeel van dezelfde L4-keten |
-| P0-ARTICLE-IDENTITY | Huishoudartikelidentiteit | Purchase → detail → historie als echte API/browserketen |
-| P0-PLATFORM-AUTHORITY | Platformrollen | Echte browser/full-stack platformauthority |
-| P0-MIGRATION-STARTUP | Migratie & startup | Centraal combineren met functionele releaseacceptatie |
+| P0-domein | Belangrijkste resterende gat |
+|---|---|
+| Account & sessie | Echte browsergestuurde L4-reis |
+| Onboarding | Echte API/browser registratie-tot-app-keten |
+| Huishouden / uitnodiging / rol | Echte API/browser uitnodigingsreis + huishoudwissel |
+| Autorisatie & huishoudisolatie | Niet-gemockte L4-keten |
+| Instellingen | Backendopslag + PostgreSQL + gedragsprojectie |
+| Locaties aan/uit | Echte PostgreSQL API + L4-configuratievarianten |
+| Kassa → Uitpakken → Voorraad → Bijna-op | Echte browserketen + locaties-uit variant |
+| Kassa review | Canonical fixture via echte UI naar PostgreSQL-eindstaat |
+| Uitpakken | Echte PostgreSQL API en L4 voor kernvarianten |
+| Voorraad/historie | Echte API/browsercontrole + quantity-precisie/historie |
+| Bijna-op | Gebruikersweergave onderdeel van dezelfde L4-keten |
+| Household article identity | Purchase → detail → historie als echte API/browserketen |
+| Platformrollen | Echte browser/full-stack platformauthority |
+| Migratie/startup | Centraal combineren met functionele releaseacceptatie |
 
-### 4.2 P1 — kernscope geïnventariseerd
+### P1-kernscope
 
-| ID | Domein | Auditbevinding |
-|---|---|---|
-| P1-SHOPPING | Winkelen | Echte PostgreSQL-stack en echte zoekroute; mutatie-/afrondflow nog deels gemockt. |
-| P1-GPC-ARTICLE-GROUP | GPC & Artikelgroepen | Sterke PostgreSQL GPC-import/DB-authority; huishoudspecifieke groep nog niet als één echte keten. |
-| P1-DAY-ARTICLE | Dagartikelen | Sterke PostgreSQL direct-consumption service-authority; browserketen ontbreekt. |
-| P1-SUPPORT-MESSAGES | Support/berichten | PostgreSQL service/API/authorization sterk; browserketen ontbreekt. |
-| P1-EXTERNAL-DATABASES | Externe productdatabases | Echte stack/backendcontract aanwezig; Playwright mockt kern-API's en is dus geen L4. |
-| P1-FORECASTS | Prognoses | Historische route-audit aanwezig; echte PostgreSQL prognoseberekening/projectie ontbreekt. |
-| P1-STORES-IMPORT-SETTINGS | Winkels/importinstellingen | Gerichte household/source guards bestaan; setting → ingest → juiste household-keten ontbreekt. |
-
-### 4.3 P2 — cross-cutting UX
-
-`P2-NAVIGATION-UX` borgt dat dynamic home/settings navigation en capabilityprojectie als eigen dwarsdoorsnede zichtbaar blijven. Frontendcontracten zijn sterk; server-side sessie/permission authority moet later in dezelfde gebruikersketen worden aangesloten.
-
-De exacte L1-L4-status en evidencepaden staan uitsluitend in de machineleesbare matrix.
+Geauditeerd: Winkelen, GPC/Artikelgroepen, Dagartikelen, Support/berichten, Externe productdatabases, Prognoses en Winkels/importinstellingen.
 
 ## 5. Belangrijkste test-trust bevindingen
 
-De audit heeft een terugkerend patroon blootgelegd: een workflownaam of technisch indrukwekkende testopzet zegt niet automatisch welke laag werkelijk wordt bewezen.
+### SQLite is geen PostgreSQL L3
 
-### 5.1 SQLite onder production-relevante namen
+- `unpacking-household-location-isolation.yml` gebruikt in-memory SQLite;
+- `unpacking-household-object-guard.yml` gebruikt FastAPI `TestClient` maar SQLite;
+- `temporal-inventory-validation.yml` bevat waardevolle temporal tests maar ook SQLite.
 
-- `unpacking-household-location-isolation.yml` voert zijn kerncontract uit op in-memory SQLite;
-- `unpacking-household-object-guard.yml` gebruikt FastAPI `TestClient`, maar ook SQLite;
-- `temporal-inventory-validation.yml` test waardevolle event-/replaylogica, maar de databasegevallen zijn SQLite.
+### Playwright met gemockte kern-API's is geen echte L4
 
-Deze tests blijven bruikbaar als L1/gerichte regressie, maar tellen niet als PostgreSQL L3.
+- authorization UI mockt session/authorization APIs;
+- receipt lifecycle/Kassa mockt household/batch/import/lifecycle APIs;
+- external recognition mockt summary/retailers/receipt-items/search/confirmation;
+- Winkelen gebruikt een echte zoekroute, maar de brede mutatieflow mockt shopping-list APIs.
 
-### 5.2 Playwright met gemockte kern-API's
+### Frontendbuild is geen full-stack acceptatie
 
-- authorization UI start de echte stack, maar mockt session/authorization APIs;
-- receipt lifecycle/Kassa Playwright mockt household/batch/import/lifecycle APIs;
-- external-recognition Playwright start de echte stack, maar mockt summary/retailers/receipt-items/search/confirmation;
-- Winkelen heeft één echte zoekroute, maar de brede mutatieflow mockt shopping-list APIs.
+Settings v2 en Platform Admin bevatten waardevol frontend/backendbewijs, maar geen doorlopende echte browser → API → PostgreSQL-keten.
 
-Dit is waardevolle frontendregressie, maar geen volledige L4-keten.
+### Werkelijk uitvoerpad gaat vóór workflownaam
 
-### 5.3 Frontendbuild is geen full-stack acceptatie
+Het household-article identity-contract wordt betrouwbaar op PostgreSQL uitgevoerd via `inventory-location-household-isolation.yml`, ook al suggereert een andere Slice-workflownaam het meest voor de hand liggende bewijs.
 
-- settings v2 valideert frontendcontracten en build, maar geen backend/PostgreSQL persistence;
-- Platform Admin acceptance heeft sterke PostgreSQL backendtests en bouwt de frontend, maar draait geen platform-Playwright in die closure.
+## 6. Sterke bestaande authorities
 
-### 5.4 Workflownaam is niet altijd het bewijs-pad
-
-`household-article-identity-slice2b4.yml` provisiont zelf geen PostgreSQL. Het echte identity-contract wordt wel op PostgreSQL uitgevoerd binnen `inventory-location-household-isolation.yml`. De matrix verwijst daarom naar het werkelijke uitvoerpad.
-
-## 6. Wat al sterk is
-
-Rezzerv heeft waardevolle bouwstenen die behouden en hergebruikt worden:
+Onder meer behouden/hergebruikt:
 
 - echte PostgreSQL account/session API-tests;
 - echte PostgreSQL authorization API-tests en household isolation;
 - production-like Kassa backendgate met Alembic en DML-only runtime;
-- canonical 12/12 receipt/inventoryketen met idempotentie, voorraad `0 -> 2 -> 5 -> 5 -> 1` en Bijna-op `NEE -> JA`;
-- household article identity op PostgreSQL met `household_article_id` als anker;
+- canonical 12/12 receipt/inventoryketen met voorraad `0 -> 2 -> 5 -> 5 -> 1`, idempotentie en Bijna-op `NEE -> JA`;
+- household article identity op PostgreSQL;
 - brede PostgreSQL platform capability-/routecontracten;
-- sterke GPC, day-article en support PostgreSQL authorities;
-- sterke migratie/startup gates met gescheiden migrator/runtime authority.
-
-Het nieuwe platform bouwt hierop voort. Het doel is niet opnieuw beginnen, maar bestaand bewijs correct classificeren en ontbrekende schakels gericht bouwen.
+- GPC, day-article en support PostgreSQL authorities;
+- migratie/startup gates met gescheiden migrator/runtime authority.
 
 ## 7. Workflow-landschap
 
-De bestaande workflows zijn in `docs/TEST_WORKFLOW_CLASSIFICATION.md` ingedeeld in:
+`docs/TEST_WORKFLOW_CLASSIFICATION.md` deelt bestaande workflows in als:
 
 - **KEEP — authority**;
 - **KEEP — targeted**;
 - **MERGE-CANDIDATE**;
 - **RETIRE-CANDIDATE / historical evidence**.
 
-Er wordt in Fase 0 niets verwijderd. Consolidatie gebeurt pas als uniek bewijs aantoonbaar naar een canonical authority is gemigreerd.
+Er is niets verwijderd. Consolidatie gebeurt alleen na aantoonbare migratie van uniek bewijs.
 
-## 8. P0-releaseprincipe
+## 8. Fase 1 — eerste canonical PostgreSQL foundation is GROEN
 
-Een P0-scenario is niet releaseveilig enkel omdat één featuretest groen is. Voor production-relevant functioneel gedrag moeten de relevante L2-, L3- en L4-bewijzen aantoonbaar aanwezig zijn.
+De eerste uitvoerbare basis staat nu in:
 
-De validator ondersteunt:
+- `backend/app/testing/canonical_acceptance_foundation.py`;
+- `.github/workflows/canonical-acceptance-foundation-validation.yml`.
+
+De foundation:
+
+1. gebruikt PostgreSQL 17;
+2. vergelijkt database-Alembic-head met de repository-head;
+3. gebruikt aparte `rezzerv_migrator` en `rezzerv_app` rollen;
+4. faalt als runtime schema-`CREATE` heeft;
+5. seedt drie vaste huishoudscenario's;
+6. draait daarna opnieuw om reset/reseed-determinisme te bewijzen;
+7. publiceert run-evidence als CI-artifact.
+
+### Canonical scenario's
+
+- `acceptance-locations-on` — admin + member, `waar_inhuis`, exact één space en één sublocation;
+- `acceptance-locations-off` — admin + member, `wat_inhuis`, exact nul locaties;
+- `acceptance-isolation` — tweede huishouden, exact nul locaties, geen leakage.
+
+### Bewezen contract
+
+```text
+datastore=postgresql
+alembic_head=20260902_01
+runtime_user=rezzerv_app
+migrator_user=rezzerv_migrator
+runtime_create=False
+migrator_create=True
+scenario_count=3
+locations_on_spaces=1
+locations_on_sublocations=1
+locations_off_spaces=0
+isolation_spaces=0
+CANONICAL_ACCEPTANCE_FOUNDATION_GREEN
+```
+
+De gate is geoptimaliseerd naar minimale database-/migratiedependencies; de OCR/Paddle-stack is hiervoor niet meer nodig.
+
+### Fase-1 status
+
+**F1-01 t/m F1-05 zijn gerealiseerd en groen. F1-06 blijft open:** bestaande goede PostgreSQL authorities moeten nog gecontroleerd op de gedeelde foundation worden aangesloten. De bewezen receipt-keten wordt daarbij niet risicovol in één grote refactor omgebouwd; migratie gebeurt authority voor authority.
+
+## 9. P0-releaseprincipe
+
+Een P0-scenario is niet releaseveilig enkel omdat één featuretest groen is. De validator ondersteunt:
 
 ```text
 python scripts/validate-functional-acceptance-matrix.py
 ```
 
-voor structurele/gap-validatie tijdens de opbouw, en:
+voor structurele/gap-validatie tijdens de opbouw en:
 
 ```text
 python scripts/validate-functional-acceptance-matrix.py --strict-release
@@ -157,57 +176,40 @@ python scripts/validate-functional-acceptance-matrix.py --strict-release
 
 voor de uiteindelijke blokkerende releasegate in Fase 9.
 
-## 9. Vaste configuratie- en regressievarianten
+## 10. Vaste varianten
 
-Minimaal structureel opgenomen:
+Structureel opgenomen:
 
-- huishouden **met locaties**;
-- huishouden **zonder locaties**;
-- meerdere huishoudens en household isolation;
+- huishouden met locaties;
+- huishouden zonder locaties;
+- tweede huishouden/household isolation;
 - Beheerder en Lid plus relevante beschermde/platformrollen;
 - success, denial en foutpresentatie;
 - retry/herverwerking en idempotentie;
-- exacte niet-financiële hoeveelheden `0.404`, `1.224`, `1.234567`;
+- exacte quantities `0.404`, `1.224`, `1.234567`;
 - aparte geldprecisie;
 - dagartikel versus fysiek voorraadartikel;
 - verse PostgreSQL en representatieve legacy-adoptie.
 
-## 10. PO-acceptatie
-
-Automatisering moet bewijzen dat het product technisch en functioneel volgens bekende contracten blijft werken. De PO beoordeelt daarna vooral of gedrag begrijpelijk, logisch en productmatig juist is.
+## 11. PO-acceptatie
 
 Vaste cyclus:
 
 **defect → reparatie → permanente regressietest → opname in integrale matrix/suite**
 
-Doel is uiteindelijk een handmatige PO-smoke van circa **15–30 minuten**.
+Doel blijft een handmatige PO-smoke van circa **15–30 minuten**, nadat technische/functionele automatisering al groen is.
 
-## 11. Roadmap na afsluiting Fase 0
+## 12. Roadmap
 
-| Fase | Doel | Exit |
+| Fase | Status | Exit |
 |---|---|---|
-| **0 — Test Trust Audit** | Bestaand bewijs betrouwbaar classificeren | **Afgerond: 22 scenario's + workflow-classificatie + implementatievolgorde** |
-| **1 — Canonical test foundation** | Eén reproduceerbare PostgreSQL testbasis | Vaste migratie, rollen, resetbare fixtures |
-| **2 — Testdata & scenario catalog** | Herbruikbare herkenbare scenario's | Canonieke huishoudens, rollen, bonnen, artikelen, legacydata |
-| **3 — P0 backend/API coverage** | P0 logisch/API volledig afdekken | P0 L2/L3 geen onverklaarde gaten |
-| **4 — P0 full-stack chains** | Echte frontend + backend + PostgreSQL | Kritieke gebruikersreizen L4 groen |
-| **5 — Broad regression foundation** | Historische defecten permanent borgen | Relevante regressies in matrix/suite |
-| **6 — Failure/recovery** | Fout- en herstelpaden bewijzen | Consistent gedrag bij fouten/retries |
-| **7 — CI orchestration** | PR/full/deep gates organiseren | Eenduidige CI-uitkomst en evidence |
-| **8 — PO Acceptance Pack** | Korte vaste PO-smoke | Alleen menselijke productbeoordeling over |
-| **9 — Release Acceptance Gate** | Alles samenbrengen | `--strict-release` + releasebewijs groen |
-
-## 12. Volgende bouwstap
-
-**Fase 1 start nu als volgende technische opdracht.**
-
-De eerste implementatie moet één canonical PostgreSQL 17 testfoundation maken die bestaande goede fixtures en authorities hergebruikt, met:
-
-1. Alembic naar actuele head;
-2. aparte migrator- en DML-only runtime-role;
-3. deterministische reset/cleanup;
-4. canonieke huishoudscenario's met locaties AAN en UIT;
-5. tweede huishouden voor isolation;
-6. vaste run-evidence met datastore, schemahead, scenario, commit en exitstatus.
-
-Daarop bouwt Fase 2 de gedeelde fixtures en Fase 3/4 de echte ontbrekende API- en browserketens.
+| **0 — Test Trust Audit** | **Afgerond** | 22 geverifieerde kernscenario's + workflow-classificatie |
+| **1 — Canonical test foundation** | **Bezig — F1-01 t/m F1-05 groen** | F1-06: bestaande PG authorities adopteren gedeelde foundation |
+| **2 — Testdata & scenario catalog** | Nog te starten | gedeelde bonnen, artikelen, quantities, legacydata |
+| **3 — P0 backend/API coverage** | Nog te starten | P0 L2/L3 zonder onverklaarde gaten |
+| **4 — P0 full-stack chains** | Nog te starten | echte frontend + backend + PostgreSQL L4 |
+| **5 — Broad regression** | Nog te starten | historische defecten permanent geborgd |
+| **6 — Failure/recovery** | Nog te starten | consistente fout-/retrysemantiek |
+| **7 — CI orchestration** | Nog te starten | PR/full/deep/release gates |
+| **8 — PO Acceptance Pack** | Nog te starten | korte menselijke productbeoordeling |
+| **9 — Release Acceptance Gate** | Nog te starten | strict matrix + releasebewijs groen |
