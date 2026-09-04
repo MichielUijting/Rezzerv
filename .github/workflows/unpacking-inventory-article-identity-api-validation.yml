@@ -1,0 +1,115 @@
+name: Unpacking inventory article identity API validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - '.github/workflows/unpacking-inventory-article-identity-api-validation.yml'
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/main.py'
+      - 'backend/app/database.py'
+      - 'backend/app/services/unpacking_household_object_guard.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
+      - 'backend/tests/unpacking_inventory_article_identity_api_selftest.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unpacking-inventory-article-identity-api-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unpacking-inventory-article-identity-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_f3_unpacking_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_f3_unpacking_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_f3_unpacking_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_f3_unpacking_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_EMAIL_ENABLED: 'false'
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
+      REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PostgreSQL client and backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_f3_unpacking_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: alembic
+          evidence-file: unpacking-inventory-shared-postgresql-foundation.log
+
+      - name: Compile F3-03 API authority
+        run: |
+          python -m py_compile \
+            backend/tests/unpacking_inventory_article_identity_api_selftest.py \
+            backend/app/main.py \
+            backend/app/services/unpacking_household_object_guard.py
+
+      - name: Validate Uitpakken inventory and article identity through real PostgreSQL API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/unpacking_inventory_article_identity_api_selftest.py | tee unpacking-inventory-article-identity-api.log
+          grep -F 'PASS postgresql_dml_only_runtime' unpacking-inventory-article-identity-api.log
+          grep -F 'PASS target_location_is_persisted_in_target_household' unpacking-inventory-article-identity-api.log
+          grep -F 'PASS first_unpack_process_persists_one_canonical_article_identity' unpacking-inventory-article-identity-api.log
+          grep -F 'PASS cross_household_unpack_mutation_and_processing_are_blocked' unpacking-inventory-article-identity-api.log
+          grep -F 'PASS repeat_unpack_reuses_identity_and_accumulates_inventory' unpacking-inventory-article-identity-api.log
+          grep -F 'PASS postgresql_end_state_preserves_household_article_identity_and_isolation' unpacking-inventory-article-identity-api.log
+          grep -F 'PASS processed_batch_replay_is_idempotent' unpacking-inventory-article-identity-api.log
+          grep -F 'UNPACKING_INVENTORY_ARTICLE_IDENTITY_API_POSTGRESQL_GREEN' unpacking-inventory-article-identity-api.log
+
+      - name: Upload F3-03 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unpacking-inventory-article-identity-api-evidence
+          path: |
+            unpacking-inventory-shared-postgresql-foundation.log
+            unpacking-inventory-article-identity-api.log
+          if-no-files-found: error
+          retention-days: 7
