@@ -1,0 +1,124 @@
+name: Platform authority API validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - '.github/workflows/platform-authority-api-validation.yml'
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/api/platform_authorizations_routes.py'
+      - 'backend/app/api/platform_sessions_routes.py'
+      - 'backend/app/api/platform_users_routes.py'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/platform_authorization_management_service.py'
+      - 'backend/app/services/platform_session_management_service.py'
+      - 'backend/app/services/platform_user_suspension_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
+      - 'backend/tests/platform_authority_api_selftest.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-authority-api-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  platform-authority-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_f3_platform_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_f3_platform_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_f3_platform_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_f3_platform_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_EMAIL_ENABLED: 'false'
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
+      REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PostgreSQL client and backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_f3_platform_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: alembic
+          evidence-file: platform-authority-shared-postgresql-foundation.log
+
+      - name: Compile F3-06 API authority
+        run: |
+          python -m py_compile \
+            backend/tests/platform_authority_api_selftest.py \
+            backend/app/api/platform_authorizations_routes.py \
+            backend/app/api/platform_sessions_routes.py \
+            backend/app/api/platform_users_routes.py \
+            backend/app/api/server_session_routes.py
+
+      - name: Validate platform authority through real PostgreSQL API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/platform_authority_api_selftest.py | tee platform-authority-api.log
+          grep -F 'PASS postgresql_dml_only_runtime' platform-authority-api.log
+          grep -F 'PASS regular_household_admin_has_no_platform_authority' platform-authority-api.log
+          grep -F 'PASS superuser_cannot_assume_ip_owner_special_role_authority' platform-authority-api.log
+          grep -F 'PASS platform_admin_uses_none_context_and_safe_platform_projection' platform-authority-api.log
+          grep -F 'PASS platform_admin_cannot_mutate_ip_owner_only_special_roles' platform-authority-api.log
+          grep -F 'PASS platform_admin_revokes_target_session_without_revoking_self' platform-authority-api.log
+          grep -F 'PASS ip_owner_grants_special_role_through_real_api' platform-authority-api.log
+          grep -F 'PASS platform_role_change_is_audited_and_does_not_change_household_membership' platform-authority-api.log
+          grep -F 'PASS platform_role_does_not_create_cross_household_access' platform-authority-api.log
+          grep -F 'PLATFORM_AUTHORITY_API_POSTGRESQL_GREEN' platform-authority-api.log
+
+      - name: Upload F3-06 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-authority-api-evidence
+          path: |
+            platform-authority-shared-postgresql-foundation.log
+            platform-authority-api.log
+          if-no-files-found: error
+          retention-days: 7
