@@ -91,6 +91,9 @@ jobs:
           assert engine.dialect.name == "postgresql", engine.dialect.name
           with engine.begin() as conn:
               current_user = str(conn.execute(text("SELECT current_user")).scalar_one())
+              current_database = str(conn.execute(text("SELECT current_database() ")).scalar_one())
+              current_schema = str(conn.execute(text("SELECT current_schema() ")).scalar_one())
+              search_path = str(conn.execute(text("SHOW search_path")).scalar_one())
               runtime_create = bool(
                   conn.execute(
                       text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")
@@ -99,13 +102,51 @@ jobs:
               alembic_head = str(
                   conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
               )
+              registry_columns = [
+                  str(value)
+                  for value in conn.execute(
+                      text("""
+                          SELECT column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = current_schema()
+                            AND table_name = 'household_registry'
+                          ORDER BY ordinal_position
+                      """)
+                  ).scalars().all()
+              ]
+              configuration_columns = [
+                  str(value)
+                  for value in conn.execute(
+                      text("""
+                          SELECT column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = current_schema()
+                            AND table_name = 'household_product_configuration'
+                          ORDER BY ordinal_position
+                      """)
+                  ).scalars().all()
+              ]
+          expected_configuration_columns = {
+              "household_id",
+              "inventory_tracking_level",
+              "location_tracking_level",
+              "almost_out_enabled",
+              "shopping_enabled",
+          }
           assert current_user == "rezzerv_app", current_user
           assert runtime_create is False
           assert alembic_head
-          print(f"datastore=postgresql")
+          assert "naam" in registry_columns, registry_columns
+          assert expected_configuration_columns.issubset(set(configuration_columns)), configuration_columns
+          print("datastore=postgresql")
+          print(f"database={current_database}")
+          print(f"schema={current_schema}")
+          print(f"search_path={search_path}")
           print(f"runtime_user={current_user}")
           print(f"runtime_create={runtime_create}")
           print(f"alembic_head={alembic_head}")
+          print(f"household_registry_columns={','.join(registry_columns)}")
+          print(f"household_product_configuration_columns={','.join(configuration_columns)}")
           print("P0_L4_01_POSTGRESQL_BOUNDARY_GREEN")
           PY
 
@@ -149,9 +190,49 @@ jobs:
           expected_household_name = os.environ["L4_HOUSEHOLD_NAME"].strip()
 
           with engine.begin() as conn:
+              current_database = str(conn.execute(text("SELECT current_database() ")).scalar_one())
+              current_schema = str(conn.execute(text("SELECT current_schema() ")).scalar_one())
+              search_path = str(conn.execute(text("SHOW search_path")).scalar_one())
+              alembic_head = str(
+                  conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+              )
+              registry_columns = [
+                  str(value)
+                  for value in conn.execute(
+                      text("""
+                          SELECT column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = current_schema()
+                            AND table_name = 'household_registry'
+                          ORDER BY ordinal_position
+                      """)
+                  ).scalars().all()
+              ]
+              configuration_columns = [
+                  str(value)
+                  for value in conn.execute(
+                      text("""
+                          SELECT column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = current_schema()
+                            AND table_name = 'household_product_configuration'
+                          ORDER BY ordinal_position
+                      """)
+                  ).scalars().all()
+              ]
+              expected_configuration_columns = {
+                  "household_id",
+                  "inventory_tracking_level",
+                  "location_tracking_level",
+                  "almost_out_enabled",
+                  "shopping_enabled",
+              }
+              assert "naam" in registry_columns, registry_columns
+              assert expected_configuration_columns.issubset(set(configuration_columns)), configuration_columns
+
               memberships = conn.execute(
                   text("""
-                      SELECT hm.id AS membership_id, hm.household_id, hm.role, hr.name AS household_name
+                      SELECT hm.id AS membership_id, hm.household_id, hm.role, hr.naam AS household_name
                       FROM household_memberships hm
                       JOIN household_registry hr ON hr.id = hm.household_id
                       WHERE lower(trim(hm.user_email)) = :email
@@ -201,6 +282,12 @@ jobs:
               )
               assert location_count == 0, location_count
 
+          print(f"database={current_database}")
+          print(f"schema={current_schema}")
+          print(f"search_path={search_path}")
+          print(f"alembic_head={alembic_head}")
+          print(f"household_registry_columns={','.join(registry_columns)}")
+          print(f"household_product_configuration_columns={','.join(configuration_columns)}")
           print(f"email={email}")
           print(f"household_id={household_id}")
           print(f"household_name={expected_household_name}")
