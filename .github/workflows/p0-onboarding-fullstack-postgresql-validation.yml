@@ -8,6 +8,7 @@ on:
       - 'backend/app/api/server_session_routes.py'
       - 'backend/app/api/session_household_routes.py'
       - 'backend/app/services/household_location_onboarding_service.py'
+      - 'backend/app/services/household_onboarding_service.py'
       - 'backend/app/services/household_product_configuration_service.py'
       - 'backend/app/services/household_product_use_case_service.py'
       - 'backend/app/services/server_session_service.py'
@@ -198,6 +199,7 @@ jobs:
           import os
           from sqlalchemy import text
           from app.db import engine
+          from app.services.household_product_use_case_service import resolve_active_household_product_use_cases
 
           email = os.environ["L4_EMAIL"].strip().lower()
           expected_household_name = os.environ["L4_HOUSEHOLD_NAME"].strip()
@@ -284,6 +286,20 @@ jobs:
               assert str(membership["role"]) == "admin", membership
               assert str(membership["household_name"]) == expected_household_name, membership
 
+              onboarding = conn.execute(
+                  text("""
+                      SELECT onboarding_status, primary_use_case, household_usage_mode,
+                             onboarding_completed_at
+                      FROM public.household_onboarding
+                      WHERE household_id = :household_id
+                  """),
+                  {"household_id": household_id},
+              ).mappings().one()
+              assert str(onboarding["onboarding_status"]) == "completed", onboarding
+              assert str(onboarding["primary_use_case"]) == "wat_inhuis", onboarding
+              assert str(onboarding["household_usage_mode"]) == "alone", onboarding
+              assert onboarding["onboarding_completed_at"] is not None, onboarding
+
               configuration = conn.execute(
                   text("""
                       SELECT inventory_tracking_level, location_tracking_level,
@@ -298,7 +314,7 @@ jobs:
               assert bool(configuration["almost_out_enabled"]) is True, configuration
               assert bool(configuration["shopping_enabled"]) is True, configuration
 
-              active_use_cases = [
+              additional_use_cases = [
                   str(row["use_case"])
                   for row in conn.execute(
                       text("""
@@ -310,6 +326,12 @@ jobs:
                       {"household_id": household_id},
                   ).mappings().all()
               ]
+              assert additional_use_cases == [], additional_use_cases
+              active_use_cases = resolve_active_household_product_use_cases(
+                  conn,
+                  household_id=household_id,
+                  primary_use_case=str(onboarding["primary_use_case"]),
+              )
               assert active_use_cases == ["wat_inhuis"], active_use_cases
 
               location_count = int(
@@ -323,10 +345,14 @@ jobs:
           print(f"email={email}", flush=True)
           print(f"household_id={household_id}", flush=True)
           print(f"household_name={expected_household_name}", flush=True)
+          print("onboarding_status=completed", flush=True)
+          print("primary_use_case=wat_inhuis", flush=True)
+          print("household_usage_mode=alone", flush=True)
           print("inventory_tracking_level=quantity", flush=True)
           print("location_tracking_level=none", flush=True)
           print("almost_out_enabled=true", flush=True)
           print("shopping_enabled=true", flush=True)
+          print("additional_use_cases=", flush=True)
           print("active_use_cases=wat_inhuis", flush=True)
           print("spaces=0", flush=True)
           print("P0_L4_01_POSTGRESQL_END_STATE_GREEN", flush=True)
