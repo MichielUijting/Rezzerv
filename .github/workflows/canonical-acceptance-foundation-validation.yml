@@ -5,11 +5,13 @@ on:
     branches:
       - main
     paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
       - 'backend/alembic.ini'
       - 'backend/alembic/**'
       - 'backend/app/db.py'
       - 'backend/app/migration_db.py'
       - 'backend/app/models/**'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
       - 'backend/app/testing/canonical_acceptance_foundation.py'
       - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
       - 'backend/app/testing/onboarding_request_schema_fixture.py'
@@ -71,31 +73,15 @@ jobs:
             alembic==1.19.1 \
             'psycopg[binary]==3.3.4'
 
-      - name: Bootstrap separate migrator and DML-only runtime roles
-        env:
-          PGPASSWORD: rezzerv_bootstrap_ci
-        run: |
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
-          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
-          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
-          GRANT CONNECT ON DATABASE rezzerv_acceptance_ci TO rezzerv_migrator, rezzerv_app;
-          ALTER DATABASE rezzerv_acceptance_ci OWNER TO rezzerv_migrator;
-          \connect rezzerv_acceptance_ci
-          ALTER SCHEMA public OWNER TO rezzerv_migrator;
-          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
-          GRANT USAGE ON SCHEMA public TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
-          SQL
-
-      - name: Initialize canonical schema through Alembic
-        working-directory: backend
-        run: |
-          python -m alembic upgrade head
-          python -m alembic current
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_acceptance_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migration-mode: alembic
+          evidence-file: canonical-shared-postgresql-foundation.log
 
       - name: Generate temporary acceptance credential
         shell: bash
@@ -111,6 +97,7 @@ jobs:
       - name: Compile canonical foundation
         run: |
           python -m py_compile \
+            backend/app/testing/postgresql_acceptance_foundation.py \
             backend/app/testing/canonical_acceptance_foundation.py \
             backend/app/testing/postgresql_onboarding_selftest_fixture.py
 
@@ -145,6 +132,7 @@ jobs:
         with:
           name: canonical-acceptance-foundation-evidence
           path: |
+            canonical-shared-postgresql-foundation.log
             canonical-acceptance-foundation.log
             canonical-acceptance-foundation-rerun.log
           if-no-files-found: error
