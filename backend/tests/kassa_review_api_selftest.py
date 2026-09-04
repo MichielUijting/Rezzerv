@@ -167,11 +167,17 @@ def _seed_receipt(
             assert name
             line_id = f"f3-kassa-line-{seed_key}-{index}"
             line_ids[name] = line_id
+            canonical_line_type = (
+                "loyalty"
+                if fixture_name == "non_physical_loyalty" and name == selected_product
+                else "product"
+            )
             semantic_input = {
                 **line,
                 "raw_label": name,
                 "receipt_line_text": name,
                 "unit": line.get("unit_size"),
+                "line_type": canonical_line_type,
             }
             semantics = derive_receipt_line_semantics(
                 semantic_input,
