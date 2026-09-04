@@ -14,12 +14,7 @@
     "L4": "real user/full-stack chain with frontend, backend and PostgreSQL"
   },
   "allowed_statuses": ["covered", "partial", "gap", "na"],
-  "runtime_labels": [
-    "sqlite-test-only",
-    "postgresql-service",
-    "postgresql-api",
-    "postgresql-fullstack"
-  ],
+  "runtime_labels": ["sqlite-test-only", "postgresql-service", "postgresql-api", "postgresql-fullstack"],
   "audit_statuses": ["inventory", "verified"],
   "scenarios": [
     {
@@ -44,34 +39,34 @@
       "domain": "Onboarding",
       "chain": "registratie -> huishouden -> use-case/configuratie -> bruikbare app",
       "priority": "P0",
-      "runtime_labels": ["postgresql-api", "postgresql-fullstack"],
+      "runtime_labels": ["postgresql-service", "postgresql-fullstack"],
       "variants": ["standaard huishouden", "locaties aan", "locaties uit"],
       "manual_po_acceptance": true,
-      "audit_status": "inventory",
+      "audit_status": "verified",
       "layers": {
         "L1": {"status": "partial", "evidence": ["frontend/tests/onboarding-choice-visibility.contract.mjs"]},
-        "L2": {"status": "partial", "evidence": [".github/workflows/postgresql-onboarding-use-case-portability.yml", ".github/workflows/server-side-session-security.yml"]},
-        "L3": {"status": "partial", "evidence": [".github/workflows/onboarding-v2-acceptance-closure-validation.yml"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/onboarding-v2-acceptance-closure-validation.yml", "backend/tests/consumer_account_registration_selftest.py"]},
+        "L3": {"status": "gap", "evidence": []},
         "L4": {"status": "gap", "evidence": []}
       },
-      "gap": "Backend/onboarding-evidence draait uitgebreid op PostgreSQL, maar een browsergestuurde registratie-tot-bruikbare-app-keten is nog niet aangetoond."
+      "gap": "De acceptance-closure draait uitgebreide onboarding/selftests op PostgreSQL en bouwt de frontend, maar start geen echte onboarding-API/browserreis. L3/L4 blijven daarom open."
     },
     {
       "id": "P0-HOUSEHOLD-MEMBERSHIP",
       "domain": "Household",
       "chain": "huishouden -> uitnodigen -> accepteren -> juiste rol en context",
       "priority": "P0",
-      "runtime_labels": ["postgresql-api", "postgresql-fullstack"],
+      "runtime_labels": ["postgresql-service", "postgresql-fullstack"],
       "variants": ["beheerder", "lid", "tweede huishouden"],
       "manual_po_acceptance": true,
-      "audit_status": "inventory",
+      "audit_status": "verified",
       "layers": {
         "L1": {"status": "partial", "evidence": ["backend/tests/household_invitation_acceptance_selftest.py", "backend/tests/household_invitation_delivery_redaction_selftest.py"]},
-        "L2": {"status": "partial", "evidence": [".github/workflows/household-invitation-acceptance-validation.yml"]},
-        "L3": {"status": "partial", "evidence": [".github/workflows/postgresql-household-invitation-authority.yml"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/postgresql-household-invitation-authority.yml", ".github/workflows/household-invitation-acceptance-validation.yml"]},
+        "L3": {"status": "gap", "evidence": []},
         "L4": {"status": "gap", "evidence": []}
       },
-      "gap": "Volledige uitnodigingsreis inclusief echte UI, runtime en huishoudwissel nog centraal verifiëren."
+      "gap": "Invitation lifecycle en DML-only PostgreSQL zijn goed als service/integratie bewezen; de acceptance-workflow draait alleen frontendcontract/build en geen echte API/browseracceptatie."
     },
     {
       "id": "P0-AUTHORIZATION-ISOLATION",
@@ -81,14 +76,14 @@
       "runtime_labels": ["postgresql-api", "postgresql-fullstack"],
       "variants": ["beheerder", "lid", "legacyrol", "ander huishouden", "401", "403"],
       "manual_po_acceptance": true,
-      "audit_status": "inventory",
+      "audit_status": "verified",
       "layers": {
-        "L1": {"status": "partial", "evidence": ["backend/tests/authorization_role_matrix_selftest.py"]},
-        "L2": {"status": "partial", "evidence": [".github/workflows/authorization-matrix-acceptance.yml"]},
-        "L3": {"status": "partial", "evidence": [".github/workflows/authorization-membership-api-validation.yml"]},
-        "L4": {"status": "partial", "evidence": [".github/workflows/authorization-membership-ui-validation.yml", "frontend/tests/e2e/authorization-disabled-ui.frontend-regression.spec.js"]}
+        "L1": {"status": "partial", "evidence": ["backend/tests/authorization_role_matrix_selftest.py", "backend/app/testing/authorization_matrix_acceptance.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/authorization-membership-api-validation.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/test_authorization_membership_routes.py", "backend/tests/test_server_session_routes.py"]},
+        "L4": {"status": "gap", "evidence": []}
       },
-      "gap": "190-check runtimebasis en v2.0 doelcontract moeten zichtbaar als overgang in één centrale acceptatieset worden gekoppeld."
+      "gap": "De API-laag draait op PostgreSQL en gebruikt FastAPI TestClient. De UI-workflow start wel de echte stack maar de Playwright-spec mockt session en authorization API via page.route; dat is geen L4-bewijs."
     },
     {
       "id": "P0-SETTINGS-PROJECTION",
