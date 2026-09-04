@@ -7563,7 +7563,7 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
                 "suggested_location_id": preferred_location_id if can_suggest_location else None,
                 "suggestion_confidence": suggestion_confidence,
                 "suggestion_reason": suggestion_reason,
-                                "matched_household_article_id": matched_article_id if can_auto_fill else None,
+                "matched_household_article_id": matched_article_id if can_auto_fill else None,
                 "target_location_id": preferred_location_id if can_auto_fill else None,
                 "can_auto_fill": bool(can_auto_fill),
             },
