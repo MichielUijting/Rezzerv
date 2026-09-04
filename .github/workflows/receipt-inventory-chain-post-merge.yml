@@ -136,9 +136,11 @@ jobs:
           grep -F "'almost_out_path': [False, True]" /tmp/postgresql-receipt-chain.log
           grep -F 'POSTGRESQL_RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN' /tmp/postgresql-receipt-chain.log
 
-      - name: 8/10 Bewijs locationless ready-only legacycontract
+      - name: 8/10 Bewijs locationless ready-only legacycontract (sqlite-test-only)
         env:
           PYTHONPATH: backend
+          MIGRATION_DATABASE_URL: ''
+          REZZERV_DATASTORE_POLICY: ''
           RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts-locationless
         run: |
           python backend/app/testing/receipt_inventory_locationless_production_contract.py | tee locationless-receipt-production.log
