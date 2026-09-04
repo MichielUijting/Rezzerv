@@ -1,0 +1,53 @@
+name: Functional acceptance matrix validation
+
+on:
+  pull_request:
+    paths:
+      - 'quality/acceptance/**'
+      - 'docs/TEST_MATRIX.md'
+      - 'docs/TEST_IMPLEMENTATION_BACKLOG.md'
+      - 'scripts/validate-functional-acceptance-matrix.py'
+      - '.github/workflows/functional-acceptance-matrix-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'quality/acceptance/**'
+      - 'docs/TEST_MATRIX.md'
+      - 'docs/TEST_IMPLEMENTATION_BACKLOG.md'
+      - 'scripts/validate-functional-acceptance-matrix.py'
+      - '.github/workflows/functional-acceptance-matrix-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-functional-acceptance-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile validator
+        run: python -m py_compile scripts/validate-functional-acceptance-matrix.py
+
+      - name: Validate matrix contract and report current gaps
+        run: |
+          python scripts/validate-functional-acceptance-matrix.py | tee functional-acceptance-matrix.log
+          grep -F 'FUNCTIONAL_ACCEPTANCE_MATRIX_GREEN' functional-acceptance-matrix.log
+
+      - name: Upload matrix validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: functional-acceptance-matrix-evidence
+          path: functional-acceptance-matrix.log
+          if-no-files-found: error
+          retention-days: 14
