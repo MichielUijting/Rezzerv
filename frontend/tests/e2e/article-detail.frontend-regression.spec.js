@@ -1,8 +1,5 @@
 import { test, expect } from '@playwright/test';
-import {
-  attachConsoleErrorCollector,
-  expectNoConsoleErrors,
-} from './helpers/rezzervAssertions.js';
+import { attachConsoleErrorCollector } from './helpers/rezzervAssertions.js';
 
 test.describe('Artikeldetail frontend-regressie', () => {
   test('Stabiele artikelroute gebruikt de universele naam, conditionele Locaties en standaard meldingoverlay', async ({ page }) => {
@@ -162,6 +159,15 @@ test.describe('Artikeldetail frontend-regressie', () => {
     expect(historyFailures.length).toBeGreaterThan(0);
     expect(historyFailures.every((entry) => entry.includes(`/api/household-articles/${articleId}/events`))).toBe(true);
     expect(failedResponses.filter((entry) => !entry.startsWith('503 GET '))).toEqual([]);
-    await expectNoConsoleErrors(consoleErrors);
+
+    // Chromium reports the intentionally simulated 503 as a console network error.
+    // That is part of this failure-path test, not an application console failure.
+    const unexpectedConsoleErrors = consoleErrors.filter(
+      (entry) => !(
+        entry.includes('Failed to load resource')
+        && entry.includes(`/api/household-articles/${articleId}/events`)
+      ),
+    );
+    expect(unexpectedConsoleErrors).toEqual([]);
   });
 });
