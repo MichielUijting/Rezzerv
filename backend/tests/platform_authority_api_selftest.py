@@ -3,8 +3,8 @@
 The authority proves platform administration at the production API boundary. It
 uses opaque login cookies, live canonical permissions, the Alembic PostgreSQL
 schema and a DML-only runtime. No authorization or business service is mocked.
-It also proves that platform-role changes do not silently create or upgrade
-household memberships.
+It also proves that platform roles cannot be stacked onto regular household
+memberships and that valid standalone platform users gain no household access.
 """
 from __future__ import annotations
 
@@ -45,6 +45,8 @@ TARGET_ADMIN_ID = "f3-platform-target-admin"
 TARGET_ADMIN_EMAIL = "f3-platform-target-admin@rezzerv.local"
 REVOKE_TARGET_ID = "f3-platform-revoke-target"
 REVOKE_TARGET_EMAIL = "f3-platform-revoke-target@rezzerv.local"
+STANDALONE_TARGET_ID = "f3-platform-standalone-target"
+STANDALONE_TARGET_EMAIL = "f3-platform-standalone-target@rezzerv.local"
 
 
 def _assign_platform_role(conn, user_id: str, role_key: str) -> None:
@@ -52,7 +54,7 @@ def _assign_platform_role(conn, user_id: str, role_key: str) -> None:
         text(
             """
             INSERT INTO auth_platform_user_roles (user_id, role_key, active)
-            VALUES (:user_id, :role_key, 1)
+            VALUES (:user_id, :role_key, TRUE)
             """
         ),
         {"user_id": user_id, "role_key": role_key},
@@ -105,6 +107,12 @@ def _prepare_database(engine) -> None:
             password=PASSWORD,
         )
         seed_user(conn, user_id=SUPERUSER_ID, email=SUPERUSER_EMAIL, password=PASSWORD)
+        seed_user(
+            conn,
+            user_id=STANDALONE_TARGET_ID,
+            email=STANDALONE_TARGET_EMAIL,
+            password=PASSWORD,
+        )
 
         _assign_platform_role(conn, IP_OWNER_ID, "platform.ip_owner")
         _assign_platform_role(conn, PLATFORM_ADMIN_ID, "platform.platform_admin")
@@ -188,7 +196,7 @@ def run() -> int:
             assert superuser_session["active_household_id"] == "0"
             assert superuser_session["context_type"] == "system"
             cannot_mutate_special_role = superuser.post(
-                f"/api/platform/authorizations/users/{TARGET_ADMIN_ID}/platform-admin/grant"
+                f"/api/platform/authorizations/users/{STANDALONE_TARGET_ID}/platform-admin/grant"
             )
             assert cannot_mutate_special_role.status_code == 403, cannot_mutate_special_role.text
         checks.append("superuser_cannot_assume_ip_owner_special_role_authority")
@@ -218,7 +226,7 @@ def run() -> int:
             assert authorization_inventory.json()["household_context_used"] is False
 
             denied_special_role = platform_admin.post(
-                f"/api/platform/authorizations/users/{TARGET_ADMIN_ID}/platform-admin/grant"
+                f"/api/platform/authorizations/users/{STANDALONE_TARGET_ID}/platform-admin/grant"
             )
             assert denied_special_role.status_code == 403, denied_special_role.text
         checks.append("platform_admin_uses_none_context_and_safe_platform_projection")
@@ -285,14 +293,21 @@ def run() -> int:
             assert inventory.status_code == 200, inventory.text
             assert inventory.json()["can_manage_special_roles"] is True
 
-            granted = ip_owner.post(
+            blocked_regular = ip_owner.post(
                 f"/api/platform/authorizations/users/{TARGET_ADMIN_ID}/platform-admin/grant"
+            )
+            assert blocked_regular.status_code == 409, blocked_regular.text
+            assert "huishoudlidmaatschap" in str(blocked_regular.json().get("detail") or "").lower()
+            checks.append("ip_owner_cannot_stack_platform_role_on_regular_household_member")
+
+            granted = ip_owner.post(
+                f"/api/platform/authorizations/users/{STANDALONE_TARGET_ID}/platform-admin/grant"
             )
             assert granted.status_code == 200, granted.text
             granted_item = granted.json()["item"]
             assert "platform.platform_admin" in granted_item["platform_role_keys"]
             assert granted.json()["household_context_used"] is False
-        checks.append("ip_owner_grants_special_role_through_real_api")
+        checks.append("ip_owner_grants_special_role_to_standalone_user")
 
         with engine.begin() as conn:
             memberships_after = conn.execute(
@@ -308,20 +323,36 @@ def run() -> int:
             ).mappings().all()
             assert memberships_after == memberships_before
 
-            isolation_memberships = int(
+            blocked_target_role_count = int(
                 conn.execute(
                     text(
                         """
                         SELECT COUNT(*)
-                        FROM household_memberships
-                        WHERE lower(user_email) = :email
-                          AND household_id = :household_id
+                        FROM auth_platform_user_roles
+                        WHERE user_id = :user_id
+                          AND role_key = 'platform.platform_admin'
+                          AND active IS TRUE
                         """
                     ),
-                    {"email": TARGET_ADMIN_EMAIL, "household_id": ISOLATION_HOUSEHOLD},
+                    {"user_id": TARGET_ADMIN_ID},
                 ).scalar_one()
             )
-            assert isolation_memberships == 0
+            assert blocked_target_role_count == 0
+
+            standalone_membership_count = int(
+                conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*)
+                        FROM household_memberships hm
+                        JOIN app_users u ON lower(trim(hm.user_email)) = lower(trim(u.email))
+                        WHERE u.id = :user_id
+                        """
+                    ),
+                    {"user_id": STANDALONE_TARGET_ID},
+                ).scalar_one()
+            )
+            assert standalone_membership_count == 0
 
             active_role = conn.execute(
                 text(
@@ -332,7 +363,7 @@ def run() -> int:
                       AND role_key = 'platform.platform_admin'
                     """
                 ),
-                {"user_id": TARGET_ADMIN_ID},
+                {"user_id": STANDALONE_TARGET_ID},
             ).scalar_one()
             assert bool(active_role) is True
 
@@ -347,25 +378,28 @@ def run() -> int:
                     LIMIT 1
                     """
                 ),
-                {"user_id": TARGET_ADMIN_ID},
+                {"user_id": STANDALONE_TARGET_ID},
             ).mappings().one()
             assert str(audit["actor_user_id"]) == IP_OWNER_ID
             assert audit["object_type"] == "platform_user_role"
             assert audit["reason"] == "platform.special_roles.manage"
-        checks.append("platform_role_change_is_audited_and_does_not_change_household_membership")
+        checks.append("platform_role_change_is_audited_without_household_membership_mutation")
 
-        with TestClient(app) as target_after_role_change:
-            login_after_role_change = _login(target_after_role_change, TARGET_ADMIN_EMAIL)
+        with TestClient(app) as standalone_after_role_change:
+            login_after_role_change = _login(
+                standalone_after_role_change,
+                STANDALONE_TARGET_EMAIL,
+            )
             assert login_after_role_change["context_type"] == "none"
             assert login_after_role_change["active_household_id"] is None
-            household_list = target_after_role_change.get("/api/session/households")
+            household_list = standalone_after_role_change.get("/api/session/households")
             assert household_list.status_code == 200, household_list.text
             assert household_list.json() == {
                 "items": [],
                 "total": 0,
                 "can_switch_households": False,
             }
-            forbidden_switch = target_after_role_change.post(
+            forbidden_switch = standalone_after_role_change.post(
                 "/api/session/household",
                 json={"household_id": ISOLATION_HOUSEHOLD},
             )
@@ -374,8 +408,8 @@ def run() -> int:
 
         for check in checks:
             print(f"PASS {check}")
-        print(f"RESULT {len(checks)}/9 checks passed")
-        assert len(checks) == 9
+        print(f"RESULT {len(checks)}/10 checks passed")
+        assert len(checks) == 10
         print("PLATFORM_AUTHORITY_API_POSTGRESQL_GREEN")
         return 0
     finally:
