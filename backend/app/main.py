@@ -7533,23 +7533,23 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
                     suggested_location_id = :suggested_location_id,
                     suggestion_confidence = :suggestion_confidence,
                     suggestion_reason = :suggestion_reason,
-                    is_auto_prefilled = CASE WHEN :can_auto_fill = 1 AND COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN 1 ELSE 0 END,
+                    is_auto_prefilled = CASE WHEN :can_auto_fill AND COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN TRUE ELSE FALSE END,
                     matched_household_article_id = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :can_auto_fill = 1 THEN :matched_household_article_id
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :can_auto_fill THEN :matched_household_article_id
                         WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN NULL
                         ELSE matched_household_article_id
                     END,
                     target_location_id = CASE
-                        WHEN COALESCE(location_override_mode, 'auto') = 'auto' AND :can_auto_fill = 1 THEN :target_location_id
+                        WHEN COALESCE(location_override_mode, 'auto') = 'auto' AND :can_auto_fill THEN :target_location_id
                         WHEN COALESCE(location_override_mode, 'auto') = 'auto' THEN NULL
                         ELSE target_location_id
                     END,
                     match_status = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill = 1 AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END
                         ELSE CASE WHEN matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END
                     END,
                     review_decision = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill = 1 THEN 'selected' ELSE 'pending' END
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill THEN 'selected' ELSE 'pending' END
                         WHEN matched_household_article_id IS NULL OR target_location_id IS NULL THEN 'pending'
                         ELSE review_decision
                     END,
@@ -7563,10 +7563,9 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
                 "suggested_location_id": preferred_location_id if can_suggest_location else None,
                 "suggestion_confidence": suggestion_confidence,
                 "suggestion_reason": suggestion_reason,
-                "is_auto_prefilled": 1 if can_auto_fill else 0,
-                "matched_household_article_id": matched_article_id if can_auto_fill else None,
+                                "matched_household_article_id": matched_article_id if can_auto_fill else None,
                 "target_location_id": preferred_location_id if can_auto_fill else None,
-                "can_auto_fill": 1 if can_auto_fill else 0,
+                "can_auto_fill": bool(can_auto_fill),
             },
         )
         if can_suggest_article:
