@@ -13,6 +13,7 @@ on:
       - 'backend/app/api/platform_sessions_routes.py'
       - 'backend/app/api/platform_users_routes.py'
       - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/session_household_routes.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/platform_authorization_management_service.py'
       - 'backend/app/services/platform_session_management_service.py'
@@ -94,7 +95,8 @@ jobs:
             backend/app/api/platform_authorizations_routes.py \
             backend/app/api/platform_sessions_routes.py \
             backend/app/api/platform_users_routes.py \
-            backend/app/api/server_session_routes.py
+            backend/app/api/server_session_routes.py \
+            backend/app/api/session_household_routes.py
 
       - name: Validate platform authority through real PostgreSQL API
         shell: bash
