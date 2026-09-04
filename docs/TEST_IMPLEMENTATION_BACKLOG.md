@@ -108,7 +108,7 @@ De receipt-keten blijft aantoonbaar PostgreSQL/DML-only en bewijst voorraadpad *
 
 ---
 
-## Fase 2 — Testdata en scenario catalog — IN EINDVALIDATIE
+## Fase 2 — Testdata en scenario catalog — AFGEROND
 
 **Doel:** vaste productherkenbare scenario's die door L2, L3 en L4 worden gedeeld, met één stabiele catalogus in plaats van losse fixture-eilanden.
 
@@ -173,11 +173,13 @@ De receipt-keten blijft aantoonbaar PostgreSQL/DML-only en bewijst voorraadpad *
 | F2-03 | P0 | Article-fixtures: bestaand, nieuw, dagartikel, `Niet ingedeeld` | **Gereed** |
 | F2-04 | P0 | Quantity-precisie en afzonderlijk financieel precisiecontract | **Gereed** |
 | F2-05 | P0 | Bijna-op-grensgevallen + synthetische legacy-adoptiedata | **Gereed** |
-| F2-06 | P0 | Cross-layer loader/validator + canonical CI-evidence | **Gebouwd; finale candidate-CI loopt** |
+| F2-06 | P0 | Cross-layer loader/validator + canonical CI-evidence | **Gereed en groen** |
 
-### Fase-2 harde exit
+### Fase-2 eindbewijs
 
-Fase 2 is pas afgerond wanneer F2-06 op de uiteindelijke candidate groen is. Daarna mogen Fase-3-tests deze catalogus als gedeelde datacontract-authority gaan consumeren. Fase 2 zelf bewijst **de testdata en scenariosemantiek**; het echte API-/databasegedrag voor deze scenario's wordt in Fase 3 bewezen.
+De canonical foundation-gate is volledig groen op technische candidate `20956baf8d6e302559ab7b842a915890097eedcd`: catalogusvalidatie, PostgreSQL-scenario's, deterministische reset/reseed en evidence-upload zijn allemaal geslaagd. De daaropvolgende commit `ddc691b3d4b96ed313731c89b2e2c1e4dd088f13` wijzigde uitsluitend deze backlogdocumentatie en geen test- of productcode.
+
+Fase 2 bewijst **de testdata en scenariosemantiek**. Het echte API-/databasegedrag voor deze scenario's wordt vanaf Fase 3 bewezen.
 
 ---
 
