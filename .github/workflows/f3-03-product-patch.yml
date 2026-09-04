@@ -1,0 +1,61 @@
+name: F3-03 product patch
+
+on:
+  push:
+    branches:
+      - codex/integral-test-foundation-phase-0
+    paths:
+      - '.github/workflows/f3-03-product-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/integral-test-foundation-phase-0
+          fetch-depth: 0
+
+      - name: Replace SQLite datetime ordering in article identity path
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          source = path.read_text(encoding='utf-8')
+          replacements = {
+              'ORDER BY is_primary DESC, datetime(created_at) DESC, id DESC':
+                  'ORDER BY is_primary DESC, created_at DESC, id DESC',
+              'ORDER BY datetime(created_at) ASC, id ASC':
+                  'ORDER BY created_at ASC, id ASC',
+          }
+          changed = source
+          counts = {}
+          for old, new in replacements.items():
+              count = changed.count(old)
+              counts[old] = count
+              changed = changed.replace(old, new)
+          if counts['ORDER BY is_primary DESC, datetime(created_at) DESC, id DESC'] < 1:
+              raise SystemExit('Expected article identity SQLite ordering was not found')
+          if changed == source:
+              raise SystemExit('No product SQL was changed')
+          path.write_text(changed, encoding='utf-8')
+          print('F3-03 replacements:', counts)
+          PY
+
+      - name: Commit PostgreSQL-native product query
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'rezzerv-ci'
+          git config user.email 'rezzerv-ci@users.noreply.github.com'
+          git add backend/app/main.py
+          git diff --cached --check
+          git commit -m 'Make article identity ordering PostgreSQL-native'
+          git push origin HEAD:codex/integral-test-foundation-phase-0
