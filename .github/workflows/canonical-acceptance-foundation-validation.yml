@@ -13,6 +13,9 @@ on:
       - 'backend/app/models/**'
       - 'backend/app/testing/postgresql_acceptance_foundation.py'
       - 'backend/app/testing/canonical_acceptance_foundation.py'
+      - 'backend/app/testing/canonical_scenario_catalog.py'
+      - 'backend/app/testing/receipt_acceptance/baseline.json'
+      - 'quality/acceptance/canonical_scenario_catalog.json'
       - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
       - 'backend/app/testing/onboarding_request_schema_fixture.py'
       - 'backend/app/services/authorization_foundation_service.py'
@@ -99,7 +102,23 @@ jobs:
           python -m py_compile \
             backend/app/testing/postgresql_acceptance_foundation.py \
             backend/app/testing/canonical_acceptance_foundation.py \
+            backend/app/testing/canonical_scenario_catalog.py \
             backend/app/testing/postgresql_onboarding_selftest_fixture.py
+
+      - name: Validate canonical cross-layer scenario catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m app.testing.canonical_scenario_catalog | tee canonical-scenario-catalog.log
+          grep -F 'household_context_count=4' canonical-scenario-catalog.log
+          grep -F 'receipt_fixture_count=4' canonical-scenario-catalog.log
+          grep -F 'article_fixture_count=4' canonical-scenario-catalog.log
+          grep -F 'quantity_case_count=3' canonical-scenario-catalog.log
+          grep -F 'financial_case_count=3' canonical-scenario-catalog.log
+          grep -F 'almost_out_case_count=4' canonical-scenario-catalog.log
+          grep -F 'legacy_row_count=3' canonical-scenario-catalog.log
+          grep -F 'consumers=L2,L3,L4' canonical-scenario-catalog.log
+          grep -F 'CANONICAL_SCENARIO_CATALOG_GREEN' canonical-scenario-catalog.log
 
       - name: Validate canonical PostgreSQL scenarios and evidence
         shell: bash
@@ -133,6 +152,7 @@ jobs:
           name: canonical-acceptance-foundation-evidence
           path: |
             canonical-shared-postgresql-foundation.log
+            canonical-scenario-catalog.log
             canonical-acceptance-foundation.log
             canonical-acceptance-foundation-rerun.log
           if-no-files-found: error
