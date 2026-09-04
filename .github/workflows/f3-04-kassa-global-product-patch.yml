@@ -1,0 +1,34 @@
+name: F3-04 Kassa global product typing patch
+
+on:
+  push:
+    branches:
+      - codex/integral-test-foundation-phase-0
+    paths:
+      - '.github/workflows/f3-04-kassa-global-product-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/integral-test-foundation-phase-0
+          fetch-depth: 0
+      - name: Patch and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c "from pathlib import Path; p=Path('backend/app/main.py'); s=p.read_text(encoding='utf-8'); a='SET matched_global_product_id = :matched_global_product_id,'; b='SET matched_global_product_id = CAST(:matched_global_product_id AS TEXT),'; c=\"WHEN :matched_global_product_id IS NOT NULL THEN 'product_matched'\"; d=\"WHEN CAST(:matched_global_product_id AS TEXT) IS NOT NULL THEN 'product_matched'\"; assert s.count(a)==1, s.count(a); assert s.count(c)==1, s.count(c); p.write_text(s.replace(a,b).replace(c,d), encoding='utf-8')"
+          python -m py_compile backend/app/main.py
+          git diff --check
+          git diff -- backend/app/main.py
+          git config user.name 'rezzerv-ci'
+          git config user.email 'rezzerv-ci@users.noreply.github.com'
+          git add backend/app/main.py
+          git diff --cached --check
+          git commit -m 'Type nullable Kassa global product link for PostgreSQL'
+          git push origin HEAD:codex/integral-test-foundation-phase-0
