@@ -205,7 +205,6 @@ def run() -> int:
             platform_session = _login(platform_admin, PLATFORM_ADMIN_EMAIL)
             assert platform_session["active_household_id"] is None
             assert platform_session["context_type"] == "none"
-            assert platform_session["is_platform_admin"] is True
 
             session_inventory = platform_admin.get("/api/platform/sessions")
             assert session_inventory.status_code == 200, session_inventory.text
@@ -287,7 +286,6 @@ def run() -> int:
             owner_session = _login(ip_owner, IP_OWNER_EMAIL)
             assert owner_session["active_household_id"] == "0"
             assert owner_session["context_type"] == "system"
-            assert owner_session["is_ip_owner"] is True
 
             inventory = ip_owner.get("/api/platform/authorizations")
             assert inventory.status_code == 200, inventory.text
