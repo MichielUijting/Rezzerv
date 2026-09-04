@@ -1,0 +1,238 @@
+name: P0 onboarding full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/api/household_capability_expansion_routes.py'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/session_household_routes.py'
+      - 'backend/app/services/household_location_onboarding_service.py'
+      - 'backend/app/services/household_product_configuration_service.py'
+      - 'backend/app/services/household_product_use_case_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/auth/RegisterPage.jsx'
+      - 'frontend/src/features/home/**'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/features/settings/**'
+      - 'frontend/src/lib/apiClient.js'
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/tests/e2e/p0-onboarding.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/p0-onboarding-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-onboarding-fullstack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  l4-onboarding:
+    name: L4-01 onboarding browser to PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic L4 scenario identity
+        shell: bash
+        run: |
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="L4-Onboarding-${suffix}-Pass!"
+          echo "PLAYWRIGHT_L4_ONBOARDING_EMAIL=l4-onboarding-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_ONBOARDING_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD=L4 Wat Inhuis ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Build and start real frontend, backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          echo "Backend werd niet gezond binnen 360 seconden."
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove production-like PostgreSQL runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python - <<'PY' | tee p0-l4-01-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == "postgresql", engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text("SELECT current_user")).scalar_one())
+              runtime_create = bool(
+                  conn.execute(
+                      text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")
+                  ).scalar_one()
+              )
+              alembic_head = str(
+                  conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+              )
+          assert current_user == "rezzerv_app", current_user
+          assert runtime_create is False
+          assert alembic_head
+          print(f"datastore=postgresql")
+          print(f"runtime_user={current_user}")
+          print(f"runtime_create={runtime_create}")
+          print(f"alembic_head={alembic_head}")
+          print("P0_L4_01_POSTGRESQL_BOUNDARY_GREEN")
+          PY
+
+      - name: Guard L4 browser authority against core route mocks
+        shell: bash
+        run: |
+          spec='frontend/tests/e2e/p0-onboarding.fullstack.spec.js'
+          if grep -nE 'page\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'L4-01 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          echo 'P0_L4_01_NO_CORE_ROUTE_MOCKS_GREEN'
+
+      - name: Run L4-01 through the real browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_ONBOARDING_EMAIL="$PLAYWRIGHT_L4_ONBOARDING_EMAIL" \
+            -e PLAYWRIGHT_L4_ONBOARDING_PASSWORD="$PLAYWRIGHT_L4_ONBOARDING_PASSWORD" \
+            -e PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD="$PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-onboarding.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-01-browser.log"
+          grep -F 'P0_L4_01_ONBOARDING_BROWSER_GREEN' frontend/p0-l4-01-browser.log
+
+      - name: Verify exact PostgreSQL end state after browser actions
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e L4_EMAIL="$PLAYWRIGHT_L4_ONBOARDING_EMAIL" \
+            -e L4_HOUSEHOLD_NAME="$PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD" \
+            backend python - <<'PY' | tee p0-l4-01-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          email = os.environ["L4_EMAIL"].strip().lower()
+          expected_household_name = os.environ["L4_HOUSEHOLD_NAME"].strip()
+
+          with engine.begin() as conn:
+              memberships = conn.execute(
+                  text("""
+                      SELECT hm.id AS membership_id, hm.household_id, hm.role, hr.name AS household_name
+                      FROM household_memberships hm
+                      JOIN household_registry hr ON hr.id = hm.household_id
+                      WHERE lower(trim(hm.user_email)) = :email
+                      ORDER BY hm.household_id
+                  """),
+                  {"email": email},
+              ).mappings().all()
+              assert len(memberships) == 1, memberships
+              membership = memberships[0]
+              household_id = str(membership["household_id"])
+              assert str(membership["role"]) == "admin", membership
+              assert str(membership["household_name"]) == expected_household_name, membership
+
+              configuration = conn.execute(
+                  text("""
+                      SELECT inventory_tracking_level, location_tracking_level,
+                             almost_out_enabled, shopping_enabled
+                      FROM household_product_configuration
+                      WHERE household_id = :household_id
+                  """),
+                  {"household_id": household_id},
+              ).mappings().one()
+              assert configuration["inventory_tracking_level"] == "quantity", configuration
+              assert configuration["location_tracking_level"] == "none", configuration
+              assert bool(configuration["almost_out_enabled"]) is True, configuration
+              assert bool(configuration["shopping_enabled"]) is True, configuration
+
+              active_use_cases = [
+                  str(row["use_case"])
+                  for row in conn.execute(
+                      text("""
+                          SELECT use_case
+                          FROM household_product_use_cases
+                          WHERE household_id = :household_id
+                          ORDER BY use_case
+                      """),
+                      {"household_id": household_id},
+                  ).mappings().all()
+              ]
+              assert active_use_cases == ["wat_inhuis"], active_use_cases
+
+              location_count = int(
+                  conn.execute(
+                      text("SELECT COUNT(*) FROM spaces WHERE household_id = :household_id"),
+                      {"household_id": household_id},
+                  ).scalar_one()
+              )
+              assert location_count == 0, location_count
+
+          print(f"email={email}")
+          print(f"household_id={household_id}")
+          print(f"household_name={expected_household_name}")
+          print("inventory_tracking_level=quantity")
+          print("location_tracking_level=none")
+          print("active_use_cases=wat_inhuis")
+          print("spaces=0")
+          print("P0_L4_01_POSTGRESQL_END_STATE_GREEN")
+          PY
+
+      - name: L4-01 gate marker
+        run: echo 'P0_ONBOARDING_FULLSTACK_POSTGRESQL_GREEN'
+
+      - name: Upload L4-01 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-l4-01-onboarding-fullstack-evidence
+          path: |
+            p0-l4-01-postgresql-boundary.log
+            p0-l4-01-postgresql-end-state.log
+            frontend/p0-l4-01-browser.log
+            frontend/playwright-report-fullstack
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend frontend postgres
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down --volumes

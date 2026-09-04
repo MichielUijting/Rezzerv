@@ -1,7 +1,7 @@
 # Rezzerv Integral Functional Acceptance Matrix
 
 Statusdatum: 4 september 2026
-Roadmapfase: **Fase 0 afgerond; Fase 1 in uitvoering**
+Roadmapfase: **Fase 0 t/m 3 afgerond; Fase 4 in uitvoering**
 Auditbaseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
 
 ## 1. Doel
@@ -34,76 +34,122 @@ Production-relevante integrale acceptance gebruikt PostgreSQL als authority. SQL
 
 Ieder scenario heeft daarnaast `inventory` of `verified` als auditstatus.
 
-**100% `verified` betekent dat de audit compleet is, niet dat de testdekking 100% is.**
+**100% `verified` betekent dat de audit compleet is, niet dat de testdekking 100% is.** Een fase-authority mag gereed zijn terwijl een breder scenario bewust `partial` blijft wanneer die authority niet alle varianten dekt.
 
 ## 4. Fase-0 resultaat — AFGEROND
 
-De eerste integrale kwaliteitsinventaris bevat **22 geverifieerde scenario's**:
+De integrale kwaliteitsinventaris bevat **22 geverifieerde scenario's**:
 
 - **14 P0**;
 - **7 P1**;
 - **1 P2** cross-cutting navigation/capability-UX.
 
-### P0-gaten die de bouwvolgorde bepalen
+De audit bevestigde onder meer SQLite onder production-relevante namen, TestClient-contracten op SQLite, route-gemockte Playwright-tests en frontendbuilds zonder backend/databaseprojectie. Geen van die patronen telt als sterker bewijs dan het werkelijk uitvoerpad ondersteunt.
 
-| P0-domein | Belangrijkste resterende gat |
-|---|---|
-| Account & sessie | Echte browsergestuurde L4-reis |
-| Onboarding | Echte API/browser registratie-tot-app-keten |
-| Huishouden / uitnodiging / rol | Echte API/browser uitnodigingsreis + huishoudwissel |
-| Autorisatie & huishoudisolatie | Niet-gemockte L4-keten |
-| Instellingen | Backendopslag + PostgreSQL + gedragsprojectie |
-| Locaties aan/uit | Echte PostgreSQL API + L4-configuratievarianten |
-| Kassa → Uitpakken → Voorraad → Bijna-op | Echte browserketen + locaties-uit variant |
-| Kassa review | Canonical fixture via echte UI naar PostgreSQL-eindstaat |
-| Uitpakken | Echte PostgreSQL API en L4 voor kernvarianten |
-| Voorraad/historie | Echte API/browsercontrole + quantity-precisie/historie |
-| Bijna-op | Gebruikersweergave onderdeel van dezelfde L4-keten |
-| Household article identity | Purchase → detail → historie als echte API/browserketen |
-| Platformrollen | Echte browser/full-stack platformauthority |
-| Migratie/startup | Centraal combineren met functionele releaseacceptatie |
-
-### P1-kernscope
-
-Geauditeerd: Winkelen, GPC/Artikelgroepen, Dagartikelen, Support/berichten, Externe productdatabases, Prognoses en Winkels/importinstellingen.
-
-## 5. Belangrijkste test-trust bevindingen
+## 5. Test-trust regels
 
 ### SQLite is geen PostgreSQL L3
 
-- `unpacking-household-location-isolation.yml` gebruikt in-memory SQLite;
-- `unpacking-household-object-guard.yml` gebruikt FastAPI `TestClient` maar SQLite;
-- `temporal-inventory-validation.yml` bevat waardevolle temporal tests maar ook SQLite.
+SQLite blijft bruikbaar voor expliciete `sqlite-test-only` contracten, maar production-relevante API/runtime acceptance gebruikt PostgreSQL.
 
 ### Playwright met gemockte kern-API's is geen echte L4
 
-- authorization UI mockt session/authorization APIs;
-- receipt lifecycle/Kassa mockt household/batch/import/lifecycle APIs;
-- external recognition mockt summary/retailers/receipt-items/search/confirmation;
-- Winkelen gebruikt een echte zoekroute, maar de brede mutatieflow mockt shopping-list APIs.
+Een browsertest telt pas als L4 wanneer de normale succesroute de echte frontend, backend en PostgreSQL gebruikt. `page.route(...).fulfill(...)` voor een kern-API maakt de test een frontendcontract, geen full-stack authority.
 
 ### Frontendbuild is geen full-stack acceptatie
 
-Settings v2 en Platform Admin bevatten waardevol frontend/backendbewijs, maar geen doorlopende echte browser → API → PostgreSQL-keten.
+Een geslaagde build bewijst compileerbaarheid en bundling, niet de gebruikersketen of database-eindstaat.
 
 ### Werkelijk uitvoerpad gaat vóór workflownaam
 
-Het household-article identity-contract wordt betrouwbaar op PostgreSQL uitgevoerd via `inventory-location-household-isolation.yml`, ook al suggereert een andere Slice-workflownaam het meest voor de hand liggende bewijs.
+Evidence wordt geclassificeerd op wat de workflow daadwerkelijk uitvoert, niet op de naam van workflow of bestand.
 
-## 6. Sterke bestaande authorities
+## 6. Fase 1 — Canonical PostgreSQL foundation — AFGEROND
+
+De gedeelde foundation:
+
+1. gebruikt PostgreSQL 17;
+2. vergelijkt database-Alembic-head met de repository-head;
+3. gebruikt aparte `rezzerv_migrator` en `rezzerv_app` rollen;
+4. faalt als runtime schema-`CREATE` heeft;
+5. seedt drie vaste huishoudscenario's;
+6. bewijst deterministische reset/reseed;
+7. publiceert run-evidence als CI-artifact.
+
+Canonical scenario's:
+
+- `acceptance-locations-on` — Beheerder + Lid, `waar_inhuis`, één space + één sublocation;
+- `acceptance-locations-off` — Beheerder + Lid, `wat_inhuis`, nul locaties;
+- `acceptance-isolation` — tweede huishouden, nul locaties, geen leakage.
+
+F1-01 t/m F1-06 zijn gerealiseerd. Canonical onboarding, inventory/location en receipt/inventory authorities delen dezelfde PostgreSQL-grens.
+
+## 7. Fase 2 — Testdata en scenario catalog — AFGEROND
+
+De canonical catalog bevat vaste productherkenbare data voor L2/L3/L4:
+
+- normale receipt, loyaliteitsregel, weighted `0.404 kg` en onzekere reviewregel;
+- bestaand/nieuw household article, `Niet ingedeeld` en dagartikel;
+- exacte quantities `0.404`, `1.224`, `1.234567` zonder generieke decimalenlimiet;
+- apart financieel precisiecontract;
+- Bijna-op grensgevallen 6/5/4/0 bij minimum 5;
+- synthetische legacy-adoptiedata met exact quantity-behoud.
+
+## 8. Fase 3 — P0 backend/API coverage — AFGEROND
+
+De nieuwe F3-authorities zijn real-API/PostgreSQL authorities en controleren de relevante eindstaat. Candidate `3210cc59cb9ae3c404552b53a35bf4ddfcaf3e49` is volledig groen over de complete PR-CI-golf.
+
+| Authority | Resultaat | Belangrijkste bewezen gedrag |
+|---|---|---|
+| **F3-01 Settings + location policy** | ✅ groen | echte sessie/API, rolbeperking, none/global locatiebeleid, DB/runtimeprojectie, isolation |
+| **F3-02 Onboarding + membership** | ✅ groen | registratie, uitnodiging, acceptatie, sessierotatie, rollen, huishoudwissel, isolation |
+| **F3-03 Uitpakken + inventory + identity** | ✅ groen als gerichte slice | locatie-toewijzing, processing, canonical identity, events, isolation, replay-idempotentie |
+| **F3-04 Kassa review** | ✅ groen | review/approval, weighted `0.404`, nonphysical loyalty exclusion, cross-household denial |
+| **F3-05 Bijna-op** | ✅ groen | boven/gelijk/onder/nul, locationless projectie, isolation, idempotentie, herberekening |
+| **F3-06 Platform authority** | ✅ groen | none/system context, special-role authority, stacking blokkade, audit, geen huishoudescalatie |
+
+Belangrijk: de matrix blijft conservatief. F3-03 maakt bredere varianten zoals locaties UIT, `Niet ingedeeld`, dagartikel, verbruik/correctie, same-name-different-identity en naamwijziging niet automatisch `covered`.
+
+## 9. Fase 4 — P0 full-stack PostgreSQL chains — IN UITVOERING
+
+L4 betekent: **echte browser + echte frontend + echte backend + echte PostgreSQL**. Kernmutaties gebeuren via de UI. Read-only API- en directe DB-controles mogen daarna bewijzen dat de projectie werkelijk is opgeslagen.
+
+Geplande ketens:
+
+1. **L4-01** registreren → onboarding → huishouden → instellingen → bruikbare app;
+2. **L4-02** beheerder → uitnodigen → lid accepteert → rechten → huishoudwissel → isolation;
+3. **L4-03** receipt → Kassa → goedkeuren → Uitpakken → locatie → Voorraad → historie → Bijna-op, locaties AAN;
+4. **L4-04** dezelfde receiptketen met locaties UIT en zonder locatiekolom/-validatie;
+5. **L4-05** herverwerking/idempotentie zonder dubbele voorraad/events;
+6. **L4-06** aankoop → household_article → detail → historie met dezelfde canonical identity;
+7. **L4-07** platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden.
+
+### Eerste authority: L4-01
+
+Toegevoegd in de opvolgcandidate:
+
+- `frontend/tests/e2e/p0-onboarding.fullstack.spec.js`;
+- `frontend/playwright.fullstack.config.js`;
+- `.github/workflows/p0-onboarding-fullstack-postgresql-validation.yml`.
+
+De browser registreert een nieuw account, kiest `Wat Inhuis`, zet aantallen/Bijna-op/Winkelen aan, houdt locaties expliciet UIT, rondt het huishouden af en controleert de echte home/settingsprojectie. Daarna controleert de workflow read-only API-data en de directe PostgreSQL-eindstaat. De workflow weigert een L4-spec die `page.route()` of muterende `page.request`-calls gebruikt voor de kernflow.
+
+**L4-01 wordt pas in de machineleesbare matrix als covered/partial opgewaardeerd nadat de nieuwe workflow groen is op de exacte PR-head.**
+
+## 10. Sterke bestaande authorities
 
 Onder meer behouden/hergebruikt:
 
-- echte PostgreSQL account/session API-tests;
-- echte PostgreSQL authorization API-tests en household isolation;
+- PostgreSQL account/session API-tests;
+- authorization API-tests en household isolation;
 - production-like Kassa backendgate met Alembic en DML-only runtime;
-- canonical 12/12 receipt/inventoryketen met voorraad `0 -> 2 -> 5 -> 5 -> 1`, idempotentie en Bijna-op `NEE -> JA`;
+- canonical receipt/inventoryketen met `0 -> 2 -> 5 -> 5 -> 1`, idempotentie en Bijna-op `NEE -> JA`;
 - household article identity op PostgreSQL;
-- brede PostgreSQL platform capability-/routecontracten;
+- platform capability-/routecontracten;
 - GPC, day-article en support PostgreSQL authorities;
 - migratie/startup gates met gescheiden migrator/runtime authority.
 
-## 7. Workflow-landschap
+## 11. Workflow-landschap
 
 `docs/TEST_WORKFLOW_CLASSIFICATION.md` deelt bestaande workflows in als:
 
@@ -112,55 +158,9 @@ Onder meer behouden/hergebruikt:
 - **MERGE-CANDIDATE**;
 - **RETIRE-CANDIDATE / historical evidence**.
 
-Er is niets verwijderd. Consolidatie gebeurt alleen na aantoonbare migratie van uniek bewijs.
+Consolidatie gebeurt alleen nadat uniek bewijs aantoonbaar is gemigreerd.
 
-## 8. Fase 1 — eerste canonical PostgreSQL foundation is GROEN
-
-De eerste uitvoerbare basis staat nu in:
-
-- `backend/app/testing/canonical_acceptance_foundation.py`;
-- `.github/workflows/canonical-acceptance-foundation-validation.yml`.
-
-De foundation:
-
-1. gebruikt PostgreSQL 17;
-2. vergelijkt database-Alembic-head met de repository-head;
-3. gebruikt aparte `rezzerv_migrator` en `rezzerv_app` rollen;
-4. faalt als runtime schema-`CREATE` heeft;
-5. seedt drie vaste huishoudscenario's;
-6. draait daarna opnieuw om reset/reseed-determinisme te bewijzen;
-7. publiceert run-evidence als CI-artifact.
-
-### Canonical scenario's
-
-- `acceptance-locations-on` — admin + member, `waar_inhuis`, exact één space en één sublocation;
-- `acceptance-locations-off` — admin + member, `wat_inhuis`, exact nul locaties;
-- `acceptance-isolation` — tweede huishouden, exact nul locaties, geen leakage.
-
-### Bewezen contract
-
-```text
-datastore=postgresql
-alembic_head=20260902_01
-runtime_user=rezzerv_app
-migrator_user=rezzerv_migrator
-runtime_create=False
-migrator_create=True
-scenario_count=3
-locations_on_spaces=1
-locations_on_sublocations=1
-locations_off_spaces=0
-isolation_spaces=0
-CANONICAL_ACCEPTANCE_FOUNDATION_GREEN
-```
-
-De gate is geoptimaliseerd naar minimale database-/migratiedependencies; de OCR/Paddle-stack is hiervoor niet meer nodig.
-
-### Fase-1 status
-
-**F1-01 t/m F1-05 zijn gerealiseerd en groen. F1-06 blijft open:** bestaande goede PostgreSQL authorities moeten nog gecontroleerd op de gedeelde foundation worden aangesloten. De bewezen receipt-keten wordt daarbij niet risicovol in één grote refactor omgebouwd; migratie gebeurt authority voor authority.
-
-## 9. P0-releaseprincipe
+## 12. P0-releaseprincipe
 
 Een P0-scenario is niet releaseveilig enkel omdat één featuretest groen is. De validator ondersteunt:
 
@@ -176,7 +176,7 @@ python scripts/validate-functional-acceptance-matrix.py --strict-release
 
 voor de uiteindelijke blokkerende releasegate in Fase 9.
 
-## 10. Vaste varianten
+## 13. Vaste varianten
 
 Structureel opgenomen:
 
@@ -191,7 +191,7 @@ Structureel opgenomen:
 - dagartikel versus fysiek voorraadartikel;
 - verse PostgreSQL en representatieve legacy-adoptie.
 
-## 11. PO-acceptatie
+## 14. PO-acceptatie
 
 Vaste cyclus:
 
@@ -199,15 +199,15 @@ Vaste cyclus:
 
 Doel blijft een handmatige PO-smoke van circa **15–30 minuten**, nadat technische/functionele automatisering al groen is.
 
-## 12. Roadmap
+## 15. Roadmap
 
 | Fase | Status | Exit |
 |---|---|---|
 | **0 — Test Trust Audit** | **Afgerond** | 22 geverifieerde kernscenario's + workflow-classificatie |
-| **1 — Canonical test foundation** | **Bezig — F1-01 t/m F1-05 groen** | F1-06: bestaande PG authorities adopteren gedeelde foundation |
-| **2 — Testdata & scenario catalog** | Nog te starten | gedeelde bonnen, artikelen, quantities, legacydata |
-| **3 — P0 backend/API coverage** | Nog te starten | P0 L2/L3 zonder onverklaarde gaten |
-| **4 — P0 full-stack chains** | Nog te starten | echte frontend + backend + PostgreSQL L4 |
+| **1 — Canonical test foundation** | **Afgerond** | gedeelde PostgreSQL/Alembic/runtime authority |
+| **2 — Testdata & scenario catalog** | **Afgerond** | gedeelde bonnen, artikelen, quantities, legacydata |
+| **3 — P0 backend/API coverage** | **Afgerond** | F3-01 t/m F3-06 groen + bestaande sterke authorities behouden |
+| **4 — P0 full-stack chains** | **In uitvoering** | echte frontend + backend + PostgreSQL L4 zonder kern-API mocks |
 | **5 — Broad regression** | Nog te starten | historische defecten permanent geborgd |
 | **6 — Failure/recovery** | Nog te starten | consistente fout-/retrysemantiek |
 | **7 — CI orchestration** | Nog te starten | PR/full/deep/release gates |
