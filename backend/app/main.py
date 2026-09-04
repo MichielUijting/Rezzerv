@@ -16775,7 +16775,7 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
                     suggestion_confidence = CASE WHEN :may_apply_default_location = 1 THEN COALESCE(suggestion_confidence, 'medium') ELSE suggestion_confidence END,
                     suggestion_reason = CASE WHEN :may_apply_default_location = 1 THEN 'Standaardlocatie van gekoppeld artikel' ELSE suggestion_reason END,
                     location_override_mode = CASE WHEN :may_apply_default_location = 1 THEN 'auto' ELSE location_override_mode END,
-                    review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
+                    review_decision = COALESCE(CAST(:next_review_decision AS TEXT), review_decision),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
@@ -16966,7 +16966,7 @@ def set_purchase_import_line_target_location(line_id: str, payload: TargetLocati
                 UPDATE purchase_import_lines
                 SET target_location_id = :target_location_id,
                     location_override_mode = :location_override_mode,
-                    review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
+                    review_decision = COALESCE(CAST(:next_review_decision AS TEXT), review_decision),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """

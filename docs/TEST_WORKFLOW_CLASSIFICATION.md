@@ -1,7 +1,7 @@
 # Rezzerv Test Workflow Classification
 
-Statusdatum: 4 september 2026  
-Roadmapfase: **Fase 0 — Test Trust Audit**  
+Statusdatum: 4 september 2026
+Roadmapfase: **Fase 0 — Test Trust Audit**
 Baseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
 
 ## 1. Doel

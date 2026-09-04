@@ -1,7 +1,7 @@
 # Rezzerv Integral Functional Acceptance Matrix
 
-Statusdatum: 4 september 2026  
-Roadmapfase: **Fase 0 afgerond; Fase 1 in uitvoering**  
+Statusdatum: 4 september 2026
+Roadmapfase: **Fase 0 afgerond; Fase 1 in uitvoering**
 Auditbaseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
 
 ## 1. Doel

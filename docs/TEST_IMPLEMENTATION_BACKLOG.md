@@ -1,7 +1,7 @@
 # Rezzerv Integral Test Platform — Implementatiebacklog
 
-Statusdatum: 4 september 2026  
-Branch: `codex/integral-test-foundation-phase-0`  
+Statusdatum: 4 september 2026
+Branch: `codex/integral-test-foundation-phase-0`
 Baseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
 
 ## Doel
