@@ -387,7 +387,8 @@ def run() -> int:
                 f"/api/household/invitations/accept/{raw_token}",
                 json={},
             )
-            assert replay.status_code == 404, replay.text
+            assert replay.status_code == 409, replay.text
+            assert replay.json()["detail"] == "Uitnodiging is niet meer geldig"
             with engine.begin() as conn:
                 duplicate_after_replay = int(
                     conn.execute(
