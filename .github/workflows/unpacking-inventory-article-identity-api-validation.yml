@@ -52,6 +52,7 @@ jobs:
       REZZERV_EMAIL_ENABLED: 'false'
       REZZERV_SESSION_COOKIE_SECURE: 'false'
       REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
+      RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-f3-receipts/raw
       REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
