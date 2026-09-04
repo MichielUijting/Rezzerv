@@ -16,30 +16,41 @@ Deze backlog vertaalt `docs/TEST_MATRIX.md` naar concrete bouwstappen. Prioritei
 
 - centrale Functional Acceptance Matrix: **gereed**;
 - structurele validator + eigen CI-gate: **gereed en groen**;
-- P0 evidence-audit: **7 van 14 scenario's geverifieerd (50%)**;
-- false-confidence audit: **bezig; 2 concrete patronen bevestigd**;
-- P1/P2 detailaudit en workflow-consolidatie: nog open.
+- P0 evidence-audit: **14 van 14 scenario's geverifieerd (100%)**;
+- false-confidence audit voor P0: **gereed**;
+- historische PostgreSQL PO-defectklassen: **in de matrix/backlog verankerd**;
+- P1/P2 detailaudit en workflow-consolidatie: **nog open**.
 
-De 7 geverifieerde P0-scenario's zijn Account & sessie, Onboarding, Huishouden/invitations, Autorisatie & huishoudisolatie, Locatiebeleid, Kassabon → Voorraad → Bijna-op en PostgreSQL migratie/startup.
+**100% audit is niet 100% testdekking.** De audit heeft juist meerdere echte L3/L4-gaten aangetoond. Die vormen de bouwopdracht voor fasen 1–4.
 
 ### Bevestigde false-confidence patronen
 
-1. **SQLite onder een production-relevante workflownaam** — de bestaande Uitpakken-locatie-isolatieworkflow draait zijn kerncontract op in-memory SQLite. Dit bewijs blijft bruikbaar op L1, maar telt niet als PostgreSQL L3.
-2. **Playwright + echte stack, maar cruciale API's gemockt** — de autorisatie-UI-workflow start de PostgreSQL-appstack, terwijl de Playwright-spec `/api/session` en autorisatie-endpoints met `page.route(...)` onderschept. Dit is frontendregressie, geen echte L4-keten.
+| Patroon | Voorbeeld | Werkelijke betekenis |
+|---|---|---|
+| SQLite onder production-relevante workflownaam | `unpacking-household-location-isolation.yml` | Gericht L1-bewijs; geen PostgreSQL L3 |
+| FastAPI TestClient maar SQLite | `unpacking-household-object-guard.yml` | API-contract op SQLite; geen production-like L3 |
+| Database-regressie op SQLite | `temporal-inventory-validation.yml` | Waardevolle temporal logica; geen PostgreSQL-runtimebewijs |
+| Playwright + echte stack maar API's gemockt | authorization UI validation | Frontendregressie; geen echte L4 |
+| Playwright receipt lifecycle met gemockte APIs | receipt lifecycle frontend regressie | UI-interactiecontract; geen Kassa/Uitpakken full-stack keten |
+| Frontendcontract/build zonder backend | settings v2 information architecture | UI-structuur; geen opslaan → DB → gedragsprojectie |
+| Workflownaam zonder self-contained PostgreSQL | household article identity Slice 2B4 | Het echte PG-bewijs komt uit `inventory-location-household-isolation.yml` |
+| Acceptance closure bouwt frontend maar draait geen Playwright | Platform Admin 9.1.7 | Sterke PG backendcoverage; geen L4 |
+
+### Fase-0 werkitems
 
 | ID | Prioriteit | Werk | Status | Exitbewijs |
 |---|---:|---|---|---|
-| F0-01 | P0 | Centrale machineleesbare Functional Acceptance Matrix invoeren | **Gereed op branch** | `quality/acceptance/functional_acceptance_matrix.json` |
+| F0-01 | P0 | Centrale machineleesbare Functional Acceptance Matrix invoeren | **Gereed** | `quality/acceptance/functional_acceptance_matrix.json` |
 | F0-02 | P0 | Structurele validator + CI-gate invoeren | **Gereed en groen** | validator + workflow + CI-evidence |
-| F0-03 | P0 | Alle huidige P0 evidence inhoudelijk verifiëren en `inventory` omzetten naar `verified` of expliciet `gap` | **Bezig — 7/14 (50%)** | alle P0-scenario's beoordeeld |
-| F0-04 | P0 | Historische PO-defectklassen aan permanente scenario's koppelen | **Bezig** | locatiebeleid, quantity precision, error feedback, article history, idempotentie e.d. zichtbaar in matrix |
-| F0-05 | P0 | False confidence inventariseren: mocks, alleen compilechecks, alleen HTTP-status, SQLite-approximatie, UI zonder DB-eindstaat | **Bezig — 2 patronen bevestigd** | gap-analyse per scenario |
-| F0-06 | P1 | Dubbele, obsolete en PR-specifieke workflows classificeren | Open | keep/merge/retire-lijst, nog zonder ongevraagde verwijdering |
-| F0-07 | P0 | Definitieve P0/P1/P2 implementatievolgorde vastleggen | Open | Fase-0 exitrapport |
+| F0-03 | P0 | Alle huidige P0 evidence inhoudelijk verifiëren | **Gereed — 14/14** | alle P0-scenario's `verified` |
+| F0-04 | P0 | Historische PO-defectklassen aan permanente scenario's koppelen | **Gereed voor huidige PostgreSQL PO-ronde** | locatiebeleid, quantity precision, error feedback, article history, idempotentie e.d. in roadmap |
+| F0-05 | P0 | False confidence inventariseren | **P0 gereed** | bovenstaande gap-analyse + matrixclassificatie |
+| F0-06 | P1 | Dubbele, obsolete en PR-specifieke workflows classificeren | **Open** | keep/merge/retire-lijst, nog zonder verwijdering |
+| F0-07 | P0 | Definitieve P0/P1/P2 implementatievolgorde vastleggen | **P0-volgorde gereed; P1/P2 nog afronden** | fase-0 exitrapport |
 
 ### Fase-0 exit
 
-Fase 0 is klaar wanneer alle P0-scenario's inhoudelijk zijn geverifieerd en er geen impliciete aanname meer bestaat dat een workflownaam, Docker-start of Playwright-run gelijkstaat aan integrale functionele dekking.
+De P0-audit is inhoudelijk klaar. Fase 0 als geheel sluit wanneer P1/P2 voldoende zijn geïnventariseerd en bestaande workflows een `keep / merge / retire`-classificatie hebben. Er wordt in Fase 0 nog niets verwijderd alleen omdat het dubbel of oud lijkt.
 
 ---
 
@@ -55,7 +66,7 @@ Fase 0 is klaar wanneer alle P0-scenario's inhoudelijk zijn geverifieerd en er g
 | F1-04 | P0 | Deterministische reset/cleanup | Iedere run start en eindigt schoon zonder productie/local volume te raken |
 | F1-05 | P0 | Test-run identity/evidence | Resultaat noemt datastore, schemahead, scenario, commit en exitstatus |
 
-Bestaande canonical receipt-chain infrastructuur wordt waar mogelijk hergebruikt in plaats van parallel opnieuw gebouwd.
+Bestaande canonical receipt-chain en PostgreSQL onboarding/inventory-fixtures worden hergebruikt. Het doel is één foundation, niet nóg een parallel testframework.
 
 ---
 
@@ -91,21 +102,24 @@ Bestaande canonical receipt-chain infrastructuur wordt waar mogelijk hergebruikt
 
 ## Fase 3 — P0 backend/API coverage
 
-Volgorde:
+De P0-audit bepaalt nu de uitvoeringsvolgorde:
 
-1. **Authorization & household isolation** — omdat iedere andere keten hiervan afhankelijk is;
-2. **Account/session + onboarding + household membership**;
-3. **Settings/location policy** inclusief locaties uit;
-4. **Kassa / Uitpakken / Voorraad / Bijna-op**;
-5. **Household article identity**;
-6. **Platform authority**;
-7. **Migration/startup** als blijvende technische foundation.
+1. **Settings + location policy** — grootste cross-layer gat; instelling moet echt worden opgeslagen en gedrag sturen;
+2. **Onboarding + household membership** — servicebewijs bestaat, echte API authority ontbreekt nog;
+3. **Uitpakken + inventory + article identity** — bestaande SQLite/API-contracten naar echte PostgreSQL L3 brengen;
+4. **Kassa review** — canonical fixture via echte review/approval API naar aantoonbare DB-eindstaat;
+5. **Almost-out API/projectie** — technische keten koppelen aan uitleesbare gebruikersstatus;
+6. **Platform authority** — bestaande sterke backenddekking tot volledige API-authority aanscherpen;
+7. **Account/session + authorization** — bestaande sterke L3 als blijvende regression authority behouden;
+8. **Migration/startup** — bestaande sterke technische foundation behouden.
 
 Per P0-scenario moet L2/L3 de werkelijke eindtoestand controleren, niet alleen een HTTP- of procesexitcode.
 
 ---
 
 ## Fase 4 — P0 full-stack PostgreSQL chains
+
+L4 betekent: echte browser + echte frontend + echte backend + echte PostgreSQL. Geen `page.route(...).fulfill(...)` voor kern-API's op de normale succesroute.
 
 ### L4-01 — Nieuwe gebruiker naar bruikbare app
 
@@ -121,7 +135,7 @@ Per P0-scenario moet L2/L3 de werkelijke eindtoestand controleren, niet alleen e
 
 ### L4-04 — Receipt/inventory, locaties UIT
 
-Dezelfde keten, maar zonder locatiekolom/-keuze en zonder foutieve locatievalidatie. Dit scenario borgt de defectklasse die tijdens de PostgreSQL PO-check naar voren kwam.
+Dezelfde keten, maar zonder locatiekolom/-keuze en zonder foutieve locatievalidatie. Dit borgt de defectklasse uit de PostgreSQL PO-check.
 
 ### L4-05 — Herverwerking/idempotentie
 
@@ -130,6 +144,10 @@ Dezelfde receipt opnieuw verwerken verandert voorraad niet dubbel en creëert ge
 ### L4-06 — Article identity/history
 
 `aankoop -> household_article -> detail -> historie` houdt dezelfde canonieke identiteit vast.
+
+### L4-07 — Platform authority
+
+`platformlogin -> toegestane platformfunctie -> verboden huishoudactie blijft verboden`, met echte backend en PostgreSQL.
 
 ---
 
@@ -179,8 +197,6 @@ Minimaal testen:
 
 ## Fase 7 — CI orchestration
 
-Uiteindelijke centrale niveaus:
-
 ### PR Fast Regression
 
 Snelle L1/L2 plus relevante L3/L4 op basis van geraakt scenario.
@@ -197,7 +213,7 @@ Zwaardere varianten, legacydata, recovery en combinaties.
 
 PostgreSQL + migraties + alle P0 L2/L3/L4 + build/startup + PO-acceptatiestatus.
 
-De huidige featuregerichte workflows blijven bestaan totdat de audit aantoonbaar heeft bepaald welke evidence uniek, dubbel of obsolete is.
+De huidige featuregerichte workflows blijven bestaan totdat F0-06 heeft bepaald welke evidence uniek, dubbel of obsolete is.
 
 ---
 
@@ -205,32 +221,18 @@ De huidige featuregerichte workflows blijven bestaan totdat de audit aantoonbaar
 
 Doelduur: circa **15–30 minuten**.
 
-De PO beoordeelt dan primair:
-
-- begrijpelijkheid;
-- logische gebruikersflow;
-- juiste zichtbaarheid van acties/instellingen;
-- productmatig gewenst gedrag;
-- onverwachte UX-regressies die niet zinvol volledig geautomatiseerd zijn.
-
-Technische PostgreSQL-, isolation-, idempotentie- en dataconsistentiechecks horen vóór deze stap al groen te zijn.
+De PO beoordeelt primair begrijpelijkheid, logische gebruikersflow, zichtbaarheid van acties/instellingen en productmatig gewenst gedrag. PostgreSQL-, isolation-, idempotentie- en dataconsistentiechecks horen dan al automatisch groen te zijn.
 
 ---
 
 ## Fase 9 — Release Acceptance Gate
 
-De finale gate activeert de strikte matrixcontrole:
+De finale gate activeert:
 
 ```text
 python scripts/validate-functional-acceptance-matrix.py --strict-release
 ```
 
-Een release is pas kandidaat voor PO-GO wanneer:
+Een release is pas kandidaat voor PO-GO wanneer alle vereiste P0-lagen, PostgreSQL/migratie/startup en build/runtime groen zijn en de PO-acceptatiestatus expliciet is vastgelegd.
 
-- alle P0-scenario's hun vereiste lagen hebben;
-- PostgreSQL/migratie/startup groen is;
-- geen onverklaarde functionele matrix-gap resteert;
-- build/runtime groen is;
-- PO-acceptatiestatus expliciet is vastgelegd.
-
-De automatisering geeft nooit zelfstandig toestemming om te mergen; de bestaande expliciete PO-GO blijft vereist.
+De automatisering geeft nooit zelfstandig toestemming om te mergen; expliciete PO-GO blijft vereist.
