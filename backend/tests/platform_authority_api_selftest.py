@@ -17,6 +17,7 @@ from app.api import platform_authorizations_routes
 from app.api import platform_sessions_routes
 from app.api import platform_users_routes
 from app.api.server_session_routes import SessionApiConfiguration, create_server_session_router
+from app.api.session_household_routes import create_session_household_router
 from app.services import session_request_context
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 from app.services.session_request_context import (
@@ -116,6 +117,7 @@ def _application(engine) -> FastAPI:
     platform_users_routes.engine = engine
     platform_authorizations_routes.engine = engine
 
+    configuration = SessionApiConfiguration(cookie_secure=False)
     app = FastAPI()
 
     @app.middleware("http")
@@ -135,12 +137,8 @@ def _application(engine) -> FastAPI:
         finally:
             reset_request_session(token)
 
-    app.include_router(
-        create_server_session_router(
-            engine,
-            SessionApiConfiguration(cookie_secure=False),
-        )
-    )
+    app.include_router(create_server_session_router(engine, configuration))
+    app.include_router(create_session_household_router(engine, configuration))
     app.include_router(platform_sessions_routes.router)
     app.include_router(platform_users_routes.router)
     app.include_router(platform_authorizations_routes.router)
@@ -360,10 +358,18 @@ def run() -> int:
             login_after_role_change = _login(target_after_role_change, TARGET_ADMIN_EMAIL)
             assert login_after_role_change["context_type"] == "none"
             assert login_after_role_change["active_household_id"] is None
-            forbidden_household_projection = target_after_role_change.get(
-                f"/api/households/{ISOLATION_HOUSEHOLD}/almost-out"
+            household_list = target_after_role_change.get("/api/session/households")
+            assert household_list.status_code == 200, household_list.text
+            assert household_list.json() == {
+                "items": [],
+                "total": 0,
+                "can_switch_households": False,
+            }
+            forbidden_switch = target_after_role_change.post(
+                "/api/session/household",
+                json={"household_id": ISOLATION_HOUSEHOLD},
             )
-            assert forbidden_household_projection.status_code in {403, 404}, forbidden_household_projection.text
+            assert forbidden_switch.status_code == 403, forbidden_switch.text
         checks.append("platform_role_does_not_create_cross_household_access")
 
         for check in checks:
