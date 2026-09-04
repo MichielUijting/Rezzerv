@@ -76,7 +76,7 @@ def _seed_article(
             INSERT INTO household_articles (
                 id, household_id, naam, consumable, min_stock, ideal_stock, status, updated_at
             ) VALUES (
-                :id, :household_id, :naam, TRUE, :min_stock, :ideal_stock, 'active', CURRENT_TIMESTAMP
+                :id, :household_id, :naam, 1, :min_stock, :ideal_stock, 'active', CURRENT_TIMESTAMP
             )
             """
         ),
