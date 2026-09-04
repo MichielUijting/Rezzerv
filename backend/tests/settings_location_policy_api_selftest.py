@@ -128,12 +128,12 @@ def _direct_space_id(conn, household_id: str) -> str:
             SELECT id, naam
             FROM spaces
             WHERE household_id = :household_id
-              AND COALESCE(is_direct, FALSE) = TRUE
+              AND is_direct = :is_direct
               AND COALESCE(active, TRUE) = TRUE
             ORDER BY id
             """
         ),
-        {"household_id": household_id},
+        {"household_id": household_id, "is_direct": 1},
     ).mappings().all()
     assert len(row) == 1, row
     assert str(row[0].get("naam") or "").strip().lower() == "direct"
