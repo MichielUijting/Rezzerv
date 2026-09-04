@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -143,10 +144,15 @@ def resolve_space_and_sublocation_ids(
         if row:
             resolved_space_id = str(row["id"])
         else:
-            resolved_space_id = str(conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
-                {"naam": normalized_space_name, "household_id": household_id},
-            ).scalar_one())
+            resolved_space_id = uuid4().hex
+            conn.execute(
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (:id, :naam, :household_id)"),
+                {
+                    "id": resolved_space_id,
+                    "naam": normalized_space_name,
+                    "household_id": household_id,
+                },
+            )
 
     if resolved_sublocation_id:
         row = conn.execute(
@@ -191,11 +197,12 @@ def resolve_space_and_sublocation_ids(
         if row:
             resolved_sublocation_id = str(row["id"])
         else:
-            resolved_sublocation_id = str(conn.execute(
+            resolved_sublocation_id = uuid4().hex
+            inserted = conn.execute(
                 text(
                     """
                     INSERT INTO sublocations (id, naam, space_id)
-                    SELECT lower(hex(randomblob(16))), :naam, s.id
+                    SELECT :id, :naam, s.id
                     FROM spaces s
                     WHERE s.id = :space_id
                       AND s.household_id = :household_id
@@ -203,11 +210,15 @@ def resolve_space_and_sublocation_ids(
                     """
                 ),
                 {
+                    "id": resolved_sublocation_id,
                     "naam": normalized_sublocation_name,
                     "space_id": resolved_space_id,
                     "household_id": household_id,
                 },
-            ).scalar_one())
+            ).scalar_one_or_none()
+            if not inserted:
+                raise HTTPException(status_code=400, detail="Onbekende ruimte")
+            resolved_sublocation_id = str(inserted)
 
     return resolved_space_id, resolved_sublocation_id
 
