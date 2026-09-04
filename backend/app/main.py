@@ -5109,12 +5109,9 @@ def sync_receipt_table_line_product_links(conn, receipt_table_id: str, line_id: 
             """
             UPDATE receipt_table_lines
             SET matched_global_product_id = :matched_global_product_id,
-                matched_article_id = CASE
-                    WHEN :matched_household_article_id IS NOT NULL THEN :matched_household_article_id
-                    ELSE matched_article_id
-                END,
+                matched_article_id = COALESCE(CAST(:matched_household_article_id AS TEXT), matched_article_id),
                 article_match_status = CASE
-                    WHEN :matched_household_article_id IS NOT NULL THEN 'matched'
+                    WHEN CAST(:matched_household_article_id AS TEXT) IS NOT NULL THEN 'matched'
                     WHEN :matched_global_product_id IS NOT NULL THEN 'product_matched'
                     ELSE 'unmatched'
                 END,
