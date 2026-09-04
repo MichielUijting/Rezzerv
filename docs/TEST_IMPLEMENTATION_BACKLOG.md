@@ -8,20 +8,23 @@ Baseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
 
 Deze backlog vertaalt `docs/TEST_MATRIX.md` naar concrete bouwstappen. Prioriteit wordt bepaald door productrisico en ketenimpact, niet door het aantal bestaande tests.
 
-## Fase 0 — Test Trust Audit
+## Fase 0 — Test Trust Audit — AFGEROND
 
 **Doel:** weten wat de huidige automatisering werkelijk bewijst voordat nieuwe tests worden vermenigvuldigd.
 
-### Huidige voortgang
+### Eindstand
 
 - centrale Functional Acceptance Matrix: **gereed**;
-- structurele validator + eigen CI-gate: **gereed en groen**;
-- P0 evidence-audit: **14 van 14 scenario's geverifieerd (100%)**;
-- false-confidence audit voor P0: **gereed**;
-- historische PostgreSQL PO-defectklassen: **in de matrix/backlog verankerd**;
-- P1/P2 detailaudit en workflow-consolidatie: **nog open**.
+- structurele validator + eigen CI-gate: **gereed**;
+- P0 evidence-audit: **14/14 geverifieerd**;
+- P1 kernscope-audit: **7/7 geverifieerd**;
+- P2 cross-cutting navigation/capability-UX: **1/1 geverifieerd**;
+- false-confidence audit: **gereed voor alle geïnventariseerde kernscenario's**;
+- historische PostgreSQL PO-defectklassen: **in matrix/backlog verankerd**;
+- workflow-landschap: **KEEP / targeted / merge-candidate / retire-candidate geclassificeerd** in `docs/TEST_WORKFLOW_CLASSIFICATION.md`;
+- implementatievolgorde fasen 1–4: **vastgelegd**.
 
-**100% audit is niet 100% testdekking.** De audit heeft juist meerdere echte L3/L4-gaten aangetoond. Die vormen de bouwopdracht voor fasen 1–4.
+**Audit compleet betekent niet testdekking compleet.** Fase 0 heeft juist vastgesteld waar production-relevante L3- en L4-gaten zitten.
 
 ### Bevestigde false-confidence patronen
 
@@ -32,6 +35,8 @@ Deze backlog vertaalt `docs/TEST_MATRIX.md` naar concrete bouwstappen. Prioritei
 | Database-regressie op SQLite | `temporal-inventory-validation.yml` | Waardevolle temporal logica; geen PostgreSQL-runtimebewijs |
 | Playwright + echte stack maar API's gemockt | authorization UI validation | Frontendregressie; geen echte L4 |
 | Playwright receipt lifecycle met gemockte APIs | receipt lifecycle frontend regressie | UI-interactiecontract; geen Kassa/Uitpakken full-stack keten |
+| Externe database Playwright mockt kern-API's | external recognition | UX-contract; geen echte external-database L4 |
+| Mixed Playwright | Winkelen | echte zoekroute, maar mutatieflow is gemockt; gedeeltelijk L4 |
 | Frontendcontract/build zonder backend | settings v2 information architecture | UI-structuur; geen opslaan → DB → gedragsprojectie |
 | Workflownaam zonder self-contained PostgreSQL | household article identity Slice 2B4 | Het echte PG-bewijs komt uit `inventory-location-household-isolation.yml` |
 | Acceptance closure bouwt frontend maar draait geen Playwright | Platform Admin 9.1.7 | Sterke PG backendcoverage; geen L4 |
@@ -41,16 +46,18 @@ Deze backlog vertaalt `docs/TEST_MATRIX.md` naar concrete bouwstappen. Prioritei
 | ID | Prioriteit | Werk | Status | Exitbewijs |
 |---|---:|---|---|---|
 | F0-01 | P0 | Centrale machineleesbare Functional Acceptance Matrix invoeren | **Gereed** | `quality/acceptance/functional_acceptance_matrix.json` |
-| F0-02 | P0 | Structurele validator + CI-gate invoeren | **Gereed en groen** | validator + workflow + CI-evidence |
+| F0-02 | P0 | Structurele validator + CI-gate invoeren | **Gereed** | validator + workflow + CI-evidence |
 | F0-03 | P0 | Alle huidige P0 evidence inhoudelijk verifiëren | **Gereed — 14/14** | alle P0-scenario's `verified` |
-| F0-04 | P0 | Historische PO-defectklassen aan permanente scenario's koppelen | **Gereed voor huidige PostgreSQL PO-ronde** | locatiebeleid, quantity precision, error feedback, article history, idempotentie e.d. in roadmap |
-| F0-05 | P0 | False confidence inventariseren | **P0 gereed** | bovenstaande gap-analyse + matrixclassificatie |
-| F0-06 | P1 | Dubbele, obsolete en PR-specifieke workflows classificeren | **Open** | keep/merge/retire-lijst, nog zonder verwijdering |
-| F0-07 | P0 | Definitieve P0/P1/P2 implementatievolgorde vastleggen | **P0-volgorde gereed; P1/P2 nog afronden** | fase-0 exitrapport |
+| F0-04 | P0 | Historische PO-defectklassen aan permanente scenario's koppelen | **Gereed** | location policy, quantity precision, error feedback, article history, idempotentie e.d. |
+| F0-05 | P0 | False confidence inventariseren | **Gereed** | matrix + `docs/TEST_MATRIX.md` |
+| F0-06 | P1 | Dubbele, obsolete en PR-specifieke workflows classificeren | **Gereed als migratieplan** | `docs/TEST_WORKFLOW_CLASSIFICATION.md` |
+| F0-07 | P0 | Definitieve P0/P1/P2 implementatievolgorde vastleggen | **Gereed** | fasen 1–4 hieronder |
 
-### Fase-0 exit
+### Fase-0 exitbesluit
 
-De P0-audit is inhoudelijk klaar. Fase 0 als geheel sluit wanneer P1/P2 voldoende zijn geïnventariseerd en bestaande workflows een `keep / merge / retire`-classificatie hebben. Er wordt in Fase 0 nog niets verwijderd alleen omdat het dubbel of oud lijkt.
+**Fase 0 is inhoudelijk afgerond.**
+
+Er worden in deze fase bewust geen bestaande workflows verwijderd. De workflowclassificatie is een migratieplan; consolidatie gebeurt later alleen wanneer uniek bewijs aantoonbaar naar een canonical authority is overgenomen.
 
 ---
 
@@ -65,8 +72,9 @@ De P0-audit is inhoudelijk klaar. Fase 0 als geheel sluit wanneer P1/P2 voldoend
 | F1-03 | P0 | Canonical Alembic-head als startvoorwaarde | Iedere integrale run bewijst schemahead vóór businessscenario |
 | F1-04 | P0 | Deterministische reset/cleanup | Iedere run start en eindigt schoon zonder productie/local volume te raken |
 | F1-05 | P0 | Test-run identity/evidence | Resultaat noemt datastore, schemahead, scenario, commit en exitstatus |
+| F1-06 | P0 | Bestaande goede PG fixtures normaliseren achter één interface | Receipt/onboarding/inventory tests delen dezelfde testfoundation in plaats van parallelle bootstraps |
 
-Bestaande canonical receipt-chain en PostgreSQL onboarding/inventory-fixtures worden hergebruikt. Het doel is één foundation, niet nóg een parallel testframework.
+**Herbruik eerst wat al goed is.** De canonical receipt-chain, PostgreSQL onboarding fixture en inventory/location authority bevatten bruikbare bouwstenen. Fase 1 maakt daar één herkenbare foundation van in plaats van een vierde parallel framework.
 
 ---
 
@@ -102,7 +110,7 @@ Bestaande canonical receipt-chain en PostgreSQL onboarding/inventory-fixtures wo
 
 ## Fase 3 — P0 backend/API coverage
 
-De P0-audit bepaalt nu de uitvoeringsvolgorde:
+De audit bepaalt de uitvoeringsvolgorde:
 
 1. **Settings + location policy** — grootste cross-layer gat; instelling moet echt worden opgeslagen en gedrag sturen;
 2. **Onboarding + household membership** — servicebewijs bestaat, echte API authority ontbreekt nog;
@@ -213,7 +221,7 @@ Zwaardere varianten, legacydata, recovery en combinaties.
 
 PostgreSQL + migraties + alle P0 L2/L3/L4 + build/startup + PO-acceptatiestatus.
 
-De huidige featuregerichte workflows blijven bestaan totdat F0-06 heeft bepaald welke evidence uniek, dubbel of obsolete is.
+De huidige featuregerichte workflows worden pas geconsolideerd volgens `docs/TEST_WORKFLOW_CLASSIFICATION.md` nadat vervangend bewijs aantoonbaar stabiel is.
 
 ---
 
