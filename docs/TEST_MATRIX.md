@@ -41,27 +41,35 @@ Daarnaast kent ieder scenario een auditstatus:
 
 Deze scheiding voorkomt dat het bestaan van een workflow automatisch als functionele dekking wordt geïnterpreteerd.
 
-## 4. Huidige kernbevindingen
+## 4. Huidige auditstand
 
-Rezzerv heeft al veel regressie- en acceptatiechecks. De huidige kwaliteitssignalen zijn echter historisch gegroeid en verdeeld over veel feature-, release- en migratiegerichte workflows. Daardoor kan een groot aantal groene workflows nog steeds samengaan met een gat in een complete gebruikersketen.
+Er zijn **14 P0-scenario's** in de eerste matrix. Daarvan zijn er nu **7 inhoudelijk geverifieerd (50%)**:
 
-In deze eerste audit zijn inmiddels vier P0-gebieden inhoudelijk gecontroleerd:
+1. **Account & sessie** — sterk PostgreSQL L2/L3-bewijs; echte browsergestuurde L4-reis ontbreekt.
+2. **Onboarding** — uitgebreide PostgreSQL service/integratietests; geen echte registratie-tot-bruikbare-app API/browserketen.
+3. **Huishouden / uitnodigingen** — lifecycle en DML-only PostgreSQL goed bewezen op serviceniveau; geen echte API/browseracceptatie.
+4. **Autorisatie & huishoudisolatie** — sterke PostgreSQL API-tests; bestaande Playwright-UI-test mockt cruciale API's en telt daarom niet als L4.
+5. **Locatiebeleid** — PostgreSQL service/isolation-bewijs aanwezig; bestaande Uitpakken-locatiecontractworkflow draait op in-memory SQLite en telt niet als PostgreSQL L3.
+6. **Kassabon → Voorraad → Bijna-op** — canonical PostgreSQL 12/12 keten, inclusief idempotentie en voorraadpad `0 -> 2 -> 5 -> 5 -> 1`; browser-L4 ontbreekt.
+7. **PostgreSQL migratie/startup** — migrator/runtime-scheiding en operationele startupgates sterk bewezen.
 
-1. **Account & sessie** heeft sterk PostgreSQL L2/L3-bewijs. `backend/tests/test_server_session_routes.py` gebruikt een echte FastAPI `TestClient` met PostgreSQL en controleert onder andere login, 401/403, sessiecontext, logout en invalidatie. De ontbrekende laag is de echte browsergestuurde L4-reis.
-2. **Locatiebeleid** bevat sterk PostgreSQL service/isolation-bewijs, maar de bestaande workflow `unpacking-household-location-isolation.yml` voert zijn Uitpakken-locatiecontract uit op **in-memory SQLite**. Dit telt daarom niet als PostgreSQL L3-bewijs. API- en L4-dekking voor locaties aan/uit blijven open.
-3. **Kassabon → Voorraad → Bijna-op** heeft een canonical PostgreSQL 12/12 ketenrunner met DML-only runtime, idempotentie, voorraadpad `0 -> 2 -> 5 -> 5 -> 1` en Bijna-op `NEE -> JA`. De browsergestuurde L4-keten ontbreekt nog.
-4. **PostgreSQL migratie/startup** heeft expliciete migrator/runtime-scheiding en operationele startupgates.
+### Bevestigde false-confidence patronen
 
-Dit bevestigt de kernwaarde van de matrix: de naam van een workflow is geen bewijs van de laag, datastore of gebruikersketen die hij werkelijk test.
+De audit heeft al twee concrete gevallen gevonden waarin een groen of goed klinkend testsignaal meer leek te bewijzen dan het feitelijk deed:
 
-## 5. Eerste integrale scenario-inventaris
+- `unpacking-household-location-isolation.yml` klinkt als production-relevante isolatievalidatie, maar de onderliggende contracttest gebruikt `sqlite+pysqlite:///:memory:`. Dit is dus geen PostgreSQL L3-bewijs.
+- `authorization-membership-ui-validation.yml` start wel de echte PostgreSQL-appstack en Playwright, maar `settings-authorization.frontend-regression.spec.js` onderschept onder andere `/api/session` en autorisatie-endpoints met `page.route(...)` en retourneert gemockte responses. Dit is waardevolle frontendregressie, maar geen echte L4-keten.
+
+Dit bevestigt de kernwaarde van de matrix: de naam van een workflow, het starten van Docker of het gebruik van Playwright is op zichzelf geen bewijs van de laag, datastore of gebruikersketen die werkelijk wordt getest.
+
+## 5. Integrale scenario-inventaris
 
 | ID | Domein / keten | Prioriteit | Audit | Belangrijkste resterende gat |
 |---|---|---:|---|---|
 | P0-ACCOUNT-SESSION | Account & sessie | P0 | **verified** | Echte browsergestuurde L4-reis |
-| P0-ONBOARDING | Onboarding naar bruikbare app | P0 | inventory | Browsergestuurde registratie-tot-app-keten |
-| P0-HOUSEHOLD-MEMBERSHIP | Huishouden / uitnodiging / rol | P0 | inventory | UI + runtime + huishoudwissel integraal |
-| P0-AUTHORIZATION-ISOLATION | Rollen en huishoudisolatie | P0 | inventory | 190-check runtime en v2.0 doelcontract zichtbaar koppelen |
+| P0-ONBOARDING | Onboarding naar bruikbare app | P0 | **verified** | Echte API/browser registratie-tot-app-keten |
+| P0-HOUSEHOLD-MEMBERSHIP | Huishouden / uitnodiging / rol | P0 | **verified** | Echte API/browser uitnodigingsreis + huishoudwissel |
+| P0-AUTHORIZATION-ISOLATION | Rollen en huishoudisolatie | P0 | **verified** | Onbemockte L4-keten |
 | P0-SETTINGS-PROJECTION | Instellingen naar werkelijk gedrag | P0 | inventory | Cross-layer instellingseffecten |
 | P0-LOCATIONS-POLICY | Locaties aan/uit | P0 | **verified** | Echte API + L4; bestaand Uitpakken-contract is SQLite-only |
 | P0-RECEIPT-INVENTORY-ALMOSTOUT | Kassa → Uitpakken → Voorraad → Bijna-op | P0 | **verified** | Echte browserketen + locaties-uit variant |
@@ -77,29 +85,29 @@ Dit bevestigt de kernwaarde van de matrix: de naam van een workflow is geen bewi
 | P0-PLATFORM-AUTHORITY | Platformrollen | P0 | inventory | Runtime-v1.1 en doel-v2.0 expliciet scheiden/testen |
 | P0-MIGRATION-STARTUP | Migratie & startup | P0 | **verified** | Opnemen in één integrale release acceptance gate |
 
-De details en evidencepaden staan uitsluitend in de machineleesbare matrix om dubbele administraties te voorkomen.
+De details en evidencepaden staan in de machineleesbare matrix om dubbele administraties te voorkomen.
 
 ## 6. P0-releaseprincipe
 
 Een P0-scenario is niet releaseveilig enkel omdat één featuretest groen is. Voor production-relevant functioneel gedrag moeten de relevante L2-, L3- en L4-bewijzen aantoonbaar aanwezig zijn. Een technische infrastructuurketen kan L4 als `na` hebben wanneer er geen zinvolle gebruikersinterface bestaat.
 
-De validator ondersteunt daarom twee modi:
+De validator ondersteunt twee modi:
 
 ```text
 python scripts/validate-functional-acceptance-matrix.py
 ```
 
-Controleert de structuur, toegestane labels, evidence bij `covered`, P0/PostgreSQL-contracten en rapporteert open gaten. Deze modus is tijdens de opbouw de CI-gate.
+Deze modus valideert structuur en evidence en rapporteert open P0-gaten zonder ze tijdens de opbouw als releaseblokkade te behandelen.
 
 ```text
 python scripts/validate-functional-acceptance-matrix.py --strict-release
 ```
 
-Maakt onopgeloste P0-dekkingsgaten blokkerend. Deze modus wordt pas de formele releasegate wanneer roadmapfase 9 is bereikt.
+Deze modus maakt onopgeloste P0-dekkingsgaten blokkerend en wordt pas in roadmapfase 9 de formele releasegate.
 
 ## 7. Vaste configuratie- en regressievarianten
 
-Minimaal de volgende varianten worden niet langer als incidentele bugtest behandeld, maar als onderdeel van het integrale scenario-ontwerp:
+Minimaal de volgende varianten worden structureel onderdeel van het integrale scenario-ontwerp:
 
 - huishouden **met locaties**;
 - huishouden **zonder locaties**;
