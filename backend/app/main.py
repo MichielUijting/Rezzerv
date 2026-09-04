@@ -6875,7 +6875,7 @@ def _receipt_line_total_clause(alias: str = 'rtl') -> str:
 
 
 def _receipt_line_active_filter(alias: str = 'rtl') -> str:
-    return f"COALESCE({alias}.is_deleted, 0) = 0"
+    return f"COALESCE({alias}.is_deleted, FALSE) = FALSE"
 
 def resolve_authorized_household_id(
     authorization: str | None,
@@ -8578,7 +8578,7 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
             """
         SELECT id, store_name, purchase_at, total_amount, parse_status,
                COALESCE(discount_total, 0) AS discount_total,
-               COALESCE(totals_overridden, 0) AS totals_overridden
+               COALESCE(totals_overridden, FALSE) AS totals_overridden
         FROM receipt_tables
         WHERE id = :id
         LIMIT 1
@@ -8641,7 +8641,7 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
         UPDATE receipt_tables
         SET parse_status = :parse_status,
             line_count = :line_count,
-            totals_overridden = 0,
+            totals_overridden = FALSE,
             totals_override_by_user_email = NULL,
             totals_override_at = NULL,
             updated_at = CURRENT_TIMESTAMP
@@ -11731,7 +11731,7 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
                     matched_global_product_id,
                     confidence_score,
                     COALESCE(is_deleted, FALSE) AS is_deleted,
-                    COALESCE(is_validated, 0) AS is_validated
+                    COALESCE(is_validated, FALSE) AS is_validated
                 FROM receipt_table_lines
                 WHERE receipt_table_id = :receipt_table_id
                 ORDER BY line_index ASC, created_at ASC
@@ -11824,7 +11824,7 @@ def get_receipt_explainability(receipt_table_id: str, authorization: Optional[st
                     article_match_status,
                     confidence_score,
                     COALESCE(is_deleted, FALSE) AS is_deleted,
-                    COALESCE(is_validated, 0) AS is_validated
+                    COALESCE(is_validated, FALSE) AS is_validated
                 FROM receipt_table_lines
                 WHERE receipt_table_id = :receipt_table_id
                 ORDER BY line_index ASC, created_at ASC
@@ -11983,7 +11983,7 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
     with engine.begin() as conn:
         context = require_receipt_write_context(conn, receipt_table_id, authorization)
         row = conn.execute(
-            text("SELECT id, receipt_table_id, raw_label, normalized_label, quantity, unit, unit_price, line_total, matched_article_id, matched_global_product_id, COALESCE(is_deleted, FALSE) AS is_deleted, COALESCE(is_validated, 0) AS is_validated FROM receipt_table_lines WHERE id = :id AND receipt_table_id = :receipt_table_id LIMIT 1"),
+            text("SELECT id, receipt_table_id, raw_label, normalized_label, quantity, unit, unit_price, line_total, matched_article_id, matched_global_product_id, COALESCE(is_deleted, FALSE) AS is_deleted, COALESCE(is_validated, FALSE) AS is_validated FROM receipt_table_lines WHERE id = :id AND receipt_table_id = :receipt_table_id LIMIT 1"),
             {'id': line_id, 'receipt_table_id': receipt_table_id},
         ).mappings().first()
         if not row:
@@ -11998,8 +11998,8 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
             'corrected_unit_price': row.get('unit_price') if payload.unit_price is None else float(payload.unit_price),
             'corrected_line_total': row.get('line_total') if payload.line_total is None else float(payload.line_total),
             'matched_article_id': row.get('matched_article_id') if payload.matched_article_id is None else (str(payload.matched_article_id or '').strip() or None),
-            'is_deleted': int(bool(row.get('is_deleted'))) if payload.is_deleted is None else int(bool(payload.is_deleted)),
-            'is_validated': int(bool(row.get('is_validated'))) if payload.is_validated is None else int(bool(payload.is_validated)),
+            'is_deleted': bool(row.get('is_deleted')) if payload.is_deleted is None else bool(payload.is_deleted),
+            'is_validated': bool(row.get('is_validated')) if payload.is_validated is None else bool(payload.is_validated),
         }
         conn.execute(
             text("""
@@ -12106,7 +12106,7 @@ def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest
                 :quantity, :corrected_quantity, :unit, :corrected_unit, :unit_price, :corrected_unit_price,
                 :line_total, :corrected_line_total, :barcode, :external_article_code,
                 :article_match_status, :matched_article_id, :matched_global_product_id,
-                :confidence_score, 0, :is_validated, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                :confidence_score, FALSE, :is_validated, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """),
             {
@@ -12130,7 +12130,7 @@ def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest
                 'matched_article_id': (str(payload.matched_article_id or '').strip() or None),
                 'matched_global_product_id': matched_global_product_id,
                 'confidence_score': confidence_score,
-                'is_validated': int(bool(payload.is_validated)),
+                'is_validated': bool(payload.is_validated),
             },
         )
 
@@ -12216,8 +12216,8 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
                 corrected_by_user_email = :user_email,
                 reviewed_at = CURRENT_TIMESTAMP,
                 totals_overridden = :totals_overridden,
-                totals_override_by_user_email = CASE WHEN :totals_overridden = 1 THEN :user_email ELSE NULL END,
-                totals_override_at = CASE WHEN :totals_overridden = 1 THEN CURRENT_TIMESTAMP ELSE NULL END,
+                totals_override_by_user_email = CASE WHEN :totals_overridden IS TRUE THEN :user_email ELSE NULL END,
+                totals_override_at = CASE WHEN :totals_overridden IS TRUE THEN CURRENT_TIMESTAMP ELSE NULL END,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
             """),
@@ -12226,7 +12226,7 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
                 'line_count': int(valid_line_count or 0),
                 'user_email': user_email,
                 'parse_status': next_status,
-                'totals_overridden': 0 if totals_match else 1,
+                'totals_overridden': not totals_match,
             },
         )
         line_ids = [
