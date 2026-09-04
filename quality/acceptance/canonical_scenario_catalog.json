@@ -1,0 +1,159 @@
+{
+  "catalog_version": 1,
+  "status_date": "2026-09-04",
+  "purpose": "Canonical product-recognizable test data shared by L2, L3 and L4 acceptance tests.",
+  "household_contexts": {
+    "locations_on": "acceptance-locations-on",
+    "locations_off": "acceptance-locations-off",
+    "isolation": "acceptance-isolation",
+    "system_household": "0"
+  },
+  "receipt_fixtures": {
+    "normal_physical": {
+      "source": "backend/app/testing/receipt_acceptance/baseline.json",
+      "selector": {
+        "receipt_id": "R001"
+      },
+      "contract": {
+        "currency": "EUR",
+        "article_count": 4,
+        "contains_non_physical": false
+      }
+    },
+    "non_physical_loyalty": {
+      "source": "backend/app/testing/receipt_acceptance/baseline.json",
+      "selector": {
+        "receipt_id": "R002",
+        "product_name": "Koopzegels Premium"
+      },
+      "contract": {
+        "classification": "non_physical",
+        "inventory_effect": "none"
+      }
+    },
+    "weighted_quantity": {
+      "source": "backend/app/testing/receipt_acceptance/baseline.json",
+      "selector": {
+        "receipt_id": "R003",
+        "product_name": "Kiwi Gold"
+      },
+      "contract": {
+        "quantity": "0.404",
+        "unit": "kg",
+        "must_remain_exact": true
+      }
+    },
+    "uncertain_match": {
+      "source": "backend/app/testing/receipt_acceptance/baseline.json",
+      "selector": {
+        "receipt_id": "R003",
+        "product_name": "AH bouillon"
+      },
+      "contract": {
+        "review_required": true,
+        "reason": "bronregel is inhoudelijk onzeker"
+      }
+    }
+  },
+  "article_fixtures": {
+    "existing_household_article": {
+      "id": "canonical-existing-coffee",
+      "name": "Koffiebonen",
+      "state": "existing",
+      "article_group": "Dranken"
+    },
+    "new_household_article": {
+      "id": "canonical-new-pasta",
+      "name": "Pasta penne",
+      "state": "new",
+      "article_group": "Houdbaar"
+    },
+    "unclassified_article": {
+      "id": "canonical-unclassified-minced-meat",
+      "name": "Mager gehakt",
+      "state": "existing",
+      "article_group": "Niet ingedeeld"
+    },
+    "day_article": {
+      "id": "canonical-day-bananas",
+      "name": "Bananen",
+      "consumable": true,
+      "auto_consume_mode": "purchased_quantity",
+      "existing_quantity": "3",
+      "purchased_quantity": "2",
+      "expected_final_quantity": "3"
+    }
+  },
+  "quantity_contract": {
+    "values": [
+      "0.404",
+      "1.224",
+      "1.234567"
+    ],
+    "generic_decimal_limit": null,
+    "must_round": false,
+    "storage_contract": "exact_numeric"
+  },
+  "financial_contract": {
+    "currency": "EUR",
+    "scale": 2,
+    "values": [
+      "0.10",
+      "1.19",
+      "17.79"
+    ],
+    "rounding": "financial_only"
+  },
+  "almost_out_cases": {
+    "min_stock": "5",
+    "above": {
+      "quantity": "6",
+      "expected_almost_out": false
+    },
+    "equal": {
+      "quantity": "5",
+      "expected_almost_out": true
+    },
+    "below": {
+      "quantity": "4",
+      "expected_almost_out": true
+    },
+    "zero": {
+      "quantity": "0",
+      "expected_almost_out": true
+    }
+  },
+  "legacy_adoption_fixture": {
+    "contains_personal_data": false,
+    "source_kind": "synthetic_legacy_sqlite",
+    "rows": [
+      {
+        "fixture_id": "legacy-weight-0404",
+        "entity": "purchase_import_line",
+        "quantity": "0.404",
+        "expected_quantity": "0.404"
+      },
+      {
+        "fixture_id": "legacy-weight-1224",
+        "entity": "purchase_import_line",
+        "quantity": "1.224",
+        "expected_quantity": "1.224"
+      },
+      {
+        "fixture_id": "legacy-precision-1234567",
+        "entity": "receipt_table_line",
+        "quantity": "1.234567",
+        "expected_quantity": "1.234567"
+      }
+    ]
+  },
+  "cross_layer_contract": {
+    "consumers": [
+      "L2",
+      "L3",
+      "L4"
+    ],
+    "identifiers_are_stable": true,
+    "synthetic_data_only_except_existing_receipt_acceptance_baseline": true
+  }
+}
