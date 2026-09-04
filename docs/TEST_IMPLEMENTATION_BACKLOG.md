@@ -8,6 +8,8 @@ Baseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
 
 Deze backlog vertaalt `docs/TEST_MATRIX.md` naar concrete bouwstappen. Prioriteit wordt bepaald door productrisico en ketenimpact, niet door het aantal bestaande tests.
 
+---
+
 ## Fase 0 — Test Trust Audit — AFGEROND
 
 **Doel:** weten wat de huidige automatisering werkelijk bewijst voordat nieuwe tests worden vermenigvuldigd.
@@ -53,97 +55,129 @@ Deze backlog vertaalt `docs/TEST_MATRIX.md` naar concrete bouwstappen. Prioritei
 | F0-06 | P1 | Workflows classificeren | **Gereed als migratieplan** |
 | F0-07 | P0 | P0/P1/P2 implementatievolgorde vastleggen | **Gereed** |
 
-**Fase 0 is inhoudelijk afgerond.** Er worden nog geen bestaande workflows verwijderd; consolidatie volgt alleen na aantoonbare evidence-migratie.
-
 ---
 
-## Fase 1 — Canonical PostgreSQL test foundation — BEZIG
+## Fase 1 — Canonical PostgreSQL test foundation — AFGEROND
 
 **Doel:** integrale tests reproduceerbaar laten starten op dezelfde production-like databasegrens.
 
-De eerste echte foundation staat in:
+De gedeelde foundation staat in:
 
+- `backend/app/testing/postgresql_acceptance_foundation.py`;
+- `.github/actions/postgresql-acceptance-foundation/action.yml`;
 - `backend/app/testing/canonical_acceptance_foundation.py`;
 - `.github/workflows/canonical-acceptance-foundation-validation.yml`.
-
-De CI draait de foundation tweemaal tegen PostgreSQL 17 om ook reset/reseed determinisme te bewijzen.
 
 | ID | Prioriteit | Werk | Status | Huidig bewijs |
 |---|---:|---|---|---|
 | F1-01 | P0 | Eén geïsoleerde PostgreSQL 17 foundation | **Gereed en groen** | `datastore=postgresql`; drie canonical scenariohuishoudens |
-| F1-02 | P0 | Migrator + DML-only runtime-role | **Gereed en groen** | `runtime_user=rezzerv_app`, `migrator_user=rezzerv_migrator`, runtime `CREATE=False` |
+| F1-02 | P0 | Migrator + DML-only runtime-role | **Gereed en groen** | aparte rollen; runtime `CREATE=False`; migrator `CREATE=True` |
 | F1-03 | P0 | Canonical Alembic-head als startvoorwaarde | **Gereed en groen** | repository-head wordt tegen `alembic_version` gecontroleerd |
-| F1-04 | P0 | Deterministische reset/reseed | **Gereed en groen** | tweede foundationrun levert exact dezelfde scenario-eindstaat |
-| F1-05 | P0 | Run identity/evidence | **Gereed en groen** | candidate SHA, datastore, database, head, rollen en scenarioresultaat + CI-artifact |
-| F1-06 | P0 | Bestaande goede PG fixtures achter één gedeelde interface brengen | **Open** | receipt/onboarding/inventory authorities moeten de foundation gaan consumeren |
+| F1-04 | P0 | Deterministische reset/reseed | **Gereed en groen** | tweede foundationrun levert dezelfde scenario-eindstaat |
+| F1-05 | P0 | Run identity/evidence | **Gereed en groen** | candidate SHA, datastore, database, head, rollen, scenarioresultaat en artifact |
+| F1-06 | P0 | Bestaande goede PG fixtures achter één gedeelde interface | **Gereed en groen** | canonical, onboarding, inventory/location en receipt/inventory gebruiken dezelfde foundation |
 
-### Canonical scenario's die nu bestaan
+### Canonical huishoudscenario's
 
 1. `acceptance-locations-on`
    - regulier huishouden;
-   - admin + member;
+   - Beheerder + Lid;
    - `primary_use_case=waar_inhuis`;
    - exact één `Voorraadkast` en één `Bovenste plank`.
 2. `acceptance-locations-off`
    - regulier huishouden;
-   - admin + member;
+   - Beheerder + Lid;
    - `primary_use_case=wat_inhuis`;
    - exact nul locaties.
 3. `acceptance-isolation`
    - tweede regulier huishouden;
-   - admin + member;
+   - Beheerder + Lid;
    - exact nul locaties;
    - controle dat data van het locaties-AAN-huishouden niet lekt.
 
-### Laatste bewezen foundationcontract
+### F1-06 authorities
 
-De geoptimaliseerde CI gebruikt alleen de minimale database-/migratiedependencies in plaats van de volledige OCR/Paddle-stack. De gate blijft inhoudelijk gelijk en moet eindigen met:
+De volgende sterke PostgreSQL-authorities delen nu dezelfde bootstrap/authority-grens zonder hun unieke scenariosemantiek te verliezen:
 
-```text
-datastore=postgresql
-runtime_create=False
-migrator_create=True
-scenario_count=3
-locations_on_spaces=1
-locations_on_sublocations=1
-locations_off_spaces=0
-isolation_spaces=0
-CANONICAL_ACCEPTANCE_FOUNDATION_GREEN
-```
+- Canonical acceptance foundation;
+- Onboarding v2 acceptance closure;
+- Inventory location household isolation;
+- Receipt inventory chain merge gate.
 
-**Fase 1 is nog niet volledig klaar.** Eerst moet F1-06 aantonen dat bestaande PostgreSQL-tests de nieuwe foundation daadwerkelijk kunnen hergebruiken, zodat geen nieuw parallel fixture-eiland ontstaat.
+De receipt-keten blijft aantoonbaar PostgreSQL/DML-only en bewijst voorraadpad **0 → 2 → 5 → 5 → 1**, idempotentie, Bijna-op **NEE → JA** en geweigerde runtime-DDL. De expliciete historische locationless SQLite-contracttest is als `sqlite-test-only` geïsoleerd en telt niet als production evidence.
 
 ---
 
-## Fase 2 — Testdata en scenario catalog
+## Fase 2 — Testdata en scenario catalog — IN EINDVALIDATIE
 
-**Doel:** vaste productherkenbare scenario's die door L2/L3/L4 worden gedeeld.
+**Doel:** vaste productherkenbare scenario's die door L2, L3 en L4 worden gedeeld, met één stabiele catalogus in plaats van losse fixture-eilanden.
 
-### Verplichte huishoudscenario's
+### Centrale authority
 
-1. regulier huishouden — **locaties AAN**;
-2. regulier huishouden — **locaties UIT**;
-3. tweede regulier huishouden voor isolation-tests;
-4. Beheerder;
-5. Lid;
-6. relevante legacy-/beschermde rolcontexten volgens de actuele runtime-authority;
-7. systeemhuishouden `0` uitsluitend waar het contract dit expliciet vereist.
+- `quality/acceptance/canonical_scenario_catalog.json`
+  - machineleesbare scenario- en datadefinities;
+  - stabiele identifiers;
+  - verwijst waar mogelijk naar reeds bewezen acceptance-bronnen in plaats van data te kopiëren.
+- `backend/app/testing/canonical_scenario_catalog.py`
+  - gedeelde loader voor L2/L3/L4;
+  - fail-closed validator;
+  - controleert selectors tegen de bestaande kassabonbaseline;
+  - controleert quantity-, financieel-, Almost-out- en legacycontract.
+- `.github/workflows/canonical-acceptance-foundation-validation.yml`
+  - valideert de catalogus binnen dezelfde canonical foundation-gate;
+  - schrijft `canonical-scenario-catalog.log` mee in het bestaande evidence-artifact.
 
-De eerste drie huishoudscenario's plus admin/member bestaan inmiddels in de Fase-1 foundation.
+### Canonical fixturegroepen
 
-### Nog toe te voegen datafixtures
+**Huishoudcontexten**
+- locaties AAN: `acceptance-locations-on`;
+- locaties UIT: `acceptance-locations-off`;
+- isolation: `acceptance-isolation`;
+- systeemhuishouden `0` uitsluitend voor expliciete legacy-/systeemcontracten.
 
-- kassabon met normale fysieke artikelen;
-- kassabon met koop-/spaarzegels of andere niet-fysieke regels;
-- onzekere productmatch;
-- dagartikel;
-- bestaand household article;
-- nieuw household article;
-- Artikelgroep `Niet ingedeeld`;
-- hoeveelheden `0.404`, `1.224`, `1.234567` zonder generieke quantity-afronding;
-- financiële waarden met afzonderlijk geldprecisiecontract;
-- voorraad boven en onder Bijna-op-drempel;
-- representatieve legacy-adoptiedata zonder persoonsgegevens/productiedata.
+**Kassabonnen** — hergebruik van `backend/app/testing/receipt_acceptance/baseline.json`
+- normale fysieke receipt: `R001`;
+- niet-fysieke loyaliteitsregel: `R002 / Koopzegels Premium`;
+- gewogen quantity: `R003 / Kiwi Gold / 0.404 kg`;
+- onzekere reviewregel: `R003 / AH bouillon`.
+
+**Artikelen**
+- bestaand household article: `Koffiebonen`;
+- nieuw household article: `Pasta penne`;
+- `Niet ingedeeld`: `Mager gehakt`;
+- dagartikel: `Bananen`, consumable, purchased-quantity contract.
+
+**Numeriek contract**
+- quantities exact: `0.404`, `1.224`, `1.234567`;
+- geen generieke decimalenlimiet en geen generieke quantity-afronding;
+- financiële waarden apart: EUR, schaal 2.
+
+**Bijna-op**
+- minimum = 5;
+- boven: 6 → niet Bijna-op;
+- gelijk: 5 → Bijna-op;
+- onder: 4 → Bijna-op;
+- nul: 0 → Bijna-op.
+
+**Legacy-adoptie**
+- uitsluitend synthetische, niet-persoonlijke data;
+- drie precisierijen: `0.404`, `1.224`, `1.234567`;
+- exacte behoudsverwachting.
+
+### Fase-2 werkitems
+
+| ID | Prioriteit | Werk | Status |
+|---|---:|---|---|
+| F2-01 | P0 | Stabiele verwijzingen naar canonical huishoudcontexten | **Gereed** |
+| F2-02 | P0 | Productherkenbare receipt-fixtures, incl. fysiek / niet-fysiek / weighted / onzeker | **Gereed** |
+| F2-03 | P0 | Article-fixtures: bestaand, nieuw, dagartikel, `Niet ingedeeld` | **Gereed** |
+| F2-04 | P0 | Quantity-precisie en afzonderlijk financieel precisiecontract | **Gereed** |
+| F2-05 | P0 | Bijna-op-grensgevallen + synthetische legacy-adoptiedata | **Gereed** |
+| F2-06 | P0 | Cross-layer loader/validator + canonical CI-evidence | **Gebouwd; finale candidate-CI loopt** |
+
+### Fase-2 harde exit
+
+Fase 2 is pas afgerond wanneer F2-06 op de uiteindelijke candidate groen is. Daarna mogen Fase-3-tests deze catalogus als gedeelde datacontract-authority gaan consumeren. Fase 2 zelf bewijst **de testdata en scenariosemantiek**; het echte API-/databasegedrag voor deze scenario's wordt in Fase 3 bewezen.
 
 ---
 
