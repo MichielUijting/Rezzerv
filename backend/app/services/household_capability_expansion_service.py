@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
+from app.services.canonical_direct_location_service import ensure_canonical_direct_location
 from app.services.household_product_configuration_service import (
     ensure_household_product_configuration_foundation,
     resolve_household_product_configuration,
@@ -114,6 +115,8 @@ def expand_household_product_configuration(
         "recipes_enabled": int(current.recipes_enabled or bool(recipes_enabled)),
         "unpacking_enabled": int(current.unpacking_enabled or bool(unpacking_enabled)),
     })
+    if next_location == "global":
+        ensure_canonical_direct_location(conn, household_id=normalized_household_id)
     return resolve_household_product_configuration(conn, normalized_household_id)
 
 
