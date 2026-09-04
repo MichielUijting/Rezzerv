@@ -18,7 +18,7 @@ Deze backlog vertaalt `docs/TEST_MATRIX.md` naar concrete bouwstappen. Prioritei
 - structurele validator + eigen CI-gate: **gereed**;
 - P0 evidence-audit: **14/14 geverifieerd**;
 - P1 kernscope-audit: **7/7 geverifieerd**;
-- P2 cross-cutting navigation/capability-UX: **1/1 geverifieerd**;
+- P2 navigation/capability-UX: **1/1 geverifieerd**;
 - false-confidence audit: **gereed voor alle geïnventariseerde kernscenario's**;
 - historische PostgreSQL PO-defectklassen: **in matrix/backlog verankerd**;
 - workflow-landschap: **KEEP / targeted / merge-candidate / retire-candidate geclassificeerd** in `docs/TEST_WORKFLOW_CLASSIFICATION.md`;
@@ -43,38 +43,75 @@ Deze backlog vertaalt `docs/TEST_MATRIX.md` naar concrete bouwstappen. Prioritei
 
 ### Fase-0 werkitems
 
-| ID | Prioriteit | Werk | Status | Exitbewijs |
-|---|---:|---|---|---|
-| F0-01 | P0 | Centrale machineleesbare Functional Acceptance Matrix invoeren | **Gereed** | `quality/acceptance/functional_acceptance_matrix.json` |
-| F0-02 | P0 | Structurele validator + CI-gate invoeren | **Gereed** | validator + workflow + CI-evidence |
-| F0-03 | P0 | Alle huidige P0 evidence inhoudelijk verifiëren | **Gereed — 14/14** | alle P0-scenario's `verified` |
-| F0-04 | P0 | Historische PO-defectklassen aan permanente scenario's koppelen | **Gereed** | location policy, quantity precision, error feedback, article history, idempotentie e.d. |
-| F0-05 | P0 | False confidence inventariseren | **Gereed** | matrix + `docs/TEST_MATRIX.md` |
-| F0-06 | P1 | Dubbele, obsolete en PR-specifieke workflows classificeren | **Gereed als migratieplan** | `docs/TEST_WORKFLOW_CLASSIFICATION.md` |
-| F0-07 | P0 | Definitieve P0/P1/P2 implementatievolgorde vastleggen | **Gereed** | fasen 1–4 hieronder |
+| ID | Prioriteit | Werk | Status |
+|---|---:|---|---|
+| F0-01 | P0 | Centrale machineleesbare Functional Acceptance Matrix | **Gereed** |
+| F0-02 | P0 | Structurele validator + CI-gate | **Gereed** |
+| F0-03 | P0 | Alle P0 evidence inhoudelijk verifiëren | **Gereed — 14/14** |
+| F0-04 | P0 | Historische PO-defectklassen koppelen | **Gereed** |
+| F0-05 | P0 | False confidence inventariseren | **Gereed** |
+| F0-06 | P1 | Workflows classificeren | **Gereed als migratieplan** |
+| F0-07 | P0 | P0/P1/P2 implementatievolgorde vastleggen | **Gereed** |
 
-### Fase-0 exitbesluit
-
-**Fase 0 is inhoudelijk afgerond.**
-
-Er worden in deze fase bewust geen bestaande workflows verwijderd. De workflowclassificatie is een migratieplan; consolidatie gebeurt later alleen wanneer uniek bewijs aantoonbaar naar een canonical authority is overgenomen.
+**Fase 0 is inhoudelijk afgerond.** Er worden nog geen bestaande workflows verwijderd; consolidatie volgt alleen na aantoonbare evidence-migratie.
 
 ---
 
-## Fase 1 — Canonical PostgreSQL test foundation
+## Fase 1 — Canonical PostgreSQL test foundation — BEZIG
 
-**Doel:** alle integrale tests reproduceerbaar laten starten op dezelfde production-like databasegrens.
+**Doel:** integrale tests reproduceerbaar laten starten op dezelfde production-like databasegrens.
 
-| ID | Prioriteit | Werk | Acceptatiecriterium |
-|---|---:|---|---|
-| F1-01 | P0 | Eén geïsoleerde PostgreSQL 17 teststack als canonical foundation | Geen normale P0-integratietest gebruikt SQLite als productie-approximation |
-| F1-02 | P0 | Migrator- en DML-only runtime-role als vaste testgrens | Runtime kan business-DML uitvoeren en schema-DDL niet |
-| F1-03 | P0 | Canonical Alembic-head als startvoorwaarde | Iedere integrale run bewijst schemahead vóór businessscenario |
-| F1-04 | P0 | Deterministische reset/cleanup | Iedere run start en eindigt schoon zonder productie/local volume te raken |
-| F1-05 | P0 | Test-run identity/evidence | Resultaat noemt datastore, schemahead, scenario, commit en exitstatus |
-| F1-06 | P0 | Bestaande goede PG fixtures normaliseren achter één interface | Receipt/onboarding/inventory tests delen dezelfde testfoundation in plaats van parallelle bootstraps |
+De eerste echte foundation staat in:
 
-**Herbruik eerst wat al goed is.** De canonical receipt-chain, PostgreSQL onboarding fixture en inventory/location authority bevatten bruikbare bouwstenen. Fase 1 maakt daar één herkenbare foundation van in plaats van een vierde parallel framework.
+- `backend/app/testing/canonical_acceptance_foundation.py`;
+- `.github/workflows/canonical-acceptance-foundation-validation.yml`.
+
+De CI draait de foundation tweemaal tegen PostgreSQL 17 om ook reset/reseed determinisme te bewijzen.
+
+| ID | Prioriteit | Werk | Status | Huidig bewijs |
+|---|---:|---|---|---|
+| F1-01 | P0 | Eén geïsoleerde PostgreSQL 17 foundation | **Gereed en groen** | `datastore=postgresql`; drie canonical scenariohuishoudens |
+| F1-02 | P0 | Migrator + DML-only runtime-role | **Gereed en groen** | `runtime_user=rezzerv_app`, `migrator_user=rezzerv_migrator`, runtime `CREATE=False` |
+| F1-03 | P0 | Canonical Alembic-head als startvoorwaarde | **Gereed en groen** | repository-head wordt tegen `alembic_version` gecontroleerd |
+| F1-04 | P0 | Deterministische reset/reseed | **Gereed en groen** | tweede foundationrun levert exact dezelfde scenario-eindstaat |
+| F1-05 | P0 | Run identity/evidence | **Gereed en groen** | candidate SHA, datastore, database, head, rollen en scenarioresultaat + CI-artifact |
+| F1-06 | P0 | Bestaande goede PG fixtures achter één gedeelde interface brengen | **Open** | receipt/onboarding/inventory authorities moeten de foundation gaan consumeren |
+
+### Canonical scenario's die nu bestaan
+
+1. `acceptance-locations-on`
+   - regulier huishouden;
+   - admin + member;
+   - `primary_use_case=waar_inhuis`;
+   - exact één `Voorraadkast` en één `Bovenste plank`.
+2. `acceptance-locations-off`
+   - regulier huishouden;
+   - admin + member;
+   - `primary_use_case=wat_inhuis`;
+   - exact nul locaties.
+3. `acceptance-isolation`
+   - tweede regulier huishouden;
+   - admin + member;
+   - exact nul locaties;
+   - controle dat data van het locaties-AAN-huishouden niet lekt.
+
+### Laatste bewezen foundationcontract
+
+De geoptimaliseerde CI gebruikt alleen de minimale database-/migratiedependencies in plaats van de volledige OCR/Paddle-stack. De gate blijft inhoudelijk gelijk en moet eindigen met:
+
+```text
+datastore=postgresql
+runtime_create=False
+migrator_create=True
+scenario_count=3
+locations_on_spaces=1
+locations_on_sublocations=1
+locations_off_spaces=0
+isolation_spaces=0
+CANONICAL_ACCEPTANCE_FOUNDATION_GREEN
+```
+
+**Fase 1 is nog niet volledig klaar.** Eerst moet F1-06 aantonen dat bestaande PostgreSQL-tests de nieuwe foundation daadwerkelijk kunnen hergebruiken, zodat geen nieuw parallel fixture-eiland ontstaat.
 
 ---
 
@@ -92,7 +129,9 @@ Er worden in deze fase bewust geen bestaande workflows verwijderd. De workflowcl
 6. relevante legacy-/beschermde rolcontexten volgens de actuele runtime-authority;
 7. systeemhuishouden `0` uitsluitend waar het contract dit expliciet vereist.
 
-### Verplichte datafixtures
+De eerste drie huishoudscenario's plus admin/member bestaan inmiddels in de Fase-1 foundation.
+
+### Nog toe te voegen datafixtures
 
 - kassabon met normale fysieke artikelen;
 - kassabon met koop-/spaarzegels of andere niet-fysieke regels;
@@ -110,18 +149,18 @@ Er worden in deze fase bewust geen bestaande workflows verwijderd. De workflowcl
 
 ## Fase 3 — P0 backend/API coverage
 
-De audit bepaalt de uitvoeringsvolgorde:
+Uitvoeringsvolgorde op basis van de audit:
 
-1. **Settings + location policy** — grootste cross-layer gat; instelling moet echt worden opgeslagen en gedrag sturen;
-2. **Onboarding + household membership** — servicebewijs bestaat, echte API authority ontbreekt nog;
-3. **Uitpakken + inventory + article identity** — bestaande SQLite/API-contracten naar echte PostgreSQL L3 brengen;
-4. **Kassa review** — canonical fixture via echte review/approval API naar aantoonbare DB-eindstaat;
+1. **Settings + location policy** — instelling echt opslaan en gedrag sturen;
+2. **Onboarding + household membership** — servicebewijs naar echte API-authority;
+3. **Uitpakken + inventory + article identity** — SQLite/API-contracten naar echte PostgreSQL L3;
+4. **Kassa review** — canonical fixture via echte review/approval API naar DB-eindstaat;
 5. **Almost-out API/projectie** — technische keten koppelen aan uitleesbare gebruikersstatus;
-6. **Platform authority** — bestaande sterke backenddekking tot volledige API-authority aanscherpen;
-7. **Account/session + authorization** — bestaande sterke L3 als blijvende regression authority behouden;
+6. **Platform authority** — sterke backenddekking tot volledige API-authority;
+7. **Account/session + authorization** — bestaande sterke L3 als regression authority behouden;
 8. **Migration/startup** — bestaande sterke technische foundation behouden.
 
-Per P0-scenario moet L2/L3 de werkelijke eindtoestand controleren, niet alleen een HTTP- of procesexitcode.
+Per P0-scenario moet L2/L3 de werkelijke eindtoestand controleren, niet alleen HTTP- of procesexitcodes.
 
 ---
 
@@ -129,43 +168,19 @@ Per P0-scenario moet L2/L3 de werkelijke eindtoestand controleren, niet alleen e
 
 L4 betekent: echte browser + echte frontend + echte backend + echte PostgreSQL. Geen `page.route(...).fulfill(...)` voor kern-API's op de normale succesroute.
 
-### L4-01 — Nieuwe gebruiker naar bruikbare app
-
-`registreren -> onboarding -> huishouden -> instellingen -> bruikbare home/context`
-
-### L4-02 — Huishouden en autorisatie
-
-`beheerder -> uitnodigen -> lid accepteert -> rechten -> huishoudwissel -> isolation`
-
-### L4-03 — Receipt/inventory, locaties AAN
-
-`ZIP/EML -> Kassa -> goedkeuren -> Uitpakken -> locatie -> verwerken -> Voorraad -> historie -> Bijna-op`
-
-### L4-04 — Receipt/inventory, locaties UIT
-
-Dezelfde keten, maar zonder locatiekolom/-keuze en zonder foutieve locatievalidatie. Dit borgt de defectklasse uit de PostgreSQL PO-check.
-
-### L4-05 — Herverwerking/idempotentie
-
-Dezelfde receipt opnieuw verwerken verandert voorraad niet dubbel en creëert geen foutieve events.
-
-### L4-06 — Article identity/history
-
-`aankoop -> household_article -> detail -> historie` houdt dezelfde canonieke identiteit vast.
-
-### L4-07 — Platform authority
-
-`platformlogin -> toegestane platformfunctie -> verboden huishoudactie blijft verboden`, met echte backend en PostgreSQL.
+- **L4-01:** registreren → onboarding → huishouden → instellingen → bruikbare app.
+- **L4-02:** beheerder → uitnodigen → lid accepteert → rechten → huishoudwissel → isolation.
+- **L4-03:** receipt → Kassa → goedkeuren → Uitpakken → locatie → Voorraad → historie → Bijna-op, locaties AAN.
+- **L4-04:** dezelfde keten met locaties UIT en zonder locatiekolom/-validatie.
+- **L4-05:** herverwerking/idempotentie zonder dubbele voorraad/events.
+- **L4-06:** aankoop → household_article → detail → historie met dezelfde canonical identity.
+- **L4-07:** platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden.
 
 ---
 
 ## Fase 5 — Historische regressiefoundation
 
-Iedere bevestigde productbug krijgt:
-
-1. de laagste zinvolle permanente regressietest;
-2. aanvullende L3/L4-dekking wanneer de bug alleen in samenhang ontstond;
-3. verwijzing vanuit de Functional Acceptance Matrix.
+Iedere bevestigde productbug krijgt de laagste zinvolle permanente regressietest, aanvullende L3/L4-dekking waar samenhang nodig is en een verwijzing in de matrix.
 
 Eerste verplichte defectklassen uit de PostgreSQL PO-ronde:
 
@@ -174,7 +189,7 @@ Eerste verplichte defectklassen uit de PostgreSQL PO-ronde:
 - receipt worker fail-closed status;
 - receipt source runtime wiring;
 - quantities zonder generieke decimalenlimiet;
-- bestaande beschadigde quantity-data gericht herstellen;
+- gerichte restauratie van historisch beschadigde quantity-data;
 - household location policy consequent in backend en UI;
 - locatievrije Uitpakken-verwerking;
 - `Niet ingedeeld` als geldige Uitpakken-keuze;
@@ -188,48 +203,24 @@ Eerste verplichte defectklassen uit de PostgreSQL PO-ronde:
 
 ## Fase 6 — Failure & recovery
 
-Minimaal testen:
-
-- 401 en 403;
-- functionele 4xx;
-- gecontroleerde 5xx;
-- timeout/tijdelijke dependencyfout;
-- lege of ongeldige import;
-- dubbele request/retry;
-- gedeeltelijk onderbroken keten;
-- veilige hervatting zonder dubbele mutatie;
-- standaard gebruikersfeedback zonder technische lekkage;
-- databaseconsistentie na fout.
+Minimaal: 401/403, functionele 4xx, gecontroleerde 5xx, timeout/tijdelijke fout, ongeldige import, retry/dubbele request, onderbroken keten, veilige hervatting, standaard feedback en databaseconsistentie na fout.
 
 ---
 
 ## Fase 7 — CI orchestration
 
-### PR Fast Regression
+- **PR Fast Regression:** snelle L1/L2 + relevante L3/L4.
+- **Full Regression:** complete functionele regressie voor integratiekandidaat/main.
+- **Deep / Nightly:** zwaardere varianten, legacydata, recovery en combinaties.
+- **Release Acceptance:** PostgreSQL + migraties + alle P0 L2/L3/L4 + build/startup + PO-status.
 
-Snelle L1/L2 plus relevante L3/L4 op basis van geraakt scenario.
-
-### Full Regression
-
-Complete functionele regressie voor integratiekandidaat/main.
-
-### Deep / Nightly
-
-Zwaardere varianten, legacydata, recovery en combinaties.
-
-### Release Acceptance
-
-PostgreSQL + migraties + alle P0 L2/L3/L4 + build/startup + PO-acceptatiestatus.
-
-De huidige featuregerichte workflows worden pas geconsolideerd volgens `docs/TEST_WORKFLOW_CLASSIFICATION.md` nadat vervangend bewijs aantoonbaar stabiel is.
+Featuregerichte workflows worden pas geconsolideerd volgens `docs/TEST_WORKFLOW_CLASSIFICATION.md` nadat vervangend bewijs stabiel is.
 
 ---
 
 ## Fase 8 — PO Acceptance Pack
 
-Doelduur: circa **15–30 minuten**.
-
-De PO beoordeelt primair begrijpelijkheid, logische gebruikersflow, zichtbaarheid van acties/instellingen en productmatig gewenst gedrag. PostgreSQL-, isolation-, idempotentie- en dataconsistentiechecks horen dan al automatisch groen te zijn.
+Doelduur: circa **15–30 minuten**. De PO beoordeelt primair begrijpelijkheid, logische gebruikersflow, zichtbaarheid en productmatig gewenst gedrag; technische regressie hoort al groen te zijn.
 
 ---
 
@@ -241,6 +232,4 @@ De finale gate activeert:
 python scripts/validate-functional-acceptance-matrix.py --strict-release
 ```
 
-Een release is pas kandidaat voor PO-GO wanneer alle vereiste P0-lagen, PostgreSQL/migratie/startup en build/runtime groen zijn en de PO-acceptatiestatus expliciet is vastgelegd.
-
-De automatisering geeft nooit zelfstandig toestemming om te mergen; expliciete PO-GO blijft vereist.
+Een release is pas kandidaat voor PO-GO wanneer alle vereiste P0-lagen, PostgreSQL/migratie/startup en build/runtime groen zijn en de PO-acceptatiestatus expliciet is vastgelegd. Automatisering geeft nooit zelfstandig merge-toestemming.
