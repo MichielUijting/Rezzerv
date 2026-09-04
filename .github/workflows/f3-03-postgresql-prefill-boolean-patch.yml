@@ -1,0 +1,66 @@
+name: F3-03 PostgreSQL prefill boolean patch
+
+on:
+  push:
+    branches:
+      - codex/integral-test-foundation-phase-0
+    paths:
+      - '.github/workflows/f3-03-postgresql-prefill-boolean-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-f3-03-prefill-boolean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/integral-test-foundation-phase-0
+          fetch-depth: 0
+
+      - name: Make unpacking prefill boolean PostgreSQL-native
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          source = path.read_text(encoding='utf-8')
+
+          replacements = {
+              "is_auto_prefilled = CASE WHEN :can_auto_fill = 1 AND COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN 1 ELSE 0 END,":
+              "is_auto_prefilled = CASE WHEN :can_auto_fill AND COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN TRUE ELSE FALSE END,",
+              "WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :can_auto_fill = 1 THEN :matched_household_article_id":
+              "WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :can_auto_fill THEN :matched_household_article_id",
+              "WHEN COALESCE(location_override_mode, 'auto') = 'auto' AND :can_auto_fill = 1 THEN :target_location_id":
+              "WHEN COALESCE(location_override_mode, 'auto') = 'auto' AND :can_auto_fill THEN :target_location_id",
+              "WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill = 1 AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END":
+              "WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END",
+              "WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill = 1 THEN 'selected' ELSE 'pending' END":
+              "WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill THEN 'selected' ELSE 'pending' END",
+              '"is_auto_prefilled": 1 if can_auto_fill else 0,\n': '',
+              '"can_auto_fill": 1 if can_auto_fill else 0,': '"can_auto_fill": bool(can_auto_fill),',
+          }
+
+          for old, new in replacements.items():
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one occurrence for {old!r}, found {count}')
+              source = source.replace(old, new)
+
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Commit focused F3-03 boolean repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'rezzerv-ci'
+          git config user.email 'rezzerv-ci@users.noreply.github.com'
+          git add backend/app/main.py
+          git diff --cached --check
+          git commit -m 'Make unpacking prefill boolean PostgreSQL-native'
+          git push origin HEAD:codex/integral-test-foundation-phase-0
