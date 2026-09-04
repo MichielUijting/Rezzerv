@@ -81,12 +81,22 @@ jobs:
           grep -F 'POSTGRESQL_ONBOARDING_USE_CASE_ALEMBIC_AUTHORITY_GREEN' /tmp/onboarding-use-case-static.log
           grep -F 'POSTGRESQL_ONBOARDING_USE_CASE_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/onboarding-use-case-static.log
 
-      - name: Migrate through household use-case authority revision
+      - name: Migrate through current repository Alembic head
         working-directory: backend
+        shell: bash
         run: |
+          set -euo pipefail
+          mapfile -t repository_heads < <(python -m alembic heads | awk '{print $1}')
+          if [ "${#repository_heads[@]}" -ne 1 ]; then
+            printf 'Expected exactly one repository Alembic head, found %s: %s\n' \
+              "${#repository_heads[@]}" "${repository_heads[*]}" >&2
+            exit 1
+          fi
+          repository_head="${repository_heads[0]}"
+          echo "repository_alembic_head=${repository_head}"
           python -m app.schema_migration_preflight | tee /tmp/onboarding-use-case-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/onboarding-use-case-migration.log
-          grep -F "'revision': '20260829_10'" /tmp/onboarding-use-case-migration.log
+          grep -F "'revision': '${repository_head}'" /tmp/onboarding-use-case-migration.log
 
       - name: Prove onboarding use-case requests work with DML-only runtime role
         working-directory: backend
