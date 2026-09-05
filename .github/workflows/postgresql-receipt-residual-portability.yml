@@ -43,8 +43,10 @@ jobs:
       MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
 
     steps:
-      - name: Checkout
+      - name: Checkout exact PR head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
