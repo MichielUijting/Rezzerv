@@ -164,13 +164,11 @@ async function configureAlmostOutThreshold(page, minStock, idealStock) {
   await page.getByTestId('article-overview-subtab-household').click()
   const settingsSection = page.getByTestId('article-household-settings-section')
   await expect(settingsSection).toBeVisible()
-
   const sectionToggle = settingsSection.getByRole('button', { name: 'Instellingen voor dit huishouden', exact: true })
   if ((await sectionToggle.getAttribute('aria-expanded')) !== 'true') await sectionToggle.click()
 
   await page.getByTestId('article-details-input-min_stock').fill(String(minStock))
   await page.getByTestId('article-details-input-ideal_stock').fill(String(idealStock))
-
   const settingsResponsePromise = page.waitForResponse((response) => (
     response.url().includes('/api/household-articles/')
     && response.url().includes('/settings')
@@ -203,7 +201,6 @@ async function expectAlmostOutPresence(page, articleName, finalQuantity, minStoc
 async function consumeThroughArticleStock(page, householdArticleId, inventoryId, consumeQuantity) {
   await openInventoryArticle(page, householdArticleId)
   await page.getByRole('button', { name: 'Voorraad', exact: true }).click()
-
   const consumeButton = page.getByTestId(`article-stock-consume-${inventoryId}`)
   await expect(consumeButton).toBeVisible({ timeout: 20_000 })
   await consumeButton.click()
@@ -212,14 +209,12 @@ async function consumeThroughArticleStock(page, householdArticleId, inventoryId,
   await expect(form).toBeVisible()
   await form.getByLabel('Aantal afboeken').fill(String(consumeQuantity))
   await form.getByLabel('Reden / notitie').fill('L4-03 Bijna-op drempelovergang')
-
   const mutationResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === `/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`
     && response.request().method() === 'POST'
   ))
   await form.getByRole('button', { name: 'Opslaan', exact: true }).click()
-  const mutationResponse = await mutationResponsePromise
-  expect(mutationResponse.ok()).toBeTruthy()
+  expect((await mutationResponsePromise).ok()).toBeTruthy()
   await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraad is afgeboekt.', { timeout: 20_000 })
 }
 
@@ -273,14 +268,12 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
 
   const lineSelect = page.getByTestId(`receipt-line-select-${lineId}`)
   if (!(await lineSelect.isChecked())) await lineSelect.check()
-
   const processResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === `/api/purchase-import-batches/${batchId}/process`
     && response.request().method() === 'POST'
   ))
   await page.getByTestId('receipt-process-button').click()
-  const processResponse = await processResponsePromise
-  expect(processResponse.ok()).toBeTruthy()
+  expect((await processResponsePromise).ok()).toBeTruthy()
 
   await expect(page.getByRole('dialog', { name: 'Verwerking afgerond' })).toBeVisible({ timeout: 30_000 })
   await page.getByRole('dialog', { name: 'Verwerking afgerond' }).getByRole('button', { name: 'Sluiten' }).click()
@@ -294,12 +287,7 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
   const inventoryRows = Array.isArray(inventory?.rows) ? inventory.rows : []
   const locationRows = inventoryRows.filter((item) => String(item?.locatie || '') === expectedLocationName)
   expect(locationRows.length).toBeGreaterThan(0)
-
-  const targetInventory = locationRows.find((item) => (
-    Number(item?.aantal || 0) > 0
-    && String(item?.id || '').trim()
-    && String(item?.household_article_id || '').trim()
-  ))
+  const targetInventory = locationRows.find((item) => Number(item?.aantal || 0) > 0 && String(item?.id || '').trim() && String(item?.household_article_id || '').trim())
   expect(targetInventory, JSON.stringify(locationRows)).toBeTruthy()
 
   const inventoryId = String(targetInventory.id)
