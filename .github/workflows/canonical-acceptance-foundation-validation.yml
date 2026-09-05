@@ -1,0 +1,159 @@
+name: Canonical acceptance foundation validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/db.py'
+      - 'backend/app/migration_db.py'
+      - 'backend/app/models/**'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
+      - 'backend/app/testing/canonical_acceptance_foundation.py'
+      - 'backend/app/testing/canonical_scenario_catalog.py'
+      - 'backend/app/testing/receipt_acceptance/baseline.json'
+      - 'quality/acceptance/canonical_scenario_catalog.json'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
+      - 'backend/app/testing/onboarding_request_schema_fixture.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/services/household_onboarding_service.py'
+      - 'backend/app/services/household_location_onboarding_service.py'
+      - 'backend/app/services/password_service.py'
+      - '.github/workflows/canonical-acceptance-foundation-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canonical-acceptance-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canonical-postgresql-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_acceptance_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_acceptance_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_acceptance_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_acceptance_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install minimal PostgreSQL foundation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --quiet \
+            sqlalchemy==2.0.36 \
+            alembic==1.19.1 \
+            'psycopg[binary]==3.3.4'
+
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_acceptance_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migration-mode: alembic
+          evidence-file: canonical-shared-postgresql-foundation.log
+
+      - name: Generate temporary acceptance credential
+        shell: bash
+        run: |
+          acceptance_password="Ra$(python - <<'PY'
+          import secrets
+          print(secrets.token_urlsafe(32))
+          PY
+          )"
+          echo "REZZERV_ACCEPTANCE_TEST_PASSWORD=$acceptance_password" >> "$GITHUB_ENV"
+          echo "::add-mask::$acceptance_password"
+
+      - name: Compile canonical foundation
+        run: |
+          python -m py_compile \
+            backend/app/testing/postgresql_acceptance_foundation.py \
+            backend/app/testing/canonical_acceptance_foundation.py \
+            backend/app/testing/canonical_scenario_catalog.py \
+            backend/app/testing/postgresql_onboarding_selftest_fixture.py
+
+      - name: Validate canonical cross-layer scenario catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m app.testing.canonical_scenario_catalog | tee canonical-scenario-catalog.log
+          grep -F 'household_context_count=4' canonical-scenario-catalog.log
+          grep -F 'receipt_fixture_count=4' canonical-scenario-catalog.log
+          grep -F 'article_fixture_count=4' canonical-scenario-catalog.log
+          grep -F 'quantity_case_count=3' canonical-scenario-catalog.log
+          grep -F 'financial_case_count=3' canonical-scenario-catalog.log
+          grep -F 'almost_out_case_count=4' canonical-scenario-catalog.log
+          grep -F 'legacy_row_count=3' canonical-scenario-catalog.log
+          grep -F 'consumers=L2,L3,L4' canonical-scenario-catalog.log
+          grep -F 'CANONICAL_SCENARIO_CATALOG_GREEN' canonical-scenario-catalog.log
+
+      - name: Validate canonical PostgreSQL scenarios and evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m app.testing.canonical_acceptance_foundation | tee canonical-acceptance-foundation.log
+          grep -F 'datastore=postgresql' canonical-acceptance-foundation.log
+          grep -F 'runtime_create=False' canonical-acceptance-foundation.log
+          grep -F 'migrator_create=True' canonical-acceptance-foundation.log
+          grep -F 'scenario_count=3' canonical-acceptance-foundation.log
+          grep -F 'locations_on_spaces=1' canonical-acceptance-foundation.log
+          grep -F 'locations_on_sublocations=1' canonical-acceptance-foundation.log
+          grep -F 'locations_off_spaces=0' canonical-acceptance-foundation.log
+          grep -F 'isolation_spaces=0' canonical-acceptance-foundation.log
+          grep -F 'CANONICAL_ACCEPTANCE_FOUNDATION_GREEN' canonical-acceptance-foundation.log
+
+      - name: Prove deterministic reset and reseed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m app.testing.canonical_acceptance_foundation | tee canonical-acceptance-foundation-rerun.log
+          grep -F 'scenario_count=3' canonical-acceptance-foundation-rerun.log
+          grep -F 'locations_on_spaces=1' canonical-acceptance-foundation-rerun.log
+          grep -F 'locations_off_spaces=0' canonical-acceptance-foundation-rerun.log
+          grep -F 'CANONICAL_ACCEPTANCE_FOUNDATION_GREEN' canonical-acceptance-foundation-rerun.log
+
+      - name: Upload foundation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-acceptance-foundation-evidence
+          path: |
+            canonical-shared-postgresql-foundation.log
+            canonical-scenario-catalog.log
+            canonical-acceptance-foundation.log
+            canonical-acceptance-foundation-rerun.log
+          if-no-files-found: error
+          retention-days: 7

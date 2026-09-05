@@ -1,0 +1,395 @@
+{
+  "schema_version": 1,
+  "name": "Rezzerv Integral Functional Acceptance Matrix",
+  "baseline": {
+    "branch": "main",
+    "commit": "87846e2b257cc458c24f1ea70474ab8986bfbc81",
+    "audited_on": "2026-09-04"
+  },
+  "purpose": "Central quality authority that maps product-critical user chains to evidence across L1-L4 without overstating coverage.",
+  "layers": {
+    "L1": "unit or isolated contract",
+    "L2": "service or integration",
+    "L3": "real API/runtime against PostgreSQL where production-relevant",
+    "L4": "real user/full-stack chain with frontend, backend and PostgreSQL"
+  },
+  "allowed_statuses": ["covered", "partial", "gap", "na"],
+  "runtime_labels": ["sqlite-test-only", "postgresql-service", "postgresql-api", "postgresql-fullstack"],
+  "audit_statuses": ["inventory", "verified"],
+  "scenarios": [
+    {
+      "id": "P0-ACCOUNT-SESSION",
+      "domain": "Account & session",
+      "chain": "registreren -> inloggen -> geldige sessie -> uitloggen/invalideren",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api"],
+      "variants": ["nieuwe gebruiker", "ongeldige sessie", "logout", "sessie-invalidatie"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/consumer_account_registration_selftest.py", "backend/tests/server_session_security_selftest.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/server-side-session-security.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/test_server_session_routes.py", ".github/workflows/onboarding-v2-acceptance-closure-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "Login/logout/session is sterk op PostgreSQL L2/L3 bewezen; een echte browsergestuurde account/sessionreis ontbreekt nog als L4-authority."
+    },
+    {
+      "id": "P0-ONBOARDING",
+      "domain": "Onboarding",
+      "chain": "registratie -> huishouden -> use-case/configuratie -> bruikbare app",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["standaard huishouden", "locaties aan", "locaties uit"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["frontend/tests/onboarding-choice-visibility.contract.mjs"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/onboarding-v2-acceptance-closure-validation.yml", "backend/tests/consumer_account_registration_selftest.py"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/onboarding_household_membership_api_selftest.py", ".github/workflows/onboarding-household-membership-api-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-02 bewijst registratie, uitnodiging, acceptatie, sessierotatie, huishoudwissel en PostgreSQL-eindstaat via echte API's. De volledige onboarding blijft nog zonder browsergestuurde L4-authority totdat Fase 4 groen is."
+    },
+    {
+      "id": "P0-HOUSEHOLD-MEMBERSHIP",
+      "domain": "Household",
+      "chain": "huishouden -> uitnodigen -> accepteren -> juiste rol en context",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["beheerder", "lid", "tweede huishouden"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/household_invitation_acceptance_selftest.py", "backend/tests/household_invitation_delivery_redaction_selftest.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/postgresql-household-invitation-authority.yml", ".github/workflows/household-invitation-acceptance-validation.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/onboarding_household_membership_api_selftest.py", ".github/workflows/onboarding-household-membership-api-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-02 bewijst de echte PostgreSQL API-lifecycle voor beheerder, lid, uitnodiging, acceptatie, twee huishoudcontexten en isolation. Dezelfde reis moet in Fase 4 nog door de echte browser-UI worden uitgevoerd."
+    },
+    {
+      "id": "P0-AUTHORIZATION-ISOLATION",
+      "domain": "Authorization & household isolation",
+      "chain": "sessie -> actieve huishoudcontext -> rol -> toegestane data/actie",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-api", "postgresql-fullstack"],
+      "variants": ["beheerder", "lid", "legacyrol", "ander huishouden", "401", "403"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/authorization_role_matrix_selftest.py", "backend/app/testing/authorization_matrix_acceptance.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/authorization-membership-api-validation.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/test_authorization_membership_routes.py", "backend/tests/test_server_session_routes.py"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "De API-laag draait op PostgreSQL en gebruikt FastAPI TestClient. De UI-workflow start wel de echte stack maar de Playwright-spec mockt session en authorization API via page.route; dat is geen L4-bewijs."
+    },
+    {
+      "id": "P0-SETTINGS-PROJECTION",
+      "domain": "Settings",
+      "chain": "instelling wijzigen -> backend bewaart -> UI en gedrag projecteren instelling",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-api", "postgresql-fullstack"],
+      "variants": ["locaties aan", "locaties uit", "rolbeperking"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["frontend/tests/settings-role-alignment.contract.mjs", "frontend/tests/dynamic-settings-navigation.contract.mjs", ".github/workflows/settings-v2-information-architecture.yml"]},
+        "L2": {"status": "gap", "evidence": []},
+        "L3": {"status": "covered", "evidence": ["backend/tests/settings_location_policy_api_selftest.py", ".github/workflows/circular-capability-expansion-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-01 bewijst opslaan, PostgreSQL-projectie, server-session authority, rolbeperking en locatiebeleid voor locaties aan/uit via echte API's. De browsergestuurde instellingenprojectie blijft Fase-4-werk; een aparte L2 authority is niet kunstmatig afgeleid uit het L3-bewijs."
+    },
+    {
+      "id": "P0-LOCATIONS-POLICY",
+      "domain": "Locations",
+      "chain": "huishoudinstelling -> locatiebeleid -> UI/validatie -> voorraadgedrag",
+      "priority": "P0",
+      "runtime_labels": ["sqlite-test-only", "postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["locaties aan", "locaties uit", "ander huishouden"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/app/testing/unpacking_household_location_isolation_contract.py", "backend/tests/canonical_direct_location_selftest.py"]},
+        "L2": {"status": "partial", "evidence": [".github/workflows/inventory-location-household-isolation.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/settings_location_policy_api_selftest.py", ".github/workflows/circular-capability-expansion-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-01 bewijst location_tracking_level none/global, nul locaties in de locaties-UIT-context, runtime policy en household isolation op PostgreSQL. Fase 4 moet nog bewijzen dat de echte UI kolommen, navigatie en validatie consequent volgt."
+    },
+    {
+      "id": "P0-RECEIPT-INVENTORY-ALMOSTOUT",
+      "domain": "Kassa -> Uitpakken -> Voorraad -> Bijna-op",
+      "chain": "ZIP/EML -> Kassa -> goedkeuren -> Uitpakken -> verwerken -> Voorraad -> Bijna-op",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api"],
+      "variants": ["normale bon", "herverwerking", "koopzegel", "locaties aan", "locaties uit"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/app/testing/receipt_inventory_chain_contract.py"]},
+        "L2": {"status": "covered", "evidence": ["scripts/run-receipt-inventory-chain.ps1", "docs/project/DEVELOPMENT-TEST-RELEASE.md"]},
+        "L3": {"status": "covered", "evidence": [".github/workflows/receipt-inventory-chain-post-merge.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "Canonical 12/12 PostgreSQL-keten is sterk technisch bewijs maar bevat nog geen echte browser/UI-keten en mist locaties-uit als vaste variant."
+    },
+    {
+      "id": "P0-KASSA-REVIEW",
+      "domain": "Kassa",
+      "chain": "receipt input -> herkenning -> review -> goedkeuring",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["geldige regels", "onzekere match", "financiele regels", "foutmelding"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/test_receipt_financial_components_regression.py", "backend/tests/test_receipt_inventory_eligibility.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/kassa-supermarket-baseline-validation.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/kassa_review_api_selftest.py", ".github/workflows/kassa-review-api-validation.yml", ".github/workflows/receipt-lifecycle-foundation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-04 bewijst echte review/approval-API's op PostgreSQL, inclusief canonical weighted quantity 0.404, cross-household denial en uitsluiting van niet-fysieke loyaliteitsregels. Upload/review/goedkeuring via de echte browser blijft L4-werk."
+    },
+    {
+      "id": "P0-UNPACKING",
+      "domain": "Uitpakken",
+      "chain": "goedgekeurde regel -> huishoudartikel/artikelgroep -> optionele locatie -> naar voorraad",
+      "priority": "P0",
+      "runtime_labels": ["sqlite-test-only", "postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["locaties aan", "locaties uit", "Niet ingedeeld", "dagartikel", "herverwerking"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": [".github/workflows/unpacking-readiness-article-model-validation.yml", "backend/app/testing/unpacking_household_object_guard_contract.py", "backend/app/testing/unpacking_household_location_isolation_contract.py"]},
+        "L2": {"status": "covered", "evidence": ["scripts/run-receipt-inventory-chain.ps1", ".github/workflows/receipt-inventory-chain-post-merge.yml"]},
+        "L3": {"status": "partial", "evidence": ["backend/tests/unpacking_inventory_article_identity_api_selftest.py", ".github/workflows/unpacking-inventory-article-identity-api-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-03 bewijst echte PostgreSQL API-verwerking, locatie-toewijzing, isolation, identity-reuse en idempotente replay voor de kernroute. De brede scenario-varianten locaties UIT, Niet ingedeeld en dagartikel worden niet ten onrechte als volledig L3-covered gemarkeerd en blijven aanvullende regressie/L4-scope."
+    },
+    {
+      "id": "P0-INVENTORY",
+      "domain": "Voorraad",
+      "chain": "voorraadmutatie -> juiste hoeveelheid -> event/historie -> household isolation",
+      "priority": "P0",
+      "runtime_labels": ["sqlite-test-only", "postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["aankoop", "verbruik", "correctie", "exacte niet-financiele decimalen", "herhaling"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/test_temporal_inventory_service.py", ".github/workflows/temporal-inventory-validation.yml"]},
+        "L2": {"status": "covered", "evidence": ["scripts/run-receipt-inventory-chain.ps1", ".github/workflows/inventory-location-household-isolation.yml"]},
+        "L3": {"status": "partial", "evidence": ["backend/tests/unpacking_inventory_article_identity_api_selftest.py", ".github/workflows/unpacking-inventory-article-identity-api-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-03 bewijst purchase-import naar inventory/events, identity, household isolation, accumulatie en replay-idempotentie op PostgreSQL. Verbruik/correctie, exacte niet-financiele quantity-precisie en historie als één API/browserauthority blijven breder dan deze F3-03-slice."
+    },
+    {
+      "id": "P0-ALMOST-OUT",
+      "domain": "Bijna-op",
+      "chain": "voorraad/verbruik -> drempel/prognose -> verschijnen/verdwijnen in Bijna-op",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["onder drempel", "boven drempel", "herberekening"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/app/testing/receipt_inventory_production_chain.py"]},
+        "L2": {"status": "covered", "evidence": ["scripts/run-receipt-inventory-chain.ps1"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/almost_out_api_projection_selftest.py", ".github/workflows/almost-out-api-projection-validation.yml", ".github/workflows/receipt-inventory-chain-post-merge.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-05 bewijst canonical boven/gelijk/onder/nul-drempels, locationless projectie, isolation, idempotente reads en verdwijnen/terugkeren na herberekening via de echte PostgreSQL API. De gebruikersweergave moet nog in een echte browserketen worden gekoppeld."
+    },
+    {
+      "id": "P0-ARTICLE-IDENTITY",
+      "domain": "Article identity",
+      "chain": "aankoop -> household_article -> detail -> historie zonder identiteitsverwisseling",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["zelfde product ander huishouden", "zelfde naam andere identity", "naamwijziging", "detail/historie"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/test_household_article_identity_slice2b4_inventory_contract.py", "frontend/tests/article-detail-flat-subtabs.contract.mjs"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/inventory-location-household-isolation.yml", "backend/tests/test_household_article_identity_slice2b4_inventory_contract.py"]},
+        "L3": {"status": "partial", "evidence": ["backend/tests/unpacking_inventory_article_identity_api_selftest.py", ".github/workflows/unpacking-inventory-article-identity-api-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-03 bewijst dat herhaalde aankopen dezelfde canonical household_article_id behouden door purchase lines, inventory en events en dat een ander huishouden niet kan muteren. Same-name-different-identity, naamwijziging en detail/historie via de echte API/browser blijven aanvullende dekking."
+    },
+    {
+      "id": "P0-PLATFORM-AUTHORITY",
+      "domain": "Platform admin",
+      "chain": "platformrol -> toegestane beheerfunctie -> geen huishoudprivilege-escalatie",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["superuser", "platformbeheerder", "IP-eigenaar", "normale gebruiker"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/authorization_role_matrix_selftest.py", "backend/tests/platform_admin_acceptance_closure_selftest.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/platform-admin-acceptance-closure-validation.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/platform_authority_api_selftest.py", ".github/workflows/platform-authority-api-validation.yml", "backend/tests/test_platform_sessions_route_authorization.py", "backend/tests/test_platform_users_route_authorization.py", "backend/tests/test_platform_authorizations_route_authorization.py"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "F3-06 bewijst DML-only PostgreSQL platformauthority via echte sessies/API's: normale admin geweigerd, platformbeheerder none-context, sessierevocation, IP-owner special-rolebeheer, stacking-blokkade, audit en geen huishoudtoegang. Alleen de echte browser/full-stack platformreis ontbreekt nog."
+    },
+    {
+      "id": "P0-MIGRATION-STARTUP",
+      "domain": "Migration & startup",
+      "chain": "verse/bestaande data -> Alembic -> PostgreSQL role separation -> operationele startup",
+      "priority": "P0",
+      "runtime_labels": ["postgresql-service", "postgresql-api"],
+      "variants": ["verse database", "legacy adoptie", "runtime DML-only", "credential drift"],
+      "manual_po_acceptance": false,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/database_foundation_selftest.py", "backend/tests/database_production_cutover_selftest.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/postgresql-migration-foundation-validation.yml", ".github/workflows/postgresql-data-migration-validation.yml"]},
+        "L3": {"status": "covered", "evidence": [".github/workflows/postgresql-operational-startup-validation.yml", "docs/project/ARCHITECTURE-AND-DATA.md"]},
+        "L4": {"status": "na", "evidence": []}
+      },
+      "gap": "Release-acceptatie moet deze sterke PostgreSQL-gates nog centraal combineren met functionele P0-dekking."
+    },
+    {
+      "id": "P1-SHOPPING",
+      "domain": "Winkelen",
+      "chain": "benodigd artikel -> winkellijst -> gebruikersactie -> vervolgstatus",
+      "priority": "P1",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["zoeken", "toevoegen", "wijzigen", "afronden", "huishoudisolatie"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/shopping_list_release1_selftest.py", "frontend/tests/winkelen-standard-ui.contract.mjs"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/winkelen-frontend-regression.yml"]},
+        "L3": {"status": "partial", "evidence": [".github/workflows/winkelen-frontend-regression.yml"]},
+        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/winkelen.frontend-regression.spec.js"]}
+      },
+      "gap": "De workflow start de echte PostgreSQL-appstack en de zoektest gebruikt de echte gecombineerde zoekroute. De brede toevoegen/wijzigen/verwijderen/afronden-test mockt shopping-list APIs; volledige database-eindstaat is dus nog geen echte L4-keten."
+    },
+    {
+      "id": "P1-GPC-ARTICLE-GROUP",
+      "domain": "Article groups & GPC",
+      "chain": "classificatie/catalogus -> huishoudartikel -> handmatige artikelgroep zonder cross-household leakage",
+      "priority": "P1",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["GPC import/zoekactie", "handmatige artikelgroep", "ander huishouden"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/product_catalog_release_a_check.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/gpc-catalog-validation.yml"]},
+        "L3": {"status": "partial", "evidence": [".github/workflows/gpc-article-assignment-validation.yml"]},
+        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/catalog-gpc-search.frontend-regression.spec.js"]}
+      },
+      "gap": "De GPC-catalogus heeft sterke PostgreSQL service-authority met echte import en DB-audit. De functionele scheiding tussen centrale classificatie en handmatige huishoudspecifieke Artikelgroep moet nog als één echte gebruikersketen worden bewezen."
+    },
+    {
+      "id": "P1-DAY-ARTICLE",
+      "domain": "Day articles",
+      "chain": "kassaregel -> dagartikel -> direct-consumption semantics -> geen foutieve voorraad",
+      "priority": "P1",
+      "runtime_labels": ["postgresql-service", "postgresql-api"],
+      "variants": ["dagartikel", "normaal voorraadartikel"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/day_article_release_a_selftest.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/postgresql-day-article-direct-authority.yml"]},
+        "L3": {"status": "partial", "evidence": [".github/workflows/uitpakken-dagartikelen-release-a.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "De PostgreSQL Direct-authority bewijst DML-only direct-consumption semantiek. De Uitpakken Release A workflow bouwt alleen backend en draait een selftest zonder eigen PostgreSQL service; echte API/browserketen ontbreekt."
+    },
+    {
+      "id": "P1-SUPPORT-MESSAGES",
+      "domain": "Support/messages",
+      "chain": "bericht -> bevoegde ontvanger/rol -> veilige presentatie",
+      "priority": "P1",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["bevoegd", "onbevoegd", "broadcast", "foutpresentatie"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/test_support_message_service.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/support-message-api-validation.yml"]},
+        "L3": {"status": "covered", "evidence": ["backend/tests/test_support_message_api_contract.py", "backend/tests/test_support_platform_route_authorization.py"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "Support message API/service/authorization draait op PostgreSQL met DML-only runtime. Een echte browserketen voor verzenden, routeren en veilige presentatie ontbreekt."
+    },
+    {
+      "id": "P1-EXTERNAL-DATABASES",
+      "domain": "External product databases",
+      "chain": "receipt/product candidate -> externe herkenning/zoekactie -> gebruikersbevestiging -> veilige koppeling",
+      "priority": "P1",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["bekende kandidaat", "geen resultaat", "bevestiging", "geen ongewenste household mutatie"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/tests/test_external_recognition_confirmation.py"]},
+        "L2": {"status": "covered", "evidence": [".github/workflows/external-recognition-confirmation-validation.yml"]},
+        "L3": {"status": "partial", "evidence": [".github/workflows/external-recognition-confirmation-validation.yml"]},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "De workflow start de echte PostgreSQL-stack en valideert backendcontract/route, maar de Playwright-spec mockt summary, retailers, receipt-items, OFF-search en confirm-external. Externe herkenning is daardoor nog geen echte browser/full-stack keten."
+    },
+    {
+      "id": "P1-FORECASTS",
+      "domain": "Forecasts & prognoses",
+      "chain": "voorraadhistorie -> prognose/herberekening -> koop- of Bijna-op projectie",
+      "priority": "P1",
+      "runtime_labels": ["postgresql-service", "postgresql-api", "postgresql-fullstack"],
+      "variants": ["voldoende historie", "onvoldoende historie", "herberekening", "huishoudisolatie"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": ["backend/app/testing/forecast_purchase_route_contract.py"]},
+        "L2": {"status": "partial", "evidence": [".github/workflows/m2c2n-forecast-purchase-route-audit.yml"]},
+        "L3": {"status": "gap", "evidence": []},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "De bestaande M2C2n-workflow auditeert vooral route-/contractdekking in een backendcontainer zonder PostgreSQL businessscenario. Werkelijke prognoseberekening, huishoudisolatie en gebruikersprojectie moeten nog op PostgreSQL worden bewezen."
+    },
+    {
+      "id": "P1-STORES-IMPORT-SETTINGS",
+      "domain": "Stores & import settings",
+      "chain": "huishoudinstelling/winkelkoppeling -> receipt bron/import -> juiste huishoudcontext",
+      "priority": "P1",
+      "runtime_labels": ["postgresql-api", "postgresql-fullstack"],
+      "variants": ["winkel gekoppeld", "bron actief/inactief", "ander huishouden", "ongeldige bron"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "partial", "evidence": [".github/workflows/receipt-gmail-oauth-household-guard.yml", ".github/workflows/receipt-resend-inbound-source-household-guard.yml"]},
+        "L2": {"status": "partial", "evidence": [".github/workflows/receipt-share-import-household-guard.yml"]},
+        "L3": {"status": "gap", "evidence": []},
+        "L4": {"status": "gap", "evidence": []}
+      },
+      "gap": "Er bestaan gerichte household/source guards, maar geen centraal geverifieerde PostgreSQL keten waarin een winkel- of importinstelling wordt gewijzigd en aantoonbaar het daaropvolgende receipt-ingestgedrag voor precies dat huishouden stuurt."
+    },
+    {
+      "id": "P2-NAVIGATION-UX",
+      "domain": "Navigation & capability projection",
+      "chain": "sessie/capabilities -> home/settings navigatie -> toegestane schermen bereikbaar en verboden schermen verborgen",
+      "priority": "P2",
+      "runtime_labels": ["postgresql-fullstack"],
+      "variants": ["reguliere gebruiker", "beheerder", "viewer/legacy", "platformcontext"],
+      "manual_po_acceptance": true,
+      "audit_status": "verified",
+      "layers": {
+        "L1": {"status": "covered", "evidence": ["frontend/tests/dynamic-home-navigation.contract.mjs", "frontend/tests/dynamic-settings-navigation.contract.mjs"]},
+        "L2": {"status": "partial", "evidence": [".github/workflows/dynamic-home-navigation-validation.yml", ".github/workflows/dynamic-settings-validation.yml"]},
+        "L3": {"status": "gap", "evidence": []},
+        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/dynamic-home-navigation.frontend-regression.spec.js", "frontend/tests/e2e/dynamic-settings.frontend-regression.spec.js"]}
+      },
+      "gap": "Navigatiecontracten zijn sterk als frontendregressie. De integrale releasebasis moet ze uiteindelijk koppelen aan echte server-side sessie/permissions zodat capabilityprojectie niet alleen door frontendfixtures wordt bewezen."
+    }
+  ]
+}

@@ -1,0 +1,282 @@
+name: P0 household membership full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/api/household_invitation_acceptance_routes.py'
+      - 'backend/app/api/household_invitation_routes.py'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/session_household_routes.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/services/household_invitation_delivery_service.py'
+      - 'backend/app/services/household_invitation_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/auth/**'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/features/settings/SettingsHouseholdPage.jsx'
+      - 'frontend/src/features/settings/services/householdInvitationsService.js'
+      - 'frontend/src/features/settings/services/householdMembersService.js'
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/src/ui/Header.jsx'
+      - 'frontend/tests/e2e/p0-household-membership.fullstack.spec.js'
+      - 'frontend/playwright.membership-fullstack.config.js'
+      - 'scripts/l4_resend_sink.py'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker-compose.l4-membership.yml'
+      - '.github/workflows/p0-household-membership-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-household-membership-fullstack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  l4-household-membership:
+    name: L4-02 invitation, permissions, switch and isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml:docker-compose.l4-membership.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_L4_RESEND_SINK_URL: http://host.docker.internal:18080
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic L4-02 identities
+        shell: bash
+        run: |
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="L4-Membership-${suffix}-Pass!"
+          echo "PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_EMAIL=l4-admin-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_EMAIL=l4-member-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_MEMBERSHIP_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_HOUSEHOLD=L4 Admin Household ${suffix}" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_HOUSEHOLD=L4 Member Household ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Build and start real frontend, backend, PostgreSQL and external mail sink
+        run: docker compose up -d --build
+
+      - name: Wait for backend and mail sink health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null \
+              && curl --fail --silent http://localhost:18080/health >/dev/null; then
+              echo "Backend en externe mail-sink zijn groen na $attempt pogingen."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=300 backend resend-sink
+          exit 1
+
+      - name: Prove production-like PostgreSQL runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python -u - <<'PY' | tee p0-l4-02-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == "postgresql", engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text("SELECT current_user")).scalar_one())
+              current_database = str(conn.execute(text("SELECT current_database() ")).scalar_one())
+              current_schema = str(conn.execute(text("SELECT current_schema() ")).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text("SELECT version_num FROM public.alembic_version")).scalar_one())
+              required_relations = {
+                  "app_users", "household_registry", "household_memberships",
+                  "household_invitations", "auth_membership_roles",
+              }
+              actual_relations = set(conn.execute(text("""
+                  SELECT table_name FROM information_schema.tables
+                  WHERE table_schema = 'public'
+              """)).scalars().all())
+          assert current_user == "rezzerv_app", current_user
+          assert current_schema == "public", current_schema
+          assert runtime_create is False
+          assert alembic_head
+          assert required_relations.issubset(actual_relations), sorted(required_relations - actual_relations)
+          print(f"database={current_database}")
+          print(f"runtime_user={current_user}")
+          print(f"alembic_head={alembic_head}")
+          print("P0_L4_02_POSTGRESQL_BOUNDARY_GREEN")
+          PY
+
+      - name: Guard L4-02 browser authority against core route mocks
+        shell: bash
+        run: |
+          spec='frontend/tests/e2e/p0-household-membership.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'L4-02 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          echo 'P0_L4_02_NO_CORE_ROUTE_MOCKS_GREEN'
+
+      - name: Run L4-02 through the real browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_RESEND_SINK_URL="$PLAYWRIGHT_L4_RESEND_SINK_URL" \
+            -e PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_EMAIL="$PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_EMAIL" \
+            -e PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_EMAIL="$PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_EMAIL" \
+            -e PLAYWRIGHT_L4_MEMBERSHIP_PASSWORD="$PLAYWRIGHT_L4_MEMBERSHIP_PASSWORD" \
+            -e PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_HOUSEHOLD="$PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_HOUSEHOLD" \
+            -e PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_HOUSEHOLD="$PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-household-membership.fullstack.spec.js --config=playwright.membership-fullstack.config.js --project=chromium-membership-fullstack | tee /work/p0-l4-02-browser.log"
+          grep -F 'P0_L4_02_MEMBERSHIP_SWITCH_BROWSER_GREEN' frontend/p0-l4-02-browser.log
+
+      - name: Capture exact accepted invitation hash from browser proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          token_hash="$(tr -d '\r\n' < frontend/p0-l4-02-invitation-token-hash.txt)"
+          if ! [[ "${token_hash}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Browser proof did not produce a valid SHA-256 invitation token hash." >&2
+            exit 1
+          fi
+          printf 'L4_INVITATION_TOKEN_HASH=%s\n' "${token_hash}" >> "${GITHUB_ENV}"
+
+      - name: Verify exact PostgreSQL end state after browser actions
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e L4_ADMIN_EMAIL="$PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_EMAIL" \
+            -e L4_MEMBER_EMAIL="$PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_EMAIL" \
+            -e L4_ADMIN_HOUSEHOLD="$PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_HOUSEHOLD" \
+            -e L4_MEMBER_HOUSEHOLD="$PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_HOUSEHOLD" \
+            -e L4_INVITATION_TOKEN_HASH="$L4_INVITATION_TOKEN_HASH" \
+            backend python -u - <<'PY' | tee p0-l4-02-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          admin_email = os.environ["L4_ADMIN_EMAIL"].strip().lower()
+          member_email = os.environ["L4_MEMBER_EMAIL"].strip().lower()
+          admin_name = os.environ["L4_ADMIN_HOUSEHOLD"].strip()
+          member_name = os.environ["L4_MEMBER_HOUSEHOLD"].strip()
+          token_hash = os.environ["L4_INVITATION_TOKEN_HASH"].strip().lower()
+          assert len(token_hash) == 64 and all(ch in "0123456789abcdef" for ch in token_hash), token_hash
+
+          with engine.begin() as conn:
+              admin_rows = conn.execute(text("""
+                  SELECT hm.id AS membership_id, hm.household_id, hm.role, hr.naam AS household_name
+                  FROM public.household_memberships hm
+                  JOIN public.household_registry hr ON hr.id = hm.household_id
+                  WHERE lower(trim(hm.user_email)) = :email
+                  ORDER BY hr.naam
+              """), {"email": admin_email}).mappings().all()
+              member_rows = conn.execute(text("""
+                  SELECT hm.id AS membership_id, hm.household_id, hm.role, hr.naam AS household_name
+                  FROM public.household_memberships hm
+                  JOIN public.household_registry hr ON hr.id = hm.household_id
+                  WHERE lower(trim(hm.user_email)) = :email
+                  ORDER BY hr.naam
+              """), {"email": member_email}).mappings().all()
+
+              assert len(admin_rows) == 1, admin_rows
+              assert admin_rows[0]["household_name"] == admin_name, admin_rows
+              assert admin_rows[0]["role"] == "admin", admin_rows
+              assert len(member_rows) == 2, member_rows
+              by_name = {str(row["household_name"]): row for row in member_rows}
+              assert set(by_name) == {admin_name, member_name}, by_name
+              assert by_name[admin_name]["role"] == "member", by_name
+              assert by_name[member_name]["role"] == "admin", by_name
+              admin_household_id = str(by_name[admin_name]["household_id"])
+              member_household_id = str(by_name[member_name]["household_id"])
+              assert admin_household_id != member_household_id
+
+              expected_roles = {
+                  (admin_household_id, str(admin_rows[0]["membership_id"])): "household.admin",
+                  (admin_household_id, str(by_name[admin_name]["membership_id"])): "household.member",
+                  (member_household_id, str(by_name[member_name]["membership_id"])): "household.admin",
+              }
+              for (household_id, membership_id), expected_role in expected_roles.items():
+                  role = conn.execute(text("""
+                      SELECT role_key FROM public.auth_membership_roles
+                      WHERE household_id = :household_id
+                        AND membership_id = :membership_id
+                        AND active IS TRUE
+                  """), {"household_id": household_id, "membership_id": membership_id}).scalar_one()
+                  assert str(role) == expected_role, (household_id, membership_id, role)
+
+              member_user_id = str(conn.execute(
+                  text("SELECT id FROM public.app_users WHERE lower(email) = :email"),
+                  {"email": member_email},
+              ).scalar_one())
+              invitation = conn.execute(text("""
+                  SELECT household_id, invitee_email, role_key, status, accepted_by_user_id,
+                         accepted_at, token_hash, delivery_status
+                  FROM public.household_invitations
+                  WHERE token_hash = :token_hash
+              """), {"token_hash": token_hash}).mappings().one()
+              assert str(invitation["household_id"]) == admin_household_id, invitation
+              assert str(invitation["invitee_email"]).strip().lower() == member_email, invitation
+              assert invitation["role_key"] == "household.member", invitation
+              assert invitation["status"] == "accepted", invitation
+              assert invitation["delivery_status"] == "sent", invitation
+              assert str(invitation["accepted_by_user_id"]) == member_user_id, invitation
+              assert invitation["accepted_at"] is not None, invitation
+              assert invitation["token_hash"] == token_hash, invitation
+
+              admin_in_member_household = int(conn.execute(text("""
+                  SELECT COUNT(*) FROM public.household_memberships
+                  WHERE household_id = :household_id AND lower(trim(user_email)) = :email
+              """), {"household_id": member_household_id, "email": admin_email}).scalar_one())
+              assert admin_in_member_household == 0, admin_in_member_household
+
+          print(f"admin_household={admin_name}")
+          print(f"member_household={member_name}")
+          print("admin_memberships=1")
+          print("member_memberships=2")
+          print("target_role=household.member")
+          print("own_role=household.admin")
+          print("invitation_status=accepted")
+          print("invitation_delivery=sent")
+          print("cross_household_admin_memberships=0")
+          print("P0_L4_02_POSTGRESQL_END_STATE_GREEN")
+          PY
+
+      - name: L4-02 gate marker
+        run: echo 'P0_HOUSEHOLD_MEMBERSHIP_FULLSTACK_POSTGRESQL_GREEN'
+
+      - name: Upload L4-02 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-l4-02-household-membership-fullstack-evidence
+          path: |
+            p0-l4-02-postgresql-boundary.log
+            p0-l4-02-postgresql-end-state.log
+            frontend/p0-l4-02-browser.log
+            frontend/playwright-report-membership-fullstack
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend frontend postgres resend-sink
+
+      - name: Stop L4-02 stack
+        if: always()
+        run: docker compose down -v --remove-orphans

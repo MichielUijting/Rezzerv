@@ -1,0 +1,385 @@
+name: P0 onboarding full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/api/household_capability_expansion_routes.py'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/session_household_routes.py'
+      - 'backend/app/services/household_location_onboarding_service.py'
+      - 'backend/app/services/household_onboarding_service.py'
+      - 'backend/app/services/household_product_configuration_service.py'
+      - 'backend/app/services/household_product_use_case_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/auth/RegisterPage.jsx'
+      - 'frontend/src/features/home/**'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/features/settings/**'
+      - 'frontend/src/lib/apiClient.js'
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/tests/e2e/p0-onboarding.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/p0-onboarding-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-onboarding-fullstack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  l4-onboarding:
+    name: L4-01 onboarding browser to PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic L4 scenario identity
+        shell: bash
+        run: |
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="L4-Onboarding-${suffix}-Pass!"
+          echo "PLAYWRIGHT_L4_ONBOARDING_EMAIL=l4-onboarding-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_ONBOARDING_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD=L4 Wat Inhuis ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Build and start real frontend, backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          echo "Backend werd niet gezond binnen 360 seconden."
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove production-like PostgreSQL runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python -u - <<'PY' | tee p0-l4-01-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == "postgresql", engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text("SELECT current_user")).scalar_one())
+              current_database = str(conn.execute(text("SELECT current_database() ")).scalar_one())
+              current_schema = str(conn.execute(text("SELECT current_schema() ")).scalar_one())
+              search_path = str(conn.execute(text("SHOW search_path")).scalar_one())
+              runtime_create = bool(
+                  conn.execute(
+                      text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")
+                  ).scalar_one()
+              )
+              alembic_head = str(
+                  conn.execute(text("SELECT version_num FROM public.alembic_version")).scalar_one()
+              )
+              registry_columns = [
+                  str(value)
+                  for value in conn.execute(
+                      text("""
+                          SELECT column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = 'public'
+                            AND table_name = 'household_registry'
+                          ORDER BY ordinal_position
+                      """)
+                  ).scalars().all()
+              ]
+              configuration_columns = [
+                  str(value)
+                  for value in conn.execute(
+                      text("""
+                          SELECT column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = 'public'
+                            AND table_name = 'household_product_configuration'
+                          ORDER BY ordinal_position
+                      """)
+                  ).scalars().all()
+              ]
+              configuration_relation = conn.execute(
+                  text("""
+                      SELECT n.nspname AS schema_name,
+                             c.relname AS relation_name,
+                             c.oid::text AS relation_oid
+                      FROM pg_class c
+                      JOIN pg_namespace n ON n.oid = c.relnamespace
+                      WHERE n.nspname = 'public'
+                        AND c.relname = 'household_product_configuration'
+                  """)
+              ).mappings().one()
+          expected_configuration_columns = {
+              "household_id",
+              "inventory_tracking_level",
+              "location_tracking_level",
+              "almost_out_enabled",
+              "shopping_enabled",
+          }
+          assert current_user == "rezzerv_app", current_user
+          assert current_schema == "public", current_schema
+          assert runtime_create is False
+          assert alembic_head
+          assert "naam" in registry_columns, registry_columns
+          assert expected_configuration_columns.issubset(set(configuration_columns)), configuration_columns
+          print("datastore=postgresql", flush=True)
+          print(f"database={current_database}", flush=True)
+          print(f"schema={current_schema}", flush=True)
+          print(f"search_path={search_path}", flush=True)
+          print(f"runtime_user={current_user}", flush=True)
+          print(f"runtime_create={runtime_create}", flush=True)
+          print(f"alembic_head={alembic_head}", flush=True)
+          print(f"household_registry_columns={','.join(registry_columns)}", flush=True)
+          print(f"household_product_configuration_relation={configuration_relation['schema_name']}.{configuration_relation['relation_name']}@{configuration_relation['relation_oid']}", flush=True)
+          print(f"household_product_configuration_columns={','.join(configuration_columns)}", flush=True)
+          print("P0_L4_01_POSTGRESQL_BOUNDARY_GREEN", flush=True)
+          PY
+
+      - name: Guard L4 browser authority against core route mocks
+        shell: bash
+        run: |
+          spec='frontend/tests/e2e/p0-onboarding.fullstack.spec.js'
+          if grep -nE 'page\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'L4-01 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          echo 'P0_L4_01_NO_CORE_ROUTE_MOCKS_GREEN'
+
+      - name: Run L4-01 through the real browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_ONBOARDING_EMAIL="$PLAYWRIGHT_L4_ONBOARDING_EMAIL" \
+            -e PLAYWRIGHT_L4_ONBOARDING_PASSWORD="$PLAYWRIGHT_L4_ONBOARDING_PASSWORD" \
+            -e PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD="$PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-onboarding.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-01-browser.log"
+          grep -F 'P0_L4_01_ONBOARDING_BROWSER_GREEN' frontend/p0-l4-01-browser.log
+
+      - name: Verify exact PostgreSQL end state after browser actions
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e L4_EMAIL="$PLAYWRIGHT_L4_ONBOARDING_EMAIL" \
+            -e L4_HOUSEHOLD_NAME="$PLAYWRIGHT_L4_ONBOARDING_HOUSEHOLD" \
+            backend python -u - <<'PY' | tee p0-l4-01-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.household_product_use_case_service import resolve_active_household_product_use_cases
+
+          email = os.environ["L4_EMAIL"].strip().lower()
+          expected_household_name = os.environ["L4_HOUSEHOLD_NAME"].strip()
+
+          with engine.begin() as conn:
+              current_database = str(conn.execute(text("SELECT current_database() ")).scalar_one())
+              current_schema = str(conn.execute(text("SELECT current_schema() ")).scalar_one())
+              search_path = str(conn.execute(text("SHOW search_path")).scalar_one())
+              current_schemas = [
+                  str(value)
+                  for value in conn.execute(text("SELECT unnest(current_schemas(true))")).scalars().all()
+              ]
+              alembic_head = str(
+                  conn.execute(text("SELECT version_num FROM public.alembic_version")).scalar_one()
+              )
+              registry_columns = [
+                  str(value)
+                  for value in conn.execute(
+                      text("""
+                          SELECT column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = 'public'
+                            AND table_name = 'household_registry'
+                          ORDER BY ordinal_position
+                      """)
+                  ).scalars().all()
+              ]
+              configuration_columns = [
+                  str(value)
+                  for value in conn.execute(
+                      text("""
+                          SELECT column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = 'public'
+                            AND table_name = 'household_product_configuration'
+                          ORDER BY ordinal_position
+                      """)
+                  ).scalars().all()
+              ]
+              configuration_relation = conn.execute(
+                  text("""
+                      SELECT n.nspname AS schema_name,
+                             c.relname AS relation_name,
+                             c.oid::text AS relation_oid
+                      FROM pg_class c
+                      JOIN pg_namespace n ON n.oid = c.relnamespace
+                      WHERE n.nspname = 'public'
+                        AND c.relname = 'household_product_configuration'
+                  """)
+              ).mappings().one()
+              expected_configuration_columns = {
+                  "household_id",
+                  "inventory_tracking_level",
+                  "location_tracking_level",
+                  "almost_out_enabled",
+                  "shopping_enabled",
+              }
+              assert current_schema == "public", current_schema
+              assert "naam" in registry_columns, registry_columns
+              assert expected_configuration_columns.issubset(set(configuration_columns)), configuration_columns
+
+              print(f"database={current_database}", flush=True)
+              print(f"schema={current_schema}", flush=True)
+              print(f"search_path={search_path}", flush=True)
+              print(f"current_schemas={','.join(current_schemas)}", flush=True)
+              print(f"alembic_head={alembic_head}", flush=True)
+              print(f"household_registry_columns={','.join(registry_columns)}", flush=True)
+              print(f"household_product_configuration_relation={configuration_relation['schema_name']}.{configuration_relation['relation_name']}@{configuration_relation['relation_oid']}", flush=True)
+              print(f"household_product_configuration_columns={','.join(configuration_columns)}", flush=True)
+
+              memberships = conn.execute(
+                  text("""
+                      SELECT hm.id AS membership_id, hm.household_id, hm.role, hr.naam AS household_name
+                      FROM public.household_memberships hm
+                      JOIN public.household_registry hr ON hr.id = hm.household_id
+                      WHERE lower(trim(hm.user_email)) = :email
+                      ORDER BY hm.household_id
+                  """),
+                  {"email": email},
+              ).mappings().all()
+              assert len(memberships) == 1, memberships
+              membership = memberships[0]
+              household_id = str(membership["household_id"])
+              assert str(membership["role"]) == "admin", membership
+              assert str(membership["household_name"]) == expected_household_name, membership
+
+              onboarding = conn.execute(
+                  text("""
+                      SELECT onboarding_status, primary_use_case, household_usage_mode,
+                             onboarding_completed_at
+                      FROM public.household_onboarding
+                      WHERE household_id = :household_id
+                  """),
+                  {"household_id": household_id},
+              ).mappings().one()
+              assert str(onboarding["onboarding_status"]) == "completed", onboarding
+              assert str(onboarding["primary_use_case"]) == "wat_inhuis", onboarding
+              assert str(onboarding["household_usage_mode"]) == "alone", onboarding
+              assert onboarding["onboarding_completed_at"] is not None, onboarding
+
+              configuration = conn.execute(
+                  text("""
+                      SELECT inventory_tracking_level, location_tracking_level,
+                             almost_out_enabled, shopping_enabled
+                      FROM public.household_product_configuration
+                      WHERE household_id = :household_id
+                  """),
+                  {"household_id": household_id},
+              ).mappings().one()
+              assert configuration["inventory_tracking_level"] == "quantity", configuration
+              assert configuration["location_tracking_level"] == "none", configuration
+              assert bool(configuration["almost_out_enabled"]) is True, configuration
+              assert bool(configuration["shopping_enabled"]) is True, configuration
+
+              additional_use_cases = [
+                  str(row["use_case"])
+                  for row in conn.execute(
+                      text("""
+                          SELECT use_case
+                          FROM public.household_product_use_cases
+                          WHERE household_id = :household_id
+                          ORDER BY use_case
+                      """),
+                      {"household_id": household_id},
+                  ).mappings().all()
+              ]
+              assert additional_use_cases == [], additional_use_cases
+              active_use_cases = resolve_active_household_product_use_cases(
+                  conn,
+                  household_id=household_id,
+                  primary_use_case=str(onboarding["primary_use_case"]),
+              )
+              assert active_use_cases == ["wat_inhuis"], active_use_cases
+
+              location_count = int(
+                  conn.execute(
+                      text("SELECT COUNT(*) FROM public.spaces WHERE household_id = :household_id"),
+                      {"household_id": household_id},
+                  ).scalar_one()
+              )
+              assert location_count == 0, location_count
+
+          print(f"email={email}", flush=True)
+          print(f"household_id={household_id}", flush=True)
+          print(f"household_name={expected_household_name}", flush=True)
+          print("onboarding_status=completed", flush=True)
+          print("primary_use_case=wat_inhuis", flush=True)
+          print("household_usage_mode=alone", flush=True)
+          print("inventory_tracking_level=quantity", flush=True)
+          print("location_tracking_level=none", flush=True)
+          print("almost_out_enabled=true", flush=True)
+          print("shopping_enabled=true", flush=True)
+          print("additional_use_cases=", flush=True)
+          print("active_use_cases=wat_inhuis", flush=True)
+          print("spaces=0", flush=True)
+          print("P0_L4_01_POSTGRESQL_END_STATE_GREEN", flush=True)
+          PY
+
+      - name: L4-01 gate marker
+        run: echo 'P0_ONBOARDING_FULLSTACK_POSTGRESQL_GREEN'
+
+      - name: Upload L4-01 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-l4-01-onboarding-fullstack-evidence
+          path: |
+            p0-l4-01-postgresql-boundary.log
+            p0-l4-01-postgresql-end-state.log
+            frontend/p0-l4-01-browser.log
+            frontend/playwright-report-fullstack
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend frontend postgres
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down --volumes

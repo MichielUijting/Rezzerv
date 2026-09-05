@@ -1,0 +1,20 @@
+services:
+  backend:
+    environment:
+      REZZERV_EMAIL_ENABLED: "true"
+      REZZERV_RESEND_API_KEY: "l4-membership-test-key"
+      REZZERV_RESEND_API_BASE_URL: "http://resend-sink:8080"
+      REZZERV_NOTIFICATION_FROM_EMAIL: "uitnodigingen@inhu.is"
+      REZZERV_NOTIFICATION_FROM_NAME: "Inhuis"
+      REZZERV_APP_BASE_URL: "http://inhouse.test"
+    depends_on:
+      resend-sink:
+        condition: service_started
+
+  resend-sink:
+    image: python:3.12-alpine
+    command: ["python", "-u", "/sink/l4_resend_sink.py"]
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./scripts/l4_resend_sink.py:/sink/l4_resend_sink.py:ro

@@ -5,7 +5,9 @@ on:
     branches:
       - main
     paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
       - 'backend/alembic/**'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
       - 'backend/app/testing/receipt_inventory_*'
       - 'backend/app/testing/postgresql_receipt_inventory_production_chain.py'
       - 'backend/app/services/**/*receipt*'
@@ -20,7 +22,9 @@ on:
     branches:
       - main
     paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
       - 'backend/alembic/**'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
       - 'backend/app/testing/receipt_inventory_*'
       - 'backend/app/testing/postgresql_receipt_inventory_production_chain.py'
       - 'backend/app/services/**/*receipt*'
@@ -69,6 +73,7 @@ jobs:
       - name: 1/10 Compileer ketentestmodules
         run: |
           python -m py_compile \
+            backend/app/testing/postgresql_acceptance_foundation.py \
             backend/app/testing/receipt_inventory_chain_contract.py \
             backend/app/testing/receipt_inventory_chain_test_db.py \
             backend/app/testing/receipt_inventory_chain_step3.py \
@@ -89,6 +94,8 @@ jobs:
 
       - name: 4/10 Installeer productie- en PostgreSQL-afhankelijkheden
         run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
           python -m pip install --quiet \
             fastapi==0.115.0 \
             sqlalchemy==2.0.36 \
@@ -101,32 +108,17 @@ jobs:
             beautifulsoup4==4.12.3 \
             opencv-python-headless
 
-      - name: 5/10 Configureer migrator- en DML-only runtime-rollen
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h 127.0.0.1 -U postgres -d rezzerv -v ON_ERROR_STOP=1 <<'SQL'
-          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'migration-pass';
-          CREATE ROLE rezzerv_app LOGIN PASSWORD 'runtime-pass';
-          GRANT CONNECT ON DATABASE rezzerv TO rezzerv_migrator, rezzerv_app;
-          GRANT USAGE, CREATE ON SCHEMA public TO rezzerv_migrator;
-          GRANT USAGE ON SCHEMA public TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT USAGE, SELECT ON SEQUENCES TO rezzerv_app;
-          SQL
-
-      - name: 6/10 Migreer verse PostgreSQL via canonical Alembic-head
-        working-directory: backend
-        env:
-          DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
-          MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
-          REZZERV_DATASTORE_POLICY: postgresql-only
-        run: |
-          python -m app.schema_migration_preflight | tee /tmp/receipt-chain-migration.log
-          grep -F "'dialect': 'postgresql'" /tmp/receipt-chain-migration.log
+      - name: 5-6/10 Bereid gedeelde PostgreSQL acceptance foundation voor
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv
+          bootstrap-user: postgres
+          bootstrap-password: postgres
+          port: '5432'
+          migrator-password: migration-pass
+          runtime-password: runtime-pass
+          migration-mode: preflight
+          evidence-file: receipt-postgresql-foundation.log
 
       - name: 7/10 Voer volledige productie-keten uit als DML-only PostgreSQL-runtime
         env:
@@ -144,9 +136,11 @@ jobs:
           grep -F "'almost_out_path': [False, True]" /tmp/postgresql-receipt-chain.log
           grep -F 'POSTGRESQL_RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN' /tmp/postgresql-receipt-chain.log
 
-      - name: 8/10 Bewijs locationless ready-only legacycontract
+      - name: 8/10 Bewijs locationless ready-only legacycontract (sqlite-test-only)
         env:
           PYTHONPATH: backend
+          MIGRATION_DATABASE_URL: ''
+          REZZERV_DATASTORE_POLICY: ''
           RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts-locationless
         run: |
           python backend/app/testing/receipt_inventory_locationless_production_contract.py | tee locationless-receipt-production.log
@@ -161,6 +155,15 @@ jobs:
             exit 1
           fi
           echo 'POSTGRESQL_RECEIPT_CHAIN_FINAL_CREATE_DENIED_GREEN'
+
+      - name: Upload shared PostgreSQL foundation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-shared-postgresql-foundation
+          path: receipt-postgresql-foundation.log
+          if-no-files-found: error
+          retention-days: 7
 
       - name: 10/10 Bevestig groene PostgreSQL merge-gate
         run: echo 'KETENTEST GROEN - PostgreSQL DML-only - voorraadpad 0 -> 2 -> 5 -> 5 -> 1 - Bijna-op NEE -> JA'

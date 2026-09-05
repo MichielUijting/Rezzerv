@@ -1,0 +1,170 @@
+name: PostgreSQL acceptance foundation
+description: Bootstrap and validate the shared PostgreSQL migrator/runtime boundary for acceptance tests.
+
+inputs:
+  database-name:
+    description: Existing PostgreSQL database created by the service container.
+    required: true
+  bootstrap-user:
+    description: Bootstrap/superuser used only to provision test roles.
+    required: true
+  bootstrap-password:
+    description: Password for the bootstrap user.
+    required: true
+  host:
+    description: PostgreSQL host.
+    required: false
+    default: '127.0.0.1'
+  port:
+    description: PostgreSQL port.
+    required: false
+    default: '55432'
+  migrator-user:
+    description: Canonical migration role.
+    required: false
+    default: 'rezzerv_migrator'
+  migrator-password:
+    description: Password for the migration role.
+    required: false
+    default: 'rezzerv_migrator_ci'
+  runtime-user:
+    description: Canonical DML-only runtime role.
+    required: false
+    default: 'rezzerv_app'
+  runtime-password:
+    description: Password for the runtime role.
+    required: false
+    default: 'rezzerv_app_ci'
+  migration-mode:
+    description: One of alembic, preflight or none.
+    required: false
+    default: 'alembic'
+  backend-directory:
+    description: Repository-relative backend directory.
+    required: false
+    default: 'backend'
+  evidence-file:
+    description: File receiving the shared foundation evidence.
+    required: false
+    default: 'postgresql-acceptance-foundation.log'
+
+runs:
+  using: composite
+  steps:
+    - name: Bootstrap canonical migrator and DML-only runtime roles
+      shell: bash
+      env:
+        PGPASSWORD: ${{ inputs.bootstrap-password }}
+        PGHOST: ${{ inputs.host }}
+        PGPORT: ${{ inputs.port }}
+        DATABASE_NAME: ${{ inputs.database-name }}
+        BOOTSTRAP_USER: ${{ inputs.bootstrap-user }}
+        MIGRATOR_USER: ${{ inputs.migrator-user }}
+        MIGRATOR_PASSWORD: ${{ inputs.migrator-password }}
+        RUNTIME_USER: ${{ inputs.runtime-user }}
+        RUNTIME_PASSWORD: ${{ inputs.runtime-password }}
+      run: |
+        set -euo pipefail
+        for identifier in "$DATABASE_NAME" "$BOOTSTRAP_USER" "$MIGRATOR_USER" "$RUNTIME_USER"; do
+          if [[ ! "$identifier" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            echo "Ongeldige PostgreSQL identifier: $identifier" >&2
+            exit 1
+          fi
+        done
+        for credential in "$MIGRATOR_PASSWORD" "$RUNTIME_PASSWORD"; do
+          if [[ ! "$credential" =~ ^[A-Za-z0-9._~-]+$ ]]; then
+            echo 'Acceptance credentials moeten URL-safe testwaarden zijn.' >&2
+            exit 1
+          fi
+        done
+
+        echo "::add-mask::$MIGRATOR_PASSWORD"
+        echo "::add-mask::$RUNTIME_PASSWORD"
+
+        psql -v ON_ERROR_STOP=1 -U "$BOOTSTRAP_USER" -d postgres \
+          -v db_name="$DATABASE_NAME" \
+          -v migrator_user="$MIGRATOR_USER" \
+          -v migrator_password="$MIGRATOR_PASSWORD" \
+          -v runtime_user="$RUNTIME_USER" \
+          -v runtime_password="$RUNTIME_PASSWORD" <<'SQL'
+        CREATE ROLE :"migrator_user" LOGIN PASSWORD :'migrator_password';
+        CREATE ROLE :"runtime_user" LOGIN PASSWORD :'runtime_password';
+        GRANT CONNECT ON DATABASE :"db_name" TO :"migrator_user", :"runtime_user";
+        ALTER DATABASE :"db_name" OWNER TO :"migrator_user";
+        SQL
+
+        psql -v ON_ERROR_STOP=1 -U "$BOOTSTRAP_USER" -d "$DATABASE_NAME" \
+          -v migrator_user="$MIGRATOR_USER" \
+          -v runtime_user="$RUNTIME_USER" <<'SQL'
+        ALTER SCHEMA public OWNER TO :"migrator_user";
+        REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+        REVOKE CREATE ON SCHEMA public FROM :"runtime_user";
+        GRANT USAGE, CREATE ON SCHEMA public TO :"migrator_user";
+        GRANT USAGE ON SCHEMA public TO :"runtime_user";
+        ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator_user" IN SCHEMA public
+          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"runtime_user";
+        ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator_user" IN SCHEMA public
+          GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"runtime_user";
+        SQL
+
+        runtime_url="postgresql+psycopg://${RUNTIME_USER}:${RUNTIME_PASSWORD}@${PGHOST}:${PGPORT}/${DATABASE_NAME}"
+        migration_url="postgresql+psycopg://${MIGRATOR_USER}:${MIGRATOR_PASSWORD}@${PGHOST}:${PGPORT}/${DATABASE_NAME}"
+        echo "DATABASE_URL=$runtime_url" >> "$GITHUB_ENV"
+        echo "MIGRATION_DATABASE_URL=$migration_url" >> "$GITHUB_ENV"
+        echo 'REZZERV_DATASTORE_POLICY=postgresql-only' >> "$GITHUB_ENV"
+        echo 'POSTGRESQL_ACCEPTANCE_ROLES_BOOTSTRAPPED'
+
+    - name: Apply canonical schema boundary
+      shell: bash
+      env:
+        PYTHONPATH: ${{ inputs.backend-directory }}
+        DATABASE_URL: postgresql+psycopg://${{ inputs.runtime-user }}:${{ inputs.runtime-password }}@${{ inputs.host }}:${{ inputs.port }}/${{ inputs.database-name }}
+        MIGRATION_DATABASE_URL: postgresql+psycopg://${{ inputs.migrator-user }}:${{ inputs.migrator-password }}@${{ inputs.host }}:${{ inputs.port }}/${{ inputs.database-name }}
+        REZZERV_DATASTORE_POLICY: postgresql-only
+        MIGRATION_MODE: ${{ inputs.migration-mode }}
+        BACKEND_DIRECTORY: ${{ inputs.backend-directory }}
+      run: |
+        set -euo pipefail
+        case "$MIGRATION_MODE" in
+          alembic)
+            (
+              cd "$BACKEND_DIRECTORY"
+              python -m alembic upgrade head
+              python -m alembic current
+            )
+            ;;
+          preflight)
+            (
+              cd "$BACKEND_DIRECTORY"
+              python -m app.schema_migration_preflight
+            )
+            ;;
+          none)
+            echo 'POSTGRESQL_ACCEPTANCE_MIGRATION_DEFERRED'
+            ;;
+          *)
+            echo "Ongeldige migration-mode: $MIGRATION_MODE" >&2
+            exit 1
+            ;;
+        esac
+
+    - name: Validate shared PostgreSQL acceptance boundary
+      shell: bash
+      env:
+        PYTHONPATH: ${{ inputs.backend-directory }}
+        DATABASE_URL: postgresql+psycopg://${{ inputs.runtime-user }}:${{ inputs.runtime-password }}@${{ inputs.host }}:${{ inputs.port }}/${{ inputs.database-name }}
+        MIGRATION_DATABASE_URL: postgresql+psycopg://${{ inputs.migrator-user }}:${{ inputs.migrator-password }}@${{ inputs.host }}:${{ inputs.port }}/${{ inputs.database-name }}
+        REZZERV_DATASTORE_POLICY: postgresql-only
+        MIGRATION_MODE: ${{ inputs.migration-mode }}
+        EVIDENCE_FILE: ${{ inputs.evidence-file }}
+      run: |
+        set -euo pipefail
+        if [ "$MIGRATION_MODE" = 'none' ]; then
+          python -m app.testing.postgresql_acceptance_foundation --skip-head | tee "$EVIDENCE_FILE"
+        else
+          python -m app.testing.postgresql_acceptance_foundation | tee "$EVIDENCE_FILE"
+        fi
+        grep -F 'datastore=postgresql' "$EVIDENCE_FILE"
+        grep -F 'runtime_create=False' "$EVIDENCE_FILE"
+        grep -F 'migrator_create=True' "$EVIDENCE_FILE"
+        grep -F 'POSTGRESQL_ACCEPTANCE_FOUNDATION_GREEN' "$EVIDENCE_FILE"

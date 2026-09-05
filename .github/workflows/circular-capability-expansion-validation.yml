@@ -3,13 +3,22 @@ name: Circular capability expansion validation
 on:
   pull_request:
     paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - 'backend/alembic/**'
       - 'backend/app/api/household_capability_expansion_routes.py'
+      - 'backend/app/api/server_session_routes.py'
       - 'backend/app/api/router.py'
       - 'backend/app/services/household_capability_expansion_service.py'
+      - 'backend/app/services/household_product_configuration_service.py'
       - 'backend/app/services/household_product_use_case_service.py'
       - 'backend/app/services/household_location_onboarding_service.py'
+      - 'backend/app/services/inventory_location_policy_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
       - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
       - 'backend/tests/circular_capability_expansion_selftest.py'
+      - 'backend/tests/settings_location_policy_api_selftest.py'
       - 'frontend/src/features/settings/**'
       - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
       - 'frontend/src/app/router/AppRouter.jsx'
@@ -39,6 +48,8 @@ jobs:
       DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_circular_capability_ci
       MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_circular_capability_ci
       REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
     steps:
       - uses: actions/checkout@v4
 
@@ -55,58 +66,49 @@ jobs:
           sudo apt-get install -y postgresql-client
           pip install -r requirements.txt
 
-      - name: Bootstrap PostgreSQL migrator and DML-only runtime role
-        env:
-          PGPASSWORD: rezzerv_bootstrap_ci
-        run: |
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
-          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
-          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
-          GRANT CONNECT ON DATABASE rezzerv_circular_capability_ci TO rezzerv_migrator, rezzerv_app;
-          ALTER DATABASE rezzerv_circular_capability_ci OWNER TO rezzerv_migrator;
-          \connect rezzerv_circular_capability_ci
-          ALTER SCHEMA public OWNER TO rezzerv_migrator;
-          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
-          GRANT USAGE ON SCHEMA public TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
-          SQL
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_circular_capability_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: alembic
+          evidence-file: circular-shared-postgresql-foundation.log
 
-      - name: Initialize canonical PostgreSQL schema through Alembic
-        working-directory: backend
-        run: python -m alembic upgrade head
-
-      - name: Assert runtime role is DML-only
-        working-directory: backend
-        run: |
-          python - <<'PY'
-          from sqlalchemy import create_engine, text
-          import os
-          engine = create_engine(os.environ['DATABASE_URL'])
-          with engine.connect() as conn:
-              allowed = conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one()
-          engine.dispose()
-          assert allowed is False, allowed
-          print('CIRCULAR_CAPABILITY_RUNTIME_DML_ONLY_GREEN')
-          PY
-
-      - name: Compile H backend
+      - name: Compile H backend and F3-01 API authority
         working-directory: backend
         run: |
           python -m py_compile app/api/household_capability_expansion_routes.py
           python -m py_compile app/services/household_capability_expansion_service.py
+          python -m py_compile app/services/household_product_configuration_service.py
           python -m py_compile app/services/household_product_use_case_service.py
           python -m py_compile app/services/household_location_onboarding_service.py
+          python -m py_compile app/services/inventory_location_policy_service.py
+          python -m py_compile app/services/server_session_service.py
+          python -m py_compile app/services/session_request_context.py
           python -m py_compile tests/circular_capability_expansion_selftest.py
+          python -m py_compile tests/settings_location_policy_api_selftest.py
 
       - name: Validate monotonic backend expansion on PostgreSQL
         working-directory: backend
         run: |
           PYTHONPATH=. python tests/circular_capability_expansion_selftest.py | tee /tmp/circular-backend.log
           grep -F 'CIRCULAR_CAPABILITY_EXPANSION_BACKEND_GREEN' /tmp/circular-backend.log
+
+      - name: Validate Settings to location policy through real PostgreSQL API
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python tests/settings_location_policy_api_selftest.py | tee /tmp/settings-location-policy-api.log
+          grep -F 'PASS missing_server_session_401' /tmp/settings-location-policy-api.log
+          grep -F 'PASS household_member_cannot_manage_settings' /tmp/settings-location-policy-api.log
+          grep -F 'PASS settings_api_persists_locationless_mode' /tmp/settings-location-policy-api.log
+          grep -F 'PASS settings_api_persists_global_location_mode' /tmp/settings-location-policy-api.log
+          grep -F 'PASS database_and_runtime_policy_match_saved_settings' /tmp/settings-location-policy-api.log
+          grep -F 'PASS unrelated_household_remains_isolated' /tmp/settings-location-policy-api.log
+          grep -F 'SETTINGS_LOCATION_POLICY_API_POSTGRESQL_GREEN' /tmp/settings-location-policy-api.log
 
       - uses: actions/setup-node@v4
         with:
@@ -126,6 +128,15 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+      - name: Upload shared PostgreSQL foundation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: circular-capability-shared-postgresql-foundation
+          path: circular-shared-postgresql-foundation.log
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Circular expansion gate marker
         run: echo 'CIRCULAR_CAPABILITY_EXPANSION_H_GREEN'

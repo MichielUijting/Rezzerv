@@ -34,6 +34,7 @@ import zipfile
 import re
 import math
 import mimetypes
+import sys
 from typing import Any, List, Mapping, Optional
 from dataclasses import dataclass
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
@@ -100,6 +101,7 @@ from app.services.authorization_membership_service import (
     set_household_membership_role,
 )
 from app.services.article_group_store import ensure_article_group_schema
+from app.services.unpacking_household_object_guard import install_unpacking_household_object_guard
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -162,6 +164,7 @@ import logging
 from sqlalchemy import inspect as sa_inspect, text, bindparam
 
 app = FastAPI()
+install_unpacking_household_object_guard(sys.modules[__name__])
 # Runtime schema validation is centralized; Alembic remains exclusive schema authority.
 validate_runtime_schema(engine)
 
@@ -1470,7 +1473,7 @@ def resolve_global_product_id_for_article(conn, household_article_id: str, barco
         SELECT global_product_id, identity_value, identity_type
         FROM product_identities
         WHERE household_article_id = :household_article_id AND global_product_id IS NOT NULL
-        ORDER BY is_primary DESC, datetime(created_at) DESC, id DESC
+        ORDER BY is_primary DESC, created_at DESC, id DESC
         LIMIT 1
         """
     ), {'household_article_id': str(household_article_id)}).mappings().first()
@@ -1533,7 +1536,7 @@ def get_household_article_ids_for_global_product(conn, global_product_id: str | 
         SELECT id
         FROM household_articles
         WHERE global_product_id = :global_product_id
-        ORDER BY datetime(created_at) ASC, id ASC
+        ORDER BY created_at ASC, id ASC
         """
     ), {'global_product_id': normalized_global_product_id}).mappings().all()
     return [str(row.get('id')) for row in rows if row.get('id')]
@@ -2718,7 +2721,7 @@ def get_primary_product_identity(conn, household_article_id: str):
             SELECT id, household_article_id, global_product_id, identity_type, identity_value, source, confidence_score, is_primary, created_at, updated_at
             FROM product_identities
             WHERE household_article_id = :household_article_id
-            ORDER BY is_primary DESC, datetime(created_at) DESC, id DESC
+            ORDER BY is_primary DESC, created_at DESC, id DESC
             LIMIT 1
             """
         ),
@@ -5105,14 +5108,11 @@ def sync_receipt_table_line_product_links(conn, receipt_table_id: str, line_id: 
         text(
             """
             UPDATE receipt_table_lines
-            SET matched_global_product_id = :matched_global_product_id,
-                matched_article_id = CASE
-                    WHEN :matched_household_article_id IS NOT NULL THEN :matched_household_article_id
-                    ELSE matched_article_id
-                END,
+            SET matched_global_product_id = CAST(:matched_global_product_id AS TEXT),
+                matched_article_id = COALESCE(CAST(:matched_household_article_id AS TEXT), matched_article_id),
                 article_match_status = CASE
-                    WHEN :matched_household_article_id IS NOT NULL THEN 'matched'
-                    WHEN :matched_global_product_id IS NOT NULL THEN 'product_matched'
+                    WHEN CAST(:matched_household_article_id AS TEXT) IS NOT NULL THEN 'matched'
+                    WHEN CAST(:matched_global_product_id AS TEXT) IS NOT NULL THEN 'product_matched'
                     ELSE 'unmatched'
                 END,
                 updated_at = CURRENT_TIMESTAMP
@@ -5912,7 +5912,7 @@ def resolve_existing_inventory_household_article_id(conn, household_id: str, art
             WHERE household_id = :household_id
               AND lower(trim(COALESCE(custom_name, naam))) = lower(trim(:article_name))
               AND COALESCE(status, 'active') = 'active'
-            ORDER BY datetime(created_at) ASC, id ASC
+            ORDER BY created_at ASC, id ASC
             LIMIT 2
             """
         ),
@@ -6872,7 +6872,7 @@ def _receipt_line_total_clause(alias: str = 'rtl') -> str:
 
 
 def _receipt_line_active_filter(alias: str = 'rtl') -> str:
-    return f"COALESCE({alias}.is_deleted, 0) = 0"
+    return f"COALESCE({alias}.is_deleted, FALSE) = FALSE"
 
 def resolve_authorized_household_id(
     authorization: str | None,
@@ -7533,23 +7533,23 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
                     suggested_location_id = :suggested_location_id,
                     suggestion_confidence = :suggestion_confidence,
                     suggestion_reason = :suggestion_reason,
-                    is_auto_prefilled = CASE WHEN :can_auto_fill = 1 AND COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN 1 ELSE 0 END,
+                    is_auto_prefilled = CASE WHEN :can_auto_fill AND COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN TRUE ELSE FALSE END,
                     matched_household_article_id = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :can_auto_fill = 1 THEN :matched_household_article_id
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :can_auto_fill THEN :matched_household_article_id
                         WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN NULL
                         ELSE matched_household_article_id
                     END,
                     target_location_id = CASE
-                        WHEN COALESCE(location_override_mode, 'auto') = 'auto' AND :can_auto_fill = 1 THEN :target_location_id
+                        WHEN COALESCE(location_override_mode, 'auto') = 'auto' AND :can_auto_fill THEN :target_location_id
                         WHEN COALESCE(location_override_mode, 'auto') = 'auto' THEN NULL
                         ELSE target_location_id
                     END,
                     match_status = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill = 1 AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END
                         ELSE CASE WHEN matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END
                     END,
                     review_decision = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill = 1 THEN 'selected' ELSE 'pending' END
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill THEN 'selected' ELSE 'pending' END
                         WHEN matched_household_article_id IS NULL OR target_location_id IS NULL THEN 'pending'
                         ELSE review_decision
                     END,
@@ -7563,10 +7563,9 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
                 "suggested_location_id": preferred_location_id if can_suggest_location else None,
                 "suggestion_confidence": suggestion_confidence,
                 "suggestion_reason": suggestion_reason,
-                "is_auto_prefilled": 1 if can_auto_fill else 0,
                 "matched_household_article_id": matched_article_id if can_auto_fill else None,
                 "target_location_id": preferred_location_id if can_auto_fill else None,
-                "can_auto_fill": 1 if can_auto_fill else 0,
+                "can_auto_fill": bool(can_auto_fill),
             },
         )
         if can_suggest_article:
@@ -8576,7 +8575,7 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
             """
         SELECT id, store_name, purchase_at, total_amount, parse_status,
                COALESCE(discount_total, 0) AS discount_total,
-               COALESCE(totals_overridden, 0) AS totals_overridden
+               COALESCE(totals_overridden, FALSE) AS totals_overridden
         FROM receipt_tables
         WHERE id = :id
         LIMIT 1
@@ -8639,7 +8638,7 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
         UPDATE receipt_tables
         SET parse_status = :parse_status,
             line_count = :line_count,
-            totals_overridden = 0,
+            totals_overridden = FALSE,
             totals_override_by_user_email = NULL,
             totals_override_at = NULL,
             updated_at = CURRENT_TIMESTAMP
@@ -11729,7 +11728,7 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
                     matched_global_product_id,
                     confidence_score,
                     COALESCE(is_deleted, FALSE) AS is_deleted,
-                    COALESCE(is_validated, 0) AS is_validated
+                    COALESCE(is_validated, FALSE) AS is_validated
                 FROM receipt_table_lines
                 WHERE receipt_table_id = :receipt_table_id
                 ORDER BY line_index ASC, created_at ASC
@@ -11822,7 +11821,7 @@ def get_receipt_explainability(receipt_table_id: str, authorization: Optional[st
                     article_match_status,
                     confidence_score,
                     COALESCE(is_deleted, FALSE) AS is_deleted,
-                    COALESCE(is_validated, 0) AS is_validated
+                    COALESCE(is_validated, FALSE) AS is_validated
                 FROM receipt_table_lines
                 WHERE receipt_table_id = :receipt_table_id
                 ORDER BY line_index ASC, created_at ASC
@@ -11981,7 +11980,7 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
     with engine.begin() as conn:
         context = require_receipt_write_context(conn, receipt_table_id, authorization)
         row = conn.execute(
-            text("SELECT id, receipt_table_id, raw_label, normalized_label, quantity, unit, unit_price, line_total, matched_article_id, matched_global_product_id, COALESCE(is_deleted, FALSE) AS is_deleted, COALESCE(is_validated, 0) AS is_validated FROM receipt_table_lines WHERE id = :id AND receipt_table_id = :receipt_table_id LIMIT 1"),
+            text("SELECT id, receipt_table_id, raw_label, normalized_label, quantity, unit, unit_price, line_total, matched_article_id, matched_global_product_id, COALESCE(is_deleted, FALSE) AS is_deleted, COALESCE(is_validated, FALSE) AS is_validated FROM receipt_table_lines WHERE id = :id AND receipt_table_id = :receipt_table_id LIMIT 1"),
             {'id': line_id, 'receipt_table_id': receipt_table_id},
         ).mappings().first()
         if not row:
@@ -11996,8 +11995,8 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
             'corrected_unit_price': row.get('unit_price') if payload.unit_price is None else float(payload.unit_price),
             'corrected_line_total': row.get('line_total') if payload.line_total is None else float(payload.line_total),
             'matched_article_id': row.get('matched_article_id') if payload.matched_article_id is None else (str(payload.matched_article_id or '').strip() or None),
-            'is_deleted': int(bool(row.get('is_deleted'))) if payload.is_deleted is None else int(bool(payload.is_deleted)),
-            'is_validated': int(bool(row.get('is_validated'))) if payload.is_validated is None else int(bool(payload.is_validated)),
+            'is_deleted': bool(row.get('is_deleted')) if payload.is_deleted is None else bool(payload.is_deleted),
+            'is_validated': bool(row.get('is_validated')) if payload.is_validated is None else bool(payload.is_validated),
         }
         conn.execute(
             text("""
@@ -12104,7 +12103,7 @@ def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest
                 :quantity, :corrected_quantity, :unit, :corrected_unit, :unit_price, :corrected_unit_price,
                 :line_total, :corrected_line_total, :barcode, :external_article_code,
                 :article_match_status, :matched_article_id, :matched_global_product_id,
-                :confidence_score, 0, :is_validated, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                :confidence_score, FALSE, :is_validated, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """),
             {
@@ -12128,7 +12127,7 @@ def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest
                 'matched_article_id': (str(payload.matched_article_id or '').strip() or None),
                 'matched_global_product_id': matched_global_product_id,
                 'confidence_score': confidence_score,
-                'is_validated': int(bool(payload.is_validated)),
+                'is_validated': bool(payload.is_validated),
             },
         )
 
@@ -12214,8 +12213,8 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
                 corrected_by_user_email = :user_email,
                 reviewed_at = CURRENT_TIMESTAMP,
                 totals_overridden = :totals_overridden,
-                totals_override_by_user_email = CASE WHEN :totals_overridden = 1 THEN :user_email ELSE NULL END,
-                totals_override_at = CASE WHEN :totals_overridden = 1 THEN CURRENT_TIMESTAMP ELSE NULL END,
+                totals_override_by_user_email = CASE WHEN :totals_overridden IS TRUE THEN :user_email ELSE NULL END,
+                totals_override_at = CASE WHEN :totals_overridden IS TRUE THEN CURRENT_TIMESTAMP ELSE NULL END,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
             """),
@@ -12224,7 +12223,7 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
                 'line_count': int(valid_line_count or 0),
                 'user_email': user_email,
                 'parse_status': next_status,
-                'totals_overridden': 0 if totals_match else 1,
+                'totals_overridden': not totals_match,
             },
         )
         line_ids = [
@@ -16775,7 +16774,7 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
                     suggestion_confidence = CASE WHEN :may_apply_default_location = 1 THEN COALESCE(suggestion_confidence, 'medium') ELSE suggestion_confidence END,
                     suggestion_reason = CASE WHEN :may_apply_default_location = 1 THEN 'Standaardlocatie van gekoppeld artikel' ELSE suggestion_reason END,
                     location_override_mode = CASE WHEN :may_apply_default_location = 1 THEN 'auto' ELSE location_override_mode END,
-                    review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
+                    review_decision = COALESCE(CAST(:next_review_decision AS TEXT), review_decision),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
@@ -16966,7 +16965,7 @@ def set_purchase_import_line_target_location(line_id: str, payload: TargetLocati
                 UPDATE purchase_import_lines
                 SET target_location_id = :target_location_id,
                     location_override_mode = :location_override_mode,
-                    review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
+                    review_decision = COALESCE(CAST(:next_review_decision AS TEXT), review_decision),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """

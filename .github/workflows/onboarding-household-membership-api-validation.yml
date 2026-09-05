@@ -1,0 +1,129 @@
+name: Onboarding household membership API validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - '.github/workflows/onboarding-household-membership-api-validation.yml'
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/api/household_invitation_acceptance_routes.py'
+      - 'backend/app/api/household_invitation_routes.py'
+      - 'backend/app/api/household_onboarding_routes.py'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/session_household_routes.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/services/consumer_account_provisioning.py'
+      - 'backend/app/services/household_invitation_acceptance_service.py'
+      - 'backend/app/services/household_invitation_delivery_service.py'
+      - 'backend/app/services/household_invitation_service.py'
+      - 'backend/app/services/household_invitation_target_policy.py'
+      - 'backend/app/services/password_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
+      - 'backend/tests/onboarding_household_membership_api_selftest.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onboarding-household-membership-api-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  onboarding-household-membership-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_f3_membership_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_f3_membership_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_f3_membership_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_f3_membership_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_EMAIL_ENABLED: 'false'
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
+      REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PostgreSQL client and backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_f3_membership_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: alembic
+          evidence-file: onboarding-membership-shared-postgresql-foundation.log
+
+      - name: Compile F3-02 API authority
+        run: |
+          python -m py_compile \
+            backend/tests/onboarding_household_membership_api_selftest.py \
+            backend/app/api/household_invitation_acceptance_routes.py \
+            backend/app/api/household_invitation_routes.py \
+            backend/app/api/server_session_routes.py \
+            backend/app/api/session_household_routes.py
+
+      - name: Validate onboarding and household membership through real PostgreSQL API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/onboarding_household_membership_api_selftest.py | tee onboarding-household-membership-api.log
+          grep -F 'PASS postgresql_dml_only_runtime' onboarding-household-membership-api.log
+          grep -F 'PASS consumer_registers_real_regular_household_via_api' onboarding-household-membership-api.log
+          grep -F 'PASS registration_persists_canonical_admin_membership' onboarding-household-membership-api.log
+          grep -F 'PASS ordinary_member_cannot_invite' onboarding-household-membership-api.log
+          grep -F 'PASS admin_creates_token_redacted_invitation_via_api' onboarding-household-membership-api.log
+          grep -F 'PASS logged_in_invitee_preview_is_token_bound_and_minimal' onboarding-household-membership-api.log
+          grep -F 'PASS invitation_acceptance_rotates_real_session_to_target_household' onboarding-household-membership-api.log
+          grep -F 'PASS household_switching_uses_membership_and_blocks_isolation_escape' onboarding-household-membership-api.log
+          grep -F 'PASS postgresql_end_state_has_exact_memberships_roles_and_accepted_invitation' onboarding-household-membership-api.log
+          grep -F 'PASS accepted_token_replay_cannot_duplicate_membership' onboarding-household-membership-api.log
+          grep -F 'ONBOARDING_HOUSEHOLD_MEMBERSHIP_API_POSTGRESQL_GREEN' onboarding-household-membership-api.log
+
+      - name: Upload F3-02 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onboarding-household-membership-api-evidence
+          path: |
+            onboarding-membership-shared-postgresql-foundation.log
+            onboarding-household-membership-api.log
+          if-no-files-found: error
+          retention-days: 7

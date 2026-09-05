@@ -130,6 +130,8 @@ def run() -> None:
 
             # Location management remains explicit and separate from capability
             # activation; exercise the settings-owned provisioning helper directly.
+            # The canonical Direct space provisioned by global location tracking is
+            # intentionally preserved when exact-location detail is added.
             ensure_location_foundation(conn)
             provisioned = provision_waar_inhuis_expansion_locations(
                 conn,
@@ -148,7 +150,7 @@ def run() -> None:
                 ),
                 {"household_id": "h1"},
             ).scalars().all()
-            assert persisted == ["Keuken", "Voorraadkast"]
+            assert persisted == ["Direct", "Keuken", "Voorraadkast"]
 
             activate_household_product_use_case(
                 conn,

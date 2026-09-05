@@ -5,6 +5,8 @@ on:
     branches:
       - main
     paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
       - 'backend/app/services/inventory_location_household_patch.py'
       - 'backend/app/services/inventory_location_policy_service.py'
       - 'backend/app/services/inventory_location_event_policy_patch.py'
@@ -62,33 +64,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt pytest
 
-      - name: Bootstrap PostgreSQL migrator and DML-only runtime role
-        env:
-          PGPASSWORD: rezzerv_bootstrap_ci
-        run: |
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 55432 -U rezzerv_bootstrap -d postgres <<'SQL'
-          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'rezzerv_migrator_ci';
-          CREATE ROLE rezzerv_app LOGIN PASSWORD 'rezzerv_app_ci';
-          GRANT CONNECT ON DATABASE rezzerv_inventory_identity_ci TO rezzerv_migrator, rezzerv_app;
-          ALTER DATABASE rezzerv_inventory_identity_ci OWNER TO rezzerv_migrator;
-          \connect rezzerv_inventory_identity_ci
-          ALTER SCHEMA public OWNER TO rezzerv_migrator;
-          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-          REVOKE CREATE ON SCHEMA public FROM rezzerv_app;
-          GRANT USAGE ON SCHEMA public TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO rezzerv_app;
-          SQL
-
-      - name: Assert runtime role has no schema CREATE privilege
-        env:
-          PGPASSWORD: rezzerv_app_ci
-        run: |
-          result=$(psql -At -h 127.0.0.1 -p 55432 -U rezzerv_app -d rezzerv_inventory_identity_ci -c "SELECT has_schema_privilege(current_user, 'public', 'CREATE');")
-          test "$result" = "f"
-          echo 'INVENTORY_LOCATION_RUNTIME_DML_ONLY_GREEN'
+      - name: Prepare shared PostgreSQL role boundary before focused schema guard
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_inventory_identity_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migration-mode: none
+          evidence-file: inventory-postgresql-foundation-pre-migration.log
 
       - name: Prove focused locationless identity guard with migrator-owned test schema
         run: |
@@ -99,6 +83,11 @@ jobs:
         working-directory: backend
         run: python -m alembic upgrade head
 
+      - name: Revalidate shared PostgreSQL foundation at canonical Alembic head
+        run: |
+          python -m app.testing.postgresql_acceptance_foundation | tee inventory-postgresql-foundation.log
+          grep -F 'POSTGRESQL_ACCEPTANCE_FOUNDATION_GREEN' inventory-postgresql-foundation.log
+
       - name: Compile inventory location contract and tests
         run: |
           python -m py_compile \
@@ -108,6 +97,7 @@ jobs:
             backend/app/services/inventory_location_event_policy_patch.py \
             backend/app/services/purchase_import_location_policy_patch.py \
             backend/app/services/canonical_inventory_identity_service.py \
+            backend/app/testing/postgresql_acceptance_foundation.py \
             backend/app/testing/postgresql_onboarding_selftest_fixture.py \
             backend/app/testing/inventory_location_household_isolation_contract.py \
             backend/tests/test_inventory_location_policy_service.py \
@@ -133,3 +123,14 @@ jobs:
           python backend/tests/test_household_article_identity_slice2b4_inventory_contract.py | tee household-article-identity.log
           grep -F 'HOUSEHOLD_ARTICLE_IDENTITY_SLICE2B4_INVENTORY_POSTGRESQL_GREEN' household-article-identity.log
           grep -F 'HOUSEHOLD_ARTICLE_IDENTITY_SLICE2B4_INVENTORY_GREEN' household-article-identity.log
+
+      - name: Upload shared foundation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inventory-shared-postgresql-foundation
+          path: |
+            inventory-postgresql-foundation-pre-migration.log
+            inventory-postgresql-foundation.log
+          if-no-files-found: error
+          retention-days: 7
