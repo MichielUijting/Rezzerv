@@ -65,6 +65,7 @@ from app.services.canonical_inventory_identity_service import (
     apply_inventory_purchase_by_identity,
     get_inventory_total_by_household_article,
 )
+from app.services.product_day_auto_consume_service import compute_product_day_auto_deduction
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from app.services.receipt_inventory_lifecycle_service import (
@@ -8464,12 +8465,29 @@ def compute_auto_deduction_quantity(mode: str, pre_purchase_total: float, purcha
     return 0
 
 
-def determine_auto_consume_decision(conn, household_id: str, article_id: str, article_name: str, pre_purchase_total: float, purchased_quantity: float):
+def determine_auto_consume_decision(
+    conn,
+    household_id: str,
+    article_id: str,
+    article_name: str,
+    pre_purchase_total: float,
+    purchased_quantity: float,
+    purchase_date: str | None = None,
+):
     consumable = get_article_consumable_state(conn, household_id, article_id, article_name)
     household_mode = get_household_auto_consume_mode(conn, household_id)
     article_override = get_household_article_auto_consume_override(conn, household_id, article_id)
     effective_mode = resolve_auto_consume_effective_mode(household_mode, article_override, consumable)
-    requested_deduction_quantity = compute_auto_deduction_quantity(effective_mode, pre_purchase_total, purchased_quantity)
+    product_day_decision = compute_product_day_auto_deduction(
+        conn,
+        household_id=str(household_id),
+        household_article_id=str(article_id),
+        purchase_date=purchase_date,
+        mode=effective_mode,
+        pre_purchase_total=pre_purchase_total,
+        purchased_quantity=purchased_quantity,
+    )
+    requested_deduction_quantity = int(product_day_decision["requested_deduction_quantity"])
     should_auto_consume = requested_deduction_quantity > 0
     if not consumable:
         decision_reason = 'article not consumable'
@@ -8493,6 +8511,12 @@ def determine_auto_consume_decision(conn, household_id: str, article_id: str, ar
         'requested_deduction_quantity': requested_deduction_quantity,
         'should_auto_consume': should_auto_consume,
         'decision_reason': decision_reason,
+        'product_day_applied': bool(product_day_decision.get("product_day_applied")),
+        'product_day': product_day_decision.get("purchase_day"),
+        'product_day_start_stock': int(product_day_decision.get("day_start_stock") or 0),
+        'product_day_prior_purchased_quantity': int(product_day_decision.get("prior_day_purchased_quantity") or 0),
+        'product_day_prior_auto_consumed_quantity': int(product_day_decision.get("prior_day_auto_consumed_quantity") or 0),
+        'product_day_cumulative_purchased_quantity': int(product_day_decision.get("cumulative_day_purchased_quantity") or 0),
     }
 
 
@@ -17589,6 +17613,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     article_name,
                     pre_purchase_total,
                     quantity,
+                    purchase_date=purchase_date,
                 )
                 household_mode = auto_consume_decision["household_mode"]
                 article_override = auto_consume_decision["article_override"]
