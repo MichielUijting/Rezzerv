@@ -61,6 +61,29 @@ async function readSession(page) {
   return response.json()
 }
 
+async function switchHouseholdAndWait(page, switcher, label, expectedHouseholdId) {
+  const expectedId = String(expectedHouseholdId || '').trim()
+  expect(expectedId).not.toBe('')
+
+  const switchResponsePromise = page.waitForResponse((response) => (
+    response.url().includes('/api/session/household')
+    && response.request().method() === 'POST'
+  ))
+
+  await switcher.selectOption({ label })
+  const switchResponse = await switchResponsePromise
+  expect(switchResponse.ok()).toBeTruthy()
+  const switchPayload = await switchResponse.json()
+  expect(String(switchPayload?.active_household_id || '')).toBe(expectedId)
+
+  await expect.poll(async () => {
+    const response = await page.request.get('/api/session')
+    if (!response.ok()) return ''
+    const session = await response.json()
+    return String(session?.active_household_id || '')
+  }, { timeout: 12_000 }).toBe(expectedId)
+}
+
 async function latestInvitationToken(request, sinkUrl) {
   await expect.poll(async () => {
     const response = await request.get(`${sinkUrl}/latest`)
@@ -145,9 +168,12 @@ test('L4-02 admin invite -> accept -> permissions -> household switch -> isolati
     const switcherInAdminHousehold = memberPage.getByTestId('household-switcher')
     await expect(switcherInAdminHousehold).toBeVisible()
     await expect(switcherInAdminHousehold.locator('option')).toHaveCount(2)
-    const switchedHomePromise = memberPage.waitForURL(/\/home$/)
-    await switcherInAdminHousehold.selectOption({ label: expectedMemberHousehold })
-    await switchedHomePromise
+    await switchHouseholdAndWait(
+      memberPage,
+      switcherInAdminHousehold,
+      expectedMemberHousehold,
+      memberOwnSession.active_household_id,
+    )
 
     const memberBackInOwnHousehold = await readSession(memberPage)
     expect(memberBackInOwnHousehold.role).toBe('admin')
@@ -161,9 +187,12 @@ test('L4-02 admin invite -> accept -> permissions -> household switch -> isolati
 
     const switcherInOwnHousehold = memberPage.getByTestId('household-switcher')
     await expect(switcherInOwnHousehold).toBeVisible()
-    const switchedBackPromise = memberPage.waitForURL(/\/home$/)
-    await switcherInOwnHousehold.selectOption({ label: expectedAdminHousehold })
-    await switchedBackPromise
+    await switchHouseholdAndWait(
+      memberPage,
+      switcherInOwnHousehold,
+      expectedAdminHousehold,
+      adminSessionBeforeInvite.active_household_id,
+    )
 
     const memberBackInAdminHousehold = await readSession(memberPage)
     expect(memberBackInAdminHousehold.role).toBe('member')
