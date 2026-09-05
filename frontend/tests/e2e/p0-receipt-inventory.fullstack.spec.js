@@ -140,7 +140,20 @@ async function configureAlmostOutThreshold(page, minStock, idealStock) {
   const settingsResponsePromise = page.waitForResponse((response) => response.url().includes('/api/household-articles/') && response.url().includes('/settings') && response.request().method() === 'PUT')
   await page.getByTestId('article-household-settings-save').click()
   expect((await settingsResponsePromise).ok()).toBeTruthy()
-  await expect(page.getByTestId('article-settings-save-success')).toBeVisible({ timeout: 20_000 })
+
+  await page.reload()
+  await expect(page.getByTestId('article-detail-page')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('article-overview-subtab-household').click()
+  const persistedSection = page.getByTestId('article-household-settings-section')
+  await expect(persistedSection).toBeVisible()
+  const persistedMinStockInput = page.getByTestId('article-details-input-min_stock')
+  const persistedIdealStockInput = page.getByTestId('article-details-input-ideal_stock')
+  if (!(await persistedMinStockInput.isVisible())) {
+    const persistedToggle = persistedSection.getByRole('button', { name: 'Instellingen voor dit huishouden', exact: true })
+    if ((await persistedToggle.count()) > 0 && (await persistedToggle.getAttribute('aria-expanded')) !== 'true') await persistedToggle.click()
+  }
+  await expect(persistedMinStockInput).toHaveValue(String(minStock))
+  await expect(persistedIdealStockInput).toHaveValue(String(idealStock))
 }
 
 async function expectAlmostOutAbsence(page, articleName) {
