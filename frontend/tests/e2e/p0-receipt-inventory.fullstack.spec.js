@@ -174,7 +174,7 @@ async function configureAlmostOutThreshold(page, minStock, idealStock) {
   const settingsResponsePromise = page.waitForResponse((response) => (
     response.url().includes('/api/household-articles/')
     && response.url().includes('/settings')
-    && ['PUT', 'PATCH'].includes(response.request().method())
+    && response.request().method() === 'PUT'
   ))
   await page.getByTestId('article-household-settings-save').click()
   expect((await settingsResponsePromise).ok()).toBeTruthy()
@@ -246,8 +246,11 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
   const batchId = String(approvedBatch.batch_id)
   const batchBefore = await readBatch(page, batchId)
   const lines = Array.isArray(batchBefore?.lines) ? batchBefore.lines : []
-  const line = lines.find((item) => Number(item?.quantity_raw || 0) > 0 && String(item?.processing_status || '') !== 'processed')
-  expect(line, `Geen verwerkbare bonregel gevonden in ${JSON.stringify(batchBefore)}`).toBeTruthy()
+  const line = lines.find((item) => {
+    const quantity = Number(item?.quantity_raw || 0)
+    return Number.isInteger(quantity) && quantity > 0 && String(item?.processing_status || '') !== 'processed'
+  })
+  expect(line, `Geen gehele verwerkbare bonregel gevonden voor de Afboeken/Bijna-op-keten in ${JSON.stringify(batchBefore)}`).toBeTruthy()
   const lineId = String(line.id)
 
   await page.goto(`/kassabonnen?batch=${encodeURIComponent(batchId)}`)
