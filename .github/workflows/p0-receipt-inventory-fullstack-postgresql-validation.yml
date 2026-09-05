@@ -13,6 +13,9 @@ on:
       - 'frontend/src/features/receipts/**'
       - 'frontend/src/features/stores/**'
       - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/features/articles/**'
+      - 'frontend/src/features/almostOut/**'
+      - 'frontend/src/pages/Voorraad.jsx'
       - 'frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js'
       - 'frontend/playwright.fullstack.config.js'
       - 'docker-compose.yml'
@@ -29,7 +32,7 @@ concurrency:
 
 jobs:
   l4-receipt-inventory:
-    name: L4-03 Kassa to inventory with locations
+    name: L4-03 Kassa to inventory and Bijna-op with locations
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -91,6 +94,7 @@ jobs:
               required_relations = {
                   "receipt_tables", "receipt_table_lines", "purchase_import_batches",
                   "purchase_import_lines", "inventory", "inventory_events", "spaces",
+                  "household_articles",
               }
               actual_relations = set(conn.execute(text("""
                   SELECT table_name FROM information_schema.tables
@@ -117,7 +121,7 @@ jobs:
           fi
           echo 'P0_L4_03_NO_CORE_ROUTE_MOCKS_GREEN'
 
-      - name: Run L4-03 through the real browser UI
+      - name: Run complete L4-03 through the real browser UI
         shell: bash
         run: |
           docker run --rm \
@@ -132,13 +136,16 @@ jobs:
             mcr.microsoft.com/playwright:v1.58.2-noble \
             bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-inventory.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-03-browser.log"
           grep -F 'P0_L4_03_RECEIPT_INVENTORY_BROWSER_GREEN' frontend/p0-l4-03-browser.log
+          grep -F 'P0_L4_03_ALMOST_OUT_TRANSITION_BROWSER_GREEN' frontend/p0-l4-03-browser.log
           test -s frontend/p0-l4-03-browser-proof.json
 
       - name: Capture exact browser identities for PostgreSQL proof
         shell: bash
         run: |
           proof='frontend/p0-l4-03-browser-proof.json'
-          for key in householdId receiptId batchId lineId locationName; do
+          test "$(jq -r '.almostOutBefore' "$proof")" = 'false' || { echo 'Browser proof mist Bijna-op NEE.' >&2; exit 1; }
+          test "$(jq -r '.almostOutAfter' "$proof")" = 'true' || { echo 'Browser proof mist Bijna-op JA.' >&2; exit 1; }
+          for key in householdId receiptId batchId lineId locationName inventoryId householdArticleId initialQuantity minStock idealStock consumeQuantity finalQuantity; do
             value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
             test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
             case "$key" in
@@ -147,10 +154,17 @@ jobs:
               batchId) echo "L4_BATCH_ID=$value" >> "$GITHUB_ENV" ;;
               lineId) echo "L4_LINE_ID=$value" >> "$GITHUB_ENV" ;;
               locationName) echo "L4_LOCATION_NAME=$value" >> "$GITHUB_ENV" ;;
+              inventoryId) echo "L4_INVENTORY_ID=$value" >> "$GITHUB_ENV" ;;
+              householdArticleId) echo "L4_HOUSEHOLD_ARTICLE_ID=$value" >> "$GITHUB_ENV" ;;
+              initialQuantity) echo "L4_INITIAL_QUANTITY=$value" >> "$GITHUB_ENV" ;;
+              minStock) echo "L4_MIN_STOCK=$value" >> "$GITHUB_ENV" ;;
+              idealStock) echo "L4_IDEAL_STOCK=$value" >> "$GITHUB_ENV" ;;
+              consumeQuantity) echo "L4_CONSUME_QUANTITY=$value" >> "$GITHUB_ENV" ;;
+              finalQuantity) echo "L4_FINAL_QUANTITY=$value" >> "$GITHUB_ENV" ;;
             esac
           done
 
-      - name: Verify exact PostgreSQL end state after browser actions
+      - name: Verify exact PostgreSQL end state and Bijna-op transition after browser actions
         shell: bash
         run: |
           docker compose exec -T \
@@ -160,11 +174,23 @@ jobs:
             -e L4_BATCH_ID="$L4_BATCH_ID" \
             -e L4_LINE_ID="$L4_LINE_ID" \
             -e L4_LOCATION_NAME="$L4_LOCATION_NAME" \
+            -e L4_INVENTORY_ID="$L4_INVENTORY_ID" \
+            -e L4_HOUSEHOLD_ARTICLE_ID="$L4_HOUSEHOLD_ARTICLE_ID" \
+            -e L4_INITIAL_QUANTITY="$L4_INITIAL_QUANTITY" \
+            -e L4_MIN_STOCK="$L4_MIN_STOCK" \
+            -e L4_IDEAL_STOCK="$L4_IDEAL_STOCK" \
+            -e L4_CONSUME_QUANTITY="$L4_CONSUME_QUANTITY" \
+            -e L4_FINAL_QUANTITY="$L4_FINAL_QUANTITY" \
             backend python -u - <<'PY' 2>&1 | tee p0-l4-03-postgresql-end-state.log
           import os
           from decimal import Decimal
           from sqlalchemy import text
           from app.db import engine
+          from app.main import (
+              build_almost_out_items,
+              evaluate_household_article_almost_out,
+              get_household_article_row_by_id,
+          )
 
           email = os.environ["L4_EMAIL"].strip().lower()
           household_id = os.environ["L4_HOUSEHOLD_ID"].strip()
@@ -172,6 +198,17 @@ jobs:
           batch_id = os.environ["L4_BATCH_ID"].strip()
           line_id = os.environ["L4_LINE_ID"].strip()
           location_name = os.environ["L4_LOCATION_NAME"].strip()
+          inventory_id = os.environ["L4_INVENTORY_ID"].strip()
+          household_article_id = os.environ["L4_HOUSEHOLD_ARTICLE_ID"].strip()
+          initial_quantity = Decimal(os.environ["L4_INITIAL_QUANTITY"])
+          min_stock = Decimal(os.environ["L4_MIN_STOCK"])
+          ideal_stock = Decimal(os.environ["L4_IDEAL_STOCK"])
+          consume_quantity = Decimal(os.environ["L4_CONSUME_QUANTITY"])
+          final_quantity = Decimal(os.environ["L4_FINAL_QUANTITY"])
+
+          assert initial_quantity > min_stock, (initial_quantity, min_stock)
+          assert final_quantity <= min_stock, (final_quantity, min_stock)
+          assert initial_quantity - consume_quantity == final_quantity
 
           with engine.begin() as conn:
               membership = conn.execute(text("""
@@ -225,16 +262,25 @@ jobs:
               assert str(space["household_id"]) == household_id, space
               assert str(space["naam"]) == location_name, space
 
-              inventory_rows = conn.execute(text("""
-                  SELECT id, aantal, household_article_id, space_id
+              inventory = conn.execute(text("""
+                  SELECT id, aantal, household_article_id, space_id, status
                   FROM public.inventory
-                  WHERE household_id = :household_id
-                    AND space_id = :space_id
-                    AND COALESCE(status, 'active') = 'active'
-              """), {"household_id": household_id, "space_id": str(space["id"])}).mappings().all()
-              assert inventory_rows, inventory_rows
-              inventory = next((row for row in inventory_rows if Decimal(str(row["aantal"] or 0)) > 0), None)
-              assert inventory is not None, inventory_rows
+                  WHERE id = :inventory_id
+                    AND household_id = :household_id
+              """), {"inventory_id": inventory_id, "household_id": household_id}).mappings().one()
+              assert str(inventory["household_article_id"]) == household_article_id, inventory
+              assert str(inventory["space_id"]) == str(space["id"]), (inventory, space)
+              assert Decimal(str(inventory["aantal"] or 0)) == final_quantity, inventory
+              assert str(inventory["status"] or "active") == "active", inventory
+
+              article = conn.execute(text("""
+                  SELECT id, household_id, min_stock, ideal_stock
+                  FROM public.household_articles
+                  WHERE id = :article_id
+                    AND household_id = :household_id
+              """), {"article_id": household_article_id, "household_id": household_id}).mappings().one()
+              assert Decimal(str(article["min_stock"])) == min_stock, article
+              assert Decimal(str(article["ideal_stock"])) == ideal_stock, article
 
               purchase_event = conn.execute(text("""
                   SELECT id, household_id, household_article_id, location_id,
@@ -247,8 +293,37 @@ jobs:
               assert str(purchase_event["event_type"]) == "purchase", purchase_event
               assert Decimal(str(purchase_event["quantity"])) > 0, purchase_event
               assert str(purchase_event["source"]) == "store_import", purchase_event
-              assert str(purchase_event["household_article_id"]) == str(inventory["household_article_id"]), (purchase_event, inventory)
+              assert str(purchase_event["household_article_id"]) == household_article_id, (purchase_event, inventory)
               assert str(purchase_event["location_id"]) == str(space["id"]), (purchase_event, space)
+
+              consume_event = conn.execute(text("""
+                  SELECT id, household_id, household_article_id, location_id,
+                         event_type, quantity, old_quantity, new_quantity, source, note
+                  FROM public.inventory_events
+                  WHERE household_id = :household_id
+                    AND household_article_id = :article_id
+                    AND event_type = 'consume'
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT 1
+              """), {"household_id": household_id, "article_id": household_article_id}).mappings().one()
+              assert str(consume_event["household_id"]) == household_id, consume_event
+              assert str(consume_event["household_article_id"]) == household_article_id, consume_event
+              assert str(consume_event["location_id"]) == str(space["id"]), (consume_event, space)
+              assert Decimal(str(consume_event["quantity"])) == -consume_quantity, consume_event
+              assert Decimal(str(consume_event["old_quantity"])) == initial_quantity, consume_event
+              assert Decimal(str(consume_event["new_quantity"])) == final_quantity, consume_event
+              assert str(consume_event["source"]) == "manual_inventory_api", consume_event
+
+              article_row = get_household_article_row_by_id(conn, household_id, household_article_id)
+              assert article_row is not None
+              evaluation = evaluate_household_article_almost_out(conn, household_id, article_row)
+              almost_out_items = build_almost_out_items(conn, household_id)
+              almost_out_ids = {str(item.get("household_article_id") or "") for item in almost_out_items}
+
+              assert str(evaluation.get("data_state") or "") == "ok", evaluation
+              assert Decimal(str(evaluation.get("current_quantity") or 0)) == final_quantity, evaluation
+              assert bool(evaluation.get("include_in_almost_out")) is True, evaluation
+              assert household_article_id in almost_out_ids, almost_out_ids
 
           print(f"email={email}")
           print(f"household_id={household_id}")
@@ -256,16 +331,22 @@ jobs:
           print(f"batch_id={batch_id}")
           print(f"line_id={line_id}")
           print(f"location={location_name}")
+          print(f"inventory_id={inventory_id}")
+          print(f"household_article_id={household_article_id}")
+          print(f"inventory_transition={initial_quantity}->{final_quantity}")
+          print(f"almost_out_threshold={min_stock}")
           print("receipt_approved=true")
           print("line_processed=true")
-          print("inventory_created=true")
           print("purchase_history_event=true")
-          print("almost_out_feature_enabled=true")
+          print("consume_history_event=true")
+          print("almost_out_before=false")
+          print("almost_out_after=true")
+          print("P0_L4_03_ALMOST_OUT_TRANSITION_GREEN")
           print("P0_L4_03_POSTGRESQL_END_STATE_GREEN")
           PY
 
-      - name: L4-03 slice gate marker
-        run: echo 'P0_RECEIPT_INVENTORY_FULLSTACK_POSTGRESQL_SLICE_GREEN'
+      - name: L4-03 complete gate marker
+        run: echo 'P0_RECEIPT_INVENTORY_FULLSTACK_POSTGRESQL_GREEN'
 
       - name: Upload L4-03 evidence
         if: always()
