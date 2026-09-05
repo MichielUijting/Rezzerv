@@ -123,12 +123,21 @@ async function openInventoryArticle(page, householdArticleId) {
 
 async function configureAlmostOutThreshold(page, minStock, idealStock) {
   await page.getByTestId('article-overview-subtab-household').click()
-  const settingsSection = page.getByTestId('article-household-settings-section')
-  await expect(settingsSection).toBeVisible()
-  const sectionToggle = settingsSection.getByRole('button', { name: 'Instellingen voor dit huishouden', exact: true })
-  if ((await sectionToggle.getAttribute('aria-expanded')) !== 'true') await sectionToggle.click()
-  await page.getByTestId('article-details-input-min_stock').fill(String(minStock))
-  await page.getByTestId('article-details-input-ideal_stock').fill(String(idealStock))
+  const minStockInput = page.getByTestId('article-details-input-min_stock')
+  const idealStockInput = page.getByTestId('article-details-input-ideal_stock')
+
+  if (!(await minStockInput.isVisible())) {
+    const settingsSection = page.getByTestId('article-household-settings-section')
+    await expect(settingsSection).toBeVisible()
+    const sectionToggle = settingsSection.getByRole('button', { name: 'Instellingen voor dit huishouden', exact: true })
+    await expect(sectionToggle).toBeVisible()
+    if ((await sectionToggle.getAttribute('aria-expanded')) !== 'true') await sectionToggle.click()
+  }
+
+  await expect(minStockInput).toBeVisible()
+  await expect(idealStockInput).toBeVisible()
+  await minStockInput.fill(String(minStock))
+  await idealStockInput.fill(String(idealStock))
   const settingsResponsePromise = page.waitForResponse((response) => response.url().includes('/api/household-articles/') && response.url().includes('/settings') && response.request().method() === 'PUT')
   await page.getByTestId('article-household-settings-save').click()
   expect((await settingsResponsePromise).ok()).toBeTruthy()
