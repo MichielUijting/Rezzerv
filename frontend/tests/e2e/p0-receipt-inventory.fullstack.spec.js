@@ -191,6 +191,11 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
   await page.getByTestId('receipt-location-create-save').click()
   await expect(locationButton).toContainText(expectedLocationName, { timeout: 20_000 })
 
+  const locationCreatedDialog = page.getByRole('dialog', { name: 'Gelukt' })
+  await expect(locationCreatedDialog).toContainText(`Locatie ${expectedLocationName} is toegevoegd en geselecteerd.`)
+  await locationCreatedDialog.getByRole('button', { name: 'OK', exact: true }).click()
+  await expect(locationCreatedDialog).toBeHidden()
+
   const lineSelect = page.getByTestId(`receipt-line-select-${lineId}`)
   if (!(await lineSelect.isChecked())) await lineSelect.check()
 
