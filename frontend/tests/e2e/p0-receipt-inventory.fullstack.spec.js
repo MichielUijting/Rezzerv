@@ -209,7 +209,9 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
 
   await expect(page.getByRole('dialog', { name: 'Verwerking afgerond' })).toBeVisible({ timeout: 30_000 })
   await page.getByRole('dialog', { name: 'Verwerking afgerond' }).getByRole('button', { name: 'Sluiten' }).click()
-  await expect(page.getByTestId(`receipt-line-status-${lineId}`)).toHaveText('processed', { timeout: 20_000 })
+  await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveCount(0, { timeout: 20_000 })
+  await expect(page.getByText('Status: Verwerkt naar voorraad', { exact: false })).toBeVisible()
+  await expect(page.getByText(/Verwerkt:\s*1/)).toBeVisible()
 
   const inventoryResponse = await page.request.get('/api/dev/inventory-preview')
   expect(inventoryResponse.ok()).toBeTruthy()
