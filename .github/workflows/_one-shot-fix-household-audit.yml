@@ -1,0 +1,50 @@
+name: One-shot household audit PostgreSQL fix
+
+on:
+  push:
+    branches:
+      - codex/postgresql-receipt-batch-json-contract-fix
+    paths:
+      - '.github/workflows/_one-shot-fix-household-audit.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/postgresql-receipt-batch-json-contract-fix
+          fetch-depth: 0
+
+      - name: Apply exact PostgreSQL ordering fix
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('backend/app/main.py')
+          source = path.read_text(encoding='utf-8')
+          old = 'ORDER BY datetime(created_at) DESC, id DESC'
+          new = 'ORDER BY created_at DESC NULLS LAST, id DESC'
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one target occurrence, found {count}')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+
+      - name: Verify diff is exactly the intended line
+        run: |
+          git diff --check
+          git diff -- backend/app/main.py
+          test "$(git diff --numstat -- backend/app/main.py | awk '{print $1":"$2}')" = "1:1"
+          grep -F 'ORDER BY created_at DESC NULLS LAST, id DESC' backend/app/main.py
+          ! grep -F 'ORDER BY datetime(created_at) DESC, id DESC' backend/app/main.py
+
+      - name: Commit and push fix
+        run: |
+          git config user.name 'rezzerv-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add backend/app/main.py
+          git commit -m 'fix: make household role audit ordering PostgreSQL-safe'
+          git push origin HEAD:codex/postgresql-receipt-batch-json-contract-fix
