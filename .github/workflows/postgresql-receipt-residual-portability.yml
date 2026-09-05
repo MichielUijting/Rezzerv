@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'backend/alembic/versions/20260829_15_receipt_store_chain_schema_authority.py'
+      - 'backend/app/main.py'
       - 'backend/app/services/receipt_inventory_lifecycle_service.py'
       - 'backend/app/services/receipt_status_sync.py'
       - 'backend/app/services/receipt_reimport_lineage_service.py'
       - 'backend/app/services/receipt_source_helper_service.py'
       - 'backend/app/services/receipt_status_baseline_service.py'
+      - 'backend/tests/household_members_postgresql_runtime_selftest.py'
       - 'backend/tests/postgresql_receipt_residual_portability_selftest.py'
       - 'backend/tests/postgresql_receipt_residual_dml_only_selftest.py'
       - 'backend/tests/postgresql_unpack_start_runtime_selftest.py'
@@ -92,6 +94,12 @@ jobs:
           python -m app.schema_migration_preflight | tee /tmp/receipt-residual-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/receipt-residual-migration.log
           grep -F "'revision': '20260903_01'" /tmp/receipt-residual-migration.log
+
+      - name: Reproduce household members role audit query on PostgreSQL
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/household_members_postgresql_runtime_selftest.py | tee /tmp/household-members-runtime.log
+          grep -F 'POSTGRESQL_HOUSEHOLD_MEMBERS_ROLE_AUDIT_QUERY_GREEN' /tmp/household-members-runtime.log
 
       - name: Prove receipt residual paths with DML-only runtime role
         working-directory: backend
