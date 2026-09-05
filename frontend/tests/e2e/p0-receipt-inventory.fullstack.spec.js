@@ -318,13 +318,8 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
   await openInventoryArticle(page, householdArticleId)
   await configureAlmostOutThreshold(page, minStock, idealStock)
 
-  // Dezelfde productie-UI moet vóór verbruik bewijzen dat dit artikel nog niet Bijna-op is.
   await expectAlmostOutAbsence(page, articleName)
-
-  // Afboeken loopt via de echte artikelvoorraad-route en schrijft daarmee ook een consume-event/historie.
   await consumeThroughArticleStock(page, householdArticleId, inventoryId, consumeQuantity)
-
-  // Na exact dezelfde mutatie moet de zichtbare Bijna-op-projectie omslaan van NEE naar JA.
   await expectAlmostOutPresence(page, articleName, finalQuantity, minStock)
 
   writeFileSync(join(process.cwd(), 'p0-l4-03-browser-proof.json'), JSON.stringify({
