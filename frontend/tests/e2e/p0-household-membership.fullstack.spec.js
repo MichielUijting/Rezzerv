@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { writeFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
 
 const adminEmail = process.env.PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_EMAIL
@@ -143,6 +145,15 @@ test('L4-02 admin invite -> accept -> permissions -> household switch -> isolati
     await expect(adminPage.getByTestId('household-invitations-list')).toContainText('In afwachting')
 
     const rawToken = await latestInvitationToken(request, sinkUrl)
+    const acceptedInvitationTokenHash = createHash('sha256')
+      .update(rawToken.trim(), 'utf8')
+      .digest('hex')
+    writeFileSync(
+      'p0-l4-02-invitation-token-hash.txt',
+      `${acceptedInvitationTokenHash}\n`,
+      'utf8',
+    )
+
     await memberPage.goto(`/uitnodiging/${encodeURIComponent(rawToken)}`)
     await expect(memberPage.getByTestId('invitation-acceptance-page')).toBeVisible()
     await expect(memberPage.getByTestId('invitation-authenticated-actions')).toBeVisible()
