@@ -7,7 +7,7 @@ from app.testing.postgresql_onboarding_selftest_fixture import (
     reset_postgresql_test_database,
 )
 
-HEAD_REVISION = "20260902_01"
+HEAD_REVISION = "20260903_01"
 
 
 def migrated_postgresql_engine():

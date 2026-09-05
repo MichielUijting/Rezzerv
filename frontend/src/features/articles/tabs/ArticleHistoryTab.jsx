@@ -53,9 +53,10 @@ export default function ArticleHistoryTab({ articleData = {}, isLoading = false,
 
   if (!historyEntries.length) {
     return (
-      <div>
-        {loadError ? <div className="rz-article-detail-alert">{loadError}</div> : null}
-        <div className="rz-empty-state">Er is nog geen historie beschikbaar voor dit artikel.</div>
+      <div className="rz-empty-state">
+        {loadError
+          ? 'Historie is tijdelijk niet beschikbaar.'
+          : 'Er is nog geen historie beschikbaar voor dit artikel.'}
       </div>
     )
   }

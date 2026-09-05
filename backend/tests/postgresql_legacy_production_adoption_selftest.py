@@ -2,31 +2,23 @@ from __future__ import annotations
 
 import gzip
 import hashlib
-import importlib
-import os
 import sqlite3
 import tempfile
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import text
-
 from app.maintenance.postgresql_legacy_production_adoption import (
     HEAD_REVISION,
     SQLITE_BASELINE,
     LegacyAdoptionError,
-    _normalize_legacy_purchase_import_quantities,
+    _validate_legacy_purchase_import_quantities,
     adopt_legacy_production_snapshot,
     classify_known_legacy_fk_drift,
 )
-from app.services.purchase_import_quantity_contract import (
-    PurchaseImportQuantityPrecisionError,
-    validate_purchase_import_quantity_raw,
-)
 
 
-APPROVED_QUANTITY_ID_ONE = "239ccbf1-6880-4390-9c83-cb141836f72c"
-APPROVED_QUANTITY_ID_TWO = "572f88a8-1bca-4e47-ac8c-0d903188ca4b"
+PROVEN_QUANTITY_ID_ONE = "239ccbf1-6880-4390-9c83-cb141836f72c"
+PROVEN_QUANTITY_ID_TWO = "572f88a8-1bca-4e47-ac8c-0d903188ca4b"
 
 
 def _build_minimal_legacy(path: Path, *, unknown_source: bool = False) -> sqlite3.Connection:
@@ -151,23 +143,24 @@ def _build_baseline_production_shape(path: Path) -> None:
         connection.close()
 
 
-def _build_quantity_fixture(path: Path, rows: list[tuple[str, str, str, str]]) -> None:
+def _build_quantity_fixture(path: Path) -> None:
     connection = sqlite3.connect(path)
     try:
         connection.execute(
             """
             CREATE TABLE purchase_import_lines (
                 id TEXT PRIMARY KEY,
-                quantity_raw NUMERIC(10, 2) NOT NULL,
-                package_count NUMERIC(12, 3),
-                content_value NUMERIC(12, 3)
+                quantity_raw NUMERIC(10, 2) NOT NULL
             )
             """
         )
         connection.executemany(
-            "INSERT INTO purchase_import_lines "
-            "(id, quantity_raw, package_count, content_value) VALUES (?, ?, ?, ?)",
-            rows,
+            "INSERT INTO purchase_import_lines (id, quantity_raw) VALUES (?, ?)",
+            [
+                (PROVEN_QUANTITY_ID_ONE, "0.404"),
+                (PROVEN_QUANTITY_ID_TWO, "1.224"),
+                ("arbitrary-scale", "1.234567"),
+            ],
         )
         connection.commit()
     finally:
@@ -223,165 +216,30 @@ def test_unregistered_household_is_rejected() -> None:
             connection.close()
 
 
-def test_approved_legacy_quantity_precision_is_normalized_only_at_canonical_boundary() -> None:
+def test_legacy_quantity_precision_is_preserved_without_normalization() -> None:
     with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / "approved-quantity.sqlite"
-        _build_quantity_fixture(
-            path,
-            [
-                (APPROVED_QUANTITY_ID_ONE, "0.404", "1.234", "2.345"),
-                (APPROVED_QUANTITY_ID_TWO, "1.224", "3.456", "4.567"),
-                ("valid-two-decimals", "7.230", "5.678", "6.789"),
-            ],
-        )
+        path = Path(directory) / "quantity.sqlite"
+        _build_quantity_fixture(path)
+        before = path.read_bytes()
 
-        normalizations = _normalize_legacy_purchase_import_quantities(path)
-        assert normalizations == [
-            {
-                "table": "purchase_import_lines",
-                "column": "quantity_raw",
-                "id": APPROVED_QUANTITY_ID_ONE,
-                "source": "0.404",
-                "canonical": "0.40",
-            },
-            {
-                "table": "purchase_import_lines",
-                "column": "quantity_raw",
-                "id": APPROVED_QUANTITY_ID_TWO,
-                "source": "1.224",
-                "canonical": "1.22",
-            },
-        ], normalizations
+        report = _validate_legacy_purchase_import_quantities(path)
+        assert report == {"validated_rows": 3, "normalized_rows": 0}, report
 
         connection = sqlite3.connect(path)
         try:
             rows = {
-                str(row[0]): tuple(row[1:])
+                str(row[0]): Decimal(str(row[1]))
                 for row in connection.execute(
-                    "SELECT id, quantity_raw, package_count, content_value "
-                    "FROM purchase_import_lines ORDER BY id"
+                    "SELECT id, quantity_raw FROM purchase_import_lines ORDER BY id"
                 ).fetchall()
             }
         finally:
             connection.close()
 
-        assert Decimal(str(rows[APPROVED_QUANTITY_ID_ONE][0])) == Decimal("0.40"), rows
-        assert Decimal(str(rows[APPROVED_QUANTITY_ID_TWO][0])) == Decimal("1.22"), rows
-        assert Decimal(str(rows["valid-two-decimals"][0])) == Decimal("7.230"), rows
-        assert Decimal(str(rows[APPROVED_QUANTITY_ID_ONE][1])) == Decimal("1.234"), rows
-        assert Decimal(str(rows[APPROVED_QUANTITY_ID_ONE][2])) == Decimal("2.345"), rows
-        assert Decimal(str(rows[APPROVED_QUANTITY_ID_TWO][1])) == Decimal("3.456"), rows
-        assert Decimal(str(rows[APPROVED_QUANTITY_ID_TWO][2])) == Decimal("4.567"), rows
-
-
-def test_unknown_legacy_quantity_precision_fails_before_any_normalization() -> None:
-    with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / "unknown-quantity.sqlite"
-        _build_quantity_fixture(
-            path,
-            [
-                (APPROVED_QUANTITY_ID_ONE, "0.404", "1.234", "2.345"),
-                ("unexpected-quantity-precision", "1.234", "3.456", "4.567"),
-            ],
-        )
-
-        try:
-            _normalize_legacy_purchase_import_quantities(path)
-        except LegacyAdoptionError as exc:
-            assert "Onbekende legacy quantity_raw precision drift" in str(exc), exc
-        else:
-            raise AssertionError("Unknown >2-decimal legacy quantity must fail closed")
-
-        connection = sqlite3.connect(path)
-        try:
-            still_original = connection.execute(
-                "SELECT quantity_raw FROM purchase_import_lines WHERE id=?",
-                (APPROVED_QUANTITY_ID_ONE,),
-            ).fetchone()[0]
-        finally:
-            connection.close()
-        assert Decimal(str(still_original)) == Decimal("0.404"), still_original
-
-
-def test_known_legacy_quantity_id_with_unapproved_value_is_rejected() -> None:
-    with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / "changed-known-quantity.sqlite"
-        _build_quantity_fixture(
-            path,
-            [(APPROVED_QUANTITY_ID_ONE, "0.405", "1.234", "2.345")],
-        )
-        try:
-            _normalize_legacy_purchase_import_quantities(path)
-        except LegacyAdoptionError as exc:
-            assert "onverwachte waarde" in str(exc), exc
-        else:
-            raise AssertionError("Known legacy id with changed value must fail closed")
-
-
-def test_runtime_quantity_contract_and_engine_guard() -> None:
-    assert validate_purchase_import_quantity_raw("1") == Decimal("1")
-    assert validate_purchase_import_quantity_raw("1.2") == Decimal("1.2")
-    assert validate_purchase_import_quantity_raw("1.23") == Decimal("1.23")
-    assert validate_purchase_import_quantity_raw("1.230") == Decimal("1.230")
-    try:
-        validate_purchase_import_quantity_raw("1.231")
-    except PurchaseImportQuantityPrecisionError as exc:
-        assert "at most 2 meaningful decimal places" in str(exc), exc
-    else:
-        raise AssertionError("Meaningful third decimal must be rejected")
-
-    with tempfile.TemporaryDirectory() as directory:
-        runtime_path = Path(directory) / "runtime-quantity.sqlite"
-        old_url = os.environ.get("DATABASE_URL")
-        old_policy = os.environ.get("REZZERV_DATASTORE_POLICY")
-        os.environ["DATABASE_URL"] = f"sqlite:///{runtime_path.as_posix()}"
-        os.environ["REZZERV_DATASTORE_POLICY"] = "compatibility"
-        runtime_db = None
-        try:
-            import app.db as runtime_db_module
-
-            runtime_db = importlib.reload(runtime_db_module)
-            with runtime_db.engine.begin() as connection:
-                connection.execute(
-                    text(
-                        "CREATE TABLE purchase_import_lines "
-                        "(id TEXT PRIMARY KEY, quantity_raw NUMERIC(10,2) NOT NULL)"
-                    )
-                )
-                connection.execute(
-                    text(
-                        "INSERT INTO purchase_import_lines (id, quantity_raw) "
-                        "VALUES (:id, :quantity_raw)"
-                    ),
-                    {"id": "valid", "quantity_raw": "2.30"},
-                )
-                try:
-                    connection.execute(
-                        text(
-                            "INSERT INTO purchase_import_lines (id, quantity_raw) "
-                            "VALUES (:id, :quantity_raw)"
-                        ),
-                        {"id": "invalid", "quantity_raw": "2.301"},
-                    )
-                except PurchaseImportQuantityPrecisionError:
-                    pass
-                else:
-                    raise AssertionError("Runtime engine must reject >2-decimal quantity_raw")
-                count = connection.execute(
-                    text("SELECT COUNT(*) FROM purchase_import_lines")
-                ).scalar_one()
-                assert count == 1, count
-        finally:
-            if runtime_db is not None:
-                runtime_db.engine.dispose()
-            if old_url is None:
-                os.environ.pop("DATABASE_URL", None)
-            else:
-                os.environ["DATABASE_URL"] = old_url
-            if old_policy is None:
-                os.environ.pop("REZZERV_DATASTORE_POLICY", None)
-            else:
-                os.environ["REZZERV_DATASTORE_POLICY"] = old_policy
+        assert rows[PROVEN_QUANTITY_ID_ONE] == Decimal("0.404"), rows
+        assert rows[PROVEN_QUANTITY_ID_TWO] == Decimal("1.224"), rows
+        assert rows["arbitrary-scale"] == Decimal("1.234567"), rows
+        assert path.read_bytes() == before, "quantity validation must not rewrite the database"
 
 
 def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
@@ -409,11 +267,10 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
         assert report["manual_sources_added"] >= 1, report
         assert report["canonical_only_seeded_tables"].get("external_product_index", 0) > 0, report
         assert report["legacy_value_normalizations"] == [], report
-        assert report["purchase_import_quantity_contract"] == {
-            "maximum_meaningful_decimal_places": 2,
-            "normalized_rows": 0,
-            "policy": "explicit-known-legacy-values-only",
-        }, report
+        quantity_contract = report["purchase_import_quantity_contract"]
+        assert quantity_contract["maximum_meaningful_decimal_places"] is None, quantity_contract
+        assert quantity_contract["normalized_rows"] == 0, quantity_contract
+        assert quantity_contract["policy"] == "preserve-source-precision", quantity_contract
 
         connection = sqlite3.connect(working)
         try:
@@ -438,8 +295,7 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
                 """
             ).fetchone()
             assert manual == ("legacy-selftest-household", "manual_upload"), manual
-            fk_rows = connection.execute("PRAGMA foreign_key_check").fetchall()
-            assert fk_rows == [], fk_rows
+            assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
             seed_count = connection.execute(
                 "SELECT COUNT(*) FROM external_product_index"
             ).fetchone()[0]
@@ -455,14 +311,8 @@ def main() -> None:
     print("POSTGRESQL_LEGACY_ADOPTION_UNKNOWN_SOURCE_REJECTED_GREEN")
     test_unregistered_household_is_rejected()
     print("POSTGRESQL_LEGACY_ADOPTION_UNREGISTERED_HOUSEHOLD_REJECTED_GREEN")
-    test_approved_legacy_quantity_precision_is_normalized_only_at_canonical_boundary()
-    print("POSTGRESQL_LEGACY_ADOPTION_QUANTITY_NORMALIZATION_GREEN")
-    test_unknown_legacy_quantity_precision_fails_before_any_normalization()
-    print("POSTGRESQL_LEGACY_ADOPTION_UNKNOWN_QUANTITY_PRECISION_REJECTED_GREEN")
-    test_known_legacy_quantity_id_with_unapproved_value_is_rejected()
-    print("POSTGRESQL_LEGACY_ADOPTION_CHANGED_KNOWN_QUANTITY_REJECTED_GREEN")
-    test_runtime_quantity_contract_and_engine_guard()
-    print("PURCHASE_IMPORT_QUANTITY_RUNTIME_GUARD_GREEN")
+    test_legacy_quantity_precision_is_preserved_without_normalization()
+    print("POSTGRESQL_LEGACY_ADOPTION_QUANTITY_PRECISION_PRESERVED_GREEN")
     test_canonical_rebuild_preserves_source_and_migration_owned_data()
     print("POSTGRESQL_LEGACY_ADOPTION_CANONICAL_REBUILD_GREEN")
     print("POSTGRESQL_LEGACY_ADOPTION_SOURCE_DATA_PRESERVED_GREEN")

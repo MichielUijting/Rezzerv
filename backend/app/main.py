@@ -1189,7 +1189,7 @@ def list_household_role_change_audit(conn, household_id: str, limit: int = 20) -
             SELECT changed_user_email, old_role, new_role, changed_by_user_email, action_type, created_at
             FROM household_role_change_audit
             WHERE household_id = :household_id
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC NULLS LAST, id DESC
             LIMIT :limit
             """
         ).bindparams(bindparam('limit', type_=None)),

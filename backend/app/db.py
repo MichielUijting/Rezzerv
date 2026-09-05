@@ -22,9 +22,6 @@ from app.services.postgresql_boolean_contract import (
     enforce_postgresql_boolean_parameters_before_execute,
     enforce_postgresql_boolean_sql_before_cursor_execute,
 )
-from app.services.purchase_import_quantity_contract import (
-    enforce_purchase_import_quantity_precision_before_execute,
-)
 
 
 _DEFAULT_SQLITE_DATABASE_URL = "sqlite:////app/data/rezzerv.db"
@@ -105,11 +102,6 @@ elif DATASTORE_KIND == "postgresql":
     )
 
 engine = create_engine(_engine_url, **engine_kwargs)
-event.listen(
-    engine,
-    "before_execute",
-    enforce_purchase_import_quantity_precision_before_execute,
-)
 event.listen(
     engine,
     "before_execute",

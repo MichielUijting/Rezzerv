@@ -4,13 +4,16 @@ on:
   pull_request:
     paths:
       - 'backend/alembic/versions/20260829_15_receipt_store_chain_schema_authority.py'
+      - 'backend/app/main.py'
       - 'backend/app/services/receipt_inventory_lifecycle_service.py'
       - 'backend/app/services/receipt_status_sync.py'
       - 'backend/app/services/receipt_reimport_lineage_service.py'
       - 'backend/app/services/receipt_source_helper_service.py'
       - 'backend/app/services/receipt_status_baseline_service.py'
+      - 'backend/tests/household_members_postgresql_runtime_selftest.py'
       - 'backend/tests/postgresql_receipt_residual_portability_selftest.py'
       - 'backend/tests/postgresql_receipt_residual_dml_only_selftest.py'
+      - 'backend/tests/postgresql_unpack_start_runtime_selftest.py'
       - '.github/workflows/postgresql-receipt-residual-portability.yml'
   workflow_dispatch:
 
@@ -40,8 +43,10 @@ jobs:
       MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
 
     steps:
-      - name: Checkout
+      - name: Checkout exact PR head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -90,7 +95,13 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/receipt-residual-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/receipt-residual-migration.log
-          grep -F "'revision': '20260829_15'" /tmp/receipt-residual-migration.log
+          grep -F "'revision': '20260903_01'" /tmp/receipt-residual-migration.log
+
+      - name: Reproduce household members role audit query on PostgreSQL
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/household_members_postgresql_runtime_selftest.py | tee /tmp/household-members-runtime.log
+          grep -F 'POSTGRESQL_HOUSEHOLD_MEMBERS_ROLE_AUDIT_QUERY_GREEN' /tmp/household-members-runtime.log
 
       - name: Prove receipt residual paths with DML-only runtime role
         working-directory: backend
@@ -99,6 +110,7 @@ jobs:
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_RUNTIME_CREATE_DENIED_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_SCHEMA_CONTRACT_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_BOOLEAN_TYPES_GREEN' /tmp/receipt-residual-dml-only.log
+          grep -F 'POSTGRESQL_RECEIPT_APPROVE_NULLABLE_STRING_BIND_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_INVENTORY_RETIME_DML_ONLY_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_REIMPORT_LINEAGE_DML_ONLY_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_SOURCE_BOOLEAN_DML_ONLY_GREEN' /tmp/receipt-residual-dml-only.log
@@ -106,3 +118,9 @@ jobs:
           grep -F 'POSTGRESQL_RECEIPT_STATUS_SYNC_DML_ONLY_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_SCHEMA_UNCHANGED_GREEN' /tmp/receipt-residual-dml-only.log
           grep -F 'POSTGRESQL_RECEIPT_RESIDUAL_DML_ONLY_SELFTEST_GREEN' /tmp/receipt-residual-dml-only.log
+
+      - name: Prove approved receipt reaches Uitpakken with DML-only runtime role
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_unpack_start_runtime_selftest.py | tee /tmp/receipt-unpack-start.log
+          grep -F 'POSTGRESQL_RECEIPT_UNPACK_START_BATCH_GREEN' /tmp/receipt-unpack-start.log

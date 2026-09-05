@@ -6,7 +6,7 @@ import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { StoreBatchDetailContent } from '../purchaseImport/StoreBatchDetailPage'
 import { fetchJson, normalizeErrorMessage, providerLabel } from '../stores/storeImportShared'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 
@@ -14,9 +14,8 @@ export default function ReceiptsPage() {
   const [batches, setBatches] = useState([])
   const [filters, setFilters] = useState({ winkel: '', datum: '', regels: '', status: '' })
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useDismissOnComponentClick([() => setError('')], Boolean(error))
+  const [hasLoadError, setHasLoadError] = useState(false)
+  const { showFeedback } = useAppFeedback()
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
   const [openedBatchId, setOpenedBatchId] = useState(() => (
     new URLSearchParams(window.location.search).get('batch') || ''
@@ -45,7 +44,7 @@ export default function ReceiptsPage() {
 
     async function loadData() {
       setIsLoading(true)
-      setError('')
+      setHasLoadError(false)
       try {
         const householdData = await fetchJson('/api/household')
         if (cancelled) return
@@ -55,7 +54,12 @@ export default function ReceiptsPage() {
         setBatches(Array.isArray(unpackData?.items) ? unpackData.items : [])
       } catch (err) {
         if (!cancelled) {
-          setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
+          setHasLoadError(true)
+          showFeedback({
+            variant: 'error',
+            message: normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.',
+            key: 'receipts-load-error',
+          })
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -64,7 +68,7 @@ export default function ReceiptsPage() {
 
     loadData()
     return () => { cancelled = true }
-  }, [location.search])
+  }, [location.search, showFeedback])
 
   const listItems = useMemo(() => {
     const enriched = (batches || []).map((batch) => ({
@@ -90,7 +94,7 @@ export default function ReceiptsPage() {
   }, [batches, filters, tableSort])
 
   useEffect(() => {
-    if (isLoading) return
+    if (isLoading || hasLoadError) return
 
     if (!listItems.length) {
       setSelectedBatchIds([])
@@ -103,7 +107,7 @@ export default function ReceiptsPage() {
     if (openedBatchId && !visibleIds.has(openedBatchId)) {
       setOpenedBatchId('')
     }
-  }, [isLoading, listItems, openedBatchId])
+  }, [hasLoadError, isLoading, listItems, openedBatchId])
 
   function handleFilterChange(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
@@ -145,7 +149,6 @@ export default function ReceiptsPage() {
 
   function handleDeleteSelected() {
     if (selectedBatchIds.length === 0) return
-    setError('')
     setDeleteChoiceOpen(true)
   }
 
@@ -156,7 +159,6 @@ export default function ReceiptsPage() {
     if (!selectedBatches.length) return
 
     setIsApplyingDeleteChoice(true)
-    setError('')
     try {
       if (action === 'remove') {
         const receiptTableIds = selectedBatches
@@ -186,7 +188,11 @@ export default function ReceiptsPage() {
       setSelectedBatchIds([])
       setDeleteChoiceOpen(false)
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'De gekozen kassabonactie is mislukt.')
+      showFeedback({
+        variant: 'error',
+        message: normalizeErrorMessage(err?.message) || 'De gekozen kassabonactie is mislukt.',
+        key: 'receipts-delete-error',
+      })
     } finally {
       setIsApplyingDeleteChoice(false)
     }
@@ -198,7 +204,6 @@ export default function ReceiptsPage() {
     <AppShell title="Uitpakken" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="receipts-page">
         <ScreenCard>
-        {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
         <Table dataTestId="receipts-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
             <colgroup>
               <col style={{ width: `${tableWidths.select}px` }} />
@@ -265,7 +270,7 @@ export default function ReceiptsPage() {
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={5}>Bonnen laden…</td></tr>
-              ) : listItems.length === 0 ? (
+              ) : hasLoadError ? null : listItems.length === 0 ? (
                 <tr><td colSpan={5}>Er zijn nog geen kassabonnen.</td></tr>
               ) : listItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
