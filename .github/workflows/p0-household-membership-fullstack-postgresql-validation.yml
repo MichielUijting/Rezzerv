@@ -145,7 +145,6 @@ jobs:
           grep -F 'P0_L4_02_MEMBERSHIP_SWITCH_BROWSER_GREEN' frontend/p0-l4-02-browser.log
 
       - name: Capture exact accepted invitation hash from browser proof
-        id: invitation-token
         shell: bash
         run: |
           set -euo pipefail
@@ -154,7 +153,6 @@ jobs:
             echo "Browser proof did not produce a valid SHA-256 invitation token hash." >&2
             exit 1
           fi
-          printf 'token_hash=%s\n' "${token_hash}" >> "${GITHUB_OUTPUT}"
           printf 'L4_INVITATION_TOKEN_HASH=%s\n' "${token_hash}" >> "${GITHUB_ENV}"
 
       - name: Verify exact PostgreSQL end state after browser actions
@@ -165,7 +163,7 @@ jobs:
             -e L4_MEMBER_EMAIL="$PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_EMAIL" \
             -e L4_ADMIN_HOUSEHOLD="$PLAYWRIGHT_L4_MEMBERSHIP_ADMIN_HOUSEHOLD" \
             -e L4_MEMBER_HOUSEHOLD="$PLAYWRIGHT_L4_MEMBERSHIP_MEMBER_HOUSEHOLD" \
-            -e L4_INVITATION_TOKEN="$L4_INVITATION_TOKEN" \
+            -e L4_INVITATION_TOKEN_HASH="$L4_INVITATION_TOKEN_HASH" \
             backend python -u - <<'PY' | tee p0-l4-02-postgresql-end-state.log
           import os
           from sqlalchemy import text
@@ -175,7 +173,8 @@ jobs:
           member_email = os.environ["L4_MEMBER_EMAIL"].strip().lower()
           admin_name = os.environ["L4_ADMIN_HOUSEHOLD"].strip()
           member_name = os.environ["L4_MEMBER_HOUSEHOLD"].strip()
-          raw_token = os.environ["L4_INVITATION_TOKEN"].strip()
+          token_hash = os.environ["L4_INVITATION_TOKEN_HASH"].strip().lower()
+          assert len(token_hash) == 64 and all(ch in "0123456789abcdef" for ch in token_hash), token_hash
 
           with engine.begin() as conn:
               admin_rows = conn.execute(text("""
@@ -224,20 +223,19 @@ jobs:
                   {"email": member_email},
               ).scalar_one())
               invitation = conn.execute(text("""
-                  SELECT household_id, invitee_email, status, accepted_by_user_id,
+                  SELECT household_id, invitee_email, role_key, status, accepted_by_user_id,
                          accepted_at, token_hash, delivery_status
                   FROM public.household_invitations
-                  WHERE household_id = :household_id
-                    AND lower(invitee_email) = :email
-                  ORDER BY created_at DESC
-                  LIMIT 1
-              """), {"household_id": admin_household_id, "email": member_email}).mappings().one()
+                  WHERE token_hash = :token_hash
+              """), {"token_hash": token_hash}).mappings().one()
+              assert str(invitation["household_id"]) == admin_household_id, invitation
+              assert str(invitation["invitee_email"]).strip().lower() == member_email, invitation
+              assert invitation["role_key"] == "household.member", invitation
               assert invitation["status"] == "accepted", invitation
               assert invitation["delivery_status"] == "sent", invitation
               assert str(invitation["accepted_by_user_id"]) == member_user_id, invitation
               assert invitation["accepted_at"] is not None, invitation
-              assert invitation["token_hash"] == hash_invitation_token(raw_token), invitation
-              assert invitation["token_hash"] != raw_token, invitation
+              assert invitation["token_hash"] == token_hash, invitation
 
               admin_in_member_household = int(conn.execute(text("""
                   SELECT COUNT(*) FROM public.household_memberships
