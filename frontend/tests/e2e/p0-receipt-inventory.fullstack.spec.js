@@ -151,8 +151,80 @@ async function readBatch(page, batchId) {
   return response.json()
 }
 
-test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> history', async ({ page, request }, testInfo) => {
-  test.setTimeout(300_000)
+async function openInventoryArticle(page, householdArticleId) {
+  await page.goto('/voorraad')
+  await expect(page.getByTestId('inventory-page')).toBeVisible({ timeout: 30_000 })
+  const row = page.getByTestId(`inventory-row-${householdArticleId}`)
+  await expect(row).toBeVisible({ timeout: 30_000 })
+  await row.dblclick()
+  await expect(page.getByTestId('article-detail-page')).toBeVisible({ timeout: 30_000 })
+}
+
+async function configureAlmostOutThreshold(page, minStock, idealStock) {
+  await page.getByTestId('article-overview-subtab-household').click()
+  const settingsSection = page.getByTestId('article-household-settings-section')
+  await expect(settingsSection).toBeVisible()
+
+  const sectionToggle = settingsSection.getByRole('button', { name: 'Instellingen voor dit huishouden', exact: true })
+  if ((await sectionToggle.getAttribute('aria-expanded')) !== 'true') await sectionToggle.click()
+
+  await page.getByTestId('article-details-input-min_stock').fill(String(minStock))
+  await page.getByTestId('article-details-input-ideal_stock').fill(String(idealStock))
+
+  const settingsResponsePromise = page.waitForResponse((response) => (
+    response.url().includes('/api/household-articles/')
+    && response.url().includes('/settings')
+    && ['PUT', 'PATCH'].includes(response.request().method())
+  ))
+  await page.getByTestId('article-household-settings-save').click()
+  expect((await settingsResponsePromise).ok()).toBeTruthy()
+  await expect(page.getByTestId('article-settings-save-success')).toBeVisible({ timeout: 20_000 })
+}
+
+async function expectAlmostOutAbsence(page, articleName) {
+  await page.goto('/bijna-op')
+  await expect(page.getByTestId('almost-out-page')).toBeVisible({ timeout: 30_000 })
+  const table = page.getByTestId('almost-out-table')
+  await expect(table).toBeVisible()
+  await expect(table.getByText(articleName, { exact: true })).toHaveCount(0)
+}
+
+async function expectAlmostOutPresence(page, articleName, finalQuantity, minStock) {
+  await page.goto('/bijna-op')
+  await expect(page.getByTestId('almost-out-page')).toBeVisible({ timeout: 30_000 })
+  const table = page.getByTestId('almost-out-table')
+  await expect(table).toBeVisible()
+  const row = table.getByRole('row').filter({ hasText: articleName })
+  await expect(row).toHaveCount(1)
+  await expect(row).toContainText(String(finalQuantity))
+  await expect(row).toContainText(String(minStock))
+}
+
+async function consumeThroughArticleStock(page, householdArticleId, inventoryId, consumeQuantity) {
+  await openInventoryArticle(page, householdArticleId)
+  await page.getByRole('button', { name: 'Voorraad', exact: true }).click()
+
+  const consumeButton = page.getByTestId(`article-stock-consume-${inventoryId}`)
+  await expect(consumeButton).toBeVisible({ timeout: 20_000 })
+  await consumeButton.click()
+
+  const form = page.getByTestId('article-stock-mutation-form')
+  await expect(form).toBeVisible()
+  await form.getByLabel('Aantal afboeken').fill(String(consumeQuantity))
+  await form.getByLabel('Reden / notitie').fill('L4-03 Bijna-op drempelovergang')
+
+  const mutationResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === `/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`
+    && response.request().method() === 'POST'
+  ))
+  await form.getByRole('button', { name: 'Opslaan', exact: true }).click()
+  const mutationResponse = await mutationResponsePromise
+  expect(mutationResponse.ok()).toBeTruthy()
+  await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraad is afgeboekt.', { timeout: 20_000 })
+}
+
+test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> history -> Bijna-op NEE -> JA', async ({ page, request }, testInfo) => {
+  test.setTimeout(360_000)
 
   const accountEmail = required('PLAYWRIGHT_L4_RECEIPT_EMAIL', email).toLowerCase()
   const accountPassword = required('PLAYWRIGHT_L4_RECEIPT_PASSWORD', password)
@@ -219,7 +291,38 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
   const inventoryRows = Array.isArray(inventory?.rows) ? inventory.rows : []
   const locationRows = inventoryRows.filter((item) => String(item?.locatie || '') === expectedLocationName)
   expect(locationRows.length).toBeGreaterThan(0)
-  expect(locationRows.some((item) => Number(item?.aantal || 0) > 0)).toBeTruthy()
+
+  const targetInventory = locationRows.find((item) => (
+    Number(item?.aantal || 0) > 0
+    && String(item?.id || '').trim()
+    && String(item?.household_article_id || '').trim()
+  ))
+  expect(targetInventory, JSON.stringify(locationRows)).toBeTruthy()
+
+  const inventoryId = String(targetInventory.id)
+  const householdArticleId = String(targetInventory.household_article_id)
+  const articleName = String(targetInventory.artikel || targetInventory.household_article_name || '').trim()
+  const initialQuantity = Number(targetInventory.aantal || 0)
+  expect(articleName).not.toBe('')
+  expect(Number.isInteger(initialQuantity)).toBeTruthy()
+  expect(initialQuantity).toBeGreaterThan(0)
+
+  const minStock = Math.max(initialQuantity - 1, 0)
+  const idealStock = initialQuantity
+  const consumeQuantity = 1
+  const finalQuantity = initialQuantity - consumeQuantity
+
+  await openInventoryArticle(page, householdArticleId)
+  await configureAlmostOutThreshold(page, minStock, idealStock)
+
+  // Dezelfde productie-UI moet vóór verbruik bewijzen dat dit artikel nog niet Bijna-op is.
+  await expectAlmostOutAbsence(page, articleName)
+
+  // Afboeken loopt via de echte artikelvoorraad-route en schrijft daarmee ook een consume-event/historie.
+  await consumeThroughArticleStock(page, householdArticleId, inventoryId, consumeQuantity)
+
+  // Na exact dezelfde mutatie moet de zichtbare Bijna-op-projectie omslaan van NEE naar JA.
+  await expectAlmostOutPresence(page, articleName, finalQuantity, minStock)
 
   writeFileSync(join(process.cwd(), 'p0-l4-03-browser-proof.json'), JSON.stringify({
     email: accountEmail,
@@ -228,7 +331,18 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
     batchId,
     lineId,
     locationName: expectedLocationName,
+    inventoryId,
+    householdArticleId,
+    articleName,
+    initialQuantity,
+    minStock,
+    idealStock,
+    consumeQuantity,
+    finalQuantity,
+    almostOutBefore: false,
+    almostOutAfter: true,
   }, null, 2))
 
   console.log('P0_L4_03_RECEIPT_INVENTORY_BROWSER_GREEN')
+  console.log('P0_L4_03_ALMOST_OUT_TRANSITION_BROWSER_GREEN')
 })
