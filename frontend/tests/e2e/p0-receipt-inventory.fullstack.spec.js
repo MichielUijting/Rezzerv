@@ -117,7 +117,10 @@ async function openInventoryArticle(page, householdArticleId) {
   await expect(page.getByTestId('inventory-page')).toBeVisible({ timeout: 30_000 })
   const row = page.getByTestId(`inventory-row-${householdArticleId}`)
   await expect(row).toBeVisible({ timeout: 30_000 })
+  const detailsResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/household-articles/${encodeURIComponent(householdArticleId)}` && response.request().method() === 'GET')
   await row.locator('[title="Dubbelklik op de rij voor details"]').dblclick()
+  const detailsResponse = await detailsResponsePromise
+  expect(detailsResponse.ok()).toBeTruthy()
   await expect(page.getByTestId('article-detail-page')).toBeVisible({ timeout: 30_000 })
 }
 
@@ -137,6 +140,8 @@ async function configureAlmostOutThreshold(page, minStock, idealStock) {
   await expect(idealStockInput).toBeVisible()
   await minStockInput.fill(String(minStock))
   await idealStockInput.fill(String(idealStock))
+  await expect(minStockInput).toHaveValue(String(minStock))
+  await expect(idealStockInput).toHaveValue(String(idealStock))
   const settingsResponsePromise = page.waitForResponse((response) => response.url().includes('/api/household-articles/') && response.url().includes('/settings') && response.request().method() === 'PUT')
   await page.getByTestId('article-household-settings-save').click()
   expect((await settingsResponsePromise).ok()).toBeTruthy()
