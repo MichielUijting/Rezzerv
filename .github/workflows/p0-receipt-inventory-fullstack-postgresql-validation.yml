@@ -160,7 +160,7 @@ jobs:
             -e L4_BATCH_ID="$L4_BATCH_ID" \
             -e L4_LINE_ID="$L4_LINE_ID" \
             -e L4_LOCATION_NAME="$L4_LOCATION_NAME" \
-            backend python -u - <<'PY' | tee p0-l4-03-postgresql-end-state.log
+            backend python -u - <<'PY' 2>&1 | tee p0-l4-03-postgresql-end-state.log
           import os
           from decimal import Decimal
           from sqlalchemy import text
@@ -207,13 +207,15 @@ jobs:
               assert str(batch["household_id"]) == household_id, batch
 
               line = conn.execute(text("""
-                  SELECT id, batch_id, quantity_raw, target_location_id, processing_status
+                  SELECT id, batch_id, quantity_raw, target_location_id, processing_status,
+                         processed_event_id
                   FROM public.purchase_import_lines
                   WHERE id = :line_id
               """), {"line_id": line_id}).mappings().one()
               assert str(line["batch_id"]) == batch_id, line
               assert Decimal(str(line["quantity_raw"])) > 0, line
               assert str(line["processing_status"]) == "processed", line
+              assert line["processed_event_id"] is not None, line
 
               space = conn.execute(text("""
                   SELECT id, household_id, naam
@@ -234,14 +236,19 @@ jobs:
               inventory = next((row for row in inventory_rows if Decimal(str(row["aantal"] or 0)) > 0), None)
               assert inventory is not None, inventory_rows
 
-              purchase_event_count = int(conn.execute(text("""
-                  SELECT COUNT(*)
+              purchase_event = conn.execute(text("""
+                  SELECT id, household_id, household_article_id, location_id,
+                         event_type, quantity, source
                   FROM public.inventory_events
-                  WHERE household_id = :household_id
-                    AND inventory_id = :inventory_id
-                    AND event_type = 'purchase'
-              """), {"household_id": household_id, "inventory_id": str(inventory["id"])}).scalar_one())
-              assert purchase_event_count >= 1, purchase_event_count
+                  WHERE id = :event_id
+              """), {"event_id": str(line["processed_event_id"])}).mappings().one()
+              assert str(purchase_event["id"]) == str(line["processed_event_id"]), (purchase_event, line)
+              assert str(purchase_event["household_id"]) == household_id, purchase_event
+              assert str(purchase_event["event_type"]) == "purchase", purchase_event
+              assert Decimal(str(purchase_event["quantity"])) > 0, purchase_event
+              assert str(purchase_event["source"]) == "store_import", purchase_event
+              assert str(purchase_event["household_article_id"]) == str(inventory["household_article_id"]), (purchase_event, inventory)
+              assert str(purchase_event["location_id"]) == str(space["id"]), (purchase_event, space)
 
           print(f"email={email}")
           print(f"household_id={household_id}")
