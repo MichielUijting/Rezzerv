@@ -144,13 +144,18 @@ jobs:
             bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-household-membership.fullstack.spec.js --config=playwright.membership-fullstack.config.js --project=chromium-membership-fullstack | tee /work/p0-l4-02-browser.log"
           grep -F 'P0_L4_02_MEMBERSHIP_SWITCH_BROWSER_GREEN' frontend/p0-l4-02-browser.log
 
-      - name: Capture invitation token for independent database hash proof
+      - name: Capture exact accepted invitation hash from browser proof
+        id: invitation-token
         shell: bash
         run: |
-          token="$(curl --fail --silent http://localhost:18080/latest | python -c 'import json,re,sys,urllib.parse; p=json.load(sys.stdin); m=re.search(r"/uitnodiging/([^\\s]+)", str(p.get("text") or "")); assert m; print(urllib.parse.unquote(m.group(1)))')"
-          test -n "$token"
-          echo "::add-mask::$token"
-          echo "L4_INVITATION_TOKEN=$token" >> "$GITHUB_ENV"
+          set -euo pipefail
+          token_hash="$(tr -d '\r\n' < frontend/p0-l4-02-invitation-token-hash.txt)"
+          if ! [[ "${token_hash}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Browser proof did not produce a valid SHA-256 invitation token hash." >&2
+            exit 1
+          fi
+          printf 'token_hash=%s\n' "${token_hash}" >> "${GITHUB_OUTPUT}"
+          printf 'L4_INVITATION_TOKEN_HASH=%s\n' "${token_hash}" >> "${GITHUB_ENV}"
 
       - name: Verify exact PostgreSQL end state after browser actions
         shell: bash
@@ -165,7 +170,6 @@ jobs:
           import os
           from sqlalchemy import text
           from app.db import engine
-          from app.services.household_invitation_service import hash_invitation_token
 
           admin_email = os.environ["L4_ADMIN_EMAIL"].strip().lower()
           member_email = os.environ["L4_MEMBER_EMAIL"].strip().lower()
