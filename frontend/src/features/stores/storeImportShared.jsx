@@ -3,6 +3,125 @@ import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
 import { sortOptionObjects } from '../../ui/sorting'
 import { fetchJsonWithAuth, getAuthHeaders } from '../../lib/authSession'
+import './locationlessStoreImport.css'
+
+const LOCATIONLESS_UI_SENTINEL = '__rezzerv_locationless__'
+const LOCATION_TRACKING_LEVELS = new Set(['none', 'global', 'exact'])
+let activeLocationTrackingLevel = ''
+
+function requestMethod(options = {}) {
+  return String(options?.method || 'GET').trim().toUpperCase() || 'GET'
+}
+
+function apiPath(url) {
+  try {
+    return new URL(String(url || ''), 'http://rezzerv.local').pathname
+  } catch {
+    return String(url || '').split('?')[0]
+  }
+}
+
+function setActiveLocationTrackingLevel(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  activeLocationTrackingLevel = LOCATION_TRACKING_LEVELS.has(normalized) ? normalized : ''
+
+  if (typeof document !== 'undefined' && document?.documentElement) {
+    if (activeLocationTrackingLevel) {
+      document.documentElement.dataset.rezzervLocationTrackingLevel = activeLocationTrackingLevel
+    } else {
+      delete document.documentElement.dataset.rezzervLocationTrackingLevel
+    }
+  }
+
+  return activeLocationTrackingLevel
+}
+
+async function fetchLocationTrackingLevel() {
+  try {
+    const response = await fetchJsonWithAuth('/api/onboarding/capabilities', {
+      headers: {
+        Accept: 'application/json',
+        ...getAuthHeaders(),
+      },
+      cache: 'no-store',
+    })
+    if (!response.ok) return ''
+    const payload = await response.json().catch(() => ({}))
+    return String(payload?.product_configuration?.location_tracking_level || '').trim().toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+async function syncLocationTrackingLevel(householdData) {
+  const inlineLevel = String(
+    householdData?.product_configuration?.location_tracking_level
+      || householdData?.location_tracking_level
+      || ''
+  ).trim().toLowerCase()
+
+  if (LOCATION_TRACKING_LEVELS.has(inlineLevel)) {
+    return setActiveLocationTrackingLevel(inlineLevel)
+  }
+
+  const householdId = String(householdData?.active_household_id ?? householdData?.id ?? '').trim()
+  if (householdId === '0') {
+    return setActiveLocationTrackingLevel('')
+  }
+
+  const capabilityLevel = await fetchLocationTrackingLevel()
+  return setActiveLocationTrackingLevel(capabilityLevel)
+}
+
+function locationlessSyntheticSpace() {
+  return {
+    id: LOCATIONLESS_UI_SENTINEL,
+    naam: 'Geen locatie nodig',
+    active: true,
+  }
+}
+
+function projectLocationlessRead(url, options, data) {
+  if (activeLocationTrackingLevel !== 'none' || requestMethod(options) !== 'GET') return data
+
+  const path = apiPath(url)
+  if (path === '/api/spaces') {
+    return { ...(data || {}), items: [locationlessSyntheticSpace()] }
+  }
+  if (path === '/api/sublocations') {
+    return { ...(data || {}), items: [] }
+  }
+  if (/^\/api\/purchase-import-batches\/[^/]+$/.test(path) && data && Array.isArray(data.lines)) {
+    return {
+      ...data,
+      lines: data.lines.map((line) => (
+        String(line?.processing_status || 'pending') === 'processed'
+          ? line
+          : { ...line, target_location_id: LOCATIONLESS_UI_SENTINEL }
+      )),
+    }
+  }
+
+  return data
+}
+
+function normalizeLocationlessWrite(url, options = {}) {
+  if (activeLocationTrackingLevel !== 'none') return options
+  if (requestMethod(options) === 'GET') return options
+  if (!/^\/api\/purchase-import-lines\/[^/]+\/target-location$/.test(apiPath(url))) return options
+  if (!options?.body) return options
+
+  try {
+    const payload = JSON.parse(options.body)
+    if (String(payload?.target_location_id || '') !== LOCATIONLESS_UI_SENTINEL) return options
+    return {
+      ...options,
+      body: JSON.stringify({ ...payload, target_location_id: null }),
+    }
+  } catch {
+    return options
+  }
+}
 
 
 export function normalizeErrorMessage(value) {
@@ -34,14 +153,15 @@ export function normalizeErrorMessage(value) {
 }
 
 async function requestJson(url, options = {}) {
+  const effectiveOptions = normalizeLocationlessWrite(url, options)
   const response = await fetchJsonWithAuth(url, {
     headers: {
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
-      ...(options.headers || {}),
+      ...(effectiveOptions.headers || {}),
     },
-    cache: options.cache || 'no-store',
-    ...options,
+    cache: effectiveOptions.cache || 'no-store',
+    ...effectiveOptions,
   })
 
   const responseText = await response.text()
@@ -68,7 +188,11 @@ async function requestJson(url, options = {}) {
     throw new Error(normalizeErrorMessage(data?.detail || data || responseText))
   }
 
-  return data
+  if (apiPath(url) === '/api/household' && requestMethod(effectiveOptions) === 'GET') {
+    await syncLocationTrackingLevel(data)
+  }
+
+  return projectLocationlessRead(url, effectiveOptions, data)
 }
 
 export async function fetchJson(url, options = {}) {
@@ -218,7 +342,8 @@ export function batchStatusLabel(value) {
 export function suggestionLabel(line) {
   if (line?.preparation_explanation) return line.preparation_explanation
   if (line?.suggestion_reason) return line.suggestion_reason
-  if (line?.is_auto_prefilled && (line.review_decision || 'pending') === 'selected' && line.matched_household_article_id && line.target_location_id) {
+  const locationSatisfied = activeLocationTrackingLevel === 'none' || Boolean(line?.target_location_id)
+  if (line?.is_auto_prefilled && (line.review_decision || 'pending') === 'selected' && line.matched_household_article_id && locationSatisfied) {
     return 'Automatisch voorbereid'
   }
   if (line?.suggested_household_article_id || line?.suggested_location_id) {
@@ -239,7 +364,8 @@ export function deriveBatchUiState(batch) {
   const failedCount = Number(summary.failed || lines.filter((line) => (line.processing_status || 'pending') === 'failed').length || 0)
   const visibleLines = lines.filter((line) => (line.processing_status || 'pending') !== 'processed')
   const selectedLines = visibleLines.filter((line) => (line.review_decision || 'pending') === 'selected')
-  const readyLines = selectedLines.filter((line) => line.matched_household_article_id && line.target_location_id)
+  const locationRequired = activeLocationTrackingLevel !== 'none'
+  const readyLines = selectedLines.filter((line) => line.matched_household_article_id && (!locationRequired || line.target_location_id))
   const blockedLines = selectedLines.length - readyLines.length
   const pendingReviewCount = visibleLines.filter((line) => (line.review_decision || 'pending') === 'pending').length
   const openCount = Math.max(visibleLines.length - readyLines.length, 0)
@@ -272,7 +398,9 @@ export function deriveBatchUiState(batch) {
       actionType: 'resume',
       rank: 0,
       progressText: `${readyLines.length} klaar / ${blockedLines} geblokkeerd`,
-      statusReason: `${blockedLines} regel(s) missen nog een artikel of locatie en vragen gebruikersactie.`,
+      statusReason: locationRequired
+        ? `${blockedLines} regel(s) missen nog een artikel of locatie en vragen gebruikersactie.`
+        : `${blockedLines} regel(s) missen nog een artikel en vragen gebruikersactie.`,
       primaryActionReason: 'Kies Hervatten om de openstaande of geblokkeerde regels in de bon af te maken.',
       canResume,
       countsReason,

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Tabs from '../../ui/Tabs'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import demoData from '../../demo-articles.json'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility'
 import ArticleOverviewSubtabs from './tabs/ArticleOverviewSubtabs'
@@ -12,7 +13,8 @@ import ArticleHistoryTab from './tabs/ArticleHistoryTab'
 import ArticleAnalyticsSubtabs from './tabs/ArticleAnalyticsSubtabs'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
-const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
+const TABS_WITH_LOCATIONS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
+const TABS_WITHOUT_LOCATIONS = ['Overzicht', 'Voorraad', 'Historie', 'Analyse']
 
 function PlaceholderTab({ text }) {
   return <div style={{ color: '#667085' }}>{text}</div>
@@ -96,6 +98,13 @@ async function fetchInventoryPreview() {
   if (!response.ok) throw new Error('Live artikelvoorraad kon niet worden geladen')
   const data = await response.json()
   return Array.isArray(data?.rows) ? data.rows : []
+}
+
+async function fetchArticlePrimaryUseCase() {
+  const response = await fetchJsonWithAuth('/api/onboarding')
+  if (!response.ok) return ''
+  const data = await response.json().catch(() => ({}))
+  return String(data?.primary_use_case || '').trim().toLowerCase()
 }
 
 function mapEventTypeLabel(eventType) {
@@ -289,6 +298,7 @@ function ArticleDetailState({ title, message }) {
 export default function ArticlePage() {
   const { articleId } = useParams()
   const [searchParams] = useSearchParams()
+  const { showFeedback } = useAppFeedback()
   const { visibilityMap, isLoading: visibilityLoading, error: visibilityError } = useArticleFieldVisibility()
   const [automationVersion, setAutomationVersion] = useState(0)
   const [liveInventoryRows, setLiveInventoryRows] = useState([])
@@ -299,6 +309,7 @@ export default function ArticlePage() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [inventoryRefreshVersion, setInventoryRefreshVersion] = useState(0)
   const [householdDetails, setHouseholdDetails] = useState(null)
+  const [primaryUseCase, setPrimaryUseCase] = useState('')
 
   useEffect(() => {
     function handleAutomationChange() {
@@ -311,6 +322,20 @@ export default function ArticlePage() {
     return () => {
       window.removeEventListener('rezzerv-household-automation-updated', handleAutomationChange)
       window.removeEventListener('rezzerv-article-auto-consume-overrides-updated', handleAutomationChange)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchArticlePrimaryUseCase()
+      .then((value) => {
+        if (!cancelled) setPrimaryUseCase(value)
+      })
+      .catch(() => {
+        if (!cancelled) setPrimaryUseCase('')
+      })
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -379,14 +404,21 @@ export default function ArticlePage() {
           setLiveHistoryRows(rows)
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
+          const message = hasLiveInventoryMatch
+            ? 'Live artikelhistorie kon niet worden geladen.'
+            : 'Live artikelhistorie kon niet worden geladen. Demo-historie wordt getoond waar beschikbaar.'
           setLiveHistoryRows([])
-          setHistoryLoadError(
-            hasLiveInventoryMatch
-              ? 'Live artikelhistorie kon niet worden geladen.'
-              : 'Live artikelhistorie kon niet worden geladen. Demo-historie wordt getoond waar beschikbaar.',
-          )
+          setHistoryLoadError(message)
+          showFeedback({
+            variant: 'error',
+            message,
+            detail: 'De overige artikelgegevens blijven beschikbaar.',
+            technicalDetail: String(error?.message || '').trim(),
+            showTechnicalToggle: Boolean(String(error?.message || '').trim()),
+            key: `article-history-load-error:${stableArticleId || articleNameForHistory}`,
+          })
         }
       })
       .finally(() => {
@@ -398,7 +430,7 @@ export default function ArticlePage() {
     return () => {
       cancelled = true
     }
-  }, [articleId, householdDetails?.article_id, householdDetails?.article_name, resolvedArticleName, hasLiveInventoryMatch, inventoryRefreshVersion])
+  }, [articleId, householdDetails?.article_id, householdDetails?.article_name, resolvedArticleName, hasLiveInventoryMatch, inventoryRefreshVersion, showFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -446,15 +478,21 @@ export default function ArticlePage() {
   }, [activeArticle, automationVersion, householdDetails, liveHistoryRows, hasLiveInventoryMatch, isPureDemoArticle])
 
   const pageTitle = `Artikel details: ${articleData?.name || resolvedArticleName || 'Onbekend artikel'}`
+  const tabs = useMemo(
+    () => primaryUseCase === 'waar_inhuis' ? TABS_WITH_LOCATIONS : TABS_WITHOUT_LOCATIONS,
+    [primaryUseCase],
+  )
 
   const [activeTab, setActiveTab] = useState('Overzicht')
 
   useEffect(() => {
     const requestedTab = String(searchParams.get('tab') || '').trim()
-    if (TABS.includes(requestedTab)) {
+    if (tabs.includes(requestedTab)) {
       setActiveTab(requestedTab)
+    } else if (!tabs.includes(activeTab)) {
+      setActiveTab('Overzicht')
     }
-  }, [searchParams])
+  }, [searchParams, tabs, activeTab])
 
   const tabContent = {
     Overzicht: articleData ? <ArticleOverviewSubtabs articleData={articleData} visibilityMap={visibilityMap} visibilityLoading={visibilityLoading} visibilityError={visibilityError} onDetailsSaved={(details) => { setHouseholdDetails((current) => ({ ...(current || {}), ...(details || {}) })); refreshArticleLiveData() }} /> : null,
@@ -473,7 +511,6 @@ export default function ArticlePage() {
           <div data-testid="article-detail-title" style={{ display: 'none' }}>{pageTitle}</div>
 
           {inventoryLoadError ? <div className="rz-article-detail-alert">{inventoryLoadError}</div> : null}
-          {historyLoadError && !historyLoading && articleData ? <div className="rz-article-detail-alert">{historyLoadError}</div> : null}
 
           {inventoryLoading ? (
             <ArticleDetailState title="Artikeldetail laden" message="De live artikelgegevens worden geladen. Als live data niet beschikbaar is, wordt beschikbare demo-informatie gebruikt." />
@@ -487,7 +524,7 @@ export default function ArticlePage() {
               }
             />
           ) : articleData ? (
-            <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} tabTestIdMap={{ Historie: "article-history-tab", Analyse: "article-analysis-tab" }}>
+            <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} tabTestIdMap={{ Historie: "article-history-tab", Analyse: "article-analysis-tab" }}>
               {(currentTab) => {
                 const content = tabContent[currentTab]
                 return content || <PlaceholderTab text="Deze tab volgt later." />

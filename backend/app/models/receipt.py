@@ -81,7 +81,7 @@ class ReceiptTableLine(Base):
     line_index = Column(Integer, nullable=False)
     raw_label = Column(Text, nullable=False)
     normalized_label = Column(Text, nullable=True)
-    quantity = Column(Numeric(12, 3), nullable=True)
+    quantity = Column(Numeric(), nullable=True)
     unit = Column(String, nullable=True)
     unit_price = Column(Numeric(12, 4), nullable=True)
     line_total = Column(Numeric(12, 2), nullable=True)

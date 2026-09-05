@@ -1,5 +1,8 @@
+from sqlalchemy import String, text
+
 from app.services.postgresql_boolean_contract import (
     MIGRATED_BOOLEAN_COLUMNS_BY_TABLE,
+    enforce_postgresql_boolean_parameters_before_execute,
     normalize_postgresql_boolean_parameters,
     normalize_postgresql_boolean_statement,
 )
@@ -75,6 +78,47 @@ def test_purchase_import_case_assignment_is_reduced_to_bool_parameter():
     assert "is_auto_prefilled = %(can_auto_fill)s" in normalized
 
 
+def test_receipt_approve_boolean_parameter_comparison_is_postgresql_native():
+    sql = """
+        UPDATE receipt_tables
+        SET totals_overridden = %(totals_overridden)s,
+            totals_override_by_user_email = CASE
+                WHEN %(totals_overridden)s = 1 THEN %(user_email)s
+                ELSE NULL
+            END,
+            totals_override_at = CASE
+                WHEN %(totals_overridden)s = 1 THEN CURRENT_TIMESTAMP
+                ELSE NULL
+            END
+        WHERE id = %(id)s
+    """
+    normalized = normalize_postgresql_boolean_statement(sql)
+    assert "%(totals_overridden)s = 1" not in normalized
+    assert "WHEN %(totals_overridden)s THEN" in normalized
+
+
+def test_purchase_import_boolean_parameter_comparisons_are_postgresql_native():
+    sql = """
+        UPDATE purchase_import_lines
+        SET is_auto_prefilled = CASE
+                WHEN %(can_auto_fill)s = 1 THEN 1 ELSE 0
+            END,
+            matched_household_article_id = CASE
+                WHEN %(can_auto_fill)s = 1 THEN %(matched_household_article_id)s
+                ELSE NULL
+            END,
+            review_decision = CASE
+                WHEN %(can_auto_fill)s = 1 THEN 'selected'
+                ELSE 'pending'
+            END
+        WHERE id = %(id)s
+    """
+    normalized = normalize_postgresql_boolean_statement(sql)
+    assert "%(can_auto_fill)s = 1" not in normalized
+    assert "matched_household_article_id = CASE" in normalized
+    assert "WHEN %(can_auto_fill)s THEN" in normalized
+
+
 def test_boolean_write_parameters_are_python_bools():
     _, params = normalize_postgresql_boolean_parameters(
         "UPDATE receipt_table_lines SET is_validated = :validated WHERE id = :id",
@@ -98,3 +142,44 @@ def test_non_migrated_table_values_are_not_globally_coerced():
         {"value": 1, "id": "row-1"},
     )
     assert params == {"value": 1, "id": "row-1"}
+
+
+def test_purchase_import_nullable_match_ids_are_bound_as_strings():
+    class _PostgresqlDialect:
+        name = "postgresql"
+
+    class _Connection:
+        dialect = _PostgresqlDialect()
+
+    clause = text(
+        """
+        UPDATE purchase_import_lines
+        SET matched_global_product_id = :matched_global_product_id,
+            matched_household_article_id = CASE
+                WHEN COALESCE(article_override_mode, 'auto') = 'auto'
+                THEN :matched_household_article_id
+                ELSE matched_household_article_id
+            END,
+            match_status = CASE
+                WHEN :matched_global_product_id IS NOT NULL THEN 'matched'
+                ELSE 'unmatched'
+            END
+        WHERE id = :id
+        """
+    )
+    typed_clause, _, params = enforce_postgresql_boolean_parameters_before_execute(
+        _Connection(),
+        clause,
+        (),
+        {
+            "matched_global_product_id": None,
+            "matched_household_article_id": None,
+            "id": "line-1",
+        },
+        {},
+    )
+
+    assert isinstance(typed_clause._bindparams["matched_global_product_id"].type, String)
+    assert isinstance(typed_clause._bindparams["matched_household_article_id"].type, String)
+    assert params["matched_global_product_id"] is None
+    assert params["matched_household_article_id"] is None

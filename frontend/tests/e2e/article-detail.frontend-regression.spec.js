@@ -1,11 +1,8 @@
 import { test, expect } from '@playwright/test';
-import {
-  attachConsoleErrorCollector,
-  expectNoConsoleErrors,
-} from './helpers/rezzervAssertions.js';
+import { attachConsoleErrorCollector } from './helpers/rezzervAssertions.js';
 
 test.describe('Artikeldetail frontend-regressie', () => {
-  test('Stabiele artikelroute gebruikt overal de universele huishoudartikelnaam', async ({ page }) => {
+  test('Stabiele artikelroute gebruikt de universele naam, conditionele Locaties en standaard meldingoverlay', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     const failedResponses = [];
     page.on('response', (response) => {
@@ -16,6 +13,16 @@ test.describe('Artikeldetail frontend-regressie', () => {
     const articleId = 'household-article-mosterd';
     const universalArticleName = 'Mosterd fijne Dijon extra lange universele artikelnaam';
     const receiptArticleText = 'MOSTERD DIJON 250G';
+    let primaryUseCase = 'waar_inhuis';
+    let historyShouldFail = false;
+
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ primary_use_case: primaryUseCase }),
+      });
+    });
 
     await page.route('**/api/settings/article-field-visibility', async (route) => {
       await route.fulfill({
@@ -83,6 +90,14 @@ test.describe('Artikeldetail frontend-regressie', () => {
     });
 
     await page.route(`**/api/household-articles/${articleId}/events`, async (route) => {
+      if (historyShouldFail) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'Historiebron tijdelijk niet beschikbaar' }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -119,7 +134,40 @@ test.describe('Artikeldetail frontend-regressie', () => {
       await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
     }
 
-    expect(failedResponses).toEqual([]);
-    await expectNoConsoleErrors(consoleErrors);
+    primaryUseCase = 'wat_inhuis';
+    const onboardingRequest = page.waitForRequest((request) => request.url().includes('/api/onboarding'));
+    await page.reload();
+    await onboardingRequest;
+    await expect(page.getByTestId('article-detail-page')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Locaties', exact: true })).toHaveCount(0);
+    for (const tabName of ['Overzicht', 'Voorraad', 'Historie', 'Analyse']) {
+      await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
+    }
+
+    failedResponses.length = 0;
+    historyShouldFail = true;
+    await page.reload();
+    const feedback = page.getByTestId('app-feedback-error');
+    await expect(feedback).toBeVisible();
+    await expect(feedback.getByText('Melding', { exact: true })).toBeVisible();
+    await expect(feedback.getByText(/Live artikelhistorie kon niet worden geladen/)).toBeVisible();
+    await expect(
+      page.locator('.rz-article-detail-alert').filter({ hasText: 'Live artikelhistorie kon niet worden geladen.' }),
+    ).toHaveCount(0);
+
+    const historyFailures = failedResponses.filter((entry) => entry.startsWith('503 GET '));
+    expect(historyFailures.length).toBeGreaterThan(0);
+    expect(historyFailures.every((entry) => entry.includes(`/api/household-articles/${articleId}/events`))).toBe(true);
+    expect(failedResponses.filter((entry) => !entry.startsWith('503 GET '))).toEqual([]);
+
+    // Chromium reports the intentionally simulated 503 as a console network error.
+    // That is part of this failure-path test, not an application console failure.
+    const unexpectedConsoleErrors = consoleErrors.filter(
+      (entry) => !(
+        entry.includes('Failed to load resource')
+        && entry.includes(`/api/household-articles/${articleId}/events`)
+      ),
+    );
+    expect(unexpectedConsoleErrors).toEqual([]);
   });
 });
