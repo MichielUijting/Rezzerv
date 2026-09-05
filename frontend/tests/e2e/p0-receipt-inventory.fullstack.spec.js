@@ -117,7 +117,7 @@ async function openInventoryArticle(page, householdArticleId) {
   await expect(page.getByTestId('inventory-page')).toBeVisible({ timeout: 30_000 })
   const row = page.getByTestId(`inventory-row-${householdArticleId}`)
   await expect(row).toBeVisible({ timeout: 30_000 })
-  await row.dblclick()
+  await row.locator('[title="Dubbelklik op de rij voor details"]').dblclick()
   await expect(page.getByTestId('article-detail-page')).toBeVisible({ timeout: 30_000 })
 }
 
