@@ -3,7 +3,7 @@
 
 This self-test intentionally extracts the SQL used by
 ``list_household_role_change_audit`` from ``app/main.py`` and executes that
-exact product query against PostgreSQL.  It therefore catches SQLite-only SQL
+exact product query against PostgreSQL. It therefore catches SQLite-only SQL
 such as ``datetime(created_at)`` without importing the full application.
 """
 
@@ -25,7 +25,12 @@ TARGET_FUNCTION = "list_household_role_change_audit"
 def _product_audit_query() -> str:
     tree = ast.parse(MAIN_PATH.read_text(encoding="utf-8"), filename=str(MAIN_PATH))
     target = next(
-        (node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == TARGET_FUNCTION),
+        (
+            node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == TARGET_FUNCTION
+        ),
         None,
     )
     if target is None:
@@ -51,16 +56,25 @@ def _product_audit_query() -> str:
     return candidates[0]
 
 
+def _sqlalchemy_postgresql_url(database_url: str) -> str:
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if database_url.startswith("postgresql+psycopg://"):
+        return database_url
+    raise AssertionError("DATABASE_URL must point to PostgreSQL for this self-test")
+
+
 def main() -> None:
     database_url = os.environ.get("DATABASE_URL", "").strip()
-    if not database_url.startswith("postgresql"):
-        raise AssertionError("DATABASE_URL must point to PostgreSQL for this self-test")
+    sqlalchemy_url = _sqlalchemy_postgresql_url(database_url)
 
     sql = _product_audit_query()
     if "ORDER BY" not in sql or "created_at" not in sql:
-        raise AssertionError("household role-audit query no longer contains its chronological ordering contract")
+        raise AssertionError(
+            "household role-audit query no longer contains its chronological ordering contract"
+        )
 
-    engine = create_engine(database_url, future=True)
+    engine = create_engine(sqlalchemy_url, future=True)
     with engine.begin() as conn:
         rows = conn.execute(
             text(sql),
