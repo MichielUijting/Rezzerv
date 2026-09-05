@@ -23,23 +23,60 @@ jobs:
       - name: Apply exact PostgreSQL ordering fix
         shell: python
         run: |
+          import ast
           from pathlib import Path
+
           path = Path('backend/app/main.py')
           source = path.read_text(encoding='utf-8')
+          lines = source.splitlines(keepends=True)
+          tree = ast.parse(source, filename=str(path))
+          target = next(
+              (
+                  node
+                  for node in tree.body
+                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                  and node.name == 'list_household_role_change_audit'
+              ),
+              None,
+          )
+          if target is None or target.end_lineno is None:
+              raise SystemExit('Target function list_household_role_change_audit not found')
+
+          start = target.lineno - 1
+          end = target.end_lineno
+          function_source = ''.join(lines[start:end])
           old = 'ORDER BY datetime(created_at) DESC, id DESC'
           new = 'ORDER BY created_at DESC NULLS LAST, id DESC'
-          count = source.count(old)
+          count = function_source.count(old)
           if count != 1:
-              raise SystemExit(f'Expected exactly one target occurrence, found {count}')
-          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+              raise SystemExit(f'Expected exactly one target occurrence inside function, found {count}')
+
+          function_source = function_source.replace(old, new, 1)
+          lines[start:end] = [function_source]
+          path.write_text(''.join(lines), encoding='utf-8')
 
       - name: Verify diff is exactly the intended line
         run: |
           git diff --check
           git diff -- backend/app/main.py
           test "$(git diff --numstat -- backend/app/main.py | awk '{print $1":"$2}')" = "1:1"
-          grep -F 'ORDER BY created_at DESC NULLS LAST, id DESC' backend/app/main.py
-          ! grep -F 'ORDER BY datetime(created_at) DESC, id DESC' backend/app/main.py
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          path = Path('backend/app/main.py')
+          source = path.read_text(encoding='utf-8')
+          lines = source.splitlines(keepends=True)
+          tree = ast.parse(source, filename=str(path))
+          target = next(
+              node for node in tree.body
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+              and node.name == 'list_household_role_change_audit'
+          )
+          body = ''.join(lines[target.lineno - 1:target.end_lineno])
+          assert body.count('ORDER BY created_at DESC NULLS LAST, id DESC') == 1
+          assert 'ORDER BY datetime(created_at) DESC, id DESC' not in body
+          print('HOUSEHOLD_ROLE_AUDIT_PATCH_SCOPE_GREEN')
+          PY
 
       - name: Commit and push fix
         run: |
