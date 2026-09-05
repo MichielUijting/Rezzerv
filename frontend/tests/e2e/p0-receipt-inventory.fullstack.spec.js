@@ -317,7 +317,6 @@ test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> 
 
   await openInventoryArticle(page, householdArticleId)
   await configureAlmostOutThreshold(page, minStock, idealStock)
-
   await expectAlmostOutAbsence(page, articleName)
   await consumeThroughArticleStock(page, householdArticleId, inventoryId, consumeQuantity)
   await expectAlmostOutPresence(page, articleName, finalQuantity, minStock)
