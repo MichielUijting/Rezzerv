@@ -1,7 +1,9 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 from app.services.unpacking_household_object_guard import (
     acquire_purchase_import_processing_lock,
+    install_unpacking_household_object_guard,
 )
 
 
@@ -69,3 +71,23 @@ def test_non_postgresql_runtime_does_not_use_postgresql_lock_function():
 
     assert locked is False
     assert conn.calls == []
+
+
+def test_process_route_acquires_lock_inside_its_mutation_transaction():
+    main_path = Path(__file__).resolve().parents[1] / "app" / "main.py"
+    source = main_path.read_text(encoding="utf-8")
+    route_start = source.index("def process_purchase_import_batch")
+    route_source = source[route_start:]
+
+    transaction_offset = route_source.index("with engine.begin() as conn:")
+    lock_offset = route_source.index("acquire_purchase_import_processing_lock(")
+    batch_read_offset = route_source.index("batch = conn.execute(")
+
+    assert transaction_offset < lock_offset < batch_read_offset
+
+
+def test_http_guard_does_not_hold_processing_lock_on_a_separate_connection():
+    import inspect
+
+    source = inspect.getsource(install_unpacking_household_object_guard)
+    assert "acquire_purchase_import_processing_lock(" not in source
