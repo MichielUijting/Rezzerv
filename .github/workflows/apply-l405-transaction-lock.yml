@@ -1,0 +1,122 @@
+name: Apply L4-05 transaction-local lock fix
+
+on:
+  push:
+    branches:
+      - codex/l4-05-reprocessing-idempotency
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact candidate and apply fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "366aafa477c53d7082e7ffac50f2b49008b1d4b1"
+          test "$(git hash-object backend/app/main.py)" = "762190129356d164705f8a0426ddb5bc442b9a68"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          main_path = Path("backend/app/main.py")
+          text = main_path.read_text(encoding="utf-8")
+          old_import = "from app.services.unpacking_household_object_guard import install_unpacking_household_object_guard"
+          new_import = "\n".join([
+              "from app.services.unpacking_household_object_guard import (",
+              "    acquire_purchase_import_processing_lock,",
+              "    install_unpacking_household_object_guard,",
+              ")",
+          ])
+          if text.count(old_import) != 1:
+              raise SystemExit(f"Expected one guard import, found {text.count(old_import)}")
+          text = text.replace(old_import, new_import, 1)
+
+          old_route_start = "\n".join([
+              "    try:",
+              "        with engine.begin() as conn:",
+              "            batch = conn.execute(",
+          ])
+          new_route_start = "\n".join([
+              "    try:",
+              "        with engine.begin() as conn:",
+              "            acquire_purchase_import_processing_lock(",
+              "                conn,",
+              '                "POST",',
+              '                f"/api/purchase-import-batches/{batch_id}/process",',
+              "            )",
+              "            batch = conn.execute(",
+          ])
+          marker = "def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, authorization: Optional[str] = Header(None)):"
+          start = text.find(marker)
+          if start < 0:
+              raise SystemExit("process_purchase_import_batch not found")
+          before = text[:start]
+          route = text[start:]
+          if old_route_start not in route:
+              raise SystemExit("Expected process transaction start not found")
+          route = route.replace(old_route_start, new_route_start, 1)
+          main_path.write_text(before + route, encoding="utf-8")
+
+          guard_path = Path("backend/app/services/unpacking_household_object_guard.py")
+          guard = guard_path.read_text(encoding="utf-8")
+          old_doc = "\n".join([
+              '    """Serialize concurrent processing attempts for one purchase-import batch.',
+              "",
+              "    The lock is deliberately PostgreSQL transaction-scoped.  A second process",
+              "    request for the same batch waits until the first request has fully completed,",
+              "    so the route starts with a fresh view of processing_status/processed_event_id",
+              "    instead of racing on the same pending snapshot.",
+              '    """',
+          ])
+          new_doc = "\n".join([
+              '    """Serialize concurrent processing attempts for one purchase-import batch.',
+              "",
+              "    The lock is PostgreSQL transaction-scoped and must be acquired on the same",
+              "    connection/transaction that performs the purchase-import mutation. A second",
+              "    process request for the same batch then starts from fresh committed line",
+              "    state after the first request completes.",
+              '    """',
+          ])
+          if old_doc not in guard:
+              raise SystemExit("Expected advisory-lock docstring not found")
+          guard = guard.replace(old_doc, new_doc, 1)
+          old_middleware_lock = "\n".join([
+              "                lock_acquired = acquire_purchase_import_processing_lock(",
+              "                    conn,",
+              "                    request.method,",
+              "                    request.url.path,",
+              "                )",
+              "                if lock_acquired:",
+              "                    # Keep the advisory transaction lock until the route has",
+              "                    # completed and its own processing transaction has committed.",
+              "                    return await call_next(request)",
+          ]) + "\n"
+          if old_middleware_lock not in guard:
+              raise SystemExit("Expected middleware lock block not found")
+          guard = guard.replace(old_middleware_lock, "", 1)
+          guard_path.write_text(guard, encoding="utf-8")
+          PY
+
+          python -m py_compile backend/app/main.py backend/app/services/unpacking_household_object_guard.py
+          test "$(git hash-object backend/app/main.py)" = "140b007418a7f3c6c1b0e749c650889a819a5b9e"
+          git diff --check
+
+      - name: Commit fix and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/apply-l405-transaction-lock.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/main.py backend/app/services/unpacking_household_object_guard.py
+          git commit -m "fix: serialize purchase import processing in mutation transaction"
+          git push origin HEAD:codex/l4-05-reprocessing-idempotency
