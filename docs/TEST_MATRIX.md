@@ -1,8 +1,8 @@
 # Rezzerv Integral Functional Acceptance Matrix
 
 Statusdatum: 6 september 2026
-Roadmapfase: **Fase 0 t/m 3 afgerond; Fase 4 in uitvoering — L4-01 t/m L4-06 gerealiseerd**
-Auditbaseline: `main@e43224a74dcc0b8f7aa74bac8f636176d09360ed`
+Roadmapfase: **Fase 0 t/m 4 afgerond — alle 7 geplande P0-L4-authorities gerealiseerd**
+Auditbaseline: `main@f756ea195f5aea38aae8fc80b6434371243bacd0`
 
 ## 1. Doel
 
@@ -110,11 +110,11 @@ De F3-authorities zijn real-API/PostgreSQL authorities en controleren de relevan
 
 Belangrijk: de matrix blijft conservatief. Een gerichte F3-authority maakt bredere varianten niet automatisch `covered`.
 
-## 9. Fase 4 — P0 full-stack PostgreSQL chains — IN UITVOERING
+## 9. Fase 4 — P0 full-stack PostgreSQL chains — AFGEROND
 
 L4 betekent: **echte browser + echte frontend + echte backend + echte PostgreSQL**. Kernmutaties gebeuren via de UI. Read-only API- en directe DB-controles mogen daarna bewijzen dat de projectie werkelijk is opgeslagen.
 
-### Actuele stand
+### Eindstand
 
 | ID | Keten | Status |
 |---|---|---|
@@ -123,8 +123,10 @@ L4 betekent: **echte browser + echte frontend + echte backend + echte PostgreSQL
 | **L4-03** | receipt → Kassa → goedkeuren → Uitpakken → locatie → Voorraad → historie → Bijna-op, locaties AAN | ✅ Gereed; gemerged via PR #366 |
 | **L4-04** | dezelfde receiptketen met locaties UIT en zonder locatiekolom/-validatie | ✅ Gereed; gemerged via PR #368 |
 | **L4-05** | herverwerking/idempotentie zonder dubbele voorraad/events | ✅ Gereed; gemerged via PR #369 |
-| **L4-06** | aankoop → household_article → detail → historie zonder identiteitsverwisseling | ✅ Authority groen op PR #370 |
-| **L4-07** | platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden | ⏳ Eerstvolgende L4-scope |
+| **L4-06** | aankoop → household_article → detail → historie zonder identiteitsverwisseling | ✅ Gereed; gemerged via PR #370 |
+| **L4-07** | platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden | ✅ Gereed en groen op PR #371-authority |
+
+De fase-exit geldt voor de zeven geplande authorities. Dat maakt niet automatisch iedere variant van elk breder matrixscenario `covered`; die semantiek blijft bewust conservatief.
 
 ### L4-01 — onboarding
 
@@ -173,11 +175,31 @@ Bewezen op de echte browser/frontend/backend/PostgreSQL-keten:
 5. purchase-import-regels, inventory en inventory-events blijven exact aan de juiste UUID gekoppeld;
 6. runtime is DML-only en de browser gebruikt geen core API mocks of muterende `page.request`.
 
-De browser- en PostgreSQL-authority was volledig groen op candidate `aaed274885943e2abcbdab50aff80780e697ae1f`. De governancewijzigingen op PR #370 doorlopen opnieuw exact-head CI voordat de PR merge-klaar kan worden verklaard.
+### L4-07 — platformauthority via de echte browser
 
-### Eerstvolgende L4
+Authority:
 
-**L4-07 — platformauthority via de echte browser.** Daarmee wordt de laatste van de zeven geplande P0-L4-authorities gebouwd.
+- `frontend/tests/e2e/p0-platform-authority.fullstack.spec.js`;
+- `scripts/acceptance/l4_07_platform_browser_authority.py`;
+- `.github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml`.
+
+De echte twee-browserketen bewijst:
+
+1. een gewone huishoudbeheerder krijgt via registratie/onboarding een echte actieve serversessie;
+2. een losstaande `platform.platform_admin` logt via de zichtbare login in met `context_type=none`;
+3. platform-Home toont uitsluitend toegestane platformfuncties;
+4. de platformbeheerder trekt via **Platformbeheer → Sessies** de actieve sessie van de huishoudgebruiker in;
+5. de doelgebruiker krijgt daarna 401 en verliest de beschermde browsersessie;
+6. de platformbeheerder zelf blijft actief;
+7. directe navigatie naar Voorraad en Huishoudinstellingen geeft geen huishoudtoegang en keert terug naar none-context Home;
+8. PostgreSQL bevestigt nul huishoudlidmaatschappen voor de platformbeheerder, de exact ingetrokken doelsessie en DML-only runtime;
+9. de browserauthority gebruikt geen core API mocks of muterende `page.request`.
+
+De eerste candidate `61407e90c37ba97ea9c3ef3da8f642e9634b9778` was over de volledige 11-workflow PR-CI-golf groen. In de machineleesbare matrix staat `P0-PLATFORM-AUTHORITY` bewust op L4=`partial`: superuser- en IP-owner-specifieke beheerreizen zijn wel op L3 bewezen, maar nog niet als afzonderlijke browservarianten uitgevoerd.
+
+### Vervolg na Fase 4
+
+De volgende uitvoeringsfase is **Fase 5 — Historische regressiefoundation**: alle bevestigde defectklassen systematisch koppelen aan permanente regressie-evidence en de centrale matrix.
 
 ## 10. Sterke bestaande authorities
 
@@ -188,7 +210,7 @@ Onder meer behouden/hergebruikt:
 - production-like Kassa backendgate met Alembic en DML-only runtime;
 - canonical receipt/inventoryketen met idempotentie en Bijna-op;
 - household article identity op PostgreSQL;
-- platform capability-/routecontracten;
+- platform capability-/routecontracten plus L4-07 platformbrowserauthority;
 - GPC, day-article en support PostgreSQL authorities;
 - migratie/startup gates met gescheiden migrator/runtime authority.
 
@@ -250,7 +272,7 @@ Doel blijft een handmatige PO-smoke van circa **15–30 minuten**, nadat technis
 | **1 — Canonical test foundation** | **Afgerond** | gedeelde PostgreSQL/Alembic/runtime authority |
 | **2 — Testdata & scenario catalog** | **Afgerond** | gedeelde bonnen, artikelen, quantities, legacydata |
 | **3 — P0 backend/API coverage** | **Afgerond** | F3-01 t/m F3-06 groen + bestaande sterke authorities behouden |
-| **4 — P0 full-stack chains** | **In uitvoering — 6/7 authorities gerealiseerd** | L4-07 resteert |
+| **4 — P0 full-stack chains** | **Afgerond — 7/7 authorities groen** | L4-01 t/m L4-07 gerealiseerd |
 | **5 — Broad regression** | Gedeeltelijk opgebouwd | historische defecten permanent geborgd |
 | **6 — Failure/recovery** | Gedeeltelijk opgebouwd | consistente fout-/retrysemantiek |
 | **7 — CI orchestration** | Gedeeltelijk opgebouwd | PR/full/deep/release gates |

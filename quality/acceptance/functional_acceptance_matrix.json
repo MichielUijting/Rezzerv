@@ -3,7 +3,7 @@
   "name": "Rezzerv Integral Functional Acceptance Matrix",
   "baseline": {
     "branch": "main",
-    "commit": "019b117d6ee624add024958886ecc70d24b04896",
+    "commit": "f756ea195f5aea38aae8fc80b6434371243bacd0",
     "audited_on": "2026-09-06"
   },
   "purpose": "Central quality authority that maps product-critical user chains to evidence across L1-L4 without overstating coverage.",
@@ -134,7 +134,7 @@
         "L3": {"status": "covered", "evidence": [".github/workflows/receipt-inventory-chain-post-merge.yml"]},
         "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml"]}
       },
-      "gap": "L4-03 bewijst een normale canonieke Jumbo-bon via echte Kassa-upload, goedkeuring, Uitpakken, locatie AAN, Voorraad, artikelinstellingen, Afboeken en Bijna-op NEE -> JA met PostgreSQL-eindbewijs. Locaties UIT en herverwerking/idempotentie blijven respectievelijk L4-04 en L4-05; loyaliteitsvarianten zijn niet door L4-03 verbreed."
+      "gap": "L4-03 bewijst een normale canonieke Jumbo-bon via echte Kassa-upload, goedkeuring, Uitpakken, locatie AAN, Voorraad, artikelinstellingen, Afboeken en Bijna-op NEE -> JA met PostgreSQL-eindbewijs. Locaties UIT en herverwerking/idempotentie zijn aanvullend bewezen via L4-04 en L4-05; loyaliteitsvarianten blijven aanvullende L4-scope."
     },
     {
       "id": "P0-KASSA-REVIEW",
@@ -166,9 +166,9 @@
         "L1": {"status": "partial", "evidence": [".github/workflows/unpacking-readiness-article-model-validation.yml", "backend/app/testing/unpacking_household_object_guard_contract.py", "backend/app/testing/unpacking_household_location_isolation_contract.py"]},
         "L2": {"status": "covered", "evidence": ["scripts/run-receipt-inventory-chain.ps1", ".github/workflows/receipt-inventory-chain-post-merge.yml"]},
         "L3": {"status": "partial", "evidence": ["backend/tests/unpacking_inventory_article_identity_api_selftest.py", ".github/workflows/unpacking-inventory-article-identity-api-validation.yml"]},
-        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml"]}
+        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml", "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml", "frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml"]}
       },
-      "gap": "L4-03 bewijst de zichtbare locaties-AAN-kernroute van goedgekeurde bonregel via locatiekeuze/-creatie naar Voorraad. Locaties UIT, Niet ingedeeld, dagartikel en herverwerking worden niet als afgedekt geclaimd en blijven gerichte aanvullende L3/L4-scope."
+      "gap": "L4-03, L4-04 en L4-05 bewijzen de locaties-AAN-kernroute, locaties-UIT-verwerking en herverwerking/idempotentie via de echte stack. Niet ingedeeld en dagartikel blijven gerichte aanvullende L3/L4-scope."
     },
     {
       "id": "P0-INVENTORY",
@@ -183,9 +183,9 @@
         "L1": {"status": "partial", "evidence": ["backend/tests/test_temporal_inventory_service.py", ".github/workflows/temporal-inventory-validation.yml"]},
         "L2": {"status": "covered", "evidence": ["scripts/run-receipt-inventory-chain.ps1", ".github/workflows/inventory-location-household-isolation.yml"]},
         "L3": {"status": "partial", "evidence": ["backend/tests/unpacking_inventory_article_identity_api_selftest.py", ".github/workflows/unpacking-inventory-article-identity-api-validation.yml"]},
-        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml"]}
+        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml", "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml", "frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml"]}
       },
-      "gap": "L4-03 bewijst aankoop naar voorraad, dezelfde household_article-identiteit, zichtbare voorraad-Afboeken-mutatie, historie/projectie en canonieke verwijdering van een lege voorraadregel in PostgreSQL. Correctie, exacte niet-financiële quantity-precisie en herhaalde mutaties blijven buiten deze L4-slice."
+      "gap": "L4-03 bewijst aankoop/verbruik en historie, L4-04 locationless voorraadgedrag en L4-05 herhaling zonder dubbele mutatie. Correctie en de brede exacte niet-financiële quantity-precisie blijven buiten deze L4-slices."
     },
     {
       "id": "P0-ALMOST-OUT",
@@ -200,9 +200,9 @@
         "L1": {"status": "partial", "evidence": ["backend/app/testing/receipt_inventory_production_chain.py"]},
         "L2": {"status": "covered", "evidence": ["scripts/run-receipt-inventory-chain.ps1"]},
         "L3": {"status": "covered", "evidence": ["backend/tests/almost_out_api_projection_selftest.py", ".github/workflows/almost-out-api-projection-validation.yml", ".github/workflows/receipt-inventory-chain-post-merge.yml"]},
-        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml"]}
+        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml", "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml"]}
       },
-      "gap": "L4-03 bewijst in de echte UI dat het artikel vóór verbruik niet in Bijna-op staat en na Afboeken wel, gekoppeld aan persistente min/ideal-stockinstellingen. De bredere herberekeningsvarianten blijven op L3 bewezen maar zijn nog niet als zelfstandige L4-variant uitgevoerd."
+      "gap": "L4-03 en L4-04 bewijzen in echte UI dat Bijna-op correct projecteert met locaties AAN en UIT. De bredere herberekeningsvarianten blijven op L3 bewezen maar zijn nog niet als zelfstandige L4-variant uitgevoerd."
     },
     {
       "id": "P0-ARTICLE-IDENTITY",
@@ -234,9 +234,9 @@
         "L1": {"status": "partial", "evidence": ["backend/tests/authorization_role_matrix_selftest.py", "backend/tests/platform_admin_acceptance_closure_selftest.py"]},
         "L2": {"status": "covered", "evidence": [".github/workflows/platform-admin-acceptance-closure-validation.yml"]},
         "L3": {"status": "covered", "evidence": ["backend/tests/platform_authority_api_selftest.py", ".github/workflows/platform-authority-api-validation.yml", "backend/tests/test_platform_sessions_route_authorization.py", "backend/tests/test_platform_users_route_authorization.py", "backend/tests/test_platform_authorizations_route_authorization.py"]},
-        "L4": {"status": "gap", "evidence": []}
+        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-platform-authority.fullstack.spec.js", ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml", "scripts/acceptance/l4_07_platform_browser_authority.py"]}
       },
-      "gap": "F3-06 bewijst DML-only PostgreSQL platformauthority via echte sessies/API's: normale admin geweigerd, platformbeheerder none-context, sessierevocation, IP-owner special-rolebeheer, stacking-blokkade, audit en geen huishoudtoegang. Alleen de echte browser/full-stack platformreis ontbreekt nog als L4-07."
+      "gap": "L4-07 bewijst via twee echte browsers dat een gewone huishoudbeheerder een actieve sessie heeft, een losstaande platformbeheerder in none-context via Platformbeheer -> Sessies die sessie kan intrekken, de doelgebruiker daarna 401/redirect krijgt, de platformbeheerder zelf actief blijft en geen Voorraad/Huishoudinstellingen of huishoudlidmaatschap verkrijgt; PostgreSQL bevestigt de exacte eindstaat en DML-only runtime. Superuser- en IP-owner-specifieke beheerreizen blijven op L3 bewezen en zijn nog niet als afzonderlijke L4-browservarianten uitgevoerd."
     },
     {
       "id": "P0-MIGRATION-STARTUP",
