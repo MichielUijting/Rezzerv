@@ -11,6 +11,8 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+import sys
+
 from fastapi import APIRouter
 
 from app.api.article_group_routes import router as article_group_router
@@ -42,6 +44,9 @@ from app.db import engine
 from app.services import receipt_parser_quality_patch
 from app.services import receipt_loyalty_line_patch
 from app.services import receipt_g1_merge
+from app.services.inventory_location_event_policy_patch import (
+    install_inventory_location_event_policy_patch,
+)
 from app.services.platform_feature_flag_service import validate_platform_feature_flag_schema
 from app.services.platform_user_suspension_service import (
     install_server_session_suspension_guard,
@@ -53,6 +58,10 @@ from app.services.platform_user_suspension_service import (
 # Retire exactly the old POST member-create route before the canonical API router
 # is mounted; GET/PUT/DELETE member management remains available.
 retire_legacy_household_member_create_route_from_loaded_main()
+
+_main_module = sys.modules.get("app.main")
+if _main_module is not None and hasattr(_main_module, "create_inventory_event"):
+    install_inventory_location_event_policy_patch(_main_module)
 
 household_invitation_router = create_household_invitation_router(engine)
 household_invitation_acceptance_router = create_household_invitation_acceptance_router(engine)
