@@ -27,20 +27,22 @@ jobs:
 
           path = Path('backend/app/main.py')
           source = path.read_text(encoding='utf-8')
-          needle = """            FROM inventory_events
-            WHERE household_id = :household_id
-              AND lower(trim(article_name)) = lower(trim(:article_name))
-              AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')
-            ORDER BY datetime(created_at) DESC, id DESC
-            LIMIT 1
-"""
-          replacement = """            FROM inventory_events
-            WHERE household_id = :household_id
-              AND lower(trim(article_name)) = lower(trim(:article_name))
-              AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')
-            ORDER BY created_at DESC, id DESC
-            LIMIT 1
-"""
+          needle = (
+              "            FROM inventory_events\n"
+              "            WHERE household_id = :household_id\n"
+              "              AND lower(trim(article_name)) = lower(trim(:article_name))\n"
+              "              AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')\n"
+              "            ORDER BY datetime(created_at) DESC, id DESC\n"
+              "            LIMIT 1\n"
+          )
+          replacement = (
+              "            FROM inventory_events\n"
+              "            WHERE household_id = :household_id\n"
+              "              AND lower(trim(article_name)) = lower(trim(:article_name))\n"
+              "              AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')\n"
+              "            ORDER BY created_at DESC, id DESC\n"
+              "            LIMIT 1\n"
+          )
           count = source.count(needle)
           if count == 0:
               print('Target query already PostgreSQL-native; no patch required.')
