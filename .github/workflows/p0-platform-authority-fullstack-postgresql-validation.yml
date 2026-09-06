@@ -1,0 +1,173 @@
+name: P0 platform authority full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/api/platform_*.py'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/session_household_routes.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/platform_*.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/session_request_context.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/auth/**'
+      - 'frontend/src/features/home/**'
+      - 'frontend/src/features/platform/**'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'frontend/tests/e2e/p0-platform-authority.fullstack.spec.js'
+      - 'scripts/acceptance/l4_07_platform_browser_authority.py'
+      - 'quality/acceptance/functional_acceptance_matrix.json'
+      - 'docs/TEST_MATRIX.md'
+      - 'docs/TEST_IMPLEMENTATION_BACKLOG.md'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-platform-authority-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  l4-platform-authority:
+    name: L4-07 platform function without household privilege escalation
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic L4-07 identities
+        shell: bash
+        run: |
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          platform_password="L4-Platform-${suffix}-Pass!"
+          target_password="L4-Household-${suffix}-Pass!"
+          echo "L4_PLATFORM_USER_ID=l4-platform-admin-${suffix}" >> "$GITHUB_ENV"
+          echo "L4_PLATFORM_EMAIL=l4-platform-admin-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "L4_PLATFORM_PASSWORD=$platform_password" >> "$GITHUB_ENV"
+          echo "L4_TARGET_EMAIL=l4-household-admin-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "L4_TARGET_PASSWORD=$target_password" >> "$GITHUB_ENV"
+          echo "L4_TARGET_HOUSEHOLD=L4 Platform target household ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$platform_password"
+          echo "::add-mask::$target_password"
+
+      - name: Guard L4-07 browser authority against core route mocks
+        shell: bash
+        run: |
+          spec='frontend/tests/e2e/p0-platform-authority.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'L4-07 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          echo 'P0_L4_07_NO_CORE_ROUTE_MOCKS_GREEN'
+
+      - name: Build and start real frontend, backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Seed standalone platform administrator through DML-only runtime
+        shell: bash
+        run: |
+          cat scripts/acceptance/l4_07_platform_browser_authority.py | docker compose exec -T \
+            -e L4_PLATFORM_USER_ID -e L4_PLATFORM_EMAIL -e L4_PLATFORM_PASSWORD \
+            backend python -u - setup 2>&1 | tee p0-l4-07-platform-setup.log
+          grep -F 'P0_L4_07_PLATFORM_FIXTURE_GREEN' p0-l4-07-platform-setup.log
+          grep -F 'P0_L4_07_POSTGRESQL_BOUNDARY_GREEN' p0-l4-07-platform-setup.log
+
+      - name: Run L4-07 through the real browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_07_PLATFORM_EMAIL="$L4_PLATFORM_EMAIL" \
+            -e PLAYWRIGHT_L4_07_PLATFORM_PASSWORD="$L4_PLATFORM_PASSWORD" \
+            -e PLAYWRIGHT_L4_07_TARGET_EMAIL="$L4_TARGET_EMAIL" \
+            -e PLAYWRIGHT_L4_07_TARGET_PASSWORD="$L4_TARGET_PASSWORD" \
+            -e PLAYWRIGHT_L4_07_TARGET_HOUSEHOLD="$L4_TARGET_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-platform-authority.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-07-browser.log"
+          grep -F 'P0_L4_07_PLATFORM_LOGIN_NONE_CONTEXT_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_SESSION_REVOKE_THROUGH_UI_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_REVOKED_TARGET_SESSION_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_NO_HOUSEHOLD_PRIVILEGE_ESCALATION_GREEN' frontend/p0-l4-07-browser.log
+          test -s frontend/p0-l4-07-browser-proof.json
+
+      - name: Capture browser proof for PostgreSQL verification
+        shell: bash
+        run: |
+          proof='frontend/p0-l4-07-browser-proof.json'
+          target_household_id="$(jq -r '.targetHouseholdId // empty' "$proof")"
+          revoked_session_id="$(jq -r '.revokedSessionId // empty' "$proof")"
+          test -n "$target_household_id" || { echo 'Browser proof mist targetHouseholdId' >&2; exit 1; }
+          test -n "$revoked_session_id" || { echo 'Browser proof mist revokedSessionId' >&2; exit 1; }
+          echo "L4_TARGET_HOUSEHOLD_ID=$target_household_id" >> "$GITHUB_ENV"
+          echo "L4_REVOKED_SESSION_ID=$revoked_session_id" >> "$GITHUB_ENV"
+
+      - name: Verify exact L4-07 PostgreSQL end state
+        shell: bash
+        run: |
+          cat scripts/acceptance/l4_07_platform_browser_authority.py | docker compose exec -T \
+            -e L4_PLATFORM_USER_ID -e L4_PLATFORM_EMAIL \
+            -e L4_TARGET_EMAIL -e L4_TARGET_HOUSEHOLD_ID -e L4_REVOKED_SESSION_ID \
+            backend python -u - verify 2>&1 | tee p0-l4-07-postgresql-end-state.log
+          grep -F 'P0_L4_07_PLATFORM_ROLE_WITHOUT_HOUSEHOLD_MEMBERSHIP_GREEN' p0-l4-07-postgresql-end-state.log
+          grep -F 'P0_L4_07_TARGET_SESSION_REVOKED_GREEN' p0-l4-07-postgresql-end-state.log
+          grep -F 'P0_L4_07_PLATFORM_SESSION_REMAINS_ACTIVE_GREEN' p0-l4-07-postgresql-end-state.log
+          grep -F 'P0_L4_07_POSTGRESQL_END_STATE_GREEN' p0-l4-07-postgresql-end-state.log
+
+      - name: Upload L4-07 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-l4-07-platform-authority-evidence
+          if-no-files-found: warn
+          path: |
+            frontend/p0-l4-07-browser.log
+            frontend/p0-l4-07-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+            p0-l4-07-platform-setup.log
+            p0-l4-07-postgresql-end-state.log
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=500 backend frontend postgres || true
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans
