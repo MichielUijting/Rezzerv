@@ -1,0 +1,166 @@
+name: P0 article identity history full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/src/features/articles/**'
+      - 'frontend/src/pages/Voorraad.jsx'
+      - 'frontend/src/features/kassa/**'
+      - 'frontend/src/features/receipts/**'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/tests/e2e/p0-article-identity-history.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'scripts/acceptance/l4_06_article_identity_history.py'
+      - 'quality/acceptance/functional_acceptance_matrix.json'
+      - 'docs/TEST_MATRIX.md'
+      - 'docs/TEST_IMPLEMENTATION_BACKLOG.md'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-article-identity-history-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  l4-article-identity-history:
+    name: L4-06 canonical article identity through detail and history
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic L4-06 identity
+        shell: bash
+        run: |
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="L4-Article-Identity-${suffix}-Pass!"
+          echo "PLAYWRIGHT_L4_06_EMAIL=l4-article-identity-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_06_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_06_HOUSEHOLD=L4 Article Identity Household ${suffix}" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_06_SHARED_NAME=L4 Gedeelde artikelnaam ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Guard L4-06 browser authority against core route mocks
+        shell: bash
+        run: |
+          spec='frontend/tests/e2e/p0-article-identity-history.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'L4-06 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          echo 'P0_L4_06_NO_CORE_ROUTE_MOCKS_GREEN'
+
+      - name: Build and start real frontend, backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove PostgreSQL DML-only runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python -u - <<'PY' | tee p0-l4-06-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+          assert engine.dialect.name == 'postgresql'
+          with engine.begin() as conn:
+              assert str(conn.execute(text('SELECT current_user')).scalar_one()) == 'rezzerv_app'
+              assert bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one()) is False
+          print('P0_L4_06_POSTGRESQL_BOUNDARY_GREEN')
+          PY
+
+      - name: Run L4-06 through the real browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_06_EMAIL="$PLAYWRIGHT_L4_06_EMAIL" \
+            -e PLAYWRIGHT_L4_06_PASSWORD="$PLAYWRIGHT_L4_06_PASSWORD" \
+            -e PLAYWRIGHT_L4_06_HOUSEHOLD="$PLAYWRIGHT_L4_06_HOUSEHOLD" \
+            -e PLAYWRIGHT_L4_06_SHARED_NAME="$PLAYWRIGHT_L4_06_SHARED_NAME" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-article-identity-history.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-06-browser.log"
+          grep -F 'P0_L4_06_SAME_NAME_DIFFERENT_IDENTITY_GREEN' frontend/p0-l4-06-browser.log
+          grep -F 'P0_L4_06_RENAME_IDENTITY_GREEN' frontend/p0-l4-06-browser.log
+          grep -F 'P0_L4_06_DETAIL_HISTORY_IDENTITY_GREEN' frontend/p0-l4-06-browser.log
+          test -s frontend/p0-l4-06-browser-proof.json
+
+      - name: Capture browser identities
+        shell: bash
+        run: |
+          proof='frontend/p0-l4-06-browser-proof.json'
+          for pair in \
+            'householdId:L4_HOUSEHOLD_ID' 'receiptId:L4_RECEIPT_ID' 'batchId:L4_BATCH_ID' \
+            'lineAId:L4_LINE_A_ID' 'lineBId:L4_LINE_B_ID' \
+            'articleAId:L4_ARTICLE_A_ID' 'articleBId:L4_ARTICLE_B_ID' \
+            'eventAId:L4_EVENT_A_ID' 'eventBId:L4_EVENT_B_ID' \
+            'sharedArticleName:L4_SHARED_ARTICLE_NAME'; do
+            key="${pair%%:*}"
+            env_name="${pair##*:}"
+            value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
+            test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
+            echo "$env_name=$value" >> "$GITHUB_ENV"
+          done
+
+      - name: Verify exact L4-06 PostgreSQL end state
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e L4_HOUSEHOLD_ID -e L4_RECEIPT_ID -e L4_BATCH_ID \
+            -e L4_LINE_A_ID -e L4_LINE_B_ID \
+            -e L4_ARTICLE_A_ID -e L4_ARTICLE_B_ID \
+            -e L4_EVENT_A_ID -e L4_EVENT_B_ID -e L4_SHARED_ARTICLE_NAME \
+            backend python -u /app/../scripts/acceptance/l4_06_article_identity_history.py 2>&1 | tee p0-l4-06-postgresql-end-state.log
+
+      - name: Upload L4-06 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-l4-06-article-identity-history-evidence
+          if-no-files-found: warn
+          path: |
+            frontend/p0-l4-06-browser.log
+            frontend/p0-l4-06-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+            p0-l4-06-postgresql-boundary.log
+            p0-l4-06-postgresql-end-state.log
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=500 backend frontend postgres || true
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans
