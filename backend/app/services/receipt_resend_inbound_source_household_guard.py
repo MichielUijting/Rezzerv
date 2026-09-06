@@ -36,7 +36,7 @@ def resolve_registered_inbound_source(module: Any, recipient_addresses: list[str
                 FROM receipt_sources rs
                 JOIN household_registry hr ON hr.id = rs.household_id
                 WHERE rs.type = 'email'
-                  AND COALESCE(rs.is_active, 0) = 1
+                  AND COALESCE(rs.is_active, FALSE) = TRUE
                   AND lower(trim(rs.source_path)) IN ({placeholders})
                 ORDER BY rs.id ASC
                 """

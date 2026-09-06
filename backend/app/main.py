@@ -1241,7 +1241,7 @@ def get_household_member_permission_policies(conn, household_id: str) -> dict:
 def set_household_member_permission_policy(conn, household_id: str, permission_key: str, member_allowed: bool) -> dict:
     normalized_permission_key = normalize_permission_key(permission_key)
     normalized_household_id = str(household_id)
-    normalized_allowed = 1 if bool(member_allowed) else 0
+    normalized_allowed = bool(member_allowed)
     conn.execute(
         text(
             """
@@ -1327,7 +1327,7 @@ def safe_update_product_enrichment_row(conn, row_id: str, global_product_id: str
         WHERE global_product_id = :global_product_id
           AND source_name = :source_name
           AND id <> :row_id
-        ORDER BY datetime(COALESCE(last_lookup_at, fetched_at, '1970-01-01')) DESC, id DESC
+        ORDER BY COALESCE(last_lookup_at, fetched_at, TIMESTAMPTZ '1970-01-01 00:00:00+00') DESC, id DESC
         LIMIT 1
         """
     ), {
@@ -1354,7 +1354,7 @@ def dedupe_product_enrichments_for_global_product(conn, global_product_id: str):
         return
     duplicates = conn.execute(text(
         """
-        SELECT source_name, GROUP_CONCAT(id) AS ids
+        SELECT source_name, STRING_AGG(CAST(id AS TEXT), ',') AS ids
         FROM product_enrichments
         WHERE global_product_id = :global_product_id
           AND COALESCE(trim(global_product_id), '') <> ''
@@ -1371,7 +1371,7 @@ def dedupe_product_enrichments_for_global_product(conn, global_product_id: str):
             SELECT id
             FROM product_enrichments
             WHERE id IN :ids
-            ORDER BY datetime(COALESCE(last_lookup_at, fetched_at, '1970-01-01')) DESC,
+            ORDER BY COALESCE(last_lookup_at, fetched_at, TIMESTAMPTZ '1970-01-01 00:00:00+00') DESC,
                      CASE WHEN COALESCE(lookup_status, '') = 'found' THEN 0 ELSE 1 END ASC,
                      id DESC
             LIMIT 1
@@ -1704,7 +1704,7 @@ def get_external_product_candidates_for_purchase_line(conn, purchase_import_line
                     ELSE 3
                 END,
                 COALESCE(score, 0) DESC,
-                datetime(COALESCE(updated_at, created_at, '1970-01-01')) DESC,
+                COALESCE(updated_at, created_at, TIMESTAMPTZ '1970-01-01 00:00:00+00') DESC,
                 id ASC
             """
         ),
@@ -1949,6 +1949,63 @@ def find_existing_household_article_name(conn, household_id: str, article_name: 
     return None
 
 
+def _adopt_synthetic_household_article_identity(conn, household_id: str, synthetic_article_id: str) -> str:
+    normalized_id = str(synthetic_article_id or "").strip()
+    if not normalized_id.startswith("live::"):
+        return normalized_id
+
+    canonical_article_id = str(uuid.uuid4())
+    params = {
+        "household_id": str(household_id),
+        "synthetic_article_id": normalized_id,
+        "canonical_article_id": canonical_article_id,
+    }
+    conn.execute(
+        text(
+            """
+            UPDATE household_articles
+            SET id = :canonical_article_id, updated_at = CURRENT_TIMESTAMP
+            WHERE household_id = :household_id
+              AND id = :synthetic_article_id
+            """
+        ),
+        params,
+    )
+    conn.execute(
+        text(
+            """
+            UPDATE inventory
+            SET household_article_id = :canonical_article_id
+            WHERE household_id = :household_id
+              AND household_article_id = :synthetic_article_id
+            """
+        ),
+        params,
+    )
+    conn.execute(
+        text(
+            """
+            UPDATE inventory_events
+            SET article_id = CASE
+                    WHEN article_id = :synthetic_article_id THEN :canonical_article_id
+                    ELSE article_id
+                END,
+                household_article_id = CASE
+                    WHEN household_article_id = :synthetic_article_id THEN :canonical_article_id
+                    ELSE household_article_id
+                END
+            WHERE household_id = :household_id
+              AND (
+                  article_id = :synthetic_article_id
+                  OR household_article_id = :synthetic_article_id
+              )
+            """
+        ),
+        params,
+    )
+    return canonical_article_id
+
+
 def ensure_household_article(conn, household_id: str, article_name: str, consumable: bool | None = None) -> str:
     normalized = normalize_household_article_name(article_name)
     if not normalized:
@@ -1982,6 +2039,8 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
         existing_row = get_household_article_row_by_name(conn, household_id, final_name)
         article_id = str(existing_row.get('id')) if existing_row and existing_row.get('id') else None
     if article_id:
+        if str(article_id).startswith("live::"):
+            article_id = _adopt_synthetic_household_article_identity(conn, household_id, str(article_id))
         ensure_household_article_global_product_link(conn, article_id)
         return str(article_id)
     raise HTTPException(status_code=500, detail="Huishoudartikel kon niet worden aangemaakt")
@@ -2025,7 +2084,7 @@ def get_latest_external_article_link(conn, household_id: str, article_name: str)
             WHERE household_id = :household_id
               AND lower(trim(article_name)) = lower(trim(:article_name))
               AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC, id DESC
             LIMIT 1
             """
         ),
@@ -2790,7 +2849,7 @@ def upsert_product_identity(conn, household_article_id: str, identity_type: str,
         raise HTTPException(status_code=409, detail='Deze artikelidentiteit is al gekoppeld aan een ander artikel')
 
     if is_primary:
-        conn.execute(text("UPDATE product_identities SET is_primary = 0, updated_at = CURRENT_TIMESTAMP WHERE household_article_id = :household_article_id"), {'household_article_id': str(household_article_id)})
+        conn.execute(text("UPDATE product_identities SET is_primary = FALSE, updated_at = CURRENT_TIMESTAMP WHERE household_article_id = :household_article_id"), {'household_article_id': str(household_article_id)})
 
     if existing:
         conn.execute(
@@ -2809,7 +2868,7 @@ def upsert_product_identity(conn, household_article_id: str, identity_type: str,
                 'id': existing.get('id'),
                 'source': str(source or '').strip() or 'manual',
                 'confidence_score': float(confidence_score or 0),
-                'is_primary': 1 if is_primary else 0,
+                'is_primary': bool(is_primary),
                 'global_product_id': global_product_id,
             },
         )
@@ -2829,7 +2888,7 @@ def upsert_product_identity(conn, household_article_id: str, identity_type: str,
                 'identity_value': normalized_value,
                 'source': str(source or '').strip() or 'manual',
                 'confidence_score': float(confidence_score or 0),
-                'is_primary': 1 if is_primary else 0,
+                'is_primary': bool(is_primary),
             },
         )
     return get_primary_product_identity(conn, household_article_id)
@@ -2974,7 +3033,7 @@ def resolve_active_enrichment_row(conn, household_article_id: str):
                 WHERE global_product_id = :global_product_id
                   AND COALESCE(normalized_barcode, '') = :normalized_barcode
                 ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END,
-                         datetime(COALESCE(last_lookup_at, fetched_at)) DESC,
+                         COALESCE(last_lookup_at, fetched_at) DESC,
                          id DESC
                 LIMIT 1
                 """
@@ -2989,7 +3048,7 @@ def resolve_active_enrichment_row(conn, household_article_id: str):
                 FROM product_enrichments
                 WHERE global_product_id = :global_product_id
                 ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END,
-                         datetime(COALESCE(last_lookup_at, fetched_at)) DESC,
+                         COALESCE(last_lookup_at, fetched_at) DESC,
                          id DESC
                 LIMIT 1
                 """
@@ -3005,7 +3064,7 @@ def resolve_active_enrichment_row(conn, household_article_id: str):
                 WHERE household_article_id = :household_article_id
                   AND COALESCE(normalized_barcode, '') = :normalized_barcode
                 ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END,
-                         datetime(COALESCE(last_lookup_at, fetched_at)) DESC,
+                         COALESCE(last_lookup_at, fetched_at) DESC,
                          id DESC
                 LIMIT 1
                 """
@@ -3019,7 +3078,7 @@ def resolve_active_enrichment_row(conn, household_article_id: str):
             FROM product_enrichments
             WHERE household_article_id = :household_article_id
             ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END,
-                     datetime(COALESCE(last_lookup_at, fetched_at)) DESC,
+                     COALESCE(last_lookup_at, fetched_at) DESC,
                      id DESC
             LIMIT 1
             """
@@ -3052,7 +3111,7 @@ def get_article_enrichment_status(conn, household_article_id: str) -> dict:
                 SELECT source_name, status, message, created_at, normalized_barcode
                 FROM product_enrichment_audit
                 WHERE global_product_id = :global_product_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """
             ),
@@ -3065,7 +3124,7 @@ def get_article_enrichment_status(conn, household_article_id: str) -> dict:
                 SELECT source_name, status, message, created_at, normalized_barcode
                 FROM product_enrichment_audit
                 WHERE household_article_id = :household_article_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """
             ),
@@ -3208,7 +3267,7 @@ def get_recent_product_enrichment_attempts(conn, household_article_id: str, limi
                 SELECT source_name, action, status, message, created_at, normalized_barcode, http_status, response_excerpt
                 FROM product_enrichment_audit
                 WHERE global_product_id = :global_product_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT :limit
                 """
             ),
@@ -3221,7 +3280,7 @@ def get_recent_product_enrichment_attempts(conn, household_article_id: str, limi
                 SELECT source_name, action, status, message, created_at, normalized_barcode, http_status, response_excerpt
                 FROM product_enrichment_audit
                 WHERE household_article_id = :household_article_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT :limit
                 """
             ),
@@ -3482,7 +3541,7 @@ def get_household_article_inventory_rows(conn, household_id: str, household_arti
               AND lower(trim(i.naam)) = lower(trim(:article_name))
               AND COALESCE(i.status, 'active') = 'active'
               AND COALESCE(i.aantal, 0) > 0
-            ORDER BY datetime(COALESCE(i.updated_at, i.created_at)) DESC, i.id ASC
+            ORDER BY COALESCE(i.updated_at, i.created_at) DESC, i.id ASC
             """
         ),
         {"household_id": str(household_id), "article_name": article_name},
@@ -3535,7 +3594,7 @@ def get_household_article_event_rows(conn, household_id: str, household_article_
                 article_id = :household_article_id
                 OR lower(trim(article_name)) = lower(trim(:article_name))
               )
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC, id DESC
             """
         ),
         {
@@ -4032,7 +4091,7 @@ def compute_household_product_prediction(conn, household_id: str, household_arti
                     article_id IN :article_ids
                     OR lower(trim(article_name)) IN :article_names
                   )
-            ORDER BY datetime(COALESCE(purchase_date, created_at)) ASC, created_at ASC, id ASC
+            ORDER BY COALESCE(CAST(purchase_date AS TIMESTAMPTZ), created_at) ASC, created_at ASC, id ASC
             """
         ).bindparams(
             bindparam('article_ids', expanding=True),
@@ -4636,7 +4695,7 @@ def get_global_product_row_by_identity(conn, identity_value: str | None, identit
             FROM product_identities pi
             JOIN global_products gp ON gp.id = pi.global_product_id
             WHERE pi.global_product_id IS NOT NULL
-            ORDER BY CASE WHEN pi.is_primary THEN 0 ELSE 1 END, datetime(pi.updated_at) DESC, pi.id DESC
+            ORDER BY CASE WHEN pi.is_primary THEN 0 ELSE 1 END, pi.updated_at DESC, pi.id DESC
             """
         )
     ).mappings().all()
@@ -4790,7 +4849,7 @@ def find_global_product_match_for_receipt_line(
                      AND trim(primary_gtin) <> ''
                     THEN 0 ELSE 1
                 END,
-                datetime(updated_at) DESC,
+                updated_at DESC,
                 id DESC
             LIMIT 1
             """
@@ -4853,8 +4912,8 @@ def find_household_article_for_global_product(conn, household_id: str, global_pr
             ORDER BY
               CASE WHEN COALESCE(inv.total_quantity, 0) > 0 THEN 0 ELSE 1 END,
               CASE WHEN lower(trim(COALESCE(ha.status, 'active'))) = 'active' THEN 0 ELSE 1 END,
-              datetime(ha.created_at) ASC,
-              datetime(ha.updated_at) DESC,
+              ha.created_at ASC,
+              ha.updated_at DESC,
               ha.id ASC
             LIMIT 1
             """
@@ -4974,7 +5033,7 @@ def backfill_purchase_import_live_aliases(conn, *, household_id: str | None = No
     if normalized_household_id:
         query += " AND pib.household_id = :household_id"
         params['household_id'] = normalized_household_id
-    query += " ORDER BY datetime(pil.created_at) ASC, pil.id ASC"
+    query += " ORDER BY pil.created_at ASC, pil.id ASC"
     if resolved_limit is not None:
         query += " LIMIT :limit"
         params['limit'] = resolved_limit
@@ -5296,7 +5355,7 @@ def get_latest_global_product_enrichment(conn, global_product_id: str | None):
             SELECT *
             FROM product_enrichments
             WHERE global_product_id = :global_product_id
-            ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END, datetime(fetched_at) DESC, id DESC
+            ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END, fetched_at DESC, id DESC
             LIMIT 1
             """
         ),
@@ -5642,8 +5701,8 @@ def get_household_article_by_barcode(conn, household_id: str, barcode: str):
             ORDER BY
               CASE WHEN COALESCE(inv.total_quantity, 0) > 0 THEN 0 ELSE 1 END,
               CASE WHEN lower(trim(COALESCE(ha.status, 'active'))) = 'active' THEN 0 ELSE 1 END,
-              datetime(ha.created_at) ASC,
-              datetime(ha.updated_at) DESC,
+              ha.created_at ASC,
+              ha.updated_at DESC,
               ha.id ASC
             LIMIT 1
             """
@@ -6253,7 +6312,7 @@ def compute_household_article_prediction(conn, household_id: str, household_arti
                     article_id = :article_id
                     OR lower(trim(article_name)) = lower(trim(:article_name))
                   )
-            ORDER BY datetime(COALESCE(purchase_date, created_at)) ASC, created_at ASC, id ASC
+            ORDER BY COALESCE(CAST(purchase_date AS TIMESTAMPTZ), created_at) ASC, created_at ASC, id ASC
             """
         ),
         {'household_id': str(household_id), 'article_id': normalized_article_id, 'article_name': normalized_article_name},
@@ -7234,7 +7293,7 @@ def set_household_article_location_defaults(conn, household_article_id: str | No
 
         if "id" in columns:
             insert_columns.append("id")
-            insert_values.append("lower(hex(randomblob(16)))")
+            insert_values.append("replace(gen_random_uuid()::text, '-', '')")
 
         insert_columns.extend(["household_article_id", "setting_key", "setting_value"])
         insert_values.extend([":household_article_id", ":setting_key", ":setting_value"])
@@ -7803,7 +7862,7 @@ def resolve_space_and_sublocation_ids(conn, household_id: str, space_id: str | N
             resolved_space_id = space_row['id']
         else:
             resolved_space_id = conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :household_id) RETURNING id"),
                 {"naam": normalized_space_name, "household_id": household_id},
             ).scalar_one()
 
@@ -7828,7 +7887,7 @@ def resolve_space_and_sublocation_ids(conn, household_id: str, space_id: str | N
             resolved_sublocation_id = sub_row['id']
         else:
             resolved_sublocation_id = conn.execute(
-                text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+                text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :space_id) RETURNING id"),
                 {"naam": normalized_sublocation_name, "space_id": resolved_space_id},
             ).scalar_one()
 
@@ -9173,7 +9232,7 @@ def create_receipt_source(payload: ReceiptSourceCreateRequest):
                 'type': source_type,
                 'label': label,
                 'source_path': source_path,
-                'is_active': 1 if payload.is_active else 0,
+                'is_active': bool(payload.is_active),
             },
         )
         row = conn.execute(
@@ -13250,7 +13309,7 @@ def ensure_ui_test_seed_data():
                         'quantity_raw': 1, 'unit_raw': 'liter', 'line_price_raw': 1.59, 'currency_code': 'EUR',
                         'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': ensure_household_article(conn, 'demo-household', 'Melk'),
                         'target_location_id': kitchen_kast1, 'processing_status': 'pending', 'suggested_household_article_id': ensure_household_article(conn, 'demo-household', 'Melk'),
-                        'suggested_location_id': kitchen_kast1, 'suggestion_confidence': 'high', 'suggestion_reason': 'Automatisch voorbereid — niveau Gebalanceerd', 'is_auto_prefilled': 1,
+                        'suggested_location_id': kitchen_kast1, 'suggestion_confidence': 'high', 'suggestion_reason': 'Automatisch voorbereid — niveau Gebalanceerd', 'is_auto_prefilled': True,
                     },
                     {
                         'external_line_ref': 'seed-jumbo-2', 'external_article_code': 'JUMBO-SEED-2', 'article_name_raw': 'Appelsap', 'brand_raw': 'Jumbo',
@@ -13267,7 +13326,7 @@ def ensure_ui_test_seed_data():
                         'quantity_raw': 6, 'unit_raw': 'stuks', 'line_price_raw': 2.19, 'currency_code': 'EUR',
                         'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': ensure_household_article(conn, 'demo-household', 'Tomaten'),
                         'target_location_id': None, 'processing_status': 'pending', 'suggested_household_article_id': ensure_household_article(conn, 'demo-household', 'Tomaten'),
-                        'suggested_location_id': kitchen_koelkast, 'suggestion_confidence': 'medium', 'suggestion_reason': 'Controleer voorstel — niveau Gebalanceerd', 'is_auto_prefilled': 0,
+                        'suggested_location_id': kitchen_koelkast, 'suggestion_confidence': 'medium', 'suggestion_reason': 'Controleer voorstel — niveau Gebalanceerd', 'is_auto_prefilled': False,
                     },
                 ],
             )
@@ -13330,7 +13389,7 @@ def ensure_regression_inventory_fixture(household_id: str) -> dict:
         ).scalar()
         if not space_id:
             space_id = conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :household_id) RETURNING id"),
                 {"naam": REGRESSION_FIXTURE_SPACE_NAME, "household_id": normalized_household_id},
             ).scalar_one()
 
@@ -13340,7 +13399,7 @@ def ensure_regression_inventory_fixture(household_id: str) -> dict:
         ).scalar()
         if not sublocation_id:
             sublocation_id = conn.execute(
-                text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+                text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :space_id) RETURNING id"),
                 {"naam": REGRESSION_FIXTURE_SUBLOCATION_NAME, "space_id": space_id},
             ).scalar_one()
 
@@ -13380,7 +13439,7 @@ def ensure_regression_inventory_fixture(household_id: str) -> dict:
             text(
                 """
                 INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id, status, updated_at)
-                VALUES (lower(hex(randomblob(16))), :naam, 1, :household_id, :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP)
+                VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, 1, :household_id, :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP)
                 RETURNING id
                 """
             ),
@@ -13574,7 +13633,7 @@ def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)
         ).scalar()
         if not kitchen_id:
             kitchen_id = conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :household_id) RETURNING id"),
                 {"naam": BROWSER_REGRESSION_WORKSPACE_NAME, "household_id": BROWSER_REGRESSION_HOUSEHOLD_ID},
             ).scalar_one()
         workbench_id = conn.execute(
@@ -13583,7 +13642,7 @@ def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)
         ).scalar()
         if not workbench_id:
             workbench_id = conn.execute(
-                text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+                text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :space_id) RETURNING id"),
                 {"naam": BROWSER_REGRESSION_WORKSPACE_SUBLOCATION_NAME, "space_id": kitchen_id},
             ).scalar_one()
 
@@ -13593,7 +13652,7 @@ def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)
         ).scalar()
         if not pantry_id:
             pantry_id = conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :household_id) RETURNING id"),
                 {"naam": BROWSER_REGRESSION_SPACE_NAME, "household_id": BROWSER_REGRESSION_HOUSEHOLD_ID},
             ).scalar_one()
         shelf_id = conn.execute(
@@ -13602,7 +13661,7 @@ def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)
         ).scalar()
         if not shelf_id:
             shelf_id = conn.execute(
-                text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+                text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :space_id) RETURNING id"),
                 {"naam": BROWSER_REGRESSION_SUBLOCATION_NAME, "space_id": pantry_id},
             ).scalar_one()
 
@@ -13614,7 +13673,7 @@ def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)
                 text(
                     """
                     INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id, status, updated_at)
-                    VALUES (lower(hex(randomblob(16))), :naam, :aantal, :household_id, :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP)
+                    VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :aantal, :household_id, :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP)
                     RETURNING id
                     """
                 ),
@@ -13678,12 +13737,12 @@ def run_store_location_diagnostic(payload: DiagnosticRequest):
 
     with engine.begin() as conn:
         space_row = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+            text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :household_id) RETURNING id"),
             {"naam": test_space_name, "household_id": effective_household_id},
         ).first()
         space_id = space_row[0] if space_row else None
         sub_row = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+            text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :space_id) RETURNING id"),
             {"naam": test_sublocation_name, "space_id": space_id},
         ).first()
         sublocation_id = sub_row[0] if sub_row else None
@@ -13741,7 +13800,7 @@ def run_store_process_validation_diagnostic(householdId: str = Query(...)):
                 SELECT id, import_status
                 FROM purchase_import_batches
                 WHERE household_id = :household_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """
             ),
@@ -14626,7 +14685,7 @@ def create_space(payload: SpaceCreate, authorization: Optional[str] = Header(Non
     household_id = (payload.household_id or 'demo-household').strip() if payload.household_id else 'demo-household'
     with engine.begin() as conn:
         result = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+            text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :household_id) RETURNING id"),
             {"naam": payload.naam, "household_id": household_id},
         )
         row = result.first()
@@ -14643,7 +14702,7 @@ def create_sublocation(payload: SublocationCreate, authorization: Optional[str] 
         if not exists:
             raise HTTPException(status_code=400, detail="Onbekende space_id")
         result = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+            text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :space_id) RETURNING id"),
             {"naam": payload.naam, "space_id": payload.space_id},
         )
         row = result.first()
@@ -14662,7 +14721,7 @@ def create_inventory(payload: InventoryCreate, authorization: Optional[str] = He
         result = conn.execute(
             text("""
             INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
-            VALUES (lower(hex(randomblob(16))), :naam, :aantal, 'demo-household', :space_id, :sublocation_id)
+            VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :aantal, 'demo-household', :space_id, :sublocation_id)
             RETURNING id
             """),
             {
@@ -14841,7 +14900,7 @@ def article_history(article_name: str, authorization: Optional[str] = Header(Non
                 FROM inventory_events
                 WHERE household_id = :household_id
                   AND lower(article_name) = lower(:article_name)
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 """
             ),
             {"article_name": article_name, "household_id": effective_household_id},
@@ -14875,7 +14934,7 @@ def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity
             INSERT INTO inventory_events (
               id, household_id, article_id, article_name, location_id, location_label, event_type, quantity, old_quantity, new_quantity, source, note
             ) VALUES (
-              lower(hex(randomblob(16))), 'demo-household', :article_id, :article_name, :location_id, :location_label, :event_type, :quantity, :old_quantity, :new_quantity, :source, :note
+              replace(gen_random_uuid()::text, '-', ''), 'demo-household', :article_id, :article_name, :location_id, :location_label, :event_type, :quantity, :old_quantity, :new_quantity, :source, :note
             )
             """
         ),
@@ -14899,33 +14958,33 @@ def generate_demo_data(authorization: Optional[str] = Header(None)):
 
     with engine.begin() as conn:
         kitchen_id = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), 'Keuken', 'demo-household') RETURNING id")
+            text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), 'Keuken', 'demo-household') RETURNING id")
         ).scalar_one()
         pantry_id = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), 'Berging', 'demo-household') RETURNING id")
+            text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), 'Berging', 'demo-household') RETURNING id")
         ).scalar_one()
         bathroom_id = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), 'Badkamer', 'demo-household') RETURNING id")
+            text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), 'Badkamer', 'demo-household') RETURNING id")
         ).scalar_one()
 
         kast1_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Kast 1', :space_id) RETURNING id"),
+            text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), 'Kast 1', :space_id) RETURNING id"),
             {"space_id": kitchen_id},
         ).scalar_one()
         koelkast_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Koelkast', :space_id) RETURNING id"),
+            text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), 'Koelkast', :space_id) RETURNING id"),
             {"space_id": kitchen_id},
         ).scalar_one()
         voorraadkast_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Voorraadkast', :space_id) RETURNING id"),
+            text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), 'Voorraadkast', :space_id) RETURNING id"),
             {"space_id": pantry_id},
         ).scalar_one()
         diepvries_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Diepvries', :space_id) RETURNING id"),
+            text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), 'Diepvries', :space_id) RETURNING id"),
             {"space_id": pantry_id},
         ).scalar_one()
         badkamerkast_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Kast', :space_id) RETURNING id"),
+            text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), 'Kast', :space_id) RETURNING id"),
             {"space_id": bathroom_id},
         ).scalar_one()
 
@@ -14960,7 +15019,7 @@ def generate_demo_data(authorization: Optional[str] = Header(None)):
             conn.execute(
                 text("""
                 INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
-                VALUES (lower(hex(randomblob(16))), :naam, :aantal, 'demo-household', :space_id, :sublocation_id)
+                VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :aantal, 'demo-household', :space_id, :sublocation_id)
                 """),
                 {
                     "naam": naam,
@@ -15145,7 +15204,7 @@ def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None))
                     processing_status = 'pending',
                     suggestion_confidence = 'high',
                     suggestion_reason = 'Vaste layer1-regressiefixture',
-                    is_auto_prefilled = 1,
+                    is_auto_prefilled = TRUE,
                     article_override_mode = 'auto',
                     location_override_mode = 'auto'
                 WHERE id = :line_id
@@ -15170,7 +15229,7 @@ def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None))
                     processing_status = 'pending',
                     suggestion_confidence = NULL,
                     suggestion_reason = NULL,
-                    is_auto_prefilled = 0,
+                    is_auto_prefilled = FALSE,
                     article_override_mode = 'manual',
                     location_override_mode = 'manual'
                 WHERE id = :line_id
@@ -18390,7 +18449,7 @@ def generate_large_dataset(authorization: Optional[str] = Header(None)):
         space_ids=[]
         for s in spaces:
             sid=conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, 'demo-household') RETURNING id"),
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, 'demo-household') RETURNING id"),
                 {"naam":s}
             ).scalar_one()
             space_ids.append(sid)
@@ -18399,7 +18458,7 @@ def generate_large_dataset(authorization: Optional[str] = Header(None)):
         for sid in space_ids:
             for name in sub:
                 subid=conn.execute(
-                    text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :sid) RETURNING id"),
+                    text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :sid) RETURNING id"),
                     {"naam":name,"sid":sid}
                 ).scalar_one()
                 sub_ids.append((sid,subid))
@@ -18417,7 +18476,7 @@ def generate_large_dataset(authorization: Optional[str] = Header(None)):
             conn.execute(
                 text("""
                 INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
-                VALUES (lower(hex(randomblob(16))), :naam, :aantal, 'demo-household', :sid, :subid)
+                VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :aantal, 'demo-household', :sid, :subid)
                 """),
                 {"naam":naam,"aantal":aantal,"sid":sid,"subid":subid}
             )
@@ -18440,7 +18499,7 @@ def generate_article_testdata(authorization: Optional[str] = Header(None)):
         space_ids=[]
         for s in spaces:
             sid=conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, 'demo-household') RETURNING id"),
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, 'demo-household') RETURNING id"),
                 {"naam":s}
             ).scalar_one()
             space_ids.append(sid)
@@ -18449,7 +18508,7 @@ def generate_article_testdata(authorization: Optional[str] = Header(None)):
         for sid in space_ids:
             for name in sublocs[:3]:
                 subid=conn.execute(
-                    text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :sid) RETURNING id"),
+                    text("INSERT INTO sublocations (id, naam, space_id) VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :sid) RETURNING id"),
                     {"naam":name,"sid":sid}
                 ).scalar_one()
                 sub_ids.append((sid,subid))
@@ -18467,7 +18526,7 @@ def generate_article_testdata(authorization: Optional[str] = Header(None)):
                 conn.execute(
                     text("""
                     INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
-                    VALUES (lower(hex(randomblob(16))), :naam, :aantal, 'demo-household', :sid, :subid)
+                    VALUES (replace(gen_random_uuid()::text, '-', ''), :naam, :aantal, 'demo-household', :sid, :subid)
                     """),
                     {
                         "naam":artikel,

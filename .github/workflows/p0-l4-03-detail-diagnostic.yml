@@ -1,0 +1,97 @@
+name: L4-03 household article detail diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p0-l4-03-detail-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-l4-03-detail-diagnostic-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose-detail-request:
+    name: Diagnose failing household article detail request
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic L4-03 identity
+        shell: bash
+        run: |
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="L4-Receipt-${suffix}-Pass!"
+          echo "PLAYWRIGHT_L4_RECEIPT_EMAIL=l4-receipt-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_RECEIPT_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD=L4 Receipt Household ${suffix}" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_RECEIPT_LOCATION=L4 Voorraad ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Build and start real frontend, backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Reproduce L4-03 browser failure
+        id: browser
+        continue-on-error: true
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_RECEIPT_EMAIL="$PLAYWRIGHT_L4_RECEIPT_EMAIL" \
+            -e PLAYWRIGHT_L4_RECEIPT_PASSWORD="$PLAYWRIGHT_L4_RECEIPT_PASSWORD" \
+            -e PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD" \
+            -e PLAYWRIGHT_L4_RECEIPT_LOCATION="$PLAYWRIGHT_L4_RECEIPT_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-inventory.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-03-browser-diagnostic.log"
+
+      - name: Capture backend failure evidence
+        if: always()
+        shell: bash
+        run: |
+          docker compose logs --no-color --timestamps backend > p0-l4-03-backend-diagnostic.log 2>&1 || true
+          echo '=== household article / exception evidence ==='
+          grep -nE -C 12 'household-articles|Traceback|ERROR|Exception|Internal Server Error| 500 | 404 ' p0-l4-03-backend-diagnostic.log || true
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-l4-03-detail-diagnostic
+          if-no-files-found: warn
+          path: |
+            p0-l4-03-backend-diagnostic.log
+            frontend/p0-l4-03-browser-diagnostic.log
+            frontend/test-results/**
+
+      - name: Preserve browser result
+        if: steps.browser.outcome != 'success'
+        shell: bash
+        run: exit 1

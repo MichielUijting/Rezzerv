@@ -94,11 +94,11 @@ def _historical_count_series(
             value = int(current_value)
         else:
             end = f"{day}T23:59:59.999999+00:00"
-            clauses = [f"datetime({created_column}) <= datetime(:end)", *extra_clauses]
+            clauses = [f"{created_column} <= CAST(:end AS TIMESTAMPTZ)", *extra_clauses]
             if deleted_column:
-                clauses.append(f"({deleted_column} IS NULL OR datetime({deleted_column}) > datetime(:end))")
+                clauses.append(f"({deleted_column} IS NULL OR {deleted_column} > CAST(:end AS TIMESTAMPTZ))")
             elif "is_deleted" in columns:
-                clauses.append("COALESCE(is_deleted, 0) = 0")
+                clauses.append("COALESCE(is_deleted, FALSE) = FALSE")
             expression = f"DISTINCT CAST({distinct_column} AS TEXT)" if distinct_column else "*"
             value = int(conn.execute(
                 text(f"SELECT COUNT({expression}) FROM {table_name} WHERE {' AND '.join(clauses)}"),
@@ -122,8 +122,8 @@ def _open_notification_series(conn, current_value: int) -> list[dict]:
             value = int(conn.execute(text("""
                 SELECT COUNT(*)
                 FROM support_threads
-                WHERE datetime(created_at) <= datetime(:end)
-                  AND (closed_at IS NULL OR datetime(closed_at) > datetime(:end))
+                WHERE created_at <= CAST(:end AS TIMESTAMPTZ)
+                  AND (closed_at IS NULL OR closed_at > CAST(:end AS TIMESTAMPTZ))
             """), {"end": end}).scalar() or 0)
         result.append({"date": day, "value": value})
     return result

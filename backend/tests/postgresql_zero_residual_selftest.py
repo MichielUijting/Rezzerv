@@ -35,14 +35,40 @@ SQLITE_COMPATIBILITY_SQL_ALLOWLIST = {
     },
 }
 
+# PostgreSQL Boolean authority established by the canonical migration.
+# App code is deliberately raw-SQL heavy, so these columns cannot be discovered
+# reliably from ORM models alone.
+CANONICAL_POSTGRESQL_BOOLEAN_COLUMNS = {
+    "is_active",
+    "is_auto_prefilled",
+    "is_deleted",
+    "is_primary",
+    "is_validated",
+    "member_allowed",
+    "totals_overridden",
+}
+
+# Migration 20260829_01 deliberately keeps the taxonomy compatibility fields
+# named is_active as INTEGER pseudo-booleans. Do not reinterpret those two
+# services as native PostgreSQL Boolean columns merely because the column name
+# is shared with real Boolean columns elsewhere in the application schema.
+INTEGER_PSEUDO_BOOLEAN_SQL_EXCEPTIONS = {
+    Path("services/product_taxonomy_store.py"): {"is_active"},
+    Path("services/product_inventory_group_store.py"): {"is_active"},
+}
+
 DDL_PATTERNS = {
     "CREATE TABLE": re.compile(r"\bCREATE\s+TABLE\b", re.IGNORECASE),
     "CREATE INDEX": re.compile(r"\bCREATE\s+(?:UNIQUE\s+)?INDEX\b", re.IGNORECASE),
     "ALTER TABLE": re.compile(r"\bALTER\s+TABLE\b", re.IGNORECASE),
     "DROP TABLE/INDEX": re.compile(r"\bDROP\s+(?:TABLE|INDEX)\b", re.IGNORECASE),
 }
+
+# High-confidence SQLite-only constructs that may never occur in PostgreSQL
+# application SQL. These patterns intentionally cover column/expression arguments,
+# not only historical datetime('now') forms.
 SQLITE_SQL_PATTERNS = {
-    "PRAGMA": re.compile(r"\bPRAGMA\b", re.IGNORECASE),
+    "PRAGMA": re.compile(r"^\s*PRAGMA\s+\w+", re.IGNORECASE),
     "sqlite_master": re.compile(r"\bsqlite_master\b", re.IGNORECASE),
     "AUTOINCREMENT": re.compile(r"\bAUTOINCREMENT\b", re.IGNORECASE),
     "INSERT OR IGNORE": re.compile(r"\bINSERT\s+OR\s+IGNORE\b", re.IGNORECASE),
@@ -50,11 +76,26 @@ SQLITE_SQL_PATTERNS = {
     "GLOB": re.compile(r"\bGLOB\b", re.IGNORECASE),
     "COLLATE NOCASE": re.compile(r"\bCOLLATE\s+NOCASE\b", re.IGNORECASE),
     "last_insert_rowid": re.compile(r"\blast_insert_rowid\s*\(", re.IGNORECASE),
-    "SQLite datetime": re.compile(
-        r"\b(?:datetime|date|time|strftime|julianday)\s*\(\s*['\"](?:now|unixepoch)",
-        re.IGNORECASE,
-    ),
+    "SQLite datetime()": re.compile(r"\bdatetime\s*\(", re.IGNORECASE),
+    "SQLite strftime()": re.compile(r"\bstrftime\s*\(", re.IGNORECASE),
+    "SQLite julianday()": re.compile(r"\bjulianday\s*\(", re.IGNORECASE),
+    "SQLite unixepoch()": re.compile(r"\bunixepoch\s*\(", re.IGNORECASE),
+    "SQLite GROUP_CONCAT()": re.compile(r"\bGROUP_CONCAT\s*\(", re.IGNORECASE),
+    "SQLite IFNULL()": re.compile(r"\bIFNULL\s*\(", re.IGNORECASE),
+    "SQLite IIF()": re.compile(r"\bIIF\s*\(", re.IGNORECASE),
+    "SQLite changes()": re.compile(r"\bchanges\s*\(", re.IGNORECASE),
+    "SQLite randomblob()": re.compile(r"\brandomblob\s*\(", re.IGNORECASE),
+    "SQLite hex()": re.compile(r"\bhex\s*\(", re.IGNORECASE),
+    "SQLite zeroblob()": re.compile(r"\bzeroblob\s*\(", re.IGNORECASE),
+    "SQLite typeof()": re.compile(r"\btypeof\s*\(", re.IGNORECASE),
 }
+
+SQL_FRAGMENT_MARKER = re.compile(
+    r"\b(?:SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|ORDER\s+BY|GROUP\s+BY|HAVING|"
+    r"JOIN|SET|VALUES|CREATE|ALTER|DROP|PRAGMA|ON\s+CONFLICT|datetime|strftime|"
+    r"julianday|unixepoch|GROUP_CONCAT|IFNULL|IIF|changes|randomblob|zeroblob|typeof|hex)\b",
+    re.IGNORECASE,
+)
 EXECUTION_SINKS = {"execute", "exec_driver_sql", "executescript"}
 
 
@@ -86,6 +127,20 @@ def _string_literals(node: ast.AST):
             yield candidate
 
 
+def _docstring_ids(tree: ast.AST) -> set[int]:
+    ids: set[int] = set()
+    for candidate in ast.walk(tree):
+        if not isinstance(candidate, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        body = getattr(candidate, "body", None) or []
+        if not body or not isinstance(body[0], ast.Expr):
+            continue
+        value = body[0].value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            ids.add(id(value))
+    return ids
+
+
 def _explicit_compat_ranges(tree: ast.AST, relative: Path) -> tuple[tuple[int, int], ...]:
     names = EXPLICIT_SQLITE_TEST_DEV_FUNCTIONS.get(relative, set())
     if not names:
@@ -109,7 +164,7 @@ def _inside_ranges(line: int, ranges: tuple[tuple[int, int], ...]) -> bool:
 
 
 def _boolean_column_names(trees: dict[Path, ast.AST]) -> set[str]:
-    names: set[str] = set()
+    names: set[str] = set(CANONICAL_POSTGRESQL_BOOLEAN_COLUMNS)
     for tree in trees.values():
         for node in ast.walk(tree):
             if not isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -142,9 +197,64 @@ def _boolean_integer_pattern(column_name: str) -> re.Pattern[str]:
     return re.compile(
         rf"(?:\b\w+\.)?\b{escaped}\b\s*(?:=|<>|!=)\s*[01]\b|"
         rf"\b[01]\s*(?:=|<>|!=)\s*(?:\w+\.)?\b{escaped}\b|"
-        rf"\bSET\s+(?:\w+\.)?\b{escaped}\b\s*=\s*[01]\b",
+        rf"\bSET\s+(?:\w+\.)?\b{escaped}\b\s*=\s*[01]\b|"
+        rf"\bCOALESCE\s*\(\s*(?:\w+\.)?\b{escaped}\b\s*,\s*[01]\s*\)",
         re.IGNORECASE,
     )
+
+
+def _is_integer_boolean_expr(node: ast.AST | None) -> bool:
+    if isinstance(node, ast.Constant):
+        return type(node.value) is int and node.value in {0, 1}
+    if isinstance(node, ast.IfExp):
+        return _is_integer_boolean_expr(node.body) and _is_integer_boolean_expr(node.orelse)
+    return False
+
+
+def _integer_boolean_names(tree: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and _is_integer_boolean_expr(node.value):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    names.add(target.id)
+        elif isinstance(node, ast.AnnAssign) and _is_integer_boolean_expr(node.value):
+            if isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+    return names
+
+
+def _mapping_boolean_violations(
+    node: ast.AST,
+    boolean_columns: set[str],
+    integer_boolean_names: set[str],
+) -> list[tuple[int, str]]:
+    violations: list[tuple[int, str]] = []
+    for candidate in ast.walk(node):
+        if not isinstance(candidate, ast.Dict):
+            continue
+        for key_node, value_node in zip(candidate.keys, candidate.values):
+            if not isinstance(key_node, ast.Constant) or not isinstance(key_node.value, str):
+                continue
+            key = key_node.value
+            if key not in boolean_columns:
+                continue
+            bad_value = _is_integer_boolean_expr(value_node)
+            if isinstance(value_node, ast.Name) and value_node.id in integer_boolean_names:
+                bad_value = True
+            if bad_value:
+                violations.append(
+                    (int(getattr(value_node, "lineno", getattr(candidate, "lineno", 0)) or 0), key)
+                )
+    return violations
+
+
+def _looks_like_sql_fragment(value: str) -> bool:
+    return bool(SQL_FRAGMENT_MARKER.search(value))
+
+
+def _integer_pseudo_boolean_exception(relative: Path, column_name: str) -> bool:
+    return column_name in INTEGER_PSEUDO_BOOLEAN_SQL_EXCEPTIONS.get(relative, set())
 
 
 def main() -> None:
@@ -165,14 +275,51 @@ def main() -> None:
         if relative in EXPLICIT_SQLITE_TEST_DEV_PATHS:
             continue
         compat_ranges = _explicit_compat_ranges(tree, relative)
+        integer_boolean_names = _integer_boolean_names(tree)
+        docstring_ids = _docstring_ids(tree)
 
+        # Scan every SQL-looking literal, not only literals nested directly in
+        # conn.execute(...). This catches dynamically assembled SQL fragments.
+        for string_node in _string_literals(tree):
+            if id(string_node) in docstring_ids:
+                continue
+            value = string_node.value
+            string_line = int(getattr(string_node, "lineno", 0) or 0)
+            if _inside_ranges(string_line, compat_ranges):
+                continue
+            if not _looks_like_sql_fragment(value):
+                continue
+
+            for label, pattern in DDL_PATTERNS.items():
+                if pattern.search(value):
+                    ddl_violations.append(f"{relative}:{string_line}:{label}")
+
+            for label, pattern in SQLITE_SQL_PATTERNS.items():
+                matches = pattern.findall(value)
+                if not matches:
+                    continue
+                expected = SQLITE_COMPATIBILITY_SQL_ALLOWLIST.get(relative, {}).get(label)
+                if expected is not None:
+                    key = (relative, label)
+                    compatibility_hits[key] = compatibility_hits.get(key, 0) + len(matches)
+                    continue
+                sqlite_violations.append(f"{relative}:{string_line}:{label}")
+
+            for column_name in sorted(boolean_columns):
+                if _integer_pseudo_boolean_exception(relative, column_name):
+                    continue
+                if _boolean_integer_pattern(column_name).search(value):
+                    boolean_violations.append(
+                        f"{relative}:{string_line}:{column_name}=integer-literal"
+                    )
+
+        # Keep execution-sink awareness for create_all and bound Boolean params.
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             line = int(getattr(node, "lineno", 0) or 0)
             if _inside_ranges(line, compat_ranges):
                 continue
-
             call_name = _call_name(node.func)
             short_name = call_name.rsplit(".", 1)[-1]
             if call_name.endswith(".create_all"):
@@ -180,31 +327,14 @@ def main() -> None:
                 continue
             if short_name not in EXECUTION_SINKS:
                 continue
-
-            for string_node in _string_literals(node):
-                value = string_node.value
-                string_line = int(getattr(string_node, "lineno", line) or line)
-
-                for label, pattern in DDL_PATTERNS.items():
-                    if pattern.search(value):
-                        ddl_violations.append(f"{relative}:{string_line}:{label}")
-
-                for label, pattern in SQLITE_SQL_PATTERNS.items():
-                    matches = pattern.findall(value)
-                    if not matches:
-                        continue
-                    expected = SQLITE_COMPATIBILITY_SQL_ALLOWLIST.get(relative, {}).get(label)
-                    if expected is not None:
-                        key = (relative, label)
-                        compatibility_hits[key] = compatibility_hits.get(key, 0) + len(matches)
-                        continue
-                    sqlite_violations.append(f"{relative}:{string_line}:{label}")
-
-                for column_name in sorted(boolean_columns):
-                    if _boolean_integer_pattern(column_name).search(value):
-                        boolean_violations.append(
-                            f"{relative}:{string_line}:{column_name}=integer-literal"
-                        )
+            for mapping_line, column_name in _mapping_boolean_violations(
+                node, boolean_columns, integer_boolean_names
+            ):
+                if _integer_pseudo_boolean_exception(relative, column_name):
+                    continue
+                boolean_violations.append(
+                    f"{relative}:{mapping_line}:{column_name}=integer-bound-param"
+                )
 
     compatibility_drift: list[str] = []
     for relative, labels in SQLITE_COMPATIBILITY_SQL_ALLOWLIST.items():
@@ -215,31 +345,28 @@ def main() -> None:
                     f"{relative}:{label}:expected={expected_count}:actual={actual_count}"
                 )
 
-    if ddl_violations:
+    categories = [
+        ("RUNTIME_DDL", sorted(set(ddl_violations))),
+        ("SQLITE_SQL", sorted(set(sqlite_violations))),
+        ("BOOLEAN", sorted(set(boolean_violations))),
+        ("COMPATIBILITY_BOUNDARY", sorted(set(compatibility_drift))),
+    ]
+    all_violations: list[str] = []
+    for category, violations in categories:
+        for violation in violations:
+            finding = f"{category}:{violation}"
+            all_violations.append(finding)
+            print(f"POSTGRESQL_ZERO_RESIDUAL_FINDING={finding}")
+
+    if all_violations:
         raise AssertionError(
-            "Runtime DDL remains in backend/app: " + ", ".join(sorted(set(ddl_violations)))
+            "PostgreSQL zero-residual violations remain in backend/app: "
+            + ", ".join(all_violations)
         )
+
     print("POSTGRESQL_ZERO_RESIDUAL_RUNTIME_DDL_GREEN")
-
-    if sqlite_violations:
-        raise AssertionError(
-            "SQLite-only production SQL remains in backend/app: "
-            + ", ".join(sorted(set(sqlite_violations)))
-        )
     print("POSTGRESQL_ZERO_RESIDUAL_SQLITE_SQL_GREEN")
-
-    if boolean_violations:
-        raise AssertionError(
-            "Integer Boolean SQL remains in backend/app: "
-            + ", ".join(sorted(set(boolean_violations)))
-        )
     print("POSTGRESQL_ZERO_RESIDUAL_BOOLEAN_GREEN")
-
-    if compatibility_drift:
-        raise AssertionError(
-            "Pinned SQLite compatibility boundary drifted: "
-            + ", ".join(sorted(compatibility_drift))
-        )
     print("POSTGRESQL_ZERO_RESIDUAL_COMPATIBILITY_BOUNDARY_GREEN")
     print(f"POSTGRESQL_ZERO_RESIDUAL_BOOLEAN_COLUMNS={len(boolean_columns)}")
     print(f"POSTGRESQL_ZERO_RESIDUAL_APP_FILES={len(paths)}")

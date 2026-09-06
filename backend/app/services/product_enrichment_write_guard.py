@@ -49,11 +49,16 @@ def install_product_enrichment_write_guard(main_module) -> None:
 
     @app.middleware("http")
     async def product_enrichment_write_guard(request, call_next):
+        method = str(request.method or "").strip().upper()
+        path = str(request.url.path or "").strip()
+        if method != _PROTECTED_METHOD or path not in _PROTECTED_PATHS:
+            return await call_next(request)
+
         try:
             body = await request.body()
             authorize_product_enrichment_request(
-                request.method,
-                request.url.path,
+                method,
+                path,
                 request.headers.get("authorization"),
                 body,
                 main_module.require_inventory_write_context,

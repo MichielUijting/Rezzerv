@@ -347,7 +347,9 @@ export default function ArticlePage() {
 
   useEffect(() => {
     let cancelled = false
-    setInventoryLoading(true)
+    if (inventoryRefreshVersion === 0) {
+      setInventoryLoading(true)
+    }
     setInventoryLoadError('')
 
     fetchInventoryPreview()
