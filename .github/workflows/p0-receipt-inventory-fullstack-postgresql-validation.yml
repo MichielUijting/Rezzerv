@@ -267,11 +267,15 @@ jobs:
                   FROM public.inventory
                   WHERE id = :inventory_id
                     AND household_id = :household_id
-              """), {"inventory_id": inventory_id, "household_id": household_id}).mappings().one()
-              assert str(inventory["household_article_id"]) == household_article_id, inventory
-              assert str(inventory["space_id"]) == str(space["id"]), (inventory, space)
-              assert Decimal(str(inventory["aantal"] or 0)) == final_quantity, inventory
-              assert str(inventory["status"] or "active") == "active", inventory
+              """), {"inventory_id": inventory_id, "household_id": household_id}).mappings().first()
+              if final_quantity == 0:
+                  assert inventory is None, inventory
+              else:
+                  assert inventory is not None
+                  assert str(inventory["household_article_id"]) == household_article_id, inventory
+                  assert str(inventory["space_id"]) == str(space["id"]), (inventory, space)
+                  assert Decimal(str(inventory["aantal"] or 0)) == final_quantity, inventory
+                  assert str(inventory["status"] or "active") == "active", inventory
 
               article = conn.execute(text("""
                   SELECT id, household_id, min_stock, ideal_stock
@@ -293,7 +297,7 @@ jobs:
               assert str(purchase_event["event_type"]) == "purchase", purchase_event
               assert Decimal(str(purchase_event["quantity"])) > 0, purchase_event
               assert str(purchase_event["source"]) == "store_import", purchase_event
-              assert str(purchase_event["household_article_id"]) == household_article_id, (purchase_event, inventory)
+              assert str(purchase_event["household_article_id"]) == household_article_id, (purchase_event, household_article_id)
               assert str(purchase_event["location_id"]) == str(space["id"]), (purchase_event, space)
 
               consume_event = conn.execute(text("""
@@ -335,6 +339,7 @@ jobs:
           print(f"household_article_id={household_article_id}")
           print(f"inventory_transition={initial_quantity}->{final_quantity}")
           print(f"almost_out_threshold={min_stock}")
+          print(f"inventory_zero_row_deleted={str(final_quantity == 0).lower()}")
           print("receipt_approved=true")
           print("line_processed=true")
           print("purchase_history_event=true")
