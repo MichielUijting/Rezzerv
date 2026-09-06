@@ -1,0 +1,65 @@
+name: One-shot L4-03 PostgreSQL datetime hotfix
+
+on:
+  push:
+    branches:
+      - codex/integral-test-platform-phase-4-l4-receipt
+
+permissions:
+  contents: write
+
+jobs:
+  patch-main:
+    if: github.repository == 'MichielUijting/Rezzerv'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: codex/integral-test-platform-phase-4-l4-receipt
+          fetch-depth: 0
+
+      - name: Apply exact PostgreSQL ordering fix once
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          source = path.read_text(encoding='utf-8')
+          needle = """            FROM inventory_events
+            WHERE household_id = :household_id
+              AND lower(trim(article_name)) = lower(trim(:article_name))
+              AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')
+            ORDER BY datetime(created_at) DESC, id DESC
+            LIMIT 1
+"""
+          replacement = """            FROM inventory_events
+            WHERE household_id = :household_id
+              AND lower(trim(article_name)) = lower(trim(:article_name))
+              AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+"""
+          count = source.count(needle)
+          if count == 0:
+              print('Target query already PostgreSQL-native; no patch required.')
+              raise SystemExit(0)
+          if count != 1:
+              raise SystemExit(f'Refusing ambiguous patch: expected 1 exact target, found {count}.')
+          path.write_text(source.replace(needle, replacement, 1), encoding='utf-8')
+          print('Applied exact get_latest_external_article_link PostgreSQL ordering fix.')
+          PY
+
+      - name: Commit hotfix when changed
+        shell: bash
+        run: |
+          if git diff --quiet -- backend/app/main.py; then
+            echo "No source change to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/main.py
+          git commit -m "Fix PostgreSQL article detail event ordering"
+          git push origin HEAD:codex/integral-test-platform-phase-4-l4-receipt
