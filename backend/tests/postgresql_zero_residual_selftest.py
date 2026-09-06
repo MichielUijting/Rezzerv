@@ -48,6 +48,15 @@ CANONICAL_POSTGRESQL_BOOLEAN_COLUMNS = {
     "totals_overridden",
 }
 
+# Migration 20260829_01 deliberately keeps the taxonomy compatibility fields
+# named is_active as INTEGER pseudo-booleans. Do not reinterpret those two
+# services as native PostgreSQL Boolean columns merely because the column name
+# is shared with real Boolean columns elsewhere in the application schema.
+INTEGER_PSEUDO_BOOLEAN_SQL_EXCEPTIONS = {
+    Path("services/product_taxonomy_store.py"): {"is_active"},
+    Path("services/product_inventory_group_store.py"): {"is_active"},
+}
+
 DDL_PATTERNS = {
     "CREATE TABLE": re.compile(r"\bCREATE\s+TABLE\b", re.IGNORECASE),
     "CREATE INDEX": re.compile(r"\bCREATE\s+(?:UNIQUE\s+)?INDEX\b", re.IGNORECASE),
@@ -244,6 +253,10 @@ def _looks_like_sql_fragment(value: str) -> bool:
     return bool(SQL_FRAGMENT_MARKER.search(value))
 
 
+def _integer_pseudo_boolean_exception(relative: Path, column_name: str) -> bool:
+    return column_name in INTEGER_PSEUDO_BOOLEAN_SQL_EXCEPTIONS.get(relative, set())
+
+
 def main() -> None:
     paths = _python_paths()
     trees = {
@@ -293,6 +306,8 @@ def main() -> None:
                 sqlite_violations.append(f"{relative}:{string_line}:{label}")
 
             for column_name in sorted(boolean_columns):
+                if _integer_pseudo_boolean_exception(relative, column_name):
+                    continue
                 if _boolean_integer_pattern(column_name).search(value):
                     boolean_violations.append(
                         f"{relative}:{string_line}:{column_name}=integer-literal"
@@ -315,6 +330,8 @@ def main() -> None:
             for mapping_line, column_name in _mapping_boolean_violations(
                 node, boolean_columns, integer_boolean_names
             ):
+                if _integer_pseudo_boolean_exception(relative, column_name):
+                    continue
                 boolean_violations.append(
                     f"{relative}:{mapping_line}:{column_name}=integer-bound-param"
                 )

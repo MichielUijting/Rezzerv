@@ -182,7 +182,7 @@ async function expectAlmostOutPresence(page, articleName, finalQuantity, minStoc
 
 async function consumeThroughArticleStock(page, householdArticleId, inventoryId, consumeQuantity) {
   await openInventoryArticle(page, householdArticleId)
-  await page.getByRole('button', { name: 'Voorraad', exact: true }).click()
+  await page.getByRole('tab', { name: 'Voorraad', exact: true }).click()
   const consumeButton = page.getByTestId(`article-stock-consume-${inventoryId}`)
   await expect(consumeButton).toBeVisible({ timeout: 20_000 })
   await consumeButton.click()
