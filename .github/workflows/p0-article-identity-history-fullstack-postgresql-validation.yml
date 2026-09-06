@@ -136,12 +136,12 @@ jobs:
       - name: Verify exact L4-06 PostgreSQL end state
         shell: bash
         run: |
-          docker compose exec -T \
+          cat scripts/acceptance/l4_06_article_identity_history.py | docker compose exec -T \
             -e L4_HOUSEHOLD_ID -e L4_RECEIPT_ID -e L4_BATCH_ID \
             -e L4_LINE_A_ID -e L4_LINE_B_ID \
             -e L4_ARTICLE_A_ID -e L4_ARTICLE_B_ID \
             -e L4_EVENT_A_ID -e L4_EVENT_B_ID -e L4_SHARED_ARTICLE_NAME \
-            backend python -u /app/../scripts/acceptance/l4_06_article_identity_history.py 2>&1 | tee p0-l4-06-postgresql-end-state.log
+            backend python -u - 2>&1 | tee p0-l4-06-postgresql-end-state.log
 
       - name: Upload L4-06 evidence
         if: always()
