@@ -1,8 +1,8 @@
 # Rezzerv Integral Functional Acceptance Matrix
 
-Statusdatum: 4 september 2026
-Roadmapfase: **Fase 0 t/m 3 afgerond; Fase 4 in uitvoering**
-Auditbaseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
+Statusdatum: 6 september 2026
+Roadmapfase: **Fase 0 t/m 3 afgerond; Fase 4 in uitvoering — L4-01 t/m L4-06 gerealiseerd**
+Auditbaseline: `main@e43224a74dcc0b8f7aa74bac8f636176d09360ed`
 
 ## 1. Doel
 
@@ -97,7 +97,7 @@ De canonical catalog bevat vaste productherkenbare data voor L2/L3/L4:
 
 ## 8. Fase 3 — P0 backend/API coverage — AFGEROND
 
-De nieuwe F3-authorities zijn real-API/PostgreSQL authorities en controleren de relevante eindstaat. Candidate `3210cc59cb9ae3c404552b53a35bf4ddfcaf3e49` is volledig groen over de complete PR-CI-golf.
+De F3-authorities zijn real-API/PostgreSQL authorities en controleren de relevante eindstaat.
 
 | Authority | Resultaat | Belangrijkste bewezen gedrag |
 |---|---|---|
@@ -108,33 +108,76 @@ De nieuwe F3-authorities zijn real-API/PostgreSQL authorities en controleren de 
 | **F3-05 Bijna-op** | ✅ groen | boven/gelijk/onder/nul, locationless projectie, isolation, idempotentie, herberekening |
 | **F3-06 Platform authority** | ✅ groen | none/system context, special-role authority, stacking blokkade, audit, geen huishoudescalatie |
 
-Belangrijk: de matrix blijft conservatief. F3-03 maakt bredere varianten zoals locaties UIT, `Niet ingedeeld`, dagartikel, verbruik/correctie, same-name-different-identity en naamwijziging niet automatisch `covered`.
+Belangrijk: de matrix blijft conservatief. Een gerichte F3-authority maakt bredere varianten niet automatisch `covered`.
 
 ## 9. Fase 4 — P0 full-stack PostgreSQL chains — IN UITVOERING
 
 L4 betekent: **echte browser + echte frontend + echte backend + echte PostgreSQL**. Kernmutaties gebeuren via de UI. Read-only API- en directe DB-controles mogen daarna bewijzen dat de projectie werkelijk is opgeslagen.
 
-Geplande ketens:
+### Actuele stand
 
-1. **L4-01** registreren → onboarding → huishouden → instellingen → bruikbare app;
-2. **L4-02** beheerder → uitnodigen → lid accepteert → rechten → huishoudwissel → isolation;
-3. **L4-03** receipt → Kassa → goedkeuren → Uitpakken → locatie → Voorraad → historie → Bijna-op, locaties AAN;
-4. **L4-04** dezelfde receiptketen met locaties UIT en zonder locatiekolom/-validatie;
-5. **L4-05** herverwerking/idempotentie zonder dubbele voorraad/events;
-6. **L4-06** aankoop → household_article → detail → historie met dezelfde canonical identity;
-7. **L4-07** platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden.
+| ID | Keten | Status |
+|---|---|---|
+| **L4-01** | registreren → onboarding → huishouden → instellingen → bruikbare app | ✅ Gereed en groen |
+| **L4-02** | beheerder → uitnodigen → lid accepteert → rechten → huishoudwissel → isolation | ✅ Gereed en groen |
+| **L4-03** | receipt → Kassa → goedkeuren → Uitpakken → locatie → Voorraad → historie → Bijna-op, locaties AAN | ✅ Gereed; gemerged via PR #366 |
+| **L4-04** | dezelfde receiptketen met locaties UIT en zonder locatiekolom/-validatie | ✅ Gereed; gemerged via PR #368 |
+| **L4-05** | herverwerking/idempotentie zonder dubbele voorraad/events | ✅ Gereed; gemerged via PR #369 |
+| **L4-06** | aankoop → household_article → detail → historie zonder identiteitsverwisseling | ✅ Authority groen op PR #370 |
+| **L4-07** | platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden | ⏳ Eerstvolgende L4-scope |
 
-### Eerste authority: L4-01
+### L4-01 — onboarding
 
-Toegevoegd in de opvolgcandidate:
+De browser registreert een nieuw account, doorloopt de echte onboarding en controleert de home/settingsprojectie tegen PostgreSQL.
+
+Authority:
 
 - `frontend/tests/e2e/p0-onboarding.fullstack.spec.js`;
-- `frontend/playwright.fullstack.config.js`;
 - `.github/workflows/p0-onboarding-fullstack-postgresql-validation.yml`.
 
-De browser registreert een nieuw account, kiest `Wat Inhuis`, zet aantallen/Bijna-op/Winkelen aan, houdt locaties expliciet UIT, rondt het huishouden af en controleert de echte home/settingsprojectie. Daarna controleert de workflow read-only API-data en de directe PostgreSQL-eindstaat. De workflow weigert een L4-spec die `page.route()` of muterende `page.request`-calls gebruikt voor de kernflow.
+### L4-02 — household membership en isolation
 
-**L4-01 wordt pas in de machineleesbare matrix als covered/partial opgewaardeerd nadat de nieuwe workflow groen is op de exacte PR-head.**
+Twee echte browsercontexten bewijzen uitnodigen, accepteren, rolprojectie, huishoudwissel en isolation.
+
+Authority:
+
+- `frontend/tests/e2e/p0-household-membership.fullstack.spec.js`;
+- `.github/workflows/p0-household-membership-fullstack-postgresql-validation.yml`.
+
+### L4-03 — locaties AAN
+
+De canonical receiptketen bewijst Kassa, goedkeuren, Uitpakken, locatiekeuze, Voorraad, artikelinstellingen, Afboeken en Bijna-op via de echte stack. Tijdens deze keten is tevens de synthetische `live::...` identity-adoptie permanent gerepareerd.
+
+### L4-04 — locaties UIT
+
+PR #368 bewijst dat bij `location_tracking_level=none` de locatiekolom/-keuze niet verschijnt, geen locatievalidatie wordt afgedwongen en locationless verwerking/events geldig blijven.
+
+### L4-05 — herverwerking/idempotentie
+
+PR #369 bewijst dat een dubbele/vertraagde gebruikersactie op `Naar voorraad` niet tot dubbele voorraad of events leidt en dat replay dezelfde `processed_event_id` behoudt.
+
+### L4-06 — canonical article identity
+
+Authority:
+
+- `frontend/tests/e2e/p0-article-identity-history.fullstack.spec.js`;
+- `scripts/acceptance/l4_06_article_identity_history.py`;
+- `.github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml`.
+
+Bewezen op de echte browser/frontend/backend/PostgreSQL-keten:
+
+1. twee verschillende aankoopregels houden verschillende canonical `household_article`-UUID's;
+2. beide kunnen dezelfde huishoudnaam krijgen zonder identity-merge;
+3. een naamwijziging blijft na reload aan dezelfde UUID gekoppeld;
+4. elk Historie-scherm toont uitsluitend het eigen purchase-event;
+5. purchase-import-regels, inventory en inventory-events blijven exact aan de juiste UUID gekoppeld;
+6. runtime is DML-only en de browser gebruikt geen core API mocks of muterende `page.request`.
+
+De browser- en PostgreSQL-authority was volledig groen op candidate `aaed274885943e2abcbdab50aff80780e697ae1f`. De governancewijzigingen op PR #370 doorlopen opnieuw exact-head CI voordat de PR merge-klaar kan worden verklaard.
+
+### Eerstvolgende L4
+
+**L4-07 — platformauthority via de echte browser.** Daarmee wordt de laatste van de zeven geplande P0-L4-authorities gebouwd.
 
 ## 10. Sterke bestaande authorities
 
@@ -143,7 +186,7 @@ Onder meer behouden/hergebruikt:
 - PostgreSQL account/session API-tests;
 - authorization API-tests en household isolation;
 - production-like Kassa backendgate met Alembic en DML-only runtime;
-- canonical receipt/inventoryketen met `0 -> 2 -> 5 -> 5 -> 1`, idempotentie en Bijna-op `NEE -> JA`;
+- canonical receipt/inventoryketen met idempotentie en Bijna-op;
 - household article identity op PostgreSQL;
 - platform capability-/routecontracten;
 - GPC, day-article en support PostgreSQL authorities;
@@ -207,9 +250,9 @@ Doel blijft een handmatige PO-smoke van circa **15–30 minuten**, nadat technis
 | **1 — Canonical test foundation** | **Afgerond** | gedeelde PostgreSQL/Alembic/runtime authority |
 | **2 — Testdata & scenario catalog** | **Afgerond** | gedeelde bonnen, artikelen, quantities, legacydata |
 | **3 — P0 backend/API coverage** | **Afgerond** | F3-01 t/m F3-06 groen + bestaande sterke authorities behouden |
-| **4 — P0 full-stack chains** | **In uitvoering** | echte frontend + backend + PostgreSQL L4 zonder kern-API mocks |
-| **5 — Broad regression** | Nog te starten | historische defecten permanent geborgd |
-| **6 — Failure/recovery** | Nog te starten | consistente fout-/retrysemantiek |
-| **7 — CI orchestration** | Nog te starten | PR/full/deep/release gates |
-| **8 — PO Acceptance Pack** | Nog te starten | korte menselijke productbeoordeling |
-| **9 — Release Acceptance Gate** | Nog te starten | strict matrix + releasebewijs groen |
+| **4 — P0 full-stack chains** | **In uitvoering — 6/7 authorities gerealiseerd** | L4-07 resteert |
+| **5 — Broad regression** | Gedeeltelijk opgebouwd | historische defecten permanent geborgd |
+| **6 — Failure/recovery** | Gedeeltelijk opgebouwd | consistente fout-/retrysemantiek |
+| **7 — CI orchestration** | Gedeeltelijk opgebouwd | PR/full/deep/release gates |
+| **8 — PO Acceptance Pack** | Nog te bouwen | korte menselijke productbeoordeling |
+| **9 — Release Acceptance Gate** | Voorbereid, nog niet actief | strict matrix + releasebewijs groen |

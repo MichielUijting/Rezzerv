@@ -1,8 +1,8 @@
 # Rezzerv Integral Test Platform — Implementatiebacklog
 
 Statusdatum: 6 september 2026
-Branch: `codex/test-platform-status-after-pr366`
-Baseline: `main@019b117d6ee624add024958886ecc70d24b04896` (na merge PR #366)
+Branch: `codex/l4-06-canonical-article-identity`
+Baseline: `main@e43224a74dcc0b8f7aa74bac8f636176d09360ed` (na merge PR #369 / L4-05)
 
 ## Doel
 
@@ -137,19 +137,19 @@ De matrix blijft bewust conservatief. F3-03 maakt brede scenario's zoals locatie
 
 **L4-definitie:** echte browser + echte frontend + echte backend + echte PostgreSQL. Geen `page.route(...).fulfill(...)` voor kern-API's op de normale succesroute. Kernmutaties worden via de zichtbare UI uitgevoerd; read-only API/DB-controles mogen achteraf de projectie bewijzen.
 
-### Actuele stand na PR #366
+### Actuele stand op PR #370
 
-**3 van de 7 geplande L4-authorities zijn gerealiseerd en groen.**
+**6 van de 7 geplande L4-authorities zijn gerealiseerd. L4-01 t/m L4-05 zijn gemerged; L4-06 is groen bewezen op de PR #370-candidate en doorloopt na de governance-update opnieuw exact-head CI.**
 
 | ID | Keten | Status |
 |---|---|---|
 | L4-01 | registreren → onboarding → huishouden → instellingen → bruikbare app | **Gereed en groen** |
 | L4-02 | beheerder → uitnodigen → lid accepteert → rechten → huishoudwissel → isolation | **Gereed en groen** |
 | L4-03 | receipt → Kassa → goedkeuren → Uitpakken → locatie → Voorraad → historie → Bijna-op, locaties AAN | **Gereed en groen; gemerged via PR #366** |
-| L4-04 | dezelfde keten met locaties UIT en zonder locatiekolom/-validatie | **Te bouwen — eerstvolgende L4-scope** |
-| L4-05 | herverwerking/idempotentie zonder dubbele voorraad/events | Te bouwen |
-| L4-06 | aankoop → household_article → detail → historie met dezelfde canonical identity | Te bouwen |
-| L4-07 | platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden | Te bouwen |
+| L4-04 | dezelfde keten met locaties UIT en zonder locatiekolom/-validatie | **Gereed en groen; gemerged via PR #368** |
+| L4-05 | herverwerking/idempotentie zonder dubbele voorraad/events | **Gereed en groen; gemerged via PR #369** |
+| L4-06 | aankoop → household_article → detail → historie met dezelfde canonical identity | **Gereed en groen op PR #370-authority** |
+| L4-07 | platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden | **Te bouwen — eerstvolgende L4-scope** |
 
 ### L4-01 — onboarding, locaties UIT
 
@@ -223,23 +223,39 @@ De echte browserketen bewijst:
 
 Tijdens L4-03 werd tevens het echte productdefect rond synthetische `live::...` household-article-identiteiten gevonden. PR #366 heeft de adoptie naar canonical UUID inclusief referenties in inventory/events permanent gerepareerd en regressiegeborgd.
 
-Finale L4-03 candidate:
+### L4-04 — locaties UIT
 
-- PR-head: `4018c58c00862df77c2c5c4870c646aed602c466`;
-- PR #366: gemerged;
-- huidige `main`: `019b117d6ee624add024958886ecc70d24b04896`.
+PR #368 heeft de echte receipt/Uitpakken/Voorraad-keten voor een huishouden zonder locaties toegevoegd. De authority bewijst dat de locatiekolom en locatiekeuze verdwijnen, dat verwerking zonder locatie slaagt en dat locationless inventory-events geldig blijven in PostgreSQL.
+
+### L4-05 — herverwerking/idempotentie
+
+PR #369 heeft de dubbele/vertraagde `Naar voorraad`-grens als echte browser/PostgreSQL-authority toegevoegd. De keten bewijst dat replay hetzelfde `processed_event_id` behoudt, exact één purchase-event bestaat en de voorraad slechts één keer met `quantity_raw` stijgt.
+
+### L4-06 — canonical article identity
+
+Authority:
+
+- `frontend/tests/e2e/p0-article-identity-history.fullstack.spec.js`;
+- `scripts/acceptance/l4_06_article_identity_history.py`;
+- `.github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml`.
+
+De echte keten bewijst:
+
+1. twee verschillende aankoopregels krijgen twee verschillende canonical `household_article`-UUID's;
+2. beide artikelen kunnen via de echte Artikel-detail-UI dezelfde huishoudnaam krijgen zonder identity-merge;
+3. de naamwijziging is na reload persistent aan dezelfde canonical identity;
+4. elk Historie-scherm toont uitsluitend het eigen purchase-event;
+5. purchase-import-regels, inventory en inventory-events blijven in PostgreSQL exact aan de juiste UUID gekoppeld;
+6. runtime blijft DML-only;
+7. de browserauthority gebruikt geen core API mocks en geen muterende `page.request`.
+
+De reparatiecandidate `aaed274885943e2abcbdab50aff80780e697ae1f` heeft browserketen, identity-capture en exact PostgreSQL-eindbewijs volledig groen uitgevoerd. De governance-update op PR #370 wordt opnieuw op de exacte eindhead gevalideerd.
 
 ### Eerstvolgende Fase-4 stap
 
-**L4-04 — dezelfde receipt/Uitpakken/Voorraad-keten met locaties UIT.**
+**L4-07 — platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden.**
 
-Deze authority moet expliciet bewijzen dat:
-
-- een huishouden met `location_tracking_level=none` geen locatiekolom/-keuze krijgt waar die productmatig niet hoort;
-- Uitpakken geen locatievalidatie afdwingt;
-- verwerking naar Voorraad zonder locatie slaagt;
-- historie/events locationless geldig blijven;
-- de PostgreSQL-eindstaat dezelfde household- en article-isolation behoudt.
+Deze laatste geplande P0-L4 authority moet de bestaande sterke F3-06 platformauthority via een echte browserreis bewijzen zonder huishoudprivilege-escalatie.
 
 ---
 
@@ -258,7 +274,7 @@ Er bestaan inmiddels gerichte regressies/gates voor meerdere defectklassen, waar
 - household location policy;
 - locatievrije verwerking op gerichte lagere lagen;
 - PostgreSQL household/article isolation;
-- canonical household-article identity, inclusief `live::...` identity-adoptie;
+- canonical household-article identity, inclusief `live::...` identity-adoptie en L4-06 same-name/rename/history-authority;
 - Almost-out-projectie;
 - migratie/startup en PostgreSQL zero-residual;
 - brede frontendregressie.
