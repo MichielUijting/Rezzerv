@@ -3033,7 +3033,7 @@ def resolve_active_enrichment_row(conn, household_article_id: str):
                 WHERE global_product_id = :global_product_id
                   AND COALESCE(normalized_barcode, '') = :normalized_barcode
                 ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END,
-                         datetime(COALESCE(last_lookup_at, fetched_at)) DESC,
+                         COALESCE(last_lookup_at, fetched_at) DESC,
                          id DESC
                 LIMIT 1
                 """
@@ -3048,7 +3048,7 @@ def resolve_active_enrichment_row(conn, household_article_id: str):
                 FROM product_enrichments
                 WHERE global_product_id = :global_product_id
                 ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END,
-                         datetime(COALESCE(last_lookup_at, fetched_at)) DESC,
+                         COALESCE(last_lookup_at, fetched_at) DESC,
                          id DESC
                 LIMIT 1
                 """
@@ -3064,7 +3064,7 @@ def resolve_active_enrichment_row(conn, household_article_id: str):
                 WHERE household_article_id = :household_article_id
                   AND COALESCE(normalized_barcode, '') = :normalized_barcode
                 ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END,
-                         datetime(COALESCE(last_lookup_at, fetched_at)) DESC,
+                         COALESCE(last_lookup_at, fetched_at) DESC,
                          id DESC
                 LIMIT 1
                 """
@@ -3078,7 +3078,7 @@ def resolve_active_enrichment_row(conn, household_article_id: str):
             FROM product_enrichments
             WHERE household_article_id = :household_article_id
             ORDER BY CASE WHEN lookup_status = 'found' THEN 0 ELSE 1 END,
-                     datetime(COALESCE(last_lookup_at, fetched_at)) DESC,
+                     COALESCE(last_lookup_at, fetched_at) DESC,
                      id DESC
             LIMIT 1
             """
