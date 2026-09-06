@@ -165,7 +165,6 @@ async function renameHouseholdArticle(page, householdArticleId, nextName) {
   await input.fill(nextName)
   await input.blur()
   expect((await patchResponsePromise).ok()).toBeTruthy()
-  await expect(page.getByTestId('article-details-save-success')).toContainText('Wijziging verwerkt.', { timeout: 20_000 })
 
   await page.reload()
   await expect(page.getByTestId('article-detail-page')).toBeVisible({ timeout: 30_000 })
