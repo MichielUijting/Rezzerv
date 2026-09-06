@@ -64,7 +64,7 @@ def main() -> None:
                         'article-1',
                         'household-1',
                         'Verse broodjes',
-                        TRUE,
+                        1,
                         CURRENT_TIMESTAMP
                     )
                 """))
