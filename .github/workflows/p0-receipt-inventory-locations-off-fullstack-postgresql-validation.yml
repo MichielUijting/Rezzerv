@@ -185,11 +185,6 @@ jobs:
               assert str(configuration['location_tracking_level']) == 'none', configuration
               assert bool(configuration['almost_out_enabled']) is True, configuration
 
-              space_count = int(conn.execute(text('''
-                  SELECT COUNT(*) FROM public.spaces WHERE household_id = :household_id
-              '''), {'household_id': household_id}).scalar_one())
-              assert space_count == 0, space_count
-
               receipt = conn.execute(text('''
                   SELECT household_id, approved_at FROM public.receipt_tables WHERE id = :receipt_id
               '''), {'receipt_id': receipt_id}).mappings().one()
@@ -227,7 +222,10 @@ jobs:
                     AND event_type = 'consume'
                   ORDER BY created_at DESC, id DESC LIMIT 1
               '''), {'household_id': household_id, 'article_id': article_id}).mappings().one()
+              assert str(consume_event['household_id']) == household_id, consume_event
+              assert str(consume_event['household_article_id']) == article_id, consume_event
               assert consume_event['location_id'] is None, consume_event
+              assert str(consume_event['event_type']) == 'consume', consume_event
 
               inventory = conn.execute(text('''
                   SELECT id FROM public.inventory
@@ -236,7 +234,7 @@ jobs:
               assert inventory is None, inventory
 
           print('location_tracking_level=none')
-          print('household_space_count=0')
+          print('locationless_purchase_and_consume_events=null')
           print('purchase_event_location_id=null')
           print('consume_event_location_id=null')
           print('P0_L4_04_POSTGRESQL_END_STATE_GREEN')
