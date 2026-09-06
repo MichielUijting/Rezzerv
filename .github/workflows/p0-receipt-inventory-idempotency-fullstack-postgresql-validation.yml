@@ -1,0 +1,284 @@
+name: P0 receipt inventory idempotency full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/main.py'
+      - 'backend/app/services/**/*receipt*'
+      - 'backend/app/services/**/*inventory*'
+      - 'backend/app/testing/receipt_parsing/**'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/kassa/**'
+      - 'frontend/src/features/receipts/**'
+      - 'frontend/src/features/stores/**'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/pages/Voorraad.jsx'
+      - 'frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-receipt-inventory-idempotency-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  l4-receipt-inventory-idempotency:
+    name: L4-05 receipt reprocessing idempotency
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic L4-05 identity
+        shell: bash
+        run: |
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="L4-Idempotency-${suffix}-Pass!"
+          echo "PLAYWRIGHT_L4_IDEMPOTENCY_EMAIL=l4-idempotency-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_IDEMPOTENCY_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_IDEMPOTENCY_HOUSEHOLD=L4 Idempotency Household ${suffix}" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_IDEMPOTENCY_LOCATION=L4 Idempotency Voorraad ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Guard L4-05 browser authority against core route mocks
+        shell: bash
+        run: |
+          spec='frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'L4-05 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          echo 'P0_L4_05_NO_CORE_ROUTE_MOCKS_GREEN'
+
+      - name: Build and start real frontend, backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove production-like PostgreSQL runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python -u - <<'PY' | tee p0-l4-05-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
+              required_relations = {
+                  'receipt_tables', 'receipt_table_lines', 'purchase_import_batches',
+                  'purchase_import_lines', 'inventory', 'inventory_events', 'household_articles',
+              }
+              actual_relations = set(conn.execute(text("""
+                  SELECT table_name
+                  FROM information_schema.tables
+                  WHERE table_schema = 'public'
+              """)).scalars().all())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert alembic_head
+          assert required_relations.issubset(actual_relations), sorted(required_relations - actual_relations)
+          print(f'runtime_user={current_user}')
+          print(f'alembic_head={alembic_head}')
+          print('P0_L4_05_POSTGRESQL_BOUNDARY_GREEN')
+          PY
+
+      - name: Run duplicate processing through the real browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_IDEMPOTENCY_EMAIL="$PLAYWRIGHT_L4_IDEMPOTENCY_EMAIL" \
+            -e PLAYWRIGHT_L4_IDEMPOTENCY_PASSWORD="$PLAYWRIGHT_L4_IDEMPOTENCY_PASSWORD" \
+            -e PLAYWRIGHT_L4_IDEMPOTENCY_HOUSEHOLD="$PLAYWRIGHT_L4_IDEMPOTENCY_HOUSEHOLD" \
+            -e PLAYWRIGHT_L4_IDEMPOTENCY_LOCATION="$PLAYWRIGHT_L4_IDEMPOTENCY_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-05-browser.log"
+          grep -F 'P0_L4_05_BROWSER_IDEMPOTENCY_GREEN' frontend/p0-l4-05-browser.log
+          grep -F 'P0_L4_05_DUPLICATE_PROCESS_POSTS=' frontend/p0-l4-05-browser.log
+          test -s frontend/p0-l4-05-browser-proof.json
+
+      - name: Capture browser identities for PostgreSQL proof
+        shell: bash
+        run: |
+          proof='frontend/p0-l4-05-browser-proof.json'
+          for key in householdId receiptId batchId lineId expectedQuantity processedEventId householdArticleId targetLocationId processResponseCount browserInventoryTotal; do
+            value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
+            test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
+            case "$key" in
+              householdId) echo "L4_HOUSEHOLD_ID=$value" >> "$GITHUB_ENV" ;;
+              receiptId) echo "L4_RECEIPT_ID=$value" >> "$GITHUB_ENV" ;;
+              batchId) echo "L4_BATCH_ID=$value" >> "$GITHUB_ENV" ;;
+              lineId) echo "L4_LINE_ID=$value" >> "$GITHUB_ENV" ;;
+              expectedQuantity) echo "L4_EXPECTED_QUANTITY=$value" >> "$GITHUB_ENV" ;;
+              processedEventId) echo "L4_PROCESSED_EVENT_ID=$value" >> "$GITHUB_ENV" ;;
+              householdArticleId) echo "L4_HOUSEHOLD_ARTICLE_ID=$value" >> "$GITHUB_ENV" ;;
+              targetLocationId) echo "L4_TARGET_LOCATION_ID=$value" >> "$GITHUB_ENV" ;;
+              processResponseCount) echo "L4_PROCESS_RESPONSE_COUNT=$value" >> "$GITHUB_ENV" ;;
+              browserInventoryTotal) echo "L4_BROWSER_INVENTORY_TOTAL=$value" >> "$GITHUB_ENV" ;;
+            esac
+          done
+          test "$L4_PROCESS_RESPONSE_COUNT" -ge 2 || { echo 'Browser heeft minder dan twee process-responses gezien.' >&2; exit 1; }
+
+      - name: Verify exact idempotent PostgreSQL end state after duplicate browser action
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e L4_HOUSEHOLD_ID="$L4_HOUSEHOLD_ID" \
+            -e L4_RECEIPT_ID="$L4_RECEIPT_ID" \
+            -e L4_BATCH_ID="$L4_BATCH_ID" \
+            -e L4_LINE_ID="$L4_LINE_ID" \
+            -e L4_EXPECTED_QUANTITY="$L4_EXPECTED_QUANTITY" \
+            -e L4_PROCESSED_EVENT_ID="$L4_PROCESSED_EVENT_ID" \
+            -e L4_HOUSEHOLD_ARTICLE_ID="$L4_HOUSEHOLD_ARTICLE_ID" \
+            -e L4_TARGET_LOCATION_ID="$L4_TARGET_LOCATION_ID" \
+            -e L4_BROWSER_INVENTORY_TOTAL="$L4_BROWSER_INVENTORY_TOTAL" \
+            backend python -u - <<'PY' 2>&1 | tee p0-l4-05-postgresql-end-state.log
+          import os
+          from decimal import Decimal
+          from sqlalchemy import text
+          from app.db import engine
+
+          household_id = os.environ['L4_HOUSEHOLD_ID'].strip()
+          receipt_id = os.environ['L4_RECEIPT_ID'].strip()
+          batch_id = os.environ['L4_BATCH_ID'].strip()
+          line_id = os.environ['L4_LINE_ID'].strip()
+          expected_quantity = Decimal(os.environ['L4_EXPECTED_QUANTITY'])
+          processed_event_id = os.environ['L4_PROCESSED_EVENT_ID'].strip()
+          household_article_id = os.environ['L4_HOUSEHOLD_ARTICLE_ID'].strip()
+          target_location_id = os.environ['L4_TARGET_LOCATION_ID'].strip()
+          browser_inventory_total = Decimal(os.environ['L4_BROWSER_INVENTORY_TOTAL'])
+
+          assert expected_quantity > 0
+          assert browser_inventory_total == expected_quantity, (browser_inventory_total, expected_quantity)
+
+          with engine.begin() as conn:
+              receipt = conn.execute(text("""
+                  SELECT id, household_id, approved_at
+                  FROM public.receipt_tables
+                  WHERE id = :receipt_id
+              """), {'receipt_id': receipt_id}).mappings().one()
+              assert str(receipt['household_id']) == household_id, receipt
+              assert receipt['approved_at'] is not None, receipt
+
+              batch = conn.execute(text("""
+                  SELECT id, household_id, import_status
+                  FROM public.purchase_import_batches
+                  WHERE id = :batch_id
+              """), {'batch_id': batch_id}).mappings().one()
+              assert str(batch['household_id']) == household_id, batch
+              assert str(batch['import_status']) == 'processed', batch
+
+              line = conn.execute(text("""
+                  SELECT id, batch_id, quantity_raw, processing_status, processed_event_id,
+                         matched_household_article_id, target_location_id, final_location_id
+                  FROM public.purchase_import_lines
+                  WHERE id = :line_id
+              """), {'line_id': line_id}).mappings().one()
+              assert str(line['batch_id']) == batch_id, line
+              assert str(line['processing_status']) == 'processed', line
+              assert str(line['processed_event_id']) == processed_event_id, line
+              assert str(line['matched_household_article_id']) == household_article_id, line
+              assert Decimal(str(line['quantity_raw'])) == expected_quantity, line
+              assert str(line['target_location_id'] or line['final_location_id'] or '') == target_location_id, line
+
+              processed_event = conn.execute(text("""
+                  SELECT id, household_id, household_article_id, event_type, quantity, source, location_id
+                  FROM public.inventory_events
+                  WHERE id = :event_id
+              """), {'event_id': processed_event_id}).mappings().one()
+              assert str(processed_event['household_id']) == household_id, processed_event
+              assert str(processed_event['household_article_id']) == household_article_id, processed_event
+              assert str(processed_event['event_type']) == 'purchase', processed_event
+              assert str(processed_event['source']) == 'store_import', processed_event
+              assert Decimal(str(processed_event['quantity'])) == expected_quantity, processed_event
+              assert str(processed_event['location_id']) == target_location_id, processed_event
+
+              purchase_events = conn.execute(text("""
+                  SELECT id, quantity
+                  FROM public.inventory_events
+                  WHERE household_id = :household_id
+                    AND household_article_id = :article_id
+                    AND event_type = 'purchase'
+                    AND source = 'store_import'
+                  ORDER BY created_at, id
+              """), {'household_id': household_id, 'article_id': household_article_id}).mappings().all()
+              assert len(purchase_events) == 1, purchase_events
+              assert str(purchase_events[0]['id']) == processed_event_id, purchase_events
+              assert Decimal(str(purchase_events[0]['quantity'])) == expected_quantity, purchase_events
+
+              inventory_total = Decimal(str(conn.execute(text("""
+                  SELECT COALESCE(SUM(aantal), 0)
+                  FROM public.inventory
+                  WHERE household_id = :household_id
+                    AND household_article_id = :article_id
+                    AND COALESCE(status, 'active') = 'active'
+              """), {'household_id': household_id, 'article_id': household_article_id}).scalar_one()))
+              assert inventory_total == expected_quantity, (inventory_total, expected_quantity)
+
+          print(f'processed_event_id={processed_event_id}')
+          print(f'purchase_event_count={len(purchase_events)}')
+          print(f'inventory_total={inventory_total}')
+          print('P0_L4_05_SINGLE_PURCHASE_EVENT_GREEN')
+          print('P0_L4_05_SINGLE_INVENTORY_INCREMENT_GREEN')
+          print('P0_L4_05_POSTGRESQL_IDEMPOTENCY_GREEN')
+          PY
+
+      - name: Upload L4-05 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-l4-05-receipt-idempotency-evidence
+          if-no-files-found: warn
+          path: |
+            frontend/p0-l4-05-browser.log
+            frontend/p0-l4-05-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+            p0-l4-05-postgresql-boundary.log
+            p0-l4-05-postgresql-end-state.log
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend frontend postgres || true
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans
