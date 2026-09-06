@@ -286,7 +286,7 @@ def build_kassa_line_normalization_report(engine, household_id: str | None = Non
             FROM receipt_tables rt
             JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
             WHERE {where_sql}
-            ORDER BY datetime(rt.created_at) DESC, rt.id DESC
+            ORDER BY rt.created_at DESC, rt.id DESC
             LIMIT :limit
         """), params).mappings().all()
         lines: list[dict[str, Any]] = []

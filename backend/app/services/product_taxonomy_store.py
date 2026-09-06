@@ -348,13 +348,13 @@ def load_taxonomy_rules(retailer_code: str | None = None) -> tuple[dict[str, Any
                     """
                     SELECT intent_key, normalized_synonym AS normalized_term, priority, source
                     FROM product_taxonomy_synonyms
-                    WHERE COALESCE(is_active, 1) = 1
+                    WHERE COALESCE(is_active, TRUE) = TRUE
 
                     UNION ALL
 
                     SELECT intent_key, normalized_receipt_term AS normalized_term, 1200 AS priority, source
                     FROM retailer_receipt_terms
-                    WHERE COALESCE(is_active, 1) = 1
+                    WHERE COALESCE(is_active, TRUE) = TRUE
                       AND (:retailer_code = '' OR retailer_code = :retailer_code)
                     """
                 ),
@@ -403,7 +403,7 @@ def load_taxonomy_metadata() -> dict[str, dict[str, str]]:
                     """
                     SELECT intent_key, canonical_name, category, product_type
                     FROM product_taxonomy
-                    WHERE COALESCE(is_active, 1) = 1
+                    WHERE COALESCE(is_active, TRUE) = TRUE
                     """
                 )
             ).mappings().all()

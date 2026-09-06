@@ -211,7 +211,7 @@ def receipt_parse_quality_diagnosis_index(householdId: str | None = None, limit:
             FROM receipt_tables rt
             JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
             WHERE {' AND '.join(where_parts)}
-            ORDER BY datetime(rt.created_at) DESC, rt.id DESC
+            ORDER BY rt.created_at DESC, rt.id DESC
             LIMIT :limit
         """), params).mappings().all()
     return {
