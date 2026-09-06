@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 _LINE_PATH = re.compile(r"^/api/purchase-import-lines/([^/]+)(?:/|$)")
 _BATCH_PATH = re.compile(r"^/api/purchase-import-batches/([^/]+)(?:/|$)")
+_BATCH_PROCESS_PATH = re.compile(r"^/api/purchase-import-batches/([^/]+)/process/?$")
 _WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
@@ -80,6 +81,43 @@ def authorize_purchase_import_request(
     if normalized_method in _WRITE_METHODS:
         return require_inventory_write_context(authorization, household_id)
     return require_household_context(authorization, household_id)
+
+
+def acquire_purchase_import_processing_lock(
+    conn,
+    request_method: str,
+    request_path: str,
+) -> bool:
+    """Serialize concurrent processing attempts for one purchase-import batch.
+
+    The lock is PostgreSQL transaction-scoped and must be acquired on the same
+    connection/transaction that performs the purchase-import mutation. A second
+    process request for the same batch then starts from fresh committed line
+    state after the first request completes.
+    """
+
+    if str(request_method or "").strip().upper() != "POST":
+        return False
+
+    process_match = _BATCH_PROCESS_PATH.match(str(request_path or "").strip())
+    if not process_match:
+        return False
+
+    if str(getattr(getattr(conn, "dialect", None), "name", "") or "").lower() != "postgresql":
+        return False
+
+    batch_id = process_match.group(1).strip()
+    if not batch_id:
+        return False
+
+    lock_key = f"purchase-import-batch:{batch_id}"
+    conn.execute(
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"
+        ),
+        {"lock_key": lock_key},
+    )
+    return True
 
 
 def install_unpacking_household_object_guard(main_module) -> None:

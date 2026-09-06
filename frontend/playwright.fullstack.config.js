@@ -23,7 +23,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-fullstack',
-      testMatch: /p0-(onboarding|receipt-inventory(?:-locations-off)?)\.fullstack\.spec\.js/,
+      testMatch: /p0-(onboarding|receipt-inventory(?:-(?:locations-off|idempotency))?)\.fullstack\.spec\.js/,
       use: {
         ...devices['Desktop Chrome'],
       },
