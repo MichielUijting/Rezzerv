@@ -137,6 +137,7 @@ jobs:
         shell: bash
         run: |
           proof='frontend/p0-l4-05-browser-proof.json'
+          process_response_count=''
           for key in householdId receiptId batchId lineId expectedQuantity processedEventId householdArticleId targetLocationId processResponseCount browserInventoryTotal; do
             value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
             test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
@@ -149,11 +150,14 @@ jobs:
               processedEventId) echo "L4_PROCESSED_EVENT_ID=$value" >> "$GITHUB_ENV" ;;
               householdArticleId) echo "L4_HOUSEHOLD_ARTICLE_ID=$value" >> "$GITHUB_ENV" ;;
               targetLocationId) echo "L4_TARGET_LOCATION_ID=$value" >> "$GITHUB_ENV" ;;
-              processResponseCount) echo "L4_PROCESS_RESPONSE_COUNT=$value" >> "$GITHUB_ENV" ;;
+              processResponseCount)
+                process_response_count="$value"
+                echo "L4_PROCESS_RESPONSE_COUNT=$value" >> "$GITHUB_ENV"
+                ;;
               browserInventoryTotal) echo "L4_BROWSER_INVENTORY_TOTAL=$value" >> "$GITHUB_ENV" ;;
             esac
           done
-          test "$L4_PROCESS_RESPONSE_COUNT" -ge 2 || { echo 'Browser heeft minder dan twee process-responses gezien.' >&2; exit 1; }
+          test "$process_response_count" -ge 2 || { echo 'Browser heeft minder dan twee process-responses gezien.' >&2; exit 1; }
 
       - name: Verify exact idempotent PostgreSQL end state after duplicate browser action
         shell: bash
