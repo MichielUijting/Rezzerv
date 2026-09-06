@@ -198,7 +198,7 @@ def seed_default_inventory_groups(conn) -> None:
                         default_base_unit, is_active, created_at, updated_at
                     ) VALUES (
                         :intent_key, :canonical_name, :category, :product_type,
-                        :default_base_unit, 1, :created_at, :updated_at
+                        :default_base_unit, TRUE, :created_at, :updated_at
                     )
                 """),
                 {"created_at": timestamp, "updated_at": timestamp, **{key: item[key] for key in ["intent_key", "canonical_name", "category", "product_type", "default_base_unit"]}},
@@ -211,7 +211,7 @@ def seed_default_inventory_groups(conn) -> None:
                         category = COALESCE(NULLIF(category, ''), :category),
                         product_type = COALESCE(NULLIF(product_type, ''), :product_type),
                         default_base_unit = COALESCE(NULLIF(default_base_unit, ''), :default_base_unit),
-                        is_active = COALESCE(is_active, 1),
+                        is_active = COALESCE(is_active, TRUE),
                         updated_at = :updated_at
                     WHERE intent_key = :intent_key
                 """),

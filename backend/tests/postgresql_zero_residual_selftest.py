@@ -39,7 +39,6 @@ SQLITE_COMPATIBILITY_SQL_ALLOWLIST = {
 # App code is deliberately raw-SQL heavy, so these columns cannot be discovered
 # reliably from ORM models alone.
 CANONICAL_POSTGRESQL_BOOLEAN_COLUMNS = {
-    "active",
     "is_active",
     "is_auto_prefilled",
     "is_deleted",
@@ -60,7 +59,7 @@ DDL_PATTERNS = {
 # application SQL. These patterns intentionally cover column/expression arguments,
 # not only historical datetime('now') forms.
 SQLITE_SQL_PATTERNS = {
-    "PRAGMA": re.compile(r"\bPRAGMA\b", re.IGNORECASE),
+    "PRAGMA": re.compile(r"^\s*PRAGMA\s+\w+", re.IGNORECASE),
     "sqlite_master": re.compile(r"\bsqlite_master\b", re.IGNORECASE),
     "AUTOINCREMENT": re.compile(r"\bAUTOINCREMENT\b", re.IGNORECASE),
     "INSERT OR IGNORE": re.compile(r"\bINSERT\s+OR\s+IGNORE\b", re.IGNORECASE),
@@ -77,13 +76,15 @@ SQLITE_SQL_PATTERNS = {
     "SQLite IIF()": re.compile(r"\bIIF\s*\(", re.IGNORECASE),
     "SQLite changes()": re.compile(r"\bchanges\s*\(", re.IGNORECASE),
     "SQLite randomblob()": re.compile(r"\brandomblob\s*\(", re.IGNORECASE),
+    "SQLite hex()": re.compile(r"\bhex\s*\(", re.IGNORECASE),
     "SQLite zeroblob()": re.compile(r"\bzeroblob\s*\(", re.IGNORECASE),
     "SQLite typeof()": re.compile(r"\btypeof\s*\(", re.IGNORECASE),
 }
 
 SQL_FRAGMENT_MARKER = re.compile(
     r"\b(?:SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|ORDER\s+BY|GROUP\s+BY|HAVING|"
-    r"JOIN|SET|VALUES|CREATE|ALTER|DROP|PRAGMA|ON\s+CONFLICT)\b",
+    r"JOIN|SET|VALUES|CREATE|ALTER|DROP|PRAGMA|ON\s+CONFLICT|datetime|strftime|"
+    r"julianday|unixepoch|GROUP_CONCAT|IFNULL|IIF|changes|randomblob|zeroblob|typeof|hex)\b",
     re.IGNORECASE,
 )
 EXECUTION_SINKS = {"execute", "exec_driver_sql", "executescript"}
@@ -115,6 +116,20 @@ def _string_literals(node: ast.AST):
     for candidate in ast.walk(node):
         if isinstance(candidate, ast.Constant) and isinstance(candidate.value, str):
             yield candidate
+
+
+def _docstring_ids(tree: ast.AST) -> set[int]:
+    ids: set[int] = set()
+    for candidate in ast.walk(tree):
+        if not isinstance(candidate, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        body = getattr(candidate, "body", None) or []
+        if not body or not isinstance(body[0], ast.Expr):
+            continue
+        value = body[0].value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            ids.add(id(value))
+    return ids
 
 
 def _explicit_compat_ranges(tree: ast.AST, relative: Path) -> tuple[tuple[int, int], ...]:
@@ -248,10 +263,13 @@ def main() -> None:
             continue
         compat_ranges = _explicit_compat_ranges(tree, relative)
         integer_boolean_names = _integer_boolean_names(tree)
+        docstring_ids = _docstring_ids(tree)
 
         # Scan every SQL-looking literal, not only literals nested directly in
         # conn.execute(...). This catches dynamically assembled SQL fragments.
         for string_node in _string_literals(tree):
+            if id(string_node) in docstring_ids:
+                continue
             value = string_node.value
             string_line = int(getattr(string_node, "lineno", 0) or 0)
             if _inside_ranges(string_line, compat_ranges):

@@ -2171,7 +2171,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                             'logical_line_key': logical_line_key,
                             'line_role': semantics['line_role'],
                             'inventory_eligible': 1 if semantics['inventory_eligible'] else 0,
-                            'is_validated': 1 if (prior_validated or prior_processed) else 0,
+                            'is_validated': bool(prior_validated or prior_processed),
                         },
                     )
         response = {

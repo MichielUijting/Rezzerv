@@ -177,8 +177,8 @@ def export_receipt_debug(receipt_table_id: str, authorization: Optional[str] = H
                     matched_article_id,
                     matched_global_product_id,
                     confidence_score,
-                    COALESCE(is_deleted, 0) AS is_deleted,
-                    COALESCE(is_validated, 0) AS is_validated,
+                    COALESCE(is_deleted, FALSE) AS is_deleted,
+                    COALESCE(is_validated, FALSE) AS is_validated,
                     created_at,
                     updated_at
                 FROM receipt_table_lines
