@@ -1,0 +1,266 @@
+name: P0 receipt inventory locations-off full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/main.py'
+      - 'backend/app/services/**/*receipt*'
+      - 'backend/app/services/**/*inventory*'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/kassa/**'
+      - 'frontend/src/features/receipts/**'
+      - 'frontend/src/features/stores/**'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/features/articles/**'
+      - 'frontend/src/features/almostOut/**'
+      - 'frontend/src/pages/Voorraad.jsx'
+      - 'frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-receipt-inventory-locations-off-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  l4-receipt-inventory-locations-off:
+    name: L4-04 receipt chain with locations OFF
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic L4-04 identity
+        shell: bash
+        run: |
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="L4-Locations-Off-${suffix}-Pass!"
+          echo "PLAYWRIGHT_L4_04_EMAIL=l4-locations-off-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_04_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_L4_04_HOUSEHOLD=L4 Locations Off ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Guard L4-04 browser authority against core route mocks
+        shell: bash
+        run: |
+          spec='frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'L4-04 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          echo 'P0_L4_04_NO_CORE_ROUTE_MOCKS_GREEN'
+
+      - name: Build and start real frontend, backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove production-like PostgreSQL runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python -u - <<'PY' | tee p0-l4-04-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert alembic_head
+          print(f'runtime_user={current_user}')
+          print(f'alembic_head={alembic_head}')
+          print('P0_L4_04_POSTGRESQL_BOUNDARY_GREEN')
+          PY
+
+      - name: Run complete L4-04 through the real browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_04_EMAIL="$PLAYWRIGHT_L4_04_EMAIL" \
+            -e PLAYWRIGHT_L4_04_PASSWORD="$PLAYWRIGHT_L4_04_PASSWORD" \
+            -e PLAYWRIGHT_L4_04_HOUSEHOLD="$PLAYWRIGHT_L4_04_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-04-browser.log"
+          grep -F 'P0_L4_04_LOCATIONS_OFF_BROWSER_GREEN' frontend/p0-l4-04-browser.log
+          grep -F 'P0_L4_04_LOCATIONLESS_INVENTORY_BROWSER_GREEN' frontend/p0-l4-04-browser.log
+          test -s frontend/p0-l4-04-browser-proof.json
+
+      - name: Capture browser identities for PostgreSQL proof
+        shell: bash
+        run: |
+          proof='frontend/p0-l4-04-browser-proof.json'
+          test "$(jq -r '.locationTrackingLevel' "$proof")" = 'none'
+          for key in householdId receiptId batchId lineId inventoryId householdArticleId initialQuantity minStock idealStock consumeQuantity finalQuantity; do
+            value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
+            test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
+            case "$key" in
+              householdId) echo "L4_HOUSEHOLD_ID=$value" >> "$GITHUB_ENV" ;;
+              receiptId) echo "L4_RECEIPT_ID=$value" >> "$GITHUB_ENV" ;;
+              batchId) echo "L4_BATCH_ID=$value" >> "$GITHUB_ENV" ;;
+              lineId) echo "L4_LINE_ID=$value" >> "$GITHUB_ENV" ;;
+              inventoryId) echo "L4_INVENTORY_ID=$value" >> "$GITHUB_ENV" ;;
+              householdArticleId) echo "L4_HOUSEHOLD_ARTICLE_ID=$value" >> "$GITHUB_ENV" ;;
+              initialQuantity) echo "L4_INITIAL_QUANTITY=$value" >> "$GITHUB_ENV" ;;
+              minStock) echo "L4_MIN_STOCK=$value" >> "$GITHUB_ENV" ;;
+              idealStock) echo "L4_IDEAL_STOCK=$value" >> "$GITHUB_ENV" ;;
+              consumeQuantity) echo "L4_CONSUME_QUANTITY=$value" >> "$GITHUB_ENV" ;;
+              finalQuantity) echo "L4_FINAL_QUANTITY=$value" >> "$GITHUB_ENV" ;;
+            esac
+          done
+
+      - name: Verify exact locationless PostgreSQL end state after browser actions
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e L4_EMAIL="$PLAYWRIGHT_L4_04_EMAIL" \
+            -e L4_HOUSEHOLD_ID="$L4_HOUSEHOLD_ID" \
+            -e L4_RECEIPT_ID="$L4_RECEIPT_ID" \
+            -e L4_BATCH_ID="$L4_BATCH_ID" \
+            -e L4_LINE_ID="$L4_LINE_ID" \
+            -e L4_INVENTORY_ID="$L4_INVENTORY_ID" \
+            -e L4_HOUSEHOLD_ARTICLE_ID="$L4_HOUSEHOLD_ARTICLE_ID" \
+            backend python -u - <<'PY' 2>&1 | tee p0-l4-04-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          email = os.environ['L4_EMAIL'].strip().lower()
+          household_id = os.environ['L4_HOUSEHOLD_ID'].strip()
+          receipt_id = os.environ['L4_RECEIPT_ID'].strip()
+          batch_id = os.environ['L4_BATCH_ID'].strip()
+          line_id = os.environ['L4_LINE_ID'].strip()
+          inventory_id = os.environ['L4_INVENTORY_ID'].strip()
+          article_id = os.environ['L4_HOUSEHOLD_ARTICLE_ID'].strip()
+
+          with engine.begin() as conn:
+              membership = conn.execute(text('''
+                  SELECT household_id, role FROM public.household_memberships
+                  WHERE lower(trim(user_email)) = :email
+              '''), {'email': email}).mappings().one()
+              assert str(membership['household_id']) == household_id, membership
+              assert str(membership['role']) == 'admin', membership
+
+              configuration = conn.execute(text('''
+                  SELECT inventory_tracking_level, location_tracking_level, almost_out_enabled
+                  FROM public.household_product_configuration WHERE household_id = :household_id
+              '''), {'household_id': household_id}).mappings().one()
+              assert str(configuration['inventory_tracking_level']) == 'quantity', configuration
+              assert str(configuration['location_tracking_level']) == 'none', configuration
+              assert bool(configuration['almost_out_enabled']) is True, configuration
+
+              receipt = conn.execute(text('''
+                  SELECT household_id, approved_at FROM public.receipt_tables WHERE id = :receipt_id
+              '''), {'receipt_id': receipt_id}).mappings().one()
+              assert str(receipt['household_id']) == household_id, receipt
+              assert receipt['approved_at'] is not None, receipt
+
+              batch = conn.execute(text('''
+                  SELECT household_id FROM public.purchase_import_batches WHERE id = :batch_id
+              '''), {'batch_id': batch_id}).mappings().one()
+              assert str(batch['household_id']) == household_id, batch
+
+              line = conn.execute(text('''
+                  SELECT processing_status, target_location_id, processed_event_id
+                  FROM public.purchase_import_lines WHERE id = :line_id
+              '''), {'line_id': line_id}).mappings().one()
+              assert str(line['processing_status']) == 'processed', line
+              assert line['target_location_id'] is None, line
+              assert line['processed_event_id'] is not None, line
+
+              purchase_event = conn.execute(text('''
+                  SELECT household_id, household_article_id, location_id, event_type, source
+                  FROM public.inventory_events WHERE id = :event_id
+              '''), {'event_id': str(line['processed_event_id'])}).mappings().one()
+              assert str(purchase_event['household_id']) == household_id, purchase_event
+              assert str(purchase_event['household_article_id']) == article_id, purchase_event
+              assert purchase_event['location_id'] is None, purchase_event
+              assert str(purchase_event['event_type']) == 'purchase', purchase_event
+              assert str(purchase_event['source']) == 'store_import', purchase_event
+
+              consume_event = conn.execute(text('''
+                  SELECT household_id, household_article_id, location_id, event_type
+                  FROM public.inventory_events
+                  WHERE household_id = :household_id
+                    AND household_article_id = :article_id
+                    AND event_type = 'consume'
+                  ORDER BY created_at DESC, id DESC LIMIT 1
+              '''), {'household_id': household_id, 'article_id': article_id}).mappings().one()
+              assert str(consume_event['household_id']) == household_id, consume_event
+              assert str(consume_event['household_article_id']) == article_id, consume_event
+              assert consume_event['location_id'] is None, consume_event
+              assert str(consume_event['event_type']) == 'consume', consume_event
+
+              inventory = conn.execute(text('''
+                  SELECT id FROM public.inventory
+                  WHERE id = :inventory_id AND household_id = :household_id
+              '''), {'inventory_id': inventory_id, 'household_id': household_id}).mappings().first()
+              assert inventory is None, inventory
+
+          print('location_tracking_level=none')
+          print('locationless_purchase_and_consume_events=null')
+          print('purchase_event_location_id=null')
+          print('consume_event_location_id=null')
+          print('P0_L4_04_POSTGRESQL_END_STATE_GREEN')
+          PY
+
+      - name: Upload L4-04 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-l4-04-locations-off-evidence
+          path: |
+            p0-l4-04-postgresql-boundary.log
+            p0-l4-04-postgresql-end-state.log
+            frontend/p0-l4-04-browser.log
+            frontend/p0-l4-04-browser-proof.json
+            frontend/test-results/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps || true
+          docker compose logs --no-color --tail=400 backend || true
+          docker compose logs --no-color --tail=200 frontend || true
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans

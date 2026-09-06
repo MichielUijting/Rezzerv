@@ -16,3 +16,14 @@ html[data-rezzerv-location-tracking-level='none'] [data-testid='receipt-lines-ta
 html[data-rezzerv-location-tracking-level='none'] .rz-receipt-line-detail__wide:has([data-testid^='receipt-line-location-select-']) {
   display: none !important;
 }
+
+html[data-rezzerv-location-tracking-level='none'] [data-testid='almost-out-table'] {
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+html[data-rezzerv-location-tracking-level='none'] [data-testid='almost-out-table'] col:nth-child(8),
+html[data-rezzerv-location-tracking-level='none'] [data-testid='almost-out-table'] th:nth-child(8),
+html[data-rezzerv-location-tracking-level='none'] [data-testid='almost-out-table'] td:nth-child(8) {
+  display: none !important;
+}

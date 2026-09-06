@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from fastapi import HTTPException
+
+from app.services.inventory_location_policy_service import resolve_inventory_location
 from app.services.purchase_import_location_policy_patch import (
     _processing_household_id,
 )
@@ -33,12 +36,27 @@ def resolve_event_location_for_active_batch(
     return legacy_require_resolved_location(resolved_location)
 
 
+def _canonical_event_location(
+    conn,
+    household_id: str,
+    resolved_location: dict[str, Any] | None,
+) -> dict[str, Any]:
+    candidate = dict(resolved_location or {})
+    return resolve_inventory_location(
+        conn,
+        household_id,
+        space_id=candidate.get("space_id"),
+        sublocation_id=candidate.get("sublocation_id"),
+    )
+
+
 def install_inventory_location_event_policy_patch(main_module) -> None:
     app = main_module.app
     if getattr(app.state, "inventory_location_event_policy_patch_installed", False):
         return
 
     legacy_require_resolved_location = main_module.require_resolved_location
+    legacy_create_inventory_event = main_module.create_inventory_event
 
     def require_resolved_location_with_household_policy(resolved_location):
         return resolve_event_location_for_active_batch(
@@ -46,7 +64,56 @@ def install_inventory_location_event_policy_patch(main_module) -> None:
             legacy_require_resolved_location,
         )
 
+    def create_inventory_event_with_household_policy(
+        conn,
+        *,
+        household_id,
+        resolved_location,
+        **kwargs,
+    ):
+        try:
+            canonical_location = _canonical_event_location(
+                conn,
+                str(household_id),
+                resolved_location,
+            )
+        except LookupError:
+            # Legacy/test households without canonical product configuration keep
+            # the old strict behavior. This is deliberately fail-closed.
+            return legacy_create_inventory_event(
+                conn,
+                household_id=household_id,
+                resolved_location=resolved_location,
+                **kwargs,
+            )
+        except HTTPException:
+            raise
+
+        is_locationless = not (
+            canonical_location.get("space_id")
+            or canonical_location.get("sublocation_id")
+        )
+        if not is_locationless:
+            return legacy_create_inventory_event(
+                conn,
+                household_id=household_id,
+                resolved_location=canonical_location,
+                **kwargs,
+            )
+
+        token = _processing_household_id.set(str(household_id))
+        try:
+            return legacy_create_inventory_event(
+                conn,
+                household_id=household_id,
+                resolved_location=canonical_location,
+                **kwargs,
+            )
+        finally:
+            _processing_household_id.reset(token)
+
     main_module.require_resolved_location = (
         require_resolved_location_with_household_policy
     )
+    main_module.create_inventory_event = create_inventory_event_with_household_policy
     app.state.inventory_location_event_policy_patch_installed = True
