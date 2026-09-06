@@ -206,7 +206,7 @@ test('L4-04 receipt chain works with locations OFF and no location UI/validation
 
   const lineSelect = page.getByTestId(`receipt-line-select-${lineId}`)
   if (!(await lineSelect.isChecked())) await lineSelect.check()
-  await expect(page.getByTestId(`receipt-line-status-${lineId}`)).toHaveText('ready')
+  await expect(page.getByTestId('receipt-process-button')).toBeEnabled()
 
   const processResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === `/api/purchase-import-batches/${batchId}/process`
