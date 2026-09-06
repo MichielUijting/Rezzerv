@@ -1,8 +1,8 @@
 # Rezzerv Integral Test Platform — Implementatiebacklog
 
-Statusdatum: 4 september 2026
-Branch: `codex/integral-test-foundation-phase-0`
-Baseline: `main@87846e2b257cc458c24f1ea70474ab8986bfbc81`
+Statusdatum: 6 september 2026
+Branch: `codex/test-platform-status-after-pr366`
+Baseline: `main@019b117d6ee624add024958886ecc70d24b04896` (na merge PR #366)
 
 ## Doel
 
@@ -129,7 +129,7 @@ Candidate `3210cc59cb9ae3c404552b53a35bf4ddfcaf3e49` is volledig groen over de c
 - receipt inventory chain;
 - volledige frontend regression.
 
-De matrix is bewust conservatief bijgewerkt. F3-03 maakt brede scenario's zoals locaties UIT, `Niet ingedeeld`, dagartikel, verbruik/correctie en alle identity-varianten niet automatisch `covered`; daarvoor blijft gerichte aanvullende L3/L4-dekking nodig.
+De matrix blijft bewust conservatief. F3-03 maakt brede scenario's zoals locaties UIT, `Niet ingedeeld`, dagartikel, verbruik/correctie en alle identity-varianten niet automatisch `covered`; daarvoor blijft gerichte aanvullende L3/L4-dekking nodig.
 
 ---
 
@@ -137,44 +137,137 @@ De matrix is bewust conservatief bijgewerkt. F3-03 maakt brede scenario's zoals 
 
 **L4-definitie:** echte browser + echte frontend + echte backend + echte PostgreSQL. Geen `page.route(...).fulfill(...)` voor kern-API's op de normale succesroute. Kernmutaties worden via de zichtbare UI uitgevoerd; read-only API/DB-controles mogen achteraf de projectie bewijzen.
 
+### Actuele stand na PR #366
+
+**3 van de 7 geplande L4-authorities zijn gerealiseerd en groen.**
+
 | ID | Keten | Status |
 |---|---|---|
-| L4-01 | registreren → onboarding → huishouden → instellingen → bruikbare app | **Implementatie toegevoegd; CI-bewijs volgt op opvolgcandidate** |
-| L4-02 | beheerder → uitnodigen → lid accepteert → rechten → huishoudwissel → isolation | Te bouwen |
-| L4-03 | receipt → Kassa → goedkeuren → Uitpakken → locatie → Voorraad → historie → Bijna-op, locaties AAN | Te bouwen |
-| L4-04 | dezelfde keten met locaties UIT en zonder locatiekolom/-validatie | Te bouwen |
+| L4-01 | registreren → onboarding → huishouden → instellingen → bruikbare app | **Gereed en groen** |
+| L4-02 | beheerder → uitnodigen → lid accepteert → rechten → huishoudwissel → isolation | **Gereed en groen** |
+| L4-03 | receipt → Kassa → goedkeuren → Uitpakken → locatie → Voorraad → historie → Bijna-op, locaties AAN | **Gereed en groen; gemerged via PR #366** |
+| L4-04 | dezelfde keten met locaties UIT en zonder locatiekolom/-validatie | **Te bouwen — eerstvolgende L4-scope** |
 | L4-05 | herverwerking/idempotentie zonder dubbele voorraad/events | Te bouwen |
 | L4-06 | aankoop → household_article → detail → historie met dezelfde canonical identity | Te bouwen |
 | L4-07 | platformlogin → toegestane platformfunctie → verboden huishoudactie blijft verboden | Te bouwen |
 
-### L4-01 implementatiecontract
+### L4-01 — onboarding, locaties UIT
 
-Nieuw:
+Authority:
 
 - `frontend/tests/e2e/p0-onboarding.fullstack.spec.js`;
 - `frontend/playwright.fullstack.config.js`;
 - `.github/workflows/p0-onboarding-fullstack-postgresql-validation.yml`.
 
-De keten doet via de echte browser-UI:
+De echte browserketen bewijst:
 
-1. account registreren;
-2. `Wat Inhuis` kiezen;
-3. aantallen aanzetten;
-4. locaties expliciet UIT laten;
-5. Bijna-op en Winkelen aanzetten;
+1. accountregistratie;
+2. `Wat Inhuis`;
+3. aantallen aan;
+4. locaties UIT;
+5. Bijna-op en Winkelen aan;
 6. huishouden benoemen en onboarding afronden;
-7. bruikbare home- en settingsprojectie controleren;
-8. vervolgens read-only API-projectie en directe PostgreSQL-eindstaat controleren.
+7. bruikbare homeprojectie;
+8. settingsprojectie met het juiste actieve profiel;
+9. `Locaties` ontbreekt op home en in instellingen;
+10. read-only API/session-controle op dezelfde staat.
 
-De workflow faalt statisch wanneer de L4-spec `page.route()` of muterende `page.request.post/put/patch/delete` gebruikt voor de kernflow.
+L4-01 was groen op de finale Fase-0/1/2/3/early-F4 candidate die via PR #364 is gemerged.
+
+### L4-02 — household membership en isolation
+
+Authority:
+
+- `frontend/tests/e2e/p0-household-membership.fullstack.spec.js`;
+- `frontend/playwright.membership-fullstack.config.js`;
+- `.github/workflows/p0-household-membership-fullstack-postgresql-validation.yml`.
+
+De echte browserketen gebruikt twee afzonderlijke browsercontexten en bewijst:
+
+1. beheerder en toekomstig lid hebben ieder een eigen regulier huishouden;
+2. beheerder nodigt het lid uit via de zichtbare huishoudinstellingen;
+3. de uitnodiging wordt via de testmailboundary daadwerkelijk afgeleverd;
+4. het lid accepteert via de zichtbare uitnodigingspagina;
+5. de rol in het gedeelde huishouden is `member`;
+6. huishoudinstellingen zijn daar niet toegankelijk voor het lid;
+7. de huishoudwisselaar schakelt tussen beide huishoudens;
+8. de rol wordt per huishoudcontext correct hersteld;
+9. leden-/huishouddata lekken niet tussen de twee huishoudens.
+
+De P0 household membership full-stack PostgreSQL workflow was groen op de finale PR #364-candidate.
+
+### L4-03 — Kassa → Uitpakken → Voorraad → Bijna-op, locaties AAN
+
+Authority:
+
+- `frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js`;
+- `frontend/playwright.fullstack.config.js`;
+- `.github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml`;
+- `backend/tests/test_live_household_article_identity_adoption.py` voor de gerichte identity-regressie die tijdens deze keten nodig bleek.
+
+De echte browserketen bewijst:
+
+1. registratie en onboarding met locaties AAN;
+2. canonieke Jumbo-kassabon uploaden via Kassa;
+3. de receipt via de zichtbare UI goedkeuren;
+4. de goedgekeurde batch in Uitpakken openen;
+5. een locatie via de UI creëren en selecteren;
+6. één fysieke bonregel naar Voorraad verwerken;
+7. dezelfde canonical `household_article_id` in Voorraad/artikeldetail gebruiken;
+8. min/ideal-stock via zichtbare huishoudartikelinstellingen opslaan en na reload teruglezen;
+9. vóór verbruik niet in Bijna-op;
+10. via de zichtbare Afboeken-flow verbruiken;
+11. daarna wel in Bijna-op;
+12. browserproof en PostgreSQL-eindstaat aan dezelfde run koppelen;
+13. bij eindvoorraad `0` de canonieke contractregel volgen: de lege inventory-row wordt verwijderd terwijl purchase/consume-events en household-article-identiteit de continuïteit bewijzen.
+
+Tijdens L4-03 werd tevens het echte productdefect rond synthetische `live::...` household-article-identiteiten gevonden. PR #366 heeft de adoptie naar canonical UUID inclusief referenties in inventory/events permanent gerepareerd en regressiegeborgd.
+
+Finale L4-03 candidate:
+
+- PR-head: `4018c58c00862df77c2c5c4870c646aed602c466`;
+- PR #366: gemerged;
+- huidige `main`: `019b117d6ee624add024958886ecc70d24b04896`.
+
+### Eerstvolgende Fase-4 stap
+
+**L4-04 — dezelfde receipt/Uitpakken/Voorraad-keten met locaties UIT.**
+
+Deze authority moet expliciet bewijzen dat:
+
+- een huishouden met `location_tracking_level=none` geen locatiekolom/-keuze krijgt waar die productmatig niet hoort;
+- Uitpakken geen locatievalidatie afdwingt;
+- verwerking naar Voorraad zonder locatie slaagt;
+- historie/events locationless geldig blijven;
+- de PostgreSQL-eindstaat dezelfde household- en article-isolation behoudt.
 
 ---
 
-## Fase 5 — Historische regressiefoundation
+## Fase 5 — Historische regressiefoundation — GEDEELTELIJK OPGEBOUWD
 
 Iedere bevestigde productbug krijgt de laagste zinvolle permanente regressietest, aanvullende L3/L4-dekking waar samenhang nodig is en een verwijzing in de matrix.
 
-Verplichte defectklassen uit de PostgreSQL PO-ronde:
+### Reeds permanent geborgd tijdens PostgreSQL- en PO-rondes
+
+Er bestaan inmiddels gerichte regressies/gates voor meerdere defectklassen, waaronder:
+
+- boolean/runtime-portability;
+- quantity precision zonder generieke decimalenlimiet;
+- receipt source/runtime wiring;
+- receipt lifecycle en fail-closed gedrag;
+- household location policy;
+- locatievrije verwerking op gerichte lagere lagen;
+- PostgreSQL household/article isolation;
+- canonical household-article identity, inclusief `live::...` identity-adoptie;
+- Almost-out-projectie;
+- migratie/startup en PostgreSQL zero-residual;
+- brede frontendregressie.
+
+### Nog nodig voor Fase-5-exit
+
+De exit is nog **niet** bereikt. De volledige historische defectlijst moet systematisch worden afgevinkt tegen permanent bewijs en de Functional Acceptance Matrix, zonder impliciet krediet uit losstaande workflows.
+
+Verplichte defectklassen blijven:
 
 - boolean/runtime-portability;
 - JSON serialisatie vanuit PostgreSQL-resultaten;
@@ -193,35 +286,56 @@ Verplichte defectklassen uit de PostgreSQL PO-ronde:
 
 ---
 
-## Fase 6 — Failure & recovery
+## Fase 6 — Failure & recovery — GEDEELTELIJK OPGEBOUWD
 
-Minimaal: 401/403, functionele 4xx, gecontroleerde 5xx, timeout/tijdelijke fout, ongeldige import, retry/dubbele request, onderbroken keten, veilige hervatting, standaard feedback en databaseconsistentie na fout.
+Er bestaat al sterk gericht bewijs voor onder meer authorization-denials, household isolation, diverse functionele foutpaden en idempotentie op lagere lagen. Dat telt als bestaande bouwsteen, maar niet als volledige Fase-6-exit.
+
+Nog integraal af te dekken:
+
+- 401/403 in de relevante echte gebruikersketens;
+- functionele 4xx;
+- gecontroleerde 5xx;
+- timeout/tijdelijke fout;
+- ongeldige import;
+- retry/dubbele request;
+- onderbroken keten;
+- veilige hervatting;
+- standaard gebruikersfeedback;
+- databaseconsistentie na fout.
 
 ---
 
-## Fase 7 — CI orchestration
+## Fase 7 — CI orchestration — GEDEELTELIJK OPGEBOUWD
+
+Er bestaan veel production-relevante PostgreSQL-, L3-, L4- en regressieworkflows. De centrale orchestratie volgens de roadmap is echter nog niet gerealiseerd.
+
+Doelstructuur:
 
 - **PR Fast Regression:** snelle L1/L2 + relevante L3/L4.
 - **Full Regression:** complete functionele regressie voor integratiekandidaat/main.
 - **Deep / Nightly:** zwaardere varianten, legacydata, recovery en combinaties.
 - **Release Acceptance:** PostgreSQL + migraties + alle P0 L2/L3/L4 + build/startup + PO-status.
 
-Featuregerichte workflows worden pas geconsolideerd volgens `docs/TEST_WORKFLOW_CLASSIFICATION.md` nadat vervangend bewijs stabiel is.
+Featuregerichte workflows worden pas geconsolideerd volgens `docs/TEST_WORKFLOW_CLASSIFICATION.md` nadat vervangend bewijs stabiel is. De bestaande workflow `test-orchestration-platform-authorization.yml` is een autorisatie-authority voor de platformroute en is **niet** de nog te bouwen overkoepelende CI-orchestrator.
 
 ---
 
-## Fase 8 — PO Acceptance Pack
+## Fase 8 — PO Acceptance Pack — NOG TE BOUWEN
 
 Doelduur: circa **15–30 minuten**. De PO beoordeelt primair begrijpelijkheid, logische gebruikersflow, zichtbaarheid en productmatig gewenst gedrag; technische regressie hoort al groen te zijn.
 
+De formele, wijzigingsgerichte PO-packaging en statusregistratie zijn nog geen afgeronde platformlaag.
+
 ---
 
-## Fase 9 — Release Acceptance Gate
+## Fase 9 — Release Acceptance Gate — VOORBEREID, NOG NIET ACTIEF
 
-De finale gate activeert:
+De validator ondersteunt al:
 
 ```text
 python scripts/validate-functional-acceptance-matrix.py --strict-release
 ```
+
+De huidige CI gebruikt voor de Functional Acceptance Matrix nog de structurele modus. `--strict-release` wordt pas de finale releasegate wanneer de resterende P0-gaten, centrale orchestratie en PO-statusregistratie gereed zijn.
 
 Een release is pas kandidaat voor PO-GO wanneer alle vereiste P0-lagen, PostgreSQL/migratie/startup en build/runtime groen zijn en de PO-acceptatiestatus expliciet is vastgelegd. Automatisering geeft nooit zelfstandig merge-toestemming.
