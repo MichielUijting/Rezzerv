@@ -1949,6 +1949,63 @@ def find_existing_household_article_name(conn, household_id: str, article_name: 
     return None
 
 
+def _adopt_synthetic_household_article_identity(conn, household_id: str, synthetic_article_id: str) -> str:
+    normalized_id = str(synthetic_article_id or "").strip()
+    if not normalized_id.startswith("live::"):
+        return normalized_id
+
+    canonical_article_id = str(uuid.uuid4())
+    params = {
+        "household_id": str(household_id),
+        "synthetic_article_id": normalized_id,
+        "canonical_article_id": canonical_article_id,
+    }
+    conn.execute(
+        text(
+            """
+            UPDATE household_articles
+            SET id = :canonical_article_id, updated_at = CURRENT_TIMESTAMP
+            WHERE household_id = :household_id
+              AND id = :synthetic_article_id
+            """
+        ),
+        params,
+    )
+    conn.execute(
+        text(
+            """
+            UPDATE inventory
+            SET household_article_id = :canonical_article_id
+            WHERE household_id = :household_id
+              AND household_article_id = :synthetic_article_id
+            """
+        ),
+        params,
+    )
+    conn.execute(
+        text(
+            """
+            UPDATE inventory_events
+            SET article_id = CASE
+                    WHEN article_id = :synthetic_article_id THEN :canonical_article_id
+                    ELSE article_id
+                END,
+                household_article_id = CASE
+                    WHEN household_article_id = :synthetic_article_id THEN :canonical_article_id
+                    ELSE household_article_id
+                END
+            WHERE household_id = :household_id
+              AND (
+                  article_id = :synthetic_article_id
+                  OR household_article_id = :synthetic_article_id
+              )
+            """
+        ),
+        params,
+    )
+    return canonical_article_id
+
+
 def ensure_household_article(conn, household_id: str, article_name: str, consumable: bool | None = None) -> str:
     normalized = normalize_household_article_name(article_name)
     if not normalized:
@@ -1982,6 +2039,8 @@ def ensure_household_article(conn, household_id: str, article_name: str, consuma
         existing_row = get_household_article_row_by_name(conn, household_id, final_name)
         article_id = str(existing_row.get('id')) if existing_row and existing_row.get('id') else None
     if article_id:
+        if str(article_id).startswith("live::"):
+            article_id = _adopt_synthetic_household_article_identity(conn, household_id, str(article_id))
         ensure_household_article_global_product_link(conn, article_id)
         return str(article_id)
     raise HTTPException(status_code=500, detail="Huishoudartikel kon niet worden aangemaakt")
