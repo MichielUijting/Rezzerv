@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 _LINE_PATH = re.compile(r"^/api/purchase-import-lines/([^/]+)(?:/|$)")
 _BATCH_PATH = re.compile(r"^/api/purchase-import-batches/([^/]+)(?:/|$)")
+_BATCH_PROCESS_PATH = re.compile(r"^/api/purchase-import-batches/([^/]+)/process/?$")
 _WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
@@ -82,6 +83,43 @@ def authorize_purchase_import_request(
     return require_household_context(authorization, household_id)
 
 
+def acquire_purchase_import_processing_lock(
+    conn,
+    request_method: str,
+    request_path: str,
+) -> bool:
+    """Serialize concurrent processing attempts for one purchase-import batch.
+
+    The lock is deliberately PostgreSQL transaction-scoped.  A second process
+    request for the same batch waits until the first request has fully completed,
+    so the route starts with a fresh view of processing_status/processed_event_id
+    instead of racing on the same pending snapshot.
+    """
+
+    if str(request_method or "").strip().upper() != "POST":
+        return False
+
+    process_match = _BATCH_PROCESS_PATH.match(str(request_path or "").strip())
+    if not process_match:
+        return False
+
+    if str(getattr(getattr(conn, "dialect", None), "name", "") or "").lower() != "postgresql":
+        return False
+
+    batch_id = process_match.group(1).strip()
+    if not batch_id:
+        return False
+
+    lock_key = f"purchase-import-batch:{batch_id}"
+    conn.execute(
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"
+        ),
+        {"lock_key": lock_key},
+    )
+    return True
+
+
 def install_unpacking_household_object_guard(main_module) -> None:
     """Install one HTTP guard for all production Uitpakken batch/line routes."""
 
@@ -101,6 +139,15 @@ def install_unpacking_household_object_guard(main_module) -> None:
                     main_module.require_household_context,
                     main_module.require_inventory_write_context,
                 )
+                lock_acquired = acquire_purchase_import_processing_lock(
+                    conn,
+                    request.method,
+                    request.url.path,
+                )
+                if lock_acquired:
+                    # Keep the advisory transaction lock until the route has
+                    # completed and its own processing transaction has committed.
+                    return await call_next(request)
         except HTTPException as exc:
             return JSONResponse(
                 status_code=exc.status_code,
