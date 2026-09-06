@@ -3111,7 +3111,7 @@ def get_article_enrichment_status(conn, household_article_id: str) -> dict:
                 SELECT source_name, status, message, created_at, normalized_barcode
                 FROM product_enrichment_audit
                 WHERE global_product_id = :global_product_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """
             ),
@@ -3124,7 +3124,7 @@ def get_article_enrichment_status(conn, household_article_id: str) -> dict:
                 SELECT source_name, status, message, created_at, normalized_barcode
                 FROM product_enrichment_audit
                 WHERE household_article_id = :household_article_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """
             ),
@@ -3267,7 +3267,7 @@ def get_recent_product_enrichment_attempts(conn, household_article_id: str, limi
                 SELECT source_name, action, status, message, created_at, normalized_barcode, http_status, response_excerpt
                 FROM product_enrichment_audit
                 WHERE global_product_id = :global_product_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT :limit
                 """
             ),
@@ -3280,7 +3280,7 @@ def get_recent_product_enrichment_attempts(conn, household_article_id: str, limi
                 SELECT source_name, action, status, message, created_at, normalized_barcode, http_status, response_excerpt
                 FROM product_enrichment_audit
                 WHERE household_article_id = :household_article_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT :limit
                 """
             ),
@@ -3594,7 +3594,7 @@ def get_household_article_event_rows(conn, household_id: str, household_article_
                 article_id = :household_article_id
                 OR lower(trim(article_name)) = lower(trim(:article_name))
               )
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC, id DESC
             """
         ),
         {
@@ -13800,7 +13800,7 @@ def run_store_process_validation_diagnostic(householdId: str = Query(...)):
                 SELECT id, import_status
                 FROM purchase_import_batches
                 WHERE household_id = :household_id
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """
             ),
@@ -14900,7 +14900,7 @@ def article_history(article_name: str, authorization: Optional[str] = Header(Non
                 FROM inventory_events
                 WHERE household_id = :household_id
                   AND lower(article_name) = lower(:article_name)
-                ORDER BY datetime(created_at) DESC, id DESC
+                ORDER BY created_at DESC, id DESC
                 """
             ),
             {"article_name": article_name, "household_id": effective_household_id},
