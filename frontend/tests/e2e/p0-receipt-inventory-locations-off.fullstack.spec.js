@@ -188,8 +188,11 @@ test('L4-04 receipt chain works with locations OFF and no location UI/validation
   const batchId = String(approvedBatch.batch_id)
   const batchBefore = await readBatch(page, batchId)
   const lines = Array.isArray(batchBefore?.lines) ? batchBefore.lines : []
-  const line = lines.find((item) => Number(item?.quantity_raw || 0) > 0 && String(item?.processing_status || '') !== 'processed')
-  expect(line, `Geen verwerkbare bonregel gevonden in ${JSON.stringify(batchBefore)}`).toBeTruthy()
+  const line = lines.find((item) => {
+    const quantity = Number(item?.quantity_raw || 0)
+    return Number.isInteger(quantity) && quantity > 0 && String(item?.processing_status || '') !== 'processed'
+  })
+  expect(line, `Geen gehele verwerkbare bonregel gevonden in ${JSON.stringify(batchBefore)}`).toBeTruthy()
   const lineId = String(line.id)
 
   await page.goto(`/kassabonnen?batch=${encodeURIComponent(batchId)}`)
@@ -197,9 +200,9 @@ test('L4-04 receipt chain works with locations OFF and no location UI/validation
   const receiptTable = page.getByTestId('receipt-lines-table')
   await expect(receiptTable).toBeVisible({ timeout: 30_000 })
   await expect(receiptTable.getByRole('columnheader', { name: 'Locatie', exact: true })).toHaveCount(0)
-  await expect(page.getByLabel('Filter op locatie')).toHaveCount(0)
-  await expect(page.getByTestId('receipt-bulk-location-button')).toHaveCount(0)
-  await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toHaveCount(0)
+  await expect(page.getByLabel('Filter op locatie')).toBeHidden()
+  await expect(page.getByTestId('receipt-bulk-location-button')).toBeHidden()
+  await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toBeHidden()
 
   const lineSelect = page.getByTestId(`receipt-line-select-${lineId}`)
   if (!(await lineSelect.isChecked())) await lineSelect.check()
@@ -226,24 +229,26 @@ test('L4-04 receipt chain works with locations OFF and no location UI/validation
   expect(targetInventory, JSON.stringify(inventoryPayload)).toBeTruthy()
   const inventoryId = String(targetInventory.id)
   const householdArticleId = String(targetInventory.household_article_id)
-  const articleName = String(targetInventory.artikel || targetInventory.article_name || targetInventory.naam || '').trim()
-  const initialQuantity = Number(targetInventory.aantal)
+  const articleName = String(targetInventory.artikel || targetInventory.household_article_name || '').trim()
+  const initialQuantity = Number(targetInventory.aantal || 0)
+  expect(articleName).not.toBe('')
+  expect(Number.isInteger(initialQuantity)).toBeTruthy()
   expect(initialQuantity).toBeGreaterThan(0)
 
   await openInventoryArticle(page, householdArticleId)
-  const minStock = Math.max(1, Math.floor(initialQuantity))
-  const idealStock = minStock + 1
+  const minStock = Math.max(initialQuantity - 1, 0)
+  const idealStock = initialQuantity
   await configureAlmostOutThreshold(page, minStock, idealStock)
 
   await page.goto('/bijna-op')
   await expect(page.getByTestId('almost-out-page')).toBeVisible()
-  if (articleName) await expect(page.getByTestId('almost-out-table').getByText(articleName, { exact: true })).toHaveCount(0)
+  await expect(page.getByTestId('almost-out-table').getByText(articleName, { exact: true })).toHaveCount(0)
 
   await consumeThroughArticleStock(page, householdArticleId, inventoryId, initialQuantity)
 
   await page.goto('/bijna-op')
   await expect(page.getByTestId('almost-out-page')).toBeVisible()
-  if (articleName) await expect(page.getByTestId('almost-out-table').getByText(articleName, { exact: true })).toHaveCount(1)
+  await expect(page.getByTestId('almost-out-table').getByText(articleName, { exact: true })).toHaveCount(1)
 
   writeFileSync('p0-l4-04-browser-proof.json', JSON.stringify({
     householdId,
