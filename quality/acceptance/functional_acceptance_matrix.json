@@ -217,9 +217,9 @@
         "L1": {"status": "partial", "evidence": ["backend/tests/test_household_article_identity_slice2b4_inventory_contract.py", "frontend/tests/article-detail-flat-subtabs.contract.mjs", "backend/tests/test_live_household_article_identity_adoption.py"]},
         "L2": {"status": "covered", "evidence": [".github/workflows/inventory-location-household-isolation.yml", "backend/tests/test_household_article_identity_slice2b4_inventory_contract.py"]},
         "L3": {"status": "partial", "evidence": ["backend/tests/unpacking_inventory_article_identity_api_selftest.py", ".github/workflows/unpacking-inventory-article-identity-api-validation.yml"]},
-        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml"]}
+        "L4": {"status": "covered", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml", "frontend/tests/e2e/p0-article-identity-history.fullstack.spec.js", ".github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml", "scripts/acceptance/l4_06_article_identity_history.py"]}
       },
-      "gap": "PR #366 borgt adoptie van historische synthetische live-identiteiten naar een canonical UUID en L4-03 volgt die identiteit door bonverwerking, voorraad, artikeldetail, instellingen en Afboeken. De bredere same-name/different-identity-, naamwijzigings- en expliciete detail/historie-authority blijft L4-06."
+      "gap": "L4-06 bewijst via de echte browser/frontend/backend/PostgreSQL-keten dat twee verschillende aangekochte bonregels verschillende canonical household_article-UUID's behouden, ook nadat beide via Artikel-detail dezelfde huishoudnaam krijgen. Naamwijziging blijft na reload aan dezelfde canonical identity gekoppeld; elk Historie-scherm toont uitsluitend het eigen purchase-event en PostgreSQL bevestigt de exacte purchase-import-, inventory- en eventkoppelingen. De afzonderlijke L1- en L3-lagen blijven bewust partial waar hun bredere varianten nog niet volledig zijn afgedekt."
     },
     {
       "id": "P0-PLATFORM-AUTHORITY",
