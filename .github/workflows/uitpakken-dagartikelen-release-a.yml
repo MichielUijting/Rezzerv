@@ -3,6 +3,7 @@ name: Uitpakken dagartikelen Release A
 on:
   pull_request:
     paths:
+      - 'backend/alembic/**'
       - 'backend/app/services/day_article_service.py'
       - 'backend/app/api/day_article_routes.py'
       - 'backend/app/api/router.py'
@@ -18,13 +19,73 @@ jobs:
     name: Dagartikelen backend selftest
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rezzerv
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d rezzerv"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      DATABASE_URL: postgresql://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv
+      MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv
+
     steps:
-      - name: Checkout
+      - name: Checkout exact PR head
         uses: actions/checkout@v4
-      - name: Build backend
-        run: docker compose build backend
-      - name: Run Release A selftest
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PostgreSQL client
         run: |
-          docker compose run --rm --no-deps \
-            -e PYTHONPATH=/app \
-            backend python /app/tests/day_article_release_a_selftest.py
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Configure migration and runtime roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d rezzerv -v ON_ERROR_STOP=1 <<'SQL'
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'migration-pass';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'runtime-pass';
+          GRANT CONNECT ON DATABASE rezzerv TO rezzerv_migrator, rezzerv_app;
+          GRANT USAGE, CREATE ON SCHEMA public TO rezzerv_migrator;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO rezzerv_app;
+          SQL
+
+      - name: Migrate PostgreSQL to canonical head
+        working-directory: backend
+        run: |
+          python -m app.schema_migration_preflight | tee /tmp/day-article-release-a-migration.log
+          grep -F "'dialect': 'postgresql'" /tmp/day-article-release-a-migration.log
+
+      - name: Run Release A selftest as DML-only runtime
+        working-directory: backend
+        run: |
+          env -u MIGRATION_DATABASE_URL PYTHONPATH=. python tests/day_article_release_a_selftest.py | tee /tmp/day-article-release-a.log
+          grep -F 'DAY_ARTICLE_RELEASE_A_POSTGRESQL_RUNTIME_GREEN' /tmp/day-article-release-a.log
+          grep -F 'DAY_ARTICLE_RELEASE_A_SELFTEST=PASS' /tmp/day-article-release-a.log
