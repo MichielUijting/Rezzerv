@@ -2025,7 +2025,7 @@ def get_latest_external_article_link(conn, household_id: str, article_name: str)
             WHERE household_id = :household_id
               AND lower(trim(article_name)) = lower(trim(:article_name))
               AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')
-            ORDER BY datetime(created_at) DESC, id DESC
+            ORDER BY created_at DESC, id DESC
             LIMIT 1
             """
         ),
