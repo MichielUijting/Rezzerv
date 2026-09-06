@@ -90,10 +90,10 @@ def acquire_purchase_import_processing_lock(
 ) -> bool:
     """Serialize concurrent processing attempts for one purchase-import batch.
 
-    The lock is deliberately PostgreSQL transaction-scoped.  A second process
-    request for the same batch waits until the first request has fully completed,
-    so the route starts with a fresh view of processing_status/processed_event_id
-    instead of racing on the same pending snapshot.
+    The lock is PostgreSQL transaction-scoped and must be acquired on the same
+    connection/transaction that performs the purchase-import mutation. A second
+    process request for the same batch then starts from fresh committed line
+    state after the first request completes.
     """
 
     if str(request_method or "").strip().upper() != "POST":
@@ -139,15 +139,6 @@ def install_unpacking_household_object_guard(main_module) -> None:
                     main_module.require_household_context,
                     main_module.require_inventory_write_context,
                 )
-                lock_acquired = acquire_purchase_import_processing_lock(
-                    conn,
-                    request.method,
-                    request.url.path,
-                )
-                if lock_acquired:
-                    # Keep the advisory transaction lock until the route has
-                    # completed and its own processing transaction has committed.
-                    return await call_next(request)
         except HTTPException as exc:
             return JSONResponse(
                 status_code=exc.status_code,

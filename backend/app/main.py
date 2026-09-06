@@ -101,7 +101,10 @@ from app.services.authorization_membership_service import (
     set_household_membership_role,
 )
 from app.services.article_group_store import ensure_article_group_schema
-from app.services.unpacking_household_object_guard import install_unpacking_household_object_guard
+from app.services.unpacking_household_object_guard import (
+    acquire_purchase_import_processing_lock,
+    install_unpacking_household_object_guard,
+)
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -17291,6 +17294,11 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
     current_stage = 'batch_start'
     try:
         with engine.begin() as conn:
+            acquire_purchase_import_processing_lock(
+                conn,
+                "POST",
+                f"/api/purchase-import-batches/{batch_id}/process",
+            )
             batch = conn.execute(
                 text(
                     """
