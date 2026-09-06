@@ -168,6 +168,10 @@ async function consumeThroughArticleStock(page, householdArticleId, inventoryId,
   await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraad is afgeboekt.')
 }
 
+function almostOutRowsForArticle(page, articleName) {
+  return page.getByTestId('almost-out-table').locator('tbody tr').filter({ hasText: articleName })
+}
+
 test('L4-04 receipt chain works with locations OFF and no location UI/validation', async ({ page, request }, testInfo) => {
   test.setTimeout(360_000)
   const accountEmail = required('PLAYWRIGHT_L4_04_EMAIL', email).toLowerCase()
@@ -242,13 +246,17 @@ test('L4-04 receipt chain works with locations OFF and no location UI/validation
 
   await page.goto('/bijna-op')
   await expect(page.getByTestId('almost-out-page')).toBeVisible()
-  await expect(page.getByTestId('almost-out-table').getByText(articleName, { exact: true })).toHaveCount(0)
+  const almostOutTableBeforeConsumption = page.getByTestId('almost-out-table')
+  await expect(almostOutTableBeforeConsumption.getByRole('columnheader', { name: 'Locatie', exact: true })).toHaveCount(0)
+  await expect(almostOutRowsForArticle(page, articleName)).toHaveCount(0)
 
   await consumeThroughArticleStock(page, householdArticleId, inventoryId, initialQuantity)
 
   await page.goto('/bijna-op')
   await expect(page.getByTestId('almost-out-page')).toBeVisible()
-  await expect(page.getByTestId('almost-out-table').getByText(articleName, { exact: true })).toHaveCount(1)
+  const almostOutTableAfterConsumption = page.getByTestId('almost-out-table')
+  await expect(almostOutTableAfterConsumption.getByRole('columnheader', { name: 'Locatie', exact: true })).toHaveCount(0)
+  await expect(almostOutRowsForArticle(page, articleName)).toHaveCount(1)
 
   writeFileSync('p0-l4-04-browser-proof.json', JSON.stringify({
     householdId,

@@ -5,6 +5,7 @@ import Table from '../../ui/Table'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
+import '../stores/locationlessStoreImport.css'
 
 function normalizeNumber(value) {
   const number = Number(value)
@@ -72,6 +73,21 @@ async function resolveHouseholdId() {
   return resolvedHouseholdId
 }
 
+async function syncLocationTrackingLevel() {
+  try {
+    const response = await fetchJsonWithAuth('/api/onboarding/capabilities', { method: 'GET', cache: 'no-store' })
+    if (!response.ok) return
+    const data = await response.json().catch(() => ({}))
+    const level = String(data?.product_configuration?.location_tracking_level || '').trim().toLowerCase()
+    if (!['none', 'global', 'exact'].includes(level)) return
+    if (typeof document !== 'undefined' && document?.documentElement) {
+      document.documentElement.dataset.rezzervLocationTrackingLevel = level
+    }
+  } catch {
+    // Bijna-op blijft bruikbaar als de capability-read tijdelijk niet beschikbaar is.
+  }
+}
+
 export default function AlmostOutPage() {
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -126,6 +142,7 @@ export default function AlmostOutPage() {
       }
     }
 
+    syncLocationTrackingLevel()
     loadAlmostOut()
     return () => { cancelled = true }
   }, [])
