@@ -80,6 +80,10 @@ def main() -> int:
     assert location_policy_entry["status"] in {"candidate", "covered"}, location_policy_entry
     assert len(location_policy_entry.get("acceptance") or []) >= 6, location_policy_entry
 
+    locationless_unpacking_entry = next(item for item in classes if item["key"] == "locationless-unpacking")
+    assert locationless_unpacking_entry["status"] in {"candidate", "covered"}, locationless_unpacking_entry
+    assert len(locationless_unpacking_entry.get("acceptance") or []) >= 6, locationless_unpacking_entry
+
     print("PASS historical_defect_registry_has_exact_14_required_classes")
     print("PASS historical_defect_registry_statuses_are_conservative")
     print("PASS historical_defect_registry_evidence_paths_exist")
@@ -90,6 +94,7 @@ def main() -> int:
     print("PASS quantity_unbounded_decimals_has_explicit_acceptance_and_evidence")
     print("PASS historical_quantity_restoration_has_explicit_acceptance_and_evidence")
     print("PASS household_location_policy_has_explicit_acceptance_and_evidence")
+    print("PASS locationless_unpacking_has_explicit_acceptance_and_evidence")
     print("F5_HISTORICAL_DEFECT_REGISTRY_GREEN")
     return 0
 

@@ -186,8 +186,26 @@
       "id": "F5-08",
       "key": "locationless-unpacking",
       "label": "locatievrije Uitpakken-verwerking",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "acceptance": [
+        "een huishouden met location_tracking_level=none doorloopt de echte goedgekeurde kassabon naar Uitpakken zonder locatiekeuze",
+        "de Uitpakken-UI toont voor locaties UIT geen Locatie-kolom, locatiefilter, bulk-locatieactie of locatie-select op de regel",
+        "de verwerkactie blijft zonder locatiekeuze enabled en de echte process-POST verwerkt minimaal één geselecteerde bonregel succesvol",
+        "de verwerkte purchase_import_line eindigt persisted als processing_status=processed met target_location_id=NULL en een processed_event_id",
+        "het gekoppelde inventory purchase-event hoort bij hetzelfde huishouden en household article, heeft event_type=purchase, source=store_import en location_id=NULL",
+        "de browserauthority gebruikt geen kern-API mocks of request-mutaties en draait tegen de echte frontend, backend en PostgreSQL-stack",
+        "de PostgreSQL runtime-role blijft rezzerv_app en DML-only zonder schema-CREATE-recht"
+      ],
+      "evidence": [
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
+        ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+        ".github/workflows/f5-postgresql-locationless-unpacking-regression.yml"
+      ],
+      "proof": {
+        "workflow_run_id": 34112164964,
+        "candidate_sha": "2a22b136958b34402938284e2062d69ff5f000dc",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-09",
