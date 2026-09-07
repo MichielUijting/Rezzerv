@@ -1,0 +1,265 @@
+name: P0 authorization isolation full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/api/authorization_membership_routes.py'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/auth/**'
+      - 'frontend/src/features/settings/SettingsAuthorizationPage.jsx'
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/tests/e2e/p0-authorization-isolation.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/p0-authorization-isolation-fullstack-postgresql-validation.yml'
+      - 'quality/acceptance/p0_residual_closure.json'
+      - 'scripts/acceptance/validate_p0_residual_closure.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-authorization-isolation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p0-authorization-isolation:
+    name: P0 legacy role browser authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic legacy-role identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="P0-Legacy-${suffix}-Pass!"
+          echo "PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL=p0-legacy-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD=P0 Legacy Role ${suffix}" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD_ID=p0-legacy-${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Build and start real frontend backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Seed migrated legacy advanced-member fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e LEGACY_EMAIL="$PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL" \
+            -e LEGACY_PASSWORD="$PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD" \
+            -e LEGACY_HOUSEHOLD="$PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD" \
+            -e LEGACY_HOUSEHOLD_ID="$PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD_ID" \
+            backend python -u - <<'PY' | tee p0-authorization-legacy-seed.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.authorization_foundation_service import ensure_authorization_foundation
+          from app.testing.onboarding_request_schema_fixture import backfill_completed_household_onboarding
+          from app.testing.postgresql_onboarding_selftest_fixture import seed_household, seed_user_membership
+
+          email = os.environ['LEGACY_EMAIL'].strip().lower()
+          password = os.environ['LEGACY_PASSWORD']
+          household_name = os.environ['LEGACY_HOUSEHOLD'].strip()
+          household_id = os.environ['LEGACY_HOUSEHOLD_ID'].strip()
+          user_id = f'user-{household_id}'
+          membership_id = f'membership-{household_id}'
+
+          with engine.begin() as conn:
+              ensure_authorization_foundation(conn)
+              seed_household(conn, household_id=household_id, name=household_name, context_type='regular')
+              seed_user_membership(
+                  conn,
+                  household_id=household_id,
+                  user_id=user_id,
+                  email=email,
+                  password=password,
+                  membership_id=membership_id,
+                  role='advanced_member',
+              )
+              backfill_completed_household_onboarding(conn)
+              legacy_role = str(conn.execute(text('''
+                  SELECT role FROM household_memberships
+                  WHERE id = :membership_id
+              '''), {'membership_id': membership_id}).scalar_one())
+              canonical_role = str(conn.execute(text('''
+                  SELECT role_key FROM auth_membership_roles
+                  WHERE household_id = :household_id
+                    AND membership_id = :membership_id
+                    AND active IS TRUE
+              '''), {'household_id': household_id, 'membership_id': membership_id}).scalar_one())
+          assert legacy_role == 'advanced_member', legacy_role
+          assert canonical_role == 'household.advanced_member', canonical_role
+          print(f'legacy_role={legacy_role}', flush=True)
+          print(f'canonical_role={canonical_role}', flush=True)
+          print('P0_AUTHORIZATION_LEGACY_SEED_GREEN', flush=True)
+          PY
+
+      - name: Prove production-like PostgreSQL authorization boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -u - <<'PY' | tee p0-authorization-postgresql-boundary.log
+          from sqlalchemy import inspect, text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              tables = set(inspect(conn).get_table_names())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert {'household_memberships', 'auth_membership_roles', 'auth_role_permissions', 'server_sessions'} <= tables
+          print(f'runtime_user={current_user}', flush=True)
+          print('P0_AUTHORIZATION_POSTGRESQL_BOUNDARY_GREEN', flush=True)
+          PY
+
+      - name: Guard legacy-role browser authority against mocks and request mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/p0-authorization-isolation.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'P0 authorization authority mag kern-API niet mocken of via page.request muteren.' >&2
+            exit 1
+          fi
+          grep -F "getByTestId('login-submit').click()" "$spec"
+          grep -F "expect(session.role).toBe('advanced_member')" "$spec"
+          grep -F "expect(session.permissions?.['admin.access']).toBe(true)" "$spec"
+          grep -F "getByTestId('admin-page')" "$spec"
+          grep -F "expect(members.items[0].role_key).toBe('household.advanced_member')" "$spec"
+          echo 'P0_AUTHORIZATION_LEGACY_NO_MOCKS_GREEN'
+
+      - name: Run legacy-role authority through real browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL="$PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL" \
+            -e PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD="$PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD" \
+            -e PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD="$PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-authorization-isolation.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-authorization-legacy-browser.log"
+          grep -F 'P0_AUTHORIZATION_LEGACY_ROLE_BROWSER_GREEN' frontend/p0-authorization-legacy-browser.log
+
+      - name: Verify exact legacy-role PostgreSQL end state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e LEGACY_EMAIL="$PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL" \
+            backend python -u - <<'PY' | tee p0-authorization-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          email = os.environ['LEGACY_EMAIL'].strip().lower()
+          with engine.begin() as conn:
+              row = conn.execute(text('''
+                  SELECT hm.id AS membership_id, hm.household_id, hm.role AS legacy_role,
+                         amr.role_key AS canonical_role
+                  FROM household_memberships hm
+                  JOIN auth_membership_roles amr
+                    ON amr.household_id = hm.household_id
+                   AND amr.membership_id = hm.id
+                   AND amr.active IS TRUE
+                  WHERE lower(trim(hm.user_email)) = :email
+              '''), {'email': email}).mappings().one()
+              permissions = set(conn.execute(text('''
+                  SELECT arp.permission_key
+                  FROM auth_role_permissions arp
+                  WHERE arp.role_key = :role_key
+              '''), {'role_key': row['canonical_role']}).scalars().all())
+              session_count = int(conn.execute(text('''
+                  SELECT COUNT(*)
+                  FROM server_sessions ss
+                  JOIN app_users u ON u.id = ss.user_id
+                  WHERE lower(trim(u.email)) = :email
+                    AND ss.revoked_at IS NULL
+                    AND ss.expires_at > CURRENT_TIMESTAMP
+              '''), {'email': email}).scalar_one())
+          assert row['legacy_role'] == 'advanced_member', row
+          assert row['canonical_role'] == 'household.advanced_member', row
+          assert 'admin.access' in permissions, permissions
+          assert 'members.manage' in permissions, permissions
+          assert 'gpc.update' in permissions, permissions
+          assert 'catalog.update' not in permissions, permissions
+          assert session_count == 1, session_count
+          print('legacy_role=advanced_member', flush=True)
+          print('canonical_role=household.advanced_member', flush=True)
+          print('active_sessions=1', flush=True)
+          print('P0_AUTHORIZATION_LEGACY_POSTGRESQL_END_STATE_GREEN', flush=True)
+          PY
+
+      - name: Upload authorization legacy-role evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-authorization-isolation-legacy-role-evidence
+          path: |
+            p0-authorization-legacy-seed.log
+            p0-authorization-postgresql-boundary.log
+            p0-authorization-postgresql-end-state.log
+            frontend/p0-authorization-legacy-browser.log
+            frontend/playwright-report-fullstack
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend frontend postgres
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+      - name: P0 authorization isolation gate marker
+        run: echo 'P0_AUTHORIZATION_ISOLATION_FULLSTACK_POSTGRESQL_GREEN'
