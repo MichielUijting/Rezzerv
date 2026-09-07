@@ -186,7 +186,7 @@
       "id": "F5-08",
       "key": "locationless-unpacking",
       "label": "locatievrije Uitpakken-verwerking",
-      "status": "candidate",
+      "status": "covered",
       "acceptance": [
         "een huishouden met location_tracking_level=none doorloopt de echte goedgekeurde kassabon naar Uitpakken zonder locatiekeuze",
         "de Uitpakken-UI toont voor locaties UIT geen Locatie-kolom, locatiefilter, bulk-locatieactie of locatie-select op de regel",
@@ -200,7 +200,12 @@
         "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
         ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
         ".github/workflows/f5-postgresql-locationless-unpacking-regression.yml"
-      ]
+      ],
+      "proof": {
+        "workflow_run_id": 34112164964,
+        "candidate_sha": "2a22b136958b34402938284e2062d69ff5f000dc",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-09",
