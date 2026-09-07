@@ -107,6 +107,16 @@ def main() -> int:
     assert locationless_history_entry["status"] == "covered", locationless_history_entry
     assert len(locationless_history_entry.get("acceptance") or []) >= 6, locationless_history_entry
 
+    conditional_locations_entry = next(item for item in classes if item["key"] == "conditional-locations-tab")
+    assert conditional_locations_entry["status"] == "covered", conditional_locations_entry
+    assert len(conditional_locations_entry.get("acceptance") or []) >= 6, conditional_locations_entry
+    required_conditional_evidence = {
+        "frontend/src/features/articles/ArticlePage.jsx",
+        "frontend/tests/f5-conditional-locations-tab.contract.mjs",
+        ".github/workflows/f5-conditional-locations-tab-regression.yml",
+    }
+    assert required_conditional_evidence.issubset(set(conditional_locations_entry.get("evidence") or [])), conditional_locations_entry
+
     print("PASS historical_defect_registry_has_exact_14_required_classes")
     print("PASS historical_defect_registry_statuses_are_conservative")
     print("PASS historical_defect_registry_evidence_paths_exist")
@@ -123,6 +133,7 @@ def main() -> int:
     print("PASS household_article_canonical_identity_has_explicit_acceptance_and_evidence")
     print("PASS history_postgresql_null_sorting_is_covered_with_explicit_acceptance_and_evidence")
     print("PASS locationless_history_events_is_covered_with_explicit_acceptance_and_evidence")
+    print("PASS conditional_locations_tab_is_covered_with_explicit_acceptance_and_evidence")
     print("F5_HISTORICAL_DEFECT_REGISTRY_GREEN")
     return 0
 
