@@ -95,8 +95,10 @@ function mergeLiveLocations(baseArticle, liveRows) {
 
 async function fetchInventoryPreview() {
   const response = await fetchJsonWithAuth('/api/dev/inventory-preview')
-  if (!response.ok) throw new Error('Live artikelvoorraad kon niet worden geladen')
-  const data = await response.json()
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data?.detail || data?.message || data?.error || 'Live artikelvoorraad kon niet worden geladen')
+  }
   return Array.isArray(data?.rows) ? data.rows : []
 }
 
@@ -303,7 +305,6 @@ export default function ArticlePage() {
   const [automationVersion, setAutomationVersion] = useState(0)
   const [liveInventoryRows, setLiveInventoryRows] = useState([])
   const [liveHistoryRows, setLiveHistoryRows] = useState([])
-  const [inventoryLoadError, setInventoryLoadError] = useState('')
   const [historyLoadError, setHistoryLoadError] = useState('')
   const [inventoryLoading, setInventoryLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -350,18 +351,25 @@ export default function ArticlePage() {
     if (inventoryRefreshVersion === 0) {
       setInventoryLoading(true)
     }
-    setInventoryLoadError('')
-
     fetchInventoryPreview()
       .then((rows) => {
         if (!cancelled) {
           setLiveInventoryRows(rows)
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
+          const message = 'Live artikelvoorraad kon niet worden geladen. Demo-locaties worden getoond waar beschikbaar.'
+          const technicalDetail = String(error?.message || '').trim()
           setLiveInventoryRows([])
-          setInventoryLoadError('Live artikelvoorraad kon niet worden geladen. Demo-locaties worden getoond waar beschikbaar.')
+          showFeedback({
+            variant: 'error',
+            message,
+            detail: 'De overige artikelgegevens blijven beschikbaar waar fallbackinformatie beschikbaar is.',
+            technicalDetail,
+            showTechnicalToggle: Boolean(technicalDetail),
+            key: 'article-inventory-load-error',
+          })
         }
       })
       .finally(() => {
@@ -373,7 +381,7 @@ export default function ArticlePage() {
     return () => {
       cancelled = true
     }
-  }, [inventoryRefreshVersion])
+  }, [inventoryRefreshVersion, showFeedback])
 
   const resolution = useMemo(() => {
     return buildArticleResolution({ articleId, requestedArticleName, liveInventoryRows })
@@ -511,8 +519,6 @@ export default function ArticlePage() {
       <ScreenCard fullWidth>
         <div className="rz-article-detail-page" data-testid="article-detail-page">
           <div data-testid="article-detail-title" style={{ display: 'none' }}>{pageTitle}</div>
-
-          {inventoryLoadError ? <div className="rz-article-detail-alert">{inventoryLoadError}</div> : null}
 
           {inventoryLoading ? (
             <ArticleDetailState title="Artikeldetail laden" message="De live artikelgegevens worden geladen. Als live data niet beschikbaar is, wordt beschikbare demo-informatie gebruikt." />

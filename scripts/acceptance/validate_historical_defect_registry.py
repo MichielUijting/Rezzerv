@@ -117,6 +117,18 @@ def main() -> int:
     }
     assert required_conditional_evidence.issubset(set(conditional_locations_entry.get("evidence") or [])), conditional_locations_entry
 
+    standard_feedback_entry = next(item for item in classes if item["key"] == "standard-api-error-feedback")
+    assert standard_feedback_entry["status"] == "covered", standard_feedback_entry
+    assert len(standard_feedback_entry.get("acceptance") or []) >= 6, standard_feedback_entry
+    required_standard_feedback_evidence = {
+        "frontend/src/ui/AppFeedbackProvider.jsx",
+        "frontend/src/features/articles/ArticlePage.jsx",
+        "frontend/tests/f5-standard-api-error-feedback.contract.mjs",
+        "frontend/tests/e2e/article-detail.frontend-regression.spec.js",
+        ".github/workflows/f5-standard-api-error-feedback-regression.yml",
+    }
+    assert required_standard_feedback_evidence.issubset(set(standard_feedback_entry.get("evidence") or [])), standard_feedback_entry
+
     print("PASS historical_defect_registry_has_exact_14_required_classes")
     print("PASS historical_defect_registry_statuses_are_conservative")
     print("PASS historical_defect_registry_evidence_paths_exist")
@@ -134,6 +146,7 @@ def main() -> int:
     print("PASS history_postgresql_null_sorting_is_covered_with_explicit_acceptance_and_evidence")
     print("PASS locationless_history_events_is_covered_with_explicit_acceptance_and_evidence")
     print("PASS conditional_locations_tab_is_covered_with_explicit_acceptance_and_evidence")
+    print("PASS standard_api_error_feedback_is_covered_with_explicit_acceptance_and_evidence")
     print("F5_HISTORICAL_DEFECT_REGISTRY_GREEN")
     return 0
 

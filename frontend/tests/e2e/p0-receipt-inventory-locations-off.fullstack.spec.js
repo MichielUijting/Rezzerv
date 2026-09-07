@@ -172,6 +172,50 @@ function almostOutRowsForArticle(page, articleName) {
   return page.getByTestId('almost-out-table').locator('tbody tr').filter({ hasText: articleName })
 }
 
+async function readL404LedgerDiagnostic(page, householdId, householdArticleId, articleName) {
+  const inventoryResponse = await page.request.get('/api/dev/inventory-preview')
+  const historyResponse = await page.request.get(`/api/household-articles/${encodeURIComponent(householdArticleId)}/events`)
+  const articleResponse = await page.request.get(`/api/household-articles/${encodeURIComponent(householdArticleId)}`)
+  const almostOutResponse = await page.request.get(`/api/households/${encodeURIComponent(householdId)}/almost-out`)
+
+  const inventoryPayload = await inventoryResponse.json().catch(() => ({}))
+  const historyPayload = await historyResponse.json().catch(() => ({}))
+  const articlePayload = await articleResponse.json().catch(() => ({}))
+  const almostOutPayload = await almostOutResponse.json().catch(() => ({}))
+  const inventoryRows = (Array.isArray(inventoryPayload?.rows) ? inventoryPayload.rows : []).filter((row) => (
+    String(row?.household_article_id || '') === householdArticleId
+    || String(row?.artikel || '').trim().toLowerCase() === articleName.toLowerCase()
+  ))
+  const eventRows = Array.isArray(historyPayload?.items) ? historyPayload.items : []
+  const currentQuantity = inventoryRows.reduce((sum, row) => sum + Number(row?.aantal || 0), 0)
+  const eventNetQuantity = eventRows.reduce((sum, row) => sum + Number(row?.quantity || 0), 0)
+  const almostOutItems = Array.isArray(almostOutPayload?.items) ? almostOutPayload.items : []
+  const almostOutMatch = almostOutItems.find((item) => String(item?.household_article_id || '') === householdArticleId) || null
+
+  const diagnostic = {
+    householdId,
+    householdArticleId,
+    articleName,
+    http: {
+      inventory: inventoryResponse.status(),
+      history: historyResponse.status(),
+      article: articleResponse.status(),
+      almostOut: almostOutResponse.status(),
+    },
+    currentQuantity,
+    eventNetQuantity,
+    inventoryRows,
+    eventRows,
+    articleMinStock: articlePayload?.min_stock ?? articlePayload?.settings?.min_stock ?? null,
+    articleIdealStock: articlePayload?.ideal_stock ?? articlePayload?.settings?.ideal_stock ?? null,
+    almostOutMatch,
+    almostOutItemIds: almostOutItems.map((item) => String(item?.household_article_id || '')),
+  }
+  console.log(`P0_L4_04_LEDGER_DIAGNOSTIC ${JSON.stringify(diagnostic)}`)
+  writeFileSync('p0-l4-04-ledger-diagnostic.json', JSON.stringify(diagnostic, null, 2))
+  return diagnostic
+}
+
 test('L4-04 receipt chain works with locations OFF and no location UI/validation', async ({ page, request }, testInfo) => {
   test.setTimeout(360_000)
   const accountEmail = required('PLAYWRIGHT_L4_04_EMAIL', email).toLowerCase()
@@ -251,6 +295,10 @@ test('L4-04 receipt chain works with locations OFF and no location UI/validation
   await expect(almostOutRowsForArticle(page, articleName)).toHaveCount(0)
 
   await consumeThroughArticleStock(page, householdArticleId, inventoryId, initialQuantity)
+
+  const ledgerDiagnostic = await readL404LedgerDiagnostic(page, householdId, householdArticleId, articleName)
+  expect(ledgerDiagnostic.currentQuantity, JSON.stringify(ledgerDiagnostic)).toBe(0)
+  expect(ledgerDiagnostic.eventNetQuantity, JSON.stringify(ledgerDiagnostic)).toBe(0)
 
   await page.goto('/bijna-op')
   await expect(page.getByTestId('almost-out-page')).toBeVisible()

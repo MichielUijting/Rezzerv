@@ -16,6 +16,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     let primaryUseCase = 'waar_inhuis';
     let locationTrackingLevel = 'global';
     let historyShouldFail = false;
+    let inventoryShouldFail = false;
 
     await page.route('**/api/onboarding', async (route) => {
       await route.fulfill({
@@ -45,6 +46,14 @@ test.describe('Artikeldetail frontend-regressie', () => {
     });
 
     await page.route('**/api/dev/inventory-preview', async (route) => {
+      if (inventoryShouldFail) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'Voorraadbron tijdelijk niet beschikbaar' }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -160,7 +169,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     failedResponses.length = 0;
     historyShouldFail = true;
     await page.reload();
-    const feedback = page.getByTestId('app-feedback-error');
+    let feedback = page.getByTestId('app-feedback-error');
     await expect(feedback).toBeVisible();
     await expect(feedback.getByText('Melding', { exact: true })).toBeVisible();
     await expect(feedback.getByText(/Live artikelhistorie kon niet worden geladen/)).toBeVisible();
@@ -173,12 +182,36 @@ test.describe('Artikeldetail frontend-regressie', () => {
     expect(historyFailures.every((entry) => entry.includes(`/api/household-articles/${articleId}/events`))).toBe(true);
     expect(failedResponses.filter((entry) => !entry.startsWith('503 GET '))).toEqual([]);
 
-    // Chromium reports the intentionally simulated 503 as a console network error.
-    // That is part of this failure-path test, not an application console failure.
+    await feedback.getByTestId('app-feedback-error-ok-button').click();
+    await expect(feedback).toHaveCount(0);
+
+    failedResponses.length = 0;
+    historyShouldFail = false;
+    inventoryShouldFail = true;
+    await page.reload();
+    feedback = page.getByTestId('app-feedback-error');
+    await expect(feedback).toBeVisible();
+    await expect(feedback.getByText('Melding', { exact: true })).toBeVisible();
+    await expect(feedback.getByText(/Live artikelvoorraad kon niet worden geladen/)).toBeVisible();
+    await expect(page.locator('.rz-article-detail-alert')).toHaveCount(0);
+    await expect(feedback.getByTestId('app-feedback-technical-toggle')).toBeVisible();
+    await feedback.getByTestId('app-feedback-technical-toggle').click();
+    await expect(feedback.getByTestId('app-feedback-technical-details')).toContainText('Voorraadbron tijdelijk niet beschikbaar');
+
+    const inventoryFailures = failedResponses.filter((entry) => entry.startsWith('503 GET '));
+    expect(inventoryFailures.length).toBeGreaterThan(0);
+    expect(inventoryFailures.every((entry) => entry.includes('/api/dev/inventory-preview'))).toBe(true);
+    expect(failedResponses.filter((entry) => !entry.startsWith('503 GET '))).toEqual([]);
+
+    // Chromium reports the intentionally simulated 503s as console network errors.
+    // Those are part of these failure-path tests, not application console failures.
     const unexpectedConsoleErrors = consoleErrors.filter(
       (entry) => !(
         entry.includes('Failed to load resource')
-        && entry.includes(`/api/household-articles/${articleId}/events`)
+        && (
+          entry.includes(`/api/household-articles/${articleId}/events`)
+          || entry.includes('/api/dev/inventory-preview')
+        )
       ),
     );
     expect(unexpectedConsoleErrors).toEqual([]);

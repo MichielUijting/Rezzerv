@@ -1,0 +1,57 @@
+name: F5 standard API error feedback regression
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'frontend/src/features/articles/ArticlePage.jsx'
+      - 'frontend/tests/f5-standard-api-error-feedback.contract.mjs'
+      - 'frontend/tests/e2e/uitpakken-feedback.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/article-detail.frontend-regression.spec.js'
+      - 'quality/regression/historical_defect_registry.json'
+      - 'scripts/acceptance/validate_historical_defect_registry.py'
+      - '.github/workflows/f5-standard-api-error-feedback-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  standard-api-error-feedback:
+    name: F5-14 standaard API-foutfeedback
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate historical defect registry
+        run: python scripts/acceptance/validate_historical_defect_registry.py
+
+      - name: Prove standard API error feedback contract
+        run: |
+          set -euo pipefail
+          node frontend/tests/f5-standard-api-error-feedback.contract.mjs | tee f5-standard-api-error-feedback.log
+          grep -F 'PASS article_page_uses_app_feedback_provider' f5-standard-api-error-feedback.log
+          grep -F 'PASS article_api_errors_have_no_inline_alert' f5-standard-api-error-feedback.log
+          grep -F 'PASS inventory_preview_failure_uses_standard_feedback' f5-standard-api-error-feedback.log
+          grep -F 'PASS receipt_list_api_failure_has_browser_authority' f5-standard-api-error-feedback.log
+          grep -F 'PASS article_history_api_failure_has_browser_authority' f5-standard-api-error-feedback.log
+          grep -F 'F5_14_STANDARD_API_ERROR_FEEDBACK_GREEN' f5-standard-api-error-feedback.log
+
+      - name: Upload F5-14 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f5-standard-api-error-feedback-evidence
+          path: f5-standard-api-error-feedback.log
+          if-no-files-found: warn
+          retention-days: 14

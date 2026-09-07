@@ -349,8 +349,28 @@
       "id": "F5-14",
       "key": "standard-api-error-feedback",
       "label": "standaard gebruikersfeedback bij API-fouten",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "evidence": [
+        "frontend/src/ui/AppFeedbackProvider.jsx",
+        "frontend/src/features/articles/ArticlePage.jsx",
+        "frontend/tests/f5-standard-api-error-feedback.contract.mjs",
+        "frontend/tests/e2e/uitpakken-feedback.frontend-regression.spec.js",
+        "frontend/tests/e2e/article-detail.frontend-regression.spec.js",
+        ".github/workflows/f5-standard-api-error-feedback-regression.yml"
+      ],
+      "acceptance": [
+        "actieve API-readfouten gebruiken de centrale AppFeedbackProvider/Melding error-overlay in plaats van losse inline rode alerts",
+        "een kassabonnenlijst-API 500 toont serverdetail via de standaard foutoverlay en veroorzaakt geen valse leegstaat",
+        "een artikelhistorie-API 503 gebruikt de standaard foutoverlay en rendert geen losse rz-article-detail-alert",
+        "een inventory-preview API-fout gebruikt de standaard foutoverlay terwijl beschikbare fallback/demo-informatie bruikbaar blijft",
+        "JSON detail, message of error van de inventory-API blijft beschikbaar als technische foutdetail achter de toggle terwijl de gebruiker een veilige Nederlandse hoofdtekst krijgt",
+        "401/session-expiry blijft centraal afgehandeld door fetchJsonWithAuth/auth session en wordt niet gedupliceerd als generieke foutoverlay"
+      ],
+      "proof": {
+        "workflow_run_id": 34153750412,
+        "candidate_sha": "638e81e5308591981eb254dff4f34896b96e41f5",
+        "conclusion": "success"
+      }
     }
   ]
 }
