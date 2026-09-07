@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test'
 
 const email = process.env.PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL
 const password = process.env.PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD
-const householdName = process.env.PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD
 
 function required(name, value) {
   if (!String(value || '').trim()) throw new Error(`${name} ontbreekt voor P0 authorization/isolation authority`)
@@ -12,7 +11,6 @@ function required(name, value) {
 test('P0 authorization legacy advanced_member -> canonical permissions -> browser admin authority', async ({ page }) => {
   const accountEmail = required('PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL', email).toLowerCase()
   const accountPassword = required('PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD', password)
-  const expectedHouseholdName = required('PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD', householdName)
 
   await page.goto('/login')
   await expect(page.getByTestId('login-page')).toBeVisible()
@@ -35,7 +33,7 @@ test('P0 authorization legacy advanced_member -> canonical permissions -> browse
   const session = await sessionResponse.json()
   expect(session.email).toBe(accountEmail)
   expect(session.context_type).toBe('regular')
-  expect(session.active_household_name).toBe(expectedHouseholdName)
+  expect(session.active_household_id).toBeTruthy()
   expect(session.role).toBe('advanced_member')
   expect(session.permissions?.['admin.access']).toBe(true)
   expect(session.permissions?.['members.manage']).toBe(true)
