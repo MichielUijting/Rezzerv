@@ -265,8 +265,26 @@
       "id": "F5-11",
       "key": "history-postgresql-null-sorting",
       "label": "history sortering/NULL-semantiek op PostgreSQL",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "acceptance": [
+        "get_household_article_event_rows sorteert geldige created_at-waarden aflopend en plaatst created_at=NULL expliciet als laatste op PostgreSQL",
+        "get_household_product_event_rows sorteert geldige created_at-waarden aflopend en plaatst created_at=NULL expliciet als laatste op PostgreSQL",
+        "de legacy article_history-route bewaart dezelfde nieuwste -> oudere -> NULL-volgorde",
+        "get_latest_external_article_link negeert een legacy event met created_at=NULL als er een nieuwere gedateerde externe koppeling bestaat",
+        "alle vijf relevante inventory_events-paden in main.py bewaken expliciet ORDER BY created_at DESC NULLS LAST, id DESC",
+        "de regressieauthority draait op PostgreSQL 17 met twee gedateerde events plus één legacy NULL-event en bewijst de exacte verwachte volgorde",
+        "de PostgreSQL runtime-role blijft rezzerv_app en DML-only zonder schema-CREATE-recht"
+      ],
+      "evidence": [
+        "backend/app/main.py",
+        "backend/tests/postgresql_history_null_sorting_selftest.py",
+        ".github/workflows/f5-postgresql-history-null-sorting-regression.yml"
+      ],
+      "proof": {
+        "workflow_run_id": 34139007516,
+        "candidate_sha": "ebb588d1ba6de82ab1341f77301862d0fd93d47b",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-12",
