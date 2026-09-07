@@ -102,8 +102,10 @@ jobs:
           set -euo pipefail
           python backend/tests/postgresql_history_null_sorting_selftest.py | tee f5-postgresql-history-null-sorting.log
           grep -F 'PASS postgresql_runtime_is_dml_only' f5-postgresql-history-null-sorting.log
-          grep -F 'PASS history_non_null_created_at_descending' f5-postgresql-history-null-sorting.log
-          grep -F 'PASS history_null_created_at_last' f5-postgresql-history-null-sorting.log
+          grep -F 'PASS article_history_non_null_created_at_descending' f5-postgresql-history-null-sorting.log
+          grep -F 'PASS article_history_null_created_at_last' f5-postgresql-history-null-sorting.log
+          grep -F 'PASS product_history_non_null_created_at_descending' f5-postgresql-history-null-sorting.log
+          grep -F 'PASS product_history_null_created_at_last' f5-postgresql-history-null-sorting.log
           grep -F 'F5_11_POSTGRESQL_HISTORY_NULL_SORTING_GREEN' f5-postgresql-history-null-sorting.log
 
       - name: Upload F5-11 evidence
