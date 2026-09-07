@@ -59,17 +59,17 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
 }
 
 async function createSpaceThroughUi(page, locationName) {
-  await page.goto('/locaties')
-  await expect(page.getByTestId('locations-page')).toBeVisible({ timeout: 30_000 })
-  await page.getByTestId('add-location').click()
-  await expect(page.getByRole('dialog', { name: 'Hoofdlocatie toevoegen' })).toBeVisible()
-  await page.getByTestId('location-name-input').fill(locationName)
+  await page.goto('/instellingen/locaties')
+  await expect(page.getByTestId('settings-locations-page')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByTestId('settings-locations-page')).toHaveAttribute('data-sublocations-enabled', 'false')
+  await page.locator('#new-main-location').fill(locationName)
   const createPromise = page.waitForResponse((response) => (
-    response.url().includes('/api/spaces') && response.request().method() === 'POST'
+    new URL(response.url()).pathname === '/api/spaces' && response.request().method() === 'POST'
   ))
-  await page.getByTestId('location-submit').click()
+  await page.getByTestId('new-main-location-row').getByRole('button', { name: 'Toevoegen', exact: true }).click()
   expect((await createPromise).ok()).toBeTruthy()
-  await expect(page.getByRole('dialog', { name: 'Hoofdlocatie toevoegen' })).toHaveCount(0)
+  await expect(page.locator('#new-main-location')).toHaveValue('')
+  await expect(page.getByText(locationName, { exact: true })).toBeVisible()
 }
 
 async function readSession(page) {
