@@ -4,7 +4,7 @@ import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import { apiPost } from '../../lib/apiClient.js'
-import { readStoredAuthContext } from '../../lib/authSession.js'
+import { logoutServerSession, readStoredAuthContext } from '../../lib/authSession.js'
 
 export default function SettingsMyAccountPage() {
   const context = readStoredAuthContext()
@@ -12,6 +12,7 @@ export default function SettingsMyAccountPage() {
   const [newPassword, setNewPassword] = useState('')
   const [newPasswordRepeat, setNewPasswordRepeat] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -60,6 +61,16 @@ export default function SettingsMyAccountPage() {
       setError(saveError?.message || 'Wachtwoord wijzigen mislukt.')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleLogout() {
+    if (isLoggingOut) return
+    setIsLoggingOut(true)
+    try {
+      await logoutServerSession()
+    } finally {
+      window.location.replace('/login')
     }
   }
 
@@ -146,6 +157,26 @@ export default function SettingsMyAccountPage() {
                 </Button>
               </div>
             </form>
+          </section>
+
+          <section style={{ display: 'grid', gap: '12px' }} aria-labelledby="account-session-title">
+            <div>
+              <h3 id="account-session-title" style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Sessie</h3>
+              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>
+                Log uit om deze actieve sessie op de server direct ongeldig te maken.
+              </p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isLoggingOut}
+                onClick={handleLogout}
+                data-testid="my-account-logout"
+              >
+                {isLoggingOut ? 'Uitloggen…' : 'Uitloggen'}
+              </Button>
+            </div>
           </section>
         </div>
       </Card>

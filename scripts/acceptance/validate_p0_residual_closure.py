@@ -28,6 +28,7 @@ EXPECTED_P0_IDS = {
 }
 
 EXPECTED_CLOSED = {
+    "P0-ACCOUNT-SESSION",
     "P0-ONBOARDING",
     "P0-HOUSEHOLD-MEMBERSHIP",
     "P0-SETTINGS-PROJECTION",
@@ -98,8 +99,8 @@ def main() -> None:
 
     summary = closure.get("summary", {})
     require(summary.get("total_p0_scenarios") == 14, "closure_summary_total_14")
-    require(summary.get("closed") == len(EXPECTED_CLOSED) == 6, "closure_summary_closed_6")
-    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 8, "closure_summary_residual_8")
+    require(summary.get("closed") == len(EXPECTED_CLOSED) == 7, "closure_summary_closed_7")
+    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 7, "closure_summary_residual_7")
 
     for scenario in closure_scenarios:
         scenario_id = scenario["id"]
@@ -111,6 +112,12 @@ def main() -> None:
             require(bool(scenario.get("residual_scope")), f"{scenario_id}_residual_scope_explicit")
         else:
             require(not scenario.get("residual_scope"), f"{scenario_id}_closed_has_no_residual_scope")
+
+    account_session = next(row for row in closure_scenarios if row.get("id") == "P0-ACCOUNT-SESSION")
+    account_proof = account_session.get("proof", {})
+    require(account_proof.get("workflow_run_id") == 34163055850, "account_session_proof_run_exact")
+    require(account_proof.get("candidate_sha") == "f6b9b2a0105ff67563dcd6e8400e601a3748014b", "account_session_proof_candidate_exact")
+    require(account_proof.get("conclusion") == "success", "account_session_proof_success")
 
     registry_rows = {row.get("id"): row for row in registry.get("defect_classes", [])}
     require(EXPECTED_F5_IDS <= set(registry_rows), "registry_contains_f5_01_through_f5_14")
