@@ -79,8 +79,27 @@
       "id": "F5-04",
       "key": "receipt-source-runtime-wiring",
       "label": "receipt source runtime wiring",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "acceptance": [
+        "de geëxtraheerde receipt source helper wordt tijdens de normale run_runtime_initialization-startupgrens expliciet geconfigureerd",
+        "ensure_household_email_source strandt na applicatiestart niet meer op 'Receipt source helper service is niet geconfigureerd'",
+        "de email receipt source wordt voor het exacte huishouden actief en met de canonieke route_address persisted in PostgreSQL",
+        "de echte import_email_receipt_payload EML-route gebruikt de persisted email source als source_id voor receipt-ingestie",
+        "de reparatie vereist geen lokale fallback met id=None wanneer de reguliere runtime-startup gezond is",
+        "de PostgreSQL runtime-role blijft DML-only en verkrijgt geen schema-CREATE-recht"
+      ],
+      "evidence": [
+        "backend/app/main.py",
+        "backend/app/startup/runtime_initialization.py",
+        "backend/app/services/receipt_source_helper_service.py",
+        "backend/tests/postgresql_receipt_source_runtime_wiring_selftest.py",
+        ".github/workflows/f5-postgresql-receipt-source-runtime-wiring-regression.yml"
+      ],
+      "proof": {
+        "workflow_run_id": 34098769444,
+        "candidate_sha": "d2658da2b4832774e57cca9f73a4ca6dbed76ab7",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-05",
