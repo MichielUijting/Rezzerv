@@ -56,7 +56,7 @@ def main() -> int:
                 INSERT INTO household_articles (
                     id, household_id, naam, consumable, created_at, updated_at, source, status
                 ) VALUES (
-                    :id, :household_id, :naam, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                    :id, :household_id, :naam, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
                     'f5-11-regression', 'active'
                 )
                 ON CONFLICT (id) DO NOTHING
