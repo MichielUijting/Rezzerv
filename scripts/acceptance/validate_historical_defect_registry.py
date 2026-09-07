@@ -103,6 +103,10 @@ def main() -> int:
     assert history_null_sorting_entry["status"] == "covered", history_null_sorting_entry
     assert len(history_null_sorting_entry.get("acceptance") or []) >= 6, history_null_sorting_entry
 
+    locationless_history_entry = next(item for item in classes if item["key"] == "locationless-history-events")
+    assert locationless_history_entry["status"] == "covered", locationless_history_entry
+    assert len(locationless_history_entry.get("acceptance") or []) >= 6, locationless_history_entry
+
     print("PASS historical_defect_registry_has_exact_14_required_classes")
     print("PASS historical_defect_registry_statuses_are_conservative")
     print("PASS historical_defect_registry_evidence_paths_exist")
@@ -118,6 +122,7 @@ def main() -> int:
     print("PASS unclassified_unpacking_choice_has_explicit_acceptance_and_evidence")
     print("PASS household_article_canonical_identity_has_explicit_acceptance_and_evidence")
     print("PASS history_postgresql_null_sorting_is_covered_with_explicit_acceptance_and_evidence")
+    print("PASS locationless_history_events_is_covered_with_explicit_acceptance_and_evidence")
     print("F5_HISTORICAL_DEFECT_REGISTRY_GREEN")
     return 0
 
