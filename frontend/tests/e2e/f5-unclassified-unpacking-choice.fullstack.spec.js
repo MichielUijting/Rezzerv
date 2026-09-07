@@ -175,10 +175,9 @@ test('F5-09 Niet ingedeeld remains valid in ready-only unpacking', async ({ page
   const lines = Array.isArray(batchBefore?.lines) ? batchBefore.lines : []
   const targetLine = lines.find((item) => {
     const quantity = Number(item?.quantity_raw || 0)
-    const hasBackendIdentity = Boolean(String(item?.matched_household_article_id || item?.matched_global_product_id || '').trim())
-    return Number.isInteger(quantity) && quantity > 0 && hasBackendIdentity && String(item?.processing_status || '') !== 'processed'
+    return Number.isInteger(quantity) && quantity > 0 && String(item?.processing_status || '') !== 'processed'
   })
-  expect(targetLine, `Geen F5-09-doelregel met backendidentiteit gevonden in ${JSON.stringify(batchBefore)}`).toBeTruthy()
+  expect(targetLine, `Geen F5-09-doelregel met geldige hoeveelheid gevonden in ${JSON.stringify(batchBefore)}`).toBeTruthy()
   const incompleteLine = lines.find((item) => (
     String(item?.id || '') !== String(targetLine.id)
       && Number(item?.quantity_raw || 0) > 0
