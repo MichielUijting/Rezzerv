@@ -141,15 +141,15 @@ async function assignLocationToLine(page, lineId, locationName) {
   await locationButton.click()
   const dialog = page.getByRole('dialog', { name: 'Locatie kiezen' })
   await expect(dialog).toBeVisible()
-  await dialog.getByRole('button', { name: locationName, exact: true }).click()
   const savePromise = page.waitForResponse((response) => (
     response.url().includes(`/api/purchase-import-lines/${lineId}/target-location`)
       && response.request().method() === 'POST'
   ))
-  await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click()
+  await dialog.getByRole('button', { name: locationName, exact: true }).click()
   const response = await savePromise
   expect(response.ok()).toBeTruthy()
   const payload = await response.json()
+  await expect(locationButton).toContainText(locationName)
   return String(payload?.target_location_id || payload?.resolved_location?.location_id || payload?.resolved_location?.space_id || '').trim()
 }
 
