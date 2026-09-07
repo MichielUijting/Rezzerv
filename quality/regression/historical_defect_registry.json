@@ -8,7 +8,7 @@
       "id": "F5-01",
       "key": "boolean-runtime-portability",
       "label": "boolean/runtime-portability",
-      "status": "candidate",
+      "status": "covered",
       "acceptance": [
         "de expliciet gemigreerde Boolean-kolomset blijft exact en beperkt tot de bekende table/column-paren",
         "SQLite-achtige 0/1 Boolean-literals, COALESCE en parametervergelijkingen worden PostgreSQL-native zonder niet-Boolean integers globaal te herschrijven",
@@ -22,7 +22,12 @@
         ".github/workflows/f5-postgresql-boolean-runtime-portability-regression.yml",
         ".github/workflows/postgresql-zero-residual-gate.yml",
         ".github/workflows/postgresql-migration-foundation-validation.yml"
-      ]
+      ],
+      "proof": {
+        "workflow_run_id": 34092272530,
+        "candidate_sha": "af958b07d0ebd264d09e7e0927c053635043247a",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-02",
