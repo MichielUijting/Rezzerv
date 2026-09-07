@@ -12,6 +12,7 @@ def main_test() -> int:
     assert engine.dialect.name == "postgresql", engine.dialect.name
 
     household_id = f"f5-source-{uuid.uuid4()}"
+    household_name = "F5 receipt source runtime wiring"
     with engine.begin() as conn:
         current_user = str(conn.execute(text("SELECT current_user")).scalar_one())
         runtime_create = bool(
@@ -24,11 +25,22 @@ def main_test() -> int:
         conn.execute(
             text(
                 """
-                INSERT INTO households (id, naam, created_at)
+                INSERT INTO household_registry (id, naam, created_at)
                 VALUES (:id, :naam, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO NOTHING
                 """
             ),
-            {"id": household_id, "naam": "F5 receipt source runtime wiring"},
+            {"id": household_id, "naam": household_name},
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO households (id, naam, created_at)
+                VALUES (:id, :naam, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO NOTHING
+                """
+            ),
+            {"id": household_id, "naam": household_name},
         )
 
     source = main.ensure_household_email_source(household_id)
