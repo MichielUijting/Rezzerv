@@ -211,15 +211,55 @@
       "id": "F5-09",
       "key": "unclassified-unpacking-choice",
       "label": "Niet ingedeeld als geldige Uitpakken-keuze",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "acceptance": [
+        "de Uitpakken-UI biedt Niet ingedeeld expliciet aan als lege artikelgroepkeuze en deze keuze blijft geldig in de ready_only-verwerking",
+        "een complete geselecteerde regel met Niet ingedeeld wordt door de echte process-POST verwerkt en eindigt als processing_status=processed",
+        "purchase_import_lines.selected_article_group_id blijft NULL voor Niet ingedeeld",
+        "het gekoppelde household_article.article_group_id blijft NULL en krijgt geen kunstmatige of default artikelgroep",
+        "een tweede bewust incomplete geselecteerde regel blijft in ready_only onverwerkt",
+        "het purchase inventory-event blijft aan hetzelfde household article en de gekozen locatie gekoppeld",
+        "de browserauthority draait zonder kern-API mocks tegen echte frontend, backend en PostgreSQL en de runtime-role blijft DML-only"
+      ],
+      "evidence": [
+        "backend/app/main.py",
+        "frontend/src/features/stores/StoreBatchDetailPage.jsx",
+        "frontend/tests/e2e/f5-unclassified-unpacking-choice.fullstack.spec.js",
+        ".github/workflows/f5-postgresql-unclassified-unpacking-choice-regression.yml"
+      ],
+      "proof": {
+        "workflow_run_id": 34129909877,
+        "candidate_sha": "2e51ffb03f1f1e838308850098aefcf475154164",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-10",
       "key": "household-article-canonical-identity",
       "label": "household article canonical naam/identiteit",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "acceptance": [
+        "twee verschillende aangekochte bonregels behouden twee verschillende canonical household_article-UUID's en mogen niet op basis van een gedeelde naam op dezelfde identity instorten",
+        "beide household articles mogen na verwerking exact dezelfde custom_name krijgen zonder dat hun canonical UUID verandert",
+        "na rename en reload opent Voorraad-detail nog steeds het juiste household_article op UUID en niet op naam",
+        "elk Historie-scherm toont uitsluitend het eigen purchase-event en niet het event van het andere gelijknamige household article",
+        "purchase_import_lines, inventory-rijen en inventory_events blijven in PostgreSQL aan de exacte canonical household_article-UUID gekoppeld",
+        "de bestaande L3 API-authority bewijst aanvullend dat herhaalde aankopen die expliciet op dezelfde canonical identity worden gemapt juist op één household article convergeren en dat cross-household mutatie/verwerking wordt geblokkeerd",
+        "de browserauthority gebruikt geen kern-API mocks en draait tegen echte frontend, backend en PostgreSQL; rezzerv_app blijft DML-only"
+      ],
+      "evidence": [
+        "backend/tests/unpacking_inventory_article_identity_api_selftest.py",
+        ".github/workflows/unpacking-inventory-article-identity-api-validation.yml",
+        "frontend/tests/e2e/p0-article-identity-history.fullstack.spec.js",
+        ".github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml",
+        "scripts/acceptance/l4_06_article_identity_history.py",
+        ".github/workflows/f5-postgresql-household-article-canonical-identity-regression.yml"
+      ],
+      "proof": {
+        "workflow_run_id": 34131988970,
+        "candidate_sha": "62621591b3702c262083bbe096a908dc4bb2e74e",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-11",

@@ -84,6 +84,14 @@ def main() -> int:
     assert locationless_unpacking_entry["status"] in {"candidate", "covered"}, locationless_unpacking_entry
     assert len(locationless_unpacking_entry.get("acceptance") or []) >= 6, locationless_unpacking_entry
 
+    unclassified_unpacking_entry = next(item for item in classes if item["key"] == "unclassified-unpacking-choice")
+    assert unclassified_unpacking_entry["status"] == "covered", unclassified_unpacking_entry
+    assert len(unclassified_unpacking_entry.get("acceptance") or []) >= 6, unclassified_unpacking_entry
+
+    canonical_identity_entry = next(item for item in classes if item["key"] == "household-article-canonical-identity")
+    assert canonical_identity_entry["status"] in {"candidate", "covered"}, canonical_identity_entry
+    assert len(canonical_identity_entry.get("acceptance") or []) >= 6, canonical_identity_entry
+
     print("PASS historical_defect_registry_has_exact_14_required_classes")
     print("PASS historical_defect_registry_statuses_are_conservative")
     print("PASS historical_defect_registry_evidence_paths_exist")
@@ -95,6 +103,8 @@ def main() -> int:
     print("PASS historical_quantity_restoration_has_explicit_acceptance_and_evidence")
     print("PASS household_location_policy_has_explicit_acceptance_and_evidence")
     print("PASS locationless_unpacking_has_explicit_acceptance_and_evidence")
+    print("PASS unclassified_unpacking_choice_has_explicit_acceptance_and_evidence")
+    print("PASS household_article_canonical_identity_has_explicit_acceptance_and_evidence")
     print("F5_HISTORICAL_DEFECT_REGISTRY_GREEN")
     return 0
 
