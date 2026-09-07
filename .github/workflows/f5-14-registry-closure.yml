@@ -1,4 +1,5 @@
 name: F5-14 registry closure helper
+# Trigger registry closure after green F5-14 proof
 
 on:
   pull_request:
