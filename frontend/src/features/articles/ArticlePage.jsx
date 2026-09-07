@@ -100,11 +100,11 @@ async function fetchInventoryPreview() {
   return Array.isArray(data?.rows) ? data.rows : []
 }
 
-async function fetchArticlePrimaryUseCase() {
+async function fetchArticleLocationTrackingLevel() {
   const response = await fetchJsonWithAuth('/api/onboarding')
-  if (!response.ok) return ''
+  if (!response.ok) return 'none'
   const data = await response.json().catch(() => ({}))
-  return String(data?.primary_use_case || '').trim().toLowerCase()
+  return String(data?.product_configuration?.location_tracking_level || 'none').trim().toLowerCase()
 }
 
 function mapEventTypeLabel(eventType) {
@@ -309,7 +309,7 @@ export default function ArticlePage() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [inventoryRefreshVersion, setInventoryRefreshVersion] = useState(0)
   const [householdDetails, setHouseholdDetails] = useState(null)
-  const [primaryUseCase, setPrimaryUseCase] = useState('')
+  const [locationTrackingLevel, setLocationTrackingLevel] = useState('none')
 
   useEffect(() => {
     function handleAutomationChange() {
@@ -327,12 +327,12 @@ export default function ArticlePage() {
 
   useEffect(() => {
     let cancelled = false
-    fetchArticlePrimaryUseCase()
+    fetchArticleLocationTrackingLevel()
       .then((value) => {
-        if (!cancelled) setPrimaryUseCase(value)
+        if (!cancelled) setLocationTrackingLevel(value)
       })
       .catch(() => {
-        if (!cancelled) setPrimaryUseCase('')
+        if (!cancelled) setLocationTrackingLevel('none')
       })
     return () => {
       cancelled = true
@@ -481,8 +481,8 @@ export default function ArticlePage() {
 
   const pageTitle = `Artikel details: ${articleData?.name || resolvedArticleName || 'Onbekend artikel'}`
   const tabs = useMemo(
-    () => primaryUseCase === 'waar_inhuis' ? TABS_WITH_LOCATIONS : TABS_WITHOUT_LOCATIONS,
-    [primaryUseCase],
+    () => locationTrackingLevel === 'none' ? TABS_WITHOUT_LOCATIONS : TABS_WITH_LOCATIONS,
+    [locationTrackingLevel],
   )
 
   const [activeTab, setActiveTab] = useState('Overzicht')
