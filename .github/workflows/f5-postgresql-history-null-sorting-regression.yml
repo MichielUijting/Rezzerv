@@ -90,6 +90,33 @@ jobs:
           python scripts/acceptance/validate_historical_defect_registry.py | tee f5-historical-defect-registry.log
           grep -F 'F5_HISTORICAL_DEFECT_REGISTRY_GREEN' f5-historical-defect-registry.log
 
+      - name: Guard explicit PostgreSQL NULLS LAST product contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('backend/app/main.py').read_text(encoding='utf-8')
+          required_functions = (
+              'get_latest_external_article_link',
+              'get_household_article_event_rows',
+              'get_household_product_event_rows',
+              'article_history',
+              'count_history_events_for_article',
+          )
+          for index, function_name in enumerate(required_functions):
+              marker = f'def {function_name}'
+              start = source.index(marker)
+              next_def = source.find('\ndef ', start + len(marker))
+              next_app = source.find('\n@app', start + len(marker))
+              candidates = [position for position in (next_def, next_app) if position != -1]
+              end = min(candidates) if candidates else len(source)
+              chunk = source[start:end]
+              assert 'ORDER BY created_at DESC NULLS LAST, id DESC' in chunk, function_name
+          print('F5_11_NULLS_LAST_SOURCE_GUARD_GREEN')
+          PY
+
       - name: Compile F5-11 regression authority
         run: |
           python -m py_compile \
@@ -106,6 +133,8 @@ jobs:
           grep -F 'PASS article_history_null_created_at_last' f5-postgresql-history-null-sorting.log
           grep -F 'PASS product_history_non_null_created_at_descending' f5-postgresql-history-null-sorting.log
           grep -F 'PASS product_history_null_created_at_last' f5-postgresql-history-null-sorting.log
+          grep -F 'PASS article_history_endpoint_null_created_at_last' f5-postgresql-history-null-sorting.log
+          grep -F 'PASS latest_external_article_link_ignores_null_created_at' f5-postgresql-history-null-sorting.log
           grep -F 'F5_11_POSTGRESQL_HISTORY_NULL_SORTING_GREEN' f5-postgresql-history-null-sorting.log
 
       - name: Upload F5-11 evidence
