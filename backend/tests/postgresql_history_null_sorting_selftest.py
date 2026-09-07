@@ -18,6 +18,9 @@ EVENT_NEWEST_ID = "f5-11-event-newest"
 EVENT_OLDER_ID = "f5-11-event-older"
 EVENT_NULL_ID = "f5-11-event-null"
 EXPECTED_ORDER = [EVENT_NEWEST_ID, EVENT_OLDER_ID, EVENT_NULL_ID]
+BARCODE_NEWEST = "8712345000001"
+BARCODE_OLDER = "8712345000002"
+BARCODE_NULL = "8712345000003"
 
 
 def assert_history_order(rows: list[dict], label: str) -> None:
@@ -76,22 +79,44 @@ def main() -> int:
             ),
             {"id": ARTICLE_ID, "household_id": HOUSEHOLD_ID, "naam": ARTICLE_NAME},
         )
+        conn.execute(
+            text(
+                """
+                UPDATE household_articles
+                SET barcode = NULL,
+                    article_number = NULL,
+                    external_source = NULL
+                WHERE id = :id AND household_id = :household_id
+                """
+            ),
+            {"id": ARTICLE_ID, "household_id": HOUSEHOLD_ID},
+        )
 
         events = (
-            (EVENT_OLDER_ID, datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc), "ouder gedateerd event"),
-            (EVENT_NEWEST_ID, datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc), "nieuwste gedateerd event"),
-            (EVENT_NULL_ID, None, "legacy event zonder created_at"),
+            (
+                EVENT_OLDER_ID,
+                datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc),
+                "ouder gedateerd event",
+                BARCODE_OLDER,
+            ),
+            (
+                EVENT_NEWEST_ID,
+                datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc),
+                "nieuwste gedateerd event",
+                BARCODE_NEWEST,
+            ),
+            (EVENT_NULL_ID, None, "legacy event zonder created_at", BARCODE_NULL),
         )
-        for event_id, created_at, note in events:
+        for event_id, created_at, note, barcode in events:
             conn.execute(
                 text(
                     """
                     INSERT INTO inventory_events (
                         id, household_id, article_id, household_article_id, article_name,
-                        event_type, quantity, source, note, created_at
+                        event_type, quantity, source, note, barcode, created_at
                     ) VALUES (
                         :id, :household_id, :article_id, :household_article_id, :article_name,
-                        'purchase', 1, 'f5-11-regression', :note, :created_at
+                        'purchase', 1, 'f5-11-regression', :note, :barcode, :created_at
                     )
                     """
                 ),
@@ -102,6 +127,7 @@ def main() -> int:
                     "household_article_id": ARTICLE_ID,
                     "article_name": ARTICLE_NAME,
                     "note": note,
+                    "barcode": barcode,
                     "created_at": created_at,
                 },
             )
@@ -117,14 +143,27 @@ def main() -> int:
             ARTICLE_ID,
             None,
         )
+        latest_external_link = main_module.get_latest_external_article_link(
+            conn,
+            HOUSEHOLD_ID,
+            ARTICLE_NAME,
+        )
+
+    authorization = f"Bearer {main_module.build_auth_token(ADMIN_EMAIL)}"
+    endpoint_rows = main_module.article_history(ARTICLE_NAME, authorization=authorization)["rows"]
 
     assert_history_order(article_rows, "article detail/history")
     assert_history_order(product_rows, "product event projection")
+    assert_history_order(endpoint_rows, "legacy article history endpoint")
+    assert latest_external_link.get("barcode") == BARCODE_NEWEST, latest_external_link
+    assert latest_external_link.get("source") == "f5-11-regression", latest_external_link
 
     print("PASS article_history_non_null_created_at_descending")
     print("PASS article_history_null_created_at_last")
     print("PASS product_history_non_null_created_at_descending")
     print("PASS product_history_null_created_at_last")
+    print("PASS article_history_endpoint_null_created_at_last")
+    print("PASS latest_external_article_link_ignores_null_created_at")
     print("F5_11_POSTGRESQL_HISTORY_NULL_SORTING_GREEN")
     return 0
 
