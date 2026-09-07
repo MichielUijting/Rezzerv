@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "name": "Rezzerv P0 Residual Closure Authority",
+  "baseline": {
+    "branch": "main",
+    "commit": "c7ef1a7a04d87fbcd37ea2164a95871e4c26515f",
+    "audited_on": "2026-09-07"
+  },
+  "sources": {
+    "functional_acceptance_matrix": {
+      "path": "quality/acceptance/functional_acceptance_matrix.json",
+      "blob_sha": "d2507055e761ab80528cf7fd2105b470640737cd"
+    },
+    "historical_defect_registry": {
+      "path": "quality/regression/historical_defect_registry.json",
+      "blob_sha": "c7c2dd93af8f6c1fc13830cf24db9c61fd17b21f"
+    }
+  },
+  "policy": {
+    "scope": "P0",
+    "closed_definition": "release-relevante productketen is door bestaande L2/L3/L4 authorities bewezen; bewust partial lagere lagen zijn geen zelfstandig releaseblokkerend residual",
+    "residual_definition": "minimaal een expliciet in de matrix genoemde productvariant mist nog bewijs op de vereiste productie-relevante API- of browsergrens",
+    "f5_rule": "F5-01 t/m F5-14 zijn historical-regression closure en mogen niet opnieuw als P0 residual worden opgevoerd"
+  },
+  "summary": {
+    "total_p0_scenarios": 14,
+    "closed": 6,
+    "residual": 8
+  },
+  "scenarios": [
+    {
+      "id": "P0-ACCOUNT-SESSION",
+      "status": "residual",
+      "evidence": [
+        "frontend/tests/e2e/p0-onboarding.fullstack.spec.js",
+        ".github/workflows/p0-onboarding-fullstack-postgresql-validation.yml",
+        "frontend/tests/e2e/p0-platform-authority.fullstack.spec.js",
+        ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml"
+      ],
+      "closure_note": "registratie, geldige sessie en expliciete sessie-invalidatie/401 zijn op de echte stack bewezen",
+      "residual_scope": [
+        "expliciete browser-login met bestaande gebruiker",
+        "expliciete browser-logout met aantoonbaar onbruikbaar geworden sessie"
+      ]
+    },
+    {
+      "id": "P0-ONBOARDING",
+      "status": "closed",
+      "evidence": [
+        "frontend/tests/e2e/p0-onboarding.fullstack.spec.js",
+        ".github/workflows/p0-onboarding-fullstack-postgresql-validation.yml",
+        "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
+        ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml"
+      ],
+      "closure_note": "locaties UIT en AAN zijn via echte browser/backend/PostgreSQL-ketens bewezen"
+    },
+    {
+      "id": "P0-HOUSEHOLD-MEMBERSHIP",
+      "status": "closed",
+      "evidence": [
+        "frontend/tests/e2e/p0-household-membership.fullstack.spec.js",
+        ".github/workflows/p0-household-membership-fullstack-postgresql-validation.yml",
+        ".github/workflows/postgresql-household-invitation-authority.yml"
+      ],
+      "closure_note": "uitnodigen, accepteren, rol, huishoudwissel en isolation zijn end-to-end bewezen"
+    },
+    {
+      "id": "P0-AUTHORIZATION-ISOLATION",
+      "status": "residual",
+      "evidence": [
+        "frontend/tests/e2e/p0-household-membership.fullstack.spec.js",
+        ".github/workflows/p0-household-membership-fullstack-postgresql-validation.yml",
+        "frontend/tests/e2e/p0-platform-authority.fullstack.spec.js",
+        ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml"
+      ],
+      "closure_note": "beheerder/lid, huishoudisolatie, browser-403 en sessie-invalidatie/401 zijn bewezen",
+      "residual_scope": [
+        "legacyrol als expliciete browserauthority tegen de actuele server-side autorisatieprojectie"
+      ]
+    },
+    {
+      "id": "P0-SETTINGS-PROJECTION",
+      "status": "closed",
+      "evidence": [
+        "backend/tests/settings_location_policy_api_selftest.py",
+        ".github/workflows/f5-postgresql-household-location-policy-regression.yml",
+        "frontend/tests/dynamic-settings-navigation.contract.mjs",
+        ".github/workflows/f5-conditional-locations-tab-regression.yml",
+        "frontend/tests/e2e/p0-household-membership.fullstack.spec.js",
+        "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js"
+      ],
+      "closure_note": "persistente instelling, locaties AAN/UIT, UI-projectie en rolbeperking zijn gezamenlijk bewezen; de oude L2-gap is door F5-07 achterhaald"
+    },
+    {
+      "id": "P0-LOCATIONS-POLICY",
+      "status": "closed",
+      "evidence": [
+        "backend/tests/settings_location_policy_api_selftest.py",
+        ".github/workflows/f5-postgresql-household-location-policy-regression.yml",
+        "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
+        ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+        ".github/workflows/f5-postgresql-locationless-unpacking-regression.yml",
+        ".github/workflows/f5-conditional-locations-tab-regression.yml"
+      ],
+      "closure_note": "locaties AAN, locaties UIT, huishoudauthority/isolation en locatievrije Uitpakken/Voorraad-keten zijn bewezen; L4-04 is groen"
+    },
+    {
+      "id": "P0-RECEIPT-INVENTORY-ALMOSTOUT",
+      "status": "residual",
+      "evidence": [
+        "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
+        ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml",
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
+        ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+        "frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js",
+        ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml"
+      ],
+      "closure_note": "normale bon, locaties AAN/UIT, herverwerking/idempotentie en Bijna-op NEE->JA zijn bewezen",
+      "residual_scope": [
+        "koopzegel/niet-fysieke receiptvariant als echte L4-keten zonder voorraadmutatie"
+      ]
+    },
+    {
+      "id": "P0-KASSA-REVIEW",
+      "status": "residual",
+      "evidence": [
+        "backend/tests/kassa_review_api_selftest.py",
+        ".github/workflows/kassa-review-api-validation.yml",
+        "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
+        ".github/workflows/f5-standard-api-error-feedback-regression.yml"
+      ],
+      "closure_note": "upload, bonoverzicht, goedkeuring en standaard API-foutfeedback zijn bewezen",
+      "residual_scope": [
+        "onzekere match als echte browserreview",
+        "financiële reviewvariant als echte browserreview"
+      ]
+    },
+    {
+      "id": "P0-UNPACKING",
+      "status": "residual",
+      "evidence": [
+        "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
+        "frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js",
+        "frontend/tests/e2e/f5-unclassified-unpacking-choice.fullstack.spec.js",
+        ".github/workflows/f5-postgresql-unclassified-unpacking-choice-regression.yml",
+        ".github/workflows/f5-postgresql-locationless-unpacking-regression.yml"
+      ],
+      "closure_note": "locaties AAN/UIT, Niet ingedeeld en herverwerking zijn via echte PostgreSQL-browserketens bewezen",
+      "residual_scope": [
+        "dagartikel/direct-consumption als echte L4 Uitpakken-keten"
+      ]
+    },
+    {
+      "id": "P0-INVENTORY",
+      "status": "residual",
+      "evidence": [
+        "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
+        "frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js",
+        ".github/workflows/f5-postgresql-quantity-unbounded-decimals-regression.yml",
+        ".github/workflows/f5-postgresql-history-null-sorting-regression.yml",
+        ".github/workflows/f5-postgresql-locationless-history-events-regression.yml"
+      ],
+      "closure_note": "aankoop, verbruik, locatievrij gedrag, herhaling, history-semantiek en exacte NUMERIC-opslag zijn bewezen",
+      "residual_scope": [
+        "correctiemutatie als echte browser/API/PostgreSQL-keten",
+        "exacte niet-financiële decimalen door de volledige gebruikersketen tot zichtbare voorraad/historie"
+      ]
+    },
+    {
+      "id": "P0-ALMOST-OUT",
+      "status": "residual",
+      "evidence": [
+        "backend/tests/almost_out_api_projection_selftest.py",
+        ".github/workflows/almost-out-api-projection-validation.yml",
+        "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js"
+      ],
+      "closure_note": "boven/onder drempel en locatievarianten zijn in L3/L4 bewezen",
+      "residual_scope": [
+        "zelfstandige L4-herberekeningsvariant van bestaande historie naar gewijzigde Bijna-op-projectie"
+      ]
+    },
+    {
+      "id": "P0-ARTICLE-IDENTITY",
+      "status": "closed",
+      "evidence": [
+        "backend/tests/unpacking_inventory_article_identity_api_selftest.py",
+        ".github/workflows/f5-postgresql-household-article-canonical-identity-regression.yml",
+        "frontend/tests/e2e/p0-article-identity-history.fullstack.spec.js",
+        ".github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml",
+        "scripts/acceptance/l4_06_article_identity_history.py"
+      ],
+      "closure_note": "canonical UUID, gelijke naam met verschillende identities, rename/reload, eigen historie en cross-household guard zijn release-relevant bewezen"
+    },
+    {
+      "id": "P0-PLATFORM-AUTHORITY",
+      "status": "residual",
+      "evidence": [
+        "backend/tests/platform_authority_api_selftest.py",
+        ".github/workflows/platform-authority-api-validation.yml",
+        "frontend/tests/e2e/p0-platform-authority.fullstack.spec.js",
+        ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml",
+        "scripts/acceptance/l4_07_platform_browser_authority.py"
+      ],
+      "closure_note": "platformbeheerder versus normale huishoudbeheerder, sessie-intrekking en geen huishoudprivilege-escalatie zijn L4 bewezen",
+      "residual_scope": [
+        "superuser-specifieke beheerreis als echte browserketen",
+        "IP-owner-specifieke beheerreis als echte browserketen"
+      ]
+    },
+    {
+      "id": "P0-MIGRATION-STARTUP",
+      "status": "closed",
+      "evidence": [
+        ".github/workflows/postgresql-migration-foundation-validation.yml",
+        ".github/workflows/postgresql-data-migration-validation.yml",
+        ".github/workflows/postgresql-operational-startup-validation.yml",
+        ".github/workflows/postgresql-zero-residual-gate.yml"
+      ],
+      "closure_note": "verse migratie, legacy adoptie, operationele startup en DML-only runtime zijn bewezen; centrale bundeling hoort bij Fase 9 releasegate en is geen ontbrekende P0-authority"
+    }
+  ]
+}
