@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "phase": "F5-historical-regression-foundation",
+  "baseline_main_sha": "57109b9dc754c806db2ab8d7e64b0647f064ae1c",
+  "status_values": ["pending_audit", "candidate", "partial", "covered", "gap"],
+  "defect_classes": [
+    {
+      "id": "F5-01",
+      "key": "boolean-runtime-portability",
+      "label": "boolean/runtime-portability",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-02",
+      "key": "postgresql-json-serialization",
+      "label": "JSON serialisatie vanuit PostgreSQL-resultaten",
+      "status": "candidate",
+      "acceptance": [
+        "PostgreSQL UUID bereikt geldig JSON als string",
+        "PostgreSQL NUMERIC behoudt quantity-waarden 0.404, 1.224 en 1.234567 aan de JSON-grens",
+        "PostgreSQL TIMESTAMPTZ bereikt geldig timezone-behoudend JSON",
+        "SQLAlchemy RowMapping gaat via de bestaande receipt serializer en FastAPI JSON response boundary",
+        "runtime role blijft DML-only"
+      ],
+      "evidence": [
+        "backend/tests/postgresql_json_serialization_regression_selftest.py",
+        ".github/workflows/f5-postgresql-json-serialization-regression.yml"
+      ]
+    },
+    {
+      "id": "F5-03",
+      "key": "receipt-worker-fail-closed-status",
+      "label": "receipt worker fail-closed status",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-04",
+      "key": "receipt-source-runtime-wiring",
+      "label": "receipt source runtime wiring",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-05",
+      "key": "quantity-unbounded-decimals",
+      "label": "quantities zonder generieke decimalenlimiet",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-06",
+      "key": "historical-quantity-restoration",
+      "label": "gerichte restauratie van historisch beschadigde quantity-data",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-07",
+      "key": "household-location-policy",
+      "label": "household location policy consequent in backend en UI",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-08",
+      "key": "locationless-unpacking",
+      "label": "locatievrije Uitpakken-verwerking",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-09",
+      "key": "unclassified-unpacking-choice",
+      "label": "Niet ingedeeld als geldige Uitpakken-keuze",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-10",
+      "key": "household-article-canonical-identity",
+      "label": "household article canonical naam/identiteit",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-11",
+      "key": "history-postgresql-null-sorting",
+      "label": "history sortering/NULL-semantiek op PostgreSQL",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-12",
+      "key": "locationless-history-events",
+      "label": "history events zonder locatie waar het huishouden geen locaties gebruikt",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-13",
+      "key": "conditional-locations-tab",
+      "label": "conditionele Locaties-tab",
+      "status": "pending_audit",
+      "evidence": []
+    },
+    {
+      "id": "F5-14",
+      "key": "standard-api-error-feedback",
+      "label": "standaard gebruikersfeedback bij API-fouten",
+      "status": "pending_audit",
+      "evidence": []
+    }
+  ]
+}
