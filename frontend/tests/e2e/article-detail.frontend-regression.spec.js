@@ -14,13 +14,19 @@ test.describe('Artikeldetail frontend-regressie', () => {
     const universalArticleName = 'Mosterd fijne Dijon extra lange universele artikelnaam';
     const receiptArticleText = 'MOSTERD DIJON 250G';
     let primaryUseCase = 'waar_inhuis';
+    let locationTrackingLevel = 'global';
     let historyShouldFail = false;
 
     await page.route('**/api/onboarding', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ primary_use_case: primaryUseCase }),
+        body: JSON.stringify({
+          primary_use_case: primaryUseCase,
+          product_configuration: {
+            location_tracking_level: locationTrackingLevel,
+          },
+        }),
       });
     });
 
@@ -135,9 +141,16 @@ test.describe('Artikeldetail frontend-regressie', () => {
     }
 
     primaryUseCase = 'wat_inhuis';
-    const onboardingRequest = page.waitForRequest((request) => request.url().includes('/api/onboarding'));
+    const onboardingUseCaseRequest = page.waitForRequest((request) => request.url().includes('/api/onboarding'));
     await page.reload();
-    await onboardingRequest;
+    await onboardingUseCaseRequest;
+    await expect(page.getByTestId('article-detail-page')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Locaties', exact: true })).toBeVisible();
+
+    locationTrackingLevel = 'none';
+    const onboardingLocationPolicyRequest = page.waitForRequest((request) => request.url().includes('/api/onboarding'));
+    await page.reload();
+    await onboardingLocationPolicyRequest;
     await expect(page.getByTestId('article-detail-page')).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Locaties', exact: true })).toHaveCount(0);
     for (const tabName of ['Overzicht', 'Voorraad', 'Historie', 'Analyse']) {
