@@ -105,8 +105,22 @@
       "id": "F5-05",
       "key": "quantity-unbounded-decimals",
       "label": "quantities zonder generieke decimalenlimiet",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "candidate",
+      "acceptance": [
+        "purchase_import_lines.quantity_raw is in PostgreSQL onbegrensd NUMERIC zonder precision/scale-typmod",
+        "receipt_table_lines.quantity is in PostgreSQL onbegrensd NUMERIC zonder precision/scale-typmod",
+        "quantity 0.404 wordt exact geschreven en teruggelezen in beide productie-quantitykolommen",
+        "quantity 1.224 wordt exact geschreven en teruggelezen in beide productie-quantitykolommen",
+        "quantity 1.234567 wordt exact geschreven en teruggelezen in beide productie-quantitykolommen",
+        "er bestaat geen generieke 2- of 3-decimalenlimiet voor quantities; financiële afronding blijft een afzonderlijk contract",
+        "de PostgreSQL runtime-role blijft DML-only en verkrijgt geen schema-CREATE-recht"
+      ],
+      "evidence": [
+        "backend/alembic/versions/20260903_01_unbounded_quantity_precision.py",
+        "backend/tests/postgresql_quantity_unbounded_decimals_selftest.py",
+        "quality/acceptance/canonical_scenario_catalog.json",
+        ".github/workflows/f5-postgresql-quantity-unbounded-decimals-regression.yml"
+      ]
     },
     {
       "id": "F5-06",
