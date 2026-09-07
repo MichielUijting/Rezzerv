@@ -17,6 +17,18 @@ ARTICLE_NAME = "F5-11 historie sorteerartikel"
 EVENT_NEWEST_ID = "f5-11-event-newest"
 EVENT_OLDER_ID = "f5-11-event-older"
 EVENT_NULL_ID = "f5-11-event-null"
+EXPECTED_ORDER = [EVENT_NEWEST_ID, EVENT_OLDER_ID, EVENT_NULL_ID]
+
+
+def assert_history_order(rows: list[dict], label: str) -> None:
+    ids = [str(row.get("id") or "") for row in rows]
+    assert ids == EXPECTED_ORDER, (
+        f"{label}: PostgreSQL Historie moet geldige created_at-waarden DESC tonen en NULL created_at als laatste; "
+        f"expected={EXPECTED_ORDER} actual={ids}"
+    )
+    assert rows[0].get("created_at") is not None, rows
+    assert rows[1].get("created_at") is not None, rows
+    assert rows[2].get("created_at") is None, rows
 
 
 def main() -> int:
@@ -94,25 +106,25 @@ def main() -> int:
                 },
             )
 
-        rows = main_module.get_household_product_event_rows(
+        article_rows = main_module.get_household_article_event_rows(
+            conn,
+            HOUSEHOLD_ID,
+            ARTICLE_ID,
+        )
+        product_rows = main_module.get_household_product_event_rows(
             conn,
             HOUSEHOLD_ID,
             ARTICLE_ID,
             None,
         )
 
-    ids = [str(row.get("id") or "") for row in rows]
-    expected = [EVENT_NEWEST_ID, EVENT_OLDER_ID, EVENT_NULL_ID]
-    assert ids == expected, (
-        "PostgreSQL Historie moet geldige created_at-waarden DESC tonen en NULL created_at als laatste; "
-        f"expected={expected} actual={ids}"
-    )
+    assert_history_order(article_rows, "article detail/history")
+    assert_history_order(product_rows, "product event projection")
 
-    assert rows[0].get("created_at") is not None, rows
-    assert rows[1].get("created_at") is not None, rows
-    assert rows[2].get("created_at") is None, rows
-    print("PASS history_non_null_created_at_descending")
-    print("PASS history_null_created_at_last")
+    print("PASS article_history_non_null_created_at_descending")
+    print("PASS article_history_null_created_at_last")
+    print("PASS product_history_non_null_created_at_descending")
+    print("PASS product_history_null_created_at_last")
     print("F5_11_POSTGRESQL_HISTORY_NULL_SORTING_GREEN")
     return 0
 
