@@ -51,6 +51,13 @@ def main() -> int:
             for relative_path in evidence:
                 path = ROOT / str(relative_path)
                 assert path.is_file(), f"Evidencepad ontbreekt voor {item['key']}: {relative_path}"
+        if status == "covered":
+            proof = item.get("proof") or {}
+            assert isinstance(proof, dict), item
+            assert isinstance(proof.get("workflow_run_id"), int) and proof["workflow_run_id"] > 0, item
+            candidate_sha = str(proof.get("candidate_sha") or "")
+            assert len(candidate_sha) == 40 and all(char in "0123456789abcdef" for char in candidate_sha), item
+            assert proof.get("conclusion") == "success", item
 
     boolean_entry = next(item for item in classes if item["key"] == "boolean-runtime-portability")
     assert boolean_entry["status"] == "covered", boolean_entry
@@ -92,9 +99,14 @@ def main() -> int:
     assert canonical_identity_entry["status"] in {"candidate", "covered"}, canonical_identity_entry
     assert len(canonical_identity_entry.get("acceptance") or []) >= 6, canonical_identity_entry
 
+    history_null_sorting_entry = next(item for item in classes if item["key"] == "history-postgresql-null-sorting")
+    assert history_null_sorting_entry["status"] == "covered", history_null_sorting_entry
+    assert len(history_null_sorting_entry.get("acceptance") or []) >= 6, history_null_sorting_entry
+
     print("PASS historical_defect_registry_has_exact_14_required_classes")
     print("PASS historical_defect_registry_statuses_are_conservative")
     print("PASS historical_defect_registry_evidence_paths_exist")
+    print("PASS historical_defect_registry_covered_entries_have_successful_proof")
     print("PASS boolean_runtime_portability_has_explicit_acceptance_and_evidence")
     print("PASS postgresql_json_serialization_has_explicit_acceptance_and_evidence")
     print("PASS receipt_worker_fail_closed_has_explicit_acceptance_and_evidence")
@@ -105,6 +117,7 @@ def main() -> int:
     print("PASS locationless_unpacking_has_explicit_acceptance_and_evidence")
     print("PASS unclassified_unpacking_choice_has_explicit_acceptance_and_evidence")
     print("PASS household_article_canonical_identity_has_explicit_acceptance_and_evidence")
+    print("PASS history_postgresql_null_sorting_is_covered_with_explicit_acceptance_and_evidence")
     print("F5_HISTORICAL_DEFECT_REGISTRY_GREEN")
     return 0
 
