@@ -8,8 +8,26 @@
       "id": "F5-01",
       "key": "boolean-runtime-portability",
       "label": "boolean/runtime-portability",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "acceptance": [
+        "de expliciet gemigreerde Boolean-kolomset blijft exact en beperkt tot de bekende table/column-paren",
+        "SQLite-achtige 0/1 Boolean-literals, COALESCE en parametervergelijkingen worden PostgreSQL-native zonder niet-Boolean integers globaal te herschrijven",
+        "totals_overridden en can_auto_fill parametervergelijkingen worden als echte booleans uitgevoerd",
+        "Boolean write-bindparameters worden Python bools terwijl niet-gemigreerde waarden ongemoeid blijven",
+        "alle gemigreerde Boolean-kolommen zijn in PostgreSQL 17 daadwerkelijk van type boolean en de runtime-role blijft DML-only"
+      ],
+      "evidence": [
+        "backend/app/services/postgresql_boolean_contract.py",
+        "backend/tests/postgresql_boolean_contract_selftest.py",
+        ".github/workflows/f5-postgresql-boolean-runtime-portability-regression.yml",
+        ".github/workflows/postgresql-zero-residual-gate.yml",
+        ".github/workflows/postgresql-migration-foundation-validation.yml"
+      ],
+      "proof": {
+        "workflow_run_id": 34092272530,
+        "candidate_sha": "af958b07d0ebd264d09e7e0927c053635043247a",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-02",

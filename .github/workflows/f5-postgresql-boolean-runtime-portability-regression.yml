@@ -1,0 +1,171 @@
+name: F5 PostgreSQL boolean runtime portability regression
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - '.github/workflows/f5-postgresql-boolean-runtime-portability-regression.yml'
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/db.py'
+      - 'backend/app/services/postgresql_boolean_contract.py'
+      - 'backend/tests/postgresql_boolean_contract_selftest.py'
+      - 'quality/regression/historical_defect_registry.json'
+      - 'scripts/acceptance/validate_historical_defect_registry.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f5-postgresql-boolean-runtime-portability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgresql-boolean-runtime-portability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_f5_boolean_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_f5_boolean_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_f5_boolean_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_f5_boolean_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_EMAIL_ENABLED: 'false'
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
+      RECEIPT_STORAGE_ROOT: /tmp/rezzerv-f5-boolean-receipts/raw
+      REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PostgreSQL client and backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest
+
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_f5_boolean_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: alembic
+          evidence-file: f5-boolean-shared-postgresql-foundation.log
+
+      - name: Validate Phase 5 historical defect registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_historical_defect_registry.py | tee f5-historical-defect-registry.log
+          grep -F 'F5_HISTORICAL_DEFECT_REGISTRY_GREEN' f5-historical-defect-registry.log
+
+      - name: Compile Boolean runtime authority
+        run: |
+          python -m py_compile \
+            backend/app/services/postgresql_boolean_contract.py \
+            backend/tests/postgresql_boolean_contract_selftest.py \
+            scripts/acceptance/validate_historical_defect_registry.py
+
+      - name: Prove historical Boolean SQL and bind-parameter contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q backend/tests/postgresql_boolean_contract_selftest.py | tee f5-postgresql-boolean-contract.log
+          grep -E '[0-9]+ passed' f5-postgresql-boolean-contract.log
+          echo 'F5_POSTGRESQL_BOOLEAN_CONTRACT_GREEN' | tee -a f5-postgresql-boolean-contract.log
+
+      - name: Prove live PostgreSQL Boolean schema and DML-only runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u - <<'PY' | tee f5-postgresql-boolean-runtime.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          expected = {
+              'household_permission_policies': {'member_allowed'},
+              'product_identities': {'is_primary'},
+              'purchase_import_lines': {'is_auto_prefilled'},
+              'receipt_sources': {'is_active'},
+              'receipt_table_lines': {'is_deleted', 'is_validated'},
+              'receipt_tables': {'totals_overridden'},
+              'spaces': {'active'},
+              'sublocations': {'active'},
+          }
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              rows = conn.execute(text("""
+                  SELECT table_name, column_name, data_type
+                  FROM information_schema.columns
+                  WHERE table_schema = 'public'
+                    AND table_name = ANY(:tables)
+              """), {'tables': list(expected)}).mappings().all()
+
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False, runtime_create
+          actual = {(str(row['table_name']), str(row['column_name'])): str(row['data_type']) for row in rows}
+          missing = []
+          wrong_type = []
+          for table_name, columns in expected.items():
+              for column_name in columns:
+                  key = (table_name, column_name)
+                  if key not in actual:
+                      missing.append(f'{table_name}.{column_name}')
+                  elif actual[key] != 'boolean':
+                      wrong_type.append(f'{table_name}.{column_name}={actual[key]}')
+          assert not missing, missing
+          assert not wrong_type, wrong_type
+
+          print(f'runtime_user={current_user}')
+          print(f'checked_boolean_columns={sum(len(columns) for columns in expected.values())}')
+          print('PASS postgresql_runtime_is_dml_only')
+          print('PASS migrated_boolean_columns_are_native_postgresql_boolean')
+          print('F5_POSTGRESQL_BOOLEAN_RUNTIME_PORTABILITY_GREEN')
+          PY
+
+      - name: Upload F5 Boolean evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f5-postgresql-boolean-runtime-portability-evidence
+          path: |
+            f5-boolean-shared-postgresql-foundation.log
+            f5-historical-defect-registry.log
+            f5-postgresql-boolean-contract.log
+            f5-postgresql-boolean-runtime.log
+          if-no-files-found: error
+          retention-days: 7
