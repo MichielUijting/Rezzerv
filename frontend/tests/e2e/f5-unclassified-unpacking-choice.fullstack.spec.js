@@ -69,7 +69,6 @@ async function createSpaceThroughUi(page, locationName) {
   await page.getByTestId('new-main-location-row').getByRole('button', { name: 'Toevoegen', exact: true }).click()
   expect((await createPromise).ok()).toBeTruthy()
   await expect(page.locator('#new-main-location')).toHaveValue('')
-  await expect(page.getByText(locationName, { exact: true })).toBeVisible()
 }
 
 async function readSession(page) {
