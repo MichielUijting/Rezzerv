@@ -1,4 +1,5 @@
 name: F5-14 product fix helper
+# Trigger exact product patch after red F5-14 proof
 
 on:
   pull_request:
