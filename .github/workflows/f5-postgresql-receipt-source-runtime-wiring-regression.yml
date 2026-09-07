@@ -1,0 +1,126 @@
+name: F5 PostgreSQL receipt source runtime wiring regression
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - '.github/workflows/f5-postgresql-receipt-source-runtime-wiring-regression.yml'
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/db.py'
+      - 'backend/app/main.py'
+      - 'backend/app/startup/runtime_initialization.py'
+      - 'backend/app/services/receipt_source_helper_service.py'
+      - 'backend/tests/postgresql_receipt_source_runtime_wiring_selftest.py'
+      - 'quality/regression/historical_defect_registry.json'
+      - 'scripts/acceptance/validate_historical_defect_registry.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f5-postgresql-receipt-source-runtime-wiring-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  receipt-source-runtime-wiring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_f5_receipt_source_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_f5_receipt_source_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_f5_receipt_source_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_f5_receipt_source_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_EMAIL_ENABLED: 'false'
+      REZZERV_RECEIPT_EMAIL_DOMAIN: receipts.rezzerv.example
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
+      RECEIPT_STORAGE_ROOT: /tmp/rezzerv-f5-receipt-source/raw
+      REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PostgreSQL client and backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_f5_receipt_source_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: alembic
+          evidence-file: f5-receipt-source-shared-postgresql-foundation.log
+
+      - name: Validate Phase 5 historical defect registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_historical_defect_registry.py | tee f5-historical-defect-registry.log
+          grep -F 'PASS receipt_source_runtime_wiring_has_explicit_acceptance_and_evidence' f5-historical-defect-registry.log
+          grep -F 'F5_HISTORICAL_DEFECT_REGISTRY_GREEN' f5-historical-defect-registry.log
+
+      - name: Compile receipt source runtime authority
+        run: |
+          python -m py_compile \
+            backend/app/startup/runtime_initialization.py \
+            backend/tests/postgresql_receipt_source_runtime_wiring_selftest.py \
+            scripts/acceptance/validate_historical_defect_registry.py
+
+      - name: Prove receipt source runtime wiring in PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/postgresql_receipt_source_runtime_wiring_selftest.py | tee f5-postgresql-receipt-source-runtime-wiring.log
+          grep -F 'PASS receipt_source_helper_is_wired_at_runtime_startup' f5-postgresql-receipt-source-runtime-wiring.log
+          grep -F 'PASS receipt_email_source_is_persisted_in_postgresql' f5-postgresql-receipt-source-runtime-wiring.log
+          grep -F 'PASS receipt_email_source_is_household_scoped' f5-postgresql-receipt-source-runtime-wiring.log
+          grep -F 'PASS eml_import_uses_configured_receipt_source' f5-postgresql-receipt-source-runtime-wiring.log
+          grep -F 'PASS receipt_source_unconfigured_runtime_error_is_eliminated' f5-postgresql-receipt-source-runtime-wiring.log
+          grep -F 'PASS postgresql_runtime_is_dml_only' f5-postgresql-receipt-source-runtime-wiring.log
+          grep -F 'F5_RECEIPT_SOURCE_RUNTIME_WIRING_GREEN' f5-postgresql-receipt-source-runtime-wiring.log
+
+      - name: Upload F5 receipt source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f5-postgresql-receipt-source-runtime-wiring-evidence
+          path: |
+            f5-receipt-source-shared-postgresql-foundation.log
+            f5-historical-defect-registry.log
+            f5-postgresql-receipt-source-runtime-wiring.log
+          if-no-files-found: error
+          retention-days: 7
