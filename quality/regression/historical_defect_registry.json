@@ -79,7 +79,7 @@
       "id": "F5-04",
       "key": "receipt-source-runtime-wiring",
       "label": "receipt source runtime wiring",
-      "status": "candidate",
+      "status": "covered",
       "acceptance": [
         "de geëxtraheerde receipt source helper wordt tijdens de normale run_runtime_initialization-startupgrens expliciet geconfigureerd",
         "ensure_household_email_source strandt na applicatiestart niet meer op 'Receipt source helper service is niet geconfigureerd'",
@@ -94,7 +94,12 @@
         "backend/app/services/receipt_source_helper_service.py",
         "backend/tests/postgresql_receipt_source_runtime_wiring_selftest.py",
         ".github/workflows/f5-postgresql-receipt-source-runtime-wiring-regression.yml"
-      ]
+      ],
+      "proof": {
+        "workflow_run_id": 34098769444,
+        "candidate_sha": "d2658da2b4832774e57cca9f73a4ca6dbed76ab7",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-05",
