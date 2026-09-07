@@ -17385,16 +17385,6 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                         })
                         skipped_count += 1
                         continue
-                    if not article_group_id:
-                        results.append({
-                            "line_id": line_id,
-                            "line_reference": line_reference,
-                            "status": "skipped",
-                            "reason": "Nog geen artikelgroep gekozen",
-                            "failure_stage": "article_group_resolution",
-                        })
-                        skipped_count += 1
-                        continue
                     if not location_id:
                         results.append({
                             "line_id": line_id,
