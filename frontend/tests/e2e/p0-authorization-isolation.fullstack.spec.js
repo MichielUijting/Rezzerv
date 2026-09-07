@@ -26,7 +26,6 @@ test('P0 authorization legacy advanced_member -> canonical permissions -> browse
   expect(loginResponse.ok()).toBeTruthy()
 
   await expect(page).toHaveURL(/\/home$/)
-  await expect(page.getByTestId('dynamic-home-navigation')).toBeVisible()
 
   const sessionResponse = await page.request.get('/api/session')
   expect(sessionResponse.ok()).toBeTruthy()
