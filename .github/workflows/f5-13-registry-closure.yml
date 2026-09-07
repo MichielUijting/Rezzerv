@@ -1,0 +1,94 @@
+name: F5-13 registry closure
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/f5-13-registry-closure.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close-registry:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mark F5-13 covered and harden validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          registry_path = Path('quality/regression/historical_defect_registry.json')
+          payload = json.loads(registry_path.read_text(encoding='utf-8'))
+          entry = next(item for item in payload['defect_classes'] if item['id'] == 'F5-13')
+          entry.update({
+              'status': 'covered',
+              'acceptance': [
+                  'de actieve artikel-detailpagina gebruikt product_configuration.location_tracking_level als gezaghebbende huishoudconfiguratie voor de Locaties-tab',
+                  'bij location_tracking_level=none ontbreekt de Locaties-tab terwijl Overzicht, Voorraad, Historie en Analyse beschikbaar blijven',
+                  'bij ingeschakelde location tracking is de Locaties-tab beschikbaar op de artikel-detailpagina',
+                  'primary_use_case autoriseert de Locaties-tab niet langer en kan een latere huishoudinstelling locaties UIT niet overrulen',
+                  'een reeds actieve of via deep-link gevraagde Locaties-tab valt bij locaties UIT veilig terug op Overzicht',
+                  'ontbrekende of onleesbare onboarding/productconfiguratie behandelt locations fail-closed en toont de Locaties-tab niet',
+                  'de bestaande Settings-location-policy blijft dezelfde product_configuration.location_tracking_level volgen',
+              ],
+              'evidence': [
+                  'frontend/src/features/articles/ArticlePage.jsx',
+                  'frontend/tests/f5-conditional-locations-tab.contract.mjs',
+                  'frontend/src/features/settings/settingsNavigation.js',
+                  'frontend/tests/dynamic-settings-navigation.contract.mjs',
+                  '.github/workflows/f5-conditional-locations-tab-regression.yml',
+              ],
+              'proof': {
+                  'workflow_run_id': 34149011753,
+                  'candidate_sha': 'd35c6aca875ec25355c9bc5d69c0029e9569d449',
+                  'conclusion': 'success',
+              },
+          })
+          registry_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          validator_path = Path('scripts/acceptance/validate_historical_defect_registry.py')
+          source = validator_path.read_text(encoding='utf-8')
+          needle = '''    locationless_history_entry = next(item for item in classes if item["key"] == "locationless-history-events")\n    assert locationless_history_entry["status"] == "covered", locationless_history_entry\n    assert len(locationless_history_entry.get("acceptance") or []) >= 6, locationless_history_entry\n\n'''
+          replacement = needle + '''    conditional_locations_entry = next(item for item in classes if item["key"] == "conditional-locations-tab")\n    assert conditional_locations_entry["status"] == "covered", conditional_locations_entry\n    assert len(conditional_locations_entry.get("acceptance") or []) >= 6, conditional_locations_entry\n    required_conditional_evidence = {\n        "frontend/src/features/articles/ArticlePage.jsx",\n        "frontend/tests/f5-conditional-locations-tab.contract.mjs",\n        ".github/workflows/f5-conditional-locations-tab-regression.yml",\n    }\n    assert required_conditional_evidence.issubset(set(conditional_locations_entry.get("evidence") or [])), conditional_locations_entry\n\n'''
+          if source.count(needle) != 1:
+              raise SystemExit('F5-13 validator insertion point not unique')
+          source = source.replace(needle, replacement, 1)
+          print_needle = '    print("PASS locationless_history_events_is_covered_with_explicit_acceptance_and_evidence")\n'
+          if source.count(print_needle) != 1:
+              raise SystemExit('F5-13 validator print insertion point not unique')
+          source = source.replace(
+              print_needle,
+              print_needle + '    print("PASS conditional_locations_tab_is_covered_with_explicit_acceptance_and_evidence")\n',
+              1,
+          )
+          validator_path.write_text(source, encoding='utf-8')
+          PY
+
+          python scripts/acceptance/validate_historical_defect_registry.py
+          node frontend/tests/f5-conditional-locations-tab.contract.mjs
+
+      - name: Commit closure to PR branch
+        shell: bash
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add quality/regression/historical_defect_registry.json scripts/acceptance/validate_historical_defect_registry.py
+          git diff --cached --quiet && exit 0
+          git commit -m 'Mark F5-13 conditional Locations tab covered'
+          git push origin "HEAD:${BRANCH}"
