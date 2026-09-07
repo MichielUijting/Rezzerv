@@ -1,0 +1,80 @@
+name: F5-14 product fix helper
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/f5-14-product-fix-helper.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Apply exact F5-14 product patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/features/articles/ArticlePage.jsx')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  """async function fetchInventoryPreview() {\n  const response = await fetchJsonWithAuth('/api/dev/inventory-preview')\n  if (!response.ok) throw new Error('Live artikelvoorraad kon niet worden geladen')\n  const data = await response.json()\n  return Array.isArray(data?.rows) ? data.rows : []\n}\n""",
+                  """async function fetchInventoryPreview() {\n  const response = await fetchJsonWithAuth('/api/dev/inventory-preview')\n  const data = await response.json().catch(() => ({}))\n  if (!response.ok) {\n    throw new Error(data?.detail || data?.message || data?.error || 'Live artikelvoorraad kon niet worden geladen')\n  }\n  return Array.isArray(data?.rows) ? data.rows : []\n}\n""",
+              ),
+              (
+                  "  const [inventoryLoadError, setInventoryLoadError] = useState('')\n",
+                  "",
+              ),
+              (
+                  "    setInventoryLoadError('')\n\n",
+                  "",
+              ),
+              (
+                  """      .catch(() => {\n        if (!cancelled) {\n          setLiveInventoryRows([])\n          setInventoryLoadError('Live artikelvoorraad kon niet worden geladen. Demo-locaties worden getoond waar beschikbaar.')\n        }\n      })\n""",
+                  """      .catch((error) => {\n        if (!cancelled) {\n          const message = 'Live artikelvoorraad kon niet worden geladen. Demo-locaties worden getoond waar beschikbaar.'\n          const technicalDetail = String(error?.message || '').trim()\n          setLiveInventoryRows([])\n          showFeedback({\n            variant: 'error',\n            message,\n            detail: 'De overige artikelgegevens blijven beschikbaar waar fallbackinformatie beschikbaar is.',\n            technicalDetail,\n            showTechnicalToggle: Boolean(technicalDetail),\n            key: 'article-inventory-load-error',\n          })\n        }\n      })\n""",
+              ),
+              (
+                  "  }, [inventoryRefreshVersion])\n",
+                  "  }, [inventoryRefreshVersion, showFeedback])\n",
+              ),
+              (
+                  "          {inventoryLoadError ? <div className=\"rz-article-detail-alert\">{inventoryLoadError}</div> : null}\n\n",
+                  "",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one match, got {count}: {old[:100]!r}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- frontend/src/features/articles/ArticlePage.jsx
+
+      - name: Commit product fix to PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/features/articles/ArticlePage.jsx
+          git commit -m 'Fix F5-14 article inventory API feedback'
+          git push origin HEAD:${{ github.head_ref }}
