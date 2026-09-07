@@ -13,11 +13,12 @@ Dit is vanaf baseline `main@c7ef1a7a04d87fbcd37ea2164a95871e4c26515f` de actuele
 De closure is evidence-first:
 
 - exact 14 P0-scenario's;
-- 6 release-relevant gesloten;
-- 8 expliciete residuals;
+- 7 release-relevant gesloten;
+- 7 expliciete residuals;
+- P0-ACCOUNT-SESSION is gesloten met echte browser-login als bestaande gebruiker, server-side logout, stale-cookie 401 en PostgreSQL-eindbewijs zonder actieve sessies;
 - F5-01 t/m F5-14 zijn historische regressieclosure en worden niet opnieuw als P0-gat opgevoerd;
 - ieder closure-besluit noemt bestaande repository-evidence;
-- `scripts/acceptance/validate_p0_residual_closure.py` controleert bron-blob-SHA's, evidencepaden, tellingen en F5-proof;
+- `scripts/acceptance/validate_p0_residual_closure.py` controleert bron-blob-SHA's, evidencepaden, tellingen en proof;
 - `.github/workflows/p0-residual-matrix-closure.yml` is de CI-gate.
 
-De acht residuals zijn daarmee de enige P0-testuitbreidingen die na deze audit nog als open implementatiewerk gelden. Centrale bundeling van alle gates tot één releasebeslissing hoort bij Fase 9 en is geen nieuw functioneel P0-scenario.
+De zeven resterende residuals zijn daarmee de enige P0-testuitbreidingen die na deze eerste residual-closure nog als open implementatiewerk gelden. Centrale bundeling van alle gates tot één releasebeslissing hoort bij Fase 9 en is geen nieuw functioneel P0-scenario.
