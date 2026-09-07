@@ -28,17 +28,18 @@ jobs:
           from pathlib import Path
           path = Path('backend/app/main.py')
           text = path.read_text(encoding='utf-8')
-          old = '''                    if not article_group_id:
-                        results.append({
-                            "line_id": line_id,
-                            "line_reference": line_reference,
-                            "status": "skipped",
-                            "reason": "Nog geen artikelgroep gekozen",
-                            "failure_stage": "article_group_resolution",
-                        })
-                        skipped_count += 1
-                        continue
-'''
+          old = (
+              '                    if not article_group_id:\n'
+              '                        results.append({\n'
+              '                            "line_id": line_id,\n'
+              '                            "line_reference": line_reference,\n'
+              '                            "status": "skipped",\n'
+              '                            "reason": "Nog geen artikelgroep gekozen",\n'
+              '                            "failure_stage": "article_group_resolution",\n'
+              '                        })\n'
+              '                        skipped_count += 1\n'
+              '                        continue\n'
+          )
           if text.count(old) != 1:
               raise SystemExit('F5-09 ready_only artikelgroepguard niet exact eenmaal gevonden')
           path.write_text(text.replace(old, '', 1), encoding='utf-8')
