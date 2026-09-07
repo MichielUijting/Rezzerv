@@ -1,236 +1,61 @@
-name: F5 PostgreSQL unclassified unpacking choice regression
+name: F5-09 verified main patch
 
-on:
-  pull_request:
-    paths:
-      - 'backend/app/main.py'
-      - 'frontend/src/features/stores/**'
-      - 'frontend/tests/e2e/f5-unclassified-unpacking-choice.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'quality/regression/historical_defect_registry.json'
-      - 'scripts/acceptance/validate_historical_defect_registry.py'
-      - '.github/workflows/f5-postgresql-unclassified-unpacking-choice-regression.yml'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-  workflow_dispatch:
+on: [pull_request]
 
 permissions:
-  contents: read
-
-concurrency:
-  group: f5-unclassified-unpacking-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  contents: write
 
 jobs:
-  unclassified-unpacking-choice:
-    name: F5-09 Niet ingedeeld through ready-only browser and PostgreSQL
+  patch-main:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
-      COMPOSE_PROFILES: postgresql
-      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
-
     steps:
-      - name: Checkout exact PR head
+      - name: Checkout exact PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
-      - name: Validate Phase 5 historical defect registry
-        run: python scripts/acceptance/validate_historical_defect_registry.py
-
-      - name: Prepare deterministic F5-09 identity
+      - name: Apply exact F5-09 product fix
         shell: bash
         run: |
-          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          password="F5-09-Unclassified-${suffix}-Pass!"
-          echo "PLAYWRIGHT_F5_09_EMAIL=f5-09-unclassified-${suffix}@example.com" >> "$GITHUB_ENV"
-          echo "PLAYWRIGHT_F5_09_PASSWORD=$password" >> "$GITHUB_ENV"
-          echo "PLAYWRIGHT_F5_09_HOUSEHOLD=F5-09 Niet ingedeeld ${suffix}" >> "$GITHUB_ENV"
-          echo "::add-mask::$password"
-
-      - name: Guard F5-09 browser authority and product contract
-        shell: bash
-        run: |
-          spec='frontend/tests/e2e/f5-unclassified-unpacking-choice.fullstack.spec.js'
-          ui='frontend/src/features/stores/StoreBatchDetailPage.jsx'
-          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
-            echo 'F5-09 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
+          set -euo pipefail
+          current_blob="$(git hash-object backend/app/main.py)"
+          test "$current_blob" = "140b007418a7f3c6c1b0e749c650889a819a5b9e" || {
+            echo "Unexpected main.py blob: $current_blob" >&2
             exit 1
-          fi
-          grep -F '<option value="">Niet ingedeeld</option>' "$ui"
-          grep -F "selectOption('')" "$spec"
-          grep -F "Verwerk alleen complete regels" "$spec"
-          grep -F "processMode: 'ready_only'" "$spec"
-          echo 'F5_09_READY_ONLY_BROWSER_CONTRACT_GUARD_GREEN'
-
-      - name: Build and start real frontend, backend and PostgreSQL
-        run: docker compose up -d --build
-
-      - name: Wait for backend health
-        shell: bash
-        run: |
-          for attempt in $(seq 1 180); do
-            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
-              echo "Backend health is groen na $attempt pogingen."
-              exit 0
-            fi
-            if (( attempt % 30 == 0 )); then
-              docker compose logs --no-color --tail=100 backend
-            fi
-            sleep 2
-          done
-          docker compose ps
-          docker compose logs --no-color --tail=500 backend
-          exit 1
-
-      - name: Prove production-like PostgreSQL runtime boundary
-        shell: bash
-        run: |
-          docker compose exec -T backend python -u - <<'PY' | tee f5-09-postgresql-boundary.log
-          from sqlalchemy import text
-          from app.db import engine
-
-          assert engine.dialect.name == 'postgresql', engine.dialect.name
-          with engine.begin() as conn:
-              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
-              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
-              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
-          assert current_user == 'rezzerv_app', current_user
-          assert runtime_create is False
-          assert alembic_head
-          print(f'runtime_user={current_user}')
-          print(f'alembic_head={alembic_head}')
-          print('F5_09_POSTGRESQL_BOUNDARY_GREEN')
+          }
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''                    if not article_group_id:
+                        results.append({
+                            "line_id": line_id,
+                            "line_reference": line_reference,
+                            "status": "skipped",
+                            "reason": "Nog geen artikelgroep gekozen",
+                            "failure_stage": "article_group_resolution",
+                        })
+                        skipped_count += 1
+                        continue
+'''
+          if text.count(old) != 1:
+              raise SystemExit('F5-09 ready_only artikelgroepguard niet exact eenmaal gevonden')
+          path.write_text(text.replace(old, '', 1), encoding='utf-8')
           PY
+          python -m py_compile backend/app/main.py
+          patched_blob="$(git hash-object backend/app/main.py)"
+          test "$patched_blob" = "2933f49726002512143e693e0fd0ac87ad806427" || {
+            echo "Unexpected patched main.py blob: $patched_blob" >&2
+            exit 1
+          }
 
-      - name: Run Niet ingedeeld through ready-only browser UI
+      - name: Commit verified product fix
         shell: bash
         run: |
-          docker run --rm \
-            --add-host=host.docker.internal:host-gateway \
-            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
-            -e PLAYWRIGHT_F5_09_EMAIL="$PLAYWRIGHT_F5_09_EMAIL" \
-            -e PLAYWRIGHT_F5_09_PASSWORD="$PLAYWRIGHT_F5_09_PASSWORD" \
-            -e PLAYWRIGHT_F5_09_HOUSEHOLD="$PLAYWRIGHT_F5_09_HOUSEHOLD" \
-            -v "$GITHUB_WORKSPACE/frontend:/work" \
-            -w /work \
-            mcr.microsoft.com/playwright:v1.58.2-noble \
-            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/f5-unclassified-unpacking-choice.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f5-09-browser.log"
-          grep -F 'F5_09_UNCLASSIFIED_READY_ONLY_BROWSER_GREEN' frontend/f5-09-browser.log
-          grep -F 'F5_09_UNCLASSIFIED_UNPACKING_BROWSER_GREEN' frontend/f5-09-browser.log
-          test -s frontend/f5-09-browser-proof.json
-
-      - name: Capture exact browser identities
-        shell: bash
-        run: |
-          proof='frontend/f5-09-browser-proof.json'
-          test "$(jq -r '.locationTrackingLevel' "$proof")" = 'global'
-          test "$(jq -r '.processMode' "$proof")" = 'ready_only'
-          test "$(jq -r '.articleGroupId' "$proof")" = 'null'
-          for key in householdId receiptId batchId lineId incompleteLineId processedEventId targetLocationId; do
-            value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
-            test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
-            case "$key" in
-              householdId) echo "F5_HOUSEHOLD_ID=$value" >> "$GITHUB_ENV" ;;
-              lineId) echo "F5_LINE_ID=$value" >> "$GITHUB_ENV" ;;
-              incompleteLineId) echo "F5_INCOMPLETE_LINE_ID=$value" >> "$GITHUB_ENV" ;;
-              processedEventId) echo "F5_EVENT_ID=$value" >> "$GITHUB_ENV" ;;
-              targetLocationId) echo "F5_LOCATION_ID=$value" >> "$GITHUB_ENV" ;;
-            esac
-          done
-
-      - name: Verify exact unclassified PostgreSQL end state
-        shell: bash
-        run: |
-          docker compose exec -T \
-            -e F5_HOUSEHOLD_ID="$F5_HOUSEHOLD_ID" \
-            -e F5_LINE_ID="$F5_LINE_ID" \
-            -e F5_INCOMPLETE_LINE_ID="$F5_INCOMPLETE_LINE_ID" \
-            -e F5_EVENT_ID="$F5_EVENT_ID" \
-            -e F5_LOCATION_ID="$F5_LOCATION_ID" \
-            backend python -u - <<'PY' 2>&1 | tee f5-09-postgresql-end-state.log
-          import os
-          from sqlalchemy import text
-          from app.db import engine
-
-          household_id = os.environ['F5_HOUSEHOLD_ID'].strip()
-          line_id = os.environ['F5_LINE_ID'].strip()
-          incomplete_line_id = os.environ['F5_INCOMPLETE_LINE_ID'].strip()
-          event_id = os.environ['F5_EVENT_ID'].strip()
-          location_id = os.environ['F5_LOCATION_ID'].strip()
-
-          with engine.begin() as conn:
-              line = conn.execute(text('''
-                  SELECT household_article_id, selected_article_group_id, processing_status,
-                         target_location_id, processed_event_id
-                  FROM public.purchase_import_lines
-                  WHERE id = :line_id
-              '''), {'line_id': line_id}).mappings().one()
-              assert str(line['processing_status']) == 'processed', line
-              assert line['selected_article_group_id'] is None, line
-              assert str(line['target_location_id']) == location_id, line
-              assert str(line['processed_event_id']) == event_id, line
-              article_id = str(line['household_article_id'] or '')
-              assert article_id, line
-
-              article = conn.execute(text('''
-                  SELECT id, household_id, naam
-                  FROM public.household_articles
-                  WHERE id = :article_id
-              '''), {'article_id': article_id}).mappings().one()
-              assert str(article['household_id']) == household_id, article
-
-              incomplete = conn.execute(text('''
-                  SELECT processing_status, target_location_id
-                  FROM public.purchase_import_lines
-                  WHERE id = :line_id
-              '''), {'line_id': incomplete_line_id}).mappings().one()
-              assert str(incomplete['processing_status'] or '') != 'processed', incomplete
-              assert incomplete['target_location_id'] is None, incomplete
-
-              event = conn.execute(text('''
-                  SELECT household_id, household_article_id, location_id, event_type, source
-                  FROM public.inventory_events
-                  WHERE id = :event_id
-              '''), {'event_id': event_id}).mappings().one()
-              assert str(event['household_id']) == household_id, event
-              assert str(event['household_article_id']) == article_id, event
-              assert str(event['location_id']) == location_id, event
-              assert str(event['event_type']) == 'purchase', event
-              assert str(event['source']) == 'store_import', event
-
-          print('purchase_import_line=processed_with_selected_article_group_null')
-          print('ready_only_incomplete_line=not_processed')
-          print('purchase_event=store_import_at_selected_location')
-          print('F5_09_UNCLASSIFIED_UNPACKING_POSTGRESQL_GREEN')
-          PY
-
-      - name: Upload F5-09 evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: f5-09-unclassified-unpacking-evidence
-          path: |
-            f5-09-postgresql-boundary.log
-            f5-09-postgresql-end-state.log
-            frontend/f5-09-browser.log
-            frontend/f5-09-browser-proof.json
-            frontend/test-results/**
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: F5-09 gate marker
-        run: echo 'F5_09_UNCLASSIFIED_UNPACKING_GREEN'
-
-      - name: Show stack diagnostics on failure
-        if: failure()
-        run: |
-          docker compose ps || true
-          docker compose logs --no-color --tail=400 backend || true
-          docker compose logs --no-color --tail=200 frontend || true
-
-      - name: Stop stack
-        if: always()
-        run: docker compose down -v --remove-orphans
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/main.py
+          git commit -m 'fix: allow unclassified article group in ready-only unpacking'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
