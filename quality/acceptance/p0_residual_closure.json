@@ -24,24 +24,28 @@
   },
   "summary": {
     "total_p0_scenarios": 14,
-    "closed": 6,
-    "residual": 8
+    "closed": 7,
+    "residual": 7
   },
   "scenarios": [
     {
       "id": "P0-ACCOUNT-SESSION",
-      "status": "residual",
+      "status": "closed",
       "evidence": [
+        "frontend/src/features/settings/SettingsMyAccountPage.jsx",
+        "frontend/tests/e2e/p0-account-session.fullstack.spec.js",
+        ".github/workflows/p0-account-session-fullstack-postgresql-validation.yml",
         "frontend/tests/e2e/p0-onboarding.fullstack.spec.js",
         ".github/workflows/p0-onboarding-fullstack-postgresql-validation.yml",
         "frontend/tests/e2e/p0-platform-authority.fullstack.spec.js",
         ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml"
       ],
-      "closure_note": "registratie, geldige sessie en expliciete sessie-invalidatie/401 zijn op de echte stack bewezen",
-      "residual_scope": [
-        "expliciete browser-login met bestaande gebruiker",
-        "expliciete browser-logout met aantoonbaar onbruikbaar geworden sessie"
-      ]
+      "closure_note": "registratie/onboarding bouwt een bestaand account op; daarna zijn expliciete browser-login, geldige reguliere adminsessie, zichtbare server-side Uitloggen, verwijderde sessiecookie, stale-cookie 401 en nul actieve server_sessions in PostgreSQL bewezen",
+      "proof": {
+        "workflow_run_id": 34163055850,
+        "candidate_sha": "f6b9b2a0105ff67563dcd6e8400e601a3748014b",
+        "conclusion": "success"
+      }
     },
     {
       "id": "P0-ONBOARDING",
