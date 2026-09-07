@@ -55,8 +55,20 @@
       "id": "F5-03",
       "key": "receipt-worker-fail-closed-status",
       "label": "receipt worker fail-closed status",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "candidate",
+      "acceptance": [
+        "een exception in een ZIP-receiptlid wordt door de echte _run_receipt_zip_import_batch worker als failed resultaat vastgelegd",
+        "een batch met een mislukt receiptlid eindigt persisted als completed_with_errors en blijft nooit running",
+        "een batch met een mislukt receiptlid wordt niet foutief als completed gemarkeerd",
+        "processed_files en failed_files worden exact persisted en imported_files/duplicate_files blijven nul voor de geforceerde failure",
+        "results_json bewaart bestandsnaam, archive_path, import_status=failed en het foutdetail",
+        "finished_at wordt persisted en de PostgreSQL runtime-role blijft DML-only"
+      ],
+      "evidence": [
+        "backend/app/main.py",
+        "backend/tests/postgresql_receipt_worker_fail_closed_selftest.py",
+        ".github/workflows/f5-postgresql-receipt-worker-fail-closed-regression.yml"
+      ]
     },
     {
       "id": "F5-04",
