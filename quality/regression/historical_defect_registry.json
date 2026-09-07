@@ -237,7 +237,7 @@
       "id": "F5-10",
       "key": "household-article-canonical-identity",
       "label": "household article canonical naam/identiteit",
-      "status": "candidate",
+      "status": "covered",
       "acceptance": [
         "twee verschillende aangekochte bonregels behouden twee verschillende canonical household_article-UUID's en mogen niet op basis van een gedeelde naam op dezelfde identity instorten",
         "beide household articles mogen na verwerking exact dezelfde custom_name krijgen zonder dat hun canonical UUID verandert",
@@ -254,7 +254,12 @@
         ".github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml",
         "scripts/acceptance/l4_06_article_identity_history.py",
         ".github/workflows/f5-postgresql-household-article-canonical-identity-regression.yml"
-      ]
+      ],
+      "proof": {
+        "workflow_run_id": 34131988970,
+        "candidate_sha": "62621591b3702c262083bbe096a908dc4bb2e74e",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-11",
