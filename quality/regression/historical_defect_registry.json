@@ -156,7 +156,7 @@
       "id": "F5-07",
       "key": "household-location-policy",
       "label": "household location policy consequent in backend en UI",
-      "status": "candidate",
+      "status": "covered",
       "acceptance": [
         "de huishoudinstelling global_locations_enabled=false wordt server-side persisted als location_tracking_level=none",
         "de huishoudinstelling global_locations_enabled=true wordt server-side persisted als location_tracking_level=global",
@@ -175,7 +175,12 @@
         "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
         ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
         ".github/workflows/f5-postgresql-household-location-policy-regression.yml"
-      ]
+      ],
+      "proof": {
+        "workflow_run_id": 34110774837,
+        "candidate_sha": "49f9ed2c0afc0017c5393918562709ab39824923",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-08",
