@@ -163,7 +163,7 @@ jobs:
 
           with engine.begin() as conn:
               line = conn.execute(text('''
-                  SELECT household_article_id, selected_article_group_id, processing_status,
+                  SELECT matched_household_article_id, selected_article_group_id, processing_status,
                          target_location_id, processed_event_id
                   FROM public.purchase_import_lines
                   WHERE id = :line_id
@@ -172,15 +172,16 @@ jobs:
               assert line['selected_article_group_id'] is None, line
               assert str(line['target_location_id']) == location_id, line
               assert str(line['processed_event_id']) == event_id, line
-              article_id = str(line['household_article_id'] or '')
+              article_id = str(line['matched_household_article_id'] or '')
               assert article_id, line
 
               article = conn.execute(text('''
-                  SELECT id, household_id, naam
+                  SELECT id, household_id, article_group_id, naam
                   FROM public.household_articles
                   WHERE id = :article_id
               '''), {'article_id': article_id}).mappings().one()
               assert str(article['household_id']) == household_id, article
+              assert article['article_group_id'] is None, article
 
               incomplete = conn.execute(text('''
                   SELECT processing_status, target_location_id
@@ -202,6 +203,7 @@ jobs:
               assert str(event['source']) == 'store_import', event
 
           print('purchase_import_line=processed_with_selected_article_group_null')
+          print('household_article=article_group_null')
           print('ready_only_incomplete_line=not_processed')
           print('purchase_event=store_import_at_selected_location')
           print('F5_09_UNCLASSIFIED_UNPACKING_POSTGRESQL_GREEN')
