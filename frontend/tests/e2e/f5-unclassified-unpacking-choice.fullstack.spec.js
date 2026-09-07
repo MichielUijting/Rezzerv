@@ -10,7 +10,7 @@ function required(name, value) {
   return String(value).trim()
 }
 
-async function registerLocationsOffHousehold(page, accountEmail, accountPassword, expectedHouseholdName) {
+async function registerLocationsOnHousehold(page, accountEmail, accountPassword, expectedHouseholdName) {
   await page.goto('/registreren')
   await expect(page.getByTestId('register-page')).toBeVisible()
   await page.getByTestId('register-email').fill(accountEmail)
@@ -33,7 +33,7 @@ async function registerLocationsOffHousehold(page, accountEmail, accountPassword
 
   await expect(page.getByTestId('onboarding-wat-inhuis-follow-up')).toBeVisible()
   await page.getByTestId('wat-inhuis-tracking-quantity').check()
-  await page.getByTestId('wat-inhuis-global-locations-no').check()
+  await page.getByTestId('wat-inhuis-global-locations-yes').check()
   await page.getByTestId('wat-inhuis-almost-out-yes').check()
   await page.getByTestId('wat-inhuis-shopping-yes').check()
   const product = page.waitForResponse((response) => (
@@ -55,7 +55,21 @@ async function registerLocationsOffHousehold(page, accountEmail, accountPassword
   const capabilitiesResponse = await page.request.get('/api/onboarding/capabilities')
   expect(capabilitiesResponse.ok()).toBeTruthy()
   const capabilities = await capabilitiesResponse.json()
-  expect(capabilities.product_configuration.location_tracking_level).toBe('none')
+  expect(capabilities.product_configuration.location_tracking_level).toBe('global')
+}
+
+async function createSpaceThroughUi(page, locationName) {
+  await page.goto('/locaties')
+  await expect(page.getByTestId('locations-page')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('add-location').click()
+  await expect(page.getByRole('dialog', { name: 'Hoofdlocatie toevoegen' })).toBeVisible()
+  await page.getByTestId('location-name-input').fill(locationName)
+  const createPromise = page.waitForResponse((response) => (
+    response.url().includes('/api/spaces') && response.request().method() === 'POST'
+  ))
+  await page.getByTestId('location-submit').click()
+  expect((await createPromise).ok()).toBeTruthy()
+  await expect(page.getByRole('dialog', { name: 'Hoofdlocatie toevoegen' })).toHaveCount(0)
 }
 
 async function readSession(page) {
@@ -122,48 +136,87 @@ async function readBatch(page, batchId) {
   return response.json()
 }
 
-test('F5-09 Niet ingedeeld is a valid unpacking choice', async ({ page, request }, testInfo) => {
+async function assignLocationToLine(page, lineId, locationName) {
+  const locationButton = page.getByTestId(`receipt-line-location-select-${lineId}`)
+  await expect(locationButton).toBeVisible({ timeout: 30_000 })
+  await locationButton.click()
+  const dialog = page.getByRole('dialog', { name: 'Locatie kiezen' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: locationName, exact: true }).click()
+  const savePromise = page.waitForResponse((response) => (
+    response.url().includes(`/api/purchase-import-lines/${lineId}/target-location`)
+      && response.request().method() === 'POST'
+  ))
+  await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click()
+  const response = await savePromise
+  expect(response.ok()).toBeTruthy()
+  const payload = await response.json()
+  return String(payload?.target_location_id || payload?.resolved_location?.location_id || payload?.resolved_location?.space_id || '').trim()
+}
+
+test('F5-09 Niet ingedeeld remains valid in ready-only unpacking', async ({ page, request }, testInfo) => {
   test.setTimeout(360_000)
   const accountEmail = required('PLAYWRIGHT_F5_09_EMAIL', email).toLowerCase()
   const accountPassword = required('PLAYWRIGHT_F5_09_PASSWORD', password)
   const expectedHouseholdName = required('PLAYWRIGHT_F5_09_HOUSEHOLD', householdName)
   const baseURL = required('PLAYWRIGHT_BASE_URL', testInfo.project.use.baseURL)
+  const locationName = `F5-09 voorraad ${Date.now()}`
 
-  await registerLocationsOffHousehold(page, accountEmail, accountPassword, expectedHouseholdName)
+  await registerLocationsOnHousehold(page, accountEmail, accountPassword, expectedHouseholdName)
   const session = await readSession(page)
   expect(session.role).toBe('admin')
   const householdId = String(session.active_household_id || '')
   expect(householdId).not.toBe('')
+  await createSpaceThroughUi(page, locationName)
 
   const receiptId = await uploadReceiptThroughKassa(page, await loadCanonicalReceiptFixture(request, baseURL))
   await approveReceiptThroughKassa(page, receiptId)
   const batchId = String((await resolveApprovedBatch(page, householdId, receiptId)).batch_id)
   const batchBefore = await readBatch(page, batchId)
   const lines = Array.isArray(batchBefore?.lines) ? batchBefore.lines : []
-  const line = lines.find((item) => {
+  const targetLine = lines.find((item) => {
     const quantity = Number(item?.quantity_raw || 0)
-    return Number.isInteger(quantity) && quantity > 0 && String(item?.processing_status || '') !== 'processed'
+    const hasBackendIdentity = Boolean(String(item?.matched_household_article_id || item?.matched_global_product_id || '').trim())
+    return Number.isInteger(quantity) && quantity > 0 && hasBackendIdentity && String(item?.processing_status || '') !== 'processed'
   })
-  expect(line, `Geen verwerkbare bonregel gevonden in ${JSON.stringify(batchBefore)}`).toBeTruthy()
-  const lineId = String(line.id)
+  expect(targetLine, `Geen F5-09-doelregel met backendidentiteit gevonden in ${JSON.stringify(batchBefore)}`).toBeTruthy()
+  const incompleteLine = lines.find((item) => (
+    String(item?.id || '') !== String(targetLine.id)
+      && Number(item?.quantity_raw || 0) > 0
+      && String(item?.processing_status || '') !== 'processed'
+  ))
+  expect(incompleteLine, `Geen tweede incomplete regel gevonden in ${JSON.stringify(batchBefore)}`).toBeTruthy()
+  const lineId = String(targetLine.id)
+  const incompleteLineId = String(incompleteLine.id)
 
   await page.goto(`/kassabonnen?batch=${encodeURIComponent(batchId)}`)
   await expect(page.getByTestId('receipts-page')).toBeVisible()
+
   const groupSelect = page.getByTestId(`receipt-line-article-group-select-${lineId}`)
   await expect(groupSelect).toBeVisible({ timeout: 30_000 })
   await expect(groupSelect.locator('option[value=""]')).toHaveText('Niet ingedeeld')
   await groupSelect.selectOption('')
   await expect(groupSelect).toHaveValue('')
 
-  const lineSelect = page.getByTestId(`receipt-line-select-${lineId}`)
-  if (!(await lineSelect.isChecked())) await lineSelect.check()
+  const targetLocationId = await assignLocationToLine(page, lineId, locationName)
+  expect(targetLocationId).not.toBe('')
+
+  const targetSelect = page.getByTestId(`receipt-line-select-${lineId}`)
+  if (!(await targetSelect.isChecked())) await targetSelect.check()
+  const incompleteSelect = page.getByTestId(`receipt-line-select-${incompleteLineId}`)
+  if (!(await incompleteSelect.isChecked())) await incompleteSelect.check()
+
   await expect(page.getByTestId('receipt-process-button')).toBeEnabled()
+  await page.getByTestId('receipt-process-button').click()
+  const confirm = page.getByRole('dialog', { name: 'Niet alle geselecteerde regels zijn compleet' })
+  await expect(confirm).toBeVisible()
+  await expect(confirm).toContainText('1 geselecteerde regel(s) zijn klaar voor verwerking')
 
   const processResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === `/api/purchase-import-batches/${batchId}/process`
       && response.request().method() === 'POST'
   ))
-  await page.getByTestId('receipt-process-button').click()
+  await confirm.getByRole('button', { name: 'Verwerk alleen complete regels', exact: true }).click()
   const processResponse = await processResponsePromise
   expect(processResponse.ok()).toBeTruthy()
   const processPayload = await processResponse.json()
@@ -175,21 +228,29 @@ test('F5-09 Niet ingedeeld is a valid unpacking choice', async ({ page, request 
   await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveCount(0, { timeout: 20_000 })
 
   const batchAfter = await readBatch(page, batchId)
-  const processedLine = (Array.isArray(batchAfter?.lines) ? batchAfter.lines : []).find((item) => String(item?.id || '') === lineId)
+  const afterLines = Array.isArray(batchAfter?.lines) ? batchAfter.lines : []
+  const processedLine = afterLines.find((item) => String(item?.id || '') === lineId)
+  const stillIncompleteLine = afterLines.find((item) => String(item?.id || '') === incompleteLineId)
   expect(processedLine).toBeTruthy()
   expect(String(processedLine.processing_status || '')).toBe('processed')
-  expect(String(processedLine.article_group_id || '')).toBe('')
+  expect(String(processedLine.article_group_id || processedLine.selected_article_group_id || '')).toBe('')
   expect(String(processedLine.processed_event_id || '')).not.toBe('')
+  expect(stillIncompleteLine).toBeTruthy()
+  expect(String(stillIncompleteLine.processing_status || '')).not.toBe('processed')
 
   writeFileSync('f5-09-browser-proof.json', JSON.stringify({
     householdId,
     receiptId,
     batchId,
     lineId,
+    incompleteLineId,
     processedEventId: String(processedLine.processed_event_id),
     articleGroupId: null,
-    locationTrackingLevel: 'none',
+    targetLocationId,
+    locationTrackingLevel: 'global',
+    processMode: 'ready_only',
   }, null, 2))
 
+  console.log('F5_09_UNCLASSIFIED_READY_ONLY_BROWSER_GREEN')
   console.log('F5_09_UNCLASSIFIED_UNPACKING_BROWSER_GREEN')
 })
