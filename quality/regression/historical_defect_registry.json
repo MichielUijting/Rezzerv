@@ -131,7 +131,7 @@
       "id": "F5-06",
       "key": "historical-quantity-restoration",
       "label": "gerichte restauratie van historisch beschadigde quantity-data",
-      "status": "candidate",
+      "status": "covered",
       "acceptance": [
         "de bewezen legacy-regel 239ccbf1-6880-4390-9c83-cb141836f72c wordt uitsluitend bij quantity_raw=0.40 hersteld naar exact 0.404",
         "de bewezen legacy-regel 572f88a8-1bca-4e47-ac8c-0d903188ca4b wordt uitsluitend bij quantity_raw=1.22 hersteld naar exact 1.224",
@@ -145,7 +145,12 @@
         "backend/alembic/versions/20260903_01_unbounded_quantity_precision.py",
         "backend/tests/postgresql_historical_quantity_restoration_selftest.py",
         ".github/workflows/f5-postgresql-historical-quantity-restoration-regression.yml"
-      ]
+      ],
+      "proof": {
+        "workflow_run_id": 34108498535,
+        "candidate_sha": "af1d632553309782ed219af16176015626a8fba7",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-07",
