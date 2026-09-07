@@ -15,7 +15,7 @@
       "id": "F5-02",
       "key": "postgresql-json-serialization",
       "label": "JSON serialisatie vanuit PostgreSQL-resultaten",
-      "status": "candidate",
+      "status": "covered",
       "acceptance": [
         "PostgreSQL UUID bereikt geldig JSON als string",
         "PostgreSQL NUMERIC behoudt quantity-waarden 0.404, 1.224 en 1.234567 aan de JSON-grens",
@@ -26,7 +26,12 @@
       "evidence": [
         "backend/tests/postgresql_json_serialization_regression_selftest.py",
         ".github/workflows/f5-postgresql-json-serialization-regression.yml"
-      ]
+      ],
+      "proof": {
+        "workflow_run_id": 34090168244,
+        "candidate_sha": "96b3c60a29043898bbf5918258096a5ea71eefe8",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-03",
