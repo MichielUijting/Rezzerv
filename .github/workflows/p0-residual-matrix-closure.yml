@@ -1,0 +1,75 @@
+name: P0 residual matrix closure
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'quality/acceptance/functional_acceptance_matrix.json'
+      - 'quality/acceptance/p0_residual_closure.json'
+      - 'quality/regression/historical_defect_registry.json'
+      - 'scripts/acceptance/validate_p0_residual_closure.py'
+      - 'scripts/acceptance/validate_historical_defect_registry.py'
+      - 'backend/tests/**'
+      - 'frontend/tests/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-residual-matrix-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p0-residual-closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile closure validator
+        run: python -m py_compile scripts/acceptance/validate_p0_residual_closure.py
+
+      - name: Validate F5 historical-regression closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_historical_defect_registry.py | tee f5-registry-validation.log
+          grep -F 'F5_HISTORICAL_DEFECT_REGISTRY_GREEN' f5-registry-validation.log
+
+      - name: Validate exact P0 residual closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_p0_residual_closure.py | tee p0-residual-closure.log
+          grep -F 'PASS matrix_has_exact_14_p0_scenarios' p0-residual-closure.log
+          grep -F 'PASS closure_summary_closed_6' p0-residual-closure.log
+          grep -F 'PASS closure_summary_residual_8' p0-residual-closure.log
+          grep -F 'PASS all_f5_01_through_f5_14_are_covered' p0-residual-closure.log
+          grep -F 'P0_RESIDUAL_CLOSURE_GREEN' p0-residual-closure.log
+
+      - name: Upload P0 closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-residual-matrix-closure-evidence
+          path: |
+            quality/acceptance/p0_residual_closure.json
+            f5-registry-validation.log
+            p0-residual-closure.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: P0 residual closure gate marker
+        run: echo 'P0_RESIDUAL_MATRIX_CLOSURE_GREEN'
