@@ -7,7 +7,6 @@ import './settingsAuthorization.css'
 
 const ROLE_LABELS = {
   'household.member': 'Lid',
-  'household.advanced_member': 'Gevorderd lid',
   'household.admin': 'Beheerder',
   'household.owner': 'Superuser',
   'household.frontteam': 'Frontteamlid',
@@ -15,7 +14,6 @@ const ROLE_LABELS = {
 
 const AUTHORIZATION_ROLE_KEYS = new Set([
   'household.member',
-  'household.advanced_member',
   'household.admin',
   'household.owner',
   'household.frontteam',
