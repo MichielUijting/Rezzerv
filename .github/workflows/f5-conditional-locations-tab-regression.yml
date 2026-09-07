@@ -1,0 +1,57 @@
+name: F5 conditional Locations tab regression
+# F5-13 final-head closure authority
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'frontend/src/features/articles/ArticlePage.jsx'
+      - 'frontend/tests/f5-conditional-locations-tab.contract.mjs'
+      - 'frontend/tests/dynamic-settings-navigation.contract.mjs'
+      - 'frontend/src/features/settings/settingsNavigation.js'
+      - 'quality/regression/historical_defect_registry.json'
+      - 'scripts/acceptance/validate_historical_defect_registry.py'
+      - '.github/workflows/f5-conditional-locations-tab-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conditional-locations-tab:
+    name: F5-13 conditionele Locaties-tab
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate existing dynamic location policy
+        run: node frontend/tests/dynamic-settings-navigation.contract.mjs
+
+      - name: Prove Article Locaties tab follows household location policy
+        run: |
+          set -euo pipefail
+          node frontend/tests/f5-conditional-locations-tab.contract.mjs | tee f5-conditional-locations-tab.log
+          grep -F 'PASS article_locations_tab_uses_product_configuration' f5-conditional-locations-tab.log
+          grep -F 'PASS location_tracking_none_hides_locations_tab' f5-conditional-locations-tab.log
+          grep -F 'PASS primary_use_case_no_longer_authorizes_locations_tab' f5-conditional-locations-tab.log
+          grep -F 'PASS stale_locations_tab_falls_back_to_overview' f5-conditional-locations-tab.log
+          grep -F 'F5_13_CONDITIONAL_LOCATIONS_TAB_GREEN' f5-conditional-locations-tab.log
+
+      - name: Upload F5-13 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f5-conditional-locations-tab-evidence
+          path: f5-conditional-locations-tab.log
+          if-no-files-found: warn
+          retention-days: 14

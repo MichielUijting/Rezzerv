@@ -2,7 +2,13 @@
   "schema_version": 1,
   "phase": "F5-historical-regression-foundation",
   "baseline_main_sha": "57109b9dc754c806db2ab8d7e64b0647f064ae1c",
-  "status_values": ["pending_audit", "candidate", "partial", "covered", "gap"],
+  "status_values": [
+    "pending_audit",
+    "candidate",
+    "partial",
+    "covered",
+    "gap"
+  ],
   "defect_classes": [
     {
       "id": "F5-01",
@@ -316,8 +322,28 @@
       "id": "F5-13",
       "key": "conditional-locations-tab",
       "label": "conditionele Locaties-tab",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "evidence": [
+        "frontend/src/features/articles/ArticlePage.jsx",
+        "frontend/tests/f5-conditional-locations-tab.contract.mjs",
+        "frontend/src/features/settings/settingsNavigation.js",
+        "frontend/tests/dynamic-settings-navigation.contract.mjs",
+        ".github/workflows/f5-conditional-locations-tab-regression.yml"
+      ],
+      "acceptance": [
+        "de actieve artikel-detailpagina gebruikt product_configuration.location_tracking_level als gezaghebbende huishoudconfiguratie voor de Locaties-tab",
+        "bij location_tracking_level=none ontbreekt de Locaties-tab terwijl Overzicht, Voorraad, Historie en Analyse beschikbaar blijven",
+        "bij ingeschakelde location tracking is de Locaties-tab beschikbaar op de artikel-detailpagina",
+        "primary_use_case autoriseert de Locaties-tab niet langer en kan een latere huishoudinstelling locaties UIT niet overrulen",
+        "een reeds actieve of via deep-link gevraagde Locaties-tab valt bij locaties UIT veilig terug op Overzicht",
+        "ontbrekende of onleesbare onboarding/productconfiguratie behandelt locations fail-closed en toont de Locaties-tab niet",
+        "de bestaande Settings-location-policy blijft dezelfde product_configuration.location_tracking_level volgen"
+      ],
+      "proof": {
+        "workflow_run_id": 34149011753,
+        "candidate_sha": "d35c6aca875ec25355c9bc5d69c0029e9569d449",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-14",
