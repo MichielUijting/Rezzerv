@@ -53,17 +53,23 @@ def main() -> int:
                 assert path.is_file(), f"Evidencepad ontbreekt voor {item['key']}: {relative_path}"
 
     boolean_entry = next(item for item in classes if item["key"] == "boolean-runtime-portability")
-    assert boolean_entry["status"] in {"candidate", "covered"}, boolean_entry
+    assert boolean_entry["status"] == "covered", boolean_entry
     assert len(boolean_entry.get("acceptance") or []) >= 5, boolean_entry
 
     json_entry = next(item for item in classes if item["key"] == "postgresql-json-serialization")
     assert json_entry["status"] == "covered", json_entry
     assert len(json_entry.get("acceptance") or []) >= 5, json_entry
 
+    worker_entry = next(item for item in classes if item["key"] == "receipt-worker-fail-closed-status")
+    assert worker_entry["status"] in {"candidate", "covered"}, worker_entry
+    assert len(worker_entry.get("acceptance") or []) >= 6, worker_entry
+
     print("PASS historical_defect_registry_has_exact_14_required_classes")
     print("PASS historical_defect_registry_statuses_are_conservative")
     print("PASS historical_defect_registry_evidence_paths_exist")
     print("PASS boolean_runtime_portability_has_explicit_acceptance_and_evidence")
+    print("PASS postgresql_json_serialization_has_explicit_acceptance_and_evidence")
+    print("PASS receipt_worker_fail_closed_has_explicit_acceptance_and_evidence")
     print("F5_HISTORICAL_DEFECT_REGISTRY_GREEN")
     return 0
 

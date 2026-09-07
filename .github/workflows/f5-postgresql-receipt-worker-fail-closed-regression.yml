@@ -1,0 +1,121 @@
+name: F5 PostgreSQL receipt worker fail-closed regression
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - '.github/workflows/f5-postgresql-receipt-worker-fail-closed-regression.yml'
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/db.py'
+      - 'backend/app/main.py'
+      - 'backend/tests/postgresql_receipt_worker_fail_closed_selftest.py'
+      - 'quality/regression/historical_defect_registry.json'
+      - 'scripts/acceptance/validate_historical_defect_registry.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f5-postgresql-receipt-worker-fail-closed-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  receipt-worker-fail-closed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_f5_receipt_worker_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_f5_receipt_worker_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_f5_receipt_worker_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_f5_receipt_worker_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_EMAIL_ENABLED: 'false'
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
+      RECEIPT_STORAGE_ROOT: /tmp/rezzerv-f5-receipt-worker/raw
+      REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PostgreSQL client and backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_f5_receipt_worker_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: alembic
+          evidence-file: f5-receipt-worker-shared-postgresql-foundation.log
+
+      - name: Validate Phase 5 historical defect registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_historical_defect_registry.py | tee f5-historical-defect-registry.log
+          grep -F 'F5_HISTORICAL_DEFECT_REGISTRY_GREEN' f5-historical-defect-registry.log
+
+      - name: Compile receipt worker fail-closed authority
+        run: |
+          python -m py_compile \
+            backend/tests/postgresql_receipt_worker_fail_closed_selftest.py \
+            scripts/acceptance/validate_historical_defect_registry.py
+
+      - name: Prove receipt worker fails closed in PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/postgresql_receipt_worker_fail_closed_selftest.py | tee f5-postgresql-receipt-worker-fail-closed.log
+          grep -F 'PASS receipt_worker_failure_not_left_running' f5-postgresql-receipt-worker-fail-closed.log
+          grep -F 'PASS receipt_worker_failure_not_mislabeled_completed' f5-postgresql-receipt-worker-fail-closed.log
+          grep -F 'PASS receipt_worker_failure_count_persisted' f5-postgresql-receipt-worker-fail-closed.log
+          grep -F 'PASS receipt_worker_failure_detail_persisted' f5-postgresql-receipt-worker-fail-closed.log
+          grep -F 'PASS receipt_worker_finished_at_persisted' f5-postgresql-receipt-worker-fail-closed.log
+          grep -F 'PASS postgresql_runtime_is_dml_only' f5-postgresql-receipt-worker-fail-closed.log
+          grep -F 'F5_RECEIPT_WORKER_FAIL_CLOSED_GREEN' f5-postgresql-receipt-worker-fail-closed.log
+
+      - name: Upload F5 receipt worker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f5-postgresql-receipt-worker-fail-closed-evidence
+          path: |
+            f5-receipt-worker-shared-postgresql-foundation.log
+            f5-historical-defect-registry.log
+            f5-postgresql-receipt-worker-fail-closed.log
+          if-no-files-found: error
+          retention-days: 7
