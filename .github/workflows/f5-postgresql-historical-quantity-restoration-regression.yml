@@ -1,0 +1,184 @@
+name: F5 PostgreSQL historical quantity restoration regression
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - '.github/workflows/f5-postgresql-historical-quantity-restoration-regression.yml'
+      - 'backend/alembic.ini'
+      - 'backend/alembic/**'
+      - 'backend/app/db.py'
+      - 'backend/tests/postgresql_historical_quantity_restoration_selftest.py'
+      - 'quality/regression/historical_defect_registry.json'
+      - 'scripts/acceptance/validate_historical_defect_registry.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f5-postgresql-historical-quantity-restoration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  historical-quantity-restoration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_f5_quantity_restore_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_f5_quantity_restore_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_f5_quantity_restore_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_f5_quantity_restore_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_EMAIL_ENABLED: 'false'
+      REZZERV_SESSION_COOKIE_SECURE: 'false'
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
+      REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PostgreSQL client and backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Bootstrap shared PostgreSQL roles without applying head
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_f5_quantity_restore_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: none
+          evidence-file: f5-history-quantity-shared-postgresql-foundation.log
+
+      - name: Validate Phase 5 historical defect registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_historical_defect_registry.py | tee f5-historical-defect-registry.log
+          grep -F 'PASS historical_quantity_restoration_has_explicit_acceptance_and_evidence' f5-historical-defect-registry.log
+          grep -F 'F5_HISTORICAL_DEFECT_REGISTRY_GREEN' f5-historical-defect-registry.log
+
+      - name: Compile historical quantity restoration authority
+        run: |
+          python -m py_compile \
+            backend/tests/postgresql_historical_quantity_restoration_selftest.py \
+            scripts/acceptance/validate_historical_defect_registry.py
+
+      - name: Apply predecessor schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd backend
+            python -m alembic upgrade 20260902_01
+            python -m alembic current
+          ) | tee f5-historical-quantity-predecessor.log
+          grep -F '20260902_01' f5-historical-quantity-predecessor.log
+
+      - name: Seed proven historical rounded quantities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/postgresql_historical_quantity_restoration_selftest.py seed-legacy | tee f5-historical-quantity-seed.log
+          grep -F 'PASS historical_quantity_legacy_fixture_seeded_at_20260902_01' f5-historical-quantity-seed.log
+          grep -F 'PASS postgresql_runtime_is_dml_only' f5-historical-quantity-seed.log
+
+      - name: Apply F5-06 restoration migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd backend
+            python -m alembic upgrade head
+            python -m alembic current
+          ) | tee f5-historical-quantity-upgrade.log
+          grep -F '20260903_01' f5-historical-quantity-upgrade.log
+
+      - name: Prove targeted restoration and UUID scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/postgresql_historical_quantity_restoration_selftest.py verify-restored | tee f5-postgresql-historical-quantity-restoration.log
+          grep -F 'PASS historical_quantity_target_239ccbf1_restored_0_404' f5-postgresql-historical-quantity-restoration.log
+          grep -F 'PASS historical_quantity_target_572f88a8_restored_1_224' f5-postgresql-historical-quantity-restoration.log
+          grep -F 'PASS unrelated_rounded_quantity_0_40_is_not_changed' f5-postgresql-historical-quantity-restoration.log
+          grep -F 'PASS unrelated_rounded_quantity_1_22_is_not_changed' f5-postgresql-historical-quantity-restoration.log
+          grep -F 'F5_HISTORICAL_QUANTITY_RESTORATION_GREEN' f5-postgresql-historical-quantity-restoration.log
+
+      - name: Return to predecessor and prepare later user edits
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd backend
+            python -m alembic downgrade 20260902_01
+            python -m alembic current
+          ) | tee f5-historical-quantity-downgrade.log
+          grep -F '20260902_01' f5-historical-quantity-downgrade.log
+          python backend/tests/postgresql_historical_quantity_restoration_selftest.py prepare-guard | tee f5-historical-quantity-guard-seed.log
+          grep -F 'PASS guarded_quantity_user_edits_prepared' f5-historical-quantity-guard-seed.log
+
+      - name: Reapply migration and prove user edits are guarded
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd backend
+            python -m alembic upgrade head
+            python -m alembic current
+          ) | tee f5-historical-quantity-reupgrade.log
+          grep -F '20260903_01' f5-historical-quantity-reupgrade.log
+          python backend/tests/postgresql_historical_quantity_restoration_selftest.py verify-guard | tee f5-postgresql-historical-quantity-guard.log
+          grep -F 'PASS historical_quantity_guard_preserves_user_edit_0_41' f5-postgresql-historical-quantity-guard.log
+          grep -F 'PASS historical_quantity_guard_preserves_user_edit_1_23' f5-postgresql-historical-quantity-guard.log
+          grep -F 'PASS historical_quantity_guard_remains_uuid_scoped' f5-postgresql-historical-quantity-guard.log
+          grep -F 'F5_HISTORICAL_QUANTITY_GUARD_GREEN' f5-postgresql-historical-quantity-guard.log
+
+      - name: Upload F5 historical quantity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f5-postgresql-historical-quantity-restoration-evidence
+          path: |
+            f5-history-quantity-shared-postgresql-foundation.log
+            f5-historical-defect-registry.log
+            f5-historical-quantity-predecessor.log
+            f5-historical-quantity-seed.log
+            f5-historical-quantity-upgrade.log
+            f5-postgresql-historical-quantity-restoration.log
+            f5-historical-quantity-downgrade.log
+            f5-historical-quantity-guard-seed.log
+            f5-historical-quantity-reupgrade.log
+            f5-postgresql-historical-quantity-guard.log
+          if-no-files-found: error
+          retention-days: 7
