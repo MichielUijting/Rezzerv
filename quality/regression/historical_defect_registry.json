@@ -55,7 +55,7 @@
       "id": "F5-03",
       "key": "receipt-worker-fail-closed-status",
       "label": "receipt worker fail-closed status",
-      "status": "candidate",
+      "status": "covered",
       "acceptance": [
         "een exception in een ZIP-receiptlid wordt door de echte _run_receipt_zip_import_batch worker als failed resultaat vastgelegd",
         "een batch met een mislukt receiptlid eindigt persisted als completed_with_errors en blijft nooit running",
@@ -68,7 +68,12 @@
         "backend/app/main.py",
         "backend/tests/postgresql_receipt_worker_fail_closed_selftest.py",
         ".github/workflows/f5-postgresql-receipt-worker-fail-closed-regression.yml"
-      ]
+      ],
+      "proof": {
+        "workflow_run_id": 34094139563,
+        "candidate_sha": "44219e36bd5875468e092b062a45d2b330014e45",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-04",
