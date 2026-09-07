@@ -156,8 +156,31 @@
       "id": "F5-07",
       "key": "household-location-policy",
       "label": "household location policy consequent in backend en UI",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "acceptance": [
+        "de huishoudinstelling global_locations_enabled=false wordt server-side persisted als location_tracking_level=none",
+        "de huishoudinstelling global_locations_enabled=true wordt server-side persisted als location_tracking_level=global",
+        "resolve_inventory_location retourneert voor location_tracking_level=none uitsluitend een locatievrije policy en maakt geen spaces aan",
+        "de server-session bepaalt het gezaghebbende huishouden; een payload kan geen ander huishouden forceren en een regulier lid kan de huishoudinstelling niet wijzigen",
+        "de Settings-UI verbergt de Locaties-tegel wanneer location_tracking_level=none en toont hem wanneer locations volgens de productconfiguratie zijn ingeschakeld",
+        "de bestaande L4 locationless browserauthority blijft aantoonbaar gekoppeld aan dezelfde capabilities-projectie en verbergt locatiekolom, filter en invoer bij locaties UIT",
+        "de PostgreSQL runtime-role blijft DML-only en een unrelated huishouden blijft geïsoleerd"
+      ],
+      "evidence": [
+        "backend/app/services/household_product_configuration_service.py",
+        "backend/app/services/inventory_location_policy_service.py",
+        "backend/tests/settings_location_policy_api_selftest.py",
+        "frontend/src/features/settings/settingsNavigation.js",
+        "frontend/tests/dynamic-settings-navigation.contract.mjs",
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
+        ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+        ".github/workflows/f5-postgresql-household-location-policy-regression.yml"
+      ],
+      "proof": {
+        "workflow_run_id": 34110774837,
+        "candidate_sha": "49f9ed2c0afc0017c5393918562709ab39824923",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-08",
