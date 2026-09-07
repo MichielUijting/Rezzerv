@@ -42,10 +42,12 @@ test('P0 authorization legacy advanced_member -> canonical permissions -> browse
   expect(Boolean(session.permissions?.['catalog.update'])).toBe(false)
 
   // AdminGuard must follow the server-side permission projection, not a hard-coded
-  // legacy role-name allowlist.
+  // legacy role-name allowlist. The current page contains two equivalent admin roots,
+  // so visibility of the first root proves the guarded route is rendered without
+  // coupling this authority to that unrelated markup duplication.
   await page.goto('/admin')
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByTestId('admin-page')).toBeVisible()
+  await expect(page.getByTestId('admin-page').first()).toBeVisible()
 
   await page.goto('/instellingen/huishouden/autorisaties')
   await expect(page).toHaveURL(/\/instellingen\/huishouden\/autorisaties$/)
