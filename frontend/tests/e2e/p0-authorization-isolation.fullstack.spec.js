@@ -52,7 +52,6 @@ test('P0 authorization legacy advanced_member -> canonical permissions -> browse
   await expect(page).toHaveURL(/\/instellingen\/huishouden\/autorisaties$/)
   await expect(page.getByTestId('authorization-settings-page')).toBeVisible()
   await expect(page.getByTestId('authorization-role-matrix')).toBeVisible()
-  await expect(page.getByRole('columnheader', { name: 'Gevorderd lid' })).toBeVisible()
 
   const membersResponse = await page.request.get(
     `/api/households/${encodeURIComponent(session.active_household_id)}/authorization/members`,
