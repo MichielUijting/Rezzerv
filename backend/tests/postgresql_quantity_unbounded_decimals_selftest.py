@@ -54,6 +54,8 @@ def main_test() -> int:
     assert engine.dialect.name == "postgresql", engine.dialect.name
 
     household_id = f"f5-quantity-{uuid.uuid4()}"
+    provider_id = str(uuid.uuid4())
+    connection_id = str(uuid.uuid4())
     purchase_batch_id = str(uuid.uuid4())
     raw_receipt_id = str(uuid.uuid4())
     receipt_table_id = str(uuid.uuid4())
@@ -89,6 +91,35 @@ def main_test() -> int:
             ),
             {"id": household_id, "naam": "F5 quantity unbounded decimals"},
         )
+        conn.execute(
+            text(
+                """
+                INSERT INTO store_providers (id, code, name, status, import_mode)
+                VALUES (:id, :code, :name, 'active', 'mock')
+                """
+            ),
+            {
+                "id": provider_id,
+                "code": f"f5_quantity_{provider_id.replace('-', '')[:12]}",
+                "name": "F5 quantity provider",
+            },
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO household_store_connections (
+                    id, household_id, store_provider_id, connection_status, linked_at
+                ) VALUES (
+                    :id, :household_id, :store_provider_id, 'active', CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": connection_id,
+                "household_id": household_id,
+                "store_provider_id": provider_id,
+            },
+        )
 
         conn.execute(
             text(
@@ -97,7 +128,7 @@ def main_test() -> int:
                     id, household_id, store_provider_id, connection_id, source_type,
                     source_reference, import_status, raw_payload, created_at
                 ) VALUES (
-                    :id, :household_id, NULL, NULL, 'f5-regression',
+                    :id, :household_id, :store_provider_id, :connection_id, 'mock',
                     :source_reference, 'new', :raw_payload, CURRENT_TIMESTAMP
                 )
                 """
@@ -105,6 +136,8 @@ def main_test() -> int:
             {
                 "id": purchase_batch_id,
                 "household_id": household_id,
+                "store_provider_id": provider_id,
+                "connection_id": connection_id,
                 "source_reference": f"f5-05::{household_id}",
                 "raw_payload": "{}",
             },
