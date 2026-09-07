@@ -2087,7 +2087,7 @@ def get_latest_external_article_link(conn, household_id: str, article_name: str)
             WHERE household_id = :household_id
               AND lower(trim(article_name)) = lower(trim(:article_name))
               AND (COALESCE(barcode, '') <> '' OR COALESCE(article_number, '') <> '')
-            ORDER BY created_at DESC, id DESC
+            ORDER BY created_at DESC NULLS LAST, id DESC
             LIMIT 1
             """
         ),
@@ -3597,7 +3597,7 @@ def get_household_article_event_rows(conn, household_id: str, household_article_
                 article_id = :household_article_id
                 OR lower(trim(article_name)) = lower(trim(:article_name))
               )
-            ORDER BY created_at DESC, id DESC
+            ORDER BY created_at DESC NULLS LAST, id DESC
             """
         ),
         {
@@ -4059,7 +4059,7 @@ def get_household_product_event_rows(conn, household_id: str, household_article_
                 article_id IN :article_ids
                 OR lower(trim(article_name)) IN :article_names
               )
-            ORDER BY created_at DESC, id DESC
+            ORDER BY created_at DESC NULLS LAST, id DESC
             """
         ).bindparams(
             bindparam('article_ids', expanding=True),
@@ -14903,7 +14903,7 @@ def article_history(article_name: str, authorization: Optional[str] = Header(Non
                 FROM inventory_events
                 WHERE household_id = :household_id
                   AND lower(article_name) = lower(:article_name)
-                ORDER BY created_at DESC, id DESC
+                ORDER BY created_at DESC NULLS LAST, id DESC
                 """
             ),
             {"article_name": article_name, "household_id": effective_household_id},
@@ -17113,7 +17113,7 @@ def count_history_events_for_article(conn, household_id: str, household_article_
             FROM inventory_events
             WHERE household_id = :household_id
               AND household_article_id = :household_article_id
-            ORDER BY created_at DESC, id DESC
+            ORDER BY created_at DESC NULLS LAST, id DESC
             """
         ),
         {"household_id": resolved_household_id, "household_article_id": resolved_article_id},
