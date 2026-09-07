@@ -290,8 +290,27 @@
       "id": "F5-12",
       "key": "locationless-history-events",
       "label": "history events zonder locatie waar het huishouden geen locaties gebruikt",
-      "status": "pending_audit",
-      "evidence": []
+      "status": "covered",
+      "acceptance": [
+        "een huishouden met inventory_tracking_level=quantity en location_tracking_level=none is de gezaghebbende configuratie voor de locatievrije Historie-authority",
+        "een purchase- en een consume-inventory_event blijven in PostgreSQL persisted met location_id=NULL en zonder location_label",
+        "get_household_article_event_rows houdt beide locatievrije events zichtbaar in de artikel-Historie",
+        "get_household_product_event_rows houdt beide locatievrije events zichtbaar in de product-Historie",
+        "de legacy article_history-route houdt beide locatievrije events zichtbaar en filtert ze niet weg wegens ontbrekende locatie",
+        "het lezen van Historie maakt bij location_tracking_level=none geen spaces of andere locaties aan",
+        "de regressieauthority draait op PostgreSQL 17 en de runtime-role blijft rezzerv_app DML-only zonder schema-CREATE-recht"
+      ],
+      "evidence": [
+        "backend/tests/postgresql_locationless_history_events_selftest.py",
+        ".github/workflows/f5-postgresql-locationless-history-events-regression.yml",
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
+        ".github/workflows/f5-postgresql-locationless-unpacking-regression.yml"
+      ],
+      "proof": {
+        "workflow_run_id": 34143562403,
+        "candidate_sha": "e10b145688662e361ccc69ca7a60beda033b2786",
+        "conclusion": "success"
+      }
     },
     {
       "id": "F5-13",
