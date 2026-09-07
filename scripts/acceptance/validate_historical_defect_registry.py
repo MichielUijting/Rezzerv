@@ -68,6 +68,10 @@ def main() -> int:
     assert source_entry["status"] in {"candidate", "covered"}, source_entry
     assert len(source_entry.get("acceptance") or []) >= 6, source_entry
 
+    quantity_entry = next(item for item in classes if item["key"] == "quantity-unbounded-decimals")
+    assert quantity_entry["status"] in {"candidate", "covered"}, quantity_entry
+    assert len(quantity_entry.get("acceptance") or []) >= 6, quantity_entry
+
     print("PASS historical_defect_registry_has_exact_14_required_classes")
     print("PASS historical_defect_registry_statuses_are_conservative")
     print("PASS historical_defect_registry_evidence_paths_exist")
@@ -75,6 +79,7 @@ def main() -> int:
     print("PASS postgresql_json_serialization_has_explicit_acceptance_and_evidence")
     print("PASS receipt_worker_fail_closed_has_explicit_acceptance_and_evidence")
     print("PASS receipt_source_runtime_wiring_has_explicit_acceptance_and_evidence")
+    print("PASS quantity_unbounded_decimals_has_explicit_acceptance_and_evidence")
     print("F5_HISTORICAL_DEFECT_REGISTRY_GREEN")
     return 0
 
