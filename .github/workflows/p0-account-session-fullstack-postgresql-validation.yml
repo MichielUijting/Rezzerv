@@ -1,0 +1,198 @@
+name: P0 account session full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/auth/**'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/features/settings/SettingsMyAccountPage.jsx'
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/tests/e2e/p0-account-session.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/p0-account-session-fullstack-postgresql-validation.yml'
+      - 'quality/acceptance/p0_residual_closure.json'
+      - 'scripts/acceptance/validate_p0_residual_closure.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-account-session-fullstack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p0-account-session:
+    name: P0 existing-user login and logout authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic account session identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="P0-Account-${suffix}-Pass!"
+          echo "PLAYWRIGHT_P0_ACCOUNT_SESSION_EMAIL=p0-account-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_ACCOUNT_SESSION_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_ACCOUNT_SESSION_HOUSEHOLD=P0 Account ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Build and start real frontend backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove production-like PostgreSQL session boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -u - <<'PY' | tee p0-account-session-postgresql-boundary.log
+          from sqlalchemy import inspect, text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              tables = set(inspect(conn).get_table_names())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert 'server_sessions' in tables, sorted(tables)
+          print(f'runtime_user={current_user}', flush=True)
+          print(f'runtime_create={runtime_create}', flush=True)
+          print('server_sessions_table=true', flush=True)
+          print('P0_ACCOUNT_SESSION_POSTGRESQL_BOUNDARY_GREEN', flush=True)
+          PY
+
+      - name: Guard browser authority against login logout mocks
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/p0-account-session.fullstack.spec.js'
+          if grep -nE 'page\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'P0 account/session authority mag login/logout niet mocken of via page.request muteren.' >&2
+            exit 1
+          fi
+          grep -F "getByTestId('login-submit').click()" "$spec"
+          grep -F "getByTestId('my-account-logout').click()" "$spec"
+          grep -F "expect(staleSessionResponse.status()).toBe(401)" "$spec"
+          echo 'P0_ACCOUNT_SESSION_NO_CORE_ROUTE_MOCKS_GREEN'
+
+      - name: Run existing-user login and logout through real browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_ACCOUNT_SESSION_EMAIL="$PLAYWRIGHT_P0_ACCOUNT_SESSION_EMAIL" \
+            -e PLAYWRIGHT_P0_ACCOUNT_SESSION_PASSWORD="$PLAYWRIGHT_P0_ACCOUNT_SESSION_PASSWORD" \
+            -e PLAYWRIGHT_P0_ACCOUNT_SESSION_HOUSEHOLD="$PLAYWRIGHT_P0_ACCOUNT_SESSION_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-account-session.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-account-session-browser.log"
+          grep -F 'P0_ACCOUNT_SESSION_BROWSER_AUTHORITY_GREEN' frontend/p0-account-session-browser.log
+
+      - name: Verify server sessions are revoked in PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e P0_ACCOUNT_EMAIL="$PLAYWRIGHT_P0_ACCOUNT_SESSION_EMAIL" \
+            backend python -u - <<'PY' | tee p0-account-session-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          email = os.environ['P0_ACCOUNT_EMAIL'].strip().lower()
+          with engine.begin() as conn:
+              user = conn.execute(text('''
+                  SELECT id, email
+                  FROM app_users
+                  WHERE lower(trim(email)) = :email
+                  LIMIT 1
+              '''), {'email': email}).mappings().one()
+              rows = conn.execute(text('''
+                  SELECT id, issued_at, expires_at, revoked_at
+                  FROM server_sessions
+                  WHERE user_id = :user_id
+                  ORDER BY issued_at, id
+              '''), {'user_id': str(user['id'])}).mappings().all()
+              active_count = int(conn.execute(text('''
+                  SELECT COUNT(*)
+                  FROM server_sessions
+                  WHERE user_id = :user_id
+                    AND revoked_at IS NULL
+                    AND expires_at > CURRENT_TIMESTAMP
+              '''), {'user_id': str(user['id'])}).scalar_one())
+          assert len(rows) >= 2, rows
+          assert all(row['revoked_at'] is not None for row in rows), rows
+          assert active_count == 0, active_count
+          print(f'email={email}', flush=True)
+          print(f'session_rows={len(rows)}', flush=True)
+          print(f'active_sessions={active_count}', flush=True)
+          print('P0_ACCOUNT_SESSION_POSTGRESQL_END_STATE_GREEN', flush=True)
+          PY
+
+      - name: Upload account session evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-account-session-fullstack-evidence
+          path: |
+            p0-account-session-postgresql-boundary.log
+            p0-account-session-postgresql-end-state.log
+            frontend/p0-account-session-browser.log
+            frontend/playwright-report-fullstack
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend frontend postgres
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+      - name: P0 account session gate marker
+        run: echo 'P0_ACCOUNT_SESSION_FULLSTACK_POSTGRESQL_GREEN'
