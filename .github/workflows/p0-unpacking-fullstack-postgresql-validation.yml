@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
           docker compose exec -T backend python /app/tests/p0_unpacking_fixture.py prepare | tee p0-unpacking-fixture.log
           grep -F 'P0_UNPACKING_FIXTURE_GREEN' p0-unpacking-fixture.log
-          docker compose exec -T backend python /app/tests/p0_unpacking_receipt_bridge.py | tee p0-unpacking-receipt-bridge.log
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/p0_unpacking_receipt_bridge.py | tee p0-unpacking-receipt-bridge.log
           grep -F 'P0_UNPACKING_RECEIPT_BRIDGE_GREEN' p0-unpacking-receipt-bridge.log
           fixture_json="$(grep '^P0_UNPACKING_FIXTURE=' p0-unpacking-fixture.log | tail -1 | cut -d= -f2-)"
           test -n "$fixture_json"
