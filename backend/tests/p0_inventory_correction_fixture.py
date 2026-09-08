@@ -34,6 +34,8 @@ MEMBER_EMAIL = "p0-inventory-member@rezzerv.local"
 MEMBER_MEMBERSHIP_ID = "p0-inventory-member-membership"
 ARTICLE_ID = "p0-inventory-exact-decimal-article"
 ARTICLE_NAME = "P0 Exacte Decimaal"
+SPACE_ID = "p0-inventory-exact-decimal-space"
+SPACE_NAME = "P0 Voorraadlocatie"
 INVENTORY_ID = "p0-inventory-exact-decimal-row"
 INITIAL_QUANTITY = Decimal("2")
 TARGET_QUANTITY = Decimal("1.234567")
@@ -76,6 +78,10 @@ def prepare() -> dict:
                 {"household_id": HOUSEHOLD_ID, "inventory_id": INVENTORY_ID},
             )
             conn.execute(
+                text("DELETE FROM spaces WHERE household_id = :household_id AND id = :space_id"),
+                {"household_id": HOUSEHOLD_ID, "space_id": SPACE_ID},
+            )
+            conn.execute(
                 text("DELETE FROM household_articles WHERE household_id = :household_id AND id = :article_id"),
                 {"household_id": HOUSEHOLD_ID, "article_id": ARTICLE_ID},
             )
@@ -95,12 +101,21 @@ def prepare() -> dict:
             conn.execute(
                 text(
                     """
+                    INSERT INTO spaces (id, naam, household_id)
+                    VALUES (:id, :name, :household_id)
+                    """
+                ),
+                {"id": SPACE_ID, "name": SPACE_NAME, "household_id": HOUSEHOLD_ID},
+            )
+            conn.execute(
+                text(
+                    """
                     INSERT INTO inventory (
                         id, naam, aantal, household_id, household_article_id,
                         space_id, sublocation_id, status, updated_at
                     ) VALUES (
                         :id, :name, :quantity, :household_id, :article_id,
-                        NULL, NULL, 'active', CURRENT_TIMESTAMP
+                        :space_id, NULL, 'active', CURRENT_TIMESTAMP
                     )
                     """
                 ),
@@ -110,13 +125,14 @@ def prepare() -> dict:
                     "quantity": INITIAL_QUANTITY,
                     "household_id": HOUSEHOLD_ID,
                     "article_id": ARTICLE_ID,
+                    "space_id": SPACE_ID,
                 },
             )
 
             start = conn.execute(
                 text(
                     """
-                    SELECT aantal, aantal::text AS quantity_text
+                    SELECT aantal, aantal::text AS quantity_text, space_id, sublocation_id
                     FROM inventory
                     WHERE id = :inventory_id AND household_id = :household_id
                     """
@@ -124,6 +140,8 @@ def prepare() -> dict:
                 {"inventory_id": INVENTORY_ID, "household_id": HOUSEHOLD_ID},
             ).mappings().one()
             assert Decimal(str(start["aantal"])) == INITIAL_QUANTITY, start
+            assert str(start["space_id"] or "") == SPACE_ID, start
+            assert start["sublocation_id"] is None, start
 
         return {
             "household_id": HOUSEHOLD_ID,
@@ -131,6 +149,8 @@ def prepare() -> dict:
             "password": ADMIN_PASSWORD,
             "article_id": ARTICLE_ID,
             "article_name": ARTICLE_NAME,
+            "space_id": SPACE_ID,
+            "space_name": SPACE_NAME,
             "inventory_id": INVENTORY_ID,
             "initial_quantity": str(INITIAL_QUANTITY),
             "target_quantity": str(TARGET_QUANTITY),
@@ -152,7 +172,7 @@ def verify() -> dict:
             inventory = conn.execute(
                 text(
                     """
-                    SELECT aantal, aantal::text AS quantity_text
+                    SELECT aantal, aantal::text AS quantity_text, space_id, sublocation_id
                     FROM inventory
                     WHERE id = :inventory_id
                       AND household_id = :household_id
@@ -167,6 +187,8 @@ def verify() -> dict:
             ).mappings().one()
             final_quantity = Decimal(str(inventory["quantity_text"]))
             assert final_quantity == TARGET_QUANTITY, inventory
+            assert str(inventory["space_id"] or "") == SPACE_ID, inventory
+            assert inventory["sublocation_id"] is None, inventory
 
             events = conn.execute(
                 text(
@@ -194,6 +216,7 @@ def verify() -> dict:
 
         return {
             "article_id": ARTICLE_ID,
+            "space_id": SPACE_ID,
             "inventory_id": INVENTORY_ID,
             "final_quantity": str(final_quantity),
             "event_id": str(event["id"]),
