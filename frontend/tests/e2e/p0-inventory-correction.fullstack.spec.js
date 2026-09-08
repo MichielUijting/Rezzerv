@@ -65,15 +65,48 @@ test('P0 Inventory corrects exact non-financial decimal through visible stock an
   const quantityInput = form.getByLabel('Nieuwe hoeveelheid')
   await expect(quantityInput).toHaveAttribute('step', 'any')
   await quantityInput.fill(expectedTargetQuantity)
+  await expect(quantityInput).toHaveValue(expectedTargetQuantity)
   await form.getByLabel('Reden / notitie').fill(expectedNote)
 
   const mutationResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === `/api/household-articles/${encodeURIComponent(expectedArticleId)}/inventory-events`
       && response.request().method() === 'POST'
   ))
+  const previewResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/dev/inventory-preview'
+      && response.request().method() === 'GET'
+  ))
+  const detailRefreshResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === `/api/household-articles/${encodeURIComponent(expectedArticleId)}`
+      && response.request().method() === 'GET'
+  ))
+
   await form.getByRole('button', { name: 'Opslaan', exact: true }).click()
   const mutationResponse = await mutationResponsePromise
-  expect(mutationResponse.ok(), await mutationResponse.text()).toBeTruthy()
+  const mutationData = await mutationResponse.json().catch(() => ({}))
+  expect(mutationResponse.ok(), JSON.stringify(mutationData)).toBeTruthy()
+
+  const [previewResponse, detailRefreshResponse] = await Promise.all([
+    previewResponsePromise,
+    detailRefreshResponsePromise,
+  ])
+  const previewData = await previewResponse.json().catch(() => ({}))
+  const detailRefreshData = await detailRefreshResponse.json().catch(() => ({}))
+  const previewRow = (Array.isArray(previewData?.rows) ? previewData.rows : []).find(
+    (row) => String(row?.id || '') === expectedInventoryId,
+  ) || null
+  const detailInventory = Array.isArray(detailRefreshData?.inventory) ? detailRefreshData.inventory : []
+  const detailInventoryRow = detailInventory.find((row) => String(row?.id || '') === expectedInventoryId) || null
+  const diagnostic = {
+    inputValue: await quantityInput.inputValue().catch(() => expectedTargetQuantity),
+    requestPostData: mutationResponse.request().postDataJSON?.() || mutationResponse.request().postData(),
+    mutationRowQuantity: mutationData?.inventory?.quantity ?? mutationData?.inventory?.aantal ?? null,
+    mutationRowNewQuantity: mutationData?.row_new_quantity ?? null,
+    previewQuantity: previewRow?.aantal ?? null,
+    detailQuantity: detailInventoryRow?.quantity ?? detailInventoryRow?.aantal ?? null,
+  }
+  console.log(`P0_INVENTORY_DECIMAL_DIAGNOSTIC=${JSON.stringify(diagnostic)}`)
+
   await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraadcorrectie is opgeslagen.', { timeout: 20_000 })
 
   const stockRow = page.getByTestId(new RegExp(`^article-stock-row-${expectedInventoryId}-`))
