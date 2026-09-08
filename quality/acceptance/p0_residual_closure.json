@@ -24,8 +24,8 @@
   },
   "summary": {
     "total_p0_scenarios": 14,
-    "closed": 7,
-    "residual": 7
+    "closed": 8,
+    "residual": 6
   },
   "scenarios": [
     {
@@ -70,17 +70,21 @@
     },
     {
       "id": "P0-AUTHORIZATION-ISOLATION",
-      "status": "residual",
+      "status": "closed",
       "evidence": [
         "frontend/tests/e2e/p0-household-membership.fullstack.spec.js",
         ".github/workflows/p0-household-membership-fullstack-postgresql-validation.yml",
         "frontend/tests/e2e/p0-platform-authority.fullstack.spec.js",
-        ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml"
+        ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml",
+        "frontend/tests/e2e/p0-authorization-isolation.fullstack.spec.js",
+        ".github/workflows/p0-authorization-isolation-fullstack-postgresql-validation.yml"
       ],
-      "closure_note": "beheerder/lid, huishoudisolatie, browser-403 en sessie-invalidatie/401 zijn bewezen",
-      "residual_scope": [
-        "legacyrol als expliciete browserauthority tegen de actuele server-side autorisatieprojectie"
-      ]
+      "closure_note": "beheerder/lid, huishoudisolatie, browser-403 en sessie-invalidatie/401 zijn bewezen; daarnaast is de gemigreerde legacyrol advanced_member via de echte loginpagina, server-side permissionprojectie, beheerroute, autorisatiematrix en exacte PostgreSQL-eindstaat als browserauthority bewezen",
+      "proof": {
+        "workflow_run_id": 34166819340,
+        "candidate_sha": "7cea876321a320c5f059649cd7cae9b689a17f65",
+        "conclusion": "success"
+      }
     },
     {
       "id": "P0-SETTINGS-PROJECTION",
