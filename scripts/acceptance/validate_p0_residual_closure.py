@@ -34,6 +34,7 @@ EXPECTED_CLOSED = {
     "P0-AUTHORIZATION-ISOLATION",
     "P0-SETTINGS-PROJECTION",
     "P0-LOCATIONS-POLICY",
+    "P0-RECEIPT-INVENTORY-ALMOSTOUT",
     "P0-ARTICLE-IDENTITY",
     "P0-MIGRATION-STARTUP",
 }
@@ -100,8 +101,8 @@ def main() -> None:
 
     summary = closure.get("summary", {})
     require(summary.get("total_p0_scenarios") == 14, "closure_summary_total_14")
-    require(summary.get("closed") == len(EXPECTED_CLOSED) == 8, "closure_summary_closed_8")
-    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 6, "closure_summary_residual_6")
+    require(summary.get("closed") == len(EXPECTED_CLOSED) == 9, "closure_summary_closed_9")
+    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 5, "closure_summary_residual_5")
 
     for scenario in closure_scenarios:
         scenario_id = scenario["id"]
@@ -125,6 +126,12 @@ def main() -> None:
     require(authorization_proof.get("workflow_run_id") == 34166819340, "authorization_isolation_proof_run_exact")
     require(authorization_proof.get("candidate_sha") == "7cea876321a320c5f059649cd7cae9b689a17f65", "authorization_isolation_proof_candidate_exact")
     require(authorization_proof.get("conclusion") == "success", "authorization_isolation_proof_success")
+
+    receipt_inventory = next(row for row in closure_scenarios if row.get("id") == "P0-RECEIPT-INVENTORY-ALMOSTOUT")
+    receipt_inventory_proof = receipt_inventory.get("proof", {})
+    require(receipt_inventory_proof.get("workflow_run_id") == 34215252124, "receipt_nonphysical_proof_run_exact")
+    require(receipt_inventory_proof.get("candidate_sha") == "efad750f0a008b0b7885d82bde490072885b0953", "receipt_nonphysical_proof_candidate_exact")
+    require(receipt_inventory_proof.get("conclusion") == "success", "receipt_nonphysical_proof_success")
 
     registry_rows = {row.get("id"): row for row in registry.get("defect_classes", [])}
     require(EXPECTED_F5_IDS <= set(registry_rows), "registry_contains_f5_01_through_f5_14")
