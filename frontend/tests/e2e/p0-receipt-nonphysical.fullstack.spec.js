@@ -102,7 +102,11 @@ async function inspectAndApproveReceipt(page, receiptId) {
   await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 30_000 })
   const receiptTable = page.getByTestId('receipt-lines-table')
   await expect(receiptTable).toBeVisible({ timeout: 30_000 })
-  await expect(receiptTable).toContainText(/KOOPZEGELS/i)
+  const articleInputs = receiptTable.locator('tbody tr td:nth-child(2) input')
+  await expect.poll(
+    async () => articleInputs.evaluateAll((inputs) => inputs.map((input) => String(input.value || '')).join('\n')),
+    { timeout: 12_000 },
+  ).toMatch(/KOOPZEGELS/i)
 
   const approval = page.waitForResponse((response) => (
     new URL(response.url()).pathname === `/api/receipts/${receiptId}/approve` && response.request().method() === 'POST'
