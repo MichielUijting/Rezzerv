@@ -23,6 +23,7 @@ from kassa_review_api_selftest import (
     SEED_PASSWORD,
     TARGET_ADMIN_EMAIL,
     TARGET_HOUSEHOLD,
+    _canonical_receipt,
     _prepare_database,
     _seed_receipt,
     create_postgresql_runtime_test_engine,
@@ -32,6 +33,17 @@ UNCERTAIN_KEY = "l4-review-uncertain"
 FINANCIAL_KEY = "l4-review-financial"
 UNCERTAIN_RECEIPT_ID = f"f3-kassa-receipt-{UNCERTAIN_KEY}"
 FINANCIAL_RECEIPT_ID = f"f3-kassa-receipt-{FINANCIAL_KEY}"
+
+
+def _uncertain_line_id_from_contract() -> str:
+    fixture, receipt = _canonical_receipt("uncertain_match")
+    selected_product = str((fixture.get("selector") or {}).get("product_name") or "").strip()
+    assert selected_product
+    for index, line in enumerate(list(receipt.get("lines") or []), start=1):
+        name = str(line.get("product_name") or line.get("expected_label") or "").strip()
+        if name == selected_product:
+            return f"f3-kassa-line-{UNCERTAIN_KEY}-{index}"
+    raise AssertionError(f"Canonical uncertain product not found: {selected_product}")
 
 
 def prepare() -> dict:
@@ -53,6 +65,7 @@ def prepare() -> dict:
 
         uncertain_product = str((uncertain["fixture"].get("selector") or {}).get("product_name") or "").strip()
         uncertain_line_id = str(uncertain["line_ids"][uncertain_product])
+        assert uncertain_line_id == _uncertain_line_id_from_contract(), uncertain_line_id
 
         with engine.begin() as conn:
             conn.execute(
@@ -149,6 +162,7 @@ def verify() -> dict:
     engine = create_postgresql_runtime_test_engine()
     try:
         with engine.begin() as conn:
+            uncertain_line_id = _uncertain_line_id_from_contract()
             uncertain = conn.execute(
                 text(
                     """
@@ -157,13 +171,14 @@ def verify() -> dict:
                            rt.approved_by_user_email, rt.totals_overridden
                     FROM receipt_table_lines rtl
                     JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-                    WHERE rt.id = :receipt_id
-                      AND rtl.article_match_status = 'uncertain'
-                    ORDER BY rtl.line_index
-                    LIMIT 1
+                    WHERE rtl.id = :line_id
+                      AND rt.id = :receipt_id
                     """
                 ),
-                {"receipt_id": UNCERTAIN_RECEIPT_ID},
+                {
+                    "line_id": uncertain_line_id,
+                    "receipt_id": UNCERTAIN_RECEIPT_ID,
+                },
             ).mappings().one()
 
             # "Alles goed" means accepting the uncertain match as-is. The
