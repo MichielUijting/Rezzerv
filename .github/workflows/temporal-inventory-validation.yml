@@ -10,6 +10,7 @@ on:
       - 'backend/app/integrations/receipt_scanners/**'
       - 'backend/tests/test_inventory_event_writer_temporal_contract.py'
       - 'backend/tests/test_temporal_inventory_service.py'
+      - 'backend/tests/test_temporal_inventory_decimal_reconciliation.py'
       - 'backend/tests/test_receipt_scanner_temporal_inventory_e2e.py'
       - '.github/workflows/temporal-inventory-validation.yml'
 
@@ -30,6 +31,7 @@ jobs:
           backend/app/services/canonical_inventory_identity_service.py
           backend/tests/test_inventory_event_writer_temporal_contract.py
           backend/tests/test_temporal_inventory_service.py
+          backend/tests/test_temporal_inventory_decimal_reconciliation.py
           backend/tests/test_receipt_scanner_temporal_inventory_e2e.py
       - name: Prove writer contract import-order invariance projection repair and scanner-boundary chronology
         env:
@@ -38,4 +40,5 @@ jobs:
           pytest -q
           backend/tests/test_inventory_event_writer_temporal_contract.py
           backend/tests/test_temporal_inventory_service.py
+          backend/tests/test_temporal_inventory_decimal_reconciliation.py
           backend/tests/test_receipt_scanner_temporal_inventory_e2e.py
