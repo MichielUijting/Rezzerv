@@ -1,0 +1,135 @@
+name: P0 Inventory exact-decimal product fix helper
+
+on:
+  push:
+    branches:
+      - codex/p0-inventory-l4-closure
+    paths:
+      - .github/workflows/p0-inventory-product-fix-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-product-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/p0-inventory-l4-closure
+          fetch-depth: 0
+
+      - name: Apply exact-decimal inventory correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}: {old!r}')
+              file.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          stock = 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
+          replace_once(
+              stock,
+              """    const quantity = Number(mutationForm.quantity)\n    if (!Number.isInteger(quantity) || quantity < 0) {\n      setMutationError('Voer een geldig geheel aantal in.')\n      return\n    }\n    if (mutationForm.action === 'consume' && quantity <= 0) {""",
+              """    const quantity = Number(mutationForm.quantity)\n    if (!Number.isFinite(quantity) || quantity < 0) {\n      setMutationError('Voer een geldig aantal in.')\n      return\n    }\n    if (mutationForm.action === 'consume' && !Number.isInteger(quantity)) {\n      setMutationError('Het af te boeken aantal moet een geheel getal zijn.')\n      return\n    }\n    if (mutationForm.action === 'consume' && quantity <= 0) {""",
+          )
+          replace_once(
+              stock,
+              """          quantity,\n          event_type: mutationForm.action,""",
+              """          quantity: mutationForm.action === 'adjustment' ? String(mutationForm.quantity).trim() : quantity,\n          event_type: mutationForm.action,""",
+          )
+          replace_once(
+              stock,
+              """                  min=\"0\"\n                  step=\"1\"\n                  value={mutationForm.quantity}""",
+              """                  min=\"0\"\n                  step={mutationForm.action === 'consume' ? '1' : 'any'}\n                  value={mutationForm.quantity}""",
+          )
+
+          main = 'backend/app/main.py'
+          replace_once(
+              main,
+              '        "aantal": int(row.get("aantal") or 0),',
+              '        "aantal": float(row.get("aantal") or 0),',
+          )
+          replace_once(
+              main,
+              """class InventoryEventMutationRequest(BaseModel):\n    household_id: Optional[str] = None\n    inventory_id: Optional[str] = None\n    article_name: Optional[str] = None\n    quantity: int\n    event_type: str""",
+              """class InventoryEventMutationRequest(BaseModel):\n    household_id: Optional[str] = None\n    inventory_id: Optional[str] = None\n    article_name: Optional[str] = None\n    quantity: Decimal\n    event_type: str""",
+          )
+          replace_once(
+              main,
+              'def update_inventory_row_quantity(conn, *, inventory_id: str, new_quantity: int):',
+              'def update_inventory_row_quantity(conn, *, inventory_id: str, new_quantity: Decimal):',
+          )
+          replace_once(
+              main,
+              """@app.post(\"/api/inventory-events\")\ndef mutate_inventory_event(payload: InventoryEventMutationRequest, authorization: Optional[str] = Header(None)):""",
+              """@app.post(\"/api/household-articles/{household_article_id}/inventory-events\")\ndef mutate_household_article_inventory_event(\n    household_article_id: str,\n    payload: InventoryEventMutationRequest,\n    authorization: Optional[str] = Header(None),\n):\n    context = require_inventory_write_context(authorization, payload.household_id)\n    household_id = str(context.get(\"active_household_id\") or \"demo-household\")\n    normalized_article_id = str(household_article_id or '').strip()\n    if not normalized_article_id:\n        raise HTTPException(status_code=400, detail=\"Huishoudartikel-id ontbreekt\")\n    if not payload.inventory_id:\n        raise HTTPException(status_code=400, detail=\"Voorraadregel-id is verplicht voor deze artikelroute\")\n    with engine.begin() as conn:\n        inventory_row = fetch_inventory_row(conn, inventory_id=payload.inventory_id, household_id=household_id)\n        row_article_id = str(inventory_row.get('household_article_id') or '').strip()\n        if row_article_id != normalized_article_id:\n            raise HTTPException(status_code=404, detail=\"Voorraadregel hoort niet bij dit huishoudartikel\")\n    return mutate_inventory_event(payload, authorization)\n\n\n@app.post(\"/api/inventory-events\")\ndef mutate_inventory_event(payload: InventoryEventMutationRequest, authorization: Optional[str] = Header(None)):""",
+          )
+          replace_once(
+              main,
+              """    with engine.begin() as conn:\n        event_type = payload.event_type\n\n        if event_type == 'purchase':""",
+              """    with engine.begin() as conn:\n        event_type = payload.event_type\n        if event_type in {'purchase', 'consume'} and payload.quantity != payload.quantity.to_integral_value():\n            raise HTTPException(status_code=400, detail=\"Aantal moet voor aankoop en afboeken een geheel getal zijn\")\n\n        if event_type == 'purchase':""",
+          )
+          replace_once(
+              main,
+              "current_row_quantity = int(inventory_row.get('quantity') or 0)",
+              "current_row_quantity = Decimal(str(inventory_row.get('quantity') or 0))",
+          )
+          replace_once(
+              main,
+              '        adjusted_quantity = int(payload.quantity)',
+              '        adjusted_quantity = Decimal(str(payload.quantity))',
+          )
+
+          canonical = 'backend/app/services/canonical_inventory_identity_service.py'
+          replace_once(
+              canonical,
+              """from __future__ import annotations\n\nimport uuid""",
+              """from __future__ import annotations\n\nfrom decimal import Decimal\nimport uuid""",
+          )
+          replace_once(
+              canonical,
+              'def get_inventory_total_by_household_article(conn, household_id: str, household_article_id: str) -> int:',
+              'def get_inventory_total_by_household_article(conn, household_id: str, household_article_id: str) -> Decimal:',
+          )
+          replace_once(
+              canonical,
+              '    return int((row or {}).get("total_quantity") or 0)',
+              '    return Decimal(str((row or {}).get("total_quantity") or 0))',
+          )
+
+          print('P0_INVENTORY_PRODUCT_FIX_APPLIED')
+          PY
+
+      - name: Verify targeted product diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "quantity: Decimal" backend/app/main.py
+          grep -F "adjusted_quantity = Decimal(str(payload.quantity))" backend/app/main.py
+          grep -F '"aantal": float(row.get("aantal") or 0)' backend/app/main.py
+          grep -F '@app.post("/api/household-articles/{household_article_id}/inventory-events")' backend/app/main.py
+          grep -F "step={mutationForm.action === 'consume' ? '1' : 'any'}" frontend/src/features/articles/tabs/ArticleStockTab.jsx
+          grep -F "quantity: mutationForm.action === 'adjustment' ? String(mutationForm.quantity).trim() : quantity" frontend/src/features/articles/tabs/ArticleStockTab.jsx
+          grep -F "def get_inventory_total_by_household_article(conn, household_id: str, household_article_id: str) -> Decimal:" backend/app/services/canonical_inventory_identity_service.py
+          git diff --check
+
+      - name: Commit product fix and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/p0-inventory-product-fix-helper.yml
+          git add backend/app/main.py backend/app/services/canonical_inventory_identity_service.py frontend/src/features/articles/tabs/ArticleStockTab.jsx
+          git diff --cached --check
+          git commit -m "Fix exact decimal inventory corrections"
+          git push origin HEAD:codex/p0-inventory-l4-closure
