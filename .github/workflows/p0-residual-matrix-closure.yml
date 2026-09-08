@@ -54,10 +54,11 @@ jobs:
           set -euo pipefail
           python scripts/acceptance/validate_p0_residual_closure.py | tee p0-residual-closure.log
           grep -F 'PASS matrix_has_exact_14_p0_scenarios' p0-residual-closure.log
-          grep -F 'PASS closure_summary_closed_8' p0-residual-closure.log
-          grep -F 'PASS closure_summary_residual_6' p0-residual-closure.log
+          grep -F 'PASS closure_summary_closed_9' p0-residual-closure.log
+          grep -F 'PASS closure_summary_residual_5' p0-residual-closure.log
           grep -F 'PASS account_session_proof_success' p0-residual-closure.log
           grep -F 'PASS authorization_isolation_proof_success' p0-residual-closure.log
+          grep -F 'PASS receipt_nonphysical_proof_success' p0-residual-closure.log
           grep -F 'PASS all_f5_01_through_f5_14_are_covered' p0-residual-closure.log
           grep -F 'P0_RESIDUAL_CLOSURE_GREEN' p0-residual-closure.log
 
