@@ -10,6 +10,7 @@ independent from receipt import order while preserving the existing location mod
 
 from __future__ import annotations
 
+from decimal import Decimal
 import uuid
 
 from fastapi import HTTPException
@@ -62,7 +63,7 @@ def require_household_article(conn, household_id: str, household_article_id: str
     return dict(row)
 
 
-def get_inventory_total_by_household_article(conn, household_id: str, household_article_id: str) -> int:
+def get_inventory_total_by_household_article(conn, household_id: str, household_article_id: str) -> Decimal:
     article = require_household_article(conn, household_id, household_article_id)
     row = conn.execute(
         text(
@@ -79,7 +80,7 @@ def get_inventory_total_by_household_article(conn, household_id: str, household_
             "household_article_id": str(article["id"]),
         },
     ).mappings().first()
-    return int((row or {}).get("total_quantity") or 0)
+    return Decimal(str((row or {}).get("total_quantity") or 0))
 
 
 def _table_exists(conn, table_name: str) -> bool:
