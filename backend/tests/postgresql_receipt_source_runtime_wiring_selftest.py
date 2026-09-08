@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 import uuid
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from app.db import engine
 import app.main as main
@@ -43,11 +45,29 @@ def main_test() -> int:
             {"id": household_id, "naam": household_name},
         )
 
-    source = main.ensure_household_email_source(household_id)
+    insert_barrier = Barrier(2)
+
+    def synchronize_email_source_inserts(conn, cursor, statement, parameters, context, executemany) -> None:
+        if "INSERT INTO receipt_sources" not in str(statement):
+            return
+        insert_barrier.wait(timeout=10)
+
+    event.listen(engine, "before_cursor_execute", synchronize_email_source_inserts)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(main.ensure_household_email_source, household_id) for _ in range(2)]
+            ensured_sources = [future.result(timeout=30) for future in futures]
+    finally:
+        event.remove(engine, "before_cursor_execute", synchronize_email_source_inserts)
+
+    assert len(ensured_sources) == 2, ensured_sources
+    expected_source_id = f"{household_id}-email-route"
+    assert all(str(item.get("id") or "") == expected_source_id for item in ensured_sources), ensured_sources
+    source = ensured_sources[0]
     source_id = str(source.get("id") or "").strip()
     route_address = str(source.get("route_address") or "").strip()
 
-    assert source_id == f"{household_id}-email-route", source
+    assert source_id == expected_source_id, source
     assert str(source.get("household_id") or "") == household_id, source
     assert str(source.get("type") or "") == "email", source
     assert bool(source.get("is_active")) is True, source
@@ -64,7 +84,20 @@ def main_test() -> int:
             ),
             {"id": source_id},
         ).mappings().one()
+        source_count = int(
+            conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM receipt_sources
+                    WHERE household_id = :household_id AND type = 'email'
+                    """
+                ),
+                {"household_id": household_id},
+            ).scalar_one()
+        )
 
+    assert source_count == 1, source_count
     assert str(persisted["household_id"]) == household_id, persisted
     assert str(persisted["type"]) == "email", persisted
     assert str(persisted["source_path"]) == route_address, persisted
@@ -118,6 +151,7 @@ def main_test() -> int:
     print("PASS receipt_source_helper_is_wired_at_runtime_startup")
     print("PASS receipt_email_source_is_persisted_in_postgresql")
     print("PASS receipt_email_source_is_household_scoped")
+    print("PASS receipt_email_source_concurrent_ensure_is_idempotent")
     print("PASS eml_import_uses_configured_receipt_source")
     print("PASS receipt_source_unconfigured_runtime_error_is_eliminated")
     print("PASS postgresql_runtime_is_dml_only")

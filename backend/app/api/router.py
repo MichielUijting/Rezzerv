@@ -26,6 +26,10 @@ from app.api.legacy_household_member_creation_closure import (
     create_legacy_household_member_creation_closure_router,
     retire_legacy_household_member_create_route_from_loaded_main,
 )
+from app.api.picnic_email_import_source_closure import (
+    create_picnic_email_import_source_closure_router,
+    retire_legacy_picnic_email_import_route_from_loaded_main,
+)
 from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
 from app.api.platform_audit_routes import router as platform_audit_router
 from app.api.platform_authorizations_routes import router as platform_authorizations_router
@@ -59,6 +63,11 @@ from app.services.platform_user_suspension_service import (
 # is mounted; GET/PUT/DELETE member management remains available.
 retire_legacy_household_member_create_route_from_loaded_main()
 
+# The historical Picnic EML route fabricated a receipt source id that is not
+# persisted under the PostgreSQL source FK authority. Retire exactly that route
+# before mounting the replacement that uses the canonical household email source.
+retire_legacy_picnic_email_import_route_from_loaded_main()
+
 _main_module = sys.modules.get("app.main")
 if _main_module is not None and hasattr(_main_module, "create_inventory_event"):
     install_inventory_location_event_policy_patch(_main_module)
@@ -66,6 +75,7 @@ if _main_module is not None and hasattr(_main_module, "create_inventory_event"):
 household_invitation_router = create_household_invitation_router(engine)
 household_invitation_acceptance_router = create_household_invitation_acceptance_router(engine)
 legacy_household_member_creation_closure_router = create_legacy_household_member_creation_closure_router()
+picnic_email_import_source_closure_router = create_picnic_email_import_source_closure_router()
 session_household_router = create_session_household_router(engine)
 
 # Alembic owns platform feature-flag persistence; runtime startup validates only.
@@ -88,6 +98,7 @@ api_router.include_router(household_capability_expansion_router)
 api_router.include_router(household_invitation_router)
 api_router.include_router(household_invitation_acceptance_router)
 api_router.include_router(legacy_household_member_creation_closure_router)
+api_router.include_router(picnic_email_import_source_closure_router)
 api_router.include_router(session_household_router)
 api_router.include_router(loyalty_stamp_router)
 api_router.include_router(support_message_router)

@@ -1,0 +1,290 @@
+name: P0 receipt nonphysical full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/main.py'
+      - 'backend/app/receipt_ingestion/**'
+      - 'backend/app/services/**/*receipt*'
+      - 'backend/app/services/**/*inventory*'
+      - 'backend/app/testing/receipt_parsing/raw/Jumbo_koopzegels.txt'
+      - 'frontend/src/features/kassa/**'
+      - 'frontend/src/features/receipts/**'
+      - 'frontend/src/features/articles/**'
+      - 'frontend/src/pages/Voorraad.jsx'
+      - 'frontend/tests/e2e/p0-receipt-nonphysical.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/p0-receipt-nonphysical-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-receipt-nonphysical-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p0-receipt-nonphysical:
+    name: P0 nonphysical receipt without inventory mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic nonphysical receipt identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="P0-Nonphysical-${suffix}-Pass!"
+          echo "PLAYWRIGHT_P0_NONPHYSICAL_EMAIL=p0-nonphysical-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_NONPHYSICAL_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_NONPHYSICAL_HOUSEHOLD=P0 Nonphysical ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Guard browser authority against core route mocks
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/p0-receipt-nonphysical.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'P0 nonphysical authority mag kern-API niet mocken of via request-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          grep -F "setInputFiles(path)" "$spec"
+          grep -F "getByRole('button', { name: 'Goedkeuren', exact: true }).click()" "$spec"
+          grep -F "getByTestId('receipt-process-button').click()" "$spec"
+          grep -F "not.toContainText(/KOOPZEGELS/i)" "$spec"
+          echo 'P0_NONPHYSICAL_NO_CORE_MOCKS_GREEN'
+
+      - name: Build and start real frontend backend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove production-like PostgreSQL runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python -u - <<'PY' | tee p0-nonphysical-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert alembic_head
+          print(f'runtime_user={current_user}')
+          print(f'alembic_head={alembic_head}')
+          print('P0_NONPHYSICAL_POSTGRESQL_BOUNDARY_GREEN')
+          PY
+
+      - name: Run nonphysical receipt through the real browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_NONPHYSICAL_EMAIL="$PLAYWRIGHT_P0_NONPHYSICAL_EMAIL" \
+            -e PLAYWRIGHT_P0_NONPHYSICAL_PASSWORD="$PLAYWRIGHT_P0_NONPHYSICAL_PASSWORD" \
+            -e PLAYWRIGHT_P0_NONPHYSICAL_HOUSEHOLD="$PLAYWRIGHT_P0_NONPHYSICAL_HOUSEHOLD" \
+            -e PLAYWRIGHT_P0_NONPHYSICAL_FIXTURE=/fixtures/Jumbo_koopzegels.txt \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -v "$GITHUB_WORKSPACE/backend/app/testing/receipt_parsing/raw:/fixtures:ro" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-nonphysical.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-nonphysical-browser.log"
+          grep -F 'P0_NONPHYSICAL_RECEIPT_BROWSER_GREEN' frontend/p0-nonphysical-browser.log
+          grep -F 'P0_NONPHYSICAL_NO_INVENTORY_MUTATION_BROWSER_GREEN' frontend/p0-nonphysical-browser.log
+          test -s frontend/p0-nonphysical-browser-proof.json
+
+      - name: Capture browser identities
+        shell: bash
+        run: |
+          proof='frontend/p0-nonphysical-browser-proof.json'
+          for key in householdId receiptId batchId processedPhysicalLineId processedPhysicalEventId targetLocationId; do
+            value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
+            test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
+            case "$key" in
+              householdId) echo "P0_NONPHYSICAL_HOUSEHOLD_ID=$value" >> "$GITHUB_ENV" ;;
+              receiptId) echo "P0_NONPHYSICAL_RECEIPT_ID=$value" >> "$GITHUB_ENV" ;;
+              batchId) echo "P0_NONPHYSICAL_BATCH_ID=$value" >> "$GITHUB_ENV" ;;
+              processedPhysicalLineId) echo "P0_NONPHYSICAL_PHYSICAL_LINE_ID=$value" >> "$GITHUB_ENV" ;;
+              processedPhysicalEventId) echo "P0_NONPHYSICAL_PHYSICAL_EVENT_ID=$value" >> "$GITHUB_ENV" ;;
+              targetLocationId) echo "P0_NONPHYSICAL_LOCATION_ID=$value" >> "$GITHUB_ENV" ;;
+            esac
+          done
+
+      - name: Verify exact PostgreSQL nonphysical end state
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e P0_HOUSEHOLD_ID="$P0_NONPHYSICAL_HOUSEHOLD_ID" \
+            -e P0_RECEIPT_ID="$P0_NONPHYSICAL_RECEIPT_ID" \
+            -e P0_BATCH_ID="$P0_NONPHYSICAL_BATCH_ID" \
+            -e P0_PHYSICAL_LINE_ID="$P0_NONPHYSICAL_PHYSICAL_LINE_ID" \
+            -e P0_PHYSICAL_EVENT_ID="$P0_NONPHYSICAL_PHYSICAL_EVENT_ID" \
+            backend python -u - <<'PY' 2>&1 | tee p0-nonphysical-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          household_id = os.environ['P0_HOUSEHOLD_ID'].strip()
+          receipt_id = os.environ['P0_RECEIPT_ID'].strip()
+          batch_id = os.environ['P0_BATCH_ID'].strip()
+          physical_line_id = os.environ['P0_PHYSICAL_LINE_ID'].strip()
+          physical_event_id = os.environ['P0_PHYSICAL_EVENT_ID'].strip()
+
+          with engine.begin() as conn:
+              receipt = conn.execute(text('''
+                  SELECT household_id, approved_at, total_amount
+                  FROM receipt_tables WHERE id = :receipt_id
+              '''), {'receipt_id': receipt_id}).mappings().one()
+              assert str(receipt['household_id']) == household_id, receipt
+              assert receipt['approved_at'] is not None, receipt
+
+              loyalty_rows = conn.execute(text('''
+                  SELECT id, raw_label, normalized_label, line_role, inventory_eligible
+                  FROM receipt_table_lines
+                  WHERE receipt_table_id = :receipt_id
+                    AND upper(COALESCE(raw_label, '')) LIKE '%KOOPZEGEL%'
+                  ORDER BY line_index ASC, id ASC
+              '''), {'receipt_id': receipt_id}).mappings().all()
+              assert len(loyalty_rows) == 1, loyalty_rows
+              loyalty = loyalty_rows[0]
+              assert str(loyalty['line_role']) == 'loyalty', loyalty
+              assert bool(loyalty['inventory_eligible']) is False, loyalty
+              loyalty_ref = f"receipt-line:{loyalty['id']}"
+
+              loyalty_purchase_lines = conn.execute(text('''
+                  SELECT id, processing_status, processed_event_id
+                  FROM purchase_import_lines
+                  WHERE batch_id = :batch_id AND external_line_ref = :source_ref
+              '''), {'batch_id': batch_id, 'source_ref': loyalty_ref}).mappings().all()
+              assert loyalty_purchase_lines == [], loyalty_purchase_lines
+
+              physical_line = conn.execute(text('''
+                  SELECT id, external_line_ref, processing_status, processed_event_id,
+                         matched_household_article_id
+                  FROM purchase_import_lines
+                  WHERE id = :line_id AND batch_id = :batch_id
+              '''), {'line_id': physical_line_id, 'batch_id': batch_id}).mappings().one()
+              assert str(physical_line['processing_status']) == 'processed', physical_line
+              assert str(physical_line['processed_event_id']) == physical_event_id, physical_line
+              assert str(physical_line['external_line_ref']).startswith('receipt-line:'), physical_line
+              assert physical_line['matched_household_article_id'] is not None, physical_line
+
+              physical_receipt_line_id = str(physical_line['external_line_ref']).split(':', 1)[1]
+              physical_receipt_line = conn.execute(text('''
+                  SELECT id, raw_label, line_role, inventory_eligible
+                  FROM receipt_table_lines
+                  WHERE id = :line_id AND receipt_table_id = :receipt_id
+              '''), {'line_id': physical_receipt_line_id, 'receipt_id': receipt_id}).mappings().one()
+              assert str(physical_receipt_line['line_role']) == 'product', physical_receipt_line
+              assert bool(physical_receipt_line['inventory_eligible']) is True, physical_receipt_line
+
+              physical_event = conn.execute(text('''
+                  SELECT id, household_id, household_article_id, event_type, source
+                  FROM inventory_events WHERE id = :event_id
+              '''), {'event_id': physical_event_id}).mappings().one()
+              assert str(physical_event['household_id']) == household_id, physical_event
+              assert str(physical_event['household_article_id']) == str(physical_line['matched_household_article_id']), physical_event
+              assert str(physical_event['event_type']) == 'purchase', physical_event
+              assert str(physical_event['source']) == 'store_import', physical_event
+
+              physical_inventory = conn.execute(text('''
+                  SELECT COUNT(*) FROM inventory
+                  WHERE household_id = :household_id
+                    AND household_article_id = :article_id
+                    AND COALESCE(aantal, 0) > 0
+              '''), {'household_id': household_id, 'article_id': str(physical_line['matched_household_article_id'])}).scalar_one()
+              assert int(physical_inventory) >= 1, physical_inventory
+
+              loyalty_articles = int(conn.execute(text('''
+                  SELECT COUNT(*) FROM household_articles
+                  WHERE household_id = :household_id
+                    AND lower(COALESCE(naam, '')) LIKE '%koopzegel%'
+              '''), {'household_id': household_id}).scalar_one())
+              loyalty_inventory = int(conn.execute(text('''
+                  SELECT COUNT(*) FROM inventory
+                  WHERE household_id = :household_id
+                    AND lower(COALESCE(naam, '')) LIKE '%koopzegel%'
+              '''), {'household_id': household_id}).scalar_one())
+              loyalty_events = int(conn.execute(text('''
+                  SELECT COUNT(*) FROM inventory_events
+                  WHERE household_id = :household_id
+                    AND lower(COALESCE(article_name, '')) LIKE '%koopzegel%'
+              '''), {'household_id': household_id}).scalar_one())
+              assert loyalty_articles == 0, loyalty_articles
+              assert loyalty_inventory == 0, loyalty_inventory
+              assert loyalty_events == 0, loyalty_events
+
+          print(f'loyalty_receipt_line_id={loyalty["id"]}')
+          print(f'loyalty_source_ref={loyalty_ref}')
+          print('loyalty_purchase_import_lines=0')
+          print('loyalty_inventory_rows=0')
+          print('loyalty_inventory_events=0')
+          print('physical_purchase_event=1')
+          print('P0_NONPHYSICAL_POSTGRESQL_END_STATE_GREEN')
+          PY
+
+      - name: Upload P0 nonphysical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-receipt-nonphysical-evidence
+          path: |
+            p0-nonphysical-postgresql-boundary.log
+            p0-nonphysical-postgresql-end-state.log
+            frontend/p0-nonphysical-browser.log
+            frontend/p0-nonphysical-browser-proof.json
+            frontend/test-results/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps || true
+          docker compose logs --no-color --tail=500 backend || true
+          docker compose logs --no-color --tail=250 frontend || true
+          docker compose logs --no-color --tail=250 postgres || true
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+      - name: P0 nonphysical receipt gate marker
+        run: echo 'P0_RECEIPT_NONPHYSICAL_FULLSTACK_POSTGRESQL_GREEN'

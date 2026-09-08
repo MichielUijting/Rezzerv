@@ -24,8 +24,8 @@
   },
   "summary": {
     "total_p0_scenarios": 14,
-    "closed": 8,
-    "residual": 6
+    "closed": 9,
+    "residual": 5
   },
   "scenarios": [
     {
@@ -115,19 +115,23 @@
     },
     {
       "id": "P0-RECEIPT-INVENTORY-ALMOSTOUT",
-      "status": "residual",
+      "status": "closed",
       "evidence": [
         "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
         ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml",
         "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
         ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
         "frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js",
-        ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml"
+        ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml",
+        "frontend/tests/e2e/p0-receipt-nonphysical.fullstack.spec.js",
+        ".github/workflows/p0-receipt-nonphysical-fullstack-postgresql-validation.yml"
       ],
-      "closure_note": "normale bon, locaties AAN/UIT, herverwerking/idempotentie en Bijna-op NEE->JA zijn bewezen",
-      "residual_scope": [
-        "koopzegel/niet-fysieke receiptvariant als echte L4-keten zonder voorraadmutatie"
-      ]
+      "closure_note": "normale bon, locaties AAN/UIT, herverwerking/idempotentie, Bijna-op NEE->JA en de koopzegel/niet-fysieke receiptvariant als echte L4-keten zonder voorraadmutatie zijn bewezen",
+      "proof": {
+        "workflow_run_id": 34215252124,
+        "candidate_sha": "efad750f0a008b0b7885d82bde490072885b0953",
+        "conclusion": "success"
+      }
     },
     {
       "id": "P0-KASSA-REVIEW",
