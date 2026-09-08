@@ -26,7 +26,7 @@ from .postgresql_legacy_production_rebuild import (
 )
 
 
-HEAD_REVISION = "20260903_01"
+HEAD_REVISION = "20260908_01"
 PURCHASE_IMPORT_LINES_TABLE = "purchase_import_lines"
 PURCHASE_IMPORT_QUANTITY_COLUMN = "quantity_raw"
 
