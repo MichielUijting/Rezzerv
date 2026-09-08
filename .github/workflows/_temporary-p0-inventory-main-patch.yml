@@ -1,4 +1,4 @@
-name: Temporary P0 Inventory main.py patch
+name: Temporary P0 Inventory authority alignment
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  patch-main:
+  align-authorities:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,34 +19,77 @@ jobs:
           ref: codex/p0-inventory-l4-closure
           fetch-depth: 0
 
-      - name: Apply exact Decimal write fix
+      - name: Align exact Alembic head authorities
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path('backend/app/main.py')
-          source = path.read_text(encoding='utf-8')
-          old = '{"id": str(inventory_id), "new_quantity": int(new_quantity)},'
-          new = '{"id": str(inventory_id), "new_quantity": new_quantity},'
-          count = source.count(old)
-          if count != 1:
-              raise SystemExit(f'Expected exactly one Decimal-truncating write, found {count}')
-          path.write_text(source.replace(old, new, 1), encoding='utf-8')
-          print('P0_INVENTORY_MAIN_DECIMAL_WRITE_PATCH_GREEN')
-          PY
-          git diff --check
-          git diff -- backend/app/main.py
+          replacements = [
+              (
+                  Path('backend/tests/household_invitation_migrated_fixture.py'),
+                  'HEAD_REVISION = "20260903_01"',
+                  'HEAD_REVISION = "20260908_01"',
+              ),
+              (
+                  Path('backend/tests/support_message_migrated_fixture.py'),
+                  'HEAD_REVISION = "20260903_01"',
+                  'HEAD_REVISION = "20260908_01"',
+              ),
+              (
+                  Path('.github/workflows/postgresql-runtime-startup-schema-authority.yml'),
+                  "'revision': '20260903_01'",
+                  "'revision': '20260908_01'",
+              ),
+              (
+                  Path('backend/app/maintenance/postgresql_legacy_production_adoption.py'),
+                  'HEAD_REVISION = "20260903_01"',
+                  'HEAD_REVISION = "20260908_01"',
+              ),
+              (
+                  Path('backend/app/maintenance/postgresql_legacy_production_rebuild.py'),
+                  'HEAD_REVISION = "20260902_01"',
+                  'HEAD_REVISION = "20260908_01"',
+              ),
+          ]
 
-      - name: Commit product fix to PR branch
+          for path, old, new in replacements:
+              source = path.read_text(encoding='utf-8')
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one {old!r}, found {count}')
+              path.write_text(source.replace(old, new, 1), encoding='utf-8')
+              print(f'ALIGNED {path}: {old} -> {new}')
+
+          migration = Path('backend/alembic/versions/20260908_01_inventory_exact_quantity_precision.py').read_text(encoding='utf-8')
+          if 'down_revision = "20260903_01"' not in migration:
+              raise SystemExit('Inventory precision migration no longer points to 20260903_01')
+          print('P0_INVENTORY_ALEMBIC_HEAD_AUTHORITY_ALIGNMENT_GREEN')
+          PY
+
+          git diff --check
+          git diff -- \
+            backend/tests/household_invitation_migrated_fixture.py \
+            backend/tests/support_message_migrated_fixture.py \
+            .github/workflows/postgresql-runtime-startup-schema-authority.yml \
+            backend/app/maintenance/postgresql_legacy_production_adoption.py \
+            backend/app/maintenance/postgresql_legacy_production_rebuild.py
+
+          echo '--- Remaining historical 20260903_01 references (audit only) ---'
+          git grep -n '20260903_01' -- backend .github/workflows || true
+
+      - name: Commit authority fix and remove temporary helper
         shell: bash
         run: |
-          if git diff --quiet -- backend/app/main.py; then
-            echo 'No main.py change to commit'
-            exit 1
-          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend/app/main.py
-          git commit -m 'Preserve exact Decimal inventory writes'
+          git rm .github/workflows/_temporary-p0-inventory-main-patch.yml
+          git add \
+            backend/tests/household_invitation_migrated_fixture.py \
+            backend/tests/support_message_migrated_fixture.py \
+            .github/workflows/postgresql-runtime-startup-schema-authority.yml \
+            backend/app/maintenance/postgresql_legacy_production_adoption.py \
+            backend/app/maintenance/postgresql_legacy_production_rebuild.py
+          git diff --cached --check
+          git commit -m 'Align schema authorities with inventory precision head'
           git push origin HEAD:codex/p0-inventory-l4-closure
