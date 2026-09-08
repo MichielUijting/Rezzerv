@@ -50,6 +50,14 @@ async function reviewUncertainLineThroughBrowser(page, receiptId, lineId) {
   const reviewResponse = await reviewResponsePromise
   expect(reviewResponse.ok()).toBeTruthy()
 
+  // The product intentionally presents successful Kassa feedback as a modal.
+  // Follow the real user path and acknowledge it before the next action rather
+  // than bypassing the overlay with a forced click.
+  const successOverlay = page.getByTestId('kassa-feedback-success-overlay')
+  await expect(successOverlay).toBeVisible()
+  await page.getByTestId('kassa-feedback-success-ok-button').click()
+  await expect(successOverlay).toBeHidden()
+
   const approvalResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === `/api/receipts/${receiptId}/approve`
     && response.request().method() === 'POST'
