@@ -31,6 +31,7 @@ EXPECTED_CLOSED = {
     "P0-ACCOUNT-SESSION",
     "P0-ONBOARDING",
     "P0-HOUSEHOLD-MEMBERSHIP",
+    "P0-AUTHORIZATION-ISOLATION",
     "P0-SETTINGS-PROJECTION",
     "P0-LOCATIONS-POLICY",
     "P0-ARTICLE-IDENTITY",
@@ -99,8 +100,8 @@ def main() -> None:
 
     summary = closure.get("summary", {})
     require(summary.get("total_p0_scenarios") == 14, "closure_summary_total_14")
-    require(summary.get("closed") == len(EXPECTED_CLOSED) == 7, "closure_summary_closed_7")
-    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 7, "closure_summary_residual_7")
+    require(summary.get("closed") == len(EXPECTED_CLOSED) == 8, "closure_summary_closed_8")
+    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 6, "closure_summary_residual_6")
 
     for scenario in closure_scenarios:
         scenario_id = scenario["id"]
@@ -118,6 +119,12 @@ def main() -> None:
     require(account_proof.get("workflow_run_id") == 34163055850, "account_session_proof_run_exact")
     require(account_proof.get("candidate_sha") == "f6b9b2a0105ff67563dcd6e8400e601a3748014b", "account_session_proof_candidate_exact")
     require(account_proof.get("conclusion") == "success", "account_session_proof_success")
+
+    authorization_isolation = next(row for row in closure_scenarios if row.get("id") == "P0-AUTHORIZATION-ISOLATION")
+    authorization_proof = authorization_isolation.get("proof", {})
+    require(authorization_proof.get("workflow_run_id") == 34166819340, "authorization_isolation_proof_run_exact")
+    require(authorization_proof.get("candidate_sha") == "7cea876321a320c5f059649cd7cae9b689a17f65", "authorization_isolation_proof_candidate_exact")
+    require(authorization_proof.get("conclusion") == "success", "authorization_isolation_proof_success")
 
     registry_rows = {row.get("id"): row for row in registry.get("defect_classes", [])}
     require(EXPECTED_F5_IDS <= set(registry_rows), "registry_contains_f5_01_through_f5_14")
