@@ -124,6 +124,7 @@ def ensure_household_email_source(household_id: str) -> dict[str, Any]:
                     """
                     INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
                     VALUES (:id, :household_id, 'email', :label, :source_path, TRUE)
+                    ON CONFLICT(id) DO NOTHING
                     """
                 ),
                 {'id': source_id, 'household_id': effective_household_id, 'label': 'E-mail', 'source_path': route_address},
