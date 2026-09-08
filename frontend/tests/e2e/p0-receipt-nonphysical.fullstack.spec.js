@@ -80,7 +80,7 @@ async function uploadReceiptThroughKassa(page, sourcePath) {
   await page.goto('/kassa/nieuw')
   await expect(page.getByTestId('kassa-add-page')).toBeVisible()
   const importResponsePromise = page.waitForResponse((response) => (
-    new URL(response.url()).pathname === '/api/receipts/import' && response.request().method() === 'POST'
+    new URL(response.url()).pathname === '/api/receipts/picnic-email-import' && response.request().method() === 'POST'
   ), { timeout: 180_000 })
   await page.getByTestId('kassa-manual-file-input').setInputFiles(path)
   const response = await importResponsePromise
