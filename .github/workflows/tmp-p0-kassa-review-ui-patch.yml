@@ -32,44 +32,50 @@ jobs:
           if text.count(function_anchor) != 1:
               raise SystemExit(f'Expected exactly one function anchor, got {text.count(function_anchor)}')
 
-          review_function = r'''  async function markSelectedLinesReviewed() {
-            if (!canEdit || selectedLineIds.length === 0) return
-            try {
-              let updated = null
-              for (const lineId of selectedLineIds) {
-                const draft = lineDrafts[lineId] || {}
-                updated = await fetchJson(`/api/receipts/${encodeURIComponent(receipt.id)}/lines/${encodeURIComponent(lineId)}`, {
-                  method: 'PATCH',
-                  body: JSON.stringify({
-                    article_name: draft.article_name,
-                    quantity: draft.quantity === '' ? null : Number(draft.quantity),
-                    unit: draft.unit,
-                    unit_price: draft.unit_price === '' ? null : Number(draft.unit_price),
-                    line_total: draft.line_total === '' ? null : Number(draft.line_total),
-                    is_validated: true,
-                    is_deleted: Boolean(draft.is_deleted),
-                  }),
-                })
-              }
-              if (updated) onReceiptUpdated?.(updated)
-              setSelectedLineIds([])
-              onFeedback?.('success', 'Geselecteerde bonregels zijn gecontroleerd.')
-            } catch (err) {
-              onFeedback?.('error', normalizeErrorMessage(err?.message) || 'Bonregels konden niet als gecontroleerd worden gemarkeerd.')
-            }
-          }
-
-'''
+          review_function = "\n".join([
+              "  async function markSelectedLinesReviewed() {",
+              "    if (!canEdit || selectedLineIds.length === 0) return",
+              "    try {",
+              "      let updated = null",
+              "      for (const lineId of selectedLineIds) {",
+              "        const draft = lineDrafts[lineId] || {}",
+              "        updated = await fetchJson(`/api/receipts/${encodeURIComponent(receipt.id)}/lines/${encodeURIComponent(lineId)}`, {",
+              "          method: 'PATCH',",
+              "          body: JSON.stringify({",
+              "            article_name: draft.article_name,",
+              "            quantity: draft.quantity === '' ? null : Number(draft.quantity),",
+              "            unit: draft.unit,",
+              "            unit_price: draft.unit_price === '' ? null : Number(draft.unit_price),",
+              "            line_total: draft.line_total === '' ? null : Number(draft.line_total),",
+              "            is_validated: true,",
+              "            is_deleted: Boolean(draft.is_deleted),",
+              "          }),",
+              "        })",
+              "      }",
+              "      if (updated) onReceiptUpdated?.(updated)",
+              "      setSelectedLineIds([])",
+              "      onFeedback?.('success', 'Geselecteerde bonregels zijn gecontroleerd.')",
+              "    } catch (err) {",
+              "      onFeedback?.('error', normalizeErrorMessage(err?.message) || 'Bonregels konden niet als gecontroleerd worden gemarkeerd.')",
+              "    }",
+              "  }",
+              "",
+              "",
+          ])
           text = text.replace(function_anchor, review_function + function_anchor, 1)
 
-          button_anchor = '''      {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}
-      <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>'''
+          button_anchor = "\n".join([
+              '      {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}',
+              '      <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>',
+          ])
           if text.count(button_anchor) != 1:
               raise SystemExit(f'Expected exactly one button anchor, got {text.count(button_anchor)}')
 
-          button_replacement = '''      {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}
-      {canEdit ? <Button type="button" variant="secondary" onClick={markSelectedLinesReviewed} disabled={selectedLineIds.length === 0} data-testid="receipt-lines-mark-reviewed">Alles goed</Button> : null}
-      <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>'''
+          button_replacement = "\n".join([
+              '      {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}',
+              '      {canEdit ? <Button type="button" variant="secondary" onClick={markSelectedLinesReviewed} disabled={selectedLineIds.length === 0} data-testid="receipt-lines-mark-reviewed">Alles goed</Button> : null}',
+              '      <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>',
+          ])
           text = text.replace(button_anchor, button_replacement, 1)
 
           path.write_text(text, encoding='utf-8')
