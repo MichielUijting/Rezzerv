@@ -8,6 +8,7 @@ on:
       - 'backend/alembic/**'
       - 'backend/app/main.py'
       - 'backend/app/api/article_detail_admin_routes.py'
+      - 'backend/app/services/temporal_inventory_service.py'
       - 'backend/tests/p0_inventory_correction_fixture.py'
       - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
       - 'frontend/src/features/articles/tabs/ArticleHistoryTab.jsx'
