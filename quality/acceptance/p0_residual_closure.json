@@ -24,8 +24,8 @@
   },
   "summary": {
     "total_p0_scenarios": 14,
-    "closed": 9,
-    "residual": 5
+    "closed": 10,
+    "residual": 4
   },
   "scenarios": [
     {
@@ -135,18 +135,22 @@
     },
     {
       "id": "P0-KASSA-REVIEW",
-      "status": "residual",
+      "status": "closed",
       "evidence": [
         "backend/tests/kassa_review_api_selftest.py",
         ".github/workflows/kassa-review-api-validation.yml",
+        "backend/tests/p0_kassa_review_fixture.py",
+        "frontend/tests/e2e/p0-kassa-review.fullstack.spec.js",
+        ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml",
         "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
         ".github/workflows/f5-standard-api-error-feedback-regression.yml"
       ],
-      "closure_note": "upload, bonoverzicht, goedkeuring en standaard API-foutfeedback zijn bewezen",
-      "residual_scope": [
-        "onzekere match als echte browserreview",
-        "financiële reviewvariant als echte browserreview"
-      ]
+      "closure_note": "upload, bonoverzicht en bestaande API-authority zijn aangevuld met echte browserreview voor een onzekere artikelmatch en een afzonderlijke financiële afwijking; beide routes lopen via zichtbare Kassa-acties, echte backendmutaties en een exacte PostgreSQL-eindstaat onder DML-only runtime",
+      "proof": {
+        "workflow_run_id": 34234425601,
+        "candidate_sha": "ebdbdd87a3ec4cd6fd774f300ef08f7200da8352",
+        "conclusion": "success"
+      }
     },
     {
       "id": "P0-UNPACKING",
