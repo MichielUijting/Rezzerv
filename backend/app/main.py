@@ -6036,7 +6036,7 @@ def update_inventory_row_quantity(conn, *, inventory_id: str, new_quantity: Deci
             WHERE id = :id
             """
         ),
-        {"id": str(inventory_id), "new_quantity": int(new_quantity)},
+        {"id": str(inventory_id), "new_quantity": new_quantity},
     )
 
 
