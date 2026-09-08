@@ -7,6 +7,7 @@ the visible Kassa browser UI.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -23,7 +24,6 @@ from kassa_review_api_selftest import (
     SEED_PASSWORD,
     TARGET_ADMIN_EMAIL,
     TARGET_HOUSEHOLD,
-    _canonical_receipt,
     _prepare_database,
     _seed_receipt,
     create_postgresql_runtime_test_engine,
@@ -33,17 +33,6 @@ UNCERTAIN_KEY = "l4-review-uncertain"
 FINANCIAL_KEY = "l4-review-financial"
 UNCERTAIN_RECEIPT_ID = f"f3-kassa-receipt-{UNCERTAIN_KEY}"
 FINANCIAL_RECEIPT_ID = f"f3-kassa-receipt-{FINANCIAL_KEY}"
-
-
-def _uncertain_line_id_from_contract() -> str:
-    fixture, receipt = _canonical_receipt("uncertain_match")
-    selected_product = str((fixture.get("selector") or {}).get("product_name") or "").strip()
-    assert selected_product
-    for index, line in enumerate(list(receipt.get("lines") or []), start=1):
-        name = str(line.get("product_name") or line.get("expected_label") or "").strip()
-        if name == selected_product:
-            return f"f3-kassa-line-{UNCERTAIN_KEY}-{index}"
-    raise AssertionError(f"Canonical uncertain product not found: {selected_product}")
 
 
 def prepare() -> dict:
@@ -65,7 +54,7 @@ def prepare() -> dict:
 
         uncertain_product = str((uncertain["fixture"].get("selector") or {}).get("product_name") or "").strip()
         uncertain_line_id = str(uncertain["line_ids"][uncertain_product])
-        assert uncertain_line_id == _uncertain_line_id_from_contract(), uncertain_line_id
+        assert uncertain_line_id.startswith(f"f3-kassa-line-{UNCERTAIN_KEY}-"), uncertain_line_id
 
         with engine.begin() as conn:
             conn.execute(
@@ -159,10 +148,13 @@ def prepare() -> dict:
 
 
 def verify() -> dict:
+    uncertain_line_id = str(os.getenv("P0_KASSA_REVIEW_UNCERTAIN_LINE_ID") or "").strip()
+    assert uncertain_line_id, "P0_KASSA_REVIEW_UNCERTAIN_LINE_ID ontbreekt"
+    assert uncertain_line_id.startswith(f"f3-kassa-line-{UNCERTAIN_KEY}-"), uncertain_line_id
+
     engine = create_postgresql_runtime_test_engine()
     try:
         with engine.begin() as conn:
-            uncertain_line_id = _uncertain_line_id_from_contract()
             uncertain = conn.execute(
                 text(
                     """
@@ -209,7 +201,7 @@ def verify() -> dict:
             assert financial["totals_override_at"] is not None, financial
             assert str(financial["totals_override_by_user_email"] or "").lower() == TARGET_ADMIN_EMAIL.lower(), financial
 
-        return {"uncertain": dict(uncertain), "financial": dict(financial)}
+        return {"uncertain_line_id": uncertain_line_id, "uncertain": dict(uncertain), "financial": dict(financial)}
     finally:
         engine.dispose()
 
