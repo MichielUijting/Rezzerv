@@ -264,7 +264,7 @@ def prepare() -> dict:
                         0.50, 'EUR', 'matched', 'selected',
                         1, :article_id, :target_location_id,
                         'pending', :article_id,
-                        :target_location_id, 'high', 'Canonieke P0 dagartikel-fixture',
+                        :suggested_location_id, 'high', 'Canonieke P0 dagartikel-fixture',
                         TRUE, 'auto', 'auto', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                     )
                     """
@@ -276,6 +276,7 @@ def prepare() -> dict:
                     "quantity": Decimal(str(canonical["purchased_quantity"])),
                     "article_id": ARTICLE_ID,
                     "target_location_id": direct_location_id,
+                    "suggested_location_id": direct_location_id,
                 },
             )
 
