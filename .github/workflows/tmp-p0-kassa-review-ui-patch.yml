@@ -64,19 +64,12 @@ jobs:
           ])
           text = text.replace(function_anchor, review_function + function_anchor, 1)
 
-          button_anchor = "\n".join([
-              '      {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}',
-              '      <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>',
-          ])
+          button_anchor = '                  <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>'
           if text.count(button_anchor) != 1:
               raise SystemExit(f'Expected exactly one button anchor, got {text.count(button_anchor)}')
 
-          button_replacement = "\n".join([
-              '      {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}',
-              '      {canEdit ? <Button type="button" variant="secondary" onClick={markSelectedLinesReviewed} disabled={selectedLineIds.length === 0} data-testid="receipt-lines-mark-reviewed">Alles goed</Button> : null}',
-              '      <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>',
-          ])
-          text = text.replace(button_anchor, button_replacement, 1)
+          review_button = '                  {canEdit ? <Button type="button" variant="secondary" onClick={markSelectedLinesReviewed} disabled={selectedLineIds.length === 0} data-testid="receipt-lines-mark-reviewed">Alles goed</Button> : null}\n'
+          text = text.replace(button_anchor, review_button + button_anchor, 1)
 
           path.write_text(text, encoding='utf-8')
           PY
