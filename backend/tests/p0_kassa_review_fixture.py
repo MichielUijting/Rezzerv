@@ -83,28 +83,26 @@ def prepare() -> dict:
                 text(
                     """
                     UPDATE receipt_table_lines
-                    SET is_validated = TRUE,
-                        reviewed_at = COALESCE(reviewed_at, CURRENT_TIMESTAMP),
-                        reviewed_by_user_email = COALESCE(reviewed_by_user_email, :reviewer)
+                    SET is_validated = TRUE
                     WHERE receipt_table_id = :receipt_id
                     """
                 ),
-                {"receipt_id": FINANCIAL_RECEIPT_ID, "reviewer": TARGET_ADMIN_EMAIL},
+                {"receipt_id": FINANCIAL_RECEIPT_ID},
             )
 
             uncertain_state = conn.execute(
                 text(
                     """
-                    SELECT is_validated, reviewed_at, reviewed_by_user_email
-                    FROM receipt_table_lines
-                    WHERE id = :line_id
+                    SELECT rtl.is_validated, rt.reviewed_at
+                    FROM receipt_table_lines rtl
+                    JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+                    WHERE rtl.id = :line_id
                     """
                 ),
                 {"line_id": uncertain_line_id},
             ).mappings().one()
             assert not bool(uncertain_state["is_validated"]), uncertain_state
             assert uncertain_state["reviewed_at"] is None, uncertain_state
-            assert uncertain_state["reviewed_by_user_email"] is None, uncertain_state
 
             financial_state = conn.execute(
                 text(
@@ -154,8 +152,9 @@ def verify() -> dict:
             uncertain = conn.execute(
                 text(
                     """
-                    SELECT rtl.is_validated, rtl.reviewed_at, rtl.reviewed_by_user_email,
-                           rt.parse_status, rt.approved_at, rt.totals_overridden
+                    SELECT rtl.is_validated, rtl.corrected_raw_label,
+                           rt.reviewed_at, rt.parse_status, rt.approved_at,
+                           rt.approved_by_user_email, rt.totals_overridden
                     FROM receipt_table_lines rtl
                     JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
                     WHERE rtl.id = :line_id
@@ -168,8 +167,9 @@ def verify() -> dict:
                 uncertain = conn.execute(
                     text(
                         """
-                        SELECT rtl.is_validated, rtl.reviewed_at, rtl.reviewed_by_user_email,
-                               rt.parse_status, rt.approved_at, rt.totals_overridden
+                        SELECT rtl.is_validated, rtl.corrected_raw_label,
+                               rt.reviewed_at, rt.parse_status, rt.approved_at,
+                               rt.approved_by_user_email, rt.totals_overridden
                         FROM receipt_table_lines rtl
                         JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
                         WHERE rt.id = :receipt_id
@@ -182,10 +182,11 @@ def verify() -> dict:
                 ).mappings().one()
 
             assert bool(uncertain["is_validated"]), uncertain
+            assert str(uncertain["corrected_raw_label"] or "").strip(), uncertain
             assert uncertain["reviewed_at"] is not None, uncertain
-            assert str(uncertain["reviewed_by_user_email"] or "").lower() == TARGET_ADMIN_EMAIL.lower(), uncertain
             assert str(uncertain["parse_status"]) == "approved", uncertain
             assert uncertain["approved_at"] is not None, uncertain
+            assert str(uncertain["approved_by_user_email"] or "").lower() == TARGET_ADMIN_EMAIL.lower(), uncertain
             assert not bool(uncertain["totals_overridden"]), uncertain
 
             financial = conn.execute(
