@@ -152,7 +152,7 @@ def verify() -> dict:
             uncertain = conn.execute(
                 text(
                     """
-                    SELECT rtl.is_validated, rtl.corrected_raw_label,
+                    SELECT rtl.is_validated,
                            rt.reviewed_at, rt.parse_status, rt.approved_at,
                            rt.approved_by_user_email, rt.totals_overridden
                     FROM receipt_table_lines rtl
@@ -166,8 +166,10 @@ def verify() -> dict:
                 {"receipt_id": UNCERTAIN_RECEIPT_ID},
             ).mappings().one()
 
+            # "Alles goed" means accepting the uncertain match as-is. The
+            # established Kassa contract therefore requires persisted review
+            # state, not a synthetic corrected_raw_label value.
             assert bool(uncertain["is_validated"]), uncertain
-            assert str(uncertain["corrected_raw_label"] or "").strip(), uncertain
             assert uncertain["reviewed_at"] is not None, uncertain
             assert str(uncertain["parse_status"]) == "approved", uncertain
             assert uncertain["approved_at"] is not None, uncertain
