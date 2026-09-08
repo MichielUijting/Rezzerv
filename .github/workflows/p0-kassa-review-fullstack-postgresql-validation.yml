@@ -8,8 +8,10 @@ on:
       - 'backend/alembic/**'
       - 'backend/app/main.py'
       - 'backend/app/services/**/*receipt*'
+      - 'backend/app/testing/receipt_acceptance/baseline.json'
       - 'backend/tests/kassa_review_api_selftest.py'
       - 'backend/tests/p0_kassa_review_fixture.py'
+      - 'quality/acceptance/canonical_scenario_catalog.json'
       - 'frontend/src/features/receipts/KassaPage.jsx'
       - 'frontend/tests/e2e/p0-kassa-review.fullstack.spec.js'
       - 'frontend/playwright.fullstack.config.js'
@@ -94,6 +96,17 @@ jobs:
           print(f'alembic_head={alembic_head}')
           print('P0_KASSA_REVIEW_POSTGRESQL_BOUNDARY_GREEN')
           PY
+
+      - name: Stage canonical acceptance fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend mkdir -p /quality/acceptance /backend/app/testing/receipt_acceptance
+          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
+          docker compose cp backend/app/testing/receipt_acceptance/baseline.json backend:/backend/app/testing/receipt_acceptance/baseline.json
+          docker compose exec -T backend test -s /quality/acceptance/canonical_scenario_catalog.json
+          docker compose exec -T backend test -s /backend/app/testing/receipt_acceptance/baseline.json
+          echo 'P0_KASSA_REVIEW_CANONICAL_FIXTURES_STAGED_GREEN'
 
       - name: Prepare deterministic review receipts
         shell: bash
