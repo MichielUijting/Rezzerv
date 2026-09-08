@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
 
 const email = process.env.PLAYWRIGHT_P0_NONPHYSICAL_EMAIL
@@ -55,7 +55,28 @@ function receiptIdFromImport(payload) {
   return String(payload?.receipt_table_id || payload?.receiptTableId || payload?.existing_receipt?.receipt_table_id || '').trim()
 }
 
-async function uploadReceiptThroughKassa(page, path) {
+function supportedEmlFixture(sourcePath) {
+  const body = readFileSync(sourcePath, 'utf8').trimEnd()
+  const eml = [
+    'From: kassabon@jumbo.example',
+    'To: rezzerv-test@example.com',
+    'Subject: Jumbo kassabon met koopzegels',
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    body,
+    '',
+  ].join('\r\n')
+  return {
+    name: `p0-nonphysical-jumbo-${Date.now()}.eml`,
+    mimeType: 'message/rfc822',
+    buffer: Buffer.from(eml, 'utf8'),
+  }
+}
+
+async function uploadReceiptThroughKassa(page, sourcePath) {
+  const path = supportedEmlFixture(sourcePath)
   await page.goto('/kassa/nieuw')
   await expect(page.getByTestId('kassa-add-page')).toBeVisible()
   const importResponsePromise = page.waitForResponse((response) => (
