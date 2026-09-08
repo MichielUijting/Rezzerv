@@ -62,7 +62,9 @@ test('P0 Inventory corrects exact non-financial decimal through visible stock an
 
   const form = page.getByTestId('article-stock-mutation-form')
   await expect(form).toBeVisible()
-  await form.getByLabel('Nieuwe hoeveelheid').fill(expectedTargetQuantity)
+  const quantityInput = form.getByLabel('Nieuwe hoeveelheid')
+  await expect(quantityInput).toHaveAttribute('step', 'any')
+  await quantityInput.fill(expectedTargetQuantity)
   await form.getByLabel('Reden / notitie').fill(expectedNote)
 
   const mutationResponsePromise = page.waitForResponse((response) => (
