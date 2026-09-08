@@ -1,0 +1,199 @@
+name: P0 Unpacking full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/main.py'
+      - 'backend/app/services/day_article*.py'
+      - 'backend/app/services/canonical_inventory_identity_service.py'
+      - 'backend/tests/day_article_release_a_selftest.py'
+      - 'backend/tests/p0_unpacking_fixture.py'
+      - 'backend/tests/p0_unpacking_receipt_bridge.py'
+      - 'quality/acceptance/canonical_scenario_catalog.json'
+      - 'quality/acceptance/p0_residual_closure.json'
+      - 'frontend/src/features/stores/StoreBatchDetailPage.jsx'
+      - 'frontend/src/features/receipts/dayArticleHandling.js'
+      - 'frontend/tests/e2e/p0-unpacking.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/p0-unpacking-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-unpacking-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p0-unpacking:
+    name: P0 day article Direct browser chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Guard browser authority against core route shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/p0-unpacking.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'P0 Uitpakken authority mag kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          grep -F "getByTestId('receipt-process-button')" "$spec"
+          grep -F "toContainText('Direct')" "$spec"
+          grep -F "/api/purchase-import-batches/\${expectedBatchId}/process" "$spec"
+          echo 'P0_UNPACKING_NO_CORE_SHORTCUTS_GREEN'
+
+      - name: Build real frontend backend and PostgreSQL images
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+
+      - name: Start real frontend backend and PostgreSQL
+        run: docker compose up -d --no-build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove production-like PostgreSQL runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python -u - <<'PY' | tee p0-unpacking-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert alembic_head
+          print(f'runtime_user={current_user}')
+          print(f'alembic_head={alembic_head}')
+          print('P0_UNPACKING_POSTGRESQL_BOUNDARY_GREEN')
+          PY
+
+      - name: Stage canonical acceptance fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend mkdir -p /quality/acceptance
+          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
+          docker compose exec -T backend test -s /quality/acceptance/canonical_scenario_catalog.json
+          echo 'P0_UNPACKING_CANONICAL_FIXTURE_STAGED_GREEN'
+
+      - name: Prepare canonical day article Uitpakken state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python /app/tests/p0_unpacking_fixture.py prepare | tee p0-unpacking-fixture.log
+          grep -F 'P0_UNPACKING_FIXTURE_GREEN' p0-unpacking-fixture.log
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/p0_unpacking_receipt_bridge.py | tee p0-unpacking-receipt-bridge.log
+          grep -F 'P0_UNPACKING_RECEIPT_BRIDGE_GREEN' p0-unpacking-receipt-bridge.log
+          fixture_json="$(grep '^P0_UNPACKING_FIXTURE=' p0-unpacking-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          echo "PLAYWRIGHT_P0_UNPACKING_EMAIL=$(jq -r '.email' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_UNPACKING_PASSWORD=$(jq -r '.password' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_UNPACKING_BATCH_ID=$(jq -r '.batch_id' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_UNPACKING_LINE_ID=$(jq -r '.line_id' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_UNPACKING_ARTICLE_NAME=$(jq -r '.article_name' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "::add-mask::$(jq -r '.password' <<<"$fixture_json")"
+
+      - name: Process canonical day article through real Uitpakken browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_UNPACKING_EMAIL="$PLAYWRIGHT_P0_UNPACKING_EMAIL" \
+            -e PLAYWRIGHT_P0_UNPACKING_PASSWORD="$PLAYWRIGHT_P0_UNPACKING_PASSWORD" \
+            -e PLAYWRIGHT_P0_UNPACKING_BATCH_ID="$PLAYWRIGHT_P0_UNPACKING_BATCH_ID" \
+            -e PLAYWRIGHT_P0_UNPACKING_LINE_ID="$PLAYWRIGHT_P0_UNPACKING_LINE_ID" \
+            -e PLAYWRIGHT_P0_UNPACKING_ARTICLE_NAME="$PLAYWRIGHT_P0_UNPACKING_ARTICLE_NAME" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-unpacking.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee p0-unpacking-browser.log"
+
+      - name: Prove exact PostgreSQL Direct-consumption end state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e P0_UNPACKING_BATCH_ID="$PLAYWRIGHT_P0_UNPACKING_BATCH_ID" \
+            -e P0_UNPACKING_LINE_ID="$PLAYWRIGHT_P0_UNPACKING_LINE_ID" \
+            backend python /app/tests/p0_unpacking_fixture.py verify | tee p0-unpacking-postgresql-proof.log
+          grep -F 'P0_UNPACKING_POSTGRESQL_GREEN' p0-unpacking-postgresql-proof.log
+
+      - name: Verify browser proof markers
+        shell: bash
+        run: |
+          grep -F 'P0_UNPACKING_DAY_ARTICLE_BROWSER_GREEN' frontend/p0-unpacking-browser.log
+          grep -F 'P0_UNPACKING_DIRECT_CONSUMPTION_BROWSER_GREEN' frontend/p0-unpacking-browser.log
+          test -s frontend/p0-unpacking-browser-proof.json
+          echo 'P0_UNPACKING_BROWSER_PROOF_GREEN'
+
+      - name: Upload P0 Uitpakken evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-unpacking-postgresql-evidence
+          path: |
+            p0-unpacking-postgresql-boundary.log
+            p0-unpacking-fixture.log
+            p0-unpacking-receipt-bridge.log
+            p0-unpacking-postgresql-proof.log
+            frontend/p0-unpacking-browser.log
+            frontend/p0-unpacking-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: P0 Uitpakken gate marker
+        run: echo 'P0_UNPACKING_FULLSTACK_POSTGRESQL_GREEN'
+
+      - name: Dump diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend || true
+          docker compose logs --no-color --tail=200 frontend || true
+
+      - name: Cleanup containers and volumes
+        if: always()
+        run: docker compose down -v --remove-orphans
