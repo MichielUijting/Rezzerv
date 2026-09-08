@@ -1,0 +1,52 @@
+name: Temporary P0 Inventory main.py patch
+
+on:
+  push:
+    branches:
+      - codex/p0-inventory-l4-closure
+    paths:
+      - .github/workflows/_temporary-p0-inventory-main-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/p0-inventory-l4-closure
+          fetch-depth: 0
+
+      - name: Apply exact Decimal write fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          source = path.read_text(encoding='utf-8')
+          old = '{"id": str(inventory_id), "new_quantity": int(new_quantity)},'
+          new = '{"id": str(inventory_id), "new_quantity": new_quantity},'
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one Decimal-truncating write, found {count}')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          print('P0_INVENTORY_MAIN_DECIMAL_WRITE_PATCH_GREEN')
+          PY
+          git diff --check
+          git diff -- backend/app/main.py
+
+      - name: Commit product fix to PR branch
+        shell: bash
+        run: |
+          if git diff --quiet -- backend/app/main.py; then
+            echo 'No main.py change to commit'
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/main.py
+          git commit -m 'Preserve exact Decimal inventory writes'
+          git push origin HEAD:codex/p0-inventory-l4-closure
