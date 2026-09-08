@@ -7,8 +7,17 @@ the visible Kassa browser UI.
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
 from sqlalchemy import text
+
+# The backend container executes this file from /app/tests. Keep /app itself on
+# sys.path as well so imports made by the reused Kassa API authority can resolve
+# the real ``app`` package.
+APP_ROOT = Path(__file__).resolve().parents[1]
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
 
 from kassa_review_api_selftest import (
     SEED_PASSWORD,
@@ -67,6 +76,21 @@ def prepare() -> dict:
                 ),
                 {"receipt_id": FINANCIAL_RECEIPT_ID},
             )
+            # The financial variant starts after ordinary line review. Seed that
+            # precondition explicitly so its only remaining blocker is the
+            # deliberately inconsistent receipt total.
+            conn.execute(
+                text(
+                    """
+                    UPDATE receipt_table_lines
+                    SET is_validated = TRUE,
+                        reviewed_at = COALESCE(reviewed_at, CURRENT_TIMESTAMP),
+                        reviewed_by_user_email = COALESCE(reviewed_by_user_email, :reviewer)
+                    WHERE receipt_table_id = :receipt_id
+                    """
+                ),
+                {"receipt_id": FINANCIAL_RECEIPT_ID, "reviewer": TARGET_ADMIN_EMAIL},
+            )
 
             uncertain_state = conn.execute(
                 text(
@@ -95,6 +119,20 @@ def prepare() -> dict:
             assert str(financial_state["parse_status"]) == "review_needed", financial_state
             assert not bool(financial_state["totals_overridden"]), financial_state
             assert financial_state["approved_at"] is None, financial_state
+
+            financial_unreviewed = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM receipt_table_lines
+                    WHERE receipt_table_id = :receipt_id
+                      AND COALESCE(is_deleted, FALSE) = FALSE
+                      AND COALESCE(is_validated, FALSE) = FALSE
+                    """
+                ),
+                {"receipt_id": FINANCIAL_RECEIPT_ID},
+            ).scalar_one()
+            assert int(financial_unreviewed or 0) == 0, financial_unreviewed
 
         return {
             "household_id": TARGET_HOUSEHOLD,
@@ -174,8 +212,6 @@ def verify() -> dict:
 
 
 def main() -> int:
-    import sys
-
     mode = str(sys.argv[1] if len(sys.argv) > 1 else "prepare").strip().lower()
     if mode == "prepare":
         payload = prepare()
