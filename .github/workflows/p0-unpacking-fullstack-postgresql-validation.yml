@@ -59,8 +59,14 @@ jobs:
           grep -F "/api/purchase-import-batches/\${expectedBatchId}/process" "$spec"
           echo 'P0_UNPACKING_NO_CORE_SHORTCUTS_GREEN'
 
-      - name: Build and start real frontend backend and PostgreSQL
-        run: docker compose up -d --build
+      - name: Build real frontend backend and PostgreSQL images
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+
+      - name: Start real frontend backend and PostgreSQL
+        run: docker compose up -d --no-build
 
       - name: Wait for backend health
         shell: bash
