@@ -11,6 +11,7 @@ on:
       - 'backend/app/services/canonical_inventory_identity_service.py'
       - 'backend/tests/day_article_release_a_selftest.py'
       - 'backend/tests/p0_unpacking_fixture.py'
+      - 'backend/tests/p0_unpacking_receipt_bridge.py'
       - 'quality/acceptance/canonical_scenario_catalog.json'
       - 'quality/acceptance/p0_residual_closure.json'
       - 'frontend/src/features/stores/StoreBatchDetailPage.jsx'
@@ -120,6 +121,8 @@ jobs:
           set -euo pipefail
           docker compose exec -T backend python /app/tests/p0_unpacking_fixture.py prepare | tee p0-unpacking-fixture.log
           grep -F 'P0_UNPACKING_FIXTURE_GREEN' p0-unpacking-fixture.log
+          docker compose exec -T backend python /app/tests/p0_unpacking_receipt_bridge.py | tee p0-unpacking-receipt-bridge.log
+          grep -F 'P0_UNPACKING_RECEIPT_BRIDGE_GREEN' p0-unpacking-receipt-bridge.log
           fixture_json="$(grep '^P0_UNPACKING_FIXTURE=' p0-unpacking-fixture.log | tail -1 | cut -d= -f2-)"
           test -n "$fixture_json"
           echo "PLAYWRIGHT_P0_UNPACKING_EMAIL=$(jq -r '.email' <<<"$fixture_json")" >> "$GITHUB_ENV"
@@ -171,6 +174,7 @@ jobs:
           path: |
             p0-unpacking-postgresql-boundary.log
             p0-unpacking-fixture.log
+            p0-unpacking-receipt-bridge.log
             p0-unpacking-postgresql-proof.log
             frontend/p0-unpacking-browser.log
             frontend/p0-unpacking-browser-proof.json
