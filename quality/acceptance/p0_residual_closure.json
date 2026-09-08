@@ -24,8 +24,8 @@
   },
   "summary": {
     "total_p0_scenarios": 14,
-    "closed": 10,
-    "residual": 4
+    "closed": 11,
+    "residual": 3
   },
   "scenarios": [
     {
@@ -154,19 +154,25 @@
     },
     {
       "id": "P0-UNPACKING",
-      "status": "residual",
+      "status": "closed",
       "evidence": [
         "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
         "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
         "frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js",
         "frontend/tests/e2e/f5-unclassified-unpacking-choice.fullstack.spec.js",
         ".github/workflows/f5-postgresql-unclassified-unpacking-choice-regression.yml",
-        ".github/workflows/f5-postgresql-locationless-unpacking-regression.yml"
+        ".github/workflows/f5-postgresql-locationless-unpacking-regression.yml",
+        "backend/tests/p0_unpacking_fixture.py",
+        "backend/tests/p0_unpacking_receipt_bridge.py",
+        "frontend/tests/e2e/p0-unpacking.fullstack.spec.js",
+        ".github/workflows/p0-unpacking-fullstack-postgresql-validation.yml"
       ],
-      "closure_note": "locaties AAN/UIT, Niet ingedeeld en herverwerking zijn via echte PostgreSQL-browserketens bewezen",
-      "residual_scope": [
-        "dagartikel/direct-consumption als echte L4 Uitpakken-keten"
-      ]
+      "closure_note": "locaties AAN/UIT, Niet ingedeeld en herverwerking zijn aangevuld met het canonieke dagartikel Bananen als echte L4 Uitpakken-keten: een goedgekeurde kassabon wordt via de zichtbare Direct-bestemming verwerkt, waarna PostgreSQL exact RECEIPT plus DIRECT_CONSUMPTION voor hoeveelheid 2 bewijst terwijl de bestaande voorraad 3 blijft en geen Direct-voorraadregel ontstaat",
+      "proof": {
+        "workflow_run_id": 34254866285,
+        "candidate_sha": "8abc6469de611784d4948967b6a66648365a7f76",
+        "conclusion": "success"
+      }
     },
     {
       "id": "P0-INVENTORY",
