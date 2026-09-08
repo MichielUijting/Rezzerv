@@ -157,29 +157,14 @@ def verify() -> dict:
                            rt.approved_by_user_email, rt.totals_overridden
                     FROM receipt_table_lines rtl
                     JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-                    WHERE rtl.id = :line_id
+                    WHERE rt.id = :receipt_id
+                      AND rtl.article_match_status = 'uncertain'
+                    ORDER BY rtl.line_index
+                    LIMIT 1
                     """
                 ),
-                {"line_id": f"f3-kassa-line-{UNCERTAIN_KEY}-1"},
-            ).mappings().first()
-
-            if uncertain is None:
-                uncertain = conn.execute(
-                    text(
-                        """
-                        SELECT rtl.is_validated, rtl.corrected_raw_label,
-                               rt.reviewed_at, rt.parse_status, rt.approved_at,
-                               rt.approved_by_user_email, rt.totals_overridden
-                        FROM receipt_table_lines rtl
-                        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-                        WHERE rt.id = :receipt_id
-                          AND rtl.article_match_status = 'uncertain'
-                        ORDER BY rtl.line_index
-                        LIMIT 1
-                        """
-                    ),
-                    {"receipt_id": UNCERTAIN_RECEIPT_ID},
-                ).mappings().one()
+                {"receipt_id": UNCERTAIN_RECEIPT_ID},
+            ).mappings().one()
 
             assert bool(uncertain["is_validated"]), uncertain
             assert str(uncertain["corrected_raw_label"] or "").strip(), uncertain
