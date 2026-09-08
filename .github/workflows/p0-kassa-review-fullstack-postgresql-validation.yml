@@ -143,7 +143,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose exec -T backend python /app/tests/p0_kassa_review_fixture.py verify | tee p0-kassa-review-postgresql-proof.log
+          docker compose exec -T \
+            -e P0_KASSA_REVIEW_UNCERTAIN_LINE_ID="$PLAYWRIGHT_P0_KASSA_REVIEW_UNCERTAIN_LINE_ID" \
+            backend python /app/tests/p0_kassa_review_fixture.py verify | tee p0-kassa-review-postgresql-proof.log
           grep -F 'P0_KASSA_REVIEW_POSTGRESQL_GREEN' p0-kassa-review-postgresql-proof.log
 
       - name: Verify browser proof markers
