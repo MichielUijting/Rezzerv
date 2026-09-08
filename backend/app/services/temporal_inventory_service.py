@@ -363,7 +363,7 @@ def reconcile_inventory_total(
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
             """
-        ), {"id": str(target_id), "delta": int(delta)})
+        ), {"id": str(target_id), "delta": str(delta)})
 
     return {
         **replay,
