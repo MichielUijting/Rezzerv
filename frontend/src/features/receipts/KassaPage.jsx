@@ -1228,6 +1228,33 @@ async function saveLine(lineId, overrides = null) {
   }
 
 
+  async function markSelectedLinesReviewed() {
+    if (!canEdit || selectedLineIds.length === 0) return
+    try {
+      let updated = null
+      for (const lineId of selectedLineIds) {
+        const draft = lineDrafts[lineId] || {}
+        updated = await fetchJson(`/api/receipts/${encodeURIComponent(receipt.id)}/lines/${encodeURIComponent(lineId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            article_name: draft.article_name,
+            quantity: draft.quantity === '' ? null : Number(draft.quantity),
+            unit: draft.unit,
+            unit_price: draft.unit_price === '' ? null : Number(draft.unit_price),
+            line_total: draft.line_total === '' ? null : Number(draft.line_total),
+            is_validated: true,
+            is_deleted: Boolean(draft.is_deleted),
+          }),
+        })
+      }
+      if (updated) onReceiptUpdated?.(updated)
+      setSelectedLineIds([])
+      onFeedback?.('success', 'Geselecteerde bonregels zijn gecontroleerd.')
+    } catch (err) {
+      onFeedback?.('error', normalizeErrorMessage(err?.message) || 'Bonregels konden niet als gecontroleerd worden gemarkeerd.')
+    }
+  }
+
   async function deleteSelectedLines() {
     if (!canEdit || selectedLineIds.length === 0) return
     try {
@@ -1516,6 +1543,7 @@ async function saveLine(lineId, overrides = null) {
                 <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   {canEdit ? <Button type="button" variant="secondary" onClick={addLine}>{isAddingLine ? 'Nieuwe regel opslaan' : 'Toevoegen'}</Button> : null}
                   {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}
+                  {canEdit ? <Button type="button" variant="secondary" onClick={markSelectedLinesReviewed} disabled={selectedLineIds.length === 0} data-testid="receipt-lines-mark-reviewed">Alles goed</Button> : null}
                   <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
                 </div>
               <div className="rz-kassa-secondary-actions">
