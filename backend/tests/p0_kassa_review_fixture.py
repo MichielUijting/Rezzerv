@@ -57,12 +57,22 @@ def prepare() -> dict:
         assert uncertain_line_id.startswith(f"f3-kassa-line-{UNCERTAIN_KEY}-"), uncertain_line_id
 
         with engine.begin() as conn:
+            # The uncertain-match variant must prove only the explicit review
+            # journey. Normalize its header total to the exact approval formula
+            # used by production so an unrelated financial mismatch cannot turn
+            # this scenario into a totals override as well.
             conn.execute(
                 text(
                     """
-                    UPDATE receipt_tables
-                    SET store_name = 'L4 Onzekere Match'
-                    WHERE id = :receipt_id
+                    UPDATE receipt_tables AS rt
+                    SET store_name = 'L4 Onzekere Match',
+                        total_amount = (
+                            SELECT COALESCE(SUM(COALESCE(rtl.corrected_line_total, rtl.line_total, 0)), 0)
+                            FROM receipt_table_lines rtl
+                            WHERE rtl.receipt_table_id = rt.id
+                              AND COALESCE(rtl.is_deleted, FALSE) = FALSE
+                        ) + COALESCE(rt.discount_total, 0)
+                    WHERE rt.id = :receipt_id
                     """
                 ),
                 {"receipt_id": UNCERTAIN_RECEIPT_ID},
@@ -95,7 +105,14 @@ def prepare() -> dict:
             uncertain_state = conn.execute(
                 text(
                     """
-                    SELECT rtl.is_validated, rt.reviewed_at
+                    SELECT rtl.is_validated, rt.reviewed_at,
+                           rt.total_amount,
+                           (
+                               SELECT COALESCE(SUM(COALESCE(l.corrected_line_total, l.line_total, 0)), 0)
+                               FROM receipt_table_lines l
+                               WHERE l.receipt_table_id = rt.id
+                                 AND COALESCE(l.is_deleted, FALSE) = FALSE
+                           ) + COALESCE(rt.discount_total, 0) AS approval_total
                     FROM receipt_table_lines rtl
                     JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
                     WHERE rtl.id = :line_id
@@ -105,6 +122,7 @@ def prepare() -> dict:
             ).mappings().one()
             assert not bool(uncertain_state["is_validated"]), uncertain_state
             assert uncertain_state["reviewed_at"] is None, uncertain_state
+            assert uncertain_state["total_amount"] == uncertain_state["approval_total"], uncertain_state
 
             financial_state = conn.execute(
                 text(
