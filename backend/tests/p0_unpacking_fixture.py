@@ -122,12 +122,12 @@ def prepare() -> dict:
                     INSERT INTO household_articles (
                         id, household_id, naam, consumable, status, updated_at
                     ) VALUES (
-                        :id, :household_id, :name, TRUE, 'active', CURRENT_TIMESTAMP
+                        :id, :household_id, :name, 1, 'active', CURRENT_TIMESTAMP
                     )
                     ON CONFLICT (id) DO UPDATE SET
                         household_id = EXCLUDED.household_id,
                         naam = EXCLUDED.naam,
-                        consumable = TRUE,
+                        consumable = 1,
                         status = 'active',
                         updated_at = CURRENT_TIMESTAMP
                     """
