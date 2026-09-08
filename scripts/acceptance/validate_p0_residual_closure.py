@@ -35,6 +35,7 @@ EXPECTED_CLOSED = {
     "P0-SETTINGS-PROJECTION",
     "P0-LOCATIONS-POLICY",
     "P0-RECEIPT-INVENTORY-ALMOSTOUT",
+    "P0-KASSA-REVIEW",
     "P0-ARTICLE-IDENTITY",
     "P0-MIGRATION-STARTUP",
 }
@@ -101,8 +102,8 @@ def main() -> None:
 
     summary = closure.get("summary", {})
     require(summary.get("total_p0_scenarios") == 14, "closure_summary_total_14")
-    require(summary.get("closed") == len(EXPECTED_CLOSED) == 9, "closure_summary_closed_9")
-    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 5, "closure_summary_residual_5")
+    require(summary.get("closed") == len(EXPECTED_CLOSED) == 10, "closure_summary_closed_10")
+    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 4, "closure_summary_residual_4")
 
     for scenario in closure_scenarios:
         scenario_id = scenario["id"]
@@ -132,6 +133,12 @@ def main() -> None:
     require(receipt_inventory_proof.get("workflow_run_id") == 34215252124, "receipt_nonphysical_proof_run_exact")
     require(receipt_inventory_proof.get("candidate_sha") == "efad750f0a008b0b7885d82bde490072885b0953", "receipt_nonphysical_proof_candidate_exact")
     require(receipt_inventory_proof.get("conclusion") == "success", "receipt_nonphysical_proof_success")
+
+    kassa_review = next(row for row in closure_scenarios if row.get("id") == "P0-KASSA-REVIEW")
+    kassa_review_proof = kassa_review.get("proof", {})
+    require(kassa_review_proof.get("workflow_run_id") == 34234425601, "kassa_review_proof_run_exact")
+    require(kassa_review_proof.get("candidate_sha") == "ebdbdd87a3ec4cd6fd774f300ef08f7200da8352", "kassa_review_proof_candidate_exact")
+    require(kassa_review_proof.get("conclusion") == "success", "kassa_review_proof_success")
 
     registry_rows = {row.get("id"): row for row in registry.get("defect_classes", [])}
     require(EXPECTED_F5_IDS <= set(registry_rows), "registry_contains_f5_01_through_f5_14")
