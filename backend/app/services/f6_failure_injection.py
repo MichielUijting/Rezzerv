@@ -1,8 +1,10 @@
 """Test-only SQL failure injection for Fase 6 recovery authority.
 
 The hook is dormant unless REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION=1.
-When enabled on PostgreSQL, any SQL execution whose bound parameters contain
-F6_SQL_FAILURE_SENTINEL raises before the matching statement reaches the driver.
+When enabled on PostgreSQL, a mutating SQL execution whose bound parameters
+contain F6_SQL_FAILURE_SENTINEL raises before the matching statement reaches
+the driver. Read-only proof queries are never intercepted.
+
 Because application mutations run inside engine.begin(), earlier writes in the
 same transaction must be rolled back by SQLAlchemy/PostgreSQL.
 """
@@ -14,6 +16,7 @@ from typing import Any
 
 F6_SQL_FAILURE_SENTINEL = "F6-01-CONTROLLED-500"
 F6_SQL_FAILURE_ENV = "REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION"
+_MUTATING_SQL_PREFIXES = ("INSERT", "UPDATE", "DELETE")
 
 
 def _enabled() -> bool:
@@ -30,10 +33,17 @@ def _contains_sentinel(value: Any) -> bool:
     return False
 
 
+def _is_mutating_statement(clauseelement: Any) -> bool:
+    sql = str(clauseelement or "").lstrip().upper()
+    return sql.startswith(_MUTATING_SQL_PREFIXES)
+
+
 def inject_f6_controlled_failure_before_execute(conn, clauseelement, multiparams, params, execution_options):
-    """Raise a deterministic test-only failure when the F6 sentinel is bound."""
+    """Raise a deterministic test-only failure for a sentinel-bearing SQL write."""
 
     if not _enabled() or getattr(conn.dialect, "name", "") != "postgresql":
+        return clauseelement, multiparams, params
+    if not _is_mutating_statement(clauseelement):
         return clauseelement, multiparams, params
 
     if _contains_sentinel(params) or _contains_sentinel(multiparams):
