@@ -1,0 +1,70 @@
+name: F6 failure recovery gap audit validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
+      - 'quality/acceptance/p0_residual_closure.json'
+      - 'scripts/acceptance/validate_f6_failure_recovery_gap_audit.py'
+      - 'frontend/tests/**'
+      - 'backend/tests/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f6-failure-recovery-gap-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  f6-gap-audit:
+    name: F6 failure and recovery gap authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile F6 audit validator
+        run: python -m py_compile scripts/acceptance/validate_f6_failure_recovery_gap_audit.py
+
+      - name: Validate F6 failure and recovery audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_f6_failure_recovery_gap_audit.py | tee f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_audit_exact_10_categories' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_summary_140_assessments' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_covered_15' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_partial_64' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_gap_38' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_na_23' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_priority_slices_f6_01_through_f6_05' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_controlled_5xx_is_confirmed_cross_cutting_gap' f6-failure-recovery-gap-audit.log
+          grep -F 'F6_FAILURE_RECOVERY_GAP_AUDIT_GREEN' f6-failure-recovery-gap-audit.log
+
+      - name: Upload F6 audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-failure-recovery-gap-audit-evidence
+          path: |
+            quality/acceptance/f6_failure_recovery_gap_audit.json
+            f6-failure-recovery-gap-audit.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: F6 gap audit gate marker
+        run: echo 'F6_FAILURE_RECOVERY_GAP_AUDIT_VALIDATION_GREEN'
