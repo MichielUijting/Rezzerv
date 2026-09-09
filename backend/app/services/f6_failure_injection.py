@@ -20,6 +20,11 @@ F6_SQL_FAILURE_ENV = "REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION"
 F6_RECEIPT_FINALIZATION_ENV = "REZZERV_TEST_ONLY_F6_RECEIPT_FINALIZATION_FAILURE"
 F6_RECEIPT_FAILURE_MARKER = "F6-01-RECEIPT-CONTROLLED-500"
 _MUTATING_SQL_PREFIXES = ("INSERT", "UPDATE", "DELETE")
+_RECEIPT_FINALIZATION_SQL = (
+    "UPDATE PURCHASE_IMPORT_BATCHES "
+    "SET PROCESSED_AT = CURRENT_TIMESTAMP "
+    "WHERE ID = :ID"
+)
 
 
 def _truthy_env(name: str) -> bool:
@@ -61,18 +66,19 @@ def _parameter_mappings(multiparams: Any, params: Any):
 
 
 def _is_receipt_finalization_update(clauseelement: Any, multiparams: Any, params: Any) -> bool:
+    """Match the final batch timestamp write, not the earlier status write.
+
+    Production first updates ``import_status`` and only after successful line
+    processing writes ``processed_at``. That second UPDATE is the stable point
+    after inventory/event mutations and immediately before transaction commit.
+    """
+
     sql_source = clauseelement if clauseelement is not None else ""
     sql = " ".join(str(sql_source).strip().upper().split())
-    if not sql.startswith("UPDATE PURCHASE_IMPORT_BATCHES"):
-        return False
-    if "PROCESSING_STATUS" not in sql or "PROCESSED_AT" not in sql:
+    if sql != _RECEIPT_FINALIZATION_SQL:
         return False
 
-    for mapping in _parameter_mappings(multiparams, params):
-        processing_status = str(mapping.get("processing_status") or "").strip().lower()
-        if processing_status in {"processed", "partially_processed"} and mapping.get("batch_id") is not None:
-            return True
-    return False
+    return any(mapping.get("id") is not None for mapping in _parameter_mappings(multiparams, params))
 
 
 def inject_f6_controlled_failure_before_execute(conn, clauseelement, multiparams, params, execution_options):
