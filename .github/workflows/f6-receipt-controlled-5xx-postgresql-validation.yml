@@ -1,0 +1,323 @@
+name: F6 Receipt controlled 5xx PostgreSQL rollback
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/db.py'
+      - 'backend/app/main.py'
+      - 'backend/app/services/f6_failure_injection.py'
+      - 'backend/app/testing/receipt_parsing/**'
+      - 'frontend/src/features/kassa/**'
+      - 'frontend/src/features/receipts/**'
+      - 'frontend/src/features/stores/**'
+      - 'frontend/src/features/almostOut/**'
+      - 'frontend/src/pages/Voorraad.jsx'
+      - 'frontend/tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f6-receipt-controlled-5xx-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  f6-receipt-controlled-5xx:
+    name: F6 Receipt real 500 feedback and full transaction rollback authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic F6 Receipt identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="F6-Receipt-${suffix}-Pass!"
+          echo "PLAYWRIGHT_F6_RECEIPT_EMAIL=f6-receipt-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_RECEIPT_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD=F6 Receipt Household ${suffix}" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_RECEIPT_LOCATION=F6 Receipt Location ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Guard F6 Receipt browser authority against shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'F6 Receipt authority mag de kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          grep -F "getByTestId('receipt-process-button').click()" "$spec"
+          grep -F 'expect(processResponse.status()).toBe(500)' "$spec"
+          grep -F "Verwerken van bonregels is mislukt." "$spec"
+          grep -F 'F6_RECEIPT_BROWSER_ROLLBACK_GREEN' "$spec"
+          echo 'F6_RECEIPT_NO_CORE_SHORTCUTS_GREEN'
+
+      - name: Compile F6 Receipt authority sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile backend/app/services/f6_failure_injection.py
+          node --check frontend/tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js
+          echo 'F6_RECEIPT_AUTHORITY_COMPILE_GREEN'
+
+      - name: Enable test-only receipt finalization failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > f6-receipt-compose.override.yml <<'YAML'
+          services:
+            backend:
+              environment:
+                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
+                REZZERV_TEST_ONLY_F6_RECEIPT_FINALIZATION_FAILURE: "1"
+          YAML
+          echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.postgresql.yml:f6-receipt-compose.override.yml' >> "$GITHUB_ENV"
+          echo 'F6_RECEIPT_TEST_ONLY_FAILURE_ENV_CONFIGURED_GREEN'
+
+      - name: Build real frontend backend and PostgreSQL images
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+
+      - name: Start real frontend backend and PostgreSQL
+        run: docker compose up -d --no-build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              echo 'F6_RECEIPT_BACKEND_HEALTH_GREEN'
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove PostgreSQL boundary and active receipt hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -u - <<'PY' | tee f6-receipt-runtime-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.f6_failure_injection import _enabled, _receipt_finalization_enabled
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          assert _enabled() is True
+          assert _receipt_finalization_enabled() is True
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          print(f'runtime_user={current_user}')
+          print('F6_RECEIPT_FAILURE_HOOK_ENABLED_GREEN')
+          print('F6_RECEIPT_POSTGRESQL_RUNTIME_GREEN')
+          PY
+          grep -F 'F6_RECEIPT_FAILURE_HOOK_ENABLED_GREEN' f6-receipt-runtime-boundary.log
+          grep -F 'F6_RECEIPT_POSTGRESQL_RUNTIME_GREEN' f6-receipt-runtime-boundary.log
+
+      - name: Trigger controlled 500 through real Receipt browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_RECEIPT_EMAIL="$PLAYWRIGHT_F6_RECEIPT_EMAIL" \
+            -e PLAYWRIGHT_F6_RECEIPT_PASSWORD="$PLAYWRIGHT_F6_RECEIPT_PASSWORD" \
+            -e PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD" \
+            -e PLAYWRIGHT_F6_RECEIPT_LOCATION="$PLAYWRIGHT_F6_RECEIPT_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-receipt-controlled-5xx-browser.log"
+          grep -F 'F6_RECEIPT_REAL_500_FEEDBACK_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
+          grep -F 'F6_RECEIPT_BROWSER_ROLLBACK_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
+          grep -F 'F6_RECEIPT_ALMOST_OUT_UNCHANGED_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
+          test -s frontend/f6-receipt-controlled-5xx-browser-proof.json
+
+      - name: Capture exact browser identities for PostgreSQL rollback proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof='frontend/f6-receipt-controlled-5xx-browser-proof.json'
+          test "$(jq -r '.processStatus' "$proof")" = '500'
+          test "$(jq -r '.inventoryRowsAfter' "$proof")" = '0'
+          test "$(jq -r '.almostOutRowsBefore' "$proof")" = "$(jq -r '.almostOutRowsAfter' "$proof")"
+          for key in householdId receiptId batchId lineId locationName batchProcessingStatusBefore lineProcessingStatusBefore; do
+            value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
+            test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
+            case "$key" in
+              householdId) echo "F6_HOUSEHOLD_ID=$value" >> "$GITHUB_ENV" ;;
+              receiptId) echo "F6_RECEIPT_ID=$value" >> "$GITHUB_ENV" ;;
+              batchId) echo "F6_BATCH_ID=$value" >> "$GITHUB_ENV" ;;
+              lineId) echo "F6_LINE_ID=$value" >> "$GITHUB_ENV" ;;
+              locationName) echo "F6_LOCATION_NAME=$value" >> "$GITHUB_ENV" ;;
+              batchProcessingStatusBefore) echo "F6_BATCH_STATUS_BEFORE=$value" >> "$GITHUB_ENV" ;;
+              lineProcessingStatusBefore) echo "F6_LINE_STATUS_BEFORE=$value" >> "$GITHUB_ENV" ;;
+            esac
+          done
+          echo 'F6_RECEIPT_BROWSER_IDENTITIES_CAPTURED_GREEN'
+
+      - name: Prove exact PostgreSQL rollback after Receipt failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_EMAIL="$PLAYWRIGHT_F6_RECEIPT_EMAIL" \
+            -e F6_HOUSEHOLD_ID="$F6_HOUSEHOLD_ID" \
+            -e F6_RECEIPT_ID="$F6_RECEIPT_ID" \
+            -e F6_BATCH_ID="$F6_BATCH_ID" \
+            -e F6_LINE_ID="$F6_LINE_ID" \
+            -e F6_LOCATION_NAME="$F6_LOCATION_NAME" \
+            -e F6_BATCH_STATUS_BEFORE="$F6_BATCH_STATUS_BEFORE" \
+            -e F6_LINE_STATUS_BEFORE="$F6_LINE_STATUS_BEFORE" \
+            backend python -u - <<'PY' 2>&1 | tee f6-receipt-postgresql-rollback.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+          from app.main import build_almost_out_items
+
+          email = os.environ['F6_EMAIL'].strip().lower()
+          household_id = os.environ['F6_HOUSEHOLD_ID'].strip()
+          receipt_id = os.environ['F6_RECEIPT_ID'].strip()
+          batch_id = os.environ['F6_BATCH_ID'].strip()
+          line_id = os.environ['F6_LINE_ID'].strip()
+          location_name = os.environ['F6_LOCATION_NAME'].strip()
+          batch_status_before = os.environ['F6_BATCH_STATUS_BEFORE']
+          line_status_before = os.environ['F6_LINE_STATUS_BEFORE']
+
+          with engine.begin() as conn:
+              membership = conn.execute(text("""
+                  SELECT household_id, role FROM public.household_memberships
+                  WHERE lower(trim(user_email)) = :email
+              """), {'email': email}).mappings().one()
+              assert str(membership['household_id']) == household_id, membership
+              assert str(membership['role']) == 'admin', membership
+
+              receipt = conn.execute(text("""
+                  SELECT id, household_id, approved_at FROM public.receipt_tables WHERE id = :receipt_id
+              """), {'receipt_id': receipt_id}).mappings().one()
+              assert str(receipt['household_id']) == household_id, receipt
+              assert receipt['approved_at'] is not None, receipt
+
+              batch = conn.execute(text("""
+                  SELECT id, household_id, processing_status, processed_at
+                  FROM public.purchase_import_batches WHERE id = :batch_id
+              """), {'batch_id': batch_id}).mappings().one()
+              assert str(batch['household_id']) == household_id, batch
+              assert str(batch['processing_status'] or '') == batch_status_before, (batch, batch_status_before)
+              assert batch['processed_at'] is None, batch
+
+              line = conn.execute(text("""
+                  SELECT id, batch_id, target_location_id, processing_status, processed_event_id
+                  FROM public.purchase_import_lines WHERE id = :line_id
+              """), {'line_id': line_id}).mappings().one()
+              assert str(line['batch_id']) == batch_id, line
+              assert str(line['processing_status'] or '') == line_status_before, (line, line_status_before)
+              assert line['processed_event_id'] is None, line
+              assert line['target_location_id'] is not None, line
+
+              space = conn.execute(text("""
+                  SELECT id, household_id, naam FROM public.spaces WHERE id = :space_id
+              """), {'space_id': str(line['target_location_id'])}).mappings().one()
+              assert str(space['household_id']) == household_id, space
+              assert str(space['naam']) == location_name, space
+
+              inventory_count = int(conn.execute(text("""
+                  SELECT COUNT(*) FROM public.inventory WHERE household_id = :household_id
+              """), {'household_id': household_id}).scalar_one())
+              event_count = int(conn.execute(text("""
+                  SELECT COUNT(*) FROM public.inventory_events WHERE household_id = :household_id
+              """), {'household_id': household_id}).scalar_one())
+              almost_out_items = build_almost_out_items(conn, household_id)
+
+              assert inventory_count == 0, inventory_count
+              assert event_count == 0, event_count
+              assert len(almost_out_items) == 0, almost_out_items
+
+          print(f'batch_id={batch_id}')
+          print(f'line_id={line_id}')
+          print(f'inventory_count={inventory_count}')
+          print(f'inventory_event_count={event_count}')
+          print(f'almost_out_count={len(almost_out_items)}')
+          print('F6_RECEIPT_BATCH_STATE_ROLLED_BACK_GREEN')
+          print('F6_RECEIPT_INVENTORY_ZERO_EFFECT_GREEN')
+          print('F6_RECEIPT_ALMOST_OUT_ZERO_EFFECT_GREEN')
+          print('F6_RECEIPT_POSTGRESQL_ROLLBACK_GREEN')
+          PY
+          grep -F 'F6_RECEIPT_BATCH_STATE_ROLLED_BACK_GREEN' f6-receipt-postgresql-rollback.log
+          grep -F 'F6_RECEIPT_INVENTORY_ZERO_EFFECT_GREEN' f6-receipt-postgresql-rollback.log
+          grep -F 'F6_RECEIPT_ALMOST_OUT_ZERO_EFFECT_GREEN' f6-receipt-postgresql-rollback.log
+          grep -F 'F6_RECEIPT_POSTGRESQL_ROLLBACK_GREEN' f6-receipt-postgresql-rollback.log
+
+      - name: Prove backend actually injected controlled Receipt failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose logs --no-color backend > f6-receipt-backend.log
+          grep -F 'F6-01-RECEIPT-CONTROLLED-500: injected controlled receipt finalization failure' f6-receipt-backend.log
+          echo 'F6_RECEIPT_SERVER_INJECTION_PROVEN_GREEN'
+
+      - name: Verify browser proof markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'F6_RECEIPT_REAL_500_FEEDBACK_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
+          grep -F 'F6_RECEIPT_BROWSER_ROLLBACK_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
+          grep -F 'F6_RECEIPT_ALMOST_OUT_UNCHANGED_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
+          echo 'F6_RECEIPT_BROWSER_PROOF_GREEN'
+
+      - name: Upload F6 Receipt evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-receipt-controlled-5xx-evidence
+          path: |
+            frontend/f6-receipt-controlled-5xx-browser.log
+            frontend/f6-receipt-controlled-5xx-browser-proof.json
+            frontend/test-results
+            f6-receipt-runtime-boundary.log
+            f6-receipt-postgresql-rollback.log
+            f6-receipt-backend.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: F6 Receipt gate marker
+        run: echo 'F6_RECEIPT_CONTROLLED_5XX_POSTGRESQL_ROLLBACK_GREEN'
+
+      - name: Dump diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps || true
+          docker compose logs --no-color --tail=500 backend || true
+          docker compose logs --no-color --tail=300 frontend || true
+
+      - name: Cleanup containers and volumes
+        if: always()
+        run: docker compose down -v --remove-orphans || true
