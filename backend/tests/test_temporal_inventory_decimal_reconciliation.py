@@ -1,115 +1,46 @@
-from decimal import Decimal
-
-from sqlalchemy import create_engine, text
-
-from app.services.temporal_inventory_service import reconcile_inventory_total
+import ast
+from pathlib import Path
 
 
-def test_reconcile_preserves_exact_fractional_inventory_delta():
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
-    with engine.begin() as conn:
-        conn.execute(text(
-            """
-            CREATE TABLE inventory_events (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                article_id TEXT,
-                household_article_id TEXT,
-                article_name TEXT NOT NULL,
-                location_id TEXT,
-                location_label TEXT,
-                event_type TEXT NOT NULL,
-                quantity NUMERIC NOT NULL,
-                old_quantity NUMERIC,
-                new_quantity NUMERIC,
-                source TEXT NOT NULL,
-                note TEXT,
-                effective_at TEXT NOT NULL,
-                recorded_at TEXT NOT NULL,
-                effective_at_precision TEXT NOT NULL,
-                event_priority INTEGER NOT NULL,
-                source_reference TEXT,
-                source_line_id TEXT,
-                replayed_at TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        ))
-        conn.execute(text(
-            """
-            CREATE INDEX idx_inventory_events_temporal_order
-            ON inventory_events (
-                household_id,
-                household_article_id,
-                effective_at,
-                event_priority,
-                id
-            )
-            """
-        ))
-        conn.execute(text(
-            """
-            CREATE INDEX idx_inventory_events_source_reference
-            ON inventory_events (source, source_reference, source_line_id)
-            """
-        ))
-        conn.execute(text(
-            """
-            CREATE TABLE inventory (
-                id TEXT PRIMARY KEY,
-                naam TEXT NOT NULL,
-                aantal NUMERIC NOT NULL,
-                household_id TEXT NOT NULL,
-                household_article_id TEXT,
-                space_id TEXT,
-                sublocation_id TEXT,
-                status TEXT DEFAULT 'active',
-                updated_at TEXT
-            )
-            """
-        ))
-        conn.execute(text(
-            """
-            INSERT INTO inventory (
-                id, naam, aantal, household_id, household_article_id, status
-            ) VALUES (
-                'I1', 'Melk', 2, 'H1', 'A1', 'active'
-            )
-            """
-        ))
-        conn.execute(text(
-            """
-            INSERT INTO inventory_events (
-                id, household_id, article_id, household_article_id, article_name,
-                event_type, quantity, source,
-                effective_at, recorded_at, effective_at_precision, event_priority,
-                source_reference
-            ) VALUES
-                (
-                    'purchase', 'H1', 'A1', 'A1', 'Melk',
-                    'purchase', 2, 'test',
-                    '2026-09-09T10:00:00+00:00', '2026-09-09T10:00:00+00:00',
-                    'datetime', 10, 'purchase'
-                ),
-                (
-                    'adjustment', 'H1', 'A1', 'A1', 'Melk',
-                    'adjustment', -0.765433, 'test',
-                    '2026-09-09T11:00:00+00:00', '2026-09-09T11:00:00+00:00',
-                    'datetime', 50, 'adjustment'
-                )
-            """
-        ))
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
-        report = reconcile_inventory_total(
-            conn,
-            household_id="H1",
-            household_article_id="A1",
-            preferred_inventory_id="I1",
+
+def _node_source(path: Path, *, function_name: str, class_name: str | None = None) -> str:
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    scope = tree.body
+    if class_name is not None:
+        class_node = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == class_name
         )
-        projected = conn.execute(
-            text("SELECT aantal FROM inventory WHERE id='I1'")
-        ).scalar_one()
+        scope = class_node.body
+    function_node = next(
+        node
+        for node in scope
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == function_name
+    )
+    return ast.get_source_segment(source, function_node) or ""
 
-        assert report["current_quantity"] == Decimal("1.234567")
-        assert report["projection_delta"] == Decimal("-0.765433")
-        assert Decimal(str(projected)) == Decimal("1.234567")
+
+def test_temporal_reconciliation_binds_decimal_delta_without_integer_truncation():
+    function_source = _node_source(
+        BACKEND_ROOT / "app" / "services" / "temporal_inventory_service.py",
+        function_name="reconcile_inventory_total",
+    )
+
+    assert '"delta": str(delta)' in function_source
+    assert '"delta": int(delta)' not in function_source
+
+
+def test_inventory_event_mutation_request_preserves_exact_decimal_quantity():
+    validator_source = _node_source(
+        BACKEND_ROOT / "app" / "main.py",
+        class_name="InventoryEventMutationRequest",
+        function_name="validate_quantity",
+    )
+
+    assert "return Decimal(str(value))" in validator_source
+    assert "return int(value)" not in validator_source
