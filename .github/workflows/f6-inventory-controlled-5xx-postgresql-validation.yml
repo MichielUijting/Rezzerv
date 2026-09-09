@@ -1,0 +1,232 @@
+name: F6 Inventory controlled 5xx PostgreSQL rollback
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/app/db.py'
+      - 'backend/app/main.py'
+      - 'backend/app/services/f6_failure_injection.py'
+      - 'backend/tests/f6_inventory_controlled_5xx_fixture.py'
+      - 'backend/tests/p0_inventory_correction_fixture.py'
+      - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
+      - 'frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f6-inventory-controlled-5xx-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  f6-inventory-controlled-5xx:
+    name: F6 Inventory real 500 feedback and rollback authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Guard F6 browser authority against shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'F6 Inventory authority mag de kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          grep -F 'article-stock-adjust-' "$spec"
+          grep -F "getByLabel('Nieuwe hoeveelheid')" "$spec"
+          grep -F "getByLabel('Reden / notitie')" "$spec"
+          grep -F "getByRole('button', { name: 'Opslaan'" "$spec"
+          grep -F 'expect(mutationResponse.status()).toBe(500)' "$spec"
+          grep -F "article-stock-mutation-error" "$spec"
+          echo 'F6_INVENTORY_NO_CORE_SHORTCUTS_GREEN'
+
+      - name: Compile F6 authority sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            backend/app/services/f6_failure_injection.py \
+            backend/tests/f6_inventory_controlled_5xx_fixture.py
+          node --check frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js
+          echo 'F6_INVENTORY_AUTHORITY_COMPILE_GREEN'
+
+      - name: Enable test-only failure injection for backend container
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > f6-compose.override.yml <<'YAML'
+          services:
+            backend:
+              environment:
+                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
+          YAML
+          echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.postgresql.yml:f6-compose.override.yml' >> "$GITHUB_ENV"
+          echo 'F6_TEST_ONLY_FAILURE_ENV_CONFIGURED_GREEN'
+
+      - name: Build real frontend backend and PostgreSQL images
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+
+      - name: Start real frontend backend and PostgreSQL
+        run: docker compose up -d --no-build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              echo 'F6_INVENTORY_BACKEND_HEALTH_GREEN'
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove PostgreSQL boundary and active test-only hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -u - <<'PY' | tee f6-inventory-runtime-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.f6_failure_injection import _enabled
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          assert _enabled() is True
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          print(f'runtime_user={current_user}')
+          print('F6_SQL_FAILURE_HOOK_ENABLED_GREEN')
+          print('F6_POSTGRESQL_RUNTIME_GREEN')
+          PY
+          grep -F 'F6_SQL_FAILURE_HOOK_ENABLED_GREEN' f6-inventory-runtime-boundary.log
+          grep -F 'F6_POSTGRESQL_RUNTIME_GREEN' f6-inventory-runtime-boundary.log
+
+      - name: Prepare deterministic Inventory rollback state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T -e PYTHONPATH=/app backend \
+            python /app/tests/f6_inventory_controlled_5xx_fixture.py prepare \
+            | tee f6-inventory-fixture.log
+          grep -F 'F6_INVENTORY_FIXTURE_GREEN' f6-inventory-fixture.log
+          fixture_json="$(grep '^F6_INVENTORY_FIXTURE=' f6-inventory-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          echo "PLAYWRIGHT_F6_INVENTORY_EMAIL=$(jq -r '.email' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_INVENTORY_PASSWORD=$(jq -r '.password' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_INVENTORY_ARTICLE_ID=$(jq -r '.article_id' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_INVENTORY_INVENTORY_ID=$(jq -r '.inventory_id' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_INVENTORY_INITIAL_QUANTITY=$(jq -r '.initial_quantity' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_INVENTORY_TARGET_QUANTITY=$(jq -r '.target_quantity' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_INVENTORY_FAILURE_NOTE=$(jq -r '.failure_note' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "::add-mask::$(jq -r '.password' <<<"$fixture_json")"
+
+      - name: Trigger controlled 500 through real Inventory browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_INVENTORY_EMAIL="$PLAYWRIGHT_F6_INVENTORY_EMAIL" \
+            -e PLAYWRIGHT_F6_INVENTORY_PASSWORD="$PLAYWRIGHT_F6_INVENTORY_PASSWORD" \
+            -e PLAYWRIGHT_F6_INVENTORY_ARTICLE_ID="$PLAYWRIGHT_F6_INVENTORY_ARTICLE_ID" \
+            -e PLAYWRIGHT_F6_INVENTORY_INVENTORY_ID="$PLAYWRIGHT_F6_INVENTORY_INVENTORY_ID" \
+            -e PLAYWRIGHT_F6_INVENTORY_INITIAL_QUANTITY="$PLAYWRIGHT_F6_INVENTORY_INITIAL_QUANTITY" \
+            -e PLAYWRIGHT_F6_INVENTORY_TARGET_QUANTITY="$PLAYWRIGHT_F6_INVENTORY_TARGET_QUANTITY" \
+            -e PLAYWRIGHT_F6_INVENTORY_FAILURE_NOTE="$PLAYWRIGHT_F6_INVENTORY_FAILURE_NOTE" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee f6-inventory-browser.log"
+
+      - name: Prove exact PostgreSQL rollback after failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T -e PYTHONPATH=/app backend \
+            python /app/tests/f6_inventory_controlled_5xx_fixture.py verify \
+            | tee f6-inventory-postgresql-rollback.log
+          grep -F 'F6_INVENTORY_POSTGRESQL_ROLLBACK_GREEN' f6-inventory-postgresql-rollback.log
+
+      - name: Prove backend actually injected the controlled failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose logs --no-color backend | tee f6-inventory-backend.log
+          grep -F 'F6-01 controlled PostgreSQL failure injection' f6-inventory-backend.log
+          echo 'F6_INVENTORY_SERVER_FAILURE_INJECTION_GREEN'
+
+      - name: Verify browser proof markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'F6_INVENTORY_CONTROLLED_500_BROWSER_GREEN' frontend/f6-inventory-browser.log
+          grep -F 'F6_INVENTORY_STANDARD_FEEDBACK_GREEN' frontend/f6-inventory-browser.log
+          test -s frontend/f6-inventory-controlled-5xx-browser-proof.json
+          jq -e '.responseStatus == 500' frontend/f6-inventory-controlled-5xx-browser-proof.json >/dev/null
+          jq -e '.visibleFeedback | contains("Voorraadmutatie kon niet worden opgeslagen")' frontend/f6-inventory-controlled-5xx-browser-proof.json >/dev/null
+          echo 'F6_INVENTORY_BROWSER_PROOF_GREEN'
+
+      - name: Upload F6 Inventory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-inventory-controlled-5xx-postgresql-evidence
+          path: |
+            f6-inventory-runtime-boundary.log
+            f6-inventory-fixture.log
+            f6-inventory-postgresql-rollback.log
+            f6-inventory-backend.log
+            frontend/f6-inventory-browser.log
+            frontend/f6-inventory-controlled-5xx-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: F6 Inventory gate marker
+        run: echo 'F6_INVENTORY_CONTROLLED_5XX_POSTGRESQL_GREEN'
+
+      - name: Dump diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend || true
+          docker compose logs --no-color --tail=200 frontend || true
+
+      - name: Cleanup containers and volumes
+        if: always()
+        run: docker compose down -v --remove-orphans
