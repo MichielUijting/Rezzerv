@@ -96,7 +96,7 @@ def _active_record_clauses(columns: set[str], *, alias: str = "") -> list[str]:
     if "deleted_at" in columns:
         clauses.append(f"{prefix}deleted_at IS NULL")
     if "is_deleted" in columns:
-        clauses.append(f"COALESCE({prefix}is_deleted, 0) = 0")
+        clauses.append(f"{prefix}is_deleted IS NOT TRUE")
     return clauses
 
 
