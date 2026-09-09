@@ -81,7 +81,7 @@ test('F6-01 Inventory controlled 500 shows feedback and PostgreSQL state stays u
   await expect(page.getByTestId(new RegExp(`^article-stock-row-${expectedInventoryId}-`))).toContainText(expectedInitialQuantity)
 
   await page.getByRole('tab', { name: 'Historie', exact: true }).click()
-  await expect(page.getByTestId('history-page')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Er is nog geen historie beschikbaar voor dit artikel.', { exact: true })).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('[data-testid^="history-row-"]').filter({ hasText: expectedFailureNote })).toHaveCount(0)
 
   writeFileSync('f6-inventory-controlled-5xx-browser-proof.json', JSON.stringify({
