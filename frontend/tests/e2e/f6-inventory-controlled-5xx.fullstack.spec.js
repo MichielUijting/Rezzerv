@@ -72,6 +72,7 @@ test('F6-01 Inventory controlled 500 shows feedback and PostgreSQL state stays u
   const visibleError = page.getByTestId('article-stock-mutation-error')
   await expect(visibleError).toBeVisible({ timeout: 20_000 })
   await expect(visibleError).toContainText('Voorraadmutatie kon niet worden opgeslagen.')
+  const visibleFeedbackText = String(await visibleError.textContent() || '').trim()
   await expect(page.getByTestId('article-stock-mutation-success')).toHaveCount(0)
 
   await page.reload()
@@ -90,7 +91,7 @@ test('F6-01 Inventory controlled 500 shows feedback and PostgreSQL state stays u
     initialQuantity: expectedInitialQuantity,
     targetQuantity: expectedTargetQuantity,
     responseStatus: mutationResponse.status(),
-    visibleFeedback: await visibleError.textContent().catch(() => ''),
+    visibleFeedback: visibleFeedbackText,
   }, null, 2))
 
   console.log('F6_INVENTORY_CONTROLLED_500_BROWSER_GREEN')
