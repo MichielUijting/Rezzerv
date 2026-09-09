@@ -634,7 +634,7 @@ class InventoryEventMutationRequest(BaseModel):
     def validate_quantity(cls, value):
         if value is None:
             raise ValueError("quantity is verplicht")
-        return int(value)
+        return Decimal(str(value))
 
     @field_validator("event_type")
     @classmethod
