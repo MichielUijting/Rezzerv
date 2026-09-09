@@ -9,7 +9,7 @@
   "sources": {
     "functional_acceptance_matrix": {
       "path": "quality/acceptance/functional_acceptance_matrix.json",
-      "blob_sha": "d2507055e761ab80528cf7fd2105b470640737cd"
+      "blob_sha": "75549a41080aeba2bbc8518437764a7904922de3"
     },
     "historical_defect_registry": {
       "path": "quality/regression/historical_defect_registry.json",
@@ -24,8 +24,8 @@
   },
   "summary": {
     "total_p0_scenarios": 14,
-    "closed": 12,
-    "residual": 2
+    "closed": 14,
+    "residual": 0
   },
   "scenarios": [
     {
@@ -198,17 +198,24 @@
     },
     {
       "id": "P0-ALMOST-OUT",
-      "status": "residual",
+      "status": "closed",
       "evidence": [
         "backend/tests/almost_out_api_projection_selftest.py",
         ".github/workflows/almost-out-api-projection-validation.yml",
         "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
-        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js"
+        "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
+        "backend/tests/p0_almost_out_recalculation_fixture.py",
+        "frontend/tests/e2e/p0-almost-out-recalculation.fullstack.spec.js",
+        ".github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml"
       ],
-      "closure_note": "boven/onder drempel en locatievarianten zijn in L3/L4 bewezen",
-      "residual_scope": [
-        "zelfstandige L4-herberekeningsvariant van bestaande historie naar gewijzigde Bijna-op-projectie"
-      ]
+      "closure_note": "zelfstandige L4-herberekeningsauthority is groen: bestaande historie purchase +3 en consume -2 wordt na een echte browsercorrectie chronologisch gereplayed naar 0->3->6->4; zichtbare voorraad eindigt exact op 4 en Bijna-op projecteert JA->NEE onder production-like PostgreSQL runtime",
+      "proof": {
+        "workflow_run_id": 34357026889,
+        "candidate_sha": "1ac8107277b58907a3c4bed0d5b179c21b666647",
+        "conclusion": "success",
+        "artifact_id": 10106363372,
+        "artifact_sha256": "ff98c88dc395f7ef1e981f7dc28736c02f997ef7a48d10010d46d7cf3a756e92"
+      }
     },
     {
       "id": "P0-ARTICLE-IDENTITY",
@@ -224,19 +231,23 @@
     },
     {
       "id": "P0-PLATFORM-AUTHORITY",
-      "status": "residual",
+      "status": "closed",
       "evidence": [
         "backend/tests/platform_authority_api_selftest.py",
         ".github/workflows/platform-authority-api-validation.yml",
         "frontend/tests/e2e/p0-platform-authority.fullstack.spec.js",
         ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml",
-        "scripts/acceptance/l4_07_platform_browser_authority.py"
+        "scripts/acceptance/l4_07_platform_browser_authority.py",
+        "backend/tests/test_l4_07_platform_browser_authority_contract.py"
       ],
-      "closure_note": "platformbeheerder versus normale huishoudbeheerder, sessie-intrekking en geen huishoudprivilege-escalatie zijn L4 bewezen",
-      "residual_scope": [
-        "superuser-specifieke beheerreis als echte browserketen",
-        "IP-owner-specifieke beheerreis als echte browserketen"
-      ]
+      "closure_note": "L4-07 bewijst via echte browserreizen platformbeheerder, superuser en IP-owner: sessie-intrekking zonder huishoudprivilege-escalatie, zichtbaar read-only Superuser-systeembeheer en zichtbare IP-owner roltoekenning; PostgreSQL bevestigt de exacte rolgrenzen, audit, eindstaat en DML-only runtime",
+      "proof": {
+        "workflow_run_id": 34374530657,
+        "candidate_sha": "7157ebd21ebc2c8eff655ba234b3dad199c49675",
+        "conclusion": "success",
+        "artifact_id": 10113460701,
+        "artifact_sha256": "80123bd07351c55241eabc7397216886816ea5cbe13238e5f568d8fac79aa194"
+      }
     },
     {
       "id": "P0-MIGRATION-STARTUP",
