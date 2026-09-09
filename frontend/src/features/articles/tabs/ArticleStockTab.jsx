@@ -199,7 +199,10 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(data?.detail || 'Voorraadmutatie kon niet worden opgeslagen.')
+        const message = response.status >= 500
+          ? 'Voorraadmutatie kon niet worden opgeslagen.'
+          : (data?.detail || 'Voorraadmutatie kon niet worden opgeslagen.')
+        throw new Error(message)
       }
       await onInventoryChanged()
       setMutationSuccess(mutationForm.action === 'consume' ? 'Voorraad is afgeboekt.' : 'Voorraadcorrectie is opgeslagen.')
