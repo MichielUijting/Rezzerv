@@ -24,7 +24,7 @@ EXPECTED_CATEGORIES = {
 }
 EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
-EXPECTED_COUNTS = {"covered": 15, "partial": 64, "gap": 38, "na": 23}
+EXPECTED_COUNTS = {"covered": 18, "partial": 62, "gap": 37, "na": 23}
 
 
 def load_json(path: Path):
@@ -98,6 +98,20 @@ def main() -> None:
 
     account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
     require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")
+
+    inventory = next(row for row in scenarios if row["id"] == "P0-INVENTORY")
+    require(inventory["assessments"]["controlled_5xx"] == "covered", "f6_inventory_controlled_5xx_covered")
+    require(inventory["assessments"]["standard_user_feedback"] == "covered", "f6_inventory_standard_feedback_covered")
+    require(inventory["assessments"]["db_consistency_after_error"] == "covered", "f6_inventory_db_consistency_after_error_covered")
+    inventory_evidence = set(inventory.get("evidence") or [])
+    require(
+        "frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js" in inventory_evidence,
+        "f6_inventory_browser_authority_registered",
+    )
+    require(
+        ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml" in inventory_evidence,
+        "f6_inventory_postgresql_workflow_registered",
+    )
 
     print("F6_FAILURE_RECOVERY_GAP_AUDIT_GREEN")
 

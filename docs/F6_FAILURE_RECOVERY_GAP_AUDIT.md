@@ -21,16 +21,18 @@ De roadmapcategorieën zijn exact:
 9. standaard gebruikersfeedback;
 10. databaseconsistentie na fout.
 
-## Startaudit
+## Actuele auditstand
 
 Alle 14 gesloten P0-scenario's zijn tegen alle tien categorieën beoordeeld. Dat levert 140 beoordelingen op:
 
 | Status | Aantal | Betekenis |
 |---|---:|---|
-| covered | 15 | voldoende production-relevant bestaand bewijs |
-| partial | 64 | relevant bewijs bestaat, maar Fase-6 authority is nog niet compleet |
-| gap | 38 | expliciete bouwopgave |
+| covered | 18 | voldoende production-relevant bestaand bewijs |
+| partial | 62 | relevant bewijs bestaat, maar Fase-6 authority is nog niet compleet |
+| gap | 37 | expliciete bouwopgave |
 | N/A | 23 | niet materieel voor dit scenario |
+
+De oorspronkelijke startaudit stond op 15 covered / 64 partial / 38 gap / 23 N/A. De eerste groene F6-01 sub-slice heeft voor P0-INVENTORY `controlled_5xx`, `standard_user_feedback` en `db_consistency_after_error` naar `covered` gebracht.
 
 De audit is bewust conservatief. Een frontendtest met mocks, een contracttest of indirect bewijs wordt niet opgewaardeerd tot volledige failure/recovery authority.
 
@@ -40,12 +42,13 @@ De audit is bewust conservatief. Een frontendtest met mocks, een contracttest of
 - Household/authorization: rol- en household-isolation authorities bestaan op browser/API-grens.
 - Receipt/Uitpakken: L4-05 bewijst echte dubbele browser-submit zonder dubbele voorraad/events.
 - Platform Authority: L4-07 bewijst sessie-intrekking, 401 en geen huishoudprivilege-escalatie.
+- F6-01 Inventory: proof run `34397204686` op candidate `c7f630b47e446fe59a4c61b8dcb29ac8c3889b2d` bewijst een echte gecontroleerde 500 via de browser, vaste gebruikersfeedback en exacte PostgreSQL-rollback zonder inventory-event.
 - Historical F5-14 borgt standaard API-foutfeedback op gerichte frontendpaden, maar telt binnen Fase 6 alleen als partial zolang de backendfout niet production-like door de echte keten loopt.
 - Migration/startup heeft eigen schema/runtime/zero-residual safety authority en wordt niet kunstmatig als user-facing recoveryflow behandeld.
 
 ## Belangrijkste bevinding
 
-Het grootste gedeelde P0-gat is **controlled 5xx + standaard gebruikersfeedback + bewezen PostgreSQL-consistentie**. Veel schermen hebben al foutpresentatie of lagere-laag contracten, maar er is nog onvoldoende bewijs dat een echte backendfout door de echte browserketen loopt zonder halve of verborgen database-mutatie.
+Het grootste gedeelde P0-gat is **controlled 5xx + standaard gebruikersfeedback + bewezen PostgreSQL-consistentie**. Inventory is als eerste F6-01 sub-slice gesloten; voor Receipt/Inventory/Almost-out, Kassa Review en Uitpakken resteert nog aanvullende closure binnen deze slice.
 
 ## Uitvoeringsvolgorde
 
