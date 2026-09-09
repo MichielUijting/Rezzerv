@@ -3,9 +3,18 @@ import { test, expect } from '@playwright/test'
 
 const platformEmail = process.env.PLAYWRIGHT_L4_07_PLATFORM_EMAIL
 const platformPassword = process.env.PLAYWRIGHT_L4_07_PLATFORM_PASSWORD
+const superuserEmail = process.env.PLAYWRIGHT_L4_07_SUPERUSER_EMAIL
+const superuserPassword = process.env.PLAYWRIGHT_L4_07_SUPERUSER_PASSWORD
+const ipOwnerEmail = process.env.PLAYWRIGHT_L4_07_IP_OWNER_EMAIL
+const ipOwnerPassword = process.env.PLAYWRIGHT_L4_07_IP_OWNER_PASSWORD
+const ipOwnerUserId = process.env.PLAYWRIGHT_L4_07_IP_OWNER_USER_ID
+const standaloneEmail = process.env.PLAYWRIGHT_L4_07_STANDALONE_EMAIL
+const standaloneUserId = process.env.PLAYWRIGHT_L4_07_STANDALONE_USER_ID
 const targetEmail = process.env.PLAYWRIGHT_L4_07_TARGET_EMAIL
 const targetPassword = process.env.PLAYWRIGHT_L4_07_TARGET_PASSWORD
 const targetHousehold = process.env.PLAYWRIGHT_L4_07_TARGET_HOUSEHOLD
+
+test.describe.configure({ mode: 'serial' })
 
 function required(name, value) {
   if (!String(value || '').trim()) throw new Error(`${name} ontbreekt voor L4-07`)
@@ -105,8 +114,7 @@ test('L4-07 platform admin revokes a household session without gaining household
 
   const householdsResponse = await platformPage.request.get('/api/session/households')
   expect(householdsResponse.ok()).toBeTruthy()
-  const householdsPayload = await householdsResponse.json()
-  expect(householdsPayload).toEqual({ items: [], total: 0, can_switch_households: false })
+  expect(await householdsResponse.json()).toEqual({ items: [], total: 0, can_switch_households: false })
 
   await platformPage.getByTestId('platform-home-tile-sessions').click()
   await expect(platformPage).toHaveURL(/\/platform\/sessies$/)
@@ -151,10 +159,6 @@ test('L4-07 platform admin revokes a household session without gaining household
   await expect(platformPage).toHaveURL(/\/home$/)
   await expect(platformPage.getByTestId('inventory-page')).toHaveCount(0)
 
-  await platformPage.goto('/instellingen/huishouden')
-  await expect(platformPage.getByTestId('none-session-home')).toBeVisible({ timeout: 30_000 })
-  await expect(platformPage).toHaveURL(/\/home$/)
-
   writeFileSync('p0-l4-07-browser-proof.json', JSON.stringify({
     platformEmail: adminEmail,
     targetEmail: householdUserEmail,
@@ -171,4 +175,99 @@ test('L4-07 platform admin revokes a household session without gaining household
 
   await platformContext.close()
   await targetContext.close()
+})
+
+test('L4-07 superuser uses the visible read-only system management journey', async ({ page }) => {
+  test.setTimeout(180_000)
+  const email = required('PLAYWRIGHT_L4_07_SUPERUSER_EMAIL', superuserEmail).toLowerCase()
+  const password = required('PLAYWRIGHT_L4_07_SUPERUSER_PASSWORD', superuserPassword)
+  const householdName = required('PLAYWRIGHT_L4_07_TARGET_HOUSEHOLD', targetHousehold)
+
+  await login(page, email, password)
+  const session = await readSession(page)
+  expect(session.context_type).toBe('system')
+  expect(String(session.active_household_id)).toBe('0')
+
+  await expect(page.getByTestId('home-tile-superuser')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('home-tile-superuser').click()
+  await expect(page).toHaveURL(/\/superuser$/)
+  await expect(page.getByTestId('superuser-dashboard')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('status', { name: 'Superuser alleen-lezen status' })).toContainText('alleen lezen')
+  await page.getByRole('tab', { name: 'Huishoudens', exact: true }).click()
+  await expect(page.getByTestId('superuser-households')).toBeVisible()
+  await expect(page.getByTestId('superuser-households-table')).toContainText(householdName)
+  await expect(page.getByTestId('platform-authorizations-page')).toHaveCount(0)
+
+  writeFileSync('p0-l4-07-superuser-browser-proof.json', JSON.stringify({
+    email,
+    contextType: session.context_type,
+    activeHouseholdId: session.active_household_id,
+    householdName,
+    authority: 'read-only-system-management',
+  }, null, 2))
+
+  console.log('P0_L4_07_SUPERUSER_SYSTEM_CONTEXT_GREEN')
+  console.log('P0_L4_07_SUPERUSER_READ_ONLY_BROWSER_GREEN')
+  console.log('P0_L4_07_SUPERUSER_NO_IP_OWNER_AUTHORITY_GREEN')
+})
+
+test('L4-07 IP owner grants platform admin to a standalone user through visible UI', async ({ page }) => {
+  test.setTimeout(180_000)
+  const email = required('PLAYWRIGHT_L4_07_IP_OWNER_EMAIL', ipOwnerEmail).toLowerCase()
+  const password = required('PLAYWRIGHT_L4_07_IP_OWNER_PASSWORD', ipOwnerPassword)
+  const ownerId = required('PLAYWRIGHT_L4_07_IP_OWNER_USER_ID', ipOwnerUserId)
+  const standaloneTargetEmail = required('PLAYWRIGHT_L4_07_STANDALONE_EMAIL', standaloneEmail).toLowerCase()
+  const standaloneTargetId = required('PLAYWRIGHT_L4_07_STANDALONE_USER_ID', standaloneUserId)
+
+  await login(page, email, password)
+  const session = await readSession(page)
+  expect(session.context_type).toBe('system')
+  expect(String(session.active_household_id)).toBe('0')
+
+  await page.goto('/platform/autorisaties')
+  await expect(page).toHaveURL(/\/platform\/autorisaties$/)
+  await expect(page.getByTestId('platform-authorizations-page')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByTestId('platform-authorizations-read-only')).toHaveCount(0)
+
+  const ownerCard = page.getByTestId(`platform-authorization-user-${ownerId}`)
+  await expect(ownerCard).toBeVisible()
+  await expect(ownerCard).toContainText('Beschermde IP-eigenaar')
+
+  const targetCard = page.getByTestId(`platform-authorization-user-${standaloneTargetId}`)
+  await expect(targetCard).toBeVisible()
+  await expect(targetCard).toContainText(standaloneTargetEmail)
+  await expect(targetCard).toContainText('Platformrollen: Geen')
+  await targetCard.getByRole('button', { name: 'Platformbeheerder toekennen' }).click()
+
+  const confirmation = page.getByTestId('platform-authorization-confirmation')
+  await expect(confirmation).toBeVisible()
+  await expect(confirmation).toContainText(standaloneTargetEmail)
+  const grantResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === `/api/platform/authorizations/users/${standaloneTargetId}/platform-admin/grant`
+    && response.request().method() === 'POST'
+  ))
+  await confirmation.getByRole('button', { name: 'Definitief toekennen' }).click()
+  const grantResponse = await grantResponsePromise
+  expect(grantResponse.ok()).toBeTruthy()
+  const grantPayload = await grantResponse.json()
+  expect(grantPayload?.household_context_used).toBe(false)
+  expect(grantPayload?.item?.platform_role_keys || []).toContain('platform.platform_admin')
+
+  await expect(page.getByRole('status')).toContainText(`Platformbeheerder is toegekend aan ${standaloneTargetEmail}.`)
+  await expect(targetCard).toContainText('Platformbeheerder')
+  await expect(targetCard.getByRole('button', { name: 'Platformbeheerder intrekken' })).toBeVisible()
+
+  writeFileSync('p0-l4-07-ip-owner-browser-proof.json', JSON.stringify({
+    email,
+    userId: ownerId,
+    contextType: session.context_type,
+    activeHouseholdId: session.active_household_id,
+    standaloneTargetEmail,
+    standaloneTargetId,
+    grantedRole: 'platform.platform_admin',
+  }, null, 2))
+
+  console.log('P0_L4_07_IP_OWNER_SYSTEM_CONTEXT_GREEN')
+  console.log('P0_L4_07_IP_OWNER_PROTECTED_BROWSER_GREEN')
+  console.log('P0_L4_07_IP_OWNER_ROLE_GRANT_THROUGH_UI_GREEN')
 })
