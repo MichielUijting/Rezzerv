@@ -84,10 +84,19 @@ jobs:
 
       - name: Migrate with dedicated Alembic role
         working-directory: backend
+        shell: bash
         run: |
+          set -euo pipefail
+          mapfile -t heads < <(python -m alembic heads | awk '{print $1}')
+          if [ "${#heads[@]}" -ne 1 ]; then
+            echo "Expected exactly one Alembic head; found ${#heads[@]}: ${heads[*]}" >&2
+            exit 1
+          fi
+          expected_head="${heads[0]}"
           python -m app.schema_migration_preflight | tee /tmp/main-retirement-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/main-retirement-migration.log
-          grep -F "'revision': '20260903_01'" /tmp/main-retirement-migration.log
+          grep -F "'revision': '$expected_head'" /tmp/main-retirement-migration.log
+          echo "POSTGRESQL_MAIN_CURRENT_ALEMBIC_HEAD_GREEN revision=$expected_head"
 
       - name: Prove runtime role has no schema CREATE privilege
         run: |
