@@ -169,7 +169,7 @@ jobs:
           test "$(jq -r '.processStatus' "$proof")" = '500'
           test "$(jq -r '.inventoryRowsAfter' "$proof")" = '0'
           test "$(jq -r '.almostOutRowsBefore' "$proof")" = "$(jq -r '.almostOutRowsAfter' "$proof")"
-          for key in householdId receiptId batchId lineId locationName batchProcessingStatusBefore lineProcessingStatusBefore; do
+          for key in householdId receiptId batchId lineId locationName lineProcessingStatusBefore; do
             value="$(jq -r --arg key "$key" '.[$key] // empty' "$proof")"
             test -n "$value" || { echo "Browser proof mist $key" >&2; exit 1; }
             case "$key" in
@@ -178,10 +178,14 @@ jobs:
               batchId) echo "F6_BATCH_ID=$value" >> "$GITHUB_ENV" ;;
               lineId) echo "F6_LINE_ID=$value" >> "$GITHUB_ENV" ;;
               locationName) echo "F6_LOCATION_NAME=$value" >> "$GITHUB_ENV" ;;
-              batchProcessingStatusBefore) echo "F6_BATCH_STATUS_BEFORE=$value" >> "$GITHUB_ENV" ;;
               lineProcessingStatusBefore) echo "F6_LINE_STATUS_BEFORE=$value" >> "$GITHUB_ENV" ;;
             esac
           done
+          if ! jq -e 'has("batchProcessingStatusBefore")' "$proof" >/dev/null; then
+            echo 'Browser proof mist batchProcessingStatusBefore' >&2
+            exit 1
+          fi
+          echo "F6_BATCH_STATUS_BEFORE=$(jq -r '.batchProcessingStatusBefore // ""' "$proof")" >> "$GITHUB_ENV"
           echo 'F6_RECEIPT_BROWSER_IDENTITIES_CAPTURED_GREEN'
 
       - name: Prove exact PostgreSQL rollback after Receipt failure
