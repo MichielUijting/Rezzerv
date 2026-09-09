@@ -66,6 +66,7 @@ test('P0 Inventory corrects exact non-financial decimal through visible stock an
   await expect(quantityInput).toHaveAttribute('step', 'any')
   await quantityInput.fill(expectedTargetQuantity)
   await expect(quantityInput).toHaveValue(expectedTargetQuantity)
+  const inputValueBeforeSave = await quantityInput.inputValue()
   await form.getByLabel('Reden / notitie').fill(expectedNote)
 
   const mutationResponsePromise = page.waitForResponse((response) => (
@@ -98,7 +99,7 @@ test('P0 Inventory corrects exact non-financial decimal through visible stock an
   const detailInventory = Array.isArray(detailRefreshData?.inventory) ? detailRefreshData.inventory : []
   const detailInventoryRow = detailInventory.find((row) => String(row?.id || '') === expectedInventoryId) || null
   const diagnostic = {
-    inputValue: await quantityInput.inputValue().catch(() => expectedTargetQuantity),
+    inputValue: inputValueBeforeSave,
     requestPostData: mutationResponse.request().postDataJSON?.() || mutationResponse.request().postData(),
     mutationRowQuantity: mutationData?.inventory?.quantity ?? mutationData?.inventory?.aantal ?? null,
     mutationRowNewQuantity: mutationData?.row_new_quantity ?? null,
