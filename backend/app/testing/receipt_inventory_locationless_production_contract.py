@@ -11,8 +11,10 @@ line all keep the location columns NULL.
 """
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import time
+from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import text
@@ -38,9 +40,15 @@ def _wait_for_location_policy_patch(main) -> None:
     )
 
 
+def _register_sqlite_decimal_adapter() -> None:
+    """Keep the legacy SQLite-only harness compatible with exact Decimal values."""
+    sqlite3.register_adapter(Decimal, lambda value: format(value, "f"))
+
+
 def run_locationless_production_contract() -> dict:
     with tempfile.TemporaryDirectory(prefix="rezzerv_locationless_receipt_") as tmp_dir:
         database_path = Path(tmp_dir) / "rezzerv-locationless.sqlite"
+        _register_sqlite_decimal_adapter()
         main = _load_production_module(database_path)
         _initialize_production_schema(main)
         _wait_for_location_policy_patch(main)

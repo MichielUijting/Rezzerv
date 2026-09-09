@@ -213,7 +213,7 @@ def _dev_inventory_preview_row(row):
         "household_article_name": row.get("household_article_name") or row.get("artikel") or "",
         "product_name": row.get("product_name") or row.get("artikel") or "",
         "artikel": row.get("artikel") or "",
-        "aantal": int(row.get("aantal") or 0),
+        "aantal": float(row.get("aantal") or 0),
         "locatie": row.get("locatie") or "",
         "sublocatie": row.get("sublocatie") or "",
         "space_id": row.get("space_id") or None,
@@ -615,7 +615,7 @@ class InventoryEventMutationRequest(BaseModel):
     household_id: Optional[str] = None
     inventory_id: Optional[str] = None
     article_name: Optional[str] = None
-    quantity: int
+    quantity: Decimal
     event_type: str
     space_id: Optional[str] = None
     sublocation_id: Optional[str] = None
@@ -634,7 +634,7 @@ class InventoryEventMutationRequest(BaseModel):
     def validate_quantity(cls, value):
         if value is None:
             raise ValueError("quantity is verplicht")
-        return int(value)
+        return Decimal(str(value))
 
     @field_validator("event_type")
     @classmethod
@@ -6027,7 +6027,7 @@ def fetch_inventory_row_by_article_and_location(conn, *, household_id: str, hous
 
 
 
-def update_inventory_row_quantity(conn, *, inventory_id: str, new_quantity: int):
+def update_inventory_row_quantity(conn, *, inventory_id: str, new_quantity: Decimal):
     conn.execute(
         text(
             """
@@ -6036,7 +6036,7 @@ def update_inventory_row_quantity(conn, *, inventory_id: str, new_quantity: int)
             WHERE id = :id
             """
         ),
-        {"id": str(inventory_id), "new_quantity": int(new_quantity)},
+        {"id": str(inventory_id), "new_quantity": new_quantity},
     )
 
 
@@ -14428,12 +14428,35 @@ def create_barcode_purchase(payload: BarcodePurchaseCreateRequest, authorization
         return response
 
 
+@app.post("/api/household-articles/{household_article_id}/inventory-events")
+def mutate_household_article_inventory_event(
+    household_article_id: str,
+    payload: InventoryEventMutationRequest,
+    authorization: Optional[str] = Header(None),
+):
+    context = require_inventory_write_context(authorization, payload.household_id)
+    household_id = str(context.get("active_household_id") or "demo-household")
+    normalized_article_id = str(household_article_id or '').strip()
+    if not normalized_article_id:
+        raise HTTPException(status_code=400, detail="Huishoudartikel-id ontbreekt")
+    if not payload.inventory_id:
+        raise HTTPException(status_code=400, detail="Voorraadregel-id is verplicht voor deze artikelroute")
+    with engine.begin() as conn:
+        inventory_row = fetch_inventory_row(conn, inventory_id=payload.inventory_id, household_id=household_id)
+        row_article_id = str(inventory_row.get('household_article_id') or '').strip()
+        if row_article_id != normalized_article_id:
+            raise HTTPException(status_code=404, detail="Voorraadregel hoort niet bij dit huishoudartikel")
+    return mutate_inventory_event(payload, authorization)
+
+
 @app.post("/api/inventory-events")
 def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization: Optional[str] = Header(None)):
     context = require_inventory_write_context(authorization, payload.household_id)
     household_id = str(context.get("active_household_id") or "demo-household")
     with engine.begin() as conn:
         event_type = payload.event_type
+        if event_type in {'purchase', 'consume'} and payload.quantity != payload.quantity.to_integral_value():
+            raise HTTPException(status_code=400, detail="Aantal moet voor aankoop en afboeken een geheel getal zijn")
 
         if event_type == 'purchase':
             article_name = normalize_household_article_name(payload.article_name)
@@ -14508,7 +14531,7 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
 
         old_total = get_inventory_total_by_household_article(conn, household_id, household_article_id)
         inventory_id = str(inventory_row['id'])
-        current_row_quantity = int(inventory_row.get('quantity') or 0)
+        current_row_quantity = Decimal(str(inventory_row.get('quantity') or 0))
 
         if event_type == 'consume':
             consume_quantity = int(payload.quantity or 0)
@@ -14543,7 +14566,7 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
                 'row_new_quantity': int(updated_row.get('quantity') or 0),
             }
 
-        adjusted_quantity = int(payload.quantity)
+        adjusted_quantity = Decimal(str(payload.quantity))
         update_inventory_row_quantity(conn, inventory_id=inventory_id, new_quantity=adjusted_quantity)
         if adjusted_quantity == 0:
             delete_inventory_row_if_empty(conn, inventory_id=inventory_id)

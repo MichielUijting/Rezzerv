@@ -24,8 +24,8 @@
   },
   "summary": {
     "total_p0_scenarios": 14,
-    "closed": 11,
-    "residual": 3
+    "closed": 12,
+    "residual": 2
   },
   "scenarios": [
     {
@@ -176,20 +176,25 @@
     },
     {
       "id": "P0-INVENTORY",
-      "status": "residual",
+      "status": "closed",
       "evidence": [
         "frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js",
         "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js",
         "frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js",
         ".github/workflows/f5-postgresql-quantity-unbounded-decimals-regression.yml",
         ".github/workflows/f5-postgresql-history-null-sorting-regression.yml",
-        ".github/workflows/f5-postgresql-locationless-history-events-regression.yml"
+        ".github/workflows/f5-postgresql-locationless-history-events-regression.yml",
+        "frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js",
+        ".github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml"
       ],
-      "closure_note": "aankoop, verbruik, locatievrij gedrag, herhaling, history-semantiek en exacte NUMERIC-opslag zijn bewezen",
-      "residual_scope": [
-        "correctiemutatie als echte browser/API/PostgreSQL-keten",
-        "exacte niet-financiële decimalen door de volledige gebruikersketen tot zichtbare voorraad/historie"
-      ]
+      "closure_note": "correctiemutatie en exacte niet-financiële decimalen zijn nu via de echte Artikeldetail > Voorraad > Corrigeren browserflow bewezen: 1.234567 blijft exact in request, mutation response, zichtbare Voorraad en Historie, terwijl production-like PostgreSQL onder runtime rezzerv_app op Alembic head 20260908_01 exact old=2, new=1.234567 en delta=-0.765433 bewaart",
+      "proof": {
+        "workflow_run_id": 34327455011,
+        "candidate_sha": "cc9b19910cf3f0aa8a972a53a686ae4567d5622e",
+        "conclusion": "success",
+        "artifact_id": 10094573489,
+        "artifact_sha256": "526bdd00544e43d9e0da54474d59a0e21ee43006b8b296301ba3eea53c405177"
+      }
     },
     {
       "id": "P0-ALMOST-OUT",

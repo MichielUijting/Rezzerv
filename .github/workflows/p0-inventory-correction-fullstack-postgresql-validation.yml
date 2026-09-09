@@ -1,0 +1,216 @@
+name: P0 Inventory correction full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/main.py'
+      - 'backend/app/api/article_detail_admin_routes.py'
+      - 'backend/app/services/temporal_inventory_service.py'
+      - 'backend/tests/p0_inventory_correction_fixture.py'
+      - 'backend/tests/test_inventory_event_mutation_decimal_request.py'
+      - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
+      - 'frontend/src/features/articles/tabs/ArticleHistoryTab.jsx'
+      - 'frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'quality/acceptance/p0_residual_closure.json'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-inventory-correction-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p0-inventory-correction:
+    name: P0 Inventory exact decimal correction browser chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Guard browser authority against core route shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'P0 Inventory authority mag kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          grep -F "article-stock-adjust-" "$spec"
+          grep -F "getByLabel('Nieuwe hoeveelheid')" "$spec"
+          grep -F "getByRole('tab', { name: 'Historie'" "$spec"
+          echo 'P0_INVENTORY_NO_CORE_SHORTCUTS_GREEN'
+
+      - name: Build real frontend backend and PostgreSQL images
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+
+      - name: Start real frontend backend and PostgreSQL
+        run: docker compose up -d --no-build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove exact decimal request contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -u - <<'PY' | tee p0-inventory-request-contract.log
+          from decimal import Decimal
+          from app.main import InventoryEventMutationRequest
+
+          adjustment = InventoryEventMutationRequest(
+              quantity='1.234567',
+              event_type='adjustment',
+          )
+          purchase = InventoryEventMutationRequest(
+              quantity='2',
+              event_type='purchase',
+          )
+
+          assert isinstance(adjustment.quantity, Decimal), type(adjustment.quantity)
+          assert adjustment.quantity == Decimal('1.234567'), adjustment.quantity
+          assert isinstance(purchase.quantity, Decimal), type(purchase.quantity)
+          assert purchase.quantity == Decimal('2'), purchase.quantity
+          print('P0_INVENTORY_REQUEST_DECIMAL_GREEN')
+          PY
+          grep -F 'P0_INVENTORY_REQUEST_DECIMAL_GREEN' p0-inventory-request-contract.log
+
+      - name: Prove production-like PostgreSQL runtime boundary
+        shell: bash
+        run: |
+          docker compose exec -T backend python -u - <<'PY' | tee p0-inventory-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert alembic_head
+          print(f'runtime_user={current_user}')
+          print(f'alembic_head={alembic_head}')
+          print('P0_INVENTORY_POSTGRESQL_BOUNDARY_GREEN')
+          PY
+
+      - name: Prepare exact decimal inventory correction state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/p0_inventory_correction_fixture.py prepare | tee p0-inventory-fixture.log
+          grep -F 'P0_INVENTORY_FIXTURE_GREEN' p0-inventory-fixture.log
+          fixture_json="$(grep '^P0_INVENTORY_FIXTURE=' p0-inventory-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          echo "PLAYWRIGHT_P0_INVENTORY_EMAIL=$(jq -r '.email' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_INVENTORY_PASSWORD=$(jq -r '.password' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_INVENTORY_ARTICLE_ID=$(jq -r '.article_id' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_INVENTORY_ARTICLE_NAME=$(jq -r '.article_name' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_INVENTORY_INVENTORY_ID=$(jq -r '.inventory_id' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_INVENTORY_TARGET_QUANTITY=$(jq -r '.target_quantity' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_INVENTORY_NOTE=$(jq -r '.note' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "::add-mask::$(jq -r '.password' <<<"$fixture_json")"
+
+      - name: Correct exact decimal through real Inventory browser UI
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_INVENTORY_EMAIL="$PLAYWRIGHT_P0_INVENTORY_EMAIL" \
+            -e PLAYWRIGHT_P0_INVENTORY_PASSWORD="$PLAYWRIGHT_P0_INVENTORY_PASSWORD" \
+            -e PLAYWRIGHT_P0_INVENTORY_ARTICLE_ID="$PLAYWRIGHT_P0_INVENTORY_ARTICLE_ID" \
+            -e PLAYWRIGHT_P0_INVENTORY_ARTICLE_NAME="$PLAYWRIGHT_P0_INVENTORY_ARTICLE_NAME" \
+            -e PLAYWRIGHT_P0_INVENTORY_INVENTORY_ID="$PLAYWRIGHT_P0_INVENTORY_INVENTORY_ID" \
+            -e PLAYWRIGHT_P0_INVENTORY_TARGET_QUANTITY="$PLAYWRIGHT_P0_INVENTORY_TARGET_QUANTITY" \
+            -e PLAYWRIGHT_P0_INVENTORY_NOTE="$PLAYWRIGHT_P0_INVENTORY_NOTE" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-inventory-correction.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee p0-inventory-browser.log"
+
+      - name: Prove exact PostgreSQL correction end state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e PYTHONPATH=/app \
+            -e P0_INVENTORY_ARTICLE_ID="$PLAYWRIGHT_P0_INVENTORY_ARTICLE_ID" \
+            -e P0_INVENTORY_INVENTORY_ID="$PLAYWRIGHT_P0_INVENTORY_INVENTORY_ID" \
+            backend python /app/tests/p0_inventory_correction_fixture.py verify | tee p0-inventory-postgresql-proof.log
+          grep -F 'P0_INVENTORY_POSTGRESQL_GREEN' p0-inventory-postgresql-proof.log
+
+      - name: Verify browser proof markers
+        shell: bash
+        run: |
+          grep -F 'P0_INVENTORY_CORRECTION_BROWSER_GREEN' frontend/p0-inventory-browser.log
+          grep -F 'P0_INVENTORY_DECIMAL_BROWSER_GREEN' frontend/p0-inventory-browser.log
+          test -s frontend/p0-inventory-browser-proof.json
+          echo 'P0_INVENTORY_BROWSER_PROOF_GREEN'
+
+      - name: Upload P0 Inventory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-inventory-correction-postgresql-evidence
+          path: |
+            p0-inventory-request-contract.log
+            p0-inventory-postgresql-boundary.log
+            p0-inventory-fixture.log
+            p0-inventory-postgresql-proof.log
+            frontend/p0-inventory-browser.log
+            frontend/p0-inventory-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: P0 Inventory gate marker
+        run: echo 'P0_INVENTORY_FULLSTACK_POSTGRESQL_GREEN'
+
+      - name: Dump diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend || true
+          docker compose logs --no-color --tail=200 frontend || true
+
+      - name: Cleanup containers and volumes
+        if: always()
+        run: docker compose down -v --remove-orphans

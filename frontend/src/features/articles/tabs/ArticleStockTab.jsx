@@ -167,8 +167,12 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
     if (!canEditInventory || !householdArticleId || !selectedRow) return
 
     const quantity = Number(mutationForm.quantity)
-    if (!Number.isInteger(quantity) || quantity < 0) {
-      setMutationError('Voer een geldig geheel aantal in.')
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      setMutationError('Voer een geldig aantal in.')
+      return
+    }
+    if (mutationForm.action === 'consume' && !Number.isInteger(quantity)) {
+      setMutationError('Het af te boeken aantal moet een geheel getal zijn.')
       return
     }
     if (mutationForm.action === 'consume' && quantity <= 0) {
@@ -188,7 +192,7 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
         body: JSON.stringify({
           inventory_id: selectedRow.inventoryId,
           article_name: String(sourceArticle?.article_name || sourceArticle?.name || '').trim(),
-          quantity,
+          quantity: mutationForm.action === 'adjustment' ? String(mutationForm.quantity).trim() : quantity,
           event_type: mutationForm.action,
           note: String(mutationForm.note || '').trim() || undefined,
         }),
@@ -381,7 +385,7 @@ export default function ArticleStockTab({ article = {}, articleData, onInventory
                   label={mutationForm.action === 'consume' ? 'Aantal afboeken' : 'Nieuwe hoeveelheid'}
                   type="number"
                   min="0"
-                  step="1"
+                  step={mutationForm.action === 'consume' ? '1' : 'any'}
                   value={mutationForm.quantity}
                   onChange={(formEvent) => setMutationForm((current) => ({ ...current, quantity: formEvent.target.value }))}
                   disabled={mutationBusy}

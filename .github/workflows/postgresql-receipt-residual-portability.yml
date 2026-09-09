@@ -95,7 +95,7 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/receipt-residual-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/receipt-residual-migration.log
-          grep -F "'revision': '20260903_01'" /tmp/receipt-residual-migration.log
+          grep -F "'revision': '20260908_01'" /tmp/receipt-residual-migration.log
 
       - name: Reproduce household members role audit query on PostgreSQL
         working-directory: backend
