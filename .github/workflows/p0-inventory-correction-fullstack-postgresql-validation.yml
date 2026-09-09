@@ -88,9 +88,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose exec -T backend python -m pytest /app/tests/test_inventory_event_mutation_decimal_request.py -q | tee p0-inventory-request-contract.log
-          grep -F '2 passed' p0-inventory-request-contract.log
-          echo 'P0_INVENTORY_REQUEST_DECIMAL_GREEN'
+          docker compose exec -T backend python -u - <<'PY' | tee p0-inventory-request-contract.log
+          from decimal import Decimal
+          from app.main import InventoryEventMutationRequest
+
+          adjustment = InventoryEventMutationRequest(
+              quantity='1.234567',
+              event_type='adjustment',
+          )
+          purchase = InventoryEventMutationRequest(
+              quantity='2',
+              event_type='purchase',
+          )
+
+          assert isinstance(adjustment.quantity, Decimal), type(adjustment.quantity)
+          assert adjustment.quantity == Decimal('1.234567'), adjustment.quantity
+          assert isinstance(purchase.quantity, Decimal), type(purchase.quantity)
+          assert purchase.quantity == Decimal('2'), purchase.quantity
+          print('P0_INVENTORY_REQUEST_DECIMAL_GREEN')
+          PY
+          grep -F 'P0_INVENTORY_REQUEST_DECIMAL_GREEN' p0-inventory-request-contract.log
 
       - name: Prove production-like PostgreSQL runtime boundary
         shell: bash
