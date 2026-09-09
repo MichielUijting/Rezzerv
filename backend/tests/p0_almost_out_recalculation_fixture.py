@@ -109,7 +109,7 @@ def prepare() -> dict:
                 text(
                     """
                     INSERT INTO household_articles (id, household_id, naam, consumable, status, updated_at)
-                    VALUES (:id, :household_id, :name, 0, 'active', CURRENT_TIMESTAMP)
+                    VALUES (:id, :household_id, :name, 1, 'active', CURRENT_TIMESTAMP)
                     """
                 ),
                 {"id": ARTICLE_ID, "household_id": HOUSEHOLD_ID, "name": ARTICLE_NAME},
