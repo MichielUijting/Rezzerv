@@ -10,6 +10,7 @@ on:
       - 'backend/app/api/article_detail_admin_routes.py'
       - 'backend/app/services/temporal_inventory_service.py'
       - 'backend/tests/p0_inventory_correction_fixture.py'
+      - 'backend/tests/test_inventory_event_mutation_decimal_request.py'
       - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
       - 'frontend/src/features/articles/tabs/ArticleHistoryTab.jsx'
       - 'frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js'
@@ -82,6 +83,14 @@ jobs:
           docker compose ps
           docker compose logs --no-color --tail=500 backend
           exit 1
+
+      - name: Prove exact decimal request contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -m pytest /app/tests/test_inventory_event_mutation_decimal_request.py -q | tee p0-inventory-request-contract.log
+          grep -F '2 passed' p0-inventory-request-contract.log
+          echo 'P0_INVENTORY_REQUEST_DECIMAL_GREEN'
 
       - name: Prove production-like PostgreSQL runtime boundary
         shell: bash
@@ -163,6 +172,7 @@ jobs:
         with:
           name: p0-inventory-correction-postgresql-evidence
           path: |
+            p0-inventory-request-contract.log
             p0-inventory-postgresql-boundary.log
             p0-inventory-fixture.log
             p0-inventory-postgresql-proof.log
