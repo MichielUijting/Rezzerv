@@ -12,11 +12,13 @@ PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
 QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
+INVENTORY_QUANTITY_CONTRACT_TABLES = ("inventory", "inventory_events")
 _SQLITE_HEAD_EXTENSION_TABLES = {
     "receipt_sources",
     "raw_receipts",
     PASSWORD_RESET_TABLE,
     *QUANTITY_CONTRACT_TABLES,
+    *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
 _LEGACY_FOUNDATION_POSTGRESQL_TRIGGERS = {
     "trg_household_zero_system_insert",
@@ -51,10 +53,11 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
     """Delegate migration-owned head objects to exact semantic validation.
 
     The receipt objects rebuilt at 20260830_02, the password-reset table at
-    20260902_01 and the quantity-column rebuilds at 20260903_01 are
-    migration-owned extensions to the immutable SQLite baseline. Their
-    contracts are validated semantically below. Every unrelated schema block
-    remains in the immutable byte comparison.
+    20260902_01, the receipt quantity-column rebuilds at 20260903_01 and the
+    inventory quantity-column rebuilds at 20260908_01 are migration-owned
+    extensions to the immutable SQLite baseline. Their contracts are validated
+    semantically below. Every unrelated schema block remains in the immutable
+    byte comparison.
     """
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
     retained: list[str] = []
@@ -155,6 +158,18 @@ def _assert_receipt_household_authority(connection) -> None:
     print("POSTGRESQL_RECEIPT_HOUSEHOLD_AUTHORITY_GREEN")
 
 
+def _assert_unbounded_numeric(table_name: str, column_name: str, column: dict) -> None:
+    column_type = column["type"]
+    if not isinstance(column_type, sa.Numeric):
+        raise AssertionError(
+            f"Expected NUMERIC for {table_name}.{column_name}, got {column_type}"
+        )
+    if getattr(column_type, "precision", None) is not None or getattr(column_type, "scale", None) is not None:
+        raise AssertionError(
+            f"Quantity scale must be unbounded for {table_name}.{column_name}; got {column_type}"
+        )
+
+
 def _assert_quantity_precision_authority(connection) -> None:
     inspector = inspect(connection)
 
@@ -171,15 +186,7 @@ def _assert_quantity_precision_authority(connection) -> None:
         ("purchase_import_lines", "quantity_raw", purchase_columns["quantity_raw"]),
         ("receipt_table_lines", "quantity", receipt_columns["quantity"]),
     ):
-        column_type = column["type"]
-        if not isinstance(column_type, sa.Numeric):
-            raise AssertionError(
-                f"Expected NUMERIC for {table_name}.{column_name}, got {column_type}"
-            )
-        if getattr(column_type, "precision", None) is not None or getattr(column_type, "scale", None) is not None:
-            raise AssertionError(
-                f"Quantity scale must be unbounded for {table_name}.{column_name}; got {column_type}"
-            )
+        _assert_unbounded_numeric(table_name, column_name, column)
 
     for table_name, column_name, column in (
         ("purchase_import_lines", "line_price_raw", purchase_columns["line_price_raw"]),
@@ -196,6 +203,31 @@ def _assert_quantity_precision_authority(connection) -> None:
         print("POSTGRESQL_QUANTITY_PRECISION_SCHEMA_AUTHORITY_GREEN")
     else:
         print("SQLITE_QUANTITY_PRECISION_SCHEMA_AUTHORITY_GREEN")
+
+
+def _assert_inventory_quantity_precision_authority(connection) -> None:
+    inspector = inspect(connection)
+    inventory_columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns("inventory")
+    }
+    event_columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns("inventory_events")
+    }
+
+    for table_name, column_name, column in (
+        ("inventory", "aantal", inventory_columns["aantal"]),
+        ("inventory_events", "quantity", event_columns["quantity"]),
+        ("inventory_events", "old_quantity", event_columns["old_quantity"]),
+        ("inventory_events", "new_quantity", event_columns["new_quantity"]),
+    ):
+        _assert_unbounded_numeric(table_name, column_name, column)
+
+    if connection.dialect.name == "postgresql":
+        print("POSTGRESQL_INVENTORY_EXACT_QUANTITY_SCHEMA_AUTHORITY_GREEN")
+    else:
+        print("SQLITE_INVENTORY_EXACT_QUANTITY_SCHEMA_AUTHORITY_GREEN")
 
 
 def _assert_password_reset_authority(connection) -> None:
@@ -304,6 +336,7 @@ def main() -> None:
                 )
             _assert_receipt_household_authority(connection)
             _assert_quantity_precision_authority(connection)
+            _assert_inventory_quantity_precision_authority(connection)
             _assert_password_reset_authority(connection)
     finally:
         engine.dispose()
