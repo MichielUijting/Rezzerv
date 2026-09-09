@@ -293,6 +293,56 @@ def replay_article(conn, *, household_id: str, household_article_id: str) -> dic
     }
 
 
+def _manual_adjustment_has_incomplete_prior_ledger(
+    conn,
+    *,
+    household_id: str,
+    household_article_id: str,
+    projected_total: Decimal,
+) -> bool:
+    """Protect direct manual corrections when legacy stock has no complete ledger baseline."""
+    manual = conn.execute(text(
+        """
+        SELECT id, old_quantity, new_quantity, event_type, source
+        FROM inventory_events
+        WHERE household_id = :household_id
+          AND COALESCE(household_article_id, article_id) = :household_article_id
+        ORDER BY recorded_at DESC, created_at DESC, id DESC
+        LIMIT 1
+        """
+    ), {
+        "household_id": str(household_id),
+        "household_article_id": str(household_article_id),
+    }).mappings().first()
+    if not manual:
+        return False
+    if str(manual.get("event_type") or "").strip().lower() != "manual_adjustment":
+        return False
+    if str(manual.get("source") or "").strip() != "manual_inventory_api":
+        return False
+    if manual.get("old_quantity") is None or manual.get("new_quantity") is None:
+        return False
+
+    manual_new = Decimal(str(manual["new_quantity"]))
+    if manual_new != projected_total:
+        return False
+
+    prior_ledger_total = Decimal("0")
+    for row in ordered_events(
+        conn,
+        household_id=str(household_id),
+        household_article_id=str(household_article_id),
+    ):
+        if str(row.get("id")) == str(manual["id"]):
+            continue
+        prior_ledger_total += event_delta(
+            str(row.get("event_type") or ""),
+            Decimal(str(row.get("quantity") or 0)),
+        )
+
+    return prior_ledger_total != Decimal(str(manual["old_quantity"]))
+
+
 def reconcile_inventory_total(
     conn,
     *,
@@ -301,12 +351,6 @@ def reconcile_inventory_total(
     preferred_inventory_id: str | None = None,
 ) -> dict:
     """Make the current inventory projection equal the chronological ledger total."""
-    replay = replay_article(
-        conn,
-        household_id=str(household_id),
-        household_article_id=str(household_article_id),
-    )
-    expected = Decimal(str(replay["current_quantity"] or 0))
     current = Decimal(str(conn.execute(text(
         """
         SELECT COALESCE(SUM(aantal), 0)
@@ -319,6 +363,39 @@ def reconcile_inventory_total(
         "household_id": str(household_id),
         "household_article_id": str(household_article_id),
     }).scalar() or 0))
+
+    if _manual_adjustment_has_incomplete_prior_ledger(
+        conn,
+        household_id=str(household_id),
+        household_article_id=str(household_article_id),
+        projected_total=current,
+    ):
+        events = ordered_events(
+            conn,
+            household_id=str(household_id),
+            household_article_id=str(household_article_id),
+        )
+        return {
+            "household_id": str(household_id),
+            "household_article_id": str(household_article_id),
+            "event_count": len(events),
+            "current_quantity": current,
+            "first_effective_at": events[0].get("effective_at") if events else None,
+            "last_effective_at": events[-1].get("effective_at") if events else None,
+            "projected_before": current,
+            "projection_delta": Decimal("0"),
+            "projected_after": current,
+            "target_inventory_id": _normalize_text(preferred_inventory_id),
+            "replay_skipped": True,
+            "replay_skip_reason": "manual_adjustment_prior_ledger_incomplete",
+        }
+
+    replay = replay_article(
+        conn,
+        household_id=str(household_id),
+        household_article_id=str(household_article_id),
+    )
+    expected = Decimal(str(replay["current_quantity"] or 0))
     delta = expected - current
 
     target_id = _normalize_text(preferred_inventory_id)
