@@ -199,7 +199,7 @@ def prepare() -> dict:
                 {
                     **common,
                     "id": CONSUME_EVENT_ID,
-                    "quantity": "2",
+                    "quantity": "-2",
                     "old_quantity": "3",
                     "new_quantity": "1",
                     "note": EXISTING_CONSUME_NOTE,
