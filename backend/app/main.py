@@ -72,6 +72,7 @@ from app.services.receipt_inventory_lifecycle_service import (
     remove_receipt_inventory_events,
     retime_receipt_inventory_events,
 )
+from app.services.temporal_inventory_service import reconcile_inventory_total
 from app.services.receipt_reimport_lineage_service import get_prior_processed_line_fact
 from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
 from app.receipt_ingestion.package_label_extraction import extract_package_from_label
@@ -14583,6 +14584,12 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
             new_quantity=new_total,
             source='manual_inventory_api',
             note=(payload.note or '').strip() or 'Voorraad handmatig aangepast via mutatie-endpoint.',
+        )
+        reconcile_inventory_total(
+            conn,
+            household_id=household_id,
+            household_article_id=household_article_id,
+            preferred_inventory_id=inventory_id,
         )
         return {
             'status': 'ok',
