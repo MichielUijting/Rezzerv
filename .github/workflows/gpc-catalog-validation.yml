@@ -121,8 +121,16 @@ jobs:
           python -m app.cli.import_gpc_catalog /tmp/gpc-validation/nl-v-ci.xml --language nl --source-version ci > /tmp/gpc-validation/import-result.json
 
       - name: Verify PostgreSQL database and audit record
+        shell: bash
         run: |
-          python - <<'PY'
+          set -euo pipefail
+          mapfile -t heads < <(python -m alembic heads | awk '{print $1}')
+          if [ "${#heads[@]}" -ne 1 ]; then
+            echo "Expected exactly one Alembic head; found ${#heads[@]}: ${heads[*]}" >&2
+            exit 1
+          fi
+          expected_head="${heads[0]}"
+          EXPECTED_ALEMBIC_HEAD="$expected_head" python - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -143,9 +151,11 @@ jobs:
           finally:
               engine.dispose()
 
-          assert revision == '20260903_01'
+          expected_revision = os.environ['EXPECTED_ALEMBIC_HEAD']
+          assert revision == expected_revision, (revision, expected_revision)
           assert tuple(brick) == ('Mosterdblad', '50101700')
           assert tuple(audit) == ('nl', 'ci', 'success')
+          print(f'GPC_CATALOG_ALEMBIC_HEAD_GREEN revision={revision}')
           print('GPC_CATALOG_POSTGRESQL_VALIDATION_GREEN')
           PY
 
