@@ -37,6 +37,7 @@ EXPECTED_CLOSED = {
     "P0-RECEIPT-INVENTORY-ALMOSTOUT",
     "P0-KASSA-REVIEW",
     "P0-UNPACKING",
+    "P0-INVENTORY",
     "P0-ARTICLE-IDENTITY",
     "P0-MIGRATION-STARTUP",
 }
@@ -103,8 +104,8 @@ def main() -> None:
 
     summary = closure.get("summary", {})
     require(summary.get("total_p0_scenarios") == 14, "closure_summary_total_14")
-    require(summary.get("closed") == len(EXPECTED_CLOSED) == 11, "closure_summary_closed_11")
-    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 3, "closure_summary_residual_3")
+    require(summary.get("closed") == len(EXPECTED_CLOSED) == 12, "closure_summary_closed_12")
+    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 2, "closure_summary_residual_2")
 
     for scenario in closure_scenarios:
         scenario_id = scenario["id"]
@@ -146,6 +147,14 @@ def main() -> None:
     require(unpacking_proof.get("workflow_run_id") == 34254866285, "p0_unpacking_proof_run_exact")
     require(unpacking_proof.get("candidate_sha") == "8abc6469de611784d4948967b6a66648365a7f76", "p0_unpacking_proof_candidate_exact")
     require(unpacking_proof.get("conclusion") == "success", "p0_unpacking_proof_success")
+
+    inventory = next(row for row in closure_scenarios if row.get("id") == "P0-INVENTORY")
+    inventory_proof = inventory.get("proof", {})
+    require(inventory_proof.get("workflow_run_id") == 34327455011, "p0_inventory_proof_run_exact")
+    require(inventory_proof.get("candidate_sha") == "cc9b19910cf3f0aa8a972a53a686ae4567d5622e", "p0_inventory_proof_candidate_exact")
+    require(inventory_proof.get("conclusion") == "success", "p0_inventory_proof_success")
+    require(inventory_proof.get("artifact_id") == 10094573489, "p0_inventory_proof_artifact_exact")
+    require(inventory_proof.get("artifact_sha256") == "526bdd00544e43d9e0da54474d59a0e21ee43006b8b296301ba3eea53c405177", "p0_inventory_proof_artifact_sha256_exact")
 
     registry_rows = {row.get("id"): row for row in registry.get("defect_classes", [])}
     require(EXPECTED_F5_IDS <= set(registry_rows), "registry_contains_f5_01_through_f5_14")
