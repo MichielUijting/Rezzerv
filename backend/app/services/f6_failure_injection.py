@@ -61,7 +61,8 @@ def _parameter_mappings(multiparams: Any, params: Any):
 
 
 def _is_receipt_finalization_update(clauseelement: Any, multiparams: Any, params: Any) -> bool:
-    sql = " ".join(str(clauseelement or "").strip().upper().split())
+    sql_source = clauseelement if clauseelement is not None else ""
+    sql = " ".join(str(sql_source).strip().upper().split())
     if not sql.startswith("UPDATE PURCHASE_IMPORT_BATCHES"):
         return False
     if "PROCESSING_STATUS" not in sql or "PROCESSED_AT" not in sql:
