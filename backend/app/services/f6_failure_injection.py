@@ -34,8 +34,8 @@ def _contains_sentinel(value: Any) -> bool:
 
 
 def _is_mutating_statement(clauseelement: Any) -> bool:
-    sql = str(clauseelement or "").lstrip().upper()
-    return sql.startswith(_MUTATING_SQL_PREFIXES)
+    sql = str(clauseelement) if clauseelement is not None else ""
+    return sql.lstrip().upper().startswith(_MUTATING_SQL_PREFIXES)
 
 
 def inject_f6_controlled_failure_before_execute(conn, clauseelement, multiparams, params, execution_options):
