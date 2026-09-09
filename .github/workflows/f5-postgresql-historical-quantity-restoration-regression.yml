@@ -113,13 +113,13 @@ jobs:
           grep -F 'PASS historical_quantity_legacy_fixture_seeded_at_20260902_01' f5-historical-quantity-seed.log
           grep -F 'PASS postgresql_runtime_is_dml_only' f5-historical-quantity-seed.log
 
-      - name: Apply F5-06 restoration migration
+      - name: Apply exact F5-06 restoration migration
         shell: bash
         run: |
           set -euo pipefail
           (
             cd backend
-            python -m alembic upgrade head
+            python -m alembic upgrade 20260903_01
             python -m alembic current
           ) | tee f5-historical-quantity-upgrade.log
           grep -F '20260903_01' f5-historical-quantity-upgrade.log
@@ -148,13 +148,13 @@ jobs:
           python backend/tests/postgresql_historical_quantity_restoration_selftest.py prepare-guard | tee f5-historical-quantity-guard-seed.log
           grep -F 'PASS guarded_quantity_user_edits_prepared' f5-historical-quantity-guard-seed.log
 
-      - name: Reapply migration and prove user edits are guarded
+      - name: Reapply exact F5-06 migration and prove user edits are guarded
         shell: bash
         run: |
           set -euo pipefail
           (
             cd backend
-            python -m alembic upgrade head
+            python -m alembic upgrade 20260903_01
             python -m alembic current
           ) | tee f5-historical-quantity-reupgrade.log
           grep -F '20260903_01' f5-historical-quantity-reupgrade.log
@@ -163,6 +163,24 @@ jobs:
           grep -F 'PASS historical_quantity_guard_preserves_user_edit_1_23' f5-postgresql-historical-quantity-guard.log
           grep -F 'PASS historical_quantity_guard_remains_uuid_scoped' f5-postgresql-historical-quantity-guard.log
           grep -F 'F5_HISTORICAL_QUANTITY_GUARD_GREEN' f5-postgresql-historical-quantity-guard.log
+
+      - name: Prove historical restoration composes through current Alembic head
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t heads < <(cd backend && python -m alembic heads | awk '{print $1}')
+          if [ "${#heads[@]}" -ne 1 ]; then
+            echo "Expected exactly one Alembic head; found ${#heads[@]}: ${heads[*]}" >&2
+            exit 1
+          fi
+          expected_head="${heads[0]}"
+          (
+            cd backend
+            python -m alembic upgrade head
+            python -m alembic current
+          ) | tee f5-historical-quantity-current-head.log
+          grep -F "$expected_head" f5-historical-quantity-current-head.log
+          echo "F5_HISTORICAL_QUANTITY_CURRENT_HEAD_GREEN revision=$expected_head"
 
       - name: Upload F5 historical quantity evidence
         if: always()
@@ -180,5 +198,6 @@ jobs:
             f5-historical-quantity-guard-seed.log
             f5-historical-quantity-reupgrade.log
             f5-postgresql-historical-quantity-guard.log
+            f5-historical-quantity-current-head.log
           if-no-files-found: error
           retention-days: 7
