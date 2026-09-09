@@ -36,7 +36,7 @@ def _require_superuser(conn: Connection, raw_session_id: str | None):
     ensure_authorization_foundation(conn)
     granted = conn.execute(text("""
         SELECT 1 FROM auth_platform_user_roles
-        WHERE user_id = :user_id AND role_key = :role_key AND active = 1 LIMIT 1
+        WHERE user_id = :user_id AND role_key = :role_key AND active IS TRUE LIMIT 1
     """), {"user_id": context.user_id, "role_key": SUPERUSER_ROLE_KEY}).first()
     if not granted:
         raise HTTPException(status_code=403, detail="Alleen de platform-supergebruiker heeft toegang tot huishoudinzage")
@@ -96,7 +96,7 @@ def _active_record_clauses(columns: set[str], *, alias: str = "") -> list[str]:
     if "deleted_at" in columns:
         clauses.append(f"{prefix}deleted_at IS NULL")
     if "is_deleted" in columns:
-        clauses.append(f"COALESCE({prefix}is_deleted, 0) = 0")
+        clauses.append(f"{prefix}is_deleted IS NOT TRUE")
     return clauses
 
 

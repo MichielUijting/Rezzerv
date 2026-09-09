@@ -38,7 +38,9 @@ EXPECTED_CLOSED = {
     "P0-KASSA-REVIEW",
     "P0-UNPACKING",
     "P0-INVENTORY",
+    "P0-ALMOST-OUT",
     "P0-ARTICLE-IDENTITY",
+    "P0-PLATFORM-AUTHORITY",
     "P0-MIGRATION-STARTUP",
 }
 
@@ -104,8 +106,8 @@ def main() -> None:
 
     summary = closure.get("summary", {})
     require(summary.get("total_p0_scenarios") == 14, "closure_summary_total_14")
-    require(summary.get("closed") == len(EXPECTED_CLOSED) == 12, "closure_summary_closed_12")
-    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 2, "closure_summary_residual_2")
+    require(summary.get("closed") == len(EXPECTED_CLOSED) == 14, "closure_summary_closed_14")
+    require(summary.get("residual") == len(EXPECTED_RESIDUAL) == 0, "closure_summary_residual_0")
 
     for scenario in closure_scenarios:
         scenario_id = scenario["id"]
@@ -155,6 +157,22 @@ def main() -> None:
     require(inventory_proof.get("conclusion") == "success", "p0_inventory_proof_success")
     require(inventory_proof.get("artifact_id") == 10094573489, "p0_inventory_proof_artifact_exact")
     require(inventory_proof.get("artifact_sha256") == "526bdd00544e43d9e0da54474d59a0e21ee43006b8b296301ba3eea53c405177", "p0_inventory_proof_artifact_sha256_exact")
+
+    p0_almost_out = next(row for row in closure_scenarios if row.get("id") == "P0-ALMOST-OUT")
+    p0_almost_out_proof = p0_almost_out.get("proof", {})
+    require(p0_almost_out_proof.get("workflow_run_id") == 34357026889, "p0_almost_out_proof_run_exact")
+    require(p0_almost_out_proof.get("candidate_sha") == "1ac8107277b58907a3c4bed0d5b179c21b666647", "p0_almost_out_proof_candidate_exact")
+    require(p0_almost_out_proof.get("conclusion") == "success", "p0_almost_out_proof_success")
+    require(p0_almost_out_proof.get("artifact_id") == 10106363372, "p0_almost_out_proof_artifact_exact")
+    require(p0_almost_out_proof.get("artifact_sha256") == "ff98c88dc395f7ef1e981f7dc28736c02f997ef7a48d10010d46d7cf3a756e92", "p0_almost_out_proof_artifact_sha256_exact")
+
+    p0_platform_authority = next(row for row in closure_scenarios if row.get("id") == "P0-PLATFORM-AUTHORITY")
+    p0_platform_authority_proof = p0_platform_authority.get("proof", {})
+    require(p0_platform_authority_proof.get("workflow_run_id") == 34374530657, "p0_platform_authority_proof_run_exact")
+    require(p0_platform_authority_proof.get("candidate_sha") == "7157ebd21ebc2c8eff655ba234b3dad199c49675", "p0_platform_authority_proof_candidate_exact")
+    require(p0_platform_authority_proof.get("conclusion") == "success", "p0_platform_authority_proof_success")
+    require(p0_platform_authority_proof.get("artifact_id") == 10113460701, "p0_platform_authority_proof_artifact_exact")
+    require(p0_platform_authority_proof.get("artifact_sha256") == "80123bd07351c55241eabc7397216886816ea5cbe13238e5f568d8fac79aa194", "p0_platform_authority_proof_artifact_sha256_exact")
 
     registry_rows = {row.get("id"): row for row in registry.get("defect_classes", [])}
     require(EXPECTED_F5_IDS <= set(registry_rows), "registry_contains_f5_01_through_f5_14")

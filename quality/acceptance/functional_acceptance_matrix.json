@@ -200,9 +200,9 @@
         "L1": {"status": "partial", "evidence": ["backend/app/testing/receipt_inventory_production_chain.py"]},
         "L2": {"status": "covered", "evidence": ["scripts/run-receipt-inventory-chain.ps1"]},
         "L3": {"status": "covered", "evidence": ["backend/tests/almost_out_api_projection_selftest.py", ".github/workflows/almost-out-api-projection-validation.yml", ".github/workflows/receipt-inventory-chain-post-merge.yml"]},
-        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml", "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml"]}
+        "L4": {"status": "covered", "evidence": ["frontend/tests/e2e/p0-receipt-inventory.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml", "frontend/tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js", ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml", "backend/tests/p0_almost_out_recalculation_fixture.py", "frontend/tests/e2e/p0-almost-out-recalculation.fullstack.spec.js", ".github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml"]}
       },
-      "gap": "L4-03 en L4-04 bewijzen in echte UI dat Bijna-op correct projecteert met locaties AAN en UIT. De bredere herberekeningsvarianten blijven op L3 bewezen maar zijn nog niet als zelfstandige L4-variant uitgevoerd."
+      "gap": "L4-03 en L4-04 bewijzen in echte UI de drempelprojectie met locaties AAN en UIT. De zelfstandige P0 Almost-out recalculation-authority bewijst aanvullend via echte browsercorrectie en production-like PostgreSQL-replay dat bestaande historie chronologisch wordt herberekend, de eindvoorraad exact 4 wordt en Bijna-op zichtbaar van JA naar NEE gaat. De release-relevante herberekeningsvariant is daarmee L4-covered."
     },
     {
       "id": "P0-ARTICLE-IDENTITY",
@@ -234,9 +234,9 @@
         "L1": {"status": "partial", "evidence": ["backend/tests/authorization_role_matrix_selftest.py", "backend/tests/platform_admin_acceptance_closure_selftest.py"]},
         "L2": {"status": "covered", "evidence": [".github/workflows/platform-admin-acceptance-closure-validation.yml"]},
         "L3": {"status": "covered", "evidence": ["backend/tests/platform_authority_api_selftest.py", ".github/workflows/platform-authority-api-validation.yml", "backend/tests/test_platform_sessions_route_authorization.py", "backend/tests/test_platform_users_route_authorization.py", "backend/tests/test_platform_authorizations_route_authorization.py"]},
-        "L4": {"status": "partial", "evidence": ["frontend/tests/e2e/p0-platform-authority.fullstack.spec.js", ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml", "scripts/acceptance/l4_07_platform_browser_authority.py"]}
+        "L4": {"status": "covered", "evidence": ["frontend/tests/e2e/p0-platform-authority.fullstack.spec.js", ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml", "scripts/acceptance/l4_07_platform_browser_authority.py", "backend/tests/test_l4_07_platform_browser_authority_contract.py"]}
       },
-      "gap": "L4-07 bewijst via twee echte browsers dat een gewone huishoudbeheerder een actieve sessie heeft, een losstaande platformbeheerder in none-context via Platformbeheer -> Sessies die sessie kan intrekken, de doelgebruiker daarna 401/redirect krijgt, de platformbeheerder zelf actief blijft en geen Voorraad/Huishoudinstellingen of huishoudlidmaatschap verkrijgt; PostgreSQL bevestigt de exacte eindstaat en DML-only runtime. Superuser- en IP-owner-specifieke beheerreizen blijven op L3 bewezen en zijn nog niet als afzonderlijke L4-browservarianten uitgevoerd."
+      "gap": "L4-07 bewijst nu alle release-relevante platformrolvarianten via de echte browser/frontend/backend/PostgreSQL-stack: platformbeheerder trekt een huishoudsessie in zonder huishoudprivilege-escalatie, superuser gebruikt zichtbaar read-only systeembeheer en IP-owner kent via zichtbare Platformautorisaties een platformbeheerderrol toe. PostgreSQL bevestigt rolgrenzen, audit, sessiestatus, DML-only runtime en dat de platformidentiteiten geen huishoudlidmaatschap verkrijgen. Platform Authority is daarmee L4-covered."
     },
     {
       "id": "P0-MIGRATION-STARTUP",

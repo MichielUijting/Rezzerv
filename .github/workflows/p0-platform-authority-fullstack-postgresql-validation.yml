@@ -18,10 +18,12 @@ on:
       - 'frontend/src/features/auth/**'
       - 'frontend/src/features/home/**'
       - 'frontend/src/features/platform/**'
+      - 'frontend/src/features/superuser/**'
       - 'frontend/playwright.fullstack.config.js'
       - 'frontend/tests/e2e/p0-platform-authority.fullstack.spec.js'
       - 'scripts/acceptance/l4_07_platform_browser_authority.py'
       - 'quality/acceptance/functional_acceptance_matrix.json'
+      - 'quality/acceptance/p0_residual_closure.json'
       - 'docs/TEST_MATRIX.md'
       - 'docs/TEST_IMPLEMENTATION_BACKLOG.md'
       - 'docker-compose.yml'
@@ -38,7 +40,7 @@ concurrency:
 
 jobs:
   l4-platform-authority:
-    name: L4-07 platform function without household privilege escalation
+    name: L4-07 complete platform-role authority without household privilege escalation
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -55,26 +57,54 @@ jobs:
       - name: Prepare deterministic L4-07 identities
         shell: bash
         run: |
+          set -euo pipefail
           suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           platform_password="L4-Platform-${suffix}-Pass!"
+          superuser_password="L4-Superuser-${suffix}-Pass!"
+          ip_owner_password="L4-IpOwner-${suffix}-Pass!"
+          standalone_password="L4-Standalone-${suffix}-Pass!"
           target_password="L4-Household-${suffix}-Pass!"
           echo "L4_PLATFORM_USER_ID=l4-platform-admin-${suffix}" >> "$GITHUB_ENV"
           echo "L4_PLATFORM_EMAIL=l4-platform-admin-${suffix}@example.com" >> "$GITHUB_ENV"
           echo "L4_PLATFORM_PASSWORD=$platform_password" >> "$GITHUB_ENV"
+          echo "L4_SUPERUSER_USER_ID=l4-superuser-${suffix}" >> "$GITHUB_ENV"
+          echo "L4_SUPERUSER_EMAIL=l4-superuser-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "L4_SUPERUSER_PASSWORD=$superuser_password" >> "$GITHUB_ENV"
+          echo "L4_IP_OWNER_USER_ID=l4-ip-owner-${suffix}" >> "$GITHUB_ENV"
+          echo "L4_IP_OWNER_EMAIL=l4-ip-owner-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "L4_IP_OWNER_PASSWORD=$ip_owner_password" >> "$GITHUB_ENV"
+          echo "L4_STANDALONE_USER_ID=l4-standalone-${suffix}" >> "$GITHUB_ENV"
+          echo "L4_STANDALONE_EMAIL=l4-standalone-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "L4_STANDALONE_PASSWORD=$standalone_password" >> "$GITHUB_ENV"
           echo "L4_TARGET_EMAIL=l4-household-admin-${suffix}@example.com" >> "$GITHUB_ENV"
           echo "L4_TARGET_PASSWORD=$target_password" >> "$GITHUB_ENV"
           echo "L4_TARGET_HOUSEHOLD=L4 Platform target household ${suffix}" >> "$GITHUB_ENV"
           echo "::add-mask::$platform_password"
+          echo "::add-mask::$superuser_password"
+          echo "::add-mask::$ip_owner_password"
+          echo "::add-mask::$standalone_password"
           echo "::add-mask::$target_password"
+
+      - name: Compile authority fixture and browser spec
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/acceptance/l4_07_platform_browser_authority.py
+          node --check frontend/tests/e2e/p0-platform-authority.fullstack.spec.js
+          echo 'P0_L4_07_AUTHORITY_COMPILE_GREEN'
 
       - name: Guard L4-07 browser authority against core route mocks
         shell: bash
         run: |
+          set -euo pipefail
           spec='frontend/tests/e2e/p0-platform-authority.fullstack.spec.js'
           if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
             echo 'L4-07 mag geen kern-API mocken of via request-mutaties uitvoeren.' >&2
             exit 1
           fi
+          grep -F "home-tile-superuser" "$spec"
+          grep -F "Platformbeheerder toekennen" "$spec"
+          grep -F "Definitief toekennen" "$spec"
           echo 'P0_L4_07_NO_CORE_ROUTE_MOCKS_GREEN'
 
       - name: Build and start real frontend, backend and PostgreSQL
@@ -97,23 +127,37 @@ jobs:
           docker compose logs --no-color --tail=500 backend
           exit 1
 
-      - name: Seed standalone platform administrator through DML-only runtime
+      - name: Seed standalone platform identities through DML-only runtime
         shell: bash
         run: |
+          set -euo pipefail
           cat scripts/acceptance/l4_07_platform_browser_authority.py | docker compose exec -T \
             -e L4_PLATFORM_USER_ID -e L4_PLATFORM_EMAIL -e L4_PLATFORM_PASSWORD \
+            -e L4_SUPERUSER_USER_ID -e L4_SUPERUSER_EMAIL -e L4_SUPERUSER_PASSWORD \
+            -e L4_IP_OWNER_USER_ID -e L4_IP_OWNER_EMAIL -e L4_IP_OWNER_PASSWORD \
+            -e L4_STANDALONE_USER_ID -e L4_STANDALONE_EMAIL -e L4_STANDALONE_PASSWORD \
             backend python -u - setup 2>&1 | tee p0-l4-07-platform-setup.log
           grep -F 'P0_L4_07_PLATFORM_FIXTURE_GREEN' p0-l4-07-platform-setup.log
+          grep -F 'P0_L4_07_SUPERUSER_FIXTURE_GREEN' p0-l4-07-platform-setup.log
+          grep -F 'P0_L4_07_IP_OWNER_FIXTURE_GREEN' p0-l4-07-platform-setup.log
           grep -F 'P0_L4_07_POSTGRESQL_BOUNDARY_GREEN' p0-l4-07-platform-setup.log
 
-      - name: Run L4-07 through the real browser UI
+      - name: Run all L4-07 platform roles through the real browser UI
         shell: bash
         run: |
+          set -euo pipefail
           docker run --rm \
             --add-host=host.docker.internal:host-gateway \
             -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
             -e PLAYWRIGHT_L4_07_PLATFORM_EMAIL="$L4_PLATFORM_EMAIL" \
             -e PLAYWRIGHT_L4_07_PLATFORM_PASSWORD="$L4_PLATFORM_PASSWORD" \
+            -e PLAYWRIGHT_L4_07_SUPERUSER_EMAIL="$L4_SUPERUSER_EMAIL" \
+            -e PLAYWRIGHT_L4_07_SUPERUSER_PASSWORD="$L4_SUPERUSER_PASSWORD" \
+            -e PLAYWRIGHT_L4_07_IP_OWNER_EMAIL="$L4_IP_OWNER_EMAIL" \
+            -e PLAYWRIGHT_L4_07_IP_OWNER_PASSWORD="$L4_IP_OWNER_PASSWORD" \
+            -e PLAYWRIGHT_L4_07_IP_OWNER_USER_ID="$L4_IP_OWNER_USER_ID" \
+            -e PLAYWRIGHT_L4_07_STANDALONE_EMAIL="$L4_STANDALONE_EMAIL" \
+            -e PLAYWRIGHT_L4_07_STANDALONE_USER_ID="$L4_STANDALONE_USER_ID" \
             -e PLAYWRIGHT_L4_07_TARGET_EMAIL="$L4_TARGET_EMAIL" \
             -e PLAYWRIGHT_L4_07_TARGET_PASSWORD="$L4_TARGET_PASSWORD" \
             -e PLAYWRIGHT_L4_07_TARGET_HOUSEHOLD="$L4_TARGET_HOUSEHOLD" \
@@ -125,11 +169,20 @@ jobs:
           grep -F 'P0_L4_07_SESSION_REVOKE_THROUGH_UI_GREEN' frontend/p0-l4-07-browser.log
           grep -F 'P0_L4_07_REVOKED_TARGET_SESSION_GREEN' frontend/p0-l4-07-browser.log
           grep -F 'P0_L4_07_NO_HOUSEHOLD_PRIVILEGE_ESCALATION_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_SUPERUSER_SYSTEM_CONTEXT_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_SUPERUSER_READ_ONLY_BROWSER_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_SUPERUSER_NO_IP_OWNER_AUTHORITY_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_IP_OWNER_SYSTEM_CONTEXT_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_IP_OWNER_PROTECTED_BROWSER_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_IP_OWNER_ROLE_GRANT_THROUGH_UI_GREEN' frontend/p0-l4-07-browser.log
           test -s frontend/p0-l4-07-browser-proof.json
+          test -s frontend/p0-l4-07-superuser-browser-proof.json
+          test -s frontend/p0-l4-07-ip-owner-browser-proof.json
 
       - name: Capture browser proof for PostgreSQL verification
         shell: bash
         run: |
+          set -euo pipefail
           proof='frontend/p0-l4-07-browser-proof.json'
           target_household_id="$(jq -r '.targetHouseholdId // empty' "$proof")"
           revoked_session_id="$(jq -r '.revokedSessionId // empty' "$proof")"
@@ -141,13 +194,20 @@ jobs:
       - name: Verify exact L4-07 PostgreSQL end state
         shell: bash
         run: |
+          set -euo pipefail
           cat scripts/acceptance/l4_07_platform_browser_authority.py | docker compose exec -T \
             -e L4_PLATFORM_USER_ID -e L4_PLATFORM_EMAIL \
+            -e L4_SUPERUSER_USER_ID -e L4_SUPERUSER_EMAIL \
+            -e L4_IP_OWNER_USER_ID -e L4_IP_OWNER_EMAIL \
+            -e L4_STANDALONE_USER_ID -e L4_STANDALONE_EMAIL \
             -e L4_TARGET_EMAIL -e L4_TARGET_HOUSEHOLD_ID -e L4_REVOKED_SESSION_ID \
             backend python -u - verify 2>&1 | tee p0-l4-07-postgresql-end-state.log
           grep -F 'P0_L4_07_PLATFORM_ROLE_WITHOUT_HOUSEHOLD_MEMBERSHIP_GREEN' p0-l4-07-postgresql-end-state.log
           grep -F 'P0_L4_07_TARGET_SESSION_REVOKED_GREEN' p0-l4-07-postgresql-end-state.log
           grep -F 'P0_L4_07_PLATFORM_SESSION_REMAINS_ACTIVE_GREEN' p0-l4-07-postgresql-end-state.log
+          grep -F 'P0_L4_07_SUPERUSER_ROLE_BOUNDARY_GREEN' p0-l4-07-postgresql-end-state.log
+          grep -F 'P0_L4_07_IP_OWNER_ROLE_GRANT_AUDIT_GREEN' p0-l4-07-postgresql-end-state.log
+          grep -F 'P0_L4_07_STANDALONE_TARGET_NO_HOUSEHOLD_GREEN' p0-l4-07-postgresql-end-state.log
           grep -F 'P0_L4_07_POSTGRESQL_END_STATE_GREEN' p0-l4-07-postgresql-end-state.log
 
       - name: Upload L4-07 evidence
@@ -156,13 +216,19 @@ jobs:
         with:
           name: p0-l4-07-platform-authority-evidence
           if-no-files-found: warn
+          retention-days: 14
           path: |
             frontend/p0-l4-07-browser.log
             frontend/p0-l4-07-browser-proof.json
+            frontend/p0-l4-07-superuser-browser-proof.json
+            frontend/p0-l4-07-ip-owner-browser-proof.json
             frontend/test-results/
             frontend/playwright-report-fullstack/
             p0-l4-07-platform-setup.log
             p0-l4-07-postgresql-end-state.log
+
+      - name: P0 platform authority gate marker
+        run: echo 'P0_PLATFORM_AUTHORITY_FULLSTACK_POSTGRESQL_GREEN'
 
       - name: Show stack diagnostics on failure
         if: failure()
