@@ -93,6 +93,7 @@ jobs:
     env:
       COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
       COMPOSE_PROFILES: postgresql
+      COMPOSE_PROJECT_NAME: tpci04inventory${{ github.run_id }}
       PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
       PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble
 
@@ -178,7 +179,8 @@ jobs:
               docker compose ps || true
               docker compose logs --no-color --tail=500 backend frontend postgres || true
             fi
-            docker compose down -v --remove-orphans || true
+            docker compose down --remove-orphans || true
+            docker volume rm "${COMPOSE_PROJECT_NAME}_rezzerv_postgres" >/dev/null 2>&1 || true
             exit "$rc"
           }
           trap cleanup EXIT
@@ -301,7 +303,8 @@ jobs:
               docker compose ps || true
               docker compose logs --no-color --tail=500 backend frontend postgres || true
             fi
-            docker compose down -v --remove-orphans || true
+            docker compose down --remove-orphans || true
+            docker volume rm "${COMPOSE_PROJECT_NAME}_rezzerv_postgres" >/dev/null 2>&1 || true
             exit "$rc"
           }
           trap cleanup EXIT
@@ -422,7 +425,8 @@ jobs:
               docker compose ps || true
               docker compose logs --no-color --tail=500 backend frontend postgres || true
             fi
-            docker compose down -v --remove-orphans || true
+            docker compose down --remove-orphans || true
+            docker volume rm "${COMPOSE_PROJECT_NAME}_rezzerv_postgres" >/dev/null 2>&1 || true
             exit "$rc"
           }
           trap cleanup EXIT
@@ -539,6 +543,8 @@ jobs:
           F6_INVENTORY_OUTCOME: ${{ steps.f6_inventory.outcome }}
         run: |
           set -euo pipefail
+          cleanup_all() { docker compose down -v --remove-orphans || true; }
+          trap cleanup_all EXIT
           echo "run_p0_inventory=$RUN_P0_INVENTORY outcome_p0_inventory=$P0_INVENTORY_OUTCOME"
           echo "run_p0_almost_out=$RUN_P0_ALMOST_OUT outcome_p0_almost_out=$P0_ALMOST_OUT_OUTCOME"
           echo "run_f6_inventory=$RUN_F6_INVENTORY outcome_f6_inventory=$F6_INVENTORY_OUTCOME"
