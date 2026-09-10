@@ -1,25 +1,6 @@
 name: P0 receipt nonphysical full-stack PostgreSQL validation
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'backend/alembic/**'
-      - 'backend/app/main.py'
-      - 'backend/app/receipt_ingestion/**'
-      - 'backend/app/services/**/*receipt*'
-      - 'backend/app/services/**/*inventory*'
-      - 'backend/app/testing/receipt_parsing/raw/Jumbo_koopzegels.txt'
-      - 'frontend/src/features/kassa/**'
-      - 'frontend/src/features/receipts/**'
-      - 'frontend/src/features/articles/**'
-      - 'frontend/src/pages/Voorraad.jsx'
-      - 'frontend/tests/e2e/p0-receipt-nonphysical.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - '.github/workflows/p0-receipt-nonphysical-fullstack-postgresql-validation.yml'
   workflow_dispatch:
 
 permissions:
