@@ -2,9 +2,12 @@ import { defineConfig, devices } from '@playwright/test'
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5174'
 const f509AuthorityEnabled = Boolean(String(process.env.PLAYWRIGHT_F5_09_EMAIL || '').trim())
-const fullstackTestMatch = f509AuthorityEnabled
-  ? /(?:p0-(?:onboarding|account-session|authorization-isolation|receipt-inventory(?:-(?:locations-off|idempotency))?|receipt-nonphysical|kassa-review|article-identity-history|platform-authority|unpacking|inventory-correction|almost-out-recalculation)|f5-unclassified-unpacking-choice)\.fullstack\.spec\.js/
-  : /p0-(onboarding|account-session|authorization-isolation|receipt-inventory(?:-(?:locations-off|idempotency))?|receipt-nonphysical|kassa-review|article-identity-history|platform-authority|unpacking|inventory-correction|almost-out-recalculation)\.fullstack\.spec\.js/
+const f6InventoryAuthorityEnabled = Boolean(String(process.env.PLAYWRIGHT_F6_INVENTORY_EMAIL || '').trim())
+const fullstackTestMatch = f6InventoryAuthorityEnabled
+  ? /f6-inventory-controlled-5xx\.fullstack\.spec\.js/
+  : f509AuthorityEnabled
+    ? /(?:p0-(?:onboarding|account-session|authorization-isolation|receipt-inventory(?:-(?:locations-off|idempotency))?|receipt-nonphysical|kassa-review|article-identity-history|platform-authority|unpacking|inventory-correction|almost-out-recalculation)|f5-unclassified-unpacking-choice)\.fullstack\.spec\.js/
+    : /p0-(onboarding|account-session|authorization-isolation|receipt-inventory(?:-(?:locations-off|idempotency))?|receipt-nonphysical|kassa-review|article-identity-history|platform-authority|unpacking|inventory-correction|almost-out-recalculation)\.fullstack\.spec\.js/
 
 export default defineConfig({
   testDir: './tests/e2e',

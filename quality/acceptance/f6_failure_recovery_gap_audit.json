@@ -29,9 +29,9 @@
     "total_p0_scenarios": 14,
     "categories_per_scenario": 10,
     "total_assessments": 140,
-    "covered": 15,
-    "partial": 64,
-    "gap": 38,
+    "covered": 18,
+    "partial": 62,
+    "gap": 37,
     "na": 23
   },
   "priority_slices": [
@@ -297,21 +297,27 @@
       "evidence": [
         "frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js",
         ".github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml",
-        ".github/workflows/f5-standard-api-error-feedback-regression.yml"
+        ".github/workflows/f5-standard-api-error-feedback-regression.yml",
+        "frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js",
+        ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml"
       ],
       "assessments": {
         "auth_401_403": "partial",
         "functional_4xx": "partial",
-        "controlled_5xx": "gap",
+        "controlled_5xx": "covered",
         "timeout_temporary_failure": "gap",
         "invalid_import": "na",
         "retry_duplicate_request": "partial",
         "interrupted_flow": "gap",
         "safe_resume": "gap",
-        "standard_user_feedback": "partial",
-        "db_consistency_after_error": "partial"
+        "standard_user_feedback": "covered",
+        "db_consistency_after_error": "covered"
       },
-      "notes": {}
+      "notes": {
+        "controlled_5xx": "F6-01 Inventory triggert via de zichtbare UI een test-only gecontroleerde backend-500 in de echte frontend/backend/PostgreSQL-keten; proof run 34397204686 op candidate c7f630b47e446fe59a4c61b8dcb29ac8c3889b2d.",
+        "standard_user_feedback": "F6-01 bewijst voor de echte 5xx-route de vaste gebruikersmelding 'Voorraadmutatie kon niet worden opgeslagen.'.",
+        "db_consistency_after_error": "F6-01 bewijst na de 500 exact voorraad 2, nul sentinel-events en nul events voor het testartikel in PostgreSQL."
+      }
     },
     {
       "id": "P0-ALMOST-OUT",
