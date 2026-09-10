@@ -27,12 +27,12 @@ Alle 14 gesloten P0-scenario's zijn tegen alle tien categorieën beoordeeld. Dat
 
 | Status | Aantal | Betekenis |
 |---|---:|---|
-| covered | 20 | voldoende production-relevant bestaand bewijs |
-| partial | 60 | relevant bewijs bestaat, maar Fase-6 authority is nog niet compleet |
-| gap | 37 | expliciete bouwopgave |
+| covered | 23 | voldoende production-relevant bestaand bewijs |
+| partial | 58 | relevant bewijs bestaat, maar Fase-6 authority is nog niet compleet |
+| gap | 36 | expliciete bouwopgave |
 | N/A | 23 | niet materieel voor dit scenario |
 
-De oorspronkelijke startaudit stond op 15 covered / 64 partial / 38 gap / 23 N/A. F6-01 Inventory bracht de audit naar 18/62/37/23. De groene Receipt sub-slice brengt `P0-RECEIPT-INVENTORY-ALMOSTOUT` voor `controlled_5xx` en `standard_user_feedback` van partial naar covered, waardoor de actuele stand 20/60/37/23 is. `db_consistency_after_error` was voor Receipt al covered en krijgt door deze sub-slice sterker rollbackbewijs.
+De oorspronkelijke startaudit stond op 15 covered / 64 partial / 38 gap / 23 N/A. F6-01 Inventory bracht de audit naar 18/62/37/23. De groene Receipt sub-slice bracht `P0-RECEIPT-INVENTORY-ALMOSTOUT` voor `controlled_5xx` en `standard_user_feedback` van partial naar covered, waardoor de stand 20/60/37/23 werd; `db_consistency_after_error` was voor Receipt al covered en kreeg sterker rollbackbewijs. De groene Kassa Review sub-slice brengt vervolgens `controlled_5xx` van gap naar covered en `standard_user_feedback` plus `db_consistency_after_error` van partial naar covered. De actuele stand is daarmee 23/58/36/23.
 
 De audit is bewust conservatief. Een frontendtest met mocks, een contracttest of indirect bewijs wordt niet opgewaardeerd tot volledige failure/recovery authority.
 
@@ -45,12 +45,14 @@ De audit is bewust conservatief. Een frontendtest met mocks, een contracttest of
 - F6-01 Inventory: proof run `34397204686` op candidate `c7f630b47e446fe59a4c61b8dcb29ac8c3889b2d` bewijst een echte gecontroleerde 500 via de browser, vaste gebruikersfeedback en exacte PostgreSQL-rollback zonder inventory-event.
 - F6-01 Receipt: proof run `34448095919`, job `102777275844`, op candidate `d8dd6e25f3055404682c01a32cece1cc9c6d8d77` is volledig groen. De zichtbare browserflow krijgt exact HTTP 500, toont `Verwerken van bonregels is mislukt.`, toont geen ruwe interne API-fout en bewijst na reload dezelfde receipt/batch/regeltoestand.
 - Dezelfde Receipt-proof bewijst in PostgreSQL dat `purchase_import_batches.processed_at` leeg blijft, de regelstatus en `processed_event_id` niet veranderen, inventory exact 0 rijen en 0 events bevat en Almost-out exact 0 effect heeft. De backendlog bewijst bovendien dat de test-only finalization failure-hook werkelijk is geraakt.
+- F6-01 Kassa Review: proof run `34454139847`, job `102796469683`, op candidate `0f86e4f090ebecc695bd7b2d37d8670f83311dc5` is volledig groen. De zichtbare Goedkeuren-actie krijgt exact HTTP 500, toont `Bon kon niet worden goedgekeurd.` zonder interne serverdetails en de bon blijft na de fout via de normale Kassa-UI beschikbaar.
+- Dezelfde Kassa-proof bewijst dat receipt en receiptregels exact terugrollen naar de opgeslagen pre-state en dat geen receipt-backed Uitpakken-batch achterblijft; de backendlog bewijst dat de gecontroleerde Kassa failure-hook daadwerkelijk is geraakt.
 - Historical F5-14 borgt standaard API-foutfeedback op gerichte frontendpaden, maar telt binnen Fase 6 alleen als partial zolang de backendfout niet production-like door de echte keten loopt.
 - Migration/startup heeft eigen schema/runtime/zero-residual safety authority en wordt niet kunstmatig als user-facing recoveryflow behandeld.
 
 ## Belangrijkste bevinding
 
-Het grootste gedeelde P0-gat blijft **controlled 5xx + standaard gebruikersfeedback + bewezen PostgreSQL-consistentie**. Binnen F6-01 zijn Inventory en Receipt/Inventory/Almost-out nu gesloten voor de beoogde 5xx- en feedbackauthority. Voor Kassa Review en Uitpakken resteert nog aanvullende closure binnen deze slice.
+Het grootste gedeelde P0-gat blijft **controlled 5xx + standaard gebruikersfeedback + bewezen PostgreSQL-consistentie**. Binnen F6-01 zijn Inventory, Receipt/Inventory/Almost-out en Kassa Review nu gesloten voor de beoogde 5xx-, feedback- en rollbackauthority. Alleen Uitpakken resteert nog binnen deze slice.
 
 ## Uitvoeringsvolgorde
 
@@ -63,7 +65,7 @@ Scope: Receipt/Inventory/Almost-out, Kassa Review, Uitpakken en Inventory.
 Actuele sub-slice-status:
 - Inventory: closed;
 - Receipt/Inventory/Almost-out: closed voor `controlled_5xx` + `standard_user_feedback`, met versterkte databaseconsistentie-authority;
-- Kassa Review: open;
+- Kassa Review: closed voor `controlled_5xx`, `standard_user_feedback` en `db_consistency_after_error`;
 - Uitpakken: open.
 
 ### F6-02 — Timeout/temporary failure + safe retry/resume
