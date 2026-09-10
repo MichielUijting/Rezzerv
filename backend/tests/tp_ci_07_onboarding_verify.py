@@ -9,6 +9,12 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+
+# Executing this helper as /app/tests/... makes Python use /app/tests as the
+# script import root. Restore the backend application root explicitly so the
+# same app.* imports used by the original inline authority remain available.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import text
 
