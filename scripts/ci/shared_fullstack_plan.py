@@ -49,13 +49,20 @@ def _fail_open(authorities: list[str], reason: str) -> int:
     return _emit_plan({name: True for name in authorities}, reason)
 
 
+def _parse_fallback_authorities(raw: str) -> list[str]:
+    values = [part.strip() for part in raw.split(",") if part.strip()]
+    return values or ["p0_kassa", "f6_kassa"]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--event", default=os.getenv("GITHUB_EVENT_PATH", ""))
     parser.add_argument("--manual-authority", default=os.getenv("INPUT_AUTHORITY", "both"))
+    parser.add_argument("--fallback-authorities", default="p0_kassa,f6_kassa")
     args = parser.parse_args()
 
+    fallback = _parse_fallback_authorities(args.fallback_authorities)
     manifest_path = Path(args.manifest)
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -68,7 +75,6 @@ def main() -> int:
             if not isinstance(paths, list) or not paths:
                 raise ValueError(f"invalid paths for {name}")
     except Exception as exc:
-        fallback = ["p0_kassa", "f6_kassa"]
         return _fail_open(fallback, f"manifest_invalid:{type(exc).__name__}")
 
     event_name = os.getenv("GITHUB_EVENT_NAME", "").strip()
@@ -76,13 +82,7 @@ def main() -> int:
         requested = (args.manual_authority or "both").strip().lower()
         if requested == "both":
             return _emit_plan({name: True for name in authorities}, "manual_both")
-        aliases = {
-            "p0-kassa": "p0_kassa",
-            "f6-kassa": "f6_kassa",
-            "p0_kassa": "p0_kassa",
-            "f6_kassa": "f6_kassa",
-        }
-        selected = aliases.get(requested)
+        selected = requested.replace("-", "_")
         if selected not in authorities:
             return _fail_open(authorities, f"manual_unknown:{requested}")
         return _emit_plan({name: name == selected for name in authorities}, f"manual_{selected}")
