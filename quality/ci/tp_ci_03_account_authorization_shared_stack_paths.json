@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "authorities": {
+    "p0_account_session": {
+      "label": "P0 account session full-stack PostgreSQL validation",
+      "paths": [
+        "backend/alembic/**",
+        "backend/app/api/server_session_routes.py",
+        "backend/app/services/server_session_service.py",
+        "frontend/src/app/router/**",
+        "frontend/src/features/auth/**",
+        "frontend/src/features/onboarding/**",
+        "frontend/src/features/settings/SettingsMyAccountPage.jsx",
+        "frontend/src/lib/authSession.js",
+        "frontend/tests/e2e/p0-account-session.fullstack.spec.js",
+        "frontend/playwright.fullstack.config.js",
+        "scripts/ci/shared_fullstack_plan.py",
+        "quality/ci/tp_ci_03_account_authorization_shared_stack_paths.json",
+        "docker-compose.yml",
+        "docker-compose.postgresql.yml",
+        "docker/postgresql/**",
+        ".github/workflows/p0-account-session-fullstack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml"
+      ]
+    },
+    "p0_authorization_isolation": {
+      "label": "P0 authorization isolation full-stack PostgreSQL validation",
+      "paths": [
+        "backend/alembic/**",
+        "backend/app/api/authorization_membership_routes.py",
+        "backend/app/api/server_session_routes.py",
+        "backend/app/services/authorization_foundation_service.py",
+        "backend/app/services/authorization_membership_service.py",
+        "backend/app/services/server_session_service.py",
+        "backend/app/testing/postgresql_onboarding_selftest_fixture.py",
+        "frontend/src/app/router/**",
+        "frontend/src/features/auth/**",
+        "frontend/src/features/settings/SettingsAuthorizationPage.jsx",
+        "frontend/src/lib/authSession.js",
+        "frontend/tests/e2e/p0-authorization-isolation.fullstack.spec.js",
+        "frontend/playwright.fullstack.config.js",
+        "scripts/ci/shared_fullstack_plan.py",
+        "quality/ci/tp_ci_03_account_authorization_shared_stack_paths.json",
+        "docker-compose.yml",
+        "docker-compose.postgresql.yml",
+        "docker/postgresql/**",
+        ".github/workflows/p0-authorization-isolation-fullstack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml"
+      ]
+    }
+  }
+}
