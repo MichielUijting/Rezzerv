@@ -2,8 +2,6 @@ name: F6 failure recovery gap audit validation
 
 on:
   pull_request:
-    branches:
-      - main
     paths:
       - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
       - 'quality/acceptance/p0_residual_closure.json'
