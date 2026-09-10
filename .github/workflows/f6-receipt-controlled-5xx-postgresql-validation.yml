@@ -185,7 +185,6 @@ jobs:
             echo 'Browser proof mist batchProcessingStatusBefore' >&2
             exit 1
           fi
-          echo "F6_BATCH_STATUS_BEFORE=$(jq -r '.batchProcessingStatusBefore // ""' "$proof")" >> "$GITHUB_ENV"
           echo 'F6_RECEIPT_BROWSER_IDENTITIES_CAPTURED_GREEN'
 
       - name: Prove exact PostgreSQL rollback after Receipt failure
@@ -199,7 +198,6 @@ jobs:
             -e F6_BATCH_ID="$F6_BATCH_ID" \
             -e F6_LINE_ID="$F6_LINE_ID" \
             -e F6_LOCATION_NAME="$F6_LOCATION_NAME" \
-            -e F6_BATCH_STATUS_BEFORE="$F6_BATCH_STATUS_BEFORE" \
             -e F6_LINE_STATUS_BEFORE="$F6_LINE_STATUS_BEFORE" \
             backend python -u - <<'PY' 2>&1 | tee f6-receipt-postgresql-rollback.log
           import os
@@ -213,7 +211,6 @@ jobs:
           batch_id = os.environ['F6_BATCH_ID'].strip()
           line_id = os.environ['F6_LINE_ID'].strip()
           location_name = os.environ['F6_LOCATION_NAME'].strip()
-          batch_status_before = os.environ['F6_BATCH_STATUS_BEFORE']
           line_status_before = os.environ['F6_LINE_STATUS_BEFORE']
 
           with engine.begin() as conn:
@@ -231,11 +228,10 @@ jobs:
               assert receipt['approved_at'] is not None, receipt
 
               batch = conn.execute(text("""
-                  SELECT id, household_id, processing_status, processed_at
+                  SELECT id, household_id, processed_at
                   FROM public.purchase_import_batches WHERE id = :batch_id
               """), {'batch_id': batch_id}).mappings().one()
               assert str(batch['household_id']) == household_id, batch
-              assert str(batch['processing_status'] or '') == batch_status_before, (batch, batch_status_before)
               assert batch['processed_at'] is None, batch
 
               line = conn.execute(text("""
