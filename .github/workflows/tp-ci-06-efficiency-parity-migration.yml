@@ -1,0 +1,129 @@
+name: TP-CI-06 one-shot efficiency parity migration
+
+on:
+  push:
+    branches:
+      - codex/tp-ci-06-efficiency-parity
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout TP-CI-06 branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/tp-ci-06-efficiency-parity
+          fetch-depth: 0
+
+      - name: Apply proven TP-CI-05 selective reset strategy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          targets = [
+              (
+                  Path('.github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml'),
+                  'tpci02kassa',
+                  '      - name: Enforce both selected authorities and shared-stack gate\n',
+                  2,
+              ),
+              (
+                  Path('.github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml'),
+                  'tpci03accountauth',
+                  '      - name: Enforce selected authorities and shared-stack gate\n',
+                  2,
+              ),
+              (
+                  Path('.github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml'),
+                  'tpci04inventory',
+                  '      - name: Enforce selected Inventory authorities and shared-stack gate\n',
+                  3,
+              ),
+          ]
+
+          cleanup_re = re.compile(r'(?m)^(\s*)docker compose down -v --remove-orphans \|\| true$')
+
+          for path, project, gate_marker, expected_phase_cleanups in targets:
+              text = path.read_text(encoding='utf-8')
+              assert 'COMPOSE_PROJECT_NAME:' not in text, f'{path}: project name already present'
+
+              env_needle = '      COMPOSE_PROFILES: postgresql\n'
+              assert text.count(env_needle) == 1, f'{path}: unexpected COMPOSE_PROFILES count'
+              text = text.replace(
+                  env_needle,
+                  env_needle + '      COMPOSE_PROJECT_NAME: ' + project + '${{ github.run_id }}\n',
+                  1,
+              )
+
+              assert text.count(gate_marker) == 1, f'{path}: final gate marker count mismatch'
+              phase_text, gate_text = text.split(gate_marker, 1)
+              matches = list(cleanup_re.finditer(phase_text))
+              assert len(matches) == expected_phase_cleanups, (
+                  f'{path}: expected {expected_phase_cleanups} phase down -v cleanups, got {len(matches)}'
+              )
+
+              def selective_cleanup(match):
+                  indent = match.group(1)
+                  return (
+                      f'{indent}docker compose down --remove-orphans || true\n'
+                      f'{indent}docker volume rm "${{COMPOSE_PROJECT_NAME}}_rezzerv_postgres" >/dev/null 2>&1 || true'
+                  )
+
+              phase_text = cleanup_re.sub(selective_cleanup, phase_text)
+              gate_text = gate_marker + gate_text
+
+              gate_run_needle = '        run: |\n          set -euo pipefail\n'
+              assert gate_text.count(gate_run_needle) == 1, f'{path}: final gate run block mismatch'
+              gate_text = gate_text.replace(
+                  gate_run_needle,
+                  gate_run_needle
+                  + '          cleanup_all() { docker compose down -v --remove-orphans || true; }\n'
+                  + '          trap cleanup_all EXIT\n',
+                  1,
+              )
+
+              updated = phase_text + gate_text
+              assert updated.count('docker volume rm "${COMPOSE_PROJECT_NAME}_rezzerv_postgres"') == expected_phase_cleanups
+              assert updated.count('cleanup_all() { docker compose down -v --remove-orphans || true; }') == 1
+              assert updated.count('COMPOSE_PROJECT_NAME:') == 1
+              path.write_text(updated, encoding='utf-8')
+              print(f'PARITY_UPDATED={path}')
+          PY
+
+      - name: Verify migration diff and remove one-shot helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          for wf in \
+            .github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml \
+            .github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml \
+            .github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml
+          do
+            grep -F 'COMPOSE_PROJECT_NAME:' "$wf"
+            grep -F 'docker volume rm "${COMPOSE_PROJECT_NAME}_rezzerv_postgres"' "$wf"
+            grep -F 'cleanup_all() { docker compose down -v --remove-orphans || true; }' "$wf"
+          done
+          git rm .github/workflows/tp-ci-06-efficiency-parity-migration.yml
+          git diff --check
+          git status --short
+
+      - name: Commit efficiency parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml \
+                  .github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml \
+                  .github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml \
+                  .github/workflows/tp-ci-06-efficiency-parity-migration.yml
+          git commit -m 'TP-CI-06: preserve shared-stack model caches'
+          git push origin HEAD:codex/tp-ci-06-efficiency-parity
