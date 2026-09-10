@@ -14,6 +14,7 @@ on:
       - 'frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js'
       - 'frontend/playwright.fullstack.config.js'
       - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
+      - 'scripts/ci/workflow_delta_gate.py'
       - 'docker-compose.yml'
       - 'docker-compose.postgresql.yml'
       - '.github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml'
@@ -27,7 +28,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  delta-gate:
+    name: F6 Inventory current-delta gate
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.delta.outputs.run }}
+    steps:
+      - name: Checkout exact candidate for delta inspection
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Decide whether this pushed delta requires the expensive authority
+        id: delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/workflow_delta_gate.py \
+            --workflow .github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml \
+            | tee f6-inventory-delta-gate.log
+          grep -E '^RUN=(true|false)$' f6-inventory-delta-gate.log
+
   f6-inventory-controlled-5xx:
+    needs: delta-gate
+    if: needs.delta-gate.outputs.run == 'true'
     name: F6 Inventory real 500 feedback and rollback authority
     runs-on: ubuntu-latest
     timeout-minutes: 40
