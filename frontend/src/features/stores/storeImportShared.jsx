@@ -152,6 +152,15 @@ export function normalizeErrorMessage(value) {
   return 'Verzoek mislukt'
 }
 
+function requestFailureMessage(url, response, value, fallback = 'Winkelgegevens konden niet volledig worden geladen') {
+  const path = apiPath(url)
+  const isReceiptProcessRequest = /^\/api\/purchase-import-batches\/[^/]+\/process$/.test(path)
+  if (isReceiptProcessRequest && Number(response?.status || 0) >= 500) {
+    return 'Verwerken van bonregels is mislukt.'
+  }
+  return normalizeErrorMessage(value) || fallback
+}
+
 async function requestJson(url, options = {}) {
   const effectiveOptions = normalizeLocationlessWrite(url, options)
   const response = await fetchJsonWithAuth(url, {
@@ -175,17 +184,17 @@ async function requestJson(url, options = {}) {
         data = JSON.parse(responseText)
       } catch (error) {
         if (!response.ok) {
-          throw new Error('Winkelgegevens konden niet volledig worden geladen')
+          throw new Error(requestFailureMessage(url, response, responseText))
         }
         throw new Error('De server gaf ongeldige gegevens terug')
       }
     } else if (!response.ok) {
-      throw new Error(normalizeErrorMessage(responseText) || 'Winkelgegevens konden niet volledig worden geladen')
+      throw new Error(requestFailureMessage(url, response, responseText))
     }
   }
 
   if (!response.ok) {
-    throw new Error(normalizeErrorMessage(data?.detail || data || responseText))
+    throw new Error(requestFailureMessage(url, response, data?.detail || data || responseText))
   }
 
   if (apiPath(url) === '/api/household' && requestMethod(effectiveOptions) === 'GET') {

@@ -1605,7 +1605,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setProcessResultOverlay(parts.join(' · '))
       setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
+      const message = normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.'
+      setError(message)
+      showUitpakkenFeedback(
+        'error',
+        message,
+        { key: `uitpakken-process-error-${batch.batch_id}-${Date.now()}` }
+      )
     } finally {
       setIsProcessingBatch(false)
     }

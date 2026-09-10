@@ -2,8 +2,6 @@ name: F6 failure recovery gap audit validation
 
 on:
   pull_request:
-    branches:
-      - main
     paths:
       - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
       - 'quality/acceptance/p0_residual_closure.json'
@@ -47,8 +45,8 @@ jobs:
           python scripts/acceptance/validate_f6_failure_recovery_gap_audit.py | tee f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_audit_exact_10_categories' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_summary_140_assessments' f6-failure-recovery-gap-audit.log
-          grep -F 'PASS f6_count_covered_18' f6-failure-recovery-gap-audit.log
-          grep -F 'PASS f6_count_partial_62' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_covered_20' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_partial_60' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_count_gap_37' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_count_na_23' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_priority_slices_f6_01_through_f6_05' f6-failure-recovery-gap-audit.log
@@ -58,6 +56,11 @@ jobs:
           grep -F 'PASS f6_inventory_db_consistency_after_error_covered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_inventory_browser_authority_registered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_inventory_postgresql_workflow_registered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_receipt_controlled_5xx_covered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_receipt_standard_feedback_covered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_receipt_db_consistency_after_error_covered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_receipt_browser_authority_registered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_receipt_postgresql_workflow_registered' f6-failure-recovery-gap-audit.log
           grep -F 'F6_FAILURE_RECOVERY_GAP_AUDIT_GREEN' f6-failure-recovery-gap-audit.log
 
       - name: Upload F6 audit evidence
