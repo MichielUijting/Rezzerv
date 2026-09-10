@@ -24,7 +24,7 @@ EXPECTED_CATEGORIES = {
 }
 EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
-EXPECTED_COUNTS = {"covered": 20, "partial": 60, "gap": 37, "na": 23}
+EXPECTED_COUNTS = {"covered": 23, "partial": 58, "gap": 36, "na": 23}
 
 
 def load_json(path: Path):
@@ -106,6 +106,24 @@ def main() -> None:
     require(
         ".github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml" in receipt_evidence,
         "f6_receipt_postgresql_workflow_registered",
+    )
+
+    kassa = next(row for row in scenarios if row["id"] == "P0-KASSA-REVIEW")
+    require(kassa["assessments"]["controlled_5xx"] == "covered", "f6_kassa_controlled_5xx_covered")
+    require(kassa["assessments"]["standard_user_feedback"] == "covered", "f6_kassa_standard_feedback_covered")
+    require(kassa["assessments"]["db_consistency_after_error"] == "covered", "f6_kassa_db_consistency_after_error_covered")
+    kassa_evidence = set(kassa.get("evidence") or [])
+    require(
+        "backend/tests/f6_kassa_controlled_5xx_fixture.py" in kassa_evidence,
+        "f6_kassa_postgresql_fixture_registered",
+    )
+    require(
+        "frontend/tests/e2e/f6-kassa-review-controlled-5xx.fullstack.spec.js" in kassa_evidence,
+        "f6_kassa_browser_authority_registered",
+    )
+    require(
+        ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml" in kassa_evidence,
+        "f6_kassa_postgresql_workflow_registered",
     )
 
     account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
