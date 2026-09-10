@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "proof_revision": 1,
   "authorities": {
     "p0_inventory": {
       "label": "P0 Inventory correction full-stack PostgreSQL validation",
