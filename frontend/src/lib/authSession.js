@@ -175,6 +175,15 @@ function jsonResponseFrom(response, payload) {
   })
 }
 
+function normalizeAuthenticatedServerFailure(url, response) {
+  if (Number(response?.status || 0) < 500) return response
+  const normalizedPath = String(url || '').split('?')[0]
+  if (/^\/api\/receipts\/[^/]+\/approve$/.test(normalizedPath)) {
+    return jsonResponseFrom(response, { detail: 'Bon kon niet worden goedgekeurd.' })
+  }
+  return response
+}
+
 export async function fetchJsonWithAuth(url, options = {}) {
   const { headers: optionHeaders = {}, cache = 'no-store', ...restOptions } = options
   const mergedHeaders = { ...optionHeaders }
@@ -203,7 +212,7 @@ export async function fetchJsonWithAuth(url, options = {}) {
       }
     } catch {}
   }
-  return response
+  return normalizeAuthenticatedServerFailure(url, response)
 }
 
 export function isHouseholdAdminFromContext(context = null) {
