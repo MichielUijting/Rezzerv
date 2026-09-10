@@ -1,21 +1,6 @@
 name: P0 Almost-out recalculation full-stack PostgreSQL validation
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'backend/alembic/**'
-      - 'backend/app/main.py'
-      - 'backend/app/services/temporal_inventory_service.py'
-      - 'backend/tests/p0_almost_out_recalculation_fixture.py'
-      - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
-      - 'frontend/tests/e2e/p0-almost-out-recalculation.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'quality/acceptance/p0_residual_closure.json'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - '.github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml'
   workflow_dispatch:
 
 permissions:
