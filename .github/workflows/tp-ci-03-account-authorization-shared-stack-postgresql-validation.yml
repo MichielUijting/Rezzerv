@@ -1,0 +1,494 @@
+name: TP-CI-03 Account and authorization shared full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/authorization_membership_routes.py'
+      - 'backend/app/services/server_session_service.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/features/auth/**'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/features/settings/SettingsMyAccountPage.jsx'
+      - 'frontend/src/features/settings/SettingsAuthorizationPage.jsx'
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/tests/e2e/p0-account-session.fullstack.spec.js'
+      - 'frontend/tests/e2e/p0-authorization-isolation.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'scripts/ci/shared_fullstack_plan.py'
+      - 'quality/ci/tp_ci_03_account_authorization_shared_stack_paths.json'
+      - 'quality/acceptance/p0_residual_closure.json'
+      - 'scripts/acceptance/validate_p0_residual_closure.py'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/p0-account-session-fullstack-postgresql-validation.yml'
+      - '.github/workflows/p0-authorization-isolation-fullstack-postgresql-validation.yml'
+      - '.github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml'
+  workflow_dispatch:
+    inputs:
+      authority:
+        description: Authority to run on the shared account/authorization stack
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - p0-account-session
+          - p0-authorization-isolation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tp-ci-03-account-authorization-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Account and authorization shared-stack authority plan
+    runs-on: ubuntu-latest
+    outputs:
+      p0_account_session: ${{ steps.plan.outputs.p0_account_session }}
+      p0_authorization_isolation: ${{ steps.plan.outputs.p0_authorization_isolation }}
+      any: ${{ steps.plan.outputs.any }}
+    steps:
+      - name: Checkout exact candidate for authority planning
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Select authorities from current delta
+        id: plan
+        shell: bash
+        env:
+          INPUT_AUTHORITY: ${{ inputs.authority || 'both' }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/shared_fullstack_plan.py \
+            --manifest quality/ci/tp_ci_03_account_authorization_shared_stack_paths.json \
+            --fallback-authorities p0_account_session,p0_authorization_isolation \
+            | tee tp-ci-03-account-authorization-plan.log
+          grep -E '^P0_ACCOUNT_SESSION=(true|false)$' tp-ci-03-account-authorization-plan.log
+          grep -E '^P0_AUTHORIZATION_ISOLATION=(true|false)$' tp-ci-03-account-authorization-plan.log
+          grep -E '^ANY=(true|false)$' tp-ci-03-account-authorization-plan.log
+
+  shared-account-authorization-fullstack:
+    name: Shared account authorization Docker PostgreSQL Playwright authority runner
+    needs: plan
+    if: needs.plan.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble
+
+    steps:
+      - name: Checkout exact candidate once
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic identities once
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          account_password="P0-Account-${suffix}-Pass!"
+          legacy_password="P0-Legacy-${suffix}-Pass!"
+          echo "PLAYWRIGHT_P0_ACCOUNT_SESSION_EMAIL=p0-account-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_ACCOUNT_SESSION_PASSWORD=$account_password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_ACCOUNT_SESSION_HOUSEHOLD=P0 Account ${suffix}" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL=p0-legacy-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD=$legacy_password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD=P0 Legacy Role ${suffix}" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD_ID=p0-legacy-${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$account_password"
+          echo "::add-mask::$legacy_password"
+          echo 'TP_CI_03_IDENTITIES_PREPARED_GREEN'
+
+      - name: Guard selected browser authorities against shortcuts
+        shell: bash
+        env:
+          RUN_ACCOUNT: ${{ needs.plan.outputs.p0_account_session }}
+          RUN_AUTHORIZATION: ${{ needs.plan.outputs.p0_authorization_isolation }}
+        run: |
+          set -euo pipefail
+          if [[ "$RUN_ACCOUNT" == 'true' ]]; then
+            spec='frontend/tests/e2e/p0-account-session.fullstack.spec.js'
+            if grep -nE 'page\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+              echo 'P0 account/session authority mag login/logout niet mocken of via page.request muteren.' >&2
+              exit 1
+            fi
+            grep -F "getByTestId('login-submit').click()" "$spec"
+            grep -F "getByTestId('my-account-logout').click()" "$spec"
+            grep -F "expect(staleSessionResponse.status()).toBe(401)" "$spec"
+            echo 'P0_ACCOUNT_SESSION_NO_CORE_ROUTE_MOCKS_GREEN'
+          fi
+          if [[ "$RUN_AUTHORIZATION" == 'true' ]]; then
+            spec='frontend/tests/e2e/p0-authorization-isolation.fullstack.spec.js'
+            if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+              echo 'P0 authorization authority mag kern-API niet mocken of via page.request muteren.' >&2
+              exit 1
+            fi
+            grep -F "getByTestId('login-submit').click()" "$spec"
+            grep -F "expect(session.role).toBe('advanced_member')" "$spec"
+            grep -F "expect(session.permissions?.['admin.access']).toBe(true)" "$spec"
+            grep -F "getByTestId('admin-page')" "$spec"
+            grep -F "expect(members.items[0].role_key).toBe('household.advanced_member')" "$spec"
+            echo 'P0_AUTHORIZATION_LEGACY_NO_MOCKS_GREEN'
+          fi
+
+      - name: Build application images once and prepare Playwright once
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_epoch="$(date +%s)"
+          echo "TP_CI_03_SHARED_BUILD_STARTED=$start_epoch"
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+          echo 'TP_CI_03_DOCKER_BUILD_ONCE_GREEN'
+          docker pull "$PLAYWRIGHT_IMAGE"
+          echo 'TP_CI_03_PLAYWRIGHT_PULL_ONCE_GREEN'
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc 'npm ci'
+          echo 'TP_CI_03_NPM_CI_ONCE_GREEN'
+          echo "TP_CI_03_SHARED_PREP_SECONDS=$(( $(date +%s) - start_epoch ))"
+
+      - name: Run P0 account session authority on shared images
+        id: account
+        if: needs.plan.outputs.p0_account_session == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            rc=$?
+            if (( rc != 0 )); then
+              docker compose ps || true
+              docker compose logs --no-color --tail=500 backend frontend postgres || true
+            fi
+            docker compose down -v --remove-orphans || true
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          phase_start="$(date +%s)"
+          docker compose up -d --no-build
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              break
+            fi
+            if (( attempt == 180 )); then
+              echo 'Backend health timeout' >&2
+              exit 1
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+
+          docker compose exec -T backend python -u - <<'PY' | tee p0-account-session-postgresql-boundary.log
+          from sqlalchemy import inspect, text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              tables = set(inspect(conn).get_table_names())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert 'server_sessions' in tables, sorted(tables)
+          print(f'runtime_user={current_user}', flush=True)
+          print(f'runtime_create={runtime_create}', flush=True)
+          print('server_sessions_table=true', flush=True)
+          print('P0_ACCOUNT_SESSION_POSTGRESQL_BOUNDARY_GREEN', flush=True)
+          PY
+
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            rm -rf test-results playwright-report-fullstack
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_ACCOUNT_SESSION_EMAIL="$PLAYWRIGHT_P0_ACCOUNT_SESSION_EMAIL" \
+            -e PLAYWRIGHT_P0_ACCOUNT_SESSION_PASSWORD="$PLAYWRIGHT_P0_ACCOUNT_SESSION_PASSWORD" \
+            -e PLAYWRIGHT_P0_ACCOUNT_SESSION_HOUSEHOLD="$PLAYWRIGHT_P0_ACCOUNT_SESSION_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-account-session.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-account-session-browser.log"
+          grep -F 'P0_ACCOUNT_SESSION_BROWSER_AUTHORITY_GREEN' frontend/p0-account-session-browser.log
+
+          docker compose exec -T \
+            -e P0_ACCOUNT_EMAIL="$PLAYWRIGHT_P0_ACCOUNT_SESSION_EMAIL" \
+            backend python -u - <<'PY' | tee p0-account-session-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          email = os.environ['P0_ACCOUNT_EMAIL'].strip().lower()
+          with engine.begin() as conn:
+              user = conn.execute(text('''
+                  SELECT id, email
+                  FROM app_users
+                  WHERE lower(trim(email)) = :email
+                  LIMIT 1
+              '''), {'email': email}).mappings().one()
+              rows = conn.execute(text('''
+                  SELECT id, issued_at, expires_at, revoked_at
+                  FROM server_sessions
+                  WHERE user_id = :user_id
+                  ORDER BY issued_at, id
+              '''), {'user_id': str(user['id'])}).mappings().all()
+              active_count = int(conn.execute(text('''
+                  SELECT COUNT(*)
+                  FROM server_sessions
+                  WHERE user_id = :user_id
+                    AND revoked_at IS NULL
+                    AND expires_at > CURRENT_TIMESTAMP
+              '''), {'user_id': str(user['id'])}).scalar_one())
+          assert len(rows) >= 2, rows
+          assert all(row['revoked_at'] is not None for row in rows), rows
+          assert active_count == 0, active_count
+          print(f'email={email}', flush=True)
+          print(f'session_rows={len(rows)}', flush=True)
+          print(f'active_sessions={active_count}', flush=True)
+          print('P0_ACCOUNT_SESSION_POSTGRESQL_END_STATE_GREEN', flush=True)
+          PY
+
+          echo 'P0_ACCOUNT_SESSION_FULLSTACK_POSTGRESQL_GREEN'
+          echo "TP_CI_03_ACCOUNT_PHASE_SECONDS=$(( $(date +%s) - phase_start ))"
+
+      - name: Upload account session evidence from shared runner
+        if: always() && needs.plan.outputs.p0_account_session == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-account-session-fullstack-evidence-shared-runner
+          path: |
+            p0-account-session-postgresql-boundary.log
+            p0-account-session-postgresql-end-state.log
+            frontend/p0-account-session-browser.log
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Run P0 authorization isolation authority on same built images
+        id: authorization
+        if: needs.plan.outputs.p0_authorization_isolation == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            rc=$?
+            if (( rc != 0 )); then
+              docker compose ps || true
+              docker compose logs --no-color --tail=500 backend frontend postgres || true
+            fi
+            docker compose down -v --remove-orphans || true
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          phase_start="$(date +%s)"
+          docker compose up -d --no-build
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              break
+            fi
+            if (( attempt == 180 )); then
+              echo 'Backend health timeout' >&2
+              exit 1
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+
+          docker compose exec -T \
+            -e LEGACY_EMAIL="$PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL" \
+            -e LEGACY_PASSWORD="$PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD" \
+            -e LEGACY_HOUSEHOLD="$PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD" \
+            -e LEGACY_HOUSEHOLD_ID="$PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD_ID" \
+            backend python -u - <<'PY' | tee p0-authorization-legacy-seed.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.authorization_foundation_service import ensure_authorization_foundation
+          from app.testing.onboarding_request_schema_fixture import backfill_completed_household_onboarding
+          from app.testing.postgresql_onboarding_selftest_fixture import seed_household, seed_user_membership
+
+          email = os.environ['LEGACY_EMAIL'].strip().lower()
+          password = os.environ['LEGACY_PASSWORD']
+          household_name = os.environ['LEGACY_HOUSEHOLD'].strip()
+          household_id = os.environ['LEGACY_HOUSEHOLD_ID'].strip()
+          user_id = f'user-{household_id}'
+          membership_id = f'membership-{household_id}'
+
+          with engine.begin() as conn:
+              ensure_authorization_foundation(conn)
+              seed_household(conn, household_id=household_id, name=household_name, context_type='regular')
+              seed_user_membership(
+                  conn,
+                  household_id=household_id,
+                  user_id=user_id,
+                  email=email,
+                  password=password,
+                  membership_id=membership_id,
+                  role='advanced_member',
+              )
+              backfill_completed_household_onboarding(conn)
+              legacy_role = str(conn.execute(text('''
+                  SELECT role FROM household_memberships
+                  WHERE id = :membership_id
+              '''), {'membership_id': membership_id}).scalar_one())
+              canonical_role = str(conn.execute(text('''
+                  SELECT role_key FROM auth_membership_roles
+                  WHERE household_id = :household_id
+                    AND membership_id = :membership_id
+                    AND active IS TRUE
+              '''), {'household_id': household_id, 'membership_id': membership_id}).scalar_one())
+          assert legacy_role == 'advanced_member', legacy_role
+          assert canonical_role == 'household.advanced_member', canonical_role
+          print(f'legacy_role={legacy_role}', flush=True)
+          print(f'canonical_role={canonical_role}', flush=True)
+          print('P0_AUTHORIZATION_LEGACY_SEED_GREEN', flush=True)
+          PY
+
+          docker compose exec -T backend python -u - <<'PY' | tee p0-authorization-postgresql-boundary.log
+          from sqlalchemy import inspect, text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              tables = set(inspect(conn).get_table_names())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert {'household_memberships', 'auth_membership_roles', 'auth_role_permissions', 'server_sessions'} <= tables
+          print(f'runtime_user={current_user}', flush=True)
+          print('P0_AUTHORIZATION_POSTGRESQL_BOUNDARY_GREEN', flush=True)
+          PY
+
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            rm -rf test-results playwright-report-fullstack
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL="$PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL" \
+            -e PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD="$PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD" \
+            -e PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD="$PLAYWRIGHT_P0_AUTH_LEGACY_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-authorization-isolation.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-authorization-legacy-browser.log"
+          grep -F 'P0_AUTHORIZATION_LEGACY_ROLE_BROWSER_GREEN' frontend/p0-authorization-legacy-browser.log
+
+          docker compose exec -T \
+            -e LEGACY_EMAIL="$PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL" \
+            backend python -u - <<'PY' | tee p0-authorization-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          email = os.environ['LEGACY_EMAIL'].strip().lower()
+          with engine.begin() as conn:
+              row = conn.execute(text('''
+                  SELECT hm.id AS membership_id, hm.household_id, hm.role AS legacy_role,
+                         amr.role_key AS canonical_role
+                  FROM household_memberships hm
+                  JOIN auth_membership_roles amr
+                    ON amr.household_id = hm.household_id
+                   AND amr.membership_id = hm.id
+                   AND amr.active IS TRUE
+                  WHERE lower(trim(hm.user_email)) = :email
+              '''), {'email': email}).mappings().one()
+              permissions = set(conn.execute(text('''
+                  SELECT arp.permission_key
+                  FROM auth_role_permissions arp
+                  WHERE arp.role_key = :role_key
+              '''), {'role_key': row['canonical_role']}).scalars().all())
+              session_count = int(conn.execute(text('''
+                  SELECT COUNT(*)
+                  FROM server_sessions ss
+                  JOIN app_users u ON u.id = ss.user_id
+                  WHERE lower(trim(u.email)) = :email
+                    AND ss.revoked_at IS NULL
+                    AND ss.expires_at > CURRENT_TIMESTAMP
+              '''), {'email': email}).scalar_one())
+          assert row['legacy_role'] == 'advanced_member', row
+          assert row['canonical_role'] == 'household.advanced_member', row
+          assert 'admin.access' in permissions, permissions
+          assert 'members.manage' in permissions, permissions
+          assert 'gpc.update' in permissions, permissions
+          assert 'catalog.update' not in permissions, permissions
+          assert session_count == 1, session_count
+          print('legacy_role=advanced_member', flush=True)
+          print('canonical_role=household.advanced_member', flush=True)
+          print('active_sessions=1', flush=True)
+          print('P0_AUTHORIZATION_LEGACY_POSTGRESQL_END_STATE_GREEN', flush=True)
+          PY
+
+          echo 'P0_AUTHORIZATION_ISOLATION_FULLSTACK_POSTGRESQL_GREEN'
+          echo "TP_CI_03_AUTHORIZATION_PHASE_SECONDS=$(( $(date +%s) - phase_start ))"
+
+      - name: Upload authorization evidence from shared runner
+        if: always() && needs.plan.outputs.p0_authorization_isolation == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-authorization-isolation-legacy-role-evidence-shared-runner
+          path: |
+            p0-authorization-legacy-seed.log
+            p0-authorization-postgresql-boundary.log
+            p0-authorization-postgresql-end-state.log
+            frontend/p0-authorization-legacy-browser.log
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce selected authorities and shared-stack gate
+        if: always()
+        shell: bash
+        env:
+          RUN_ACCOUNT: ${{ needs.plan.outputs.p0_account_session }}
+          RUN_AUTHORIZATION: ${{ needs.plan.outputs.p0_authorization_isolation }}
+          ACCOUNT_OUTCOME: ${{ steps.account.outcome }}
+          AUTHORIZATION_OUTCOME: ${{ steps.authorization.outcome }}
+        run: |
+          set -euo pipefail
+          echo "run_account=$RUN_ACCOUNT outcome_account=$ACCOUNT_OUTCOME"
+          echo "run_authorization=$RUN_AUTHORIZATION outcome_authorization=$AUTHORIZATION_OUTCOME"
+          if [[ "$RUN_ACCOUNT" == 'true' ]]; then
+            if [[ "$ACCOUNT_OUTCOME" != 'success' ]]; then
+              echo 'Selected P0 account session authority failed.' >&2
+              exit 1
+            fi
+          fi
+          if [[ "$RUN_AUTHORIZATION" == 'true' ]]; then
+            if [[ "$AUTHORIZATION_OUTCOME" != 'success' ]]; then
+              echo 'Selected P0 authorization isolation authority failed.' >&2
+              exit 1
+            fi
+          fi
+          echo 'TP_CI_03_ACCOUNT_AUTHORIZATION_SHARED_STACK_GREEN'

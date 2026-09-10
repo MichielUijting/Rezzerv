@@ -1,26 +1,6 @@
 name: P0 account session full-stack PostgreSQL validation
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'backend/alembic/**'
-      - 'backend/app/api/server_session_routes.py'
-      - 'backend/app/services/server_session_service.py'
-      - 'frontend/src/app/router/**'
-      - 'frontend/src/features/auth/**'
-      - 'frontend/src/features/onboarding/**'
-      - 'frontend/src/features/settings/SettingsMyAccountPage.jsx'
-      - 'frontend/src/lib/authSession.js'
-      - 'frontend/tests/e2e/p0-account-session.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - 'docker/postgresql/**'
-      - '.github/workflows/p0-account-session-fullstack-postgresql-validation.yml'
-      - 'quality/acceptance/p0_residual_closure.json'
-      - 'scripts/acceptance/validate_p0_residual_closure.py'
   workflow_dispatch:
 
 permissions:
