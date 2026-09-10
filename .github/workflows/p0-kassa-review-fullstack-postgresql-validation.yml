@@ -15,6 +15,7 @@ on:
       - 'frontend/src/features/receipts/KassaPage.jsx'
       - 'frontend/tests/e2e/p0-kassa-review.fullstack.spec.js'
       - 'frontend/playwright.fullstack.config.js'
+      - 'scripts/ci/workflow_delta_gate.py'
       - 'docker-compose.yml'
       - 'docker-compose.postgresql.yml'
       - '.github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml'
@@ -28,7 +29,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  delta-gate:
+    name: P0 Kassa current-delta gate
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.delta.outputs.run }}
+    steps:
+      - name: Checkout exact candidate for delta inspection
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Decide whether this pushed delta requires the expensive authority
+        id: delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/workflow_delta_gate.py \
+            --workflow .github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml \
+            | tee p0-kassa-review-delta-gate.log
+          grep -E '^RUN=(true|false)$' p0-kassa-review-delta-gate.log
+
   p0-kassa-review:
+    needs: delta-gate
+    if: needs.delta-gate.outputs.run == 'true'
     name: P0 Kassa uncertain and financial browser review
     runs-on: ubuntu-latest
     timeout-minutes: 40
