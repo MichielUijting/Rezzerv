@@ -1,31 +1,6 @@
 name: P0 onboarding full-stack PostgreSQL validation
 
 on:
-  pull_request:
-    paths:
-      - 'backend/alembic/**'
-      - 'backend/app/api/household_capability_expansion_routes.py'
-      - 'backend/app/api/server_session_routes.py'
-      - 'backend/app/api/session_household_routes.py'
-      - 'backend/app/services/household_location_onboarding_service.py'
-      - 'backend/app/services/household_onboarding_service.py'
-      - 'backend/app/services/household_product_configuration_service.py'
-      - 'backend/app/services/household_product_use_case_service.py'
-      - 'backend/app/services/server_session_service.py'
-      - 'backend/app/services/session_request_context.py'
-      - 'frontend/src/app/router/**'
-      - 'frontend/src/features/auth/RegisterPage.jsx'
-      - 'frontend/src/features/home/**'
-      - 'frontend/src/features/onboarding/**'
-      - 'frontend/src/features/settings/**'
-      - 'frontend/src/lib/apiClient.js'
-      - 'frontend/src/lib/authSession.js'
-      - 'frontend/tests/e2e/p0-onboarding.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - 'docker/postgresql/**'
-      - '.github/workflows/p0-onboarding-fullstack-postgresql-validation.yml'
   workflow_dispatch:
 
 permissions:

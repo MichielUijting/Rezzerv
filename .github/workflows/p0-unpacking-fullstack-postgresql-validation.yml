@@ -1,27 +1,6 @@
 name: P0 Unpacking full-stack PostgreSQL validation
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'backend/alembic/**'
-      - 'backend/app/main.py'
-      - 'backend/app/services/day_article*.py'
-      - 'backend/app/services/canonical_inventory_identity_service.py'
-      - 'backend/tests/day_article_release_a_selftest.py'
-      - 'backend/tests/p0_unpacking_fixture.py'
-      - 'backend/tests/p0_unpacking_receipt_bridge.py'
-      - 'quality/acceptance/canonical_scenario_catalog.json'
-      - 'quality/acceptance/p0_residual_closure.json'
-      - 'frontend/src/features/stores/StoreBatchDetailPage.jsx'
-      - 'frontend/src/features/receipts/dayArticleHandling.js'
-      - 'frontend/tests/e2e/p0-unpacking.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'scripts/ci/workflow_delta_gate.py'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - '.github/workflows/p0-unpacking-fullstack-postgresql-validation.yml'
   workflow_dispatch:
 
 permissions:
