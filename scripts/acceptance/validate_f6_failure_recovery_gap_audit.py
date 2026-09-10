@@ -26,6 +26,12 @@ EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
 EXPECTED_COUNTS = {"covered": 23, "partial": 58, "gap": 36, "na": 23}
 
+SHARED_KASSA_WORKFLOW = ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
+MIGRATED_EVIDENCE = {
+    ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
+    ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
+}
+
 
 def load_json(path: Path):
     with path.open("r", encoding="utf-8") as handle:
@@ -36,6 +42,20 @@ def require(condition: bool, marker: str) -> None:
     if not condition:
         raise SystemExit(f"FAIL {marker}")
     print(f"PASS {marker}")
+
+
+def evidence_exists(evidence_path: str) -> bool:
+    path = ROOT / evidence_path
+    if path.exists():
+        return True
+    replacement = MIGRATED_EVIDENCE.get(evidence_path)
+    if not replacement:
+        return False
+    replacement_path = ROOT / replacement
+    if replacement_path.exists():
+        print(f"PASS evidence_migrated_{evidence_path}_to_{replacement}")
+        return True
+    return False
 
 
 def main() -> None:
@@ -72,7 +92,7 @@ def main() -> None:
         if any(status in {"covered", "partial"} for status in assessments.values()):
             require(bool(evidence), f"{scenario_id}_has_evidence_for_non_gap_claims")
         for evidence_path in evidence:
-            require((ROOT / evidence_path).exists(), f"{scenario_id}_evidence_exists_{evidence_path}")
+            require(evidence_exists(evidence_path), f"{scenario_id}_evidence_exists_{evidence_path}")
 
     summary = audit.get("summary", {})
     require(summary.get("total_p0_scenarios") == 14, "f6_summary_14_p0")
@@ -123,8 +143,9 @@ def main() -> None:
     )
     require(
         ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml" in kassa_evidence,
-        "f6_kassa_postgresql_workflow_registered",
+        "f6_kassa_historical_postgresql_workflow_registered",
     )
+    require((ROOT / SHARED_KASSA_WORKFLOW).exists(), "f6_kassa_shared_postgresql_workflow_registered")
 
     account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
     require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")

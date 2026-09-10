@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CLOSURE_PATH = ROOT / "quality/acceptance/p0_residual_closure.json"
-MATRIX_PATH = ROOT / "quality/acceptance/functional_acceptance_matrix.json"
-REGISTRY_PATH = ROOT / "quality/regression/historical_defect_registry.json"
+CLOSURE_PATH = ROOT / "quality" / "acceptance" / "p0_residual_closure.json"
+MATRIX_PATH = ROOT / "quality" / "acceptance" / "functional_acceptance_matrix.json"
+REGISTRY_PATH = ROOT / "quality" / "regression" / "historical_defect_registry.json"
 
 EXPECTED_P0_IDS = {
     "P0-ACCOUNT-SESSION",
@@ -47,6 +47,11 @@ EXPECTED_CLOSED = {
 EXPECTED_RESIDUAL = EXPECTED_P0_IDS - EXPECTED_CLOSED
 EXPECTED_F5_IDS = {f"F5-{index:02d}" for index in range(1, 15)}
 
+SHARED_KASSA_WORKFLOW = ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
+MIGRATED_EVIDENCE = {
+    ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
+}
+
 
 def load_json(path: Path):
     with path.open("r", encoding="utf-8") as handle:
@@ -67,6 +72,20 @@ def require(condition: bool, marker: str) -> None:
     if not condition:
         fail(marker)
     print(f"PASS {marker}")
+
+
+def evidence_exists(evidence_path: str) -> bool:
+    path = ROOT / evidence_path
+    if path.exists():
+        return True
+    replacement = MIGRATED_EVIDENCE.get(evidence_path)
+    if not replacement:
+        return False
+    replacement_path = ROOT / replacement
+    if replacement_path.exists():
+        print(f"PASS evidence_migrated_{evidence_path}_to_{replacement}")
+        return True
+    return False
 
 
 def main() -> None:
@@ -114,11 +133,13 @@ def main() -> None:
         evidence = scenario.get("evidence") or []
         require(bool(evidence), f"{scenario_id}_has_evidence")
         for evidence_path in evidence:
-            require((ROOT / evidence_path).exists(), f"{scenario_id}_evidence_exists_{evidence_path}")
+            require(evidence_exists(evidence_path), f"{scenario_id}_evidence_exists_{evidence_path}")
         if scenario.get("status") == "residual":
             require(bool(scenario.get("residual_scope")), f"{scenario_id}_residual_scope_explicit")
         else:
             require(not scenario.get("residual_scope"), f"{scenario_id}_closed_has_no_residual_scope")
+
+    require((ROOT / SHARED_KASSA_WORKFLOW).exists(), "p0_kassa_shared_postgresql_workflow_registered")
 
     account_session = next(row for row in closure_scenarios if row.get("id") == "P0-ACCOUNT-SESSION")
     account_proof = account_session.get("proof", {})

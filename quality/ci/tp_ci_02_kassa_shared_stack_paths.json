@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "authorities": {
+    "p0_kassa": {
+      "label": "P0 Kassa review full-stack PostgreSQL validation",
+      "paths": [
+        "backend/alembic/**",
+        "backend/app/main.py",
+        "backend/app/services/**/*receipt*",
+        "backend/app/testing/receipt_acceptance/baseline.json",
+        "backend/tests/kassa_review_api_selftest.py",
+        "backend/tests/p0_kassa_review_fixture.py",
+        "quality/acceptance/canonical_scenario_catalog.json",
+        "frontend/src/features/receipts/KassaPage.jsx",
+        "frontend/tests/e2e/p0-kassa-review.fullstack.spec.js",
+        "frontend/playwright.fullstack.config.js",
+        "scripts/ci/workflow_delta_gate.py",
+        "scripts/ci/shared_fullstack_plan.py",
+        "quality/ci/tp_ci_02_kassa_shared_stack_paths.json",
+        "docker-compose.yml",
+        "docker-compose.postgresql.yml",
+        ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
+      ]
+    },
+    "f6_kassa": {
+      "label": "F6 Kassa review controlled 5xx PostgreSQL rollback",
+      "paths": [
+        "backend/app/db.py",
+        "backend/app/main.py",
+        "backend/app/services/f6_failure_injection.py",
+        "backend/app/testing/receipt_acceptance/baseline.json",
+        "backend/tests/kassa_review_api_selftest.py",
+        "backend/tests/p0_kassa_review_fixture.py",
+        "backend/tests/f6_kassa_controlled_5xx_fixture.py",
+        "quality/acceptance/canonical_scenario_catalog.json",
+        "frontend/src/features/receipts/KassaPage.jsx",
+        "frontend/src/features/stores/storeImportShared.jsx",
+        "frontend/src/lib/authSession.js",
+        "frontend/tests/e2e/f6-kassa-review-controlled-5xx.fullstack.spec.js",
+        "frontend/playwright.fullstack.config.js",
+        "scripts/ci/workflow_delta_gate.py",
+        "scripts/ci/shared_fullstack_plan.py",
+        "quality/ci/tp_ci_02_kassa_shared_stack_paths.json",
+        "docker-compose.yml",
+        "docker-compose.postgresql.yml",
+        ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml",
+        ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
+      ]
+    }
+  }
+}
