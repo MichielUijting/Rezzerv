@@ -11,6 +11,12 @@ import json
 import os
 import sys
 from decimal import Decimal
+from pathlib import Path
+
+# Keep direct script execution (/app/tests/...) on the application import path.
+APP_ROOT = Path(__file__).resolve().parents[1]
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
 
 from sqlalchemy import text
 
