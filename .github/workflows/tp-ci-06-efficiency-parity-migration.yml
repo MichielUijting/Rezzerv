@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - codex/tp-ci-06-efficiency-parity
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
