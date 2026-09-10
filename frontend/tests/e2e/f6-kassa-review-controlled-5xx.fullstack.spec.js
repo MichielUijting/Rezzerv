@@ -53,14 +53,14 @@ test('F6-01 Kassa approval controlled 500 shows standard feedback and rolls appr
   const approvalResponse = await approvalResponsePromise
   expect(approvalResponse.status()).toBe(500)
 
-  const feedback = page.getByTestId('app-feedback-error')
+  const feedback = page.getByRole('dialog', { name: 'Melding' })
   await expect(feedback).toBeVisible({ timeout: 30_000 })
   await expect(feedback).toContainText('Bon kon niet worden goedgekeurd.')
   await expect(feedback).not.toContainText('Interne serverfout in de API')
   await expect(feedback).not.toContainText('F6 controlled Kassa')
   console.log('F6_KASSA_REAL_500_FEEDBACK_GREEN')
 
-  await page.getByTestId('app-feedback-error-ok-button').click()
+  await feedback.getByRole('button', { name: 'OK', exact: true }).click()
   await page.reload()
   await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('receipt-detail-page')).toContainText('Totaalbedrag wijkt af van de bonregels')
