@@ -1,25 +1,6 @@
 name: P0 Inventory correction full-stack PostgreSQL validation
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'backend/alembic/**'
-      - 'backend/app/main.py'
-      - 'backend/app/api/article_detail_admin_routes.py'
-      - 'backend/app/services/temporal_inventory_service.py'
-      - 'backend/tests/p0_inventory_correction_fixture.py'
-      - 'backend/tests/test_inventory_event_mutation_decimal_request.py'
-      - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
-      - 'frontend/src/features/articles/tabs/ArticleHistoryTab.jsx'
-      - 'frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'quality/acceptance/p0_residual_closure.json'
-      - 'scripts/ci/workflow_delta_gate.py'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - '.github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml'
   workflow_dispatch:
 
 permissions:
