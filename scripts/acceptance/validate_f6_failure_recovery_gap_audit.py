@@ -24,7 +24,7 @@ EXPECTED_CATEGORIES = {
 }
 EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
-EXPECTED_COUNTS = {"covered": 18, "partial": 62, "gap": 37, "na": 23}
+EXPECTED_COUNTS = {"covered": 20, "partial": 60, "gap": 37, "na": 23}
 
 
 def load_json(path: Path):
@@ -95,6 +95,18 @@ def main() -> None:
 
     receipt = next(row for row in scenarios if row["id"] == "P0-RECEIPT-INVENTORY-ALMOSTOUT")
     require(receipt["assessments"]["retry_duplicate_request"] == "covered", "f6_reuses_l4_05_idempotency_authority")
+    require(receipt["assessments"]["controlled_5xx"] == "covered", "f6_receipt_controlled_5xx_covered")
+    require(receipt["assessments"]["standard_user_feedback"] == "covered", "f6_receipt_standard_feedback_covered")
+    require(receipt["assessments"]["db_consistency_after_error"] == "covered", "f6_receipt_db_consistency_after_error_covered")
+    receipt_evidence = set(receipt.get("evidence") or [])
+    require(
+        "frontend/tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js" in receipt_evidence,
+        "f6_receipt_browser_authority_registered",
+    )
+    require(
+        ".github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml" in receipt_evidence,
+        "f6_receipt_postgresql_workflow_registered",
+    )
 
     account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
     require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")
