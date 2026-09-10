@@ -62,6 +62,10 @@ test('F6-01 Kassa approval controlled 500 shows standard feedback and rolls appr
 
   await feedback.getByRole('button', { name: 'OK', exact: true }).click()
   await page.reload()
+  await expect(page.getByTestId('kassa-page')).toBeVisible({ timeout: 30_000 })
+  const receiptRowAfterReload = page.getByTestId(`kassa-row-${targetReceiptId}`)
+  await expect(receiptRowAfterReload).toBeVisible({ timeout: 30_000 })
+  await receiptRowAfterReload.dblclick()
   await expect(page.getByTestId('receipt-detail-page')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('receipt-detail-page')).toContainText('Totaalbedrag wijkt af van de bonregels')
   await expect(page.getByRole('button', { name: 'Goedkeuren', exact: true })).toBeVisible()
