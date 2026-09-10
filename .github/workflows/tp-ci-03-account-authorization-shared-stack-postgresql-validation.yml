@@ -217,7 +217,11 @@ jobs:
           print('P0_ACCOUNT_SESSION_POSTGRESQL_BOUNDARY_GREEN', flush=True)
           PY
 
-          rm -rf frontend/test-results frontend/playwright-report-fullstack
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            rm -rf test-results playwright-report-fullstack
           docker run --rm \
             --add-host=host.docker.internal:host-gateway \
             -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
@@ -383,7 +387,11 @@ jobs:
           print('P0_AUTHORIZATION_POSTGRESQL_BOUNDARY_GREEN', flush=True)
           PY
 
-          rm -rf frontend/test-results frontend/playwright-report-fullstack
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            rm -rf test-results playwright-report-fullstack
           docker run --rm \
             --add-host=host.docker.internal:host-gateway \
             -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
