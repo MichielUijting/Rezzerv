@@ -471,12 +471,16 @@ jobs:
           set -euo pipefail
           echo "run_account=$RUN_ACCOUNT outcome_account=$ACCOUNT_OUTCOME"
           echo "run_authorization=$RUN_AUTHORIZATION outcome_authorization=$AUTHORIZATION_OUTCOME"
-          if [[ "$RUN_ACCOUNT" == 'true' && "$ACCOUNT_OUTCOME" != 'success' ]]; then
-            echo 'Selected P0 account session authority failed.' >&2
-            exit 1
+          if [[ "$RUN_ACCOUNT" == 'true' ]]; then
+            if [[ "$ACCOUNT_OUTCOME" != 'success' ]]; then
+              echo 'Selected P0 account session authority failed.' >&2
+              exit 1
+            fi
           fi
-          if [[ "$RUN_AUTHORIZATION" == 'true' && "$AUTHORIZATION_OUTCOME" != 'success' ]]; then
-            echo 'Selected P0 authorization isolation authority failed.' >&2
-            exit 1
+          if [[ "$RUN_AUTHORIZATION" == 'true' ]]; then
+            if [[ "$AUTHORIZATION_OUTCOME" != 'success' ]]; then
+              echo 'Selected P0 authorization isolation authority failed.' >&2
+              exit 1
+            fi
           fi
           echo 'TP_CI_03_ACCOUNT_AUTHORIZATION_SHARED_STACK_GREEN'
