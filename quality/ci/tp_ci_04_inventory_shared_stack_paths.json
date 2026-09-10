@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "proof_revision": 1,
+  "authorities": {
+    "p0_inventory": {
+      "label": "P0 Inventory correction full-stack PostgreSQL validation",
+      "paths": [
+        "backend/alembic/**",
+        "backend/app/main.py",
+        "backend/app/api/article_detail_admin_routes.py",
+        "backend/app/services/temporal_inventory_service.py",
+        "backend/tests/p0_inventory_correction_fixture.py",
+        "backend/tests/test_inventory_event_mutation_decimal_request.py",
+        "frontend/src/features/articles/tabs/ArticleStockTab.jsx",
+        "frontend/src/features/articles/tabs/ArticleHistoryTab.jsx",
+        "frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js",
+        "frontend/playwright.fullstack.config.js",
+        "quality/acceptance/p0_residual_closure.json",
+        "scripts/ci/shared_fullstack_plan.py",
+        "quality/ci/tp_ci_04_inventory_shared_stack_paths.json",
+        "docker-compose.yml",
+        "docker-compose.postgresql.yml",
+        "docker/postgresql/**",
+        ".github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml"
+      ]
+    },
+    "p0_almost_out": {
+      "label": "P0 Almost-out recalculation full-stack PostgreSQL validation",
+      "paths": [
+        "backend/alembic/**",
+        "backend/app/main.py",
+        "backend/app/services/temporal_inventory_service.py",
+        "backend/tests/p0_almost_out_recalculation_fixture.py",
+        "frontend/src/features/articles/tabs/ArticleStockTab.jsx",
+        "frontend/tests/e2e/p0-almost-out-recalculation.fullstack.spec.js",
+        "frontend/playwright.fullstack.config.js",
+        "quality/acceptance/p0_residual_closure.json",
+        "scripts/ci/shared_fullstack_plan.py",
+        "quality/ci/tp_ci_04_inventory_shared_stack_paths.json",
+        "docker-compose.yml",
+        "docker-compose.postgresql.yml",
+        "docker/postgresql/**",
+        ".github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml"
+      ]
+    },
+    "f6_inventory": {
+      "label": "F6 Inventory controlled 5xx PostgreSQL rollback",
+      "paths": [
+        "backend/app/db.py",
+        "backend/app/main.py",
+        "backend/app/services/f6_failure_injection.py",
+        "backend/tests/f6_inventory_controlled_5xx_fixture.py",
+        "backend/tests/p0_inventory_correction_fixture.py",
+        "frontend/src/features/articles/tabs/ArticleStockTab.jsx",
+        "frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js",
+        "frontend/playwright.fullstack.config.js",
+        "quality/acceptance/f6_failure_recovery_gap_audit.json",
+        "scripts/ci/shared_fullstack_plan.py",
+        "quality/ci/tp_ci_04_inventory_shared_stack_paths.json",
+        "docker-compose.yml",
+        "docker-compose.postgresql.yml",
+        "docker/postgresql/**",
+        ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml",
+        ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml"
+      ]
+    }
+  }
+}
