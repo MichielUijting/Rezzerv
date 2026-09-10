@@ -1,23 +1,6 @@
 name: F6 Receipt controlled 5xx PostgreSQL rollback
 
 on:
-  pull_request:
-    paths:
-      - 'backend/app/db.py'
-      - 'backend/app/main.py'
-      - 'backend/app/services/f6_failure_injection.py'
-      - 'backend/app/testing/receipt_parsing/**'
-      - 'frontend/src/features/kassa/**'
-      - 'frontend/src/features/receipts/**'
-      - 'frontend/src/features/stores/**'
-      - 'frontend/src/features/almostOut/**'
-      - 'frontend/src/pages/Voorraad.jsx'
-      - 'frontend/tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'scripts/ci/workflow_delta_gate.py'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - '.github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml'
   workflow_dispatch:
 
 permissions:

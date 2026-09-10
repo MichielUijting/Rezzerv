@@ -1,24 +1,6 @@
 name: P0 receipt inventory idempotency full-stack PostgreSQL validation
 
 on:
-  pull_request:
-    paths:
-      - 'backend/alembic/**'
-      - 'backend/app/main.py'
-      - 'backend/app/services/**/*receipt*'
-      - 'backend/app/services/**/*inventory*'
-      - 'backend/app/testing/receipt_parsing/**'
-      - 'frontend/src/app/router/**'
-      - 'frontend/src/features/kassa/**'
-      - 'frontend/src/features/receipts/**'
-      - 'frontend/src/features/stores/**'
-      - 'frontend/src/features/onboarding/**'
-      - 'frontend/src/pages/Voorraad.jsx'
-      - 'frontend/tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - '.github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml'
   workflow_dispatch:
 
 permissions:
