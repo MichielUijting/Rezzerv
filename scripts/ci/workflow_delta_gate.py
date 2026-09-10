@@ -19,8 +19,9 @@ import fnmatch
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
+
+GATE_VERSION = "1"
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
@@ -102,6 +103,8 @@ def main() -> int:
     parser.add_argument("--workflow", required=True)
     parser.add_argument("--event", default=os.getenv("GITHUB_EVENT_PATH", ""))
     args = parser.parse_args()
+
+    print(f"CI_DELTA_GATE_VERSION={GATE_VERSION}")
 
     workflow_path = Path(args.workflow)
     if not workflow_path.is_file():
