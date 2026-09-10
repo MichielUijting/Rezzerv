@@ -1,0 +1,404 @@
+name: TP-CI-02 Kassa shared full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/db.py'
+      - 'backend/app/main.py'
+      - 'backend/app/services/**/*receipt*'
+      - 'backend/app/services/f6_failure_injection.py'
+      - 'backend/app/testing/receipt_acceptance/baseline.json'
+      - 'backend/tests/kassa_review_api_selftest.py'
+      - 'backend/tests/p0_kassa_review_fixture.py'
+      - 'backend/tests/f6_kassa_controlled_5xx_fixture.py'
+      - 'quality/acceptance/canonical_scenario_catalog.json'
+      - 'quality/ci/tp_ci_02_kassa_shared_stack_paths.json'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'frontend/src/features/stores/storeImportShared.jsx'
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/tests/e2e/p0-kassa-review.fullstack.spec.js'
+      - 'frontend/tests/e2e/f6-kassa-review-controlled-5xx.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'scripts/ci/workflow_delta_gate.py'
+      - 'scripts/ci/shared_fullstack_plan.py'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml'
+      - '.github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml'
+      - '.github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml'
+  workflow_dispatch:
+    inputs:
+      authority:
+        description: Authority to run on the shared Kassa stack
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - p0-kassa
+          - f6-kassa
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tp-ci-02-kassa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Kassa shared-stack authority plan
+    runs-on: ubuntu-latest
+    outputs:
+      p0_kassa: ${{ steps.plan.outputs.p0_kassa }}
+      f6_kassa: ${{ steps.plan.outputs.f6_kassa }}
+      any: ${{ steps.plan.outputs.any }}
+    steps:
+      - name: Checkout exact candidate for authority planning
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Select authorities from current delta
+        id: plan
+        shell: bash
+        env:
+          INPUT_AUTHORITY: ${{ inputs.authority || 'both' }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/shared_fullstack_plan.py \
+            --manifest quality/ci/tp_ci_02_kassa_shared_stack_paths.json \
+            | tee tp-ci-02-kassa-plan.log
+          grep -E '^P0_KASSA=(true|false)$' tp-ci-02-kassa-plan.log
+          grep -E '^F6_KASSA=(true|false)$' tp-ci-02-kassa-plan.log
+          grep -E '^ANY=(true|false)$' tp-ci-02-kassa-plan.log
+
+  shared-kassa-fullstack:
+    name: Shared Kassa Docker PostgreSQL Playwright authority runner
+    needs: plan
+    if: needs.plan.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble
+      F6_KASSA_TARGET_RECEIPT_ID: f3-kassa-receipt-l4-review-financial
+
+    steps:
+      - name: Checkout exact candidate once
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Guard selected browser authorities against shortcuts
+        shell: bash
+        env:
+          RUN_P0: ${{ needs.plan.outputs.p0_kassa }}
+          RUN_F6: ${{ needs.plan.outputs.f6_kassa }}
+        run: |
+          set -euo pipefail
+          if [[ "$RUN_P0" == 'true' ]]; then
+            spec='frontend/tests/e2e/p0-kassa-review.fullstack.spec.js'
+            if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+              echo 'P0 Kassa review authority mag kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+              exit 1
+            fi
+            grep -F "getByTestId('receipt-lines-mark-reviewed').click()" "$spec"
+            grep -F "getByRole('button', { name: 'Goedkeuren', exact: true }).click()" "$spec"
+            grep -F "Totaalbedrag wijkt af van de bonregels" "$spec"
+            echo 'P0_KASSA_REVIEW_NO_CORE_SHORTCUTS_GREEN'
+          fi
+          if [[ "$RUN_F6" == 'true' ]]; then
+            spec='frontend/tests/e2e/f6-kassa-review-controlled-5xx.fullstack.spec.js'
+            if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+              echo 'F6 Kassa authority mag de kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+              exit 1
+            fi
+            grep -F "getByRole('button', { name: 'Goedkeuren', exact: true }).click()" "$spec"
+            grep -F 'expect(approvalResponse.status()).toBe(500)' "$spec"
+            grep -F 'Bon kon niet worden goedgekeurd.' "$spec"
+            grep -F 'F6_KASSA_BROWSER_ROLLBACK_GREEN' "$spec"
+            python -m py_compile backend/app/services/f6_failure_injection.py backend/tests/f6_kassa_controlled_5xx_fixture.py
+            node --check frontend/tests/e2e/f6-kassa-review-controlled-5xx.fullstack.spec.js
+            node --check frontend/playwright.fullstack.config.js
+            node --check frontend/src/lib/authSession.js
+            echo 'F6_KASSA_AUTHORITY_COMPILE_GREEN'
+            echo 'F6_KASSA_NO_CORE_SHORTCUTS_GREEN'
+          fi
+
+      - name: Build application images once and prepare Playwright once
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_epoch="$(date +%s)"
+          echo "TP_CI_02_SHARED_BUILD_STARTED=$start_epoch"
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+          echo 'TP_CI_02_DOCKER_BUILD_ONCE_GREEN'
+          docker pull "$PLAYWRIGHT_IMAGE"
+          echo 'TP_CI_02_PLAYWRIGHT_PULL_ONCE_GREEN'
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc 'npm ci'
+          echo 'TP_CI_02_NPM_CI_ONCE_GREEN'
+          echo "TP_CI_02_SHARED_PREP_SECONDS=$(( $(date +%s) - start_epoch ))"
+
+      - name: Run P0 Kassa authority on shared images
+        id: p0
+        if: needs.plan.outputs.p0_kassa == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            rc=$?
+            if (( rc != 0 )); then
+              docker compose ps || true
+              docker compose logs --no-color --tail=500 backend || true
+              docker compose logs --no-color --tail=200 frontend || true
+            fi
+            docker compose down -v --remove-orphans || true
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          phase_start="$(date +%s)"
+          docker compose up -d --no-build
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              break
+            fi
+            if (( attempt == 180 )); then
+              echo 'Backend health timeout' >&2
+              exit 1
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+
+          docker compose exec -T backend python -u - <<'PY' | tee p0-kassa-review-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert alembic_head
+          print(f'runtime_user={current_user}')
+          print(f'alembic_head={alembic_head}')
+          print('P0_KASSA_REVIEW_POSTGRESQL_BOUNDARY_GREEN')
+          PY
+
+          docker compose exec -T backend mkdir -p /quality/acceptance /backend/app/testing/receipt_acceptance
+          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
+          docker compose cp backend/app/testing/receipt_acceptance/baseline.json backend:/backend/app/testing/receipt_acceptance/baseline.json
+          docker compose exec -T backend test -s /quality/acceptance/canonical_scenario_catalog.json
+          docker compose exec -T backend test -s /backend/app/testing/receipt_acceptance/baseline.json
+          echo 'P0_KASSA_REVIEW_CANONICAL_FIXTURES_STAGED_GREEN'
+
+          docker compose exec -T backend python /app/tests/p0_kassa_review_fixture.py prepare | tee p0-kassa-review-fixture.log
+          grep -F 'P0_KASSA_REVIEW_FIXTURE_GREEN' p0-kassa-review-fixture.log
+          fixture_json="$(grep '^P0_KASSA_REVIEW_FIXTURE=' p0-kassa-review-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          email="$(jq -r '.email' <<<"$fixture_json")"
+          password="$(jq -r '.password' <<<"$fixture_json")"
+          uncertain_receipt_id="$(jq -r '.uncertain_receipt_id' <<<"$fixture_json")"
+          uncertain_line_id="$(jq -r '.uncertain_line_id' <<<"$fixture_json")"
+          financial_receipt_id="$(jq -r '.financial_receipt_id' <<<"$fixture_json")"
+          echo "::add-mask::$password"
+
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_EMAIL="$email" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_PASSWORD="$password" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_UNCERTAIN_RECEIPT_ID="$uncertain_receipt_id" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_UNCERTAIN_LINE_ID="$uncertain_line_id" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_FINANCIAL_RECEIPT_ID="$financial_receipt_id" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-kassa-review.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee p0-kassa-review-browser.log"
+
+          docker compose exec -T \
+            -e P0_KASSA_REVIEW_UNCERTAIN_LINE_ID="$uncertain_line_id" \
+            backend python /app/tests/p0_kassa_review_fixture.py verify | tee p0-kassa-review-postgresql-proof.log
+          grep -F 'P0_KASSA_REVIEW_POSTGRESQL_GREEN' p0-kassa-review-postgresql-proof.log
+          grep -F 'P0_KASSA_UNCERTAIN_BROWSER_REVIEW_GREEN' frontend/p0-kassa-review-browser.log
+          grep -F 'P0_KASSA_FINANCIAL_BROWSER_REVIEW_GREEN' frontend/p0-kassa-review-browser.log
+          test -s frontend/p0-kassa-review-browser-proof.json
+          echo 'P0_KASSA_REVIEW_BROWSER_PROOF_GREEN'
+          echo 'P0_KASSA_REVIEW_FULLSTACK_POSTGRESQL_GREEN'
+          echo "TP_CI_02_P0_KASSA_PHASE_SECONDS=$(( $(date +%s) - phase_start ))"
+
+      - name: Upload P0 Kassa evidence from shared runner
+        if: always() && needs.plan.outputs.p0_kassa == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-kassa-review-postgresql-evidence-shared-runner
+          path: |
+            p0-kassa-review-postgresql-boundary.log
+            p0-kassa-review-fixture.log
+            p0-kassa-review-postgresql-proof.log
+            frontend/p0-kassa-review-browser.log
+            frontend/p0-kassa-review-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Run F6 Kassa authority on the same built images
+        id: f6
+        if: needs.plan.outputs.f6_kassa == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > f6-kassa-compose.override.yml <<YAML
+          services:
+            backend:
+              environment:
+                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
+                REZZERV_TEST_ONLY_F6_KASSA_APPROVAL_FAILURE: "1"
+                REZZERV_TEST_ONLY_F6_KASSA_RECEIPT_ID: "$F6_KASSA_TARGET_RECEIPT_ID"
+          YAML
+          export COMPOSE_FILE="docker-compose.yml:docker-compose.postgresql.yml:f6-kassa-compose.override.yml"
+          cleanup() {
+            rc=$?
+            if (( rc != 0 )); then
+              docker compose ps || true
+              docker compose logs --no-color --tail=500 backend || true
+              docker compose logs --no-color --tail=300 frontend || true
+            fi
+            docker compose down -v --remove-orphans || true
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          phase_start="$(date +%s)"
+          docker compose up -d --no-build
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              echo 'F6_KASSA_BACKEND_HEALTH_GREEN'
+              break
+            fi
+            if (( attempt == 180 )); then
+              echo 'Backend health timeout' >&2
+              exit 1
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+
+          docker compose exec -T backend python -u - <<'PY' | tee f6-kassa-runtime-boundary.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.f6_failure_injection import _enabled, _kassa_approval_enabled, F6_KASSA_RECEIPT_ID_ENV
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          assert _enabled() is True
+          assert _kassa_approval_enabled() is True
+          assert os.getenv(F6_KASSA_RECEIPT_ID_ENV) == 'f3-kassa-receipt-l4-review-financial'
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          print(f'runtime_user={current_user}')
+          print('F6_KASSA_FAILURE_HOOK_ENABLED_GREEN')
+          print('F6_KASSA_POSTGRESQL_RUNTIME_GREEN')
+          PY
+
+          docker compose exec -T backend mkdir -p /quality/acceptance /backend/app/testing/receipt_acceptance
+          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
+          docker compose cp backend/app/testing/receipt_acceptance/baseline.json backend:/backend/app/testing/receipt_acceptance/baseline.json
+          docker compose exec -T backend test -s /quality/acceptance/canonical_scenario_catalog.json
+          docker compose exec -T backend test -s /backend/app/testing/receipt_acceptance/baseline.json
+          echo 'F6_KASSA_CANONICAL_FIXTURES_STAGED_GREEN'
+
+          docker compose exec -T backend python /app/tests/f6_kassa_controlled_5xx_fixture.py prepare | tee f6-kassa-fixture.log
+          grep -F 'F6_KASSA_FIXTURE_GREEN' f6-kassa-fixture.log
+          fixture_json="$(grep '^F6_KASSA_FIXTURE=' f6-kassa-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          email="$(jq -r '.email' <<<"$fixture_json")"
+          password="$(jq -r '.password' <<<"$fixture_json")"
+          receipt_id="$(jq -r '.financial_receipt_id' <<<"$fixture_json")"
+          test "$receipt_id" = "$F6_KASSA_TARGET_RECEIPT_ID"
+          echo "::add-mask::$password"
+          echo 'F6_KASSA_PRESTATE_CAPTURED_GREEN'
+
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_KASSA_EMAIL="$email" \
+            -e PLAYWRIGHT_F6_KASSA_PASSWORD="$password" \
+            -e PLAYWRIGHT_F6_KASSA_RECEIPT_ID="$receipt_id" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-kassa-review-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-kassa-review-controlled-5xx-browser.log"
+          grep -F 'F6_KASSA_REAL_500_FEEDBACK_GREEN' frontend/f6-kassa-review-controlled-5xx-browser.log
+          grep -F 'F6_KASSA_BROWSER_ROLLBACK_GREEN' frontend/f6-kassa-review-controlled-5xx-browser.log
+          test -s frontend/f6-kassa-review-controlled-5xx-browser-proof.json
+
+          docker compose exec -T backend python /app/tests/f6_kassa_controlled_5xx_fixture.py verify | tee f6-kassa-postgresql-rollback.log
+          grep -F 'F6_KASSA_POSTGRESQL_ROLLBACK_GREEN' f6-kassa-postgresql-rollback.log
+          docker compose logs --no-color backend > f6-kassa-backend.log
+          grep -F 'F6-01-KASSA-CONTROLLED-500: injected controlled Kassa approval failure' f6-kassa-backend.log
+          echo 'F6_KASSA_SERVER_INJECTION_PROVEN_GREEN'
+          test "$(jq -r '.approvalStatus' frontend/f6-kassa-review-controlled-5xx-browser-proof.json)" = '500'
+          test "$(jq -r '.receiptRemainsInInbox' frontend/f6-kassa-review-controlled-5xx-browser-proof.json)" = 'true'
+          echo 'F6_KASSA_BROWSER_PROOF_GREEN'
+          echo 'F6_KASSA_REVIEW_CONTROLLED_5XX_POSTGRESQL_ROLLBACK_GREEN'
+          echo "TP_CI_02_F6_KASSA_PHASE_SECONDS=$(( $(date +%s) - phase_start ))"
+
+      - name: Upload F6 Kassa evidence from shared runner
+        if: always() && needs.plan.outputs.f6_kassa == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-kassa-review-controlled-5xx-evidence-shared-runner
+          path: |
+            f6-kassa-runtime-boundary.log
+            f6-kassa-fixture.log
+            f6-kassa-postgresql-rollback.log
+            f6-kassa-backend.log
+            frontend/f6-kassa-review-controlled-5xx-browser.log
+            frontend/f6-kassa-review-controlled-5xx-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce both selected authorities and shared-stack gate
+        if: always()
+        shell: bash
+        env:
+          RUN_P0: ${{ needs.plan.outputs.p0_kassa }}
+          RUN_F6: ${{ needs.plan.outputs.f6_kassa }}
+          P0_OUTCOME: ${{ steps.p0.outcome }}
+          F6_OUTCOME: ${{ steps.f6.outcome }}
+        run: |
+          set -euo pipefail
+          echo "run_p0=$RUN_P0 outcome_p0=$P0_OUTCOME"
+          echo "run_f6=$RUN_F6 outcome_f6=$F6_OUTCOME"
+          if [[ "$RUN_P0" == 'true' && "$P0_OUTCOME" != 'success' ]]; then
+            echo 'Selected P0 Kassa authority failed.' >&2
+            exit 1
+          fi
+          if [[ "$RUN_F6" == 'true' && "$F6_OUTCOME" != 'success' ]]; then
+            echo 'Selected F6 Kassa authority failed.' >&2
+            exit 1
+          fi
+          echo 'TP_CI_02_KASSA_SHARED_STACK_GREEN'
