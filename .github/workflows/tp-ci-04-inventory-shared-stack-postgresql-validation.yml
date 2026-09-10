@@ -1,0 +1,557 @@
+name: TP-CI-04 Inventory shared full-stack PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/db.py'
+      - 'backend/app/main.py'
+      - 'backend/app/api/article_detail_admin_routes.py'
+      - 'backend/app/services/temporal_inventory_service.py'
+      - 'backend/app/services/f6_failure_injection.py'
+      - 'backend/tests/p0_inventory_correction_fixture.py'
+      - 'backend/tests/test_inventory_event_mutation_decimal_request.py'
+      - 'backend/tests/p0_almost_out_recalculation_fixture.py'
+      - 'backend/tests/f6_inventory_controlled_5xx_fixture.py'
+      - 'frontend/src/features/articles/tabs/ArticleStockTab.jsx'
+      - 'frontend/src/features/articles/tabs/ArticleHistoryTab.jsx'
+      - 'frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js'
+      - 'frontend/tests/e2e/p0-almost-out-recalculation.fullstack.spec.js'
+      - 'frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'quality/acceptance/p0_residual_closure.json'
+      - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
+      - 'scripts/ci/shared_fullstack_plan.py'
+      - 'quality/ci/tp_ci_04_inventory_shared_stack_paths.json'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml'
+      - '.github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml'
+      - '.github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml'
+      - '.github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml'
+  workflow_dispatch:
+    inputs:
+      authority:
+        description: Authority to run on the shared Inventory stack
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - p0-inventory
+          - p0-almost-out
+          - f6-inventory
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tp-ci-04-inventory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Inventory shared-stack authority plan
+    runs-on: ubuntu-latest
+    outputs:
+      p0_inventory: ${{ steps.plan.outputs.p0_inventory }}
+      p0_almost_out: ${{ steps.plan.outputs.p0_almost_out }}
+      f6_inventory: ${{ steps.plan.outputs.f6_inventory }}
+      any: ${{ steps.plan.outputs.any }}
+    steps:
+      - name: Checkout exact candidate for authority planning
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Select authorities from current delta
+        id: plan
+        shell: bash
+        env:
+          INPUT_AUTHORITY: ${{ inputs.authority || 'both' }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/shared_fullstack_plan.py \
+            --manifest quality/ci/tp_ci_04_inventory_shared_stack_paths.json \
+            --fallback-authorities p0_inventory,p0_almost_out,f6_inventory \
+            | tee tp-ci-04-inventory-plan.log
+          grep -E '^P0_INVENTORY=(true|false)$' tp-ci-04-inventory-plan.log
+          grep -E '^P0_ALMOST_OUT=(true|false)$' tp-ci-04-inventory-plan.log
+          grep -E '^F6_INVENTORY=(true|false)$' tp-ci-04-inventory-plan.log
+          grep -E '^ANY=(true|false)$' tp-ci-04-inventory-plan.log
+
+  shared-inventory-fullstack:
+    name: Shared Inventory Docker PostgreSQL Playwright authority runner
+    needs: plan
+    if: needs.plan.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble
+
+    steps:
+      - name: Checkout exact candidate once
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Guard selected Inventory authorities against shortcuts
+        shell: bash
+        env:
+          RUN_P0_INVENTORY: ${{ needs.plan.outputs.p0_inventory }}
+          RUN_P0_ALMOST_OUT: ${{ needs.plan.outputs.p0_almost_out }}
+          RUN_F6_INVENTORY: ${{ needs.plan.outputs.f6_inventory }}
+        run: |
+          set -euo pipefail
+          if [[ "$RUN_P0_INVENTORY" == 'true' ]]; then
+            spec='frontend/tests/e2e/p0-inventory-correction.fullstack.spec.js'
+            if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+              echo 'P0 Inventory authority mag kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+              exit 1
+            fi
+            grep -F 'article-stock-adjust-' "$spec"
+            grep -F "getByLabel('Nieuwe hoeveelheid')" "$spec"
+            grep -F "getByRole('tab', { name: 'Historie'" "$spec"
+            echo 'P0_INVENTORY_NO_CORE_SHORTCUTS_GREEN'
+          fi
+          if [[ "$RUN_P0_ALMOST_OUT" == 'true' ]]; then
+            spec='frontend/tests/e2e/p0-almost-out-recalculation.fullstack.spec.js'
+            if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+              echo 'P0 Almost-out authority mag kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+              exit 1
+            fi
+            grep -F 'article-stock-adjust-' "$spec"
+            grep -F 'almost-out-table' "$spec"
+            grep -F "getByLabel('Nieuwe hoeveelheid')" "$spec"
+            echo 'P0_ALMOST_OUT_NO_CORE_SHORTCUTS_GREEN'
+          fi
+          if [[ "$RUN_F6_INVENTORY" == 'true' ]]; then
+            spec='frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js'
+            if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+              echo 'F6 Inventory authority mag de kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+              exit 1
+            fi
+            grep -F 'article-stock-adjust-' "$spec"
+            grep -F "getByLabel('Nieuwe hoeveelheid')" "$spec"
+            grep -F "getByLabel('Reden / notitie')" "$spec"
+            grep -F "getByRole('button', { name: 'Opslaan'" "$spec"
+            grep -F 'expect(mutationResponse.status()).toBe(500)' "$spec"
+            grep -F 'article-stock-mutation-error' "$spec"
+            echo 'F6_INVENTORY_NO_CORE_SHORTCUTS_GREEN'
+          fi
+
+      - name: Build application images once and prepare Playwright once
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_epoch="$(date +%s)"
+          echo "TP_CI_04_SHARED_BUILD_STARTED=$start_epoch"
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+          echo 'TP_CI_04_DOCKER_BUILD_ONCE_GREEN'
+          docker pull "$PLAYWRIGHT_IMAGE"
+          echo 'TP_CI_04_PLAYWRIGHT_PULL_ONCE_GREEN'
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc 'npm ci'
+          echo 'TP_CI_04_NPM_CI_ONCE_GREEN'
+          echo "TP_CI_04_SHARED_PREP_SECONDS=$(( $(date +%s) - start_epoch ))"
+
+      - name: Run P0 Inventory correction authority on shared images
+        id: p0_inventory
+        if: needs.plan.outputs.p0_inventory == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            rc=$?
+            if (( rc != 0 )); then
+              docker compose ps || true
+              docker compose logs --no-color --tail=500 backend frontend postgres || true
+            fi
+            docker compose down -v --remove-orphans || true
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          phase_start="$(date +%s)"
+          docker compose up -d --no-build
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              break
+            fi
+            if (( attempt == 180 )); then
+              echo 'Backend health timeout' >&2
+              exit 1
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+
+          docker compose exec -T backend python -u - <<'PY' | tee p0-inventory-request-contract.log
+          from decimal import Decimal
+          from app.main import InventoryEventMutationRequest
+
+          adjustment = InventoryEventMutationRequest(quantity='1.234567', event_type='adjustment')
+          purchase = InventoryEventMutationRequest(quantity='2', event_type='purchase')
+          assert isinstance(adjustment.quantity, Decimal), type(adjustment.quantity)
+          assert adjustment.quantity == Decimal('1.234567'), adjustment.quantity
+          assert isinstance(purchase.quantity, Decimal), type(purchase.quantity)
+          assert purchase.quantity == Decimal('2'), purchase.quantity
+          print('P0_INVENTORY_REQUEST_DECIMAL_GREEN', flush=True)
+          PY
+          grep -F 'P0_INVENTORY_REQUEST_DECIMAL_GREEN' p0-inventory-request-contract.log
+
+          docker compose exec -T backend python -u - <<'PY' | tee p0-inventory-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert alembic_head
+          print(f'runtime_user={current_user}', flush=True)
+          print(f'alembic_head={alembic_head}', flush=True)
+          print('P0_INVENTORY_POSTGRESQL_BOUNDARY_GREEN', flush=True)
+          PY
+
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/p0_inventory_correction_fixture.py prepare | tee p0-inventory-fixture.log
+          grep -F 'P0_INVENTORY_FIXTURE_GREEN' p0-inventory-fixture.log
+          fixture_json="$(grep '^P0_INVENTORY_FIXTURE=' p0-inventory-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          export PLAYWRIGHT_P0_INVENTORY_EMAIL="$(jq -r '.email' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_INVENTORY_PASSWORD="$(jq -r '.password' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_INVENTORY_ARTICLE_ID="$(jq -r '.article_id' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_INVENTORY_ARTICLE_NAME="$(jq -r '.article_name' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_INVENTORY_INVENTORY_ID="$(jq -r '.inventory_id' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_INVENTORY_TARGET_QUANTITY="$(jq -r '.target_quantity' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_INVENTORY_NOTE="$(jq -r '.note' <<<"$fixture_json")"
+          echo "::add-mask::$PLAYWRIGHT_P0_INVENTORY_PASSWORD"
+
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" rm -rf test-results playwright-report-fullstack
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_INVENTORY_EMAIL \
+            -e PLAYWRIGHT_P0_INVENTORY_PASSWORD \
+            -e PLAYWRIGHT_P0_INVENTORY_ARTICLE_ID \
+            -e PLAYWRIGHT_P0_INVENTORY_ARTICLE_NAME \
+            -e PLAYWRIGHT_P0_INVENTORY_INVENTORY_ID \
+            -e PLAYWRIGHT_P0_INVENTORY_TARGET_QUANTITY \
+            -e PLAYWRIGHT_P0_INVENTORY_NOTE \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-inventory-correction.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-inventory-browser.log"
+
+          docker compose exec -T \
+            -e PYTHONPATH=/app \
+            -e P0_INVENTORY_ARTICLE_ID="$PLAYWRIGHT_P0_INVENTORY_ARTICLE_ID" \
+            -e P0_INVENTORY_INVENTORY_ID="$PLAYWRIGHT_P0_INVENTORY_INVENTORY_ID" \
+            backend python /app/tests/p0_inventory_correction_fixture.py verify | tee p0-inventory-postgresql-proof.log
+          grep -F 'P0_INVENTORY_POSTGRESQL_GREEN' p0-inventory-postgresql-proof.log
+          grep -F 'P0_INVENTORY_CORRECTION_BROWSER_GREEN' frontend/p0-inventory-browser.log
+          grep -F 'P0_INVENTORY_DECIMAL_BROWSER_GREEN' frontend/p0-inventory-browser.log
+          test -s frontend/p0-inventory-browser-proof.json
+          echo 'P0_INVENTORY_BROWSER_PROOF_GREEN'
+          echo 'P0_INVENTORY_FULLSTACK_POSTGRESQL_GREEN'
+          echo "TP_CI_04_P0_INVENTORY_PHASE_SECONDS=$(( $(date +%s) - phase_start ))"
+
+      - name: Upload P0 Inventory evidence from shared runner
+        if: always() && needs.plan.outputs.p0_inventory == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-inventory-correction-postgresql-evidence-shared-runner
+          path: |
+            p0-inventory-request-contract.log
+            p0-inventory-postgresql-boundary.log
+            p0-inventory-fixture.log
+            p0-inventory-postgresql-proof.log
+            frontend/p0-inventory-browser.log
+            frontend/p0-inventory-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Run P0 Almost-out recalculation authority on same built images
+        id: p0_almost_out
+        if: needs.plan.outputs.p0_almost_out == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            rc=$?
+            if (( rc != 0 )); then
+              docker compose ps || true
+              docker compose logs --no-color --tail=500 backend frontend postgres || true
+            fi
+            docker compose down -v --remove-orphans || true
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          phase_start="$(date +%s)"
+          docker compose up -d --no-build
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              break
+            fi
+            if (( attempt == 180 )); then
+              echo 'Backend health timeout' >&2
+              exit 1
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+
+          docker compose exec -T backend python -u - <<'PY' | tee p0-almost-out-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              alembic_head = str(conn.execute(text('SELECT version_num FROM public.alembic_version')).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert alembic_head
+          print(f'runtime_user={current_user}', flush=True)
+          print(f'alembic_head={alembic_head}', flush=True)
+          print('P0_ALMOST_OUT_POSTGRESQL_BOUNDARY_GREEN', flush=True)
+          PY
+
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/p0_almost_out_recalculation_fixture.py prepare | tee p0-almost-out-fixture.log
+          grep -F 'P0_ALMOST_OUT_FIXTURE_GREEN' p0-almost-out-fixture.log
+          fixture_json="$(grep '^P0_ALMOST_OUT_FIXTURE=' p0-almost-out-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          export PLAYWRIGHT_P0_ALMOST_OUT_EMAIL="$(jq -r '.email' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_PASSWORD="$(jq -r '.password' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_ARTICLE_ID="$(jq -r '.article_id' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_ARTICLE_NAME="$(jq -r '.article_name' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_INVENTORY_ID="$(jq -r '.inventory_id' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_INITIAL_QUANTITY="$(jq -r '.initial_quantity' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_TARGET_QUANTITY="$(jq -r '.target_quantity' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_MIN_STOCK="$(jq -r '.min_stock' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_IDEAL_STOCK="$(jq -r '.ideal_stock' <<<"$fixture_json")"
+          export PLAYWRIGHT_P0_ALMOST_OUT_NOTE="$(jq -r '.note' <<<"$fixture_json")"
+          echo "::add-mask::$PLAYWRIGHT_P0_ALMOST_OUT_PASSWORD"
+
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" rm -rf test-results playwright-report-fullstack
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_EMAIL \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_PASSWORD \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_ARTICLE_ID \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_ARTICLE_NAME \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_INVENTORY_ID \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_INITIAL_QUANTITY \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_TARGET_QUANTITY \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_MIN_STOCK \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_IDEAL_STOCK \
+            -e PLAYWRIGHT_P0_ALMOST_OUT_NOTE \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-almost-out-recalculation.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-almost-out-recalculation-browser.log"
+
+          docker compose exec -T \
+            -e PYTHONPATH=/app \
+            -e P0_ALMOST_OUT_ARTICLE_ID="$PLAYWRIGHT_P0_ALMOST_OUT_ARTICLE_ID" \
+            -e P0_ALMOST_OUT_INVENTORY_ID="$PLAYWRIGHT_P0_ALMOST_OUT_INVENTORY_ID" \
+            backend python /app/tests/p0_almost_out_recalculation_fixture.py verify | tee p0-almost-out-postgresql-proof.log
+          grep -F 'P0_ALMOST_OUT_RECALCULATION_POSTGRESQL_GREEN' p0-almost-out-postgresql-proof.log
+          grep -F 'P0_ALMOST_OUT_RECALCULATION_BROWSER_GREEN' frontend/p0-almost-out-recalculation-browser.log
+          test -s frontend/p0-almost-out-recalculation-browser-proof.json
+          echo 'P0_ALMOST_OUT_RECALCULATION_BROWSER_PROOF_GREEN'
+          echo 'P0_ALMOST_OUT_RECALCULATION_FULLSTACK_POSTGRESQL_GREEN'
+          echo "TP_CI_04_P0_ALMOST_OUT_PHASE_SECONDS=$(( $(date +%s) - phase_start ))"
+
+      - name: Upload P0 Almost-out evidence from shared runner
+        if: always() && needs.plan.outputs.p0_almost_out == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-almost-out-recalculation-postgresql-evidence-shared-runner
+          path: |
+            p0-almost-out-postgresql-boundary.log
+            p0-almost-out-fixture.log
+            p0-almost-out-postgresql-proof.log
+            frontend/p0-almost-out-recalculation-browser.log
+            frontend/p0-almost-out-recalculation-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Run F6 Inventory controlled-5xx authority on same built images
+        id: f6_inventory
+        if: needs.plan.outputs.f6_inventory == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > f6-compose.override.yml <<'YAML'
+          services:
+            backend:
+              environment:
+                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
+          YAML
+          export COMPOSE_FILE="docker-compose.yml:docker-compose.postgresql.yml:f6-compose.override.yml"
+
+          cleanup() {
+            rc=$?
+            if (( rc != 0 )); then
+              docker compose ps || true
+              docker compose logs --no-color --tail=500 backend frontend postgres || true
+            fi
+            docker compose down -v --remove-orphans || true
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          phase_start="$(date +%s)"
+          python -m py_compile backend/app/services/f6_failure_injection.py backend/tests/f6_inventory_controlled_5xx_fixture.py
+          node --check frontend/tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js
+          echo 'F6_INVENTORY_AUTHORITY_COMPILE_GREEN'
+          echo 'F6_TEST_ONLY_FAILURE_ENV_CONFIGURED_GREEN'
+
+          docker compose up -d --no-build
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              echo 'F6_INVENTORY_BACKEND_HEALTH_GREEN'
+              break
+            fi
+            if (( attempt == 180 )); then
+              echo 'Backend health timeout' >&2
+              exit 1
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+
+          docker compose exec -T backend python -u - <<'PY' | tee f6-inventory-runtime-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.f6_failure_injection import _enabled
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          assert _enabled() is True
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          print(f'runtime_user={current_user}', flush=True)
+          print('F6_SQL_FAILURE_HOOK_ENABLED_GREEN', flush=True)
+          print('F6_POSTGRESQL_RUNTIME_GREEN', flush=True)
+          PY
+          grep -F 'F6_SQL_FAILURE_HOOK_ENABLED_GREEN' f6-inventory-runtime-boundary.log
+          grep -F 'F6_POSTGRESQL_RUNTIME_GREEN' f6-inventory-runtime-boundary.log
+
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/f6_inventory_controlled_5xx_fixture.py prepare | tee f6-inventory-fixture.log
+          grep -F 'F6_INVENTORY_FIXTURE_GREEN' f6-inventory-fixture.log
+          fixture_json="$(grep '^F6_INVENTORY_FIXTURE=' f6-inventory-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          export PLAYWRIGHT_F6_INVENTORY_EMAIL="$(jq -r '.email' <<<"$fixture_json")"
+          export PLAYWRIGHT_F6_INVENTORY_PASSWORD="$(jq -r '.password' <<<"$fixture_json")"
+          export PLAYWRIGHT_F6_INVENTORY_ARTICLE_ID="$(jq -r '.article_id' <<<"$fixture_json")"
+          export PLAYWRIGHT_F6_INVENTORY_INVENTORY_ID="$(jq -r '.inventory_id' <<<"$fixture_json")"
+          export PLAYWRIGHT_F6_INVENTORY_INITIAL_QUANTITY="$(jq -r '.initial_quantity' <<<"$fixture_json")"
+          export PLAYWRIGHT_F6_INVENTORY_TARGET_QUANTITY="$(jq -r '.target_quantity' <<<"$fixture_json")"
+          export PLAYWRIGHT_F6_INVENTORY_FAILURE_NOTE="$(jq -r '.failure_note' <<<"$fixture_json")"
+          echo "::add-mask::$PLAYWRIGHT_F6_INVENTORY_PASSWORD"
+
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" rm -rf test-results playwright-report-fullstack
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_INVENTORY_EMAIL \
+            -e PLAYWRIGHT_F6_INVENTORY_PASSWORD \
+            -e PLAYWRIGHT_F6_INVENTORY_ARTICLE_ID \
+            -e PLAYWRIGHT_F6_INVENTORY_INVENTORY_ID \
+            -e PLAYWRIGHT_F6_INVENTORY_INITIAL_QUANTITY \
+            -e PLAYWRIGHT_F6_INVENTORY_TARGET_QUANTITY \
+            -e PLAYWRIGHT_F6_INVENTORY_FAILURE_NOTE \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-inventory-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-inventory-browser.log"
+
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/f6_inventory_controlled_5xx_fixture.py verify | tee f6-inventory-postgresql-rollback.log
+          grep -F 'F6_INVENTORY_POSTGRESQL_ROLLBACK_GREEN' f6-inventory-postgresql-rollback.log
+          docker compose logs --no-color backend | tee f6-inventory-backend.log
+          grep -F 'F6-01 controlled PostgreSQL failure injection' f6-inventory-backend.log
+          echo 'F6_INVENTORY_SERVER_FAILURE_INJECTION_GREEN'
+          grep -F 'F6_INVENTORY_CONTROLLED_500_BROWSER_GREEN' frontend/f6-inventory-browser.log
+          grep -F 'F6_INVENTORY_STANDARD_FEEDBACK_GREEN' frontend/f6-inventory-browser.log
+          test -s frontend/f6-inventory-controlled-5xx-browser-proof.json
+          jq -e '.responseStatus == 500' frontend/f6-inventory-controlled-5xx-browser-proof.json >/dev/null
+          jq -e '.visibleFeedback | contains("Voorraadmutatie kon niet worden opgeslagen")' frontend/f6-inventory-controlled-5xx-browser-proof.json >/dev/null
+          echo 'F6_INVENTORY_BROWSER_PROOF_GREEN'
+          echo 'F6_INVENTORY_CONTROLLED_5XX_POSTGRESQL_GREEN'
+          echo "TP_CI_04_F6_INVENTORY_PHASE_SECONDS=$(( $(date +%s) - phase_start ))"
+
+      - name: Upload F6 Inventory evidence from shared runner
+        if: always() && needs.plan.outputs.f6_inventory == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-inventory-controlled-5xx-postgresql-evidence-shared-runner
+          path: |
+            f6-inventory-runtime-boundary.log
+            f6-inventory-fixture.log
+            f6-inventory-postgresql-rollback.log
+            f6-inventory-backend.log
+            frontend/f6-inventory-browser.log
+            frontend/f6-inventory-controlled-5xx-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce selected Inventory authorities and shared-stack gate
+        if: always()
+        shell: bash
+        env:
+          RUN_P0_INVENTORY: ${{ needs.plan.outputs.p0_inventory }}
+          RUN_P0_ALMOST_OUT: ${{ needs.plan.outputs.p0_almost_out }}
+          RUN_F6_INVENTORY: ${{ needs.plan.outputs.f6_inventory }}
+          P0_INVENTORY_OUTCOME: ${{ steps.p0_inventory.outcome }}
+          P0_ALMOST_OUT_OUTCOME: ${{ steps.p0_almost_out.outcome }}
+          F6_INVENTORY_OUTCOME: ${{ steps.f6_inventory.outcome }}
+        run: |
+          set -euo pipefail
+          echo "run_p0_inventory=$RUN_P0_INVENTORY outcome_p0_inventory=$P0_INVENTORY_OUTCOME"
+          echo "run_p0_almost_out=$RUN_P0_ALMOST_OUT outcome_p0_almost_out=$P0_ALMOST_OUT_OUTCOME"
+          echo "run_f6_inventory=$RUN_F6_INVENTORY outcome_f6_inventory=$F6_INVENTORY_OUTCOME"
+          if [[ "$RUN_P0_INVENTORY" == 'true' && "$P0_INVENTORY_OUTCOME" != 'success' ]]; then
+            echo 'Selected P0 Inventory authority failed.' >&2
+            exit 1
+          fi
+          if [[ "$RUN_P0_ALMOST_OUT" == 'true' && "$P0_ALMOST_OUT_OUTCOME" != 'success' ]]; then
+            echo 'Selected P0 Almost-out authority failed.' >&2
+            exit 1
+          fi
+          if [[ "$RUN_F6_INVENTORY" == 'true' && "$F6_INVENTORY_OUTCOME" != 'success' ]]; then
+            echo 'Selected F6 Inventory authority failed.' >&2
+            exit 1
+          fi
+          echo 'TP_CI_04_INVENTORY_SHARED_STACK_GREEN'
