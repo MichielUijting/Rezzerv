@@ -1,23 +1,6 @@
 name: P0 article identity history full-stack PostgreSQL validation
 
 on:
-  pull_request:
-    paths:
-      - 'backend/**'
-      - 'frontend/src/features/articles/**'
-      - 'frontend/src/pages/Voorraad.jsx'
-      - 'frontend/src/features/kassa/**'
-      - 'frontend/src/features/receipts/**'
-      - 'frontend/src/features/onboarding/**'
-      - 'frontend/tests/e2e/p0-article-identity-history.fullstack.spec.js'
-      - 'frontend/playwright.fullstack.config.js'
-      - 'scripts/acceptance/l4_06_article_identity_history.py'
-      - 'quality/acceptance/functional_acceptance_matrix.json'
-      - 'docs/TEST_MATRIX.md'
-      - 'docs/TEST_IMPLEMENTATION_BACKLOG.md'
-      - 'docker-compose.yml'
-      - 'docker-compose.postgresql.yml'
-      - '.github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml'
   workflow_dispatch:
 
 permissions:
