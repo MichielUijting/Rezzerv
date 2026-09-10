@@ -6,6 +6,7 @@ against authority-specific path patterns. Open/reopened/manual runs fail open an
 run the requested authorities. The helper is deliberately conservative: any
 uncertainty schedules all authorities rather than risking a false skip.
 """
+# TP-CI-06 final-head parity proof marker; planner behavior is intentionally unchanged.
 from __future__ import annotations
 
 import argparse
