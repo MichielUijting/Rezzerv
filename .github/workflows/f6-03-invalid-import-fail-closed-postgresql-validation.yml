@@ -5,6 +5,7 @@ on:
     paths:
       - 'frontend/tests/e2e/f6-03-invalid-import-fail-closed.fullstack.spec.js'
       - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'frontend/playwright.fullstack.config.js'
       - 'backend/app/main.py'
       - 'docker-compose.yml'
       - 'docker-compose.postgresql.yml'
@@ -60,7 +61,7 @@ jobs:
             exit 1
           fi
           grep -F "response.status(), JSON.stringify(payload)).toBe(400)" "$spec"
-          grep -F "String(payload?.detail || '')).toBe('Leeg bestand.')" "$spec"
+          grep -F "responseDetail).toBe('Leeg bestand')" "$spec"
           grep -F 'F6_03_INVALID_IMPORT_VISIBLE_REJECTION_GREEN' "$spec"
           grep -F 'F6_03_RECEIPT_NO_POLLUTION_BROWSER_GREEN' "$spec"
           grep -F 'F6_03_KASSA_NO_POLLUTION_BROWSER_GREEN' "$spec"
@@ -165,7 +166,7 @@ jobs:
           detail="$(jq -r '.detail // empty' "$proof")"
           test -n "$household_id"
           test "$status" = '400'
-          test "$detail" = 'Leeg bestand.'
+          test "$detail" = 'Leeg bestand'
           echo "F6_03_HOUSEHOLD_ID=$household_id" >> "$GITHUB_ENV"
           echo 'F6_03_BROWSER_PROOF_CAPTURED_GREEN'
 
