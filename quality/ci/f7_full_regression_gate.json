@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "gate_id": "F7-03",
+  "title": "Full Regression exact-candidate gate",
+  "target_base": "main",
+  "poll_seconds": 20,
+  "timeout_seconds": 14400,
+  "candidate_contract": "Dispatch every registered authority from one candidate branch ref and accept only workflow_dispatch runs whose head_sha exactly equals the requested candidate SHA.",
+  "workflows": [
+    {
+      "id": "TP-CI-02",
+      "workflow_file": ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml",
+      "inputs": {"authority": "both"},
+      "role": "p0_shared"
+    },
+    {
+      "id": "TP-CI-03",
+      "workflow_file": ".github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml",
+      "inputs": {"authority": "both"},
+      "role": "p0_shared"
+    },
+    {
+      "id": "TP-CI-04",
+      "workflow_file": ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml",
+      "inputs": {"authority": "both"},
+      "role": "p0_shared"
+    },
+    {
+      "id": "TP-CI-05",
+      "workflow_file": ".github/workflows/tp-ci-05-receipt-shared-stack-postgresql-validation.yml",
+      "inputs": {"authority": "both"},
+      "role": "p0_shared"
+    },
+    {
+      "id": "TP-CI-07",
+      "workflow_file": ".github/workflows/tp-ci-07-core-p0-shared-stack-postgresql-validation.yml",
+      "inputs": {"authority": "both"},
+      "role": "p0_shared"
+    },
+    {
+      "id": "P0-HOUSEHOLD-MEMBERSHIP",
+      "workflow_file": ".github/workflows/p0-household-membership-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone"
+    },
+    {
+      "id": "P0-MIGRATION-FOUNDATION",
+      "workflow_file": ".github/workflows/postgresql-migration-foundation-validation.yml",
+      "inputs": {},
+      "role": "p0_schema"
+    },
+    {
+      "id": "P0-RUNTIME-STARTUP",
+      "workflow_file": ".github/workflows/postgresql-runtime-startup-schema-authority.yml",
+      "inputs": {},
+      "role": "p0_schema"
+    },
+    {
+      "id": "F5-SETTINGS-LOCATION-POLICY",
+      "workflow_file": ".github/workflows/f5-postgresql-household-location-policy-regression.yml",
+      "inputs": {},
+      "role": "p0_supporting_contract"
+    },
+    {
+      "id": "F5-CONDITIONAL-LOCATIONS-TAB",
+      "workflow_file": ".github/workflows/f5-conditional-locations-tab-regression.yml",
+      "inputs": {},
+      "role": "p0_supporting_contract"
+    },
+    {
+      "id": "FULL-FRONTEND-REGRESSION",
+      "workflow_file": ".github/workflows/pr253-full-frontend-regression.yml",
+      "inputs": {},
+      "role": "full_frontend"
+    }
+  ],
+  "p0_scenario_authorities": {
+    "P0-ACCOUNT-SESSION": ["TP-CI-03"],
+    "P0-ONBOARDING": ["TP-CI-07"],
+    "P0-HOUSEHOLD-MEMBERSHIP": ["P0-HOUSEHOLD-MEMBERSHIP"],
+    "P0-AUTHORIZATION-ISOLATION": ["TP-CI-03", "P0-HOUSEHOLD-MEMBERSHIP"],
+    "P0-SETTINGS-PROJECTION": ["F5-SETTINGS-LOCATION-POLICY", "F5-CONDITIONAL-LOCATIONS-TAB", "TP-CI-07"],
+    "P0-LOCATIONS-POLICY": ["F5-SETTINGS-LOCATION-POLICY", "F5-CONDITIONAL-LOCATIONS-TAB", "TP-CI-05"],
+    "P0-RECEIPT-INVENTORY-ALMOSTOUT": ["TP-CI-05"],
+    "P0-KASSA-REVIEW": ["TP-CI-02"],
+    "P0-UNPACKING": ["TP-CI-07", "TP-CI-05"],
+    "P0-INVENTORY": ["TP-CI-04", "TP-CI-05"],
+    "P0-ALMOST-OUT": ["TP-CI-04", "TP-CI-05"],
+    "P0-ARTICLE-IDENTITY": ["TP-CI-07"],
+    "P0-PLATFORM-AUTHORITY": ["TP-CI-07"],
+    "P0-MIGRATION-STARTUP": ["P0-MIGRATION-FOUNDATION", "P0-RUNTIME-STARTUP"]
+  },
+  "required_p0_scenario_count": 14,
+  "required_workflow_count": 11,
+  "full_frontend_workflow_id": "FULL-FRONTEND-REGRESSION"
+}
