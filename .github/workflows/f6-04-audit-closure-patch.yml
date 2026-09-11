@@ -1,4 +1,4 @@
-name: TEMP F6-04 audit closure patch
+name: TEMP F6-04 finalize audit closure
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  close-f6-04-audit:
+  finalize-f6-04-audit:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
@@ -19,114 +19,54 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Apply exact F6-04 audit closure
+      - name: Patch central F6 gate and verify closure
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json
           from pathlib import Path
 
-          audit_path = Path('quality/acceptance/f6_failure_recovery_gap_audit.json')
-          validator_path = Path('scripts/acceptance/validate_f6_failure_recovery_gap_audit.py')
+          path = Path('.github/workflows/f6-failure-recovery-gap-audit-validation.yml')
+          text = path.read_text(encoding='utf-8')
 
-          spec = 'frontend/tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js'
-          workflow = '.github/workflows/f6-04-interrupted-mutation-safe-resume-postgresql-validation.yml'
-          proof_run = '34629433456'
-          proof_job = '103362376024'
-          proof_sha = 'da0d94c74cd02b3dbc658ab9713ddf18bdd6f7ce'
-          scope = {'P0-ONBOARDING', 'P0-SETTINGS-PROJECTION', 'P0-INVENTORY'}
+          replacements = {
+              "grep -F 'PASS f6_count_covered_33' f6-failure-recovery-gap-audit.log": "grep -F 'PASS f6_count_covered_39' f6-failure-recovery-gap-audit.log",
+              "grep -F 'PASS f6_count_gap_32' f6-failure-recovery-gap-audit.log": "grep -F 'PASS f6_count_gap_26' f6-failure-recovery-gap-audit.log",
+          }
+          for old, new in replacements.items():
+              assert text.count(old) == 1, old
+              text = text.replace(old, new, 1)
 
-          audit = json.loads(audit_path.read_text(encoding='utf-8'))
-          assert audit['summary'] == {
-              'total_p0_scenarios': 14,
-              'categories_per_scenario': 10,
-              'total_assessments': 140,
-              'covered': 33,
-              'partial': 52,
-              'gap': 32,
-              'na': 23,
-          }, audit['summary']
-          rows = [row for row in audit['scenarios'] if row['id'] in scope]
-          assert {row['id'] for row in rows} == scope
-          for row in rows:
-              assessments = row['assessments']
-              assert assessments['interrupted_flow'] in {'gap', 'covered'}
-              assert assessments['safe_resume'] in {'gap', 'covered'}
-              assessments['interrupted_flow'] = 'covered'
-              assessments['safe_resume'] = 'covered'
-              evidence = row.setdefault('evidence', [])
-              for path in (spec, workflow):
-                  if path not in evidence:
-                      evidence.append(path)
-              notes = row.setdefault('notes', {})
-              scenario_label = row['id']
-              notes['interrupted_flow'] = (
-                  f'F6-04 {scenario_label} bewijst via een echte zichtbare gebruikersactie een one-shot onderbreking binnen de productie-PostgreSQL-transactie, '
-                  f'waarna directe databasecontrole geen halve toestand aantreft; proof run {proof_run}, job {proof_job} op candidate {proof_sha}.'
-              )
-              notes['safe_resume'] = (
-                  f'F6-04 {scenario_label} bewijst dat een nieuwe zichtbare gebruikersactie na de onderbreking veilig slaagt en exact één consistente eindmutatie achterlaat; '
-                  f'proof run {proof_run}, job {proof_job} op candidate {proof_sha}.'
-              )
-
-          audit['summary']['covered'] = 39
-          audit['summary']['partial'] = 52
-          audit['summary']['gap'] = 26
-          audit['summary']['na'] = 23
-          audit_path.write_text(json.dumps(audit, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
-
-          text = validator_path.read_text(encoding='utf-8')
-          old_counts = 'EXPECTED_COUNTS = {"covered": 33, "partial": 52, "gap": 32, "na": 23}'
-          new_counts = 'EXPECTED_COUNTS = {"covered": 39, "partial": 52, "gap": 26, "na": 23}'
-          if old_counts in text:
-              assert text.count(old_counts) == 1
-              text = text.replace(old_counts, new_counts, 1)
-          else:
-              assert new_counts in text
-
-          anchor = 'F6_03_PROOF_SHA = "309e113a8e4cfb550d54b28d78861029f66861d6"\n'
-          constants = (
-              'F6_04_SPEC = "frontend/tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js"\n'
-              'F6_04_WORKFLOW = ".github/workflows/f6-04-interrupted-mutation-safe-resume-postgresql-validation.yml"\n'
-              'F6_04_PROOF_RUN = "34629433456"\n'
-              'F6_04_PROOF_JOB = "103362376024"\n'
-              'F6_04_PROOF_SHA = "da0d94c74cd02b3dbc658ab9713ddf18bdd6f7ce"\n'
-          )
-          if constants not in text:
+          anchor = "          grep -F 'PASS f6_03_invalid_import_scope_fully_covered' f6-failure-recovery-gap-audit.log\n"
+          marker = "          grep -F 'PASS f6_04_interrupted_mutation_scope_fully_covered' f6-failure-recovery-gap-audit.log\n"
+          if marker not in text:
               assert text.count(anchor) == 1
-              text = text.replace(anchor, anchor + constants, 1)
+              text = text.replace(anchor, anchor + marker, 1)
 
-          account_anchor = '    account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")\n'
-          block = '''    f6_04_scope = {"P0-ONBOARDING", "P0-SETTINGS-PROJECTION", "P0-INVENTORY"}\n    f6_04_rows = [row for row in scenarios if row["id"] in f6_04_scope]\n    require(len(f6_04_rows) == 3, "f6_04_exact_three_scope_scenarios")\n    require(\n        all(\n            row["assessments"]["interrupted_flow"] == "covered"\n            and row["assessments"]["safe_resume"] == "covered"\n            for row in f6_04_rows\n        ),\n        "f6_04_interrupted_mutation_scope_fully_covered",\n    )\n    require((ROOT / F6_04_SPEC).exists(), "f6_04_browser_authority_registered")\n    require((ROOT / F6_04_WORKFLOW).exists(), "f6_04_postgresql_workflow_registered")\n    for row in f6_04_rows:\n        evidence = set(row.get("evidence") or [])\n        require(F6_04_SPEC in evidence, f"f6_04_{row['id']}_spec_registered")\n        require(F6_04_WORKFLOW in evidence, f"f6_04_{row['id']}_workflow_registered")\n        interrupted_note = row.get("notes", {}).get("interrupted_flow", "")\n        safe_resume_note = row.get("notes", {}).get("safe_resume", "")\n        for marker, value in (("proof_run", F6_04_PROOF_RUN), ("proof_job", F6_04_PROOF_JOB), ("candidate", F6_04_PROOF_SHA)):\n            require(value in interrupted_note, f"f6_04_{row['id']}_interrupted_{marker}_registered")\n            require(value in safe_resume_note, f"f6_04_{row['id']}_resume_{marker}_registered")\n\n'''
-          if block not in text:
-              assert text.count(account_anchor) == 1
-              text = text.replace(account_anchor, block + account_anchor, 1)
-
-          validator_path.write_text(text, encoding='utf-8')
-          print('F6_04_AUDIT_CLOSURE_PATCH_APPLIED')
+          path.write_text(text, encoding='utf-8')
+          print('F6_04_CENTRAL_GATE_PATCHED')
           PY
 
           python -m py_compile scripts/acceptance/validate_f6_failure_recovery_gap_audit.py
-          python scripts/acceptance/validate_f6_failure_recovery_gap_audit.py | tee f6-04-audit-closure-validation.log
-          grep -F 'PASS f6_count_covered_39' f6-04-audit-closure-validation.log
-          grep -F 'PASS f6_count_partial_52' f6-04-audit-closure-validation.log
-          grep -F 'PASS f6_count_gap_26' f6-04-audit-closure-validation.log
-          grep -F 'PASS f6_count_na_23' f6-04-audit-closure-validation.log
-          grep -F 'PASS f6_04_interrupted_mutation_scope_fully_covered' f6-04-audit-closure-validation.log
-          grep -F 'F6_FAILURE_RECOVERY_GAP_AUDIT_GREEN' f6-04-audit-closure-validation.log
-          git diff --check -- quality/acceptance/f6_failure_recovery_gap_audit.json scripts/acceptance/validate_f6_failure_recovery_gap_audit.py
+          python scripts/acceptance/validate_f6_failure_recovery_gap_audit.py | tee f6-04-final-audit-validation.log
+          grep -F 'PASS f6_count_covered_39' f6-04-final-audit-validation.log
+          grep -F 'PASS f6_count_partial_52' f6-04-final-audit-validation.log
+          grep -F 'PASS f6_count_gap_26' f6-04-final-audit-validation.log
+          grep -F 'PASS f6_count_na_23' f6-04-final-audit-validation.log
+          grep -F 'PASS f6_04_interrupted_mutation_scope_fully_covered' f6-04-final-audit-validation.log
+          grep -F 'F6_FAILURE_RECOVERY_GAP_AUDIT_GREEN' f6-04-final-audit-validation.log
+          grep -F "PASS f6_count_covered_39" .github/workflows/f6-failure-recovery-gap-audit-validation.yml
+          grep -F "PASS f6_count_gap_26" .github/workflows/f6-failure-recovery-gap-audit-validation.yml
+          grep -F "PASS f6_04_interrupted_mutation_scope_fully_covered" .github/workflows/f6-failure-recovery-gap-audit-validation.yml
+          git diff --check -- .github/workflows/f6-failure-recovery-gap-audit-validation.yml
 
-      - name: Commit audit and validator closure only
+      - name: Commit definitive F6-04 administrative closure and remove helper
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add quality/acceptance/f6_failure_recovery_gap_audit.json scripts/acceptance/validate_f6_failure_recovery_gap_audit.py
-          if git diff --cached --quiet; then
-            echo 'No F6-04 audit closure changes left to commit.'
-            exit 0
-          fi
-          git commit -m 'F6-04: close interrupted mutation audit residuals'
+          git add .github/workflows/f6-failure-recovery-gap-audit-validation.yml
+          git rm .github/workflows/f6-04-audit-closure-patch.yml
+          git commit -m 'F6-04: finalize audit closure gates'
           git push origin "HEAD:${GITHUB_HEAD_REF}"
