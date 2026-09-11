@@ -310,6 +310,7 @@ jobs:
             -e F6_UNPACKING_BATCH_ID="$F6_UNPACKING_BATCH_ID" \
             -e F6_UNPACKING_LINE_ID="$F6_UNPACKING_LINE_ID" \
             -e F6_UNPACKING_EXPECTED_QUANTITY="$F6_UNPACKING_EXPECTED_QUANTITY" \
+            -e PYTHONPATH=/app \
             backend python -u /app/tests/f6_unpacking_controlled_5xx_verify.py \
             | tee f6-unpacking-postgresql-rollback.log
           grep -F 'F6_UNPACKING_POSTGRESQL_ROLLBACK_GREEN' f6-unpacking-postgresql-rollback.log
