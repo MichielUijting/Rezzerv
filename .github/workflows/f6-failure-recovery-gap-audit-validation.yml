@@ -367,8 +367,8 @@ jobs:
           python scripts/acceptance/validate_f6_failure_recovery_gap_audit.py | tee f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_audit_exact_10_categories' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_summary_140_assessments' f6-failure-recovery-gap-audit.log
-          grep -F 'PASS f6_count_covered_39' f6-failure-recovery-gap-audit.log
-          grep -F 'PASS f6_count_partial_52' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_covered_43' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_partial_48' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_count_gap_26' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_count_na_23' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_priority_slices_f6_01_through_f6_05' f6-failure-recovery-gap-audit.log
@@ -378,6 +378,7 @@ jobs:
           grep -F 'PASS f6_02_shared_postgresql_workflow_registered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_03_invalid_import_scope_fully_covered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_04_interrupted_mutation_scope_fully_covered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_05_functional_4xx_scope_fully_covered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_unpacking_controlled_5xx_covered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_unpacking_standard_feedback_covered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_unpacking_db_consistency_after_error_covered' f6-failure-recovery-gap-audit.log

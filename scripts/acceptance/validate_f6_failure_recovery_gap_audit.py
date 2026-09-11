@@ -24,7 +24,7 @@ EXPECTED_CATEGORIES = {
 }
 EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
-EXPECTED_COUNTS = {"covered": 39, "partial": 52, "gap": 26, "na": 23}
+EXPECTED_COUNTS = {"covered": 43, "partial": 48, "gap": 26, "na": 23}
 
 SHARED_KASSA_WORKFLOW = ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
 F6_02_WORKFLOW = ".github/workflows/f6-02-temporary-failure-safe-retry-postgresql-validation.yml"
@@ -41,6 +41,11 @@ F6_04_WORKFLOW = ".github/workflows/f6-04-interrupted-mutation-safe-resume-postg
 F6_04_PROOF_RUN = "34629433456"
 F6_04_PROOF_JOB = "103362376024"
 F6_04_PROOF_SHA = "da0d94c74cd02b3dbc658ab9713ddf18bdd6f7ce"
+F6_05_VERIFY = "backend/tests/f6_05_authorization_functional_4xx_verify.py"
+F6_05_WORKFLOW = ".github/workflows/f6-05-authorization-functional-4xx-validation.yml"
+F6_05_PROOF_RUN = "34634787635"
+F6_05_PROOF_JOB = "103379928634"
+F6_05_PROOF_SHA = "f611837dbf25e6bf69f32d1d623d6ef7a8ef7d88"
 MIGRATED_EVIDENCE = {
     ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
     ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
@@ -295,6 +300,25 @@ def main() -> None:
         for marker, value in (("proof_run", F6_04_PROOF_RUN), ("proof_job", F6_04_PROOF_JOB), ("candidate", F6_04_PROOF_SHA)):
             require(value in interrupted_note, f"f6_04_{row['id']}_interrupted_{marker}_registered")
             require(value in safe_resume_note, f"f6_04_{row['id']}_resume_{marker}_registered")
+
+    f6_05_scope = {"P0-ACCOUNT-SESSION", "P0-HOUSEHOLD-MEMBERSHIP", "P0-AUTHORIZATION-ISOLATION", "P0-PLATFORM-AUTHORITY"}
+    f6_05_rows = [row for row in scenarios if row["id"] in f6_05_scope]
+    require(len(f6_05_rows) == 4, "f6_05_exact_four_scope_scenarios")
+    require(
+        all(row["assessments"]["functional_4xx"] == "covered" for row in f6_05_rows),
+        "f6_05_functional_4xx_scope_fully_covered",
+    )
+    require((ROOT / F6_05_VERIFY).exists(), "f6_05_postgresql_verifier_registered")
+    require((ROOT / F6_05_WORKFLOW).exists(), "f6_05_workflow_registered")
+    for row in f6_05_rows:
+        evidence = set(row.get("evidence") or [])
+        require(F6_05_WORKFLOW in evidence, f"f6_05_{row['id']}_workflow_evidence_registered")
+        if row["id"] in {"P0-ACCOUNT-SESSION", "P0-PLATFORM-AUTHORITY"}:
+            require(F6_05_VERIFY in evidence, f"f6_05_{row['id']}_verifier_evidence_registered")
+        proof_note = row.get("notes", {}).get("functional_4xx", "")
+        require(F6_05_PROOF_RUN in proof_note, f"f6_05_{row['id']}_proof_run_registered")
+        require(F6_05_PROOF_JOB in proof_note, f"f6_05_{row['id']}_proof_job_registered")
+        require(F6_05_PROOF_SHA in proof_note, f"f6_05_{row['id']}_candidate_registered")
 
     account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
     require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")
