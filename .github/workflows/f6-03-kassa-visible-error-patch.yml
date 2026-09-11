@@ -29,73 +29,65 @@ jobs:
 
           path = Path('frontend/src/features/receipts/KassaPage.jsx')
           text = path.read_text(encoding='utf-8')
-
-          old_status = """    const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
-              error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
-              throw error
-          """
-          new_status = """    const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
-              error.status = response.status
-              error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
-              throw error
-          """
-
-          rejection_guard = """      const responseStatus = Number(err?.status || 0)
-              if (responseStatus >= 400 && responseStatus < 500) {
-                const message = normalizeErrorMessage(err?.message) || 'Upload van het bonbestand is mislukt.'
-                setIsUploading(false)
-                resetUploadProgress()
-                setStatus('')
-                setDuplicateNotice('')
-                setEmailRouteError(message)
-                setError('')
-                showKassaFeedback('error', message, {
-                  title: 'Upload geweigerd',
-                  technicalDetail: technical?.detail || '',
-                  showTechnicalToggle: Boolean(technical?.detail),
-                  key: `kassa-receipt-upload-rejected-${responseStatus}`,
-                  dedupeMs: 0,
-                  testId: 'kassa-upload-rejected',
-                })
-                return
-              }
-
-          """
-
-          old_catch = """    } catch (err) {
-              const technical = err?.technicalUploadError || null
-              if (technical) setTechnicalUploadError(technical)
-
-              let refreshedItems = []
-          """
-          new_catch = """    } catch (err) {
-              const technical = err?.technicalUploadError || null
-              if (technical) setTechnicalUploadError(technical)
-
-          """ + rejection_guard + """      let refreshedItems = []
-          """
-
           changed = False
 
+          # Patch only uploadReceiptFile: retain the HTTP status on the thrown error.
           receipt_start = text.index('async function uploadReceiptFile(householdId, file) {')
           receipt_end = text.index('async function uploadSharedReceiptFile(', receipt_start)
           receipt_block = text[receipt_start:receipt_end]
+          status_marker = "error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')"
           if 'error.status = response.status' not in receipt_block:
-              count = receipt_block.count(old_status)
-              if count != 1:
-                  raise SystemExit(f'Expected exactly one receipt-import error block inside uploadReceiptFile, found {count}')
-              receipt_block = receipt_block.replace(old_status, new_status, 1)
+              if receipt_block.count(status_marker) != 1:
+                  raise SystemExit('Expected exactly one technicalUploadError assignment inside uploadReceiptFile')
+              marker_index = receipt_block.index(status_marker)
+              line_start = receipt_block.rfind('\n', 0, marker_index) + 1
+              indent = receipt_block[line_start:marker_index]
+              receipt_block = receipt_block[:line_start] + f'{indent}error.status = response.status\n' + receipt_block[line_start:]
               text = text[:receipt_start] + receipt_block + text[receipt_end:]
               changed = True
 
+          # Patch only processReceiptFileImport: a clean 4xx is a terminal visible rejection,
+          # so stop progress and surface the backend message before any recovery refresh.
           process_start = text.index('  async function processReceiptFileImport(file) {')
           process_end = text.index('  async function processLandingReceiptFile(file) {', process_start)
           process_block = text[process_start:process_end]
-          if rejection_guard not in process_block:
-              count = process_block.count(old_catch)
-              if count != 1:
-                  raise SystemExit(f'Expected exactly one receipt-file catch block inside processReceiptFileImport, found {count}')
-              process_block = process_block.replace(old_catch, new_catch, 1)
+          guard_marker = 'const responseStatus = Number(err?.status || 0)'
+          refresh_marker = 'let refreshedItems = []'
+          if guard_marker not in process_block:
+              if process_block.count("const technical = err?.technicalUploadError || null") != 1:
+                  raise SystemExit('Expected exactly one technical error capture inside processReceiptFileImport')
+              if process_block.count('if (technical) setTechnicalUploadError(technical)') != 1:
+                  raise SystemExit('Expected exactly one technical error state assignment inside processReceiptFileImport')
+              if process_block.count(refresh_marker) != 1:
+                  raise SystemExit('Expected exactly one recovery refresh marker inside processReceiptFileImport')
+
+              marker_index = process_block.index(refresh_marker)
+              line_start = process_block.rfind('\n', 0, marker_index) + 1
+              indent = process_block[line_start:marker_index]
+              guard_lines = [
+                  'const responseStatus = Number(err?.status || 0)',
+                  'if (responseStatus >= 400 && responseStatus < 500) {',
+                  "  const message = normalizeErrorMessage(err?.message) || 'Upload van het bonbestand is mislukt.'",
+                  '  setIsUploading(false)',
+                  '  resetUploadProgress()',
+                  "  setStatus('')",
+                  "  setDuplicateNotice('')",
+                  '  setEmailRouteError(message)',
+                  "  setError('')",
+                  "  showKassaFeedback('error', message, {",
+                  "    title: 'Upload geweigerd',",
+                  "    technicalDetail: technical?.detail || '',",
+                  '    showTechnicalToggle: Boolean(technical?.detail),',
+                  '    key: `kassa-receipt-upload-rejected-${responseStatus}`,',
+                  '    dedupeMs: 0,',
+                  "    testId: 'kassa-upload-rejected',",
+                  '  })',
+                  '  return',
+                  '}',
+                  '',
+              ]
+              guard = ''.join(f'{indent}{line}\n' if line else '\n' for line in guard_lines)
+              process_block = process_block[:line_start] + guard + process_block[line_start:]
               text = text[:process_start] + process_block + text[process_end:]
               changed = True
 
@@ -106,7 +98,9 @@ jobs:
               print('F6_03_KASSA_VISIBLE_REJECTION_ALREADY_APPLIED')
           PY
 
-          node --check frontend/src/features/receipts/KassaPage.jsx
+          git diff --check -- frontend/src/features/receipts/KassaPage.jsx
+          grep -F 'error.status = response.status' frontend/src/features/receipts/KassaPage.jsx
+          grep -F "testId: 'kassa-upload-rejected'" frontend/src/features/receipts/KassaPage.jsx
 
       - name: Commit product fix when changed
         shell: bash
