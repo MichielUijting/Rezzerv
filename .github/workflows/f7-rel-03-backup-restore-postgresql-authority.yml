@@ -163,6 +163,60 @@ jobs:
           test -s f7-rel03-source-head.txt
           echo 'F7_REL_03_SOURCE_SCHEMA_GREEN'
 
+      - name: Seed canonical runtime identity before backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="postgresql://$RUNTIME_USER:$RUNTIME_PASSWORD@host.docker.internal:5432/$SOURCE_DB" \
+            -e MIGRATION_DATABASE_URL="postgresql://$MIGRATOR_USER:$MIGRATOR_PASSWORD@host.docker.internal:5432/$SOURCE_DB" \
+            -e REZZERV_DATASTORE_POLICY=postgresql-only \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO=true \
+            "$BACKEND_IMAGE" \
+            sh -lc 'python - <<'"'"'PY'"'"'
+          import os
+          from sqlalchemy import create_engine, text
+          from app.services.system_superuser_session_provisioning import (
+              SUPERGEBRUIKER_EMAIL,
+              SUPERGEBRUIKER_HUISHOUDEN_ID,
+              ensure_system_superuser_for_session_runtime,
+          )
+
+          engine = create_engine(os.environ["MIGRATION_DATABASE_URL"], future=True)
+          with engine.begin() as conn:
+              result = ensure_system_superuser_for_session_runtime(conn)
+              household_count = int(conn.execute(text(
+                  "SELECT COUNT(*) FROM household_registry WHERE CAST(id AS TEXT) = :household_id"
+              ), {"household_id": SUPERGEBRUIKER_HUISHOUDEN_ID}).scalar_one())
+              superuser_count = int(conn.execute(text(
+                  "SELECT COUNT(*) FROM app_users WHERE lower(email) = lower(:email)"
+              ), {"email": SUPERGEBRUIKER_EMAIL}).scalar_one())
+              platform_role_count = int(conn.execute(text(
+                  "SELECT COUNT(*) FROM auth_platform_user_roles "
+                  "WHERE user_id = :user_id AND role_key = 'platform.superuser' AND active IS TRUE"
+              ), {"user_id": SUPERGEBRUIKER_EMAIL}).scalar_one())
+              membership_count = int(conn.execute(text(
+                  "SELECT COUNT(*) FROM household_memberships "
+                  "WHERE CAST(household_id AS TEXT) = :household_id "
+                  "AND CAST(user_id AS TEXT) = :user_id"
+              ), {
+                  "household_id": SUPERGEBRUIKER_HUISHOUDEN_ID,
+                  "user_id": SUPERGEBRUIKER_EMAIL,
+              }).scalar_one())
+          engine.dispose()
+          assert result.household_id == SUPERGEBRUIKER_HUISHOUDEN_ID
+          assert household_count == 1
+          assert superuser_count == 1
+          assert platform_role_count == 1
+          assert membership_count == 1
+          print("F7_REL_03_SOURCE_RUNTIME_IDENTITY_GREEN")
+          PY'
+
+          PGPASSWORD="$MIGRATOR_PASSWORD" psql -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$SOURCE_DB" -Atqc \
+            "SELECT COUNT(*) FROM household_registry WHERE CAST(id AS TEXT) = '0'" | grep -Fx '1'
+          echo 'F7_REL_03_SOURCE_RUNTIME_PREREQUISITES_GREEN'
+
       - name: Seed typed integrity probe and capture source snapshot
         shell: bash
         run: |
@@ -191,6 +245,9 @@ jobs:
           SELECT concat_ws('|',
             (SELECT version_num FROM alembic_version),
             (SELECT count(*)::text FROM pg_tables WHERE schemaname = 'public'),
+            (SELECT count(*)::text FROM household_registry WHERE CAST(id AS TEXT) = '0'),
+            (SELECT count(*)::text FROM app_users WHERE lower(email) = 'supergebruiker@rezzerv.local'),
+            (SELECT count(*)::text FROM auth_platform_user_roles WHERE user_id = 'supergebruiker@rezzerv.local' AND role_key = 'platform.superuser' AND active IS TRUE),
             p.id::text,
             p.label,
             p.quantity::text,
@@ -350,6 +407,8 @@ jobs:
               "restore_snapshot_sha256": os.environ["RESTORE_SNAPSHOT_SHA256"],
               "post_start_snapshot_sha256": os.environ["POST_START_SNAPSHOT_SHA256"],
               "backend_http_probe": int(os.environ["BACKEND_HTTP_PROBE"]),
+              "source_runtime_identity_preseeded": True,
+              "restored_startup_test_provisioning": False,
               "dump_retained": False,
               "result": "green",
           }
