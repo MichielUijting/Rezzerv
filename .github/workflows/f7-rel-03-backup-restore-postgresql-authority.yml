@@ -96,14 +96,20 @@ jobs:
           python scripts/ci/validate_f7_rel_03_backup_restore_contract.py | tee f7-rel03-contract.log
           grep -Fx 'F7_REL_03_CONTRACT_GREEN' f7-rel03-contract.log
 
-      - name: Install PostgreSQL client
+      - name: Install psql and bind PostgreSQL 17 service tools
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y postgresql-client
-          pg_dump --version
-          pg_restore --version
+          psql --version
+          POSTGRES_SERVICE_CONTAINER="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "postgres:17" {print $1; exit}')"
+          test -n "$POSTGRES_SERVICE_CONTAINER"
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$POSTGRES_SERVICE_CONTAINER")" = healthy
+          docker exec "$POSTGRES_SERVICE_CONTAINER" pg_dump --version | grep -F 'PostgreSQL) 17.'
+          docker exec "$POSTGRES_SERVICE_CONTAINER" pg_restore --version | grep -F 'PostgreSQL) 17.'
+          echo "POSTGRES_SERVICE_CONTAINER=$POSTGRES_SERVICE_CONTAINER" >> "$GITHUB_ENV"
+          echo 'F7_REL_03_POSTGRESQL_17_CLIENT_GREEN'
 
       - name: Build real backend production image
         shell: bash
@@ -206,12 +212,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PGPASSWORD="$MIGRATOR_PASSWORD" pg_dump \
-            -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$SOURCE_DB" \
+          docker exec -e PGPASSWORD="$MIGRATOR_PASSWORD" "$POSTGRES_SERVICE_CONTAINER" \
+            pg_dump -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$SOURCE_DB" \
             --format=custom --no-owner --no-acl \
-            --file=f7-rel03.backup
+            --file=/tmp/f7-rel03.backup
+          docker cp "$POSTGRES_SERVICE_CONTAINER:/tmp/f7-rel03.backup" f7-rel03.backup
           test -s f7-rel03.backup
-          pg_restore --list f7-rel03.backup | grep -F 'f7_rel03_integrity_probe'
+          docker exec "$POSTGRES_SERVICE_CONTAINER" pg_restore --list /tmp/f7-rel03.backup \
+            | grep -F 'f7_rel03_integrity_probe'
           BACKUP_BYTES="$(stat -c '%s' f7-rel03.backup)"
           test "$BACKUP_BYTES" -gt 1000
           BACKUP_SHA256="$(sha256sum f7-rel03.backup | awk '{print $1}')"
@@ -241,10 +249,11 @@ jobs:
             GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"runtime";
           SQL
 
-          PGPASSWORD="$MIGRATOR_PASSWORD" pg_restore \
-            -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$RESTORE_DB" \
+          docker cp f7-rel03.backup "$POSTGRES_SERVICE_CONTAINER:/tmp/f7-rel03.backup"
+          docker exec -e PGPASSWORD="$MIGRATOR_PASSWORD" "$POSTGRES_SERVICE_CONTAINER" \
+            pg_restore -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$RESTORE_DB" \
             --no-owner --no-acl --exit-on-error \
-            f7-rel03.backup | tee f7-rel03-restore.log
+            /tmp/f7-rel03.backup | tee f7-rel03-restore.log
 
           RESTORE_SNAPSHOT="$(PGPASSWORD="$MIGRATOR_PASSWORD" psql -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$RESTORE_DB" -Atq -v ON_ERROR_STOP=1 -f f7-rel03-snapshot.sql)"
           SOURCE_SNAPSHOT="$(cat f7-rel03-source-snapshot.txt)"
@@ -361,6 +370,9 @@ jobs:
         shell: bash
         run: |
           docker rm -f "$BACKEND_CONTAINER" >/dev/null 2>&1 || true
+          if [ -n "${POSTGRES_SERVICE_CONTAINER:-}" ]; then
+            docker exec "$POSTGRES_SERVICE_CONTAINER" rm -f /tmp/f7-rel03.backup >/dev/null 2>&1 || true
+          fi
           rm -f f7-rel03.backup
 
       - name: Upload F7 REL-03 evidence
