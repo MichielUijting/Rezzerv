@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "audit_id": "F7-01",
+  "title": "CI Orchestration Audit & Gate Map",
+  "audited_main_sha": "d3c3cbb507c50e8920a6dd0b684d9d825537c1a1",
+  "purpose": "Map the existing integral test-platform authorities to the four roadmap CI gates before changing orchestration behavior.",
+  "gate_order": [
+    "pr_fast_regression",
+    "full_regression",
+    "deep_nightly",
+    "release_acceptance"
+  ],
+  "gates": {
+    "pr_fast_regression": {
+      "status": "partial",
+      "intent": "Fast pull-request feedback using delta-selected authorities, static acceptance validators, and shared full-stack runners.",
+      "trigger_contract": "pull_request path filters with workflow_dispatch fallback",
+      "candidate_contract": "exact pull_request.head.sha or github.sha checkout",
+      "primary_workflows": [
+        ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-05-receipt-shared-stack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-07-core-p0-shared-stack-postgresql-validation.yml",
+        ".github/workflows/functional-acceptance-matrix-validation.yml",
+        ".github/workflows/p0-residual-matrix-closure.yml"
+      ],
+      "shared_stack_clusters": [
+        {
+          "id": "TP-CI-02",
+          "manifest": "quality/ci/tp_ci_02_kassa_shared_stack_paths.json",
+          "authorities": ["p0_kassa", "f6_kassa"],
+          "fallback_references": 2,
+          "existing_manual_fallbacks": 0,
+          "stale_fallback_references": 2
+        },
+        {
+          "id": "TP-CI-03",
+          "manifest": "quality/ci/tp_ci_03_account_authorization_shared_stack_paths.json",
+          "authorities": ["p0_account_session", "p0_authorization_isolation"],
+          "fallback_references": 2,
+          "existing_manual_fallbacks": 2,
+          "stale_fallback_references": 0
+        },
+        {
+          "id": "TP-CI-04",
+          "manifest": "quality/ci/tp_ci_04_inventory_shared_stack_paths.json",
+          "authorities": ["p0_inventory", "p0_almost_out", "f6_inventory"],
+          "fallback_references": 3,
+          "existing_manual_fallbacks": 3,
+          "stale_fallback_references": 0
+        },
+        {
+          "id": "TP-CI-05",
+          "manifest": "quality/ci/tp_ci_05_receipt_shared_stack_paths.json",
+          "authorities": [
+            "p0_receipt_inventory",
+            "p0_receipt_locations_off",
+            "p0_receipt_idempotency",
+            "p0_receipt_nonphysical",
+            "f6_receipt"
+          ],
+          "fallback_references": 5,
+          "existing_manual_fallbacks": 5,
+          "stale_fallback_references": 0
+        },
+        {
+          "id": "TP-CI-07",
+          "manifest": "quality/ci/tp_ci_07_core_p0_shared_stack_paths.json",
+          "authorities": [
+            "p0_onboarding",
+            "p0_article_identity",
+            "p0_platform_authority",
+            "p0_unpacking"
+          ],
+          "fallback_references": 4,
+          "existing_manual_fallbacks": 4,
+          "stale_fallback_references": 0
+        }
+      ],
+      "fallback_governance": {
+        "manual_only_workflows": [
+          ".github/workflows/p0-account-session-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-authorization-isolation-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml",
+          ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml",
+          ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-receipt-nonphysical-fullstack-postgresql-validation.yml",
+          ".github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml",
+          ".github/workflows/p0-onboarding-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-unpacking-fullstack-postgresql-validation.yml"
+        ],
+        "stale_references": [
+          ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml",
+          ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml"
+        ],
+        "duplicate_pr_fallbacks": []
+      },
+      "residuals": [
+        {
+          "id": "F7-PR-01",
+          "status": "open",
+          "description": "There is no single aggregate PR Fast Regression decision that summarizes all selected fast authorities for one candidate SHA."
+        },
+        {
+          "id": "F7-PR-02",
+          "status": "open",
+          "description": "Fourteen existing heavy-workflow fallbacks are correctly manual-only; two deleted Kassa fallback paths remain as stale references in TP-CI-02 and need central cleanup/governance."
+        }
+      ]
+    },
+    "full_regression": {
+      "status": "partial",
+      "intent": "Run the complete regression set for a candidate rather than only delta-selected authorities.",
+      "trigger_contract": "currently pull_request path-filtered and workflow_dispatch, not an unconditional candidate gate",
+      "candidate_contract": "exact PR head checkout where implemented",
+      "primary_workflows": [
+        ".github/workflows/pr253-full-frontend-regression.yml",
+        ".github/workflows/functional-acceptance-matrix-validation.yml",
+        ".github/workflows/p0-residual-matrix-closure.yml",
+        ".github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-05-receipt-shared-stack-postgresql-validation.yml",
+        ".github/workflows/tp-ci-07-core-p0-shared-stack-postgresql-validation.yml"
+      ],
+      "residuals": [
+        {
+          "id": "F7-FULL-01",
+          "status": "open",
+          "description": "No single orchestration entry point forces all P0 authorities plus full frontend regression against the same candidate SHA."
+        },
+        {
+          "id": "F7-FULL-02",
+          "status": "open",
+          "description": "The workflow named Full frontend regression is path-filtered and covers frontend regression, but is not by itself the roadmap Full Regression gate for the complete product."
+        }
+      ]
+    },
+    "deep_nightly": {
+      "status": "gap",
+      "intent": "Scheduled heavy combinations, failure/recovery variants, legacy regressions, and broader diagnostic coverage.",
+      "trigger_contract": "manual/PR authorities exist; no canonical scheduled Deep/Nightly orchestration is registered",
+      "candidate_contract": "mixed PR/manual authority execution",
+      "primary_workflows": [
+        ".github/workflows/f6-02-temporary-failure-safe-retry-postgresql-validation.yml",
+        ".github/workflows/f6-03-invalid-import-fail-closed-postgresql-validation.yml",
+        ".github/workflows/f6-04-interrupted-mutation-safe-resume-postgresql-validation.yml",
+        ".github/workflows/f6-05-authorization-functional-4xx-validation.yml",
+        ".github/workflows/f6-failure-recovery-gap-audit-validation.yml"
+      ],
+      "residuals": [
+        {
+          "id": "F7-DEEP-01",
+          "status": "open",
+          "description": "No canonical schedule trigger bundles the expensive failure/recovery and legacy authorities into a Deep/Nightly run."
+        },
+        {
+          "id": "F7-DEEP-02",
+          "status": "open",
+          "description": "Deep-run evidence has no single aggregate result or retained manifest identifying the exact candidate and all executed authorities."
+        }
+      ]
+    },
+    "release_acceptance": {
+      "status": "partial",
+      "intent": "One release-candidate decision combining build/package, PostgreSQL/migration/startup authority, acceptance matrices, and downstream PO acceptance state.",
+      "trigger_contract": "separate PR/manual workflows; no central release-acceptance orchestrator",
+      "candidate_contract": "exact candidate identity is present in key release and database workflows but not aggregated into one decision",
+      "primary_workflows": [
+        ".github/workflows/pr253-v0112109-release-package.yml",
+        ".github/workflows/postgresql-migration-foundation-validation.yml",
+        ".github/workflows/postgresql-runtime-startup-schema-authority.yml",
+        ".github/workflows/postgresql-zero-residual-gate.yml",
+        ".github/workflows/functional-acceptance-matrix-validation.yml"
+      ],
+      "residuals": [
+        {
+          "id": "F7-REL-01",
+          "status": "open",
+          "description": "No single Release Acceptance orchestration binds package/build, PostgreSQL migration/startup, zero-residual and acceptance results to one candidate SHA."
+        },
+        {
+          "id": "F7-REL-02",
+          "status": "open",
+          "description": "PO acceptance state is not yet part of an automated release decision; this is intentionally completed in roadmap Phase 8/9, not invented inside F7-01."
+        },
+        {
+          "id": "F7-REL-03",
+          "status": "open",
+          "description": "Backup -> restore -> startup -> data-integrity proof is not yet registered as a release gate dependency and remains a downstream release-readiness residual."
+        }
+      ]
+    }
+  },
+  "cross_cutting": {
+    "delta_planner": "scripts/ci/shared_fullstack_plan.py",
+    "delta_planner_policy": "fail open on uncertainty; synchronize compares only newly pushed delta; non-synchronize/manual paths run requested authorities",
+    "shared_stack_manifest_count": 5,
+    "shared_stack_authority_count": 16,
+    "fallback_reference_count": 16,
+    "existing_manual_fallback_workflow_count": 14,
+    "stale_fallback_reference_count": 2,
+    "duplicate_pr_fallback_workflow_count": 0,
+    "candidate_identity_assessment": "strong in the audited shared runners and named full/release workflows; no cross-workflow aggregate candidate contract yet",
+    "evidence_assessment": "per-workflow evidence exists, but naming, retention and aggregate decision semantics are heterogeneous"
+  },
+  "f7_01_exit": {
+    "gate_taxonomy_recorded": true,
+    "existing_shared_runners_mapped": true,
+    "fallback_governance_audited": true,
+    "residual_backlog_explicit": true,
+    "behavior_changed": false,
+    "next_slice": "F7-02"
+  }
+}
