@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "policy_id": "F7-FULL-02",
+  "target_base": "main",
+  "automatic_pull_request_actions": [
+    "opened",
+    "reopened",
+    "ready_for_review",
+    "synchronize"
+  ],
+  "draft_policy": "Skip the heavy Full Regression job while the pull request is draft.",
+  "candidate_ref_source": "github.head_ref",
+  "candidate_sha_source": "github.event.pull_request.head.sha",
+  "synchronize_policy": "Every synchronize event for a non-draft pull request creates a new exact candidate and cancels the previous in-progress Full Regression run for that pull request.",
+  "concurrency_policy": "One Full Regression run per pull request or manual candidate; cancel-in-progress is true.",
+  "manual_fallback": {
+    "event": "workflow_dispatch",
+    "required_inputs": [
+      "candidate_ref",
+      "candidate_sha"
+    ]
+  },
+  "required_authority_behavior": "The permanent trigger only selects the candidate. The existing F7-03 Full Regression gate remains responsible for dispatching and aggregating all eleven registered authorities on that exact candidate SHA."
+}
