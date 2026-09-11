@@ -1,0 +1,73 @@
+name: F6 final formal closure validation
+
+on:
+  pull_request:
+    paths:
+      - "quality/acceptance/f6_failure_recovery_gap_audit.json"
+      - "quality/acceptance/p0_residual_closure.json"
+      - "quality/acceptance/f6_final_closure.json"
+      - "scripts/acceptance/validate_f6_failure_recovery_gap_audit.py"
+      - "scripts/acceptance/validate_f6_final_closure.py"
+      - ".github/workflows/f6-final-formal-closure-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f6-final-formal-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  formal-closure:
+    name: F6 formal closure decision
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prove exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${{ github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "F6_FINAL_CANDIDATE_SHA=$actual"
+
+      - name: Compile F6 closure authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/acceptance/validate_f6_failure_recovery_gap_audit.py \
+            scripts/acceptance/validate_f6_final_closure.py
+
+      - name: Reprove source F6 failure recovery audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_f6_failure_recovery_gap_audit.py | tee f6-source-audit.log
+          grep -F "F6_FAILURE_RECOVERY_GAP_AUDIT_GREEN" f6-source-audit.log
+
+      - name: Enforce formal Phase 6 hard exit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_f6_final_closure.py | tee f6-final-closure.log
+          grep -F "F6_FINAL_RELEASE_BLOCKING_UNCOVERED=0" f6-final-closure.log
+          grep -F "F6_FINAL_EXPLICIT_NON_BLOCKING_GAPS=26" f6-final-closure.log
+          grep -F "F6_PHASE_6_FORMAL_CLOSURE_GREEN" f6-final-closure.log
+
+      - name: Upload F6 formal closure evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-final-formal-closure-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            quality/acceptance/f6_final_closure.json
+            f6-source-audit.log
+            f6-final-closure.log
+          retention-days: 30
