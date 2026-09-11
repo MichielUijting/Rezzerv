@@ -1,0 +1,114 @@
+name: TEMP F6-03 patch Kassa rejected upload feedback
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/f6-03-kassa-visible-error-patch.yml'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-kassa-visible-rejection:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply deterministic F6-03 product fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/features/receipts/KassaPage.jsx')
+          text = path.read_text(encoding='utf-8')
+
+          old_status = """    const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+              error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
+              throw error
+          """
+          new_status = """    const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+              error.status = response.status
+              error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
+              throw error
+          """
+
+          rejection_guard = """      const responseStatus = Number(err?.status || 0)
+              if (responseStatus >= 400 && responseStatus < 500) {
+                const message = normalizeErrorMessage(err?.message) || 'Upload van het bonbestand is mislukt.'
+                setIsUploading(false)
+                resetUploadProgress()
+                setStatus('')
+                setDuplicateNotice('')
+                setEmailRouteError(message)
+                setError('')
+                showKassaFeedback('error', message, {
+                  title: 'Upload geweigerd',
+                  technicalDetail: technical?.detail || '',
+                  showTechnicalToggle: Boolean(technical?.detail),
+                  key: `kassa-receipt-upload-rejected-${responseStatus}`,
+                  dedupeMs: 0,
+                  testId: 'kassa-upload-rejected',
+                })
+                return
+              }
+
+          """
+
+          old_catch = """    } catch (err) {
+              const technical = err?.technicalUploadError || null
+              if (technical) setTechnicalUploadError(technical)
+
+              let refreshedItems = []
+          """
+          new_catch = """    } catch (err) {
+              const technical = err?.technicalUploadError || null
+              if (technical) setTechnicalUploadError(technical)
+
+          """ + rejection_guard + """      let refreshedItems = []
+          """
+
+          changed = False
+          if new_status not in text:
+              count = text.count(old_status)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one receipt-import error block, found {count}')
+              text = text.replace(old_status, new_status, 1)
+              changed = True
+
+          if rejection_guard not in text:
+              count = text.count(old_catch)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one receipt-file catch block, found {count}')
+              text = text.replace(old_catch, new_catch, 1)
+              changed = True
+
+          if changed:
+              path.write_text(text, encoding='utf-8')
+              print('F6_03_KASSA_VISIBLE_REJECTION_PATCH_APPLIED')
+          else:
+              print('F6_03_KASSA_VISIBLE_REJECTION_ALREADY_APPLIED')
+          PY
+
+          node --check frontend/src/features/receipts/KassaPage.jsx
+
+      - name: Commit product fix when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- frontend/src/features/receipts/KassaPage.jsx; then
+            echo 'No product patch left to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/features/receipts/KassaPage.jsx
+          git commit -m 'F6-03: surface rejected receipt import immediately'
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
