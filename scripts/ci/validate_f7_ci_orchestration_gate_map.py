@@ -8,6 +8,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 AUDIT = ROOT / "quality/ci/f7_ci_orchestration_gate_map.json"
 EXPECTED_MAIN_SHA = "d3c3cbb507c50e8920a6dd0b684d9d825537c1a1"
+EXPECTED_PROOF_RUN = "34637965969"
+EXPECTED_PROOF_JOB = "103390391583"
+EXPECTED_PROOF_SHA = "fd7cc8d930763b9ebb643b8be5976f22b590a403"
 EXPECTED_GATES = [
     "pr_fast_regression",
     "full_regression",
@@ -139,11 +142,15 @@ def main() -> int:
     require(exit_state.get("existing_shared_runners_mapped") is True, "shared runners not mapped")
     require(exit_state.get("residual_backlog_explicit") is True, "residual backlog not explicit")
     require(exit_state.get("behavior_changed") is False, "F7-01 must remain audit-only")
+    require(exit_state.get("proof_run") == EXPECTED_PROOF_RUN, "F7-01 proof run drift")
+    require(exit_state.get("proof_job") == EXPECTED_PROOF_JOB, "F7-01 proof job drift")
+    require(exit_state.get("proof_sha") == EXPECTED_PROOF_SHA, "F7-01 proof SHA drift")
     require(exit_state.get("next_slice") == "F7-02", "next slice must be F7-02")
 
     print("PASS f7_01_gate_taxonomy_complete")
     print("PASS f7_01_existing_shared_runners_mapped")
     print("PASS f7_01_candidate_identity_contracts_present")
+    print("PASS f7_01_definitive_proof_registered")
     print(f"PASS f7_01_residual_backlog_explicit count={len(all_residual_ids)}")
     print(f"F7_01_MAPPED_WORKFLOWS={len(mapped_workflows)}")
     print("F7_01_SHARED_CLUSTERS=5")
