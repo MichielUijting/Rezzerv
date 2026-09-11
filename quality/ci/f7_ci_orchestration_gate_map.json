@@ -178,6 +178,9 @@
     "existing_shared_runners_mapped": true,
     "residual_backlog_explicit": true,
     "behavior_changed": false,
+    "proof_run": "34637965969",
+    "proof_job": "103390391583",
+    "proof_sha": "fd7cc8d930763b9ebb643b8be5976f22b590a403",
     "next_slice": "F7-02"
   }
 }
