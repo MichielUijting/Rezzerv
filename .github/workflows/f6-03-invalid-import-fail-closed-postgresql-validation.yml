@@ -1,0 +1,257 @@
+name: F6-03 invalid import fail-closed PostgreSQL validation
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/tests/e2e/f6-03-invalid-import-fail-closed.fullstack.spec.js'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'backend/app/main.py'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/f6-03-invalid-import-fail-closed-postgresql-validation.yml'
+      - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
+      - 'scripts/acceptance/validate_f6_failure_recovery_gap_audit.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f6-03-invalid-import-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  f6-03-invalid-import:
+    name: F6-03 invalid receipt import fail-closed authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      COMPOSE_PROJECT_NAME: f603invalid${{ github.run_id }}
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic F6-03 identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="F6-03-${suffix}-Pass!"
+          echo "PLAYWRIGHT_F6_03_EMAIL=f6-03-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_03_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_03_HOUSEHOLD=F6-03 Invalid Import Household ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Guard F6-03 browser authority against shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/f6-03-invalid-import-fail-closed.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'F6-03 mag de kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          grep -F "response.status(), JSON.stringify(payload)).toBe(400)" "$spec"
+          grep -F "String(payload?.detail || '')).toBe('Leeg bestand.')" "$spec"
+          grep -F 'F6_03_INVALID_IMPORT_VISIBLE_REJECTION_GREEN' "$spec"
+          grep -F 'F6_03_RECEIPT_NO_POLLUTION_BROWSER_GREEN' "$spec"
+          grep -F 'F6_03_KASSA_NO_POLLUTION_BROWSER_GREEN' "$spec"
+          echo 'F6_03_NO_CORE_SHORTCUTS_GREEN'
+
+      - name: Compile F6-03 authority sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check frontend/tests/e2e/f6-03-invalid-import-fail-closed.fullstack.spec.js
+          node --check frontend/playwright.fullstack.config.js
+          echo 'F6_03_AUTHORITY_COMPILE_GREEN'
+
+      - name: Build application images and prepare Playwright once
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+          echo 'F6_03_DOCKER_BUILD_ONCE_GREEN'
+          docker pull "$PLAYWRIGHT_IMAGE"
+          echo 'F6_03_PLAYWRIGHT_PULL_ONCE_GREEN'
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" bash -lc 'npm ci'
+          echo 'F6_03_NPM_CI_ONCE_GREEN'
+
+      - name: Start real frontend backend and PostgreSQL
+        run: docker compose up -d --no-build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              echo 'F6_03_BACKEND_HEALTH_GREEN'
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove production-like PostgreSQL boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -u - <<'PY' | tee f6-03-postgresql-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+              required_relations = {
+                  'receipt_tables', 'purchase_import_batches', 'purchase_import_lines',
+                  'inventory', 'inventory_events',
+              }
+              actual_relations = set(conn.execute(text("""
+                  SELECT table_name
+                  FROM information_schema.tables
+                  WHERE table_schema = 'public'
+              """)).scalars().all())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          assert required_relations.issubset(actual_relations), sorted(required_relations - actual_relations)
+          print(f'runtime_user={current_user}')
+          print('F6_03_POSTGRESQL_BOUNDARY_GREEN')
+          PY
+          grep -F 'F6_03_POSTGRESQL_BOUNDARY_GREEN' f6-03-postgresql-boundary.log
+
+      - name: Run invalid import through real browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" rm -rf test-results playwright-report-fullstack
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_03_EMAIL="$PLAYWRIGHT_F6_03_EMAIL" \
+            -e PLAYWRIGHT_F6_03_PASSWORD="$PLAYWRIGHT_F6_03_PASSWORD" \
+            -e PLAYWRIGHT_F6_03_HOUSEHOLD="$PLAYWRIGHT_F6_03_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-03-invalid-import-fail-closed.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-03-invalid-import-browser.log"
+          grep -F 'F6_03_INVALID_IMPORT_HTTP_REJECTED_GREEN' frontend/f6-03-invalid-import-browser.log
+          grep -F 'F6_03_INVALID_IMPORT_VISIBLE_REJECTION_GREEN' frontend/f6-03-invalid-import-browser.log
+          grep -F 'F6_03_RECEIPT_NO_POLLUTION_BROWSER_GREEN' frontend/f6-03-invalid-import-browser.log
+          grep -F 'F6_03_KASSA_NO_POLLUTION_BROWSER_GREEN' frontend/f6-03-invalid-import-browser.log
+          test -s frontend/f6-03-invalid-import-browser-proof.json
+
+      - name: Capture browser household for PostgreSQL proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof='frontend/f6-03-invalid-import-browser-proof.json'
+          household_id="$(jq -r '.householdId // empty' "$proof")"
+          status="$(jq -r '.importStatus // empty' "$proof")"
+          detail="$(jq -r '.detail // empty' "$proof")"
+          test -n "$household_id"
+          test "$status" = '400'
+          test "$detail" = 'Leeg bestand.'
+          echo "F6_03_HOUSEHOLD_ID=$household_id" >> "$GITHUB_ENV"
+          echo 'F6_03_BROWSER_PROOF_CAPTURED_GREEN'
+
+      - name: Prove exact PostgreSQL fail-closed end state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T -e F6_03_HOUSEHOLD_ID="$F6_03_HOUSEHOLD_ID" backend python -u - <<'PY' 2>&1 | tee f6-03-postgresql-end-state.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+
+          household_id = os.environ['F6_03_HOUSEHOLD_ID'].strip()
+          assert household_id
+
+          with engine.begin() as conn:
+              receipt_count = int(conn.execute(text("""
+                  SELECT COUNT(*) FROM public.receipt_tables
+                  WHERE household_id = :household_id
+              """), {'household_id': household_id}).scalar_one())
+              batch_count = int(conn.execute(text("""
+                  SELECT COUNT(*) FROM public.purchase_import_batches
+                  WHERE household_id = :household_id
+              """), {'household_id': household_id}).scalar_one())
+              line_count = int(conn.execute(text("""
+                  SELECT COUNT(*)
+                  FROM public.purchase_import_lines l
+                  JOIN public.purchase_import_batches b ON b.id = l.batch_id
+                  WHERE b.household_id = :household_id
+              """), {'household_id': household_id}).scalar_one())
+              inventory_count = int(conn.execute(text("""
+                  SELECT COUNT(*) FROM public.inventory
+                  WHERE household_id = :household_id
+              """), {'household_id': household_id}).scalar_one())
+              event_count = int(conn.execute(text("""
+                  SELECT COUNT(*) FROM public.inventory_events
+                  WHERE household_id = :household_id
+              """), {'household_id': household_id}).scalar_one())
+
+          assert receipt_count == 0, receipt_count
+          assert batch_count == 0, batch_count
+          assert line_count == 0, line_count
+          assert inventory_count == 0, inventory_count
+          assert event_count == 0, event_count
+
+          print(f'household_id={household_id}')
+          print(f'receipt_count={receipt_count}')
+          print(f'batch_count={batch_count}')
+          print(f'line_count={line_count}')
+          print(f'inventory_count={inventory_count}')
+          print(f'event_count={event_count}')
+          print('F6_03_RECEIPT_TABLES_CLEAN_GREEN')
+          print('F6_03_IMPORT_BATCHES_CLEAN_GREEN')
+          print('F6_03_INVENTORY_CLEAN_GREEN')
+          print('F6_03_POSTGRESQL_FAIL_CLOSED_GREEN')
+          PY
+          grep -F 'F6_03_RECEIPT_TABLES_CLEAN_GREEN' f6-03-postgresql-end-state.log
+          grep -F 'F6_03_IMPORT_BATCHES_CLEAN_GREEN' f6-03-postgresql-end-state.log
+          grep -F 'F6_03_INVENTORY_CLEAN_GREEN' f6-03-postgresql-end-state.log
+          grep -F 'F6_03_POSTGRESQL_FAIL_CLOSED_GREEN' f6-03-postgresql-end-state.log
+
+      - name: Upload F6-03 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-03-invalid-import-fail-closed-evidence
+          path: |
+            frontend/f6-03-invalid-import-browser.log
+            frontend/f6-03-invalid-import-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+            f6-03-postgresql-boundary.log
+            f6-03-postgresql-end-state.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: F6-03 authority gate marker
+        shell: bash
+        run: echo 'F6_03_INVALID_IMPORT_FAIL_CLOSED_AUTHORITY_GREEN'
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend frontend postgres || true
+
+      - name: Stop F6-03 stack
+        if: always()
+        run: docker compose down -v --remove-orphans || true
