@@ -94,6 +94,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          docker compose exec -T backend pip install --no-cache-dir 'pytest==8.3.5'
+          docker compose exec -T backend python -m pytest --version
+          echo 'F6_05_PYTEST_READY_GREEN'
           docker compose exec -T backend python -m pytest -q \
             /app/tests/test_authorization_membership_routes.py::test_last_admin_demotion_returns_409 \
             /app/tests/test_authorization_membership_routes.py::test_platform_permission_cannot_be_assigned_in_household_scope \
