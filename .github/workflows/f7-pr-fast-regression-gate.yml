@@ -1,0 +1,162 @@
+name: F7-02 PR Fast Regression aggregate gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact candidate commit SHA
+        required: true
+        type: string
+      base_sha:
+        description: Exact base commit SHA for the candidate diff
+        required: true
+        type: string
+      base_ref:
+        description: Target branch name; use main for live aggregation
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: f7-pr-fast-${{ github.event.pull_request.number || inputs.candidate_sha || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-fast-regression-gate:
+    name: PR Fast Regression candidate decision
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    env:
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
+      BASE_REF: ${{ inputs.base_ref || github.event.pull_request.base.ref || 'main' }}
+      GATE_CONFIG: quality/ci/f7_pr_fast_regression_gate.json
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove exact candidate identity and base availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          echo "F7_PR_FAST_CANDIDATE_SHA=$actual"
+          echo "F7_PR_FAST_BASE_SHA=$BASE_SHA"
+          echo "F7_PR_FAST_BASE_REF=$BASE_REF"
+          test "$actual" = "$CANDIDATE_SHA"
+          test -n "$BASE_SHA"
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          fi
+          git cat-file -e "${BASE_SHA}^{commit}"
+
+      - name: Compile and validate PR Fast Regression authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/ci/shared_fullstack_plan.py \
+            scripts/ci/f7_pr_fast_regression_gate.py \
+            scripts/ci/validate_f7_ci_orchestration_gate_map.py
+          python scripts/ci/f7_pr_fast_regression_gate.py validate-config --config "$GATE_CONFIG" | tee f7-pr-fast-config.log
+          grep -Fx 'PASS f7_02_fallback_governance_closed' f7-pr-fast-config.log
+          grep -Fx 'F7_02_SHARED_CLUSTERS=5' f7-pr-fast-config.log
+          grep -Fx 'F7_02_MANUAL_FALLBACKS=14' f7-pr-fast-config.log
+          grep -Fx 'F7_02_KNOWN_STALE_REFERENCES=2' f7-pr-fast-config.log
+          grep -Fx 'F7_02_DUPLICATE_PR_FALLBACKS=0' f7-pr-fast-config.log
+          grep -Fx 'F7_02_PR_FAST_CONFIG_GREEN' f7-pr-fast-config.log
+
+      - name: Prove shared planner uses complete candidate delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > f7-shared-planner-event.json <<JSON
+          {
+            "action": "synchronize",
+            "pull_request": {
+              "base": {"sha": "$BASE_SHA"},
+              "head": {"sha": "$CANDIDATE_SHA"}
+            }
+          }
+          JSON
+          GITHUB_EVENT_NAME=pull_request \
+          python scripts/ci/shared_fullstack_plan.py \
+            --event f7-shared-planner-event.json \
+            --manifest quality/ci/tp_ci_02_kassa_shared_stack_paths.json \
+            | tee f7-shared-planner-candidate.log
+          grep -Fx 'SHARED_FULLSTACK_PLAN_REASON=synchronize_candidate' f7-shared-planner-candidate.log
+          grep -Fx "SHARED_FULLSTACK_CANDIDATE_BASE=$BASE_SHA" f7-shared-planner-candidate.log
+          grep -Fx "SHARED_FULLSTACK_CANDIDATE_HEAD=$CANDIDATE_SHA" f7-shared-planner-candidate.log
+          echo 'F7_SHARED_PLANNER_CANDIDATE_SCOPE_GREEN'
+
+      - name: Plan selected shared clusters from complete candidate delta
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_pr_fast_regression_gate.py plan \
+            --config "$GATE_CONFIG" \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$CANDIDATE_SHA" \
+            --base-ref "$BASE_REF" \
+            --evidence f7-pr-fast-regression-evidence.json \
+            | tee f7-pr-fast-plan.log
+          grep -E '^F7_PR_FAST_MODE=(live|preview)$' f7-pr-fast-plan.log
+          grep -E '^F7_PR_FAST_EXPECTED_COUNT=[0-5]$' f7-pr-fast-plan.log
+
+      - name: Run cheap acceptance authorities on exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/validate-functional-acceptance-matrix.py | tee f7-pr-fast-functional-matrix.log
+          grep -F 'FUNCTIONAL_ACCEPTANCE_MATRIX_GREEN' f7-pr-fast-functional-matrix.log
+          python scripts/acceptance/validate_p0_residual_closure.py | tee f7-pr-fast-p0-residual.log
+          grep -F 'P0_RESIDUAL_CLOSURE_GREEN' f7-pr-fast-p0-residual.log
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-pr-fast-orchestration-map.log
+          grep -F 'F7_01_CI_ORCHESTRATION_AUDIT_GREEN' f7-pr-fast-orchestration-map.log
+          echo 'F7_PR_FAST_CHEAP_AUTHORITIES_GREEN'
+
+      - name: Aggregate selected shared workflow results for exact candidate
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_pr_fast_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --head-sha "$CANDIDATE_SHA" \
+            --repo "$GITHUB_REPOSITORY" \
+            --evidence f7-pr-fast-regression-evidence.json \
+            | tee f7-pr-fast-wait.log
+          if [[ '${{ steps.plan.outputs.mode }}' == 'live' ]]; then
+            grep -Fx 'F7_PR_FAST_REGRESSION_GATE_GREEN' f7-pr-fast-wait.log
+          else
+            grep -Fx 'F7_PR_FAST_STACKED_PREVIEW_GREEN' f7-pr-fast-wait.log
+          fi
+
+      - name: Upload PR Fast Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-pr-fast-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_pr_fast_regression_gate.json
+            f7-pr-fast-config.log
+            f7-shared-planner-candidate.log
+            f7-pr-fast-plan.log
+            f7-pr-fast-functional-matrix.log
+            f7-pr-fast-p0-residual.log
+            f7-pr-fast-orchestration-map.log
+            f7-pr-fast-wait.log
+            f7-pr-fast-regression-evidence.json
+          if-no-files-found: warn
+          retention-days: 14

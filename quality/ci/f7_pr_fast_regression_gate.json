@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "gate_id": "F7-02",
+  "title": "PR Fast Regression aggregate gate",
+  "target_base": "main",
+  "poll_seconds": 15,
+  "timeout_seconds": 7200,
+  "clusters": [
+    {
+      "id": "TP-CI-02",
+      "workflow_file": ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml",
+      "manifest": "quality/ci/tp_ci_02_kassa_shared_stack_paths.json"
+    },
+    {
+      "id": "TP-CI-03",
+      "workflow_file": ".github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml",
+      "manifest": "quality/ci/tp_ci_03_account_authorization_shared_stack_paths.json"
+    },
+    {
+      "id": "TP-CI-04",
+      "workflow_file": ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml",
+      "manifest": "quality/ci/tp_ci_04_inventory_shared_stack_paths.json"
+    },
+    {
+      "id": "TP-CI-05",
+      "workflow_file": ".github/workflows/tp-ci-05-receipt-shared-stack-postgresql-validation.yml",
+      "manifest": "quality/ci/tp_ci_05_receipt_shared_stack_paths.json"
+    },
+    {
+      "id": "TP-CI-07",
+      "workflow_file": ".github/workflows/tp-ci-07-core-p0-shared-stack-postgresql-validation.yml",
+      "manifest": "quality/ci/tp_ci_07_core_p0_shared_stack_paths.json"
+    }
+  ],
+  "cheap_validators": [
+    "scripts/validate-functional-acceptance-matrix.py",
+    "scripts/acceptance/validate_p0_residual_closure.py",
+    "scripts/ci/validate_f7_ci_orchestration_gate_map.py"
+  ],
+  "fallback_governance": {
+    "manual_only_workflows": [
+      ".github/workflows/p0-account-session-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-authorization-isolation-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml",
+      ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml",
+      ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-receipt-nonphysical-fullstack-postgresql-validation.yml",
+      ".github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml",
+      ".github/workflows/p0-onboarding-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml",
+      ".github/workflows/p0-unpacking-fullstack-postgresql-validation.yml"
+    ],
+    "known_stale_references": [
+      ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml",
+      ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml"
+    ],
+    "duplicate_pr_fallbacks": []
+  },
+  "stacked_preview_policy": "When pull_request.base.ref is not target_base, validate configuration and planning but do not wait for shared workflows that are intentionally main-target only."
+}
