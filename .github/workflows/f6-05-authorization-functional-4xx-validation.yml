@@ -109,6 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           docker compose exec -T \
+            -e PYTHONPATH=/app \
             -e F6_05_IP_OWNER_USER_ID \
             -e F6_05_IP_OWNER_EMAIL \
             -e F6_05_IP_OWNER_PASSWORD \
@@ -170,6 +171,7 @@ jobs:
         run: |
           set -euo pipefail
           docker compose exec -T \
+            -e PYTHONPATH=/app \
             -e F6_05_ACCOUNT_EMAIL \
             -e F6_05_IP_OWNER_USER_ID \
             -e F6_05_MISSING_TARGET_USER_ID \
