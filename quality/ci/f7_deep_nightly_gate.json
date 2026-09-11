@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "gate_id": "F7-05",
+  "target_ref": "main",
+  "schedule_utc": "30 1 * * *",
+  "required_workflow_count": 12,
+  "timeout_seconds": 18000,
+  "poll_seconds": 20,
+  "buckets": {
+    "failure_recovery": 6,
+    "legacy_portability": 6
+  },
+  "workflows": [
+    {
+      "id": "F6-02-TEMPORARY-FAILURE-SAFE-RETRY",
+      "bucket": "failure_recovery",
+      "workflow_file": ".github/workflows/f6-02-temporary-failure-safe-retry-postgresql-validation.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F6-03-INVALID-IMPORT-FAIL-CLOSED",
+      "bucket": "failure_recovery",
+      "workflow_file": ".github/workflows/f6-03-invalid-import-fail-closed-postgresql-validation.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F6-04-INTERRUPTED-MUTATION-SAFE-RESUME",
+      "bucket": "failure_recovery",
+      "workflow_file": ".github/workflows/f6-04-interrupted-mutation-safe-resume-postgresql-validation.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F6-05-AUTHORIZATION-FUNCTIONAL-4XX",
+      "bucket": "failure_recovery",
+      "workflow_file": ".github/workflows/f6-05-authorization-functional-4xx-validation.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F6-INVENTORY-CONTROLLED-5XX",
+      "bucket": "failure_recovery",
+      "workflow_file": ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F6-RECEIPT-CONTROLLED-5XX",
+      "bucket": "failure_recovery",
+      "workflow_file": ".github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F5-HISTORICAL-QUANTITY-RESTORATION",
+      "bucket": "legacy_portability",
+      "workflow_file": ".github/workflows/f5-postgresql-historical-quantity-restoration-regression.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F5-HISTORY-NULL-SORTING",
+      "bucket": "legacy_portability",
+      "workflow_file": ".github/workflows/f5-postgresql-history-null-sorting-regression.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F5-JSON-SERIALIZATION",
+      "bucket": "legacy_portability",
+      "workflow_file": ".github/workflows/f5-postgresql-json-serialization-regression.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F5-LOCATIONLESS-HISTORY-EVENTS",
+      "bucket": "legacy_portability",
+      "workflow_file": ".github/workflows/f5-postgresql-locationless-history-events-regression.yml",
+      "inputs": {}
+    },
+    {
+      "id": "F5-RECEIPT-WORKER-FAIL-CLOSED",
+      "bucket": "legacy_portability",
+      "workflow_file": ".github/workflows/f5-postgresql-receipt-worker-fail-closed-regression.yml",
+      "inputs": {}
+    },
+    {
+      "id": "POSTGRESQL-MAIN-LEGACY-SCHEMA-RETIREMENT",
+      "bucket": "legacy_portability",
+      "workflow_file": ".github/workflows/postgresql-main-legacy-schema-retirement.yml",
+      "inputs": {}
+    }
+  ]
+}

@@ -46,7 +46,7 @@
       ]
     },
     "full_regression": {
-      "status": "partial",
+      "status": "covered",
       "aggregate_workflow": ".github/workflows/f7-full-regression-gate.yml",
       "contract": "quality/ci/f7_full_regression_gate.json",
       "trigger_policy": "quality/ci/f7_full_regression_trigger_policy.json",
@@ -67,23 +67,54 @@
         },
         {
           "id": "F7-FULL-02",
-          "status": "in_progress",
-          "description": "Make Full Regression permanent for every non-draft merge candidate to main: opened, reopened, ready-for-review and every later synchronize event, while retaining workflow_dispatch as the manual fallback."
+          "status": "closed",
+          "proof": {
+            "draft_skip_run": "34645362308",
+            "run": "34645410007",
+            "job": "103414892330",
+            "candidate_sha": "dddcaae6fc0a0f9dcae41343d2430e65d8925f85",
+            "merge_commit": "a1254515cdcbbc14541c1f83a94a302a44df71ce"
+          },
+          "description": "Full Regression now runs automatically for every non-draft merge candidate to main on opened, reopened, ready-for-review and synchronize, while retaining workflow_dispatch fallback."
         }
       ]
     },
     "deep_nightly": {
-      "status": "gap",
+      "status": "covered",
+      "aggregate_workflow": ".github/workflows/f7-deep-nightly-gate.yml",
+      "contract": "quality/ci/f7_deep_nightly_gate.json",
+      "schedule_utc": "30 1 * * *",
+      "required_workflows": 12,
+      "buckets": {
+        "failure_recovery": 6,
+        "legacy_portability": 6
+      },
+      "candidate_contract": "Scheduled runs use the exact main SHA captured by the schedule event; manual and implementation-proof runs bind a branch ref to an exact SHA. Child workflow results are accepted only for that exact SHA.",
       "residuals": [
         {
           "id": "F7-DEEP-01",
-          "status": "open",
-          "description": "No canonical schedule bundles expensive failure/recovery and legacy authorities into a Deep/Nightly run."
+          "status": "closed",
+          "proof": {
+            "draft_skip_run": "34647674048",
+            "run": "34647728557",
+            "job": "103422399705",
+            "candidate_sha": "b1ff0fbe0f442692bcee21164f57cd66a3ce7a2b",
+            "aggregated_workflows": 12
+          },
+          "description": "One canonical daily Deep/Nightly schedule now bundles six expensive failure/recovery authorities and six legacy/portability authorities on one exact candidate SHA."
         },
         {
           "id": "F7-DEEP-02",
-          "status": "open",
-          "description": "Deep-run evidence has no single aggregate result identifying the exact candidate and all executed authorities."
+          "status": "closed",
+          "proof": {
+            "run": "34647728557",
+            "job": "103422399705",
+            "candidate_sha": "b1ff0fbe0f442692bcee21164f57cd66a3ce7a2b",
+            "aggregated_workflows": 12,
+            "artifact_id": "10282677711",
+            "artifact_digest": "sha256:097d5a1229bc0fd9b50ef013262e873e742285ca0f058aea1ac4896ccff6df41"
+          },
+          "description": "The aggregate evidence identifies the exact candidate SHA and all twelve accepted child runs in one retained machine-readable artifact."
         }
       ]
     },
@@ -138,9 +169,22 @@
       "result": "Full Regression exact-candidate aggregate entry point proven across all eleven registered authorities"
     },
     "F7-04": {
-      "status": "in_progress",
+      "status": "closed",
       "scope": "F7-FULL-02",
-      "next_after_green": "Close Full Regression as covered and move to the Deep/Nightly residuals."
+      "proof_run": "34645410007",
+      "proof_job": "103414892330",
+      "proof_sha": "dddcaae6fc0a0f9dcae41343d2430e65d8925f85",
+      "merge_commit": "a1254515cdcbbc14541c1f83a94a302a44df71ce",
+      "result": "Full Regression permanent merge-candidate trigger policy proven and merged"
+    },
+    "F7-05": {
+      "status": "proof_complete",
+      "scope": "F7-DEEP-01 + F7-DEEP-02",
+      "proof_run": "34647728557",
+      "proof_job": "103422399705",
+      "proof_sha": "b1ff0fbe0f442692bcee21164f57cd66a3ce7a2b",
+      "artifact_id": "10282677711",
+      "result": "Deep/Nightly canonical schedule and twelve-authority aggregate evidence proven; awaiting merge"
     }
   }
 }
