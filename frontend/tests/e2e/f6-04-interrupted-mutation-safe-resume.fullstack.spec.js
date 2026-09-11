@@ -157,7 +157,7 @@ test('F6-04 Settings projection interruption rolls expansion back', async ({ pag
   const householdName = required('PLAYWRIGHT_F6_04_SETTINGS_HOUSEHOLD')
   await completeInhuisHalenOnboarding(page, email, password, householdName)
   await submitSettingsWatInhuisExpansion(page, 500)
-  await expect(page.locator('.rz-alert')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('alert')).toContainText('Interne serverfout in de API', { timeout: 20_000 })
   await expect(page.getByTestId('capability-expansion-form-wat_inhuis')).toBeVisible()
   writeFileSync('f6-04-settings-interrupted-browser-proof.json', JSON.stringify({ email, responseStatus: 500 }, null, 2))
   console.log('F6_04_SETTINGS_INTERRUPTED_BROWSER_GREEN')
