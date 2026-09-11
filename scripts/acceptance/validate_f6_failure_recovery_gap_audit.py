@@ -24,13 +24,18 @@ EXPECTED_CATEGORIES = {
 }
 EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
-EXPECTED_COUNTS = {"covered": 31, "partial": 54, "gap": 32, "na": 23}
+EXPECTED_COUNTS = {"covered": 33, "partial": 52, "gap": 32, "na": 23}
 
 SHARED_KASSA_WORKFLOW = ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
 F6_02_WORKFLOW = ".github/workflows/f6-02-temporary-failure-safe-retry-postgresql-validation.yml"
 F6_02_PROOF_RUN = "34617055659"
 F6_02_PROOF_JOB = "103321480244"
 F6_02_PROOF_SHA = "0b79b1b4fe9ae6fc47d0dcacaca78e1be56c44bf"
+F6_03_SPEC = "frontend/tests/e2e/f6-03-invalid-import-fail-closed.fullstack.spec.js"
+F6_03_WORKFLOW = ".github/workflows/f6-03-invalid-import-fail-closed-postgresql-validation.yml"
+F6_03_PROOF_RUN = "34625163561"
+F6_03_PROOF_JOB = "103348569125"
+F6_03_PROOF_SHA = "309e113a8e4cfb550d54b28d78861029f66861d6"
 MIGRATED_EVIDENCE = {
     ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
     ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
@@ -244,6 +249,24 @@ def main() -> None:
         "f6_02_scope_fully_covered",
     )
     require((ROOT / F6_02_WORKFLOW).exists(), "f6_02_shared_postgresql_workflow_registered")
+
+    f6_03_scope = {"P0-RECEIPT-INVENTORY-ALMOSTOUT", "P0-KASSA-REVIEW"}
+    f6_03_rows = [row for row in scenarios if row["id"] in f6_03_scope]
+    require(len(f6_03_rows) == 2, "f6_03_exact_two_scope_scenarios")
+    require(
+        all(row["assessments"]["invalid_import"] == "covered" for row in f6_03_rows),
+        "f6_03_invalid_import_scope_fully_covered",
+    )
+    require((ROOT / F6_03_SPEC).exists(), "f6_03_browser_authority_registered")
+    require((ROOT / F6_03_WORKFLOW).exists(), "f6_03_postgresql_workflow_registered")
+    for row in f6_03_rows:
+        evidence = set(row.get("evidence") or [])
+        require(F6_03_SPEC in evidence, f"f6_03_{row['id']}_spec_registered")
+        require(F6_03_WORKFLOW in evidence, f"f6_03_{row['id']}_workflow_registered")
+        proof_note = row.get("notes", {}).get("invalid_import", "")
+        require(F6_03_PROOF_RUN in proof_note, f"f6_03_{row['id']}_proof_run_registered")
+        require(F6_03_PROOF_JOB in proof_note, f"f6_03_{row['id']}_proof_job_registered")
+        require(F6_03_PROOF_SHA in proof_note, f"f6_03_{row['id']}_candidate_registered")
 
     account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
     require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")
