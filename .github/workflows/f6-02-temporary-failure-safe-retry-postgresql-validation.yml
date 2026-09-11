@@ -32,7 +32,7 @@ jobs:
   shared-f6-02-fullstack:
     name: F6-02 Receipt Kassa Unpacking temporary failure authority
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 55
     env:
       COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
       COMPOSE_PROFILES: postgresql
@@ -93,16 +93,53 @@ jobs:
           node --check frontend/tests/e2e/f6-02-unpacking-temporary-retry.fullstack.spec.js
           echo 'F6_02_AUTHORITY_COMPILE_GREEN'
 
-      - name: Build application images once and prepare Playwright once
+      - name: Build images and prepare Playwright once
         shell: bash
         run: |
           set -euo pipefail
+          started=$(date +%s)
           timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
           echo 'F6_02_DOCKER_BUILD_ONCE_GREEN'
           docker pull "$PLAYWRIGHT_IMAGE"
           echo 'F6_02_PLAYWRIGHT_PULL_ONCE_GREEN'
           docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" bash -lc 'npm ci'
           echo 'F6_02_NPM_CI_ONCE_GREEN'
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Shared build/pull/npm: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start shared PostgreSQL backend frontend stack once
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          cat > f6-02-shared.override.yml <<YAML
+          services:
+            backend:
+              environment:
+                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
+                REZZERV_TEST_ONLY_F6_TEMPORARY_FAILURE_ONCE: "1"
+                REZZERV_TEST_ONLY_F6_RECEIPT_FINALIZATION_FAILURE: "1"
+                REZZERV_TEST_ONLY_F6_KASSA_APPROVAL_FAILURE: "1"
+                REZZERV_TEST_ONLY_F6_KASSA_RECEIPT_ID: "$F6_KASSA_TARGET_RECEIPT_ID"
+                REZZERV_TEST_ONLY_F6_UNPACKING_FINALIZATION_FAILURE: "1"
+                REZZERV_TEST_ONLY_F6_UNPACKING_BATCH_ID: "$F6_UNPACKING_TARGET_BATCH_ID"
+          YAML
+          export COMPOSE_FILE="docker-compose.yml:docker-compose.postgresql.yml:f6-02-shared.override.yml"
+          echo "COMPOSE_FILE=$COMPOSE_FILE" >> "$GITHUB_ENV"
+          docker compose up -d --no-build
+          healthy=0
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then healthy=1; break; fi
+            sleep 2
+          done
+          [[ "$healthy" == 1 ]]
+          docker compose ps
+          docker compose exec -T backend mkdir -p /quality/acceptance /backend/app/testing/receipt_acceptance
+          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
+          docker compose cp backend/app/testing/receipt_acceptance/baseline.json backend:/backend/app/testing/receipt_acceptance/baseline.json
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Shared stack startup/health: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_SHARED_STACK_STARTED_ONCE_GREEN'
 
       - name: Run F6-02 Receipt temporary failure and retry
         id: receipt
@@ -110,20 +147,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > f6-02-receipt.override.yml <<'YAML'
-          services:
-            backend:
-              environment:
-                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
-                REZZERV_TEST_ONLY_F6_RECEIPT_FINALIZATION_FAILURE: "1"
-                REZZERV_TEST_ONLY_F6_TEMPORARY_FAILURE_ONCE: "1"
-          YAML
-          export COMPOSE_FILE="docker-compose.yml:docker-compose.postgresql.yml:f6-02-receipt.override.yml"
-          cleanup() { rc=$?; if (( rc != 0 )); then docker compose ps || true; docker compose logs --no-color --tail=500 backend frontend postgres || true; fi; docker compose down --remove-orphans || true; docker volume rm "${COMPOSE_PROJECT_NAME}_rezzerv_postgres" >/dev/null 2>&1 || true; exit "$rc"; }
-          trap cleanup EXIT
-          docker compose up -d --no-build
-          for attempt in $(seq 1 180); do curl --fail --silent http://localhost:8011/api/health >/dev/null && break; (( attempt < 180 )) || exit 1; sleep 2; done
-
+          started=$(date +%s)
           docker run --rm --add-host=host.docker.internal:host-gateway \
             -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
             -e PLAYWRIGHT_F6_02_RECEIPT_EMAIL="$PLAYWRIGHT_F6_02_RECEIPT_EMAIL" \
@@ -142,6 +166,8 @@ jobs:
           grep -F 'P0_L4_05_SINGLE_INVENTORY_INCREMENT_GREEN' f6-02-receipt-postgresql.log
           docker compose logs --no-color backend > f6-02-receipt-backend.log
           grep -F 'F6-02-RECEIPT-TEMPORARY-FAILURE: injected one-shot temporary failure' f6-02-receipt-backend.log
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Receipt authority: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
           echo 'F6_02_RECEIPT_POSTGRESQL_EXACT_ONCE_GREEN'
 
       - name: Upload F6-02 Receipt evidence
@@ -159,30 +185,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Reset PostgreSQL data in place before Kassa
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          docker compose exec -T postgres sh -lc 'psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set=ON_ERROR_STOP=1' <<'SQL'
+          DO $$
+          DECLARE
+            truncate_sql text;
+          BEGIN
+            SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' RESTART IDENTITY CASCADE'
+              INTO truncate_sql
+              FROM pg_tables
+             WHERE schemaname = 'public'
+               AND tablename <> 'alembic_version';
+            IF truncate_sql IS NOT NULL THEN
+              EXECUTE truncate_sql;
+            END IF;
+          END
+          $$;
+          SQL
+          remaining=$(docker compose exec -T postgres sh -lc 'psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -Atqc "SELECT COUNT(*) FROM purchase_import_batches"')
+          [[ "$remaining" == 0 ]]
+          elapsed=$(( $(date +%s) - started ))
+          echo "- In-place reset Receipt→Kassa: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_RECEIPT_KASSA_IN_PLACE_RESET_GREEN'
+
       - name: Run F6-02 Kassa temporary failure and retry
         id: kassa
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          cat > f6-02-kassa.override.yml <<YAML
-          services:
-            backend:
-              environment:
-                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
-                REZZERV_TEST_ONLY_F6_KASSA_APPROVAL_FAILURE: "1"
-                REZZERV_TEST_ONLY_F6_KASSA_RECEIPT_ID: "$F6_KASSA_TARGET_RECEIPT_ID"
-                REZZERV_TEST_ONLY_F6_TEMPORARY_FAILURE_ONCE: "1"
-          YAML
-          export COMPOSE_FILE="docker-compose.yml:docker-compose.postgresql.yml:f6-02-kassa.override.yml"
-          cleanup() { rc=$?; if (( rc != 0 )); then docker compose ps || true; docker compose logs --no-color --tail=500 backend frontend postgres || true; fi; docker compose down --remove-orphans || true; docker volume rm "${COMPOSE_PROJECT_NAME}_rezzerv_postgres" >/dev/null 2>&1 || true; exit "$rc"; }
-          trap cleanup EXIT
-          docker compose up -d --no-build
-          for attempt in $(seq 1 180); do curl --fail --silent http://localhost:8011/api/health >/dev/null && break; (( attempt < 180 )) || exit 1; sleep 2; done
-
-          docker compose exec -T backend mkdir -p /quality/acceptance /backend/app/testing/receipt_acceptance
-          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
-          docker compose cp backend/app/testing/receipt_acceptance/baseline.json backend:/backend/app/testing/receipt_acceptance/baseline.json
+          started=$(date +%s)
           docker compose exec -T backend python /app/tests/p0_kassa_review_fixture.py prepare | tee f6-02-kassa-fixture.log
           grep -F 'P0_KASSA_REVIEW_FIXTURE_GREEN' f6-02-kassa-fixture.log
           fixture_json="$(grep '^P0_KASSA_REVIEW_FIXTURE=' f6-02-kassa-fixture.log | tail -1 | cut -d= -f2-)"
@@ -219,6 +255,8 @@ jobs:
           PY
           docker compose logs --no-color backend > f6-02-kassa-backend.log
           grep -F 'F6-02-KASSA-TEMPORARY-FAILURE: injected one-shot temporary failure' f6-02-kassa-backend.log
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Kassa authority: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
           echo 'F6_02_KASSA_POSTGRESQL_EXACT_ONCE_GREEN'
 
       - name: Upload F6-02 Kassa evidence
@@ -237,29 +275,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Reset PostgreSQL data in place before Unpacking
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          docker compose exec -T postgres sh -lc 'psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set=ON_ERROR_STOP=1' <<'SQL'
+          DO $$
+          DECLARE
+            truncate_sql text;
+          BEGIN
+            SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' RESTART IDENTITY CASCADE'
+              INTO truncate_sql
+              FROM pg_tables
+             WHERE schemaname = 'public'
+               AND tablename <> 'alembic_version';
+            IF truncate_sql IS NOT NULL THEN
+              EXECUTE truncate_sql;
+            END IF;
+          END
+          $$;
+          SQL
+          remaining=$(docker compose exec -T postgres sh -lc 'psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -Atqc "SELECT COUNT(*) FROM purchase_import_batches"')
+          [[ "$remaining" == 0 ]]
+          elapsed=$(( $(date +%s) - started ))
+          echo "- In-place reset Kassa→Unpacking: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_KASSA_UNPACKING_IN_PLACE_RESET_GREEN'
+
       - name: Run F6-02 Unpacking temporary failure and retry
         id: unpacking
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          cat > f6-02-unpacking.override.yml <<YAML
-          services:
-            backend:
-              environment:
-                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
-                REZZERV_TEST_ONLY_F6_UNPACKING_FINALIZATION_FAILURE: "1"
-                REZZERV_TEST_ONLY_F6_UNPACKING_BATCH_ID: "$F6_UNPACKING_TARGET_BATCH_ID"
-                REZZERV_TEST_ONLY_F6_TEMPORARY_FAILURE_ONCE: "1"
-          YAML
-          export COMPOSE_FILE="docker-compose.yml:docker-compose.postgresql.yml:f6-02-unpacking.override.yml"
-          cleanup() { rc=$?; if (( rc != 0 )); then docker compose ps || true; docker compose logs --no-color --tail=500 backend frontend postgres || true; fi; docker compose down --remove-orphans || true; docker volume rm "${COMPOSE_PROJECT_NAME}_rezzerv_postgres" >/dev/null 2>&1 || true; exit "$rc"; }
-          trap cleanup EXIT
-          docker compose up -d --no-build
-          for attempt in $(seq 1 180); do curl --fail --silent http://localhost:8011/api/health >/dev/null && break; (( attempt < 180 )) || exit 1; sleep 2; done
-
-          docker compose exec -T backend mkdir -p /quality/acceptance
-          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
+          started=$(date +%s)
           docker compose exec -T backend python /app/tests/p0_unpacking_fixture.py prepare | tee f6-02-unpacking-fixture.log
           grep -F 'P0_UNPACKING_FIXTURE_GREEN' f6-02-unpacking-fixture.log
           docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/p0_unpacking_receipt_bridge.py | tee f6-02-unpacking-receipt-bridge.log
@@ -288,6 +337,8 @@ jobs:
           grep -F 'P0_UNPACKING_POSTGRESQL_GREEN' f6-02-unpacking-postgresql.log
           docker compose logs --no-color backend > f6-02-unpacking-backend.log
           grep -F 'F6-02-UNPACKING-TEMPORARY-FAILURE: injected one-shot temporary failure' f6-02-unpacking-backend.log
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Unpacking authority: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
           echo 'F6_02_UNPACKING_POSTGRESQL_EXACT_ONCE_GREEN'
 
       - name: Upload F6-02 Unpacking evidence
@@ -320,5 +371,16 @@ jobs:
           [[ "$RECEIPT_OUTCOME" == success ]]
           [[ "$KASSA_OUTCOME" == success ]]
           [[ "$UNPACKING_OUTCOME" == success ]]
-          docker compose down -v --remove-orphans || true
           echo 'F6_02_TEMPORARY_FAILURE_SAFE_RETRY_POSTGRESQL_GREEN'
+
+      - name: Stop shared F6-02 stack once
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ "${{ steps.receipt.outcome }}" != success || "${{ steps.kassa.outcome }}" != success || "${{ steps.unpacking.outcome }}" != success ]]; then
+            docker compose ps
+            docker compose logs --no-color --tail=800 backend frontend postgres
+          fi
+          docker compose down -v --remove-orphans
+          echo 'F6_02_SHARED_STACK_STOPPED_ONCE_GREEN'
