@@ -1,15 +1,14 @@
-name: F7-03 Full Regression exact-candidate gate
+name: F7 Full Regression exact-candidate gate
 
 on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'quality/ci/f7_full_regression_gate.json'
-      - 'quality/ci/f7_ci_orchestration_gate_map.json'
-      - 'scripts/ci/f7_full_regression_gate.py'
-      - 'scripts/ci/validate_f7_ci_orchestration_gate_map.py'
-      - '.github/workflows/f7-full-regression-gate.yml'
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
   workflow_dispatch:
     inputs:
       candidate_ref:
@@ -32,12 +31,16 @@ concurrency:
 jobs:
   full-regression-gate:
     name: Full Regression candidate decision
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 250
     env:
       CANDIDATE_REF: ${{ inputs.candidate_ref || github.head_ref }}
       CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
       GATE_CONFIG: quality/ci/f7_full_regression_gate.json
+      TRIGGER_POLICY: quality/ci/f7_full_regression_trigger_policy.json
+      TRIGGER_EVENT: ${{ github.event_name }}
+      TRIGGER_ACTION: ${{ github.event.action || 'workflow_dispatch' }}
 
     steps:
       - name: Checkout exact candidate
@@ -46,30 +49,45 @@ jobs:
           ref: ${{ env.CANDIDATE_SHA }}
           fetch-depth: 1
 
-      - name: Prove exact candidate identity and immutable dispatch ref
+      - name: Prove permanent trigger event and exact candidate identity
         shell: bash
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$CANDIDATE_SHA"
           test -n "$CANDIDATE_REF"
+          if [[ "$TRIGGER_EVENT" == "pull_request" ]]; then
+            case "$TRIGGER_ACTION" in
+              opened|reopened|ready_for_review|synchronize) ;;
+              *) echo "Unexpected Full Regression PR trigger action: $TRIGGER_ACTION" >&2; exit 1 ;;
+            esac
+          elif [[ "$TRIGGER_EVENT" != "workflow_dispatch" ]]; then
+            echo "Unexpected Full Regression trigger event: $TRIGGER_EVENT" >&2
+            exit 1
+          fi
           remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_REF" | awk '{print $1}')"
           test -n "$remote_sha"
           test "$remote_sha" = "$CANDIDATE_SHA"
+          echo "F7_FULL_TRIGGER_EVENT=$TRIGGER_EVENT"
+          echo "F7_FULL_TRIGGER_ACTION=$TRIGGER_ACTION"
           echo "F7_FULL_CANDIDATE_REF=$CANDIDATE_REF"
           echo "F7_FULL_CANDIDATE_SHA=$CANDIDATE_SHA"
           echo 'F7_FULL_CANDIDATE_IDENTITY_GREEN'
 
-      - name: Compile and validate Full Regression contract
+      - name: Compile and validate Full Regression contract and trigger policy
         shell: bash
         run: |
           set -euo pipefail
+          test -f "$TRIGGER_POLICY"
           python -m py_compile scripts/ci/f7_full_regression_gate.py scripts/ci/validate_f7_ci_orchestration_gate_map.py
           python scripts/ci/f7_full_regression_gate.py validate-config --config "$GATE_CONFIG" | tee f7-full-config.log
           grep -Fx 'PASS f7_03_exact_14_p0_scenarios_mapped' f7-full-config.log
           grep -Fx 'PASS f7_03_eleven_full_regression_workflows_registered' f7-full-config.log
           grep -Fx 'PASS f7_03_full_frontend_regression_registered' f7-full-config.log
           grep -Fx 'F7_03_FULL_REGRESSION_CONFIG_GREEN' f7-full-config.log
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-trigger-policy.log
+          grep -Fx 'PASS f7_04_full_regression_trigger_policy_permanent' f7-trigger-policy.log
+          grep -Fx 'F7_FULL_TRIGGER_POLICY_GREEN' f7-trigger-policy.log
 
       - name: Dispatch every Full Regression authority on exact candidate ref
         shell: bash
@@ -117,8 +135,10 @@ jobs:
           name: f7-full-regression-${{ github.run_id }}
           path: |
             quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_full_regression_trigger_policy.json
             quality/ci/f7_ci_orchestration_gate_map.json
             f7-full-config.log
+            f7-trigger-policy.log
             f7-full-dispatch.log
             f7-full-wait.log
             f7-full-regression-evidence.json
