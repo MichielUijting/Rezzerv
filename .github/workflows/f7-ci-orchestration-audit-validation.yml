@@ -56,6 +56,7 @@ jobs:
           grep -Fx 'PASS f7_01_gate_taxonomy_complete' f7-01-ci-orchestration-audit.log
           grep -Fx 'PASS f7_01_existing_shared_runners_mapped' f7-01-ci-orchestration-audit.log
           grep -Fx 'PASS f7_01_candidate_identity_contracts_present' f7-01-ci-orchestration-audit.log
+          grep -Fx 'PASS f7_01_definitive_proof_registered' f7-01-ci-orchestration-audit.log
           grep -F 'PASS f7_01_residual_backlog_explicit count=' f7-01-ci-orchestration-audit.log
           grep -Fx 'F7_01_SHARED_CLUSTERS=5' f7-01-ci-orchestration-audit.log
           grep -Fx 'F7_01_SHARED_AUTHORITIES=16' f7-01-ci-orchestration-audit.log
