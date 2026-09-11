@@ -75,6 +75,29 @@ jobs:
           grep -Fx 'F7_02_DUPLICATE_PR_FALLBACKS=0' f7-pr-fast-config.log
           grep -Fx 'F7_02_PR_FAST_CONFIG_GREEN' f7-pr-fast-config.log
 
+      - name: Prove shared planner uses complete candidate delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > f7-shared-planner-event.json <<JSON
+          {
+            "action": "synchronize",
+            "pull_request": {
+              "base": {"sha": "$BASE_SHA"},
+              "head": {"sha": "$CANDIDATE_SHA"}
+            }
+          }
+          JSON
+          GITHUB_EVENT_NAME=pull_request \
+          python scripts/ci/shared_fullstack_plan.py \
+            --event f7-shared-planner-event.json \
+            --manifest quality/ci/tp_ci_02_kassa_shared_stack_paths.json \
+            | tee f7-shared-planner-candidate.log
+          grep -Fx 'SHARED_FULLSTACK_PLAN_REASON=synchronize_candidate' f7-shared-planner-candidate.log
+          grep -Fx "SHARED_FULLSTACK_CANDIDATE_BASE=$BASE_SHA" f7-shared-planner-candidate.log
+          grep -Fx "SHARED_FULLSTACK_CANDIDATE_HEAD=$CANDIDATE_SHA" f7-shared-planner-candidate.log
+          echo 'F7_SHARED_PLANNER_CANDIDATE_SCOPE_GREEN'
+
       - name: Plan selected shared clusters from complete candidate delta
         id: plan
         shell: bash
@@ -128,6 +151,7 @@ jobs:
           path: |
             quality/ci/f7_pr_fast_regression_gate.json
             f7-pr-fast-config.log
+            f7-shared-planner-candidate.log
             f7-pr-fast-plan.log
             f7-pr-fast-functional-matrix.log
             f7-pr-fast-p0-residual.log
