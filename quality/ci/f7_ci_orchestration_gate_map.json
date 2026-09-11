@@ -49,19 +49,26 @@
       "status": "partial",
       "aggregate_workflow": ".github/workflows/f7-full-regression-gate.yml",
       "contract": "quality/ci/f7_full_regression_gate.json",
+      "trigger_policy": "quality/ci/f7_full_regression_trigger_policy.json",
       "required_p0_scenarios": 14,
       "required_workflows": 11,
       "candidate_contract": "All registered authorities are workflow_dispatch'ed from one candidate branch ref and accepted only when their run head_sha equals the exact candidate SHA.",
       "residuals": [
         {
           "id": "F7-FULL-01",
-          "status": "in_progress",
-          "description": "Prove the new single Full Regression entry point forces all fourteen P0 scenarios plus full frontend regression on one exact candidate SHA."
+          "status": "closed",
+          "proof": {
+            "run": "34642458679",
+            "job": "103405329551",
+            "candidate_sha": "a6933a25b3cabea8c0f02df52288405ce53b9653",
+            "merge_commit": "c0943137738afc5b3db55726a9f2c5e0cc7b3d4a"
+          },
+          "description": "The single Full Regression entry point proved all fourteen P0 scenarios plus full frontend regression on one exact candidate SHA."
         },
         {
           "id": "F7-FULL-02",
-          "status": "open",
-          "description": "Define the permanent candidate trigger policy for Full Regression after F7-FULL-01 has proven the orchestration entry point."
+          "status": "in_progress",
+          "description": "Make Full Regression permanent for every non-draft merge candidate to main: opened, reopened, ready-for-review and every later synchronize event, while retaining workflow_dispatch as the manual fallback."
         }
       ]
     },
@@ -122,9 +129,18 @@
       "result": "PR Fast Regression aggregate gate and fallback governance closed"
     },
     "F7-03": {
-      "status": "in_progress",
+      "status": "closed",
       "scope": "F7-FULL-01",
-      "next_after_green": "Close F7-FULL-01 with proof and then resolve F7-FULL-02 trigger policy."
+      "proof_run": "34642458679",
+      "proof_job": "103405329551",
+      "proof_sha": "a6933a25b3cabea8c0f02df52288405ce53b9653",
+      "merge_commit": "c0943137738afc5b3db55726a9f2c5e0cc7b3d4a",
+      "result": "Full Regression exact-candidate aggregate entry point proven across all eleven registered authorities"
+    },
+    "F7-04": {
+      "status": "in_progress",
+      "scope": "F7-FULL-02",
+      "next_after_green": "Close Full Regression as covered and move to the Deep/Nightly residuals."
     }
   }
 }
