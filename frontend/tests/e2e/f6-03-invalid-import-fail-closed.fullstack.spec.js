@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
 
 // This spec is explicitly selected by playwright.fullstack.config.js for the F6-03 authority.
+// Its green PostgreSQL proof closes both Receipt/Inventory and Kassa Review invalid_import audit claims.
 const email = process.env.PLAYWRIGHT_F6_03_EMAIL
 const password = process.env.PLAYWRIGHT_F6_03_PASSWORD
 const householdName = process.env.PLAYWRIGHT_F6_03_HOUSEHOLD
