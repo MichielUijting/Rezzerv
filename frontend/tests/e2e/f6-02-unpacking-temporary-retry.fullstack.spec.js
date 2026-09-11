@@ -35,7 +35,7 @@ async function selectAndProcess(page, expectedBatchId, expectedLineId, expectedA
   const processButton = page.getByTestId('receipt-process-button')
   await expect(processButton).toBeEnabled()
   const responsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/purchase-import-batches/${expectedBatchId}/process` && response.request().method() === 'POST')
-  await processButton.click()
+  await page.getByTestId('receipt-process-button').click()
   return responsePromise
 }
 
