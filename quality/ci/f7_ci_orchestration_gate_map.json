@@ -80,7 +80,7 @@
       ]
     },
     "deep_nightly": {
-      "status": "partial",
+      "status": "covered",
       "aggregate_workflow": ".github/workflows/f7-deep-nightly-gate.yml",
       "contract": "quality/ci/f7_deep_nightly_gate.json",
       "schedule_utc": "30 1 * * *",
@@ -93,13 +93,28 @@
       "residuals": [
         {
           "id": "F7-DEEP-01",
-          "status": "in_progress",
-          "description": "Prove one canonical daily Deep/Nightly schedule bundles six expensive failure/recovery authorities and six legacy/portability authorities on one exact candidate SHA."
+          "status": "closed",
+          "proof": {
+            "draft_skip_run": "34647674048",
+            "run": "34647728557",
+            "job": "103422399705",
+            "candidate_sha": "b1ff0fbe0f442692bcee21164f57cd66a3ce7a2b",
+            "aggregated_workflows": 12
+          },
+          "description": "One canonical daily Deep/Nightly schedule now bundles six expensive failure/recovery authorities and six legacy/portability authorities on one exact candidate SHA."
         },
         {
           "id": "F7-DEEP-02",
-          "status": "open",
-          "description": "Close aggregate evidence governance after the first successful twelve-authority Deep/Nightly proof identifies the exact candidate and every accepted child run."
+          "status": "closed",
+          "proof": {
+            "run": "34647728557",
+            "job": "103422399705",
+            "candidate_sha": "b1ff0fbe0f442692bcee21164f57cd66a3ce7a2b",
+            "aggregated_workflows": 12,
+            "artifact_id": "10282677711",
+            "artifact_digest": "sha256:097d5a1229bc0fd9b50ef013262e873e742285ca0f058aea1ac4896ccff6df41"
+          },
+          "description": "The aggregate evidence identifies the exact candidate SHA and all twelve accepted child runs in one retained machine-readable artifact."
         }
       ]
     },
@@ -163,9 +178,13 @@
       "result": "Full Regression permanent merge-candidate trigger policy proven and merged"
     },
     "F7-05": {
-      "status": "in_progress",
-      "scope": "F7-DEEP-01",
-      "next_after_green": "Close F7-DEEP-01 with the first twelve-authority proof, then close aggregate evidence governance in F7-DEEP-02."
+      "status": "proof_complete",
+      "scope": "F7-DEEP-01 + F7-DEEP-02",
+      "proof_run": "34647728557",
+      "proof_job": "103422399705",
+      "proof_sha": "b1ff0fbe0f442692bcee21164f57cd66a3ce7a2b",
+      "artifact_id": "10282677711",
+      "result": "Deep/Nightly canonical schedule and twelve-authority aggregate evidence proven; awaiting merge"
     }
   }
 }
