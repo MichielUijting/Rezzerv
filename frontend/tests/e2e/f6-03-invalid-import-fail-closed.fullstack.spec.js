@@ -120,7 +120,9 @@ test('F6-03 invalid receipt import is visibly rejected and leaves no receipt bat
   expect(response.status(), JSON.stringify(payload)).toBe(400)
   expect(responseDetail).toBe('Leeg bestand')
   await expect(page).toHaveURL(/\/kassa\/nieuw$/)
-  await expect(page.locator('body')).toContainText(/Leeg bestand\.?|Upload mislukt|Fout bij uploaden/i, { timeout: 20_000 })
+  const rejectionFeedback = page.getByTestId('kassa-upload-rejected')
+  await expect(rejectionFeedback).toBeVisible({ timeout: 20_000 })
+  await expect(rejectionFeedback).toContainText(/Leeg bestand/i)
 
   const receiptsAfter = await readReceiptList(page, householdId)
   const batchesAfter = await readUnpackingBatches(page, householdId)
