@@ -43,7 +43,7 @@ def main() -> None:
             {"batch_id": batch_id},
         ).mappings().one()
         assert str(batch["household_id"]) == household_id, batch
-        assert str(batch["import_status"]) == "in_review", batch
+        assert str(batch["import_status"]) == "reviewed", batch
         assert batch["processed_at"] is None, batch
 
         line = conn.execute(
