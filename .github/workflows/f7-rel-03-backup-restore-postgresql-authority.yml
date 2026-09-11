@@ -183,7 +183,10 @@ jobs:
               ensure_system_superuser_for_session_runtime,
           )
 
-          engine = create_engine(os.environ["MIGRATION_DATABASE_URL"], future=True)
+          database_url = os.environ["MIGRATION_DATABASE_URL"]
+          if database_url.startswith("postgresql://"):
+              database_url = "postgresql+psycopg://" + database_url[len("postgresql://"):]
+          engine = create_engine(database_url, future=True)
           with engine.begin() as conn:
               result = ensure_system_superuser_for_session_runtime(conn)
               household_count = int(conn.execute(text(
