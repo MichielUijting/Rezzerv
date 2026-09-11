@@ -76,18 +76,27 @@ jobs:
           """
 
           changed = False
-          if new_status not in text:
-              count = text.count(old_status)
+
+          receipt_start = text.index('async function uploadReceiptFile(householdId, file) {')
+          receipt_end = text.index('async function uploadSharedReceiptFile(', receipt_start)
+          receipt_block = text[receipt_start:receipt_end]
+          if 'error.status = response.status' not in receipt_block:
+              count = receipt_block.count(old_status)
               if count != 1:
-                  raise SystemExit(f'Expected exactly one receipt-import error block, found {count}')
-              text = text.replace(old_status, new_status, 1)
+                  raise SystemExit(f'Expected exactly one receipt-import error block inside uploadReceiptFile, found {count}')
+              receipt_block = receipt_block.replace(old_status, new_status, 1)
+              text = text[:receipt_start] + receipt_block + text[receipt_end:]
               changed = True
 
-          if rejection_guard not in text:
-              count = text.count(old_catch)
+          process_start = text.index('  async function processReceiptFileImport(file) {')
+          process_end = text.index('  async function processLandingReceiptFile(file) {', process_start)
+          process_block = text[process_start:process_end]
+          if rejection_guard not in process_block:
+              count = process_block.count(old_catch)
               if count != 1:
-                  raise SystemExit(f'Expected exactly one receipt-file catch block, found {count}')
-              text = text.replace(old_catch, new_catch, 1)
+                  raise SystemExit(f'Expected exactly one receipt-file catch block inside processReceiptFileImport, found {count}')
+              process_block = process_block.replace(old_catch, new_catch, 1)
+              text = text[:process_start] + process_block + text[process_end:]
               changed = True
 
           if changed:
