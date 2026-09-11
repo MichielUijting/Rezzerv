@@ -1,0 +1,385 @@
+name: F7 REL-03 backup restore startup data-integrity authority
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
+    paths:
+      - 'quality/ci/f7_rel_03_backup_restore_contract.json'
+      - 'quality/ci/f7_ci_orchestration_gate_map.json'
+      - 'scripts/ci/validate_f7_rel_03_backup_restore_contract.py'
+      - '.github/workflows/f7-rel-03-backup-restore-postgresql-authority.yml'
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Branch ref that points to the exact candidate SHA
+        required: true
+        default: main
+        type: string
+      candidate_sha:
+        description: Exact candidate commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f7-rel-03-${{ github.event.pull_request.number || inputs.candidate_sha || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backup-restore-startup-integrity:
+    name: F7 REL-03 backup restore startup decision
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rezzerv_rel03_source
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d rezzerv_rel03_source"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      CANDIDATE_REF: ${{ inputs.candidate_ref || github.head_ref }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+      SOURCE_DB: rezzerv_rel03_source
+      RESTORE_DB: rezzerv_rel03_restore
+      MIGRATOR_USER: rezzerv_migrator
+      MIGRATOR_PASSWORD: f7rel03-migrator-ci
+      RUNTIME_USER: rezzerv_app
+      RUNTIME_PASSWORD: f7rel03-runtime-ci
+      BACKEND_IMAGE: rezzerv-rel03-backend:${{ github.run_id }}
+      BACKEND_CONTAINER: f7-rel03-backend-${{ github.run_id }}
+      BACKEND_PORT: '18011'
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test -n "$CANDIDATE_SHA"
+          test "$actual" = "$CANDIDATE_SHA"
+          if [ "$GITHUB_EVENT_NAME" = 'pull_request' ]; then
+            test -n "$CANDIDATE_REF"
+            remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_REF" | awk '{print $1}')"
+            test "$remote_sha" = "$CANDIDATE_SHA"
+          fi
+          echo "F7_REL_03_CANDIDATE_SHA=$actual"
+          echo 'F7_REL_03_CANDIDATE_IDENTITY_GREEN'
+
+      - name: Validate F7 REL-03 contract before execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/validate_f7_rel_03_backup_restore_contract.py
+          python scripts/ci/validate_f7_rel_03_backup_restore_contract.py | tee f7-rel03-contract.log
+          grep -Fx 'F7_REL_03_CONTRACT_GREEN' f7-rel03-contract.log
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          pg_dump --version
+          pg_restore --version
+
+      - name: Build real backend production image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -f backend/Dockerfile -t "$BACKEND_IMAGE" backend
+          docker image inspect "$BACKEND_IMAGE" >/dev/null
+          echo 'F7_REL_03_BACKEND_IMAGE_GREEN'
+
+      - name: Create production-like source database and migrate to repository head
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -v source_db="$SOURCE_DB" \
+            -v migrator="$MIGRATOR_USER" \
+            -v migrator_password="$MIGRATOR_PASSWORD" \
+            -v runtime="$RUNTIME_USER" \
+            -v runtime_password="$RUNTIME_PASSWORD" <<'SQL'
+          CREATE ROLE :"migrator" LOGIN PASSWORD :'migrator_password';
+          CREATE ROLE :"runtime" LOGIN PASSWORD :'runtime_password';
+          ALTER DATABASE :"source_db" OWNER TO :"migrator";
+          GRANT CONNECT ON DATABASE :"source_db" TO :"migrator", :"runtime";
+          SQL
+
+          psql -h 127.0.0.1 -U postgres -d "$SOURCE_DB" -v ON_ERROR_STOP=1 \
+            -v migrator="$MIGRATOR_USER" -v runtime="$RUNTIME_USER" <<'SQL'
+          ALTER SCHEMA public OWNER TO :"migrator";
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM :"runtime";
+          GRANT USAGE, CREATE ON SCHEMA public TO :"migrator";
+          GRANT USAGE ON SCHEMA public TO :"runtime";
+          ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"runtime";
+          ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"runtime";
+          SQL
+
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="postgresql://$RUNTIME_USER:$RUNTIME_PASSWORD@host.docker.internal:5432/$SOURCE_DB" \
+            -e MIGRATION_DATABASE_URL="postgresql://$MIGRATOR_USER:$MIGRATOR_PASSWORD@host.docker.internal:5432/$SOURCE_DB" \
+            -e REZZERV_DATASTORE_POLICY=postgresql-only \
+            -e REZZERV_RECEIPT_STARTUP_REMBG_WARMUP=false \
+            "$BACKEND_IMAGE" \
+            sh -lc 'python -m app.schema_migration_preflight' | tee f7-rel03-source-migration.log
+
+          grep -F "'dialect': 'postgresql'" f7-rel03-source-migration.log
+          PGPASSWORD="$MIGRATOR_PASSWORD" psql -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$SOURCE_DB" -Atqc \
+            "SELECT version_num FROM alembic_version" > f7-rel03-source-head.txt
+          test -s f7-rel03-source-head.txt
+          echo 'F7_REL_03_SOURCE_SCHEMA_GREEN'
+
+      - name: Seed typed integrity probe and capture source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          PGPASSWORD="$MIGRATOR_PASSWORD" psql -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$SOURCE_DB" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE public.f7_rel03_integrity_probe (
+            id uuid PRIMARY KEY,
+            label text NOT NULL,
+            quantity numeric NOT NULL,
+            observed_at timestamptz NOT NULL,
+            payload jsonb NOT NULL,
+            binary_payload bytea NOT NULL
+          );
+          INSERT INTO public.f7_rel03_integrity_probe
+            (id, label, quantity, observed_at, payload, binary_payload)
+          VALUES
+            ('7f703000-0000-4000-8000-000000000003',
+             'Rezzerv REL03 backup restore integrity',
+             12345.678901,
+             '2026-09-12T00:00:00.123456+00',
+             '{"mode":"backup-restore","count":3,"flags":[true,false]}'::jsonb,
+             decode('00ff10207a','hex'));
+          SQL
+
+          cat > f7-rel03-snapshot.sql <<'SQL'
+          SELECT concat_ws('|',
+            (SELECT version_num FROM alembic_version),
+            (SELECT count(*)::text FROM pg_tables WHERE schemaname = 'public'),
+            p.id::text,
+            p.label,
+            p.quantity::text,
+            to_char(p.observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+            p.payload::text,
+            encode(p.binary_payload, 'hex'))
+          FROM public.f7_rel03_integrity_probe AS p
+          WHERE p.id = '7f703000-0000-4000-8000-000000000003';
+          SQL
+
+          SOURCE_SNAPSHOT="$(PGPASSWORD="$MIGRATOR_PASSWORD" psql -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$SOURCE_DB" -Atq -v ON_ERROR_STOP=1 -f f7-rel03-snapshot.sql)"
+          test -n "$SOURCE_SNAPSHOT"
+          printf '%s\n' "$SOURCE_SNAPSHOT" > f7-rel03-source-snapshot.txt
+          SOURCE_SNAPSHOT_SHA256="$(printf '%s' "$SOURCE_SNAPSHOT" | sha256sum | awk '{print $1}')"
+          echo "SOURCE_SNAPSHOT_SHA256=$SOURCE_SNAPSHOT_SHA256" >> "$GITHUB_ENV"
+          echo 'F7_REL_03_SOURCE_DATA_GREEN'
+
+      - name: Create PostgreSQL custom-format backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          PGPASSWORD="$MIGRATOR_PASSWORD" pg_dump \
+            -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$SOURCE_DB" \
+            --format=custom --no-owner --no-acl \
+            --file=f7-rel03.backup
+          test -s f7-rel03.backup
+          pg_restore --list f7-rel03.backup | grep -F 'f7_rel03_integrity_probe'
+          BACKUP_BYTES="$(stat -c '%s' f7-rel03.backup)"
+          test "$BACKUP_BYTES" -gt 1000
+          BACKUP_SHA256="$(sha256sum f7-rel03.backup | awk '{print $1}')"
+          echo "BACKUP_BYTES=$BACKUP_BYTES" >> "$GITHUB_ENV"
+          echo "BACKUP_SHA256=$BACKUP_SHA256" >> "$GITHUB_ENV"
+          echo 'F7_REL_03_BACKUP_CREATED_GREEN'
+
+      - name: Restore backup into fresh database and compare exact snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 <<SQL
+          CREATE DATABASE $RESTORE_DB OWNER $MIGRATOR_USER;
+          GRANT CONNECT ON DATABASE $RESTORE_DB TO $MIGRATOR_USER, $RUNTIME_USER;
+          SQL
+
+          psql -h 127.0.0.1 -U postgres -d "$RESTORE_DB" -v ON_ERROR_STOP=1 \
+            -v migrator="$MIGRATOR_USER" -v runtime="$RUNTIME_USER" <<'SQL'
+          ALTER SCHEMA public OWNER TO :"migrator";
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM :"runtime";
+          GRANT USAGE, CREATE ON SCHEMA public TO :"migrator";
+          GRANT USAGE ON SCHEMA public TO :"runtime";
+          ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"runtime";
+          ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"runtime";
+          SQL
+
+          PGPASSWORD="$MIGRATOR_PASSWORD" pg_restore \
+            -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$RESTORE_DB" \
+            --no-owner --no-acl --exit-on-error \
+            f7-rel03.backup | tee f7-rel03-restore.log
+
+          RESTORE_SNAPSHOT="$(PGPASSWORD="$MIGRATOR_PASSWORD" psql -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$RESTORE_DB" -Atq -v ON_ERROR_STOP=1 -f f7-rel03-snapshot.sql)"
+          SOURCE_SNAPSHOT="$(cat f7-rel03-source-snapshot.txt)"
+          test "$RESTORE_SNAPSHOT" = "$SOURCE_SNAPSHOT"
+          printf '%s\n' "$RESTORE_SNAPSHOT" > f7-rel03-restore-snapshot.txt
+          RESTORE_SNAPSHOT_SHA256="$(printf '%s' "$RESTORE_SNAPSHOT" | sha256sum | awk '{print $1}')"
+          test "$RESTORE_SNAPSHOT_SHA256" = "$SOURCE_SNAPSHOT_SHA256"
+          echo "RESTORE_SNAPSHOT_SHA256=$RESTORE_SNAPSHOT_SHA256" >> "$GITHUB_ENV"
+          echo 'F7_REL_03_RESTORE_GREEN'
+
+      - name: Prove restored Alembic and split-role runtime boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="postgresql://$RUNTIME_USER:$RUNTIME_PASSWORD@host.docker.internal:5432/$RESTORE_DB" \
+            -e MIGRATION_DATABASE_URL="postgresql://$MIGRATOR_USER:$MIGRATOR_PASSWORD@host.docker.internal:5432/$RESTORE_DB" \
+            -e REZZERV_DATASTORE_POLICY=postgresql-only \
+            "$BACKEND_IMAGE" \
+            sh -lc 'python -m app.testing.postgresql_acceptance_foundation' | tee f7-rel03-restored-boundary.log
+          grep -F 'runtime_create=False' f7-rel03-restored-boundary.log
+          grep -F 'migrator_create=True' f7-rel03-restored-boundary.log
+          grep -F 'POSTGRESQL_ACCEPTANCE_FOUNDATION_GREEN' f7-rel03-restored-boundary.log
+          echo 'F7_REL_03_RESTORED_BOUNDARY_GREEN'
+
+      - name: Start real backend against restored database
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d \
+            --name "$BACKEND_CONTAINER" \
+            --add-host=host.docker.internal:host-gateway \
+            -p "$BACKEND_PORT:8000" \
+            -e DATABASE_URL="postgresql://$RUNTIME_USER:$RUNTIME_PASSWORD@host.docker.internal:5432/$RESTORE_DB" \
+            -e MIGRATION_DATABASE_URL="postgresql://$MIGRATOR_USER:$MIGRATOR_PASSWORD@host.docker.internal:5432/$RESTORE_DB" \
+            -e REZZERV_DATASTORE_POLICY=postgresql-only \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO=false \
+            -e REZZERV_RECEIPT_STARTUP_OCR_WARMUP=false \
+            -e REZZERV_RECEIPT_STARTUP_REMBG_WARMUP=false \
+            -e REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP=false \
+            "$BACKEND_IMAGE" >/tmp/f7-rel03-backend-id.txt
+
+          started=false
+          for attempt in $(seq 1 90); do
+            if curl -fsS "http://127.0.0.1:$BACKEND_PORT/openapi.json" -o f7-rel03-openapi.json; then
+              started=true
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' "$BACKEND_CONTAINER" 2>/dev/null || true)" != 'true' ]; then
+              docker logs "$BACKEND_CONTAINER" || true
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$started" = true
+          test -s f7-rel03-openapi.json
+          grep -F '"openapi"' f7-rel03-openapi.json
+          docker logs "$BACKEND_CONTAINER" > f7-rel03-backend.log 2>&1 || true
+          echo 'BACKEND_HTTP_PROBE=200' >> "$GITHUB_ENV"
+          echo 'F7_REL_03_STARTUP_GREEN'
+
+      - name: Prove data integrity survives backend startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          POST_START_SNAPSHOT="$(PGPASSWORD="$MIGRATOR_PASSWORD" psql -h 127.0.0.1 -U "$MIGRATOR_USER" -d "$RESTORE_DB" -Atq -v ON_ERROR_STOP=1 -f f7-rel03-snapshot.sql)"
+          SOURCE_SNAPSHOT="$(cat f7-rel03-source-snapshot.txt)"
+          test "$POST_START_SNAPSHOT" = "$SOURCE_SNAPSHOT"
+          printf '%s\n' "$POST_START_SNAPSHOT" > f7-rel03-post-start-snapshot.txt
+          POST_START_SNAPSHOT_SHA256="$(printf '%s' "$POST_START_SNAPSHOT" | sha256sum | awk '{print $1}')"
+          test "$POST_START_SNAPSHOT_SHA256" = "$SOURCE_SNAPSHOT_SHA256"
+          test "$POST_START_SNAPSHOT_SHA256" = "$RESTORE_SNAPSHOT_SHA256"
+          echo "POST_START_SNAPSHOT_SHA256=$POST_START_SNAPSHOT_SHA256" >> "$GITHUB_ENV"
+          echo 'F7_REL_03_DATA_INTEGRITY_GREEN'
+
+      - name: Write machine-readable evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          evidence = {
+              "schema_version": 1,
+              "authority_id": "F7-REL-03",
+              "candidate_sha": os.environ["CANDIDATE_SHA"],
+              "postgresql_major": 17,
+              "source_database": os.environ["SOURCE_DB"],
+              "restore_database": os.environ["RESTORE_DB"],
+              "backup_sha256": os.environ["BACKUP_SHA256"],
+              "backup_bytes": int(os.environ["BACKUP_BYTES"]),
+              "source_snapshot_sha256": os.environ["SOURCE_SNAPSHOT_SHA256"],
+              "restore_snapshot_sha256": os.environ["RESTORE_SNAPSHOT_SHA256"],
+              "post_start_snapshot_sha256": os.environ["POST_START_SNAPSHOT_SHA256"],
+              "backend_http_probe": int(os.environ["BACKEND_HTTP_PROBE"]),
+              "dump_retained": False,
+              "result": "green",
+          }
+          Path("f7-rel03-evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+          PY
+          test "$(python -c 'import json; print(json.load(open("f7-rel03-evidence.json"))["result"])')" = green
+          echo 'F7_REL_03_BACKUP_RESTORE_GATE_GREEN'
+
+      - name: Revalidate F7 REL-03 governance after proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_rel_03_backup_restore_contract.py | tee f7-rel03-contract-final.log
+          grep -Fx 'F7_REL_03_CONTRACT_GREEN' f7-rel03-contract-final.log
+
+      - name: Remove live backend and backup payload
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f "$BACKEND_CONTAINER" >/dev/null 2>&1 || true
+          rm -f f7-rel03.backup
+
+      - name: Upload F7 REL-03 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-rel-03-backup-restore-${{ github.run_id }}
+          path: |
+            quality/ci/f7_rel_03_backup_restore_contract.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-rel03-contract.log
+            f7-rel03-contract-final.log
+            f7-rel03-source-migration.log
+            f7-rel03-source-head.txt
+            f7-rel03-source-snapshot.txt
+            f7-rel03-restore-snapshot.txt
+            f7-rel03-post-start-snapshot.txt
+            f7-rel03-restored-boundary.log
+            f7-rel03-backend.log
+            f7-rel03-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
