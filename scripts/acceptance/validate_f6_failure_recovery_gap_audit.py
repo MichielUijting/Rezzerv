@@ -24,7 +24,7 @@ EXPECTED_CATEGORIES = {
 }
 EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
-EXPECTED_COUNTS = {"covered": 33, "partial": 52, "gap": 32, "na": 23}
+EXPECTED_COUNTS = {"covered": 39, "partial": 52, "gap": 26, "na": 23}
 
 SHARED_KASSA_WORKFLOW = ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
 F6_02_WORKFLOW = ".github/workflows/f6-02-temporary-failure-safe-retry-postgresql-validation.yml"
@@ -36,6 +36,11 @@ F6_03_WORKFLOW = ".github/workflows/f6-03-invalid-import-fail-closed-postgresql-
 F6_03_PROOF_RUN = "34625163561"
 F6_03_PROOF_JOB = "103348569125"
 F6_03_PROOF_SHA = "309e113a8e4cfb550d54b28d78861029f66861d6"
+F6_04_SPEC = "frontend/tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js"
+F6_04_WORKFLOW = ".github/workflows/f6-04-interrupted-mutation-safe-resume-postgresql-validation.yml"
+F6_04_PROOF_RUN = "34629433456"
+F6_04_PROOF_JOB = "103362376024"
+F6_04_PROOF_SHA = "da0d94c74cd02b3dbc658ab9713ddf18bdd6f7ce"
 MIGRATED_EVIDENCE = {
     ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
     ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
@@ -267,6 +272,29 @@ def main() -> None:
         require(F6_03_PROOF_RUN in proof_note, f"f6_03_{row['id']}_proof_run_registered")
         require(F6_03_PROOF_JOB in proof_note, f"f6_03_{row['id']}_proof_job_registered")
         require(F6_03_PROOF_SHA in proof_note, f"f6_03_{row['id']}_candidate_registered")
+
+    f6_04_scope = {"P0-ONBOARDING", "P0-SETTINGS-PROJECTION", "P0-INVENTORY"}
+    f6_04_rows = [row for row in scenarios if row["id"] in f6_04_scope]
+    require(len(f6_04_rows) == 3, "f6_04_exact_three_scope_scenarios")
+    require(
+        all(
+            row["assessments"]["interrupted_flow"] == "covered"
+            and row["assessments"]["safe_resume"] == "covered"
+            for row in f6_04_rows
+        ),
+        "f6_04_interrupted_mutation_scope_fully_covered",
+    )
+    require((ROOT / F6_04_SPEC).exists(), "f6_04_browser_authority_registered")
+    require((ROOT / F6_04_WORKFLOW).exists(), "f6_04_postgresql_workflow_registered")
+    for row in f6_04_rows:
+        evidence = set(row.get("evidence") or [])
+        require(F6_04_SPEC in evidence, f"f6_04_{row['id']}_spec_registered")
+        require(F6_04_WORKFLOW in evidence, f"f6_04_{row['id']}_workflow_registered")
+        interrupted_note = row.get("notes", {}).get("interrupted_flow", "")
+        safe_resume_note = row.get("notes", {}).get("safe_resume", "")
+        for marker, value in (("proof_run", F6_04_PROOF_RUN), ("proof_job", F6_04_PROOF_JOB), ("candidate", F6_04_PROOF_SHA)):
+            require(value in interrupted_note, f"f6_04_{row['id']}_interrupted_{marker}_registered")
+            require(value in safe_resume_note, f"f6_04_{row['id']}_resume_{marker}_registered")
 
     account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
     require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")

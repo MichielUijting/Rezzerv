@@ -19,6 +19,13 @@ The one-shot marker is created atomically in /tmp so retry behaviour remains
 deterministic even if the application serves requests from more than one
 process. Production defaults never enable these hooks.
 
+F6-04 uses a separate one-shot target list for interrupted mutations. It can
+interrupt Wat Inhuis onboarding after product configuration has been written
+but before the onboarding step advances, interrupt Settings capability
+expansion after configuration changes but before use-case activation, and make
+the existing Inventory sentinel fail once before allowing the visible retry.
+All writes remain inside their production PostgreSQL transactions.
+
 Read-only proof queries are never intercepted.
 """
 from __future__ import annotations
@@ -27,6 +34,11 @@ import hashlib
 import os
 from collections.abc import Mapping
 from typing import Any
+
+from app.services.f6_interrupted_mutation_injection import (
+    f6_04_interruption_enabled,
+    inject_f6_04_interruption_once,
+)
 
 F6_SQL_FAILURE_SENTINEL = "F6-01-CONTROLLED-500"
 F6_SQL_FAILURE_ENV = "REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION"
@@ -116,11 +128,15 @@ def _parameter_value(name: str, multiparams: Any, params: Any) -> str:
     return ""
 
 
+def _normalized_sql(clauseelement: Any) -> str:
+    sql_source = clauseelement if clauseelement is not None else ""
+    return " ".join(str(sql_source).strip().upper().split())
+
+
 def _is_receipt_finalization_update(clauseelement: Any, multiparams: Any, params: Any) -> bool:
     """Match the final batch timestamp write, not the earlier status write."""
 
-    sql_source = clauseelement if clauseelement is not None else ""
-    sql = " ".join(str(sql_source).strip().upper().split())
+    sql = _normalized_sql(clauseelement)
     if sql != _RECEIPT_FINALIZATION_SQL:
         return False
 
@@ -130,8 +146,7 @@ def _is_receipt_finalization_update(clauseelement: Any, multiparams: Any, params
 def _is_kassa_approval_unpack_batch_insert(clauseelement: Any, multiparams: Any, params: Any) -> bool:
     """Match only the receipt-backed Uitpakken batch for the configured F6 receipt."""
 
-    sql_source = clauseelement if clauseelement is not None else ""
-    sql = " ".join(str(sql_source).strip().upper().split())
+    sql = _normalized_sql(clauseelement)
     if not sql.startswith("INSERT INTO PURCHASE_IMPORT_BATCHES"):
         return False
     if "'RECEIPT'" not in sql:
@@ -153,6 +168,26 @@ def _is_unpacking_finalization_update(clauseelement: Any, multiparams: Any, para
     target_batch_id = str(os.getenv(F6_UNPACKING_BATCH_ID_ENV, "") or "").strip()
     return any(
         str(mapping.get("id") or "").strip() == target_batch_id
+        for mapping in _parameter_mappings(multiparams, params)
+    )
+
+
+def _is_f6_04_onboarding_advance(clauseelement: Any, multiparams: Any, params: Any) -> bool:
+    sql = _normalized_sql(clauseelement)
+    if not sql.startswith("UPDATE HOUSEHOLD_ONBOARDING SET ONBOARDING_STATUS = 'IN_PROGRESS', ONBOARDING_STEP = :SHARED_HOUSEHOLD_MINIMUM_STEP"):
+        return False
+    return any(
+        str(mapping.get("shared_household_minimum_step") or "").strip() == "shared_household_minimum"
+        for mapping in _parameter_mappings(multiparams, params)
+    )
+
+
+def _is_f6_04_settings_activation(clauseelement: Any, multiparams: Any, params: Any) -> bool:
+    sql = _normalized_sql(clauseelement)
+    if not sql.startswith("INSERT INTO HOUSEHOLD_PRODUCT_USE_CASES"):
+        return False
+    return any(
+        str(mapping.get("use_case") or "").strip().lower() == "wat_inhuis"
         for mapping in _parameter_mappings(multiparams, params)
     )
 
@@ -203,6 +238,14 @@ def inject_f6_controlled_failure_before_execute(conn, clauseelement, multiparams
     if not _is_mutating_statement(clauseelement):
         return clauseelement, multiparams, params
 
+    if f6_04_interruption_enabled("onboarding") and _is_f6_04_onboarding_advance(clauseelement, multiparams, params):
+        inject_f6_04_interruption_once("onboarding")
+        return clauseelement, multiparams, params
+
+    if f6_04_interruption_enabled("settings_projection") and _is_f6_04_settings_activation(clauseelement, multiparams, params):
+        inject_f6_04_interruption_once("settings_projection")
+        return clauseelement, multiparams, params
+
     if _kassa_approval_enabled() and _is_kassa_approval_unpack_batch_insert(clauseelement, multiparams, params):
         target_receipt_id = str(os.getenv(F6_KASSA_RECEIPT_ID_ENV, "") or "").strip()
         _raise_failure(
@@ -240,6 +283,9 @@ def inject_f6_controlled_failure_before_execute(conn, clauseelement, multiparams
         return clauseelement, multiparams, params
 
     if _contains_sentinel(params) or _contains_sentinel(multiparams):
+        if f6_04_interruption_enabled("inventory"):
+            inject_f6_04_interruption_once("inventory")
+            return clauseelement, multiparams, params
         raise RuntimeError("F6-01 controlled PostgreSQL failure injection")
 
     return clauseelement, multiparams, params

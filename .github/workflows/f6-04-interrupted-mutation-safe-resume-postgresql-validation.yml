@@ -1,0 +1,397 @@
+name: F6-04 interrupted mutation safe resume PostgreSQL validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/f6_failure_injection.py'
+      - 'backend/app/services/f6_interrupted_mutation_injection.py'
+      - 'backend/app/services/household_onboarding_service.py'
+      - 'backend/app/services/household_product_configuration_service.py'
+      - 'backend/app/services/household_product_use_case_service.py'
+      - 'backend/app/api/household_onboarding_routes.py'
+      - 'backend/app/api/household_capability_expansion_routes.py'
+      - 'backend/app/main.py'
+      - 'backend/tests/f6_04_interrupted_mutation_verify.py'
+      - 'backend/tests/f6_inventory_controlled_5xx_fixture.py'
+      - 'backend/tests/p0_inventory_correction_fixture.py'
+      - 'frontend/src/features/onboarding/**'
+      - 'frontend/src/features/settings/SettingsCapabilitiesPage.jsx'
+      - 'frontend/tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/f6-04-interrupted-mutation-safe-resume-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f6-04-interrupted-mutation-safe-resume-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  f6-04-authority:
+    name: F6-04 Onboarding Settings Inventory interrupted mutation authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      COMPOSE_PROFILES: postgresql
+      COMPOSE_PROJECT_NAME: f604${{ github.run_id }}
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic F6-04 identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          onboarding_password="F604-Onboarding-${suffix}-Pass!"
+          settings_password="F604-Settings-${suffix}-Pass!"
+          echo "PLAYWRIGHT_F6_04_ONBOARDING_EMAIL=f6-04-onboarding-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_ONBOARDING_PASSWORD=$onboarding_password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_SETTINGS_EMAIL=f6-04-settings-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_SETTINGS_PASSWORD=$settings_password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_SETTINGS_HOUSEHOLD=F6-04 Settings ${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$onboarding_password"
+          echo "::add-mask::$settings_password"
+          echo 'F6_04_IDENTITIES_GREEN'
+
+      - name: Guard F6-04 browser authority against shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'F6-04 authority mag kernmutaties niet mocken of via browserrequest uitvoeren.' >&2
+            exit 1
+          fi
+          grep -F "getByTestId('wat-inhuis-finish').click()" "$spec"
+          grep -F "getByTestId('capability-expansion-submit').click()" "$spec"
+          grep -F "name: 'Opslaan', exact: true" "$spec"
+          grep -F 'F6_04_ONBOARDING_INTERRUPTED_BROWSER_GREEN' "$spec"
+          grep -F 'F6_04_ONBOARDING_SAFE_RESUME_BROWSER_GREEN' "$spec"
+          grep -F 'F6_04_SETTINGS_INTERRUPTED_BROWSER_GREEN' "$spec"
+          grep -F 'F6_04_SETTINGS_SAFE_RESUME_BROWSER_GREEN' "$spec"
+          grep -F 'F6_04_INVENTORY_INTERRUPTED_BROWSER_GREEN' "$spec"
+          grep -F 'F6_04_INVENTORY_SAFE_RESUME_BROWSER_GREEN' "$spec"
+          echo 'F6_04_NO_CORE_SHORTCUTS_GREEN'
+
+      - name: Compile F6-04 authority sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            backend/app/services/f6_interrupted_mutation_injection.py \
+            backend/app/services/f6_failure_injection.py \
+            backend/tests/f6_04_interrupted_mutation_verify.py \
+            backend/tests/f6_inventory_controlled_5xx_fixture.py
+          node --check frontend/tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js
+          node --check frontend/playwright.fullstack.config.js
+          echo 'F6_04_AUTHORITY_COMPILE_GREEN'
+
+      - name: Configure one-shot interruption hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > f6-04-compose.override.yml <<'YAML'
+          services:
+            backend:
+              environment:
+                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
+                REZZERV_TEST_ONLY_F6_INTERRUPTED_MUTATION_ONCE: "1"
+                REZZERV_TEST_ONLY_F6_INTERRUPTED_MUTATION_TARGETS: "onboarding,settings_projection,inventory"
+          YAML
+          echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.postgresql.yml:f6-04-compose.override.yml' >> "$GITHUB_ENV"
+          echo 'F6_04_INTERRUPTION_ENV_CONFIGURED_GREEN'
+
+      - name: Build application images and prepare Playwright once
+        shell: bash
+        run: |
+          set -euo pipefail
+          export COMPOSE_FILE='docker-compose.yml:docker-compose.postgresql.yml:f6-04-compose.override.yml'
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+          echo 'F6_04_DOCKER_BUILD_ONCE_GREEN'
+          docker pull "$PLAYWRIGHT_IMAGE"
+          echo 'F6_04_PLAYWRIGHT_PULL_ONCE_GREEN'
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" bash -lc 'npm ci'
+          echo 'F6_04_NPM_CI_ONCE_GREEN'
+
+      - name: Start real frontend backend and PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose up -d --no-build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              echo 'F6_04_BACKEND_HEALTH_GREEN'
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove PostgreSQL boundary and active F6-04 hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -u - <<'PY' | tee f6-04-runtime-boundary.log
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.f6_failure_injection import _enabled
+          from app.services.f6_interrupted_mutation_injection import f6_04_interruption_enabled
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          assert _enabled() is True
+          for target in ('onboarding', 'settings_projection', 'inventory'):
+              assert f6_04_interruption_enabled(target) is True, target
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          print(f'runtime_user={current_user}')
+          print('F6_04_INTERRUPTION_HOOKS_ENABLED_GREEN')
+          print('F6_04_POSTGRESQL_RUNTIME_GREEN')
+          PY
+          grep -F 'F6_04_INTERRUPTION_HOOKS_ENABLED_GREEN' f6-04-runtime-boundary.log
+          grep -F 'F6_04_POSTGRESQL_RUNTIME_GREEN' f6-04-runtime-boundary.log
+
+      - name: Run Onboarding interrupted mutation through real browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_04_ONBOARDING_EMAIL="$PLAYWRIGHT_F6_04_ONBOARDING_EMAIL" \
+            -e PLAYWRIGHT_F6_04_ONBOARDING_PASSWORD="$PLAYWRIGHT_F6_04_ONBOARDING_PASSWORD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --retries=0 --grep 'F6-04 Onboarding interrupted mutation' | tee /work/f6-04-onboarding-interrupted-browser.log"
+          grep -F 'F6_04_ONBOARDING_INTERRUPTED_BROWSER_GREEN' frontend/f6-04-onboarding-interrupted-browser.log
+
+      - name: Prove Onboarding has no half state after interruption
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_04_ONBOARDING_EMAIL="$PLAYWRIGHT_F6_04_ONBOARDING_EMAIL" \
+            -e PYTHONPATH=/app backend \
+            python -u /app/tests/f6_04_interrupted_mutation_verify.py onboarding_rollback \
+            | tee f6-04-onboarding-rollback.log
+          grep -F 'F6_04_ONBOARDING_ROLLBACK_GREEN' f6-04-onboarding-rollback.log
+
+      - name: Resume Onboarding through a new real browser action
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_04_ONBOARDING_EMAIL="$PLAYWRIGHT_F6_04_ONBOARDING_EMAIL" \
+            -e PLAYWRIGHT_F6_04_ONBOARDING_PASSWORD="$PLAYWRIGHT_F6_04_ONBOARDING_PASSWORD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --retries=0 --grep 'F6-04 Onboarding resumes' | tee /work/f6-04-onboarding-resume-browser.log"
+          grep -F 'F6_04_ONBOARDING_SAFE_RESUME_BROWSER_GREEN' frontend/f6-04-onboarding-resume-browser.log
+
+      - name: Prove Onboarding exact safe-resume state in PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_04_ONBOARDING_EMAIL="$PLAYWRIGHT_F6_04_ONBOARDING_EMAIL" \
+            -e PYTHONPATH=/app backend \
+            python -u /app/tests/f6_04_interrupted_mutation_verify.py onboarding_success \
+            | tee f6-04-onboarding-success.log
+          grep -F 'F6_04_ONBOARDING_SUCCESS_GREEN' f6-04-onboarding-success.log
+
+      - name: Run Settings projection interruption through real browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_04_SETTINGS_EMAIL="$PLAYWRIGHT_F6_04_SETTINGS_EMAIL" \
+            -e PLAYWRIGHT_F6_04_SETTINGS_PASSWORD="$PLAYWRIGHT_F6_04_SETTINGS_PASSWORD" \
+            -e PLAYWRIGHT_F6_04_SETTINGS_HOUSEHOLD="$PLAYWRIGHT_F6_04_SETTINGS_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --retries=0 --grep 'F6-04 Settings projection interruption' | tee /work/f6-04-settings-interrupted-browser.log"
+          grep -F 'F6_04_SETTINGS_INTERRUPTED_BROWSER_GREEN' frontend/f6-04-settings-interrupted-browser.log
+
+      - name: Prove Settings projection has no half state after interruption
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_04_SETTINGS_EMAIL="$PLAYWRIGHT_F6_04_SETTINGS_EMAIL" \
+            -e PYTHONPATH=/app backend \
+            python -u /app/tests/f6_04_interrupted_mutation_verify.py settings_rollback \
+            | tee f6-04-settings-rollback.log
+          grep -F 'F6_04_SETTINGS_ROLLBACK_GREEN' f6-04-settings-rollback.log
+
+      - name: Resume Settings projection through a new real browser action
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_04_SETTINGS_EMAIL="$PLAYWRIGHT_F6_04_SETTINGS_EMAIL" \
+            -e PLAYWRIGHT_F6_04_SETTINGS_PASSWORD="$PLAYWRIGHT_F6_04_SETTINGS_PASSWORD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --retries=0 --grep 'F6-04 Settings projection resumes' | tee /work/f6-04-settings-resume-browser.log"
+          grep -F 'F6_04_SETTINGS_SAFE_RESUME_BROWSER_GREEN' frontend/f6-04-settings-resume-browser.log
+
+      - name: Prove Settings projection exact safe-resume state in PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_04_SETTINGS_EMAIL="$PLAYWRIGHT_F6_04_SETTINGS_EMAIL" \
+            -e PYTHONPATH=/app backend \
+            python -u /app/tests/f6_04_interrupted_mutation_verify.py settings_success \
+            | tee f6-04-settings-success.log
+          grep -F 'F6_04_SETTINGS_SUCCESS_GREEN' f6-04-settings-success.log
+
+      - name: Prepare deterministic Inventory state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T -e PYTHONPATH=/app backend \
+            python /app/tests/f6_inventory_controlled_5xx_fixture.py prepare \
+            | tee f6-04-inventory-fixture.log
+          grep -F 'F6_INVENTORY_FIXTURE_GREEN' f6-04-inventory-fixture.log
+          fixture_json="$(grep '^F6_INVENTORY_FIXTURE=' f6-04-inventory-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          password="$(jq -r '.password' <<<"$fixture_json")"
+          echo "PLAYWRIGHT_F6_04_INVENTORY_EMAIL=$(jq -r '.email' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_INVENTORY_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_INVENTORY_ARTICLE_ID=$(jq -r '.article_id' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_INVENTORY_INVENTORY_ID=$(jq -r '.inventory_id' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_INVENTORY_INITIAL_QUANTITY=$(jq -r '.initial_quantity' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_INVENTORY_TARGET_QUANTITY=$(jq -r '.target_quantity' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_04_INVENTORY_NOTE=$(jq -r '.failure_note' <<<"$fixture_json")" >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+          echo 'F6_04_INVENTORY_FIXTURE_GREEN'
+
+      - name: Run Inventory interruption through real browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_EMAIL="$PLAYWRIGHT_F6_04_INVENTORY_EMAIL" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_PASSWORD="$PLAYWRIGHT_F6_04_INVENTORY_PASSWORD" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_ARTICLE_ID="$PLAYWRIGHT_F6_04_INVENTORY_ARTICLE_ID" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_INVENTORY_ID="$PLAYWRIGHT_F6_04_INVENTORY_INVENTORY_ID" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_INITIAL_QUANTITY="$PLAYWRIGHT_F6_04_INVENTORY_INITIAL_QUANTITY" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_TARGET_QUANTITY="$PLAYWRIGHT_F6_04_INVENTORY_TARGET_QUANTITY" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_NOTE="$PLAYWRIGHT_F6_04_INVENTORY_NOTE" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --retries=0 --grep 'F6-04 Inventory interruption' | tee /work/f6-04-inventory-interrupted-browser.log"
+          grep -F 'F6_04_INVENTORY_INTERRUPTED_BROWSER_GREEN' frontend/f6-04-inventory-interrupted-browser.log
+
+      - name: Prove Inventory has no half state after interruption
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T -e PYTHONPATH=/app backend \
+            python -u /app/tests/f6_04_interrupted_mutation_verify.py inventory_rollback \
+            | tee f6-04-inventory-rollback.log
+          grep -F 'F6_04_INVENTORY_ROLLBACK_GREEN' f6-04-inventory-rollback.log
+
+      - name: Resume Inventory through the same visible correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_EMAIL="$PLAYWRIGHT_F6_04_INVENTORY_EMAIL" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_PASSWORD="$PLAYWRIGHT_F6_04_INVENTORY_PASSWORD" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_ARTICLE_ID="$PLAYWRIGHT_F6_04_INVENTORY_ARTICLE_ID" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_INVENTORY_ID="$PLAYWRIGHT_F6_04_INVENTORY_INVENTORY_ID" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_TARGET_QUANTITY="$PLAYWRIGHT_F6_04_INVENTORY_TARGET_QUANTITY" \
+            -e PLAYWRIGHT_F6_04_INVENTORY_NOTE="$PLAYWRIGHT_F6_04_INVENTORY_NOTE" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-04-interrupted-mutation-safe-resume.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --retries=0 --grep 'F6-04 Inventory resumes' | tee /work/f6-04-inventory-resume-browser.log"
+          grep -F 'F6_04_INVENTORY_SAFE_RESUME_BROWSER_GREEN' frontend/f6-04-inventory-resume-browser.log
+
+      - name: Prove Inventory exact safe-resume state in PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T -e PYTHONPATH=/app backend \
+            python -u /app/tests/f6_04_interrupted_mutation_verify.py inventory_success \
+            | tee f6-04-inventory-success.log
+          grep -F 'F6_04_INVENTORY_SUCCESS_GREEN' f6-04-inventory-success.log
+
+      - name: Prove all three interruptions were actually injected
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose logs --no-color backend | tee f6-04-backend.log
+          grep -F 'F6-04-INTERRUPTED-MUTATION: target=onboarding' f6-04-backend.log
+          grep -F 'F6-04-INTERRUPTED-MUTATION: target=settings_projection' f6-04-backend.log
+          grep -F 'F6-04-INTERRUPTED-MUTATION: target=inventory' f6-04-backend.log
+          echo 'F6_04_THREE_INTERRUPTION_MARKERS_GREEN'
+
+      - name: F6-04 shared authority gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in \
+            F6_04_ONBOARDING_ROLLBACK_GREEN \
+            F6_04_ONBOARDING_SUCCESS_GREEN \
+            F6_04_SETTINGS_ROLLBACK_GREEN \
+            F6_04_SETTINGS_SUCCESS_GREEN \
+            F6_04_INVENTORY_ROLLBACK_GREEN \
+            F6_04_INVENTORY_SUCCESS_GREEN; do
+            grep -R -F "$marker" f6-04-*.log >/dev/null
+          done
+          echo 'F6_04_INTERRUPTED_MUTATION_SAFE_RESUME_POSTGRESQL_GREEN'
+
+      - name: Upload F6-04 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-04-interrupted-mutation-safe-resume-evidence
+          path: |
+            f6-04-*.log
+            frontend/f6-04-*.log
+            frontend/f6-04-*-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend || true
+          docker compose logs --no-color --tail=200 frontend || true
+
+      - name: Stop F6-04 stack
+        if: always()
+        shell: bash
+        run: docker compose down -v --remove-orphans || true
