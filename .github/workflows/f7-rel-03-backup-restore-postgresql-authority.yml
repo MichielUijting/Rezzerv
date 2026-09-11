@@ -197,8 +197,11 @@ jobs:
               ), {"email": SUPERGEBRUIKER_EMAIL}).scalar_one())
               platform_role_count = int(conn.execute(text(
                   "SELECT COUNT(*) FROM auth_platform_user_roles "
-                  "WHERE user_id = :user_id AND role_key = 'platform.superuser' AND active IS TRUE"
-              ), {"user_id": SUPERGEBRUIKER_EMAIL}).scalar_one())
+                  "WHERE user_id = :user_id AND role_key = :role_key AND active IS TRUE"
+              ), {
+                  "user_id": SUPERGEBRUIKER_EMAIL,
+                  "role_key": "platform.superuser",
+              }).scalar_one())
               membership_count = int(conn.execute(text(
                   "SELECT COUNT(*) FROM household_memberships "
                   "WHERE CAST(household_id AS TEXT) = :household_id "
