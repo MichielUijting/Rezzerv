@@ -56,11 +56,14 @@ jobs:
           grep -Fx 'PASS f7_01_gate_taxonomy_complete' f7-01-ci-orchestration-audit.log
           grep -Fx 'PASS f7_01_existing_shared_runners_mapped' f7-01-ci-orchestration-audit.log
           grep -Fx 'PASS f7_01_candidate_identity_contracts_present' f7-01-ci-orchestration-audit.log
-          grep -Fx 'PASS f7_01_definitive_proof_registered' f7-01-ci-orchestration-audit.log
+          grep -Fx 'PASS f7_01_fallback_governance_audited' f7-01-ci-orchestration-audit.log
           grep -F 'PASS f7_01_residual_backlog_explicit count=' f7-01-ci-orchestration-audit.log
           grep -Fx 'F7_01_SHARED_CLUSTERS=5' f7-01-ci-orchestration-audit.log
           grep -Fx 'F7_01_SHARED_AUTHORITIES=16' f7-01-ci-orchestration-audit.log
-          grep -Fx 'F7_01_LEGACY_FALLBACKS=16' f7-01-ci-orchestration-audit.log
+          grep -Fx 'F7_01_FALLBACK_REFERENCES=16' f7-01-ci-orchestration-audit.log
+          grep -Fx 'F7_01_MANUAL_FALLBACKS=14' f7-01-ci-orchestration-audit.log
+          grep -Fx 'F7_01_STALE_FALLBACK_REFERENCES=2' f7-01-ci-orchestration-audit.log
+          grep -Fx 'F7_01_DUPLICATE_PR_FALLBACKS=0' f7-01-ci-orchestration-audit.log
           grep -Fx 'F7_01_CI_ORCHESTRATION_AUDIT_GREEN' f7-01-ci-orchestration-audit.log
 
       - name: Write F7-01 audit evidence summary
@@ -73,7 +76,10 @@ jobs:
             echo "validator=scripts/ci/validate_f7_ci_orchestration_gate_map.py"
             echo "shared_clusters=5"
             echo "shared_authorities=16"
-            echo "legacy_fallbacks=16"
+            echo "fallback_references=16"
+            echo "manual_fallbacks=14"
+            echo "stale_fallback_references=2"
+            echo "duplicate_pr_fallbacks=0"
             echo "gate_order=pr_fast_regression,full_regression,deep_nightly,release_acceptance"
           } > f7-01-ci-orchestration-evidence.txt
 
