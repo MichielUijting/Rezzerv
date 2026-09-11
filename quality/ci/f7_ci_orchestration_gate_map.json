@@ -30,19 +30,25 @@
           "id": "TP-CI-02",
           "manifest": "quality/ci/tp_ci_02_kassa_shared_stack_paths.json",
           "authorities": ["p0_kassa", "f6_kassa"],
-          "legacy_fallbacks": 2
+          "fallback_references": 2,
+          "existing_manual_fallbacks": 0,
+          "stale_fallback_references": 2
         },
         {
           "id": "TP-CI-03",
           "manifest": "quality/ci/tp_ci_03_account_authorization_shared_stack_paths.json",
           "authorities": ["p0_account_session", "p0_authorization_isolation"],
-          "legacy_fallbacks": 2
+          "fallback_references": 2,
+          "existing_manual_fallbacks": 2,
+          "stale_fallback_references": 0
         },
         {
           "id": "TP-CI-04",
           "manifest": "quality/ci/tp_ci_04_inventory_shared_stack_paths.json",
           "authorities": ["p0_inventory", "p0_almost_out", "f6_inventory"],
-          "legacy_fallbacks": 3
+          "fallback_references": 3,
+          "existing_manual_fallbacks": 3,
+          "stale_fallback_references": 0
         },
         {
           "id": "TP-CI-05",
@@ -54,7 +60,9 @@
             "p0_receipt_nonphysical",
             "f6_receipt"
           ],
-          "legacy_fallbacks": 5
+          "fallback_references": 5,
+          "existing_manual_fallbacks": 5,
+          "stale_fallback_references": 0
         },
         {
           "id": "TP-CI-07",
@@ -65,9 +73,34 @@
             "p0_platform_authority",
             "p0_unpacking"
           ],
-          "legacy_fallbacks": 4
+          "fallback_references": 4,
+          "existing_manual_fallbacks": 4,
+          "stale_fallback_references": 0
         }
       ],
+      "fallback_governance": {
+        "manual_only_workflows": [
+          ".github/workflows/p0-account-session-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-authorization-isolation-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml",
+          ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml",
+          ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-receipt-nonphysical-fullstack-postgresql-validation.yml",
+          ".github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml",
+          ".github/workflows/p0-onboarding-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml",
+          ".github/workflows/p0-unpacking-fullstack-postgresql-validation.yml"
+        ],
+        "stale_references": [
+          ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml",
+          ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml"
+        ],
+        "duplicate_pr_fallbacks": []
+      },
       "residuals": [
         {
           "id": "F7-PR-01",
@@ -77,7 +110,7 @@
         {
           "id": "F7-PR-02",
           "status": "open",
-          "description": "Sixteen individual heavy-workflow fallbacks still coexist with the five shared-stack clusters; intentional fallback versus duplicate automatic execution is not centrally governed."
+          "description": "Fourteen existing heavy-workflow fallbacks are correctly manual-only; two deleted Kassa fallback paths remain as stale references in TP-CI-02 and need central cleanup/governance."
         }
       ]
     },
@@ -169,18 +202,19 @@
     "delta_planner_policy": "fail open on uncertainty; synchronize compares only newly pushed delta; non-synchronize/manual paths run requested authorities",
     "shared_stack_manifest_count": 5,
     "shared_stack_authority_count": 16,
-    "legacy_fallback_workflow_count": 16,
+    "fallback_reference_count": 16,
+    "existing_manual_fallback_workflow_count": 14,
+    "stale_fallback_reference_count": 2,
+    "duplicate_pr_fallback_workflow_count": 0,
     "candidate_identity_assessment": "strong in the audited shared runners and named full/release workflows; no cross-workflow aggregate candidate contract yet",
     "evidence_assessment": "per-workflow evidence exists, but naming, retention and aggregate decision semantics are heterogeneous"
   },
   "f7_01_exit": {
     "gate_taxonomy_recorded": true,
     "existing_shared_runners_mapped": true,
+    "fallback_governance_audited": true,
     "residual_backlog_explicit": true,
     "behavior_changed": false,
-    "proof_run": "34637965969",
-    "proof_job": "103390391583",
-    "proof_sha": "fd7cc8d930763b9ebb643b8be5976f22b590a403",
     "next_slice": "F7-02"
   }
 }
