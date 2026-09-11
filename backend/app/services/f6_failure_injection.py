@@ -177,13 +177,21 @@ def _should_inject_now(key: str) -> bool:
     return True
 
 
-def _raise_failure(*, key: str, controlled_marker: str, temporary_marker: str, controlled_message: str, temporary_message: str) -> bool:
+def _raise_failure(
+    *,
+    key: str,
+    controlled_marker: str,
+    temporary_marker: str,
+    controlled_log_message: str,
+    controlled_message: str,
+    temporary_message: str,
+) -> bool:
     if not _should_inject_now(key):
         return False
     if _temporary_failure_once_enabled():
         print(f"{temporary_marker}: injected one-shot temporary failure", flush=True)
         raise RuntimeError(temporary_message)
-    print(f"{controlled_marker}: injected controlled failure", flush=True)
+    print(f"{controlled_marker}: {controlled_log_message}", flush=True)
     raise RuntimeError(controlled_message)
 
 
@@ -197,36 +205,39 @@ def inject_f6_controlled_failure_before_execute(conn, clauseelement, multiparams
 
     if _kassa_approval_enabled() and _is_kassa_approval_unpack_batch_insert(clauseelement, multiparams, params):
         target_receipt_id = str(os.getenv(F6_KASSA_RECEIPT_ID_ENV, "") or "").strip()
-        if _raise_failure(
+        _raise_failure(
             key=f"kassa:{target_receipt_id}",
             controlled_marker=F6_KASSA_FAILURE_MARKER,
             temporary_marker=F6_KASSA_TEMPORARY_MARKER,
+            controlled_log_message="injected controlled Kassa approval failure",
             controlled_message="F6 controlled Kassa approval failure",
             temporary_message="F6 temporary Kassa approval failure",
-        ):
-            return clauseelement, multiparams, params
+        )
+        return clauseelement, multiparams, params
 
     if _unpacking_finalization_enabled() and _is_unpacking_finalization_update(clauseelement, multiparams, params):
         target_batch_id = str(os.getenv(F6_UNPACKING_BATCH_ID_ENV, "") or "").strip()
-        if _raise_failure(
+        _raise_failure(
             key=f"unpacking:{target_batch_id}",
             controlled_marker=F6_UNPACKING_FAILURE_MARKER,
             temporary_marker=F6_UNPACKING_TEMPORARY_MARKER,
+            controlled_log_message="injected controlled Unpacking finalization failure",
             controlled_message="F6 controlled Unpacking finalization failure",
             temporary_message="F6 temporary Unpacking finalization failure",
-        ):
-            return clauseelement, multiparams, params
+        )
+        return clauseelement, multiparams, params
 
     if _receipt_finalization_enabled() and _is_receipt_finalization_update(clauseelement, multiparams, params):
         batch_id = _parameter_value("id", multiparams, params)
-        if _raise_failure(
+        _raise_failure(
             key=f"receipt:{batch_id}",
             controlled_marker=F6_RECEIPT_FAILURE_MARKER,
             temporary_marker=F6_RECEIPT_TEMPORARY_MARKER,
+            controlled_log_message="injected controlled receipt finalization failure",
             controlled_message="F6 controlled receipt finalization failure",
             temporary_message="F6 temporary receipt finalization failure",
-        ):
-            return clauseelement, multiparams, params
+        )
+        return clauseelement, multiparams, params
 
     if _contains_sentinel(params) or _contains_sentinel(multiparams):
         raise RuntimeError("F6-01 controlled PostgreSQL failure injection")
