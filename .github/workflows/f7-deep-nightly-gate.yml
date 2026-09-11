@@ -1,0 +1,140 @@
+name: F7 Deep Nightly exact-candidate gate
+
+on:
+  schedule:
+    - cron: '30 1 * * *'
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - ready_for_review
+      - synchronize
+    paths:
+      - 'quality/ci/f7_deep_nightly_gate.json'
+      - 'quality/ci/f7_ci_orchestration_gate_map.json'
+      - 'scripts/ci/f7_deep_nightly_gate.py'
+      - 'scripts/ci/validate_f7_ci_orchestration_gate_map.py'
+      - '.github/workflows/f7-deep-nightly-gate.yml'
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Branch ref that points to the exact candidate SHA
+        required: true
+        default: main
+        type: string
+      candidate_sha:
+        description: Exact candidate commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: f7-deep-nightly-${{ github.event.pull_request.number || inputs.candidate_sha || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deep-nightly-gate:
+    name: Deep Nightly candidate decision
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      CANDIDATE_REF: ${{ inputs.candidate_ref || github.head_ref || 'main' }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.sha }}
+      GATE_CONFIG: quality/ci/f7_deep_nightly_gate.json
+      TRIGGER_EVENT: ${{ github.event_name }}
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove Deep Nightly trigger and candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$CANDIDATE_SHA"
+          test -n "$CANDIDATE_REF"
+          if [[ "$TRIGGER_EVENT" != "schedule" ]]; then
+            remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_REF" | awk '{print $1}')"
+            test -n "$remote_sha"
+            test "$remote_sha" = "$CANDIDATE_SHA"
+          fi
+          echo "F7_DEEP_TRIGGER_EVENT=$TRIGGER_EVENT"
+          echo "F7_DEEP_CANDIDATE_REF=$CANDIDATE_REF"
+          echo "F7_DEEP_CANDIDATE_SHA=$CANDIDATE_SHA"
+          echo 'F7_DEEP_CANDIDATE_IDENTITY_GREEN'
+
+      - name: Compile and validate Deep Nightly contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/f7_deep_nightly_gate.py scripts/ci/validate_f7_ci_orchestration_gate_map.py
+          python scripts/ci/f7_deep_nightly_gate.py validate-config --config "$GATE_CONFIG" | tee f7-deep-config.log
+          grep -Fx 'PASS f7_05_twelve_deep_authorities_registered' f7-deep-config.log
+          grep -Fx 'PASS f7_05_six_failure_recovery_authorities_registered' f7-deep-config.log
+          grep -Fx 'PASS f7_05_six_legacy_portability_authorities_registered' f7-deep-config.log
+          grep -Fx 'PASS f7_05_all_children_manual_dispatchable' f7-deep-config.log
+          grep -Fx 'F7_05_DEEP_NIGHTLY_CONFIG_GREEN' f7-deep-config.log
+
+      - name: Dispatch every Deep Nightly authority on exact candidate ref
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_deep_nightly_gate.py dispatch \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --evidence f7-deep-nightly-evidence.json \
+            | tee f7-deep-dispatch.log
+          grep -Fx 'F7_DEEP_DISPATCHED_COUNT=12' f7-deep-dispatch.log
+          grep -Fx 'F7_DEEP_DISPATCH_GREEN' f7-deep-dispatch.log
+
+      - name: Aggregate all Deep Nightly authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_deep_nightly_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --evidence f7-deep-nightly-evidence.json \
+            | tee f7-deep-wait.log
+          grep -Fx 'F7_DEEP_AGGREGATED_COUNT=12' f7-deep-wait.log
+          grep -Fx 'F7_DEEP_NIGHTLY_GATE_GREEN' f7-deep-wait.log
+
+      - name: Validate orchestration gate map after Deep Nightly proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Deep Nightly aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-deep-nightly-${{ github.run_id }}
+          path: |
+            quality/ci/f7_deep_nightly_gate.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-deep-config.log
+            f7-deep-dispatch.log
+            f7-deep-wait.log
+            f7-deep-nightly-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 21
