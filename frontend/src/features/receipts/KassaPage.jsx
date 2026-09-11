@@ -368,6 +368,7 @@ async function uploadReceiptFile(householdId, file) {
   }
   if (!response.ok) {
     const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+    error.status = response.status
     error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
     throw error
   }
@@ -3114,6 +3115,26 @@ export default function KassaPage() {
     } catch (err) {
       const technical = err?.technicalUploadError || null
       if (technical) setTechnicalUploadError(technical)
+
+      const responseStatus = Number(err?.status || 0)
+      if (responseStatus >= 400 && responseStatus < 500) {
+        const message = normalizeErrorMessage(err?.message) || 'Upload van het bonbestand is mislukt.'
+        setIsUploading(false)
+        resetUploadProgress()
+        setStatus('')
+        setDuplicateNotice('')
+        setEmailRouteError(message)
+        setError('')
+        showKassaFeedback('error', message, {
+          title: 'Upload geweigerd',
+          technicalDetail: technical?.detail || '',
+          showTechnicalToggle: Boolean(technical?.detail),
+          key: `kassa-receipt-upload-rejected-${responseStatus}`,
+          dedupeMs: 0,
+          testId: 'kassa-upload-rejected',
+        })
+        return
+      }
 
       let refreshedItems = []
       try {
