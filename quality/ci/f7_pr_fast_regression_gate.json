@@ -54,7 +54,7 @@
       ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml",
       ".github/workflows/p0-unpacking-fullstack-postgresql-validation.yml"
     ],
-    "stale_references_removed": [
+    "known_stale_references": [
       ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml",
       ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml"
     ],
