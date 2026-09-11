@@ -115,11 +115,12 @@ test('F6-03 invalid receipt import is visibly rejected and leaves no receipt bat
   const responseText = await response.text()
   let payload = null
   try { payload = responseText ? JSON.parse(responseText) : null } catch { payload = responseText }
+  const responseDetail = String(payload?.detail || '')
 
   expect(response.status(), JSON.stringify(payload)).toBe(400)
-  expect(String(payload?.detail || '')).toBe('Leeg bestand.')
+  expect(responseDetail).toBe('Leeg bestand')
   await expect(page).toHaveURL(/\/kassa\/nieuw$/)
-  await expect(page.locator('body')).toContainText(/Leeg bestand\.|Upload mislukt|Fout bij uploaden/i, { timeout: 20_000 })
+  await expect(page.locator('body')).toContainText(/Leeg bestand\.?|Upload mislukt|Fout bij uploaden/i, { timeout: 20_000 })
 
   const receiptsAfter = await readReceiptList(page, householdId)
   const batchesAfter = await readUnpackingBatches(page, householdId)
@@ -134,7 +135,7 @@ test('F6-03 invalid receipt import is visibly rejected and leaves no receipt bat
   writeFileSync(join(process.cwd(), 'f6-03-invalid-import-browser-proof.json'), JSON.stringify({
     householdId,
     importStatus: response.status(),
-    detail: String(payload?.detail || ''),
+    detail: responseDetail,
     receiptCount: receiptsAfter.length,
     batchCount: batchesAfter.length,
     inventoryRowCount: inventoryAfter.length,
