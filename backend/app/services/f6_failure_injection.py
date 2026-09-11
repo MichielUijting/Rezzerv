@@ -8,6 +8,9 @@ before the surrounding PostgreSQL transaction commits. Kassa review authority
 can enable a separate narrowly scoped failure when approval is about to create
 the receipt-backed Uitpakken batch; this occurs after the receipt approval
 UPDATE but before commit, proving that PostgreSQL rolls the approval back.
+Unpacking authority can enable the same final batch transaction boundary for
+one explicit purchase-import batch, proving that line/event writes are rolled
+back before a controlled HTTP 500 reaches the real UI.
 
 Read-only proof queries are never intercepted. Production defaults never enable
 these hooks.
@@ -25,6 +28,9 @@ F6_RECEIPT_FAILURE_MARKER = "F6-01-RECEIPT-CONTROLLED-500"
 F6_KASSA_APPROVAL_ENV = "REZZERV_TEST_ONLY_F6_KASSA_APPROVAL_FAILURE"
 F6_KASSA_RECEIPT_ID_ENV = "REZZERV_TEST_ONLY_F6_KASSA_RECEIPT_ID"
 F6_KASSA_FAILURE_MARKER = "F6-01-KASSA-CONTROLLED-500"
+F6_UNPACKING_FINALIZATION_ENV = "REZZERV_TEST_ONLY_F6_UNPACKING_FINALIZATION_FAILURE"
+F6_UNPACKING_BATCH_ID_ENV = "REZZERV_TEST_ONLY_F6_UNPACKING_BATCH_ID"
+F6_UNPACKING_FAILURE_MARKER = "F6-01-UNPACKING-CONTROLLED-500"
 _MUTATING_SQL_PREFIXES = ("INSERT", "UPDATE", "DELETE")
 _RECEIPT_FINALIZATION_SQL = (
     "UPDATE PURCHASE_IMPORT_BATCHES "
@@ -50,6 +56,14 @@ def _kassa_approval_enabled() -> bool:
         _enabled()
         and _truthy_env(F6_KASSA_APPROVAL_ENV)
         and bool(str(os.getenv(F6_KASSA_RECEIPT_ID_ENV, "") or "").strip())
+    )
+
+
+def _unpacking_finalization_enabled() -> bool:
+    return (
+        _enabled()
+        and _truthy_env(F6_UNPACKING_FINALIZATION_ENV)
+        and bool(str(os.getenv(F6_UNPACKING_BATCH_ID_ENV, "") or "").strip())
     )
 
 
@@ -119,6 +133,18 @@ def _is_kassa_approval_unpack_batch_insert(clauseelement: Any, multiparams: Any,
     )
 
 
+def _is_unpacking_finalization_update(clauseelement: Any, multiparams: Any, params: Any) -> bool:
+    """Match only the finalization UPDATE for the configured F6 Unpacking batch."""
+
+    if not _is_receipt_finalization_update(clauseelement, multiparams, params):
+        return False
+    target_batch_id = str(os.getenv(F6_UNPACKING_BATCH_ID_ENV, "") or "").strip()
+    return any(
+        str(mapping.get("id") or "").strip() == target_batch_id
+        for mapping in _parameter_mappings(multiparams, params)
+    )
+
+
 def inject_f6_controlled_failure_before_execute(conn, clauseelement, multiparams, params, execution_options):
     """Raise deterministic test-only failures at production transaction boundaries."""
 
@@ -130,6 +156,10 @@ def inject_f6_controlled_failure_before_execute(conn, clauseelement, multiparams
     if _kassa_approval_enabled() and _is_kassa_approval_unpack_batch_insert(clauseelement, multiparams, params):
         print(f"{F6_KASSA_FAILURE_MARKER}: injected controlled Kassa approval failure", flush=True)
         raise RuntimeError("F6 controlled Kassa approval failure")
+
+    if _unpacking_finalization_enabled() and _is_unpacking_finalization_update(clauseelement, multiparams, params):
+        print(f"{F6_UNPACKING_FAILURE_MARKER}: injected controlled Unpacking finalization failure", flush=True)
+        raise RuntimeError("F6 controlled Unpacking finalization failure")
 
     if _receipt_finalization_enabled() and _is_receipt_finalization_update(clauseelement, multiparams, params):
         print(f"{F6_RECEIPT_FAILURE_MARKER}: injected controlled receipt finalization failure", flush=True)

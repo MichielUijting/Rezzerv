@@ -6,8 +6,15 @@ on:
       - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
       - 'quality/acceptance/p0_residual_closure.json'
       - 'scripts/acceptance/validate_f6_failure_recovery_gap_audit.py'
+      - 'backend/app/services/f6_failure_injection.py'
+      - 'frontend/src/features/stores/StoreBatchDetailPage.jsx'
+      - 'frontend/src/features/stores/storeImportShared.jsx'
       - 'frontend/tests/**'
       - 'backend/tests/**'
+      - 'frontend/playwright.fullstack.config.js'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
       - '.github/workflows/**'
   workflow_dispatch:
 
@@ -19,6 +26,321 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  f6-unpacking-delta:
+    name: F6 Unpacking controlled-5xx delta plan
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.delta.outputs.run }}
+    steps:
+      - name: Checkout exact candidate for F6 Unpacking delta
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Select F6 Unpacking authority from exact PR delta
+        id: delta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            echo 'F6_UNPACKING_DELTA_REASON=manual'
+            exit 0
+          fi
+
+          if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" ]]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            echo 'F6_UNPACKING_DELTA_REASON=missing_sha_fail_open'
+            exit 0
+          fi
+
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA" || {
+              echo 'run=true' >> "$GITHUB_OUTPUT"
+              echo 'F6_UNPACKING_DELTA_REASON=base_fetch_failed_fail_open'
+              exit 0
+            }
+          fi
+
+          git diff --name-only --diff-filter=ACMRD "$BASE_SHA" "$HEAD_SHA" | tee f6-unpacking-changed-files.log
+          python - <<'PY' | tee f6-unpacking-delta.log
+          import fnmatch
+          from pathlib import Path
+
+          changed = [line.strip() for line in Path('f6-unpacking-changed-files.log').read_text().splitlines() if line.strip()]
+          patterns = [
+              'backend/app/services/f6_failure_injection.py',
+              'backend/app/main.py',
+              'backend/app/services/day_article*.py',
+              'backend/tests/p0_unpacking_fixture.py',
+              'backend/tests/p0_unpacking_receipt_bridge.py',
+              'backend/tests/f6_unpacking_controlled_5xx_verify.py',
+              'quality/acceptance/canonical_scenario_catalog.json',
+              'quality/acceptance/f6_failure_recovery_gap_audit.json',
+              'scripts/acceptance/validate_f6_failure_recovery_gap_audit.py',
+              'frontend/src/features/stores/StoreBatchDetailPage.jsx',
+              'frontend/src/features/stores/storeImportShared.jsx',
+              'frontend/src/features/receipts/dayArticleHandling.js',
+              'frontend/tests/e2e/f6-unpacking-controlled-5xx.fullstack.spec.js',
+              'frontend/playwright.fullstack.config.js',
+              'docker-compose.yml',
+              'docker-compose.postgresql.yml',
+              'docker/postgresql/**',
+              '.github/workflows/f6-failure-recovery-gap-audit-validation.yml',
+          ]
+
+          def matches(path, pattern):
+              if fnmatch.fnmatchcase(path, pattern):
+                  return True
+              return pattern.endswith('/**') and path.startswith(pattern[:-3])
+
+          matched = [path for path in changed if any(matches(path, pattern) for pattern in patterns)]
+          for path in matched:
+              print(f'F6_UNPACKING_DELTA_MATCH={path}')
+          print('RUN=' + ('true' if matched else 'false'))
+          PY
+          run="$(grep '^RUN=' f6-unpacking-delta.log | tail -1 | cut -d= -f2)"
+          test "$run" = 'true' || test "$run" = 'false'
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  f6-unpacking-controlled-5xx:
+    name: F6 Unpacking real 500 feedback and PostgreSQL rollback authority
+    needs: f6-unpacking-delta
+    if: needs.f6-unpacking-delta.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml:f6-unpacking-compose.override.yml
+      COMPOSE_PROFILES: postgresql
+      COMPOSE_PROJECT_NAME: f6unpacking${{ github.run_id }}
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble
+      F6_TARGET_BATCH_ID: p0-unpacking-day-article-batch
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Guard F6 Unpacking browser authority against shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          spec='frontend/tests/e2e/f6-unpacking-controlled-5xx.fullstack.spec.js'
+          if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+            echo 'F6 Uitpakken authority mag de kern-API niet mocken of via browserrequest-mutaties uitvoeren.' >&2
+            exit 1
+          fi
+          grep -F 'processButton.click()' "$spec"
+          grep -F 'expect(processResponse.status()).toBe(500)' "$spec"
+          grep -F 'Verwerken van bonregels is mislukt.' "$spec"
+          grep -F 'F6_UNPACKING_BROWSER_ROLLBACK_VISIBLE_GREEN' "$spec"
+          echo 'F6_UNPACKING_NO_CORE_SHORTCUTS_GREEN'
+
+      - name: Compile F6 Unpacking authority sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            backend/app/services/f6_failure_injection.py \
+            backend/tests/p0_unpacking_fixture.py \
+            backend/tests/p0_unpacking_receipt_bridge.py \
+            backend/tests/f6_unpacking_controlled_5xx_verify.py
+          node --check frontend/tests/e2e/f6-unpacking-controlled-5xx.fullstack.spec.js
+          node --check frontend/playwright.fullstack.config.js
+          echo 'F6_UNPACKING_AUTHORITY_COMPILE_GREEN'
+
+      - name: Configure test-only Unpacking finalization failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > f6-unpacking-compose.override.yml <<YAML
+          services:
+            backend:
+              environment:
+                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
+                REZZERV_TEST_ONLY_F6_UNPACKING_FINALIZATION_FAILURE: "1"
+                REZZERV_TEST_ONLY_F6_UNPACKING_BATCH_ID: "$F6_TARGET_BATCH_ID"
+          YAML
+          echo 'F6_UNPACKING_TEST_ONLY_FAILURE_ENV_CONFIGURED_GREEN'
+
+      - name: Build application images and prepare Playwright once
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+          echo 'F6_UNPACKING_DOCKER_BUILD_ONCE_GREEN'
+          docker pull "$PLAYWRIGHT_IMAGE"
+          echo 'F6_UNPACKING_PLAYWRIGHT_PULL_ONCE_GREEN'
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" bash -lc 'npm ci'
+          echo 'F6_UNPACKING_NPM_CI_ONCE_GREEN'
+
+      - name: Start real frontend backend and PostgreSQL
+        run: docker compose up -d --no-build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              echo 'F6_UNPACKING_BACKEND_HEALTH_GREEN'
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then docker compose logs --no-color --tail=100 backend; fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Prove PostgreSQL boundary and active Unpacking hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -u - <<'PY' | tee f6-unpacking-runtime-boundary.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+          from app.services.f6_failure_injection import (
+              F6_UNPACKING_BATCH_ID_ENV,
+              _enabled,
+              _unpacking_finalization_enabled,
+          )
+
+          assert engine.dialect.name == 'postgresql', engine.dialect.name
+          assert _enabled() is True
+          assert _unpacking_finalization_enabled() is True
+          assert os.getenv(F6_UNPACKING_BATCH_ID_ENV) == 'p0-unpacking-day-article-batch'
+          with engine.begin() as conn:
+              current_user = str(conn.execute(text('SELECT current_user')).scalar_one())
+              runtime_create = bool(conn.execute(text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")).scalar_one())
+          assert current_user == 'rezzerv_app', current_user
+          assert runtime_create is False
+          print(f'runtime_user={current_user}')
+          print('F6_UNPACKING_FAILURE_HOOK_ENABLED_GREEN')
+          print('F6_UNPACKING_POSTGRESQL_RUNTIME_GREEN')
+          PY
+          grep -F 'F6_UNPACKING_FAILURE_HOOK_ENABLED_GREEN' f6-unpacking-runtime-boundary.log
+          grep -F 'F6_UNPACKING_POSTGRESQL_RUNTIME_GREEN' f6-unpacking-runtime-boundary.log
+
+      - name: Seed deterministic canonical Unpacking batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend mkdir -p /quality/acceptance
+          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
+          docker compose exec -T backend test -s /quality/acceptance/canonical_scenario_catalog.json
+          docker compose exec -T backend python /app/tests/p0_unpacking_fixture.py prepare | tee f6-unpacking-fixture.log
+          grep -F 'P0_UNPACKING_FIXTURE_GREEN' f6-unpacking-fixture.log
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/p0_unpacking_receipt_bridge.py | tee f6-unpacking-receipt-bridge.log
+          grep -F 'P0_UNPACKING_RECEIPT_BRIDGE_GREEN' f6-unpacking-receipt-bridge.log
+
+          fixture_json="$(grep '^P0_UNPACKING_FIXTURE=' f6-unpacking-fixture.log | tail -1 | cut -d= -f2-)"
+          test -n "$fixture_json"
+          email="$(jq -r '.email' <<<"$fixture_json")"
+          password="$(jq -r '.password' <<<"$fixture_json")"
+          household_id="$(jq -r '.household_id' <<<"$fixture_json")"
+          article_id="$(jq -r '.article_id' <<<"$fixture_json")"
+          batch_id="$(jq -r '.batch_id' <<<"$fixture_json")"
+          line_id="$(jq -r '.line_id' <<<"$fixture_json")"
+          article_name="$(jq -r '.article_name' <<<"$fixture_json")"
+          existing_quantity="$(jq -r '.existing_quantity' <<<"$fixture_json")"
+          test "$batch_id" = "$F6_TARGET_BATCH_ID"
+          echo "::add-mask::$password"
+          echo "PLAYWRIGHT_F6_UNPACKING_EMAIL=$email" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_UNPACKING_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_UNPACKING_BATCH_ID=$batch_id" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_UNPACKING_LINE_ID=$line_id" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_F6_UNPACKING_ARTICLE_NAME=$article_name" >> "$GITHUB_ENV"
+          echo "F6_UNPACKING_HOUSEHOLD_ID=$household_id" >> "$GITHUB_ENV"
+          echo "F6_UNPACKING_ARTICLE_ID=$article_id" >> "$GITHUB_ENV"
+          echo "F6_UNPACKING_BATCH_ID=$batch_id" >> "$GITHUB_ENV"
+          echo "F6_UNPACKING_LINE_ID=$line_id" >> "$GITHUB_ENV"
+          echo "F6_UNPACKING_EXPECTED_QUANTITY=$existing_quantity" >> "$GITHUB_ENV"
+          echo 'F6_UNPACKING_CANONICAL_FIXTURE_GREEN'
+
+      - name: Trigger controlled 500 through real Uitpakken browser UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            rm -rf test-results playwright-report-fullstack
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_UNPACKING_EMAIL="$PLAYWRIGHT_F6_UNPACKING_EMAIL" \
+            -e PLAYWRIGHT_F6_UNPACKING_PASSWORD="$PLAYWRIGHT_F6_UNPACKING_PASSWORD" \
+            -e PLAYWRIGHT_F6_UNPACKING_BATCH_ID="$PLAYWRIGHT_F6_UNPACKING_BATCH_ID" \
+            -e PLAYWRIGHT_F6_UNPACKING_LINE_ID="$PLAYWRIGHT_F6_UNPACKING_LINE_ID" \
+            -e PLAYWRIGHT_F6_UNPACKING_ARTICLE_NAME="$PLAYWRIGHT_F6_UNPACKING_ARTICLE_NAME" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-unpacking-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-unpacking-controlled-5xx-browser.log"
+          grep -F 'F6_UNPACKING_REAL_500_FEEDBACK_GREEN' frontend/f6-unpacking-controlled-5xx-browser.log
+          grep -F 'F6_UNPACKING_BROWSER_ROLLBACK_VISIBLE_GREEN' frontend/f6-unpacking-controlled-5xx-browser.log
+          grep -F 'F6_UNPACKING_BROWSER_RETRYABLE_STATE_GREEN' frontend/f6-unpacking-controlled-5xx-browser.log
+          test -s frontend/f6-unpacking-controlled-5xx-browser-proof.json
+          test "$(jq -r '.processStatus' frontend/f6-unpacking-controlled-5xx-browser-proof.json)" = '500'
+          test "$(jq -r '.feedback' frontend/f6-unpacking-controlled-5xx-browser-proof.json)" = 'Verwerken van bonregels is mislukt.'
+
+      - name: Prove controlled failure occurred at finalization boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose logs --no-color backend | tee f6-unpacking-backend.log
+          grep -F 'F6-01-UNPACKING-CONTROLLED-500: injected controlled Unpacking finalization failure' f6-unpacking-backend.log
+          echo 'F6_UNPACKING_FINALIZATION_FAILURE_OBSERVED_GREEN'
+
+      - name: Prove exact PostgreSQL rollback after Unpacking failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_UNPACKING_HOUSEHOLD_ID="$F6_UNPACKING_HOUSEHOLD_ID" \
+            -e F6_UNPACKING_ARTICLE_ID="$F6_UNPACKING_ARTICLE_ID" \
+            -e F6_UNPACKING_BATCH_ID="$F6_UNPACKING_BATCH_ID" \
+            -e F6_UNPACKING_LINE_ID="$F6_UNPACKING_LINE_ID" \
+            -e F6_UNPACKING_EXPECTED_QUANTITY="$F6_UNPACKING_EXPECTED_QUANTITY" \
+            -e PYTHONPATH=/app \
+            backend python -u /app/tests/f6_unpacking_controlled_5xx_verify.py \
+            | tee f6-unpacking-postgresql-rollback.log
+          grep -F 'F6_UNPACKING_POSTGRESQL_ROLLBACK_GREEN' f6-unpacking-postgresql-rollback.log
+          grep -F 'F6_UNPACKING_DB_CONSISTENCY_AFTER_ERROR_GREEN' f6-unpacking-postgresql-rollback.log
+
+      - name: Upload F6 Unpacking evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-unpacking-controlled-5xx-evidence
+          path: |
+            f6-unpacking-changed-files.log
+            f6-unpacking-delta.log
+            f6-unpacking-runtime-boundary.log
+            f6-unpacking-fixture.log
+            f6-unpacking-receipt-bridge.log
+            f6-unpacking-backend.log
+            f6-unpacking-postgresql-rollback.log
+            frontend/f6-unpacking-controlled-5xx-browser.log
+            frontend/f6-unpacking-controlled-5xx-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Cleanup F6 Unpacking stack
+        if: always()
+        shell: bash
+        run: docker compose down -v --remove-orphans || true
+
   f6-gap-audit:
     name: F6 failure and recovery gap authority
     runs-on: ubuntu-latest
@@ -45,12 +367,19 @@ jobs:
           python scripts/acceptance/validate_f6_failure_recovery_gap_audit.py | tee f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_audit_exact_10_categories' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_summary_140_assessments' f6-failure-recovery-gap-audit.log
-          grep -F 'PASS f6_count_covered_23' f6-failure-recovery-gap-audit.log
-          grep -F 'PASS f6_count_partial_58' f6-failure-recovery-gap-audit.log
-          grep -F 'PASS f6_count_gap_36' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_covered_25' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_partial_57' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_count_gap_35' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_count_na_23' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_priority_slices_f6_01_through_f6_05' f6-failure-recovery-gap-audit.log
-          grep -F 'PASS f6_controlled_5xx_is_confirmed_cross_cutting_gap' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_controlled_5xx_remaining_gaps_9' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_01_scope_fully_covered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_unpacking_controlled_5xx_covered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_unpacking_standard_feedback_covered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_unpacking_db_consistency_after_error_covered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_unpacking_postgresql_verifier_registered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_unpacking_browser_authority_registered' f6-failure-recovery-gap-audit.log
+          grep -F 'PASS f6_unpacking_postgresql_workflow_registered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_inventory_controlled_5xx_covered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_inventory_standard_feedback_covered' f6-failure-recovery-gap-audit.log
           grep -F 'PASS f6_inventory_db_consistency_after_error_covered' f6-failure-recovery-gap-audit.log

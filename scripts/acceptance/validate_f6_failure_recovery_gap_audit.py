@@ -24,7 +24,7 @@ EXPECTED_CATEGORIES = {
 }
 EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
-EXPECTED_COUNTS = {"covered": 23, "partial": 58, "gap": 36, "na": 23}
+EXPECTED_COUNTS = {"covered": 25, "partial": 57, "gap": 35, "na": 23}
 
 SHARED_KASSA_WORKFLOW = ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
 MIGRATED_EVIDENCE = {
@@ -111,7 +111,7 @@ def main() -> None:
     controlled_5xx_gaps = sum(
         1 for row in scenarios if row["assessments"]["controlled_5xx"] == "gap"
     )
-    require(controlled_5xx_gaps >= 10, "f6_controlled_5xx_is_confirmed_cross_cutting_gap")
+    require(controlled_5xx_gaps == 9, "f6_controlled_5xx_remaining_gaps_9")
 
     receipt = next(row for row in scenarios if row["id"] == "P0-RECEIPT-INVENTORY-ALMOSTOUT")
     require(receipt["assessments"]["retry_duplicate_request"] == "covered", "f6_reuses_l4_05_idempotency_authority")
@@ -147,8 +147,23 @@ def main() -> None:
     )
     require((ROOT / SHARED_KASSA_WORKFLOW).exists(), "f6_kassa_shared_postgresql_workflow_registered")
 
-    account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
-    require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")
+    unpacking = next(row for row in scenarios if row["id"] == "P0-UNPACKING")
+    require(unpacking["assessments"]["controlled_5xx"] == "covered", "f6_unpacking_controlled_5xx_covered")
+    require(unpacking["assessments"]["standard_user_feedback"] == "covered", "f6_unpacking_standard_feedback_covered")
+    require(unpacking["assessments"]["db_consistency_after_error"] == "covered", "f6_unpacking_db_consistency_after_error_covered")
+    unpacking_evidence = set(unpacking.get("evidence") or [])
+    require(
+        "backend/tests/f6_unpacking_controlled_5xx_verify.py" in unpacking_evidence,
+        "f6_unpacking_postgresql_verifier_registered",
+    )
+    require(
+        "frontend/tests/e2e/f6-unpacking-controlled-5xx.fullstack.spec.js" in unpacking_evidence,
+        "f6_unpacking_browser_authority_registered",
+    )
+    require(
+        ".github/workflows/f6-failure-recovery-gap-audit-validation.yml" in unpacking_evidence,
+        "f6_unpacking_postgresql_workflow_registered",
+    )
 
     inventory = next(row for row in scenarios if row["id"] == "P0-INVENTORY")
     require(inventory["assessments"]["controlled_5xx"] == "covered", "f6_inventory_controlled_5xx_covered")
@@ -163,6 +178,22 @@ def main() -> None:
         ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml" in inventory_evidence,
         "f6_inventory_postgresql_workflow_registered",
     )
+
+    f6_01_scope = {"P0-RECEIPT-INVENTORY-ALMOSTOUT", "P0-KASSA-REVIEW", "P0-UNPACKING", "P0-INVENTORY"}
+    f6_01_rows = [row for row in scenarios if row["id"] in f6_01_scope]
+    require(len(f6_01_rows) == 4, "f6_01_exact_four_scope_scenarios")
+    require(
+        all(
+            row["assessments"]["controlled_5xx"] == "covered"
+            and row["assessments"]["standard_user_feedback"] == "covered"
+            and row["assessments"]["db_consistency_after_error"] == "covered"
+            for row in f6_01_rows
+        ),
+        "f6_01_scope_fully_covered",
+    )
+
+    account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
+    require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")
 
     print("F6_FAILURE_RECOVERY_GAP_AUDIT_GREEN")
 
