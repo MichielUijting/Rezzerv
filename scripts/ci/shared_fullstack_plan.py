@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Plan which authorities need a shared full-stack runner.
 
-For pull_request synchronize events this compares only the newly pushed delta
-against authority-specific path patterns. Open/reopened/manual runs fail open and
-run the requested authorities. The helper is deliberately conservative: any
-uncertainty schedules all authorities rather than risking a false skip.
+For pull_request synchronize events this compares the complete candidate delta
+(base SHA -> current head SHA) against authority-specific path patterns. This
+ensures every selected authority is re-proven on the exact candidate consumed by
+F7 PR Fast Regression. Open/reopened/manual runs remain fail-open and run the
+requested authorities. Any uncertainty schedules all authorities rather than
+risking a false skip.
 """
-# TP-CI-06 final-head parity proof marker; planner behavior is intentionally unchanged.
 from __future__ import annotations
 
 import argparse
@@ -103,24 +104,27 @@ def main() -> int:
     if action != "synchronize":
         return _fail_open(authorities, f"action_{action or 'unknown'}_must_run")
 
-    before = str(event.get("before") or "").strip()
-    after = str(event.get("after") or event.get("pull_request", {}).get("head", {}).get("sha") or "").strip()
-    if not before or not after or before == after:
-        return _fail_open(authorities, "before_after_unavailable")
+    pull_request = event.get("pull_request") or {}
+    base_sha = str((pull_request.get("base") or {}).get("sha") or "").strip()
+    head_sha = str((pull_request.get("head") or {}).get("sha") or event.get("after") or "").strip()
+    if not base_sha or not head_sha or base_sha == head_sha:
+        return _fail_open(authorities, "candidate_base_head_unavailable")
 
-    probe = _run(["git", "cat-file", "-e", f"{before}^{{commit}}"])
+    probe = _run(["git", "cat-file", "-e", f"{base_sha}^{{commit}}"])
     if probe.returncode != 0:
-        fetched = _run(["git", "fetch", "--no-tags", "--depth=1", "origin", before])
+        fetched = _run(["git", "fetch", "--no-tags", "--depth=1", "origin", base_sha])
         if fetched.returncode != 0:
             print(fetched.stderr.strip())
-            return _fail_open(authorities, "before_fetch_failed")
+            return _fail_open(authorities, "candidate_base_fetch_failed")
 
-    diff = _run(["git", "diff", "--name-only", "--diff-filter=ACMRD", before, after])
+    diff = _run(["git", "diff", "--name-only", "--diff-filter=ACMRD", base_sha, head_sha])
     if diff.returncode != 0:
         print(diff.stderr.strip())
-        return _fail_open(authorities, "git_diff_failed")
+        return _fail_open(authorities, "candidate_git_diff_failed")
 
     changed = [line.strip() for line in diff.stdout.splitlines() if line.strip()]
+    print(f"SHARED_FULLSTACK_CANDIDATE_BASE={base_sha}")
+    print(f"SHARED_FULLSTACK_CANDIDATE_HEAD={head_sha}")
     print(f"SHARED_FULLSTACK_CHANGED_COUNT={len(changed)}")
     for path in changed:
         print(f"SHARED_FULLSTACK_CHANGED={path}")
@@ -135,7 +139,7 @@ def main() -> int:
             print(f"SHARED_FULLSTACK_MATCH_{name.upper()}={path}")
         plan[name] = bool(matched)
 
-    return _emit_plan(plan, "synchronize_delta")
+    return _emit_plan(plan, "synchronize_candidate")
 
 
 if __name__ == "__main__":
