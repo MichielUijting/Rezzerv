@@ -78,15 +78,18 @@ def main() -> int:
     require(contract.get("required_markers") == EXPECTED_MARKERS, "f7_rel_03_markers_exact")
 
     release_gate = (gate_map.get("gates") or {}).get("release_acceptance") or {}
+    require(release_gate.get("status") == "partial", "f7_rel_03_release_gate_remains_partial")
     residuals = {row.get("id"): row for row in release_gate.get("residuals", [])}
     require(set(residuals) == {"F7-REL-01", "F7-REL-02", "F7-REL-03"}, "f7_rel_03_release_residual_set")
     rel03 = residuals["F7-REL-03"]
     if contract.get("status") == "in_progress":
-        require(rel03.get("status") == "in_progress", "f7_rel_03_map_in_progress")
+        require(rel03.get("status") in {"open", "in_progress"}, "f7_rel_03_map_not_prematurely_closed")
     else:
         require(rel03.get("status") == "closed", "f7_rel_03_map_closed")
-    require(rel03.get("authority_workflow") == ".github/workflows/f7-rel-03-backup-restore-postgresql-authority.yml", "f7_rel_03_map_workflow")
-    require(rel03.get("contract") == "quality/ci/f7_rel_03_backup_restore_contract.json", "f7_rel_03_map_contract")
+        require(rel03.get("authority_workflow") == ".github/workflows/f7-rel-03-backup-restore-postgresql-authority.yml", "f7_rel_03_map_workflow")
+        require(rel03.get("contract") == "quality/ci/f7_rel_03_backup_restore_contract.json", "f7_rel_03_map_contract")
+        proof = rel03.get("proof") or {}
+        require(all(proof.get(key) for key in ("run", "job", "candidate_sha", "artifact_id")), "f7_rel_03_map_proof_complete")
 
     require(WORKFLOW.is_file(), "f7_rel_03_workflow_exists")
     required_workflow_fragments = [
@@ -99,7 +102,7 @@ def main() -> int:
         "--no-acl",
         "pg_restore",
         "--exit-on-error",
-        "CREATE DATABASE rezzerv_rel03_restore",
+        "CREATE DATABASE $RESTORE_DB",
         "python -m app.schema_migration_preflight",
         "python -m app.testing.postgresql_acceptance_foundation",
         "backend/Dockerfile",
