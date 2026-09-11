@@ -1,0 +1,211 @@
+name: F6-05 authorization and functional 4xx closure
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/server_session_routes.py'
+      - 'backend/app/api/platform_authorizations_routes.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/platform_authorization_management_service.py'
+      - 'backend/tests/test_authorization_membership_routes.py'
+      - 'backend/tests/f6_05_authorization_functional_4xx_verify.py'
+      - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
+      - 'scripts/acceptance/validate_f6_failure_recovery_gap_audit.py'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - 'docker/postgresql/**'
+      - '.github/workflows/f6-05-authorization-functional-4xx-validation.yml'
+      - '.github/workflows/f6-failure-recovery-gap-audit-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f6-05-authorization-functional-4xx-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  f6-05-functional-4xx:
+    name: F6-05 authorization and functional 4xx PostgreSQL authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic F6-05 identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          account_password="F6-05-Account-${suffix}-Pass!"
+          ip_owner_password="F6-05-IpOwner-${suffix}-Pass!"
+          echo "F6_05_ACCOUNT_EMAIL=f6-05-account-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "F6_05_ACCOUNT_PASSWORD=$account_password" >> "$GITHUB_ENV"
+          echo "F6_05_IP_OWNER_USER_ID=f6-05-ip-owner-${suffix}" >> "$GITHUB_ENV"
+          echo "F6_05_IP_OWNER_EMAIL=f6-05-ip-owner-${suffix}@example.com" >> "$GITHUB_ENV"
+          echo "F6_05_IP_OWNER_PASSWORD=$ip_owner_password" >> "$GITHUB_ENV"
+          echo "F6_05_MISSING_TARGET_USER_ID=f6-05-missing-target-${suffix}" >> "$GITHUB_ENV"
+          echo "::add-mask::$account_password"
+          echo "::add-mask::$ip_owner_password"
+
+      - name: Compile F6-05 authority sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile backend/tests/f6_05_authorization_functional_4xx_verify.py
+          python -m py_compile backend/tests/test_authorization_membership_routes.py
+          grep -F 'status_code=409' backend/app/api/server_session_routes.py
+          grep -F 'PlatformAuthorizationNotFoundError' backend/app/api/platform_authorizations_routes.py
+          grep -F 'test_last_admin_demotion_returns_409' backend/tests/test_authorization_membership_routes.py
+          grep -F 'test_platform_permission_cannot_be_assigned_in_household_scope' backend/tests/test_authorization_membership_routes.py
+          echo 'F6_05_AUTHORITY_COMPILE_GREEN'
+
+      - name: Build and start real backend frontend and PostgreSQL
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              echo 'F6_05_BACKEND_HEALTH_GREEN'
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=100 backend
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Re-prove Household Membership and Authorization Isolation functional 4xx
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T backend python -m pytest -q \
+            /app/tests/test_authorization_membership_routes.py::test_last_admin_demotion_returns_409 \
+            /app/tests/test_authorization_membership_routes.py::test_platform_permission_cannot_be_assigned_in_household_scope \
+            | tee f6-05-reused-4xx.log
+          echo 'F6_05_HOUSEHOLD_MEMBERSHIP_FUNCTIONAL_4XX_REUSED_GREEN'
+          echo 'F6_05_AUTHORIZATION_ISOLATION_FUNCTIONAL_4XX_REUSED_GREEN'
+
+      - name: Seed DML-only IP-owner authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_05_IP_OWNER_USER_ID \
+            -e F6_05_IP_OWNER_EMAIL \
+            -e F6_05_IP_OWNER_PASSWORD \
+            backend python -u /app/tests/f6_05_authorization_functional_4xx_verify.py setup \
+            | tee f6-05-ip-owner-setup.log
+          grep -F 'F6_05_IP_OWNER_FIXTURE_GREEN' f6-05-ip-owner-setup.log
+          grep -F 'F6_05_POSTGRESQL_RUNTIME_BOUNDARY_GREEN' f6-05-ip-owner-setup.log
+
+      - name: Prove Account Session duplicate registration returns functional 409
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(jq -nc --arg email "$F6_05_ACCOUNT_EMAIL" --arg password "$F6_05_ACCOUNT_PASSWORD" '{email:$email,password:$password}')"
+
+          first_status="$(curl --silent --show-error \
+            -o f6-05-account-first.json \
+            -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d "$payload" \
+            http://localhost:8011/api/auth/register)"
+          test "$first_status" = '201'
+
+          duplicate_status="$(curl --silent --show-error \
+            -o f6-05-account-duplicate.json \
+            -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d "$payload" \
+            http://localhost:8011/api/auth/register)"
+          test "$duplicate_status" = '409'
+          test "$(jq -r '.detail' f6-05-account-duplicate.json)" = 'Er bestaat al een account met dit e-mailadres.'
+          echo 'F6_05_ACCOUNT_DUPLICATE_REGISTRATION_409_GREEN'
+
+      - name: Prove Platform Authority missing target returns functional 404
+        shell: bash
+        run: |
+          set -euo pipefail
+          login_payload="$(jq -nc --arg email "$F6_05_IP_OWNER_EMAIL" --arg password "$F6_05_IP_OWNER_PASSWORD" '{email:$email,password:$password}')"
+          login_status="$(curl --silent --show-error \
+            -c f6-05-ip-owner.cookies \
+            -o f6-05-ip-owner-login.json \
+            -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d "$login_payload" \
+            http://localhost:8011/api/auth/login)"
+          test "$login_status" = '200'
+
+          missing_status="$(curl --silent --show-error \
+            -b f6-05-ip-owner.cookies \
+            -o f6-05-platform-missing-target.json \
+            -w '%{http_code}' \
+            -X POST \
+            "http://localhost:8011/api/platform/authorizations/users/${F6_05_MISSING_TARGET_USER_ID}/platform-admin/grant")"
+          test "$missing_status" = '404'
+          test "$(jq -r '.detail' f6-05-platform-missing-target.json)" = 'Gebruiker niet gevonden'
+          echo 'F6_05_PLATFORM_MISSING_TARGET_404_GREEN'
+
+      - name: Prove exact PostgreSQL no-pollution end state
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose exec -T \
+            -e F6_05_ACCOUNT_EMAIL \
+            -e F6_05_IP_OWNER_USER_ID \
+            -e F6_05_MISSING_TARGET_USER_ID \
+            backend python -u /app/tests/f6_05_authorization_functional_4xx_verify.py verify \
+            | tee f6-05-postgresql-end-state.log
+          grep -F 'F6_05_ACCOUNT_DUPLICATE_REGISTRATION_NO_POLLUTION_GREEN' f6-05-postgresql-end-state.log
+          grep -F 'F6_05_PLATFORM_MISSING_TARGET_NO_POLLUTION_GREEN' f6-05-postgresql-end-state.log
+          grep -F 'F6_05_POSTGRESQL_REJECTED_MUTATIONS_GREEN' f6-05-postgresql-end-state.log
+
+      - name: F6-05 shared authority gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s f6-05-reused-4xx.log
+          test -s f6-05-account-duplicate.json
+          test -s f6-05-platform-missing-target.json
+          test -s f6-05-postgresql-end-state.log
+          echo 'F6_05_AUTHORIZATION_FUNCTIONAL_4XX_GREEN'
+
+      - name: Upload F6-05 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-05-authorization-functional-4xx-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            f6-05-reused-4xx.log
+            f6-05-ip-owner-setup.log
+            f6-05-account-first.json
+            f6-05-account-duplicate.json
+            f6-05-ip-owner-login.json
+            f6-05-platform-missing-target.json
+            f6-05-postgresql-end-state.log
+
+      - name: Show stack diagnostics on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=500 backend postgres || true
+
+      - name: Stop F6-05 stack
+        if: always()
+        run: docker compose down -v --remove-orphans
