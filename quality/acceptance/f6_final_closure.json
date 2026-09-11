@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "phase": "F6",
+  "title": "Fase 6 Failure & Recovery Formal Closure",
+  "status": "closure_candidate",
+  "source_authorities": {
+    "failure_recovery_audit": {
+      "path": "quality/acceptance/f6_failure_recovery_gap_audit.json",
+      "blob_sha": "d51b94100378784de2e538adea7541c4a3f7aaef",
+      "raw_summary": {
+        "covered": 43,
+        "partial": 48,
+        "gap": 26,
+        "na": 23
+      }
+    },
+    "p0_residual_closure": {
+      "path": "quality/acceptance/p0_residual_closure.json",
+      "blob_sha": "b6e544b5cf26734d85d749555ac039adc91a22bf",
+      "required_closed_p0_scenarios": 14
+    }
+  },
+  "policy": {
+    "hard_exit": "All scenario-category obligations explicitly selected by P0 priority slices F6-01 through F6-05 must be covered. No release-blocking obligation may remain partial, gap or na.",
+    "raw_audit_preserved": true,
+    "non_blocking_rule": "Every audit assessment outside the explicit F6-01 through F6-05 release-blocking obligation set remains visible in the source audit and is informational for later hardening, but is not a Phase-6 release blocker.",
+    "gap_disposition_rule": "Every raw gap outside the release-blocking obligation set must be explicitly enumerated below; any new or unenumerated gap fails closure.",
+    "no_status_rewrite": "The 43/48/26/23 source audit statuses are not rewritten to make closure green."
+  },
+  "blocking_slices": [
+    {
+      "id": "F6-01",
+      "scenarios": [
+        "P0-RECEIPT-INVENTORY-ALMOSTOUT",
+        "P0-KASSA-REVIEW",
+        "P0-UNPACKING",
+        "P0-INVENTORY"
+      ],
+      "categories": [
+        "controlled_5xx",
+        "standard_user_feedback",
+        "db_consistency_after_error"
+      ],
+      "proof_runs": [
+        "34448095919",
+        "34454139847",
+        "34590138290",
+        "34397204686"
+      ]
+    },
+    {
+      "id": "F6-02",
+      "scenarios": [
+        "P0-RECEIPT-INVENTORY-ALMOSTOUT",
+        "P0-KASSA-REVIEW",
+        "P0-UNPACKING"
+      ],
+      "categories": [
+        "timeout_temporary_failure",
+        "safe_resume"
+      ],
+      "proof_runs": [
+        "34617055659"
+      ],
+      "proof_job": "103321480244",
+      "proof_sha": "0b79b1b4fe9ae6fc47d0dcacaca78e1be56c44bf"
+    },
+    {
+      "id": "F6-03",
+      "scenarios": [
+        "P0-RECEIPT-INVENTORY-ALMOSTOUT",
+        "P0-KASSA-REVIEW"
+      ],
+      "categories": [
+        "invalid_import"
+      ],
+      "proof_runs": [
+        "34625163561"
+      ],
+      "proof_job": "103348569125",
+      "proof_sha": "309e113a8e4cfb550d54b28d78861029f66861d6"
+    },
+    {
+      "id": "F6-04",
+      "scenarios": [
+        "P0-ONBOARDING",
+        "P0-SETTINGS-PROJECTION",
+        "P0-INVENTORY"
+      ],
+      "categories": [
+        "interrupted_flow",
+        "safe_resume"
+      ],
+      "proof_runs": [
+        "34629433456"
+      ],
+      "proof_job": "103362376024",
+      "proof_sha": "da0d94c74cd02b3dbc658ab9713ddf18bdd6f7ce"
+    },
+    {
+      "id": "F6-05",
+      "scenarios": [
+        "P0-ACCOUNT-SESSION",
+        "P0-HOUSEHOLD-MEMBERSHIP",
+        "P0-AUTHORIZATION-ISOLATION",
+        "P0-PLATFORM-AUTHORITY"
+      ],
+      "categories": [
+        "auth_401_403",
+        "functional_4xx"
+      ],
+      "proof_runs": [
+        "34634787635"
+      ],
+      "proof_job": "103379928634",
+      "proof_sha": "f611837dbf25e6bf69f32d1d623d6ef7a8ef7d88"
+    }
+  ],
+  "summary": {
+    "total_assessments": 140,
+    "release_blocking_assessments": 34,
+    "release_blocking_covered": 34,
+    "release_blocking_uncovered": 0,
+    "informational_non_blocking_assessments": 106,
+    "informational_statuses": {
+      "covered": 9,
+      "partial": 48,
+      "gap": 26,
+      "na": 23
+    }
+  },
+  "non_blocking_gap_dispositions": [
+    {
+      "scenario": "P0-ACCOUNT-SESSION",
+      "categories": ["controlled_5xx", "timeout_temporary_failure"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-ONBOARDING",
+      "categories": ["controlled_5xx", "timeout_temporary_failure", "retry_duplicate_request", "db_consistency_after_error"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-HOUSEHOLD-MEMBERSHIP",
+      "categories": ["controlled_5xx", "timeout_temporary_failure"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-AUTHORIZATION-ISOLATION",
+      "categories": ["controlled_5xx"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-SETTINGS-PROJECTION",
+      "categories": ["controlled_5xx", "timeout_temporary_failure", "retry_duplicate_request"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-LOCATIONS-POLICY",
+      "categories": ["controlled_5xx", "timeout_temporary_failure", "retry_duplicate_request", "interrupted_flow", "safe_resume"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-INVENTORY",
+      "categories": ["timeout_temporary_failure"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-ALMOST-OUT",
+      "categories": ["controlled_5xx", "timeout_temporary_failure"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-ARTICLE-IDENTITY",
+      "categories": ["controlled_5xx", "timeout_temporary_failure", "interrupted_flow", "safe_resume"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    },
+    {
+      "scenario": "P0-PLATFORM-AUTHORITY",
+      "categories": ["controlled_5xx", "timeout_temporary_failure"],
+      "reason_code": "outside_explicit_f6_priority_slice",
+      "reason": "Not selected as a mandatory scenario-category obligation in P0 priority slices F6-01 through F6-05; retained as a visible hardening gap but not a Phase-6 release blocker."
+    }
+  ],
+  "decision": {
+    "phase_6_hard_exit": "satisfied",
+    "release_blocking_gap_count": 0,
+    "formal_status_after_merge": "closed"
+  }
+}
