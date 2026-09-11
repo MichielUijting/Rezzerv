@@ -1,0 +1,89 @@
+name: F7-01 CI orchestration audit validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'quality/ci/**'
+      - 'scripts/ci/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f7-01-ci-orchestration-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-f7-01-orchestration-audit:
+    name: Validate F7-01 gate map and orchestration contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 2
+
+      - name: Prove exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          echo "F7_01_CANDIDATE_SHA=$actual"
+          test "$actual" = "$CANDIDATE_SHA"
+
+      - name: Compile orchestration validators
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/ci/shared_fullstack_plan.py \
+            scripts/ci/validate_f7_ci_orchestration_gate_map.py
+
+      - name: Validate F7-01 orchestration gate map
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-01-ci-orchestration-audit.log
+          grep -Fx 'PASS f7_01_gate_taxonomy_complete' f7-01-ci-orchestration-audit.log
+          grep -Fx 'PASS f7_01_existing_shared_runners_mapped' f7-01-ci-orchestration-audit.log
+          grep -Fx 'PASS f7_01_candidate_identity_contracts_present' f7-01-ci-orchestration-audit.log
+          grep -F 'PASS f7_01_residual_backlog_explicit count=' f7-01-ci-orchestration-audit.log
+          grep -Fx 'F7_01_SHARED_CLUSTERS=5' f7-01-ci-orchestration-audit.log
+          grep -Fx 'F7_01_SHARED_AUTHORITIES=16' f7-01-ci-orchestration-audit.log
+          grep -Fx 'F7_01_LEGACY_FALLBACKS=16' f7-01-ci-orchestration-audit.log
+          grep -Fx 'F7_01_CI_ORCHESTRATION_AUDIT_GREEN' f7-01-ci-orchestration-audit.log
+
+      - name: Write F7-01 audit evidence summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "candidate_sha=$CANDIDATE_SHA"
+            echo "audit=quality/ci/f7_ci_orchestration_gate_map.json"
+            echo "validator=scripts/ci/validate_f7_ci_orchestration_gate_map.py"
+            echo "shared_clusters=5"
+            echo "shared_authorities=16"
+            echo "legacy_fallbacks=16"
+            echo "gate_order=pr_fast_regression,full_regression,deep_nightly,release_acceptance"
+          } > f7-01-ci-orchestration-evidence.txt
+
+      - name: Upload F7-01 audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-01-ci-orchestration-audit-${{ github.run_id }}
+          path: |
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-01-ci-orchestration-audit.log
+            f7-01-ci-orchestration-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
