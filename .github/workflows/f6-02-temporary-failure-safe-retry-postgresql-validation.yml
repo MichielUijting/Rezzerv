@@ -1,0 +1,386 @@
+name: F6-02 temporary failure safe retry PostgreSQL validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/app/services/f6_failure_injection.py'
+      - 'backend/tests/p0_kassa_review_fixture.py'
+      - 'backend/tests/p0_unpacking_fixture.py'
+      - 'backend/tests/p0_unpacking_receipt_bridge.py'
+      - 'backend/tests/tp_ci_05_receipt_shared_verify.py'
+      - 'frontend/src/features/receipts/**'
+      - 'frontend/src/features/stores/**'
+      - 'frontend/tests/e2e/f6-02-receipt-temporary-retry.fullstack.spec.js'
+      - 'frontend/tests/e2e/f6-02-kassa-temporary-retry.fullstack.spec.js'
+      - 'frontend/tests/e2e/f6-02-unpacking-temporary-retry.fullstack.spec.js'
+      - 'quality/acceptance/canonical_scenario_catalog.json'
+      - 'docker-compose.yml'
+      - 'docker-compose.postgresql.yml'
+      - '.github/workflows/f6-02-temporary-failure-safe-retry-postgresql-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f6-02-temporary-retry-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared-f6-02-fullstack:
+    name: F6-02 Receipt Kassa Unpacking temporary failure authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+      COMPOSE_PROJECT_NAME: f602retry${{ github.run_id }}
+      PLAYWRIGHT_BASE_URL: http://host.docker.internal:5174
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.58.2-noble
+      F6_KASSA_TARGET_RECEIPT_ID: f3-kassa-receipt-l4-review-financial
+      F6_UNPACKING_TARGET_BATCH_ID: p0-unpacking-day-article-batch
+
+    steps:
+      - name: Checkout exact candidate once
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare deterministic Receipt identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          password="F6-02-Receipt-${suffix}-Pass!"
+          {
+            echo "PLAYWRIGHT_F6_02_RECEIPT_EMAIL=f6-02-receipt-${suffix}@example.com"
+            echo "PLAYWRIGHT_F6_02_RECEIPT_PASSWORD=$password"
+            echo "PLAYWRIGHT_F6_02_RECEIPT_HOUSEHOLD=F6-02 Receipt Household ${suffix}"
+            echo "PLAYWRIGHT_F6_02_RECEIPT_LOCATION=F6-02 Receipt Location ${suffix}"
+          } >> "$GITHUB_ENV"
+          echo "::add-mask::$password"
+
+      - name: Guard F6-02 browser authorities against shortcuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in \
+            frontend/tests/e2e/f6-02-receipt-temporary-retry.fullstack.spec.js \
+            frontend/tests/e2e/f6-02-kassa-temporary-retry.fullstack.spec.js \
+            frontend/tests/e2e/f6-02-unpacking-temporary-retry.fullstack.spec.js; do
+            if grep -nE 'page\.route\(|context\.route\(|page\.request\.(post|put|patch|delete)\(' "$spec"; then
+              echo "F6-02 authority mag kern-API niet mocken of via browserrequest-mutaties uitvoeren: $spec" >&2
+              exit 1
+            fi
+          done
+          grep -F "getByTestId('receipt-process-button').click()" frontend/tests/e2e/f6-02-receipt-temporary-retry.fullstack.spec.js
+          grep -F "getByRole('button', { name: 'Goedkeuren', exact: true }).click()" frontend/tests/e2e/f6-02-kassa-temporary-retry.fullstack.spec.js
+          grep -F "getByTestId('receipt-process-button').click()" frontend/tests/e2e/f6-02-unpacking-temporary-retry.fullstack.spec.js
+          grep -F 'expect(firstResponse.status()).toBe(500)' frontend/tests/e2e/f6-02-receipt-temporary-retry.fullstack.spec.js
+          grep -F 'expect(firstApproval.status()).toBe(500)' frontend/tests/e2e/f6-02-kassa-temporary-retry.fullstack.spec.js
+          grep -F 'expect(firstResponse.status()).toBe(500)' frontend/tests/e2e/f6-02-unpacking-temporary-retry.fullstack.spec.js
+          echo 'F6_02_NO_CORE_SHORTCUTS_GREEN'
+
+      - name: Compile F6-02 authority sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile backend/app/services/f6_failure_injection.py backend/tests/p0_kassa_review_fixture.py backend/tests/p0_unpacking_fixture.py backend/tests/tp_ci_05_receipt_shared_verify.py
+          node --check frontend/tests/e2e/f6-02-receipt-temporary-retry.fullstack.spec.js
+          node --check frontend/tests/e2e/f6-02-kassa-temporary-retry.fullstack.spec.js
+          node --check frontend/tests/e2e/f6-02-unpacking-temporary-retry.fullstack.spec.js
+          echo 'F6_02_AUTHORITY_COMPILE_GREEN'
+
+      - name: Build images and prepare Playwright once
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          timeout --signal=TERM --kill-after=30s 600s docker compose --progress plain build
+          echo 'F6_02_DOCKER_BUILD_ONCE_GREEN'
+          docker pull "$PLAYWRIGHT_IMAGE"
+          echo 'F6_02_PLAYWRIGHT_PULL_ONCE_GREEN'
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" bash -lc 'npm ci'
+          echo 'F6_02_NPM_CI_ONCE_GREEN'
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Shared build/pull/npm: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start shared PostgreSQL backend frontend stack once
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          cat > f6-02-shared.override.yml <<YAML
+          services:
+            backend:
+              environment:
+                REZZERV_TEST_ONLY_F6_SQL_FAILURE_INJECTION: "1"
+                REZZERV_TEST_ONLY_F6_TEMPORARY_FAILURE_ONCE: "1"
+                REZZERV_TEST_ONLY_F6_RECEIPT_FINALIZATION_FAILURE: "1"
+                REZZERV_TEST_ONLY_F6_KASSA_APPROVAL_FAILURE: "1"
+                REZZERV_TEST_ONLY_F6_KASSA_RECEIPT_ID: "$F6_KASSA_TARGET_RECEIPT_ID"
+                REZZERV_TEST_ONLY_F6_UNPACKING_FINALIZATION_FAILURE: "1"
+                REZZERV_TEST_ONLY_F6_UNPACKING_BATCH_ID: "$F6_UNPACKING_TARGET_BATCH_ID"
+          YAML
+          export COMPOSE_FILE="docker-compose.yml:docker-compose.postgresql.yml:f6-02-shared.override.yml"
+          echo "COMPOSE_FILE=$COMPOSE_FILE" >> "$GITHUB_ENV"
+          docker compose up -d --no-build
+          healthy=0
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then healthy=1; break; fi
+            sleep 2
+          done
+          [[ "$healthy" == 1 ]]
+          docker compose ps
+          docker compose exec -T backend mkdir -p /quality/acceptance /backend/app/testing/receipt_acceptance
+          docker compose cp quality/acceptance/canonical_scenario_catalog.json backend:/quality/acceptance/canonical_scenario_catalog.json
+          docker compose cp backend/app/testing/receipt_acceptance/baseline.json backend:/backend/app/testing/receipt_acceptance/baseline.json
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Shared stack startup/health: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_SHARED_STACK_STARTED_ONCE_GREEN'
+
+      - name: Run F6-02 Receipt temporary failure and retry
+        id: receipt
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          docker run --rm --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_02_RECEIPT_EMAIL="$PLAYWRIGHT_F6_02_RECEIPT_EMAIL" \
+            -e PLAYWRIGHT_F6_02_RECEIPT_PASSWORD="$PLAYWRIGHT_F6_02_RECEIPT_PASSWORD" \
+            -e PLAYWRIGHT_F6_02_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_F6_02_RECEIPT_HOUSEHOLD" \
+            -e PLAYWRIGHT_F6_02_RECEIPT_LOCATION="$PLAYWRIGHT_F6_02_RECEIPT_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-02-receipt-temporary-retry.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-02-receipt-browser.log"
+          grep -F 'F6_02_RECEIPT_TEMPORARY_FAILURE_VISIBLE_GREEN' frontend/f6-02-receipt-browser.log
+          grep -F 'F6_02_RECEIPT_VISIBLE_RETRY_SUCCESS_GREEN' frontend/f6-02-receipt-browser.log
+          grep -F 'F6_02_RECEIPT_BROWSER_EXACT_ONCE_GREEN' frontend/f6-02-receipt-browser.log
+          test -s frontend/f6-02-receipt-browser-proof.json
+          proof_json="$(cat frontend/f6-02-receipt-browser-proof.json)"
+          docker compose exec -T -e TP_CI_05_EMAIL="$PLAYWRIGHT_F6_02_RECEIPT_EMAIL" -e TP_CI_05_PROOF_JSON="$proof_json" backend python -u /app/tests/tp_ci_05_receipt_shared_verify.py verify-l4-05 | tee f6-02-receipt-postgresql.log
+          grep -F 'P0_L4_05_SINGLE_PURCHASE_EVENT_GREEN' f6-02-receipt-postgresql.log
+          grep -F 'P0_L4_05_SINGLE_INVENTORY_INCREMENT_GREEN' f6-02-receipt-postgresql.log
+          docker compose logs --no-color backend > f6-02-receipt-backend.log
+          grep -F 'F6-02-RECEIPT-TEMPORARY-FAILURE: injected one-shot temporary failure' f6-02-receipt-backend.log
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Receipt authority: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_RECEIPT_POSTGRESQL_EXACT_ONCE_GREEN'
+
+      - name: Upload F6-02 Receipt evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-02-receipt-evidence
+          path: |
+            f6-02-receipt-postgresql.log
+            f6-02-receipt-backend.log
+            frontend/f6-02-receipt-browser.log
+            frontend/f6-02-receipt-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Reset PostgreSQL data in place before Kassa
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          docker compose exec -T postgres sh -lc 'psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set=ON_ERROR_STOP=1' <<'SQL'
+          DO $$
+          DECLARE
+            truncate_sql text;
+          BEGIN
+            SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' RESTART IDENTITY CASCADE'
+              INTO truncate_sql
+              FROM pg_tables
+             WHERE schemaname = 'public'
+               AND tablename <> 'alembic_version';
+            IF truncate_sql IS NOT NULL THEN
+              EXECUTE truncate_sql;
+            END IF;
+          END
+          $$;
+          SQL
+          remaining=$(docker compose exec -T postgres sh -lc 'psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -Atqc "SELECT COUNT(*) FROM purchase_import_batches"')
+          [[ "$remaining" == 0 ]]
+          elapsed=$(( $(date +%s) - started ))
+          echo "- In-place reset Receipt→Kassa: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_RECEIPT_KASSA_IN_PLACE_RESET_GREEN'
+
+      - name: Run F6-02 Kassa temporary failure and retry
+        id: kassa
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          docker compose exec -T backend python /app/tests/p0_kassa_review_fixture.py prepare | tee f6-02-kassa-fixture.log
+          grep -F 'P0_KASSA_REVIEW_FIXTURE_GREEN' f6-02-kassa-fixture.log
+          fixture_json="$(grep '^P0_KASSA_REVIEW_FIXTURE=' f6-02-kassa-fixture.log | tail -1 | cut -d= -f2-)"
+          email="$(jq -r '.email' <<<"$fixture_json")"
+          password="$(jq -r '.password' <<<"$fixture_json")"
+          uncertain_receipt_id="$(jq -r '.uncertain_receipt_id' <<<"$fixture_json")"
+          uncertain_line_id="$(jq -r '.uncertain_line_id' <<<"$fixture_json")"
+          financial_receipt_id="$(jq -r '.financial_receipt_id' <<<"$fixture_json")"
+          echo "::add-mask::$password"
+
+          docker run --rm --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_EMAIL="$email" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_PASSWORD="$password" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_UNCERTAIN_RECEIPT_ID="$uncertain_receipt_id" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_UNCERTAIN_LINE_ID="$uncertain_line_id" \
+            -e PLAYWRIGHT_P0_KASSA_REVIEW_FINANCIAL_RECEIPT_ID="$financial_receipt_id" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-02-kassa-temporary-retry.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-02-kassa-browser.log"
+          grep -F 'F6_02_KASSA_TEMPORARY_FAILURE_VISIBLE_GREEN' frontend/f6-02-kassa-browser.log
+          grep -F 'F6_02_KASSA_VISIBLE_RETRY_SUCCESS_GREEN' frontend/f6-02-kassa-browser.log
+          grep -F 'F6_02_KASSA_BROWSER_EXACT_ONCE_GREEN' frontend/f6-02-kassa-browser.log
+          docker compose exec -T -e P0_KASSA_REVIEW_UNCERTAIN_LINE_ID="$uncertain_line_id" backend python /app/tests/p0_kassa_review_fixture.py verify | tee f6-02-kassa-postgresql.log
+          grep -F 'P0_KASSA_REVIEW_POSTGRESQL_GREEN' f6-02-kassa-postgresql.log
+          docker compose exec -T -e F6_02_FINANCIAL_RECEIPT_ID="$financial_receipt_id" backend python -u - <<'PY' | tee -a f6-02-kassa-postgresql.log
+          import os
+          from sqlalchemy import text
+          from app.db import engine
+          receipt_id = os.environ['F6_02_FINANCIAL_RECEIPT_ID']
+          with engine.begin() as conn:
+              count = int(conn.execute(text("SELECT COUNT(*) FROM purchase_import_batches WHERE source_type='receipt' AND source_reference=:ref"), {'ref': f'receipt:{receipt_id}'}).scalar_one())
+          assert count == 1, count
+          print('F6_02_KASSA_SINGLE_UNPACK_BATCH_GREEN')
+          PY
+          docker compose logs --no-color backend > f6-02-kassa-backend.log
+          grep -F 'F6-02-KASSA-TEMPORARY-FAILURE: injected one-shot temporary failure' f6-02-kassa-backend.log
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Kassa authority: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_KASSA_POSTGRESQL_EXACT_ONCE_GREEN'
+
+      - name: Upload F6-02 Kassa evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-02-kassa-evidence
+          path: |
+            f6-02-kassa-fixture.log
+            f6-02-kassa-postgresql.log
+            f6-02-kassa-backend.log
+            frontend/f6-02-kassa-browser.log
+            frontend/f6-02-kassa-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Reset PostgreSQL data in place before Unpacking
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          docker compose exec -T postgres sh -lc 'psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set=ON_ERROR_STOP=1' <<'SQL'
+          DO $$
+          DECLARE
+            truncate_sql text;
+          BEGIN
+            SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' RESTART IDENTITY CASCADE'
+              INTO truncate_sql
+              FROM pg_tables
+             WHERE schemaname = 'public'
+               AND tablename <> 'alembic_version';
+            IF truncate_sql IS NOT NULL THEN
+              EXECUTE truncate_sql;
+            END IF;
+          END
+          $$;
+          SQL
+          remaining=$(docker compose exec -T postgres sh -lc 'psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -Atqc "SELECT COUNT(*) FROM purchase_import_batches"')
+          [[ "$remaining" == 0 ]]
+          elapsed=$(( $(date +%s) - started ))
+          echo "- In-place reset Kassa→Unpacking: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_KASSA_UNPACKING_IN_PLACE_RESET_GREEN'
+
+      - name: Run F6-02 Unpacking temporary failure and retry
+        id: unpacking
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          docker compose exec -T backend python /app/tests/p0_unpacking_fixture.py prepare | tee f6-02-unpacking-fixture.log
+          grep -F 'P0_UNPACKING_FIXTURE_GREEN' f6-02-unpacking-fixture.log
+          docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/p0_unpacking_receipt_bridge.py | tee f6-02-unpacking-receipt-bridge.log
+          grep -F 'P0_UNPACKING_RECEIPT_BRIDGE_GREEN' f6-02-unpacking-receipt-bridge.log
+          fixture_json="$(grep '^P0_UNPACKING_FIXTURE=' f6-02-unpacking-fixture.log | tail -1 | cut -d= -f2-)"
+          email="$(jq -r '.email' <<<"$fixture_json")"
+          password="$(jq -r '.password' <<<"$fixture_json")"
+          batch_id="$(jq -r '.batch_id' <<<"$fixture_json")"
+          line_id="$(jq -r '.line_id' <<<"$fixture_json")"
+          article_name="$(jq -r '.article_name' <<<"$fixture_json")"
+          echo "::add-mask::$password"
+
+          docker run --rm --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_UNPACKING_EMAIL="$email" \
+            -e PLAYWRIGHT_P0_UNPACKING_PASSWORD="$password" \
+            -e PLAYWRIGHT_P0_UNPACKING_BATCH_ID="$batch_id" \
+            -e PLAYWRIGHT_P0_UNPACKING_LINE_ID="$line_id" \
+            -e PLAYWRIGHT_P0_UNPACKING_ARTICLE_NAME="$article_name" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-02-unpacking-temporary-retry.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-02-unpacking-browser.log"
+          grep -F 'F6_02_UNPACKING_TEMPORARY_FAILURE_VISIBLE_GREEN' frontend/f6-02-unpacking-browser.log
+          grep -F 'F6_02_UNPACKING_VISIBLE_RETRY_SUCCESS_GREEN' frontend/f6-02-unpacking-browser.log
+          grep -F 'F6_02_UNPACKING_BROWSER_EXACT_ONCE_GREEN' frontend/f6-02-unpacking-browser.log
+          docker compose exec -T -e P0_UNPACKING_LINE_ID="$line_id" -e P0_UNPACKING_BATCH_ID="$batch_id" backend python /app/tests/p0_unpacking_fixture.py verify | tee f6-02-unpacking-postgresql.log
+          grep -F 'P0_UNPACKING_POSTGRESQL_GREEN' f6-02-unpacking-postgresql.log
+          docker compose logs --no-color backend > f6-02-unpacking-backend.log
+          grep -F 'F6-02-UNPACKING-TEMPORARY-FAILURE: injected one-shot temporary failure' f6-02-unpacking-backend.log
+          elapsed=$(( $(date +%s) - started ))
+          echo "- Unpacking authority: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo 'F6_02_UNPACKING_POSTGRESQL_EXACT_ONCE_GREEN'
+
+      - name: Upload F6-02 Unpacking evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f6-02-unpacking-evidence
+          path: |
+            f6-02-unpacking-fixture.log
+            f6-02-unpacking-receipt-bridge.log
+            f6-02-unpacking-postgresql.log
+            f6-02-unpacking-backend.log
+            frontend/f6-02-unpacking-browser.log
+            frontend/f6-02-unpacking-browser-proof.json
+            frontend/test-results/
+            frontend/playwright-report-fullstack/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce F6-02 shared authority gate
+        if: always()
+        shell: bash
+        env:
+          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+          KASSA_OUTCOME: ${{ steps.kassa.outcome }}
+          UNPACKING_OUTCOME: ${{ steps.unpacking.outcome }}
+        run: |
+          set -euo pipefail
+          echo "receipt=$RECEIPT_OUTCOME kassa=$KASSA_OUTCOME unpacking=$UNPACKING_OUTCOME"
+          [[ "$RECEIPT_OUTCOME" == success ]]
+          [[ "$KASSA_OUTCOME" == success ]]
+          [[ "$UNPACKING_OUTCOME" == success ]]
+          echo 'F6_02_TEMPORARY_FAILURE_SAFE_RETRY_POSTGRESQL_GREEN'
+
+      - name: Stop shared F6-02 stack once
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ "${{ steps.receipt.outcome }}" != success || "${{ steps.kassa.outcome }}" != success || "${{ steps.unpacking.outcome }}" != success ]]; then
+            docker compose ps
+            docker compose logs --no-color --tail=800 backend frontend postgres
+          fi
+          docker compose down -v --remove-orphans
+          echo 'F6_02_SHARED_STACK_STOPPED_ONCE_GREEN'

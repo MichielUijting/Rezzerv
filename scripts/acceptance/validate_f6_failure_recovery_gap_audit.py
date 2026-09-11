@@ -24,9 +24,13 @@ EXPECTED_CATEGORIES = {
 }
 EXPECTED_STATUSES = {"covered", "partial", "gap", "na"}
 EXPECTED_PRIORITY_SLICES = {f"F6-{index:02d}" for index in range(1, 6)}
-EXPECTED_COUNTS = {"covered": 25, "partial": 57, "gap": 35, "na": 23}
+EXPECTED_COUNTS = {"covered": 31, "partial": 54, "gap": 32, "na": 23}
 
 SHARED_KASSA_WORKFLOW = ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml"
+F6_02_WORKFLOW = ".github/workflows/f6-02-temporary-failure-safe-retry-postgresql-validation.yml"
+F6_02_PROOF_RUN = "34617055659"
+F6_02_PROOF_JOB = "103321480244"
+F6_02_PROOF_SHA = "0b79b1b4fe9ae6fc47d0dcacaca78e1be56c44bf"
 MIGRATED_EVIDENCE = {
     ".github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
     ".github/workflows/f6-kassa-review-controlled-5xx-postgresql-validation.yml": SHARED_KASSA_WORKFLOW,
@@ -128,6 +132,18 @@ def main() -> None:
         "f6_receipt_postgresql_workflow_registered",
     )
 
+    require(receipt["assessments"]["timeout_temporary_failure"] == "covered", "f6_02_receipt_temporary_failure_covered")
+    require(receipt["assessments"]["safe_resume"] == "covered", "f6_02_receipt_safe_resume_covered")
+    require(
+        "frontend/tests/e2e/f6-02-receipt-temporary-retry.fullstack.spec.js" in receipt_evidence,
+        "f6_02_receipt_browser_authority_registered",
+    )
+    require(F6_02_WORKFLOW in receipt_evidence, "f6_02_receipt_workflow_registered")
+    receipt_timeout_note = receipt.get("notes", {}).get("timeout_temporary_failure", "")
+    require(F6_02_PROOF_RUN in receipt_timeout_note, "f6_02_receipt_proof_run_registered")
+    require(F6_02_PROOF_JOB in receipt_timeout_note, "f6_02_receipt_proof_job_registered")
+    require(F6_02_PROOF_SHA in receipt_timeout_note, "f6_02_receipt_candidate_registered")
+
     kassa = next(row for row in scenarios if row["id"] == "P0-KASSA-REVIEW")
     require(kassa["assessments"]["controlled_5xx"] == "covered", "f6_kassa_controlled_5xx_covered")
     require(kassa["assessments"]["standard_user_feedback"] == "covered", "f6_kassa_standard_feedback_covered")
@@ -147,6 +163,18 @@ def main() -> None:
     )
     require((ROOT / SHARED_KASSA_WORKFLOW).exists(), "f6_kassa_shared_postgresql_workflow_registered")
 
+    require(kassa["assessments"]["timeout_temporary_failure"] == "covered", "f6_02_kassa_temporary_failure_covered")
+    require(kassa["assessments"]["safe_resume"] == "covered", "f6_02_kassa_safe_resume_covered")
+    require(
+        "frontend/tests/e2e/f6-02-kassa-temporary-retry.fullstack.spec.js" in kassa_evidence,
+        "f6_02_kassa_browser_authority_registered",
+    )
+    require(F6_02_WORKFLOW in kassa_evidence, "f6_02_kassa_workflow_registered")
+    kassa_timeout_note = kassa.get("notes", {}).get("timeout_temporary_failure", "")
+    require(F6_02_PROOF_RUN in kassa_timeout_note, "f6_02_kassa_proof_run_registered")
+    require(F6_02_PROOF_JOB in kassa_timeout_note, "f6_02_kassa_proof_job_registered")
+    require(F6_02_PROOF_SHA in kassa_timeout_note, "f6_02_kassa_candidate_registered")
+
     unpacking = next(row for row in scenarios if row["id"] == "P0-UNPACKING")
     require(unpacking["assessments"]["controlled_5xx"] == "covered", "f6_unpacking_controlled_5xx_covered")
     require(unpacking["assessments"]["standard_user_feedback"] == "covered", "f6_unpacking_standard_feedback_covered")
@@ -164,6 +192,18 @@ def main() -> None:
         ".github/workflows/f6-failure-recovery-gap-audit-validation.yml" in unpacking_evidence,
         "f6_unpacking_postgresql_workflow_registered",
     )
+
+    require(unpacking["assessments"]["timeout_temporary_failure"] == "covered", "f6_02_unpacking_temporary_failure_covered")
+    require(unpacking["assessments"]["safe_resume"] == "covered", "f6_02_unpacking_safe_resume_covered")
+    require(
+        "frontend/tests/e2e/f6-02-unpacking-temporary-retry.fullstack.spec.js" in unpacking_evidence,
+        "f6_02_unpacking_browser_authority_registered",
+    )
+    require(F6_02_WORKFLOW in unpacking_evidence, "f6_02_unpacking_workflow_registered")
+    unpacking_timeout_note = unpacking.get("notes", {}).get("timeout_temporary_failure", "")
+    require(F6_02_PROOF_RUN in unpacking_timeout_note, "f6_02_unpacking_proof_run_registered")
+    require(F6_02_PROOF_JOB in unpacking_timeout_note, "f6_02_unpacking_proof_job_registered")
+    require(F6_02_PROOF_SHA in unpacking_timeout_note, "f6_02_unpacking_candidate_registered")
 
     inventory = next(row for row in scenarios if row["id"] == "P0-INVENTORY")
     require(inventory["assessments"]["controlled_5xx"] == "covered", "f6_inventory_controlled_5xx_covered")
@@ -191,6 +231,19 @@ def main() -> None:
         ),
         "f6_01_scope_fully_covered",
     )
+
+    f6_02_scope = {"P0-RECEIPT-INVENTORY-ALMOSTOUT", "P0-KASSA-REVIEW", "P0-UNPACKING"}
+    f6_02_rows = [row for row in scenarios if row["id"] in f6_02_scope]
+    require(len(f6_02_rows) == 3, "f6_02_exact_three_scope_scenarios")
+    require(
+        all(
+            row["assessments"]["timeout_temporary_failure"] == "covered"
+            and row["assessments"]["safe_resume"] == "covered"
+            for row in f6_02_rows
+        ),
+        "f6_02_scope_fully_covered",
+    )
+    require((ROOT / F6_02_WORKFLOW).exists(), "f6_02_shared_postgresql_workflow_registered")
 
     account = next(row for row in scenarios if row["id"] == "P0-ACCOUNT-SESSION")
     require(account["assessments"]["auth_401_403"] == "covered", "f6_reuses_account_stale_session_401")
