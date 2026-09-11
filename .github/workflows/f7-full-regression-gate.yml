@@ -1,0 +1,127 @@
+name: F7-03 Full Regression exact-candidate gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'quality/ci/f7_full_regression_gate.json'
+      - 'quality/ci/f7_ci_orchestration_gate_map.json'
+      - 'scripts/ci/f7_full_regression_gate.py'
+      - 'scripts/ci/validate_f7_ci_orchestration_gate_map.py'
+      - '.github/workflows/f7-full-regression-gate.yml'
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Branch ref that points to the exact candidate SHA
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact candidate commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: f7-full-regression-${{ github.event.pull_request.number || inputs.candidate_sha || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-regression-gate:
+    name: Full Regression candidate decision
+    runs-on: ubuntu-latest
+    timeout-minutes: 250
+    env:
+      CANDIDATE_REF: ${{ inputs.candidate_ref || github.head_ref }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+      GATE_CONFIG: quality/ci/f7_full_regression_gate.json
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove exact candidate identity and immutable dispatch ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$CANDIDATE_SHA"
+          test -n "$CANDIDATE_REF"
+          remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_REF" | awk '{print $1}')"
+          test -n "$remote_sha"
+          test "$remote_sha" = "$CANDIDATE_SHA"
+          echo "F7_FULL_CANDIDATE_REF=$CANDIDATE_REF"
+          echo "F7_FULL_CANDIDATE_SHA=$CANDIDATE_SHA"
+          echo 'F7_FULL_CANDIDATE_IDENTITY_GREEN'
+
+      - name: Compile and validate Full Regression contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/f7_full_regression_gate.py scripts/ci/validate_f7_ci_orchestration_gate_map.py
+          python scripts/ci/f7_full_regression_gate.py validate-config --config "$GATE_CONFIG" | tee f7-full-config.log
+          grep -Fx 'PASS f7_03_exact_14_p0_scenarios_mapped' f7-full-config.log
+          grep -Fx 'PASS f7_03_eleven_full_regression_workflows_registered' f7-full-config.log
+          grep -Fx 'PASS f7_03_full_frontend_regression_registered' f7-full-config.log
+          grep -Fx 'F7_03_FULL_REGRESSION_CONFIG_GREEN' f7-full-config.log
+
+      - name: Dispatch every Full Regression authority on exact candidate ref
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_full_regression_gate.py dispatch \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-dispatch.log
+          grep -Fx 'F7_FULL_DISPATCHED_COUNT=11' f7-full-dispatch.log
+          grep -Fx 'F7_FULL_DISPATCH_GREEN' f7-full-dispatch.log
+
+      - name: Aggregate all dispatched authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_full_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-wait.log
+          grep -Fx 'F7_FULL_AGGREGATED_COUNT=11' f7-full-wait.log
+          grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
+
+      - name: Validate orchestration gate map after Full Regression proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Full Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-full-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-full-config.log
+            f7-full-dispatch.log
+            f7-full-wait.log
+            f7-full-regression-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 14
