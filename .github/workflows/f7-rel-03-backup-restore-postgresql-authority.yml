@@ -176,7 +176,7 @@ jobs:
             "$BACKEND_IMAGE" \
             sh -lc 'python - <<'"'"'PY'"'"'
           import os
-          from sqlalchemy import create_engine, text
+          from sqlalchemy import create_engine, inspect, text
           from app.services.system_superuser_session_provisioning import (
               SUPERGEBRUIKER_EMAIL,
               SUPERGEBRUIKER_HUISHOUDEN_ID,
@@ -202,13 +202,32 @@ jobs:
                   "user_id": SUPERGEBRUIKER_EMAIL,
                   "role_key": "platform.superuser",
               }).scalar_one())
+              membership_columns = {
+                  str(column.get("name") or "")
+                  for column in inspect(conn).get_columns("household_memberships")
+              }
+              membership_email_column = next(
+                  (column for column in ("user_email", "email") if column in membership_columns),
+                  None,
+              )
+              membership_user_column = "user_id" if "user_id" in membership_columns else None
+              if membership_email_column:
+                  membership_identity_predicate = (
+                      f"lower({membership_email_column}) = lower(:identity)"
+                  )
+              elif membership_user_column:
+                  membership_identity_predicate = "CAST(user_id AS TEXT) = :identity"
+              else:
+                  raise RuntimeError(
+                      "household_memberships heeft geen bruikbare user_email/email/user_id kolom"
+                  )
               membership_count = int(conn.execute(text(
                   "SELECT COUNT(*) FROM household_memberships "
                   "WHERE CAST(household_id AS TEXT) = :household_id "
-                  "AND CAST(user_id AS TEXT) = :user_id"
+                  f"AND {membership_identity_predicate}"
               ), {
                   "household_id": SUPERGEBRUIKER_HUISHOUDEN_ID,
-                  "user_id": SUPERGEBRUIKER_EMAIL,
+                  "identity": SUPERGEBRUIKER_EMAIL,
               }).scalar_one())
           engine.dispose()
           assert result.household_id == SUPERGEBRUIKER_HUISHOUDEN_ID
