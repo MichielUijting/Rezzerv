@@ -34,15 +34,16 @@ export default function SharedHouseholdMinimumPage({
   const [inviteSaving, setInviteSaving] = useState(false)
   const [inviteMessage, setInviteMessage] = useState('')
   const [inviteError, setInviteError] = useState('')
+  const [finishError, setFinishError] = useState('')
   const [onboardingInvitations, setOnboardingInvitations] = useState([])
 
-  const canFinish = Boolean(String(householdName || '').trim() && usageMode && !inviteSaving)
   const normalizedInviteEmail = String(inviteEmail || '').trim().toLowerCase()
   const canInvite = usageMode === 'together' && normalizedInviteEmail.includes('@') && !inviteSaving
 
   async function changeUsageMode(nextMode) {
     if (nextMode === usageMode || inviteSaving) return
     setInviteError('')
+    setFinishError('')
 
     if (nextMode === 'alone' && onboardingInvitations.length) {
       setInviteSaving(true)
@@ -92,9 +93,19 @@ export default function SharedHouseholdMinimumPage({
   }
 
   function finish() {
-    if (!canFinish) return
+    const normalizedHouseholdName = String(householdName || '').trim()
+    if (!normalizedHouseholdName) {
+      setFinishError('Vul eerst een naam voor je huishouden in.')
+      return
+    }
+    if (!usageMode) {
+      setFinishError('Kies eerst of je Inhuis alleen of samen gebruikt.')
+      return
+    }
+
+    setFinishError('')
     onSubmit?.({
-      household_name: String(householdName || '').trim(),
+      household_name: normalizedHouseholdName,
       household_usage_mode: usageMode,
     })
   }
@@ -135,7 +146,10 @@ export default function SharedHouseholdMinimumPage({
           <Input
             label="Naam huishouden"
             value={householdName}
-            onChange={(event) => setHouseholdName(event.target.value)}
+            onChange={(event) => {
+              setHouseholdName(event.target.value)
+              setFinishError('')
+            }}
             disabled={saving || inviteSaving}
             required
             maxLength={120}
@@ -210,19 +224,29 @@ export default function SharedHouseholdMinimumPage({
       ) : null}
 
       <p style={{ marginBottom: 0 }}>
-        <strong>Na afronden blijft je actieve inrichting zichtbaar bovenaan Instellingen.</strong>
+        <strong>Na afronden ga je direct naar Home. Daar zie je de acties die passen bij jouw inrichting.</strong>
       </p>
 
       <Button
         type="button"
         variant="primary"
-        disabled={saving || !canFinish}
+        disabled={saving || inviteSaving}
         onClick={finish}
         data-testid="shared-household-finish"
       >
         {saving ? 'Opslaan…' : 'Onboarding afronden'}
       </Button>
 
+      {finishError ? (
+        <div
+          className="rz-alert"
+          role="alert"
+          aria-live="polite"
+          data-testid="shared-household-finish-validation"
+        >
+          {finishError}
+        </div>
+      ) : null}
       {error ? <div className="rz-alert">{error}</div> : null}
     </div>
   )
