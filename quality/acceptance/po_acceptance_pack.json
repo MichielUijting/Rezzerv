@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "pack_id": "F8-PO-01",
+  "title": "PO Acceptance Pack",
+  "status": "ready_for_po",
+  "release_dependency": "F7-REL-02",
+  "source_matrix": "quality/acceptance/functional_acceptance_matrix.json",
+  "source_matrix_blob": "75549a41080aeba2bbc8518437764a7904922de3",
+  "purpose": "A short, fixed PO acceptance check for user clarity, product intent and understandable end-to-end behavior. Technical regression evidence remains owned by automated authorities and is not replayed manually.",
+  "policy": {
+    "scope_rule": "Every P0 scenario in the functional acceptance matrix with manual_po_acceptance=true must be represented exactly once in this pack.",
+    "technical_authority_excluded": [
+      "P0-MIGRATION-STARTUP"
+    ],
+    "no_manual_regression_replay": true,
+    "blocking_dimensions": [
+      "clarity",
+      "user_flow",
+      "feedback",
+      "product_intent",
+      "role_and_context_comprehension"
+    ],
+    "forbidden_manual_evidence": [
+      "database inspection",
+      "API inspection",
+      "CI log inspection",
+      "workflow inspection",
+      "container inspection"
+    ]
+  },
+  "expected_total_minutes": 25,
+  "journeys": [
+    {
+      "id": "PO-01",
+      "order": 1,
+      "title": "First use, onboarding and settings",
+      "estimated_minutes": 6,
+      "covers": [
+        "P0-ACCOUNT-SESSION",
+        "P0-ONBOARDING",
+        "P0-SETTINGS-PROJECTION",
+        "P0-LOCATIONS-POLICY"
+      ],
+      "purpose": "Judge whether a new household can get into the product, understand its configuration and return to it without product knowledge.",
+      "steps": [
+        "Open the product as a new user, register and sign in.",
+        "Complete onboarding for one household and choose the location setting that best fits the test household.",
+        "From the resulting home screen, open Settings and change the location setting once.",
+        "Return to the normal user flow and confirm that navigation and visible choices match the changed setting.",
+        "Sign out and sign in again, then confirm that the active household and its configuration are understandable."
+      ],
+      "acceptance_criteria": [
+        "The user always knows what the next meaningful action is.",
+        "Labels and explanations are understandable without implementation knowledge.",
+        "The location setting has an obvious and consistent effect on visible product choices.",
+        "Signing out and back in does not create uncertainty about the active household or configuration."
+      ]
+    },
+    {
+      "id": "PO-02",
+      "order": 2,
+      "title": "Household collaboration and permission boundaries",
+      "estimated_minutes": 5,
+      "covers": [
+        "P0-HOUSEHOLD-MEMBERSHIP",
+        "P0-AUTHORIZATION-ISOLATION"
+      ],
+      "purpose": "Judge whether invitations, household context and role boundaries are understandable to normal users.",
+      "steps": [
+        "As a household administrator, invite a second user.",
+        "Accept the invitation as the second user and open the household.",
+        "Switch household context when more than one household is available and confirm that the active context is obvious.",
+        "As the non-administrator, attempt one household setting that is intentionally restricted.",
+        "Return to normal household use and judge whether the restriction and current role remain understandable."
+      ],
+      "acceptance_criteria": [
+        "Invitation and acceptance language makes the relationship between user and household clear.",
+        "The active household is visually and conceptually unambiguous.",
+        "A restricted action produces an understandable product response rather than a technical error.",
+        "Nothing in the interface suggests access to another household's data or administrator privileges."
+      ]
+    },
+    {
+      "id": "PO-03",
+      "order": 3,
+      "title": "Receipt to stock and almost-out journey",
+      "estimated_minutes": 10,
+      "covers": [
+        "P0-RECEIPT-INVENTORY-ALMOSTOUT",
+        "P0-KASSA-REVIEW",
+        "P0-UNPACKING",
+        "P0-INVENTORY",
+        "P0-ALMOST-OUT",
+        "P0-ARTICLE-IDENTITY"
+      ],
+      "purpose": "Judge the core product story from receipt review through unpacking and stock management without replaying technical edge-case tests.",
+      "steps": [
+        "Upload one normal supported receipt and review it in Kassa.",
+        "Approve the receipt and continue to Uitpakken for a small representative subset of its articles.",
+        "Assign the visible choices that a normal user would make and finish unpacking those articles.",
+        "Open Voorraad and inspect one processed article, its current stock and its visible history.",
+        "Perform one normal consumption action so the article becomes relevant for Bijna op, then open Bijna op.",
+        "Open two distinct article details, rename one of them and confirm that the other still feels like a separate article in detail and history."
+      ],
+      "acceptance_criteria": [
+        "Kassa, Uitpakken, Voorraad and Bijna op feel like one coherent user journey rather than separate technical modules.",
+        "The product gives enough feedback to understand what has been accepted, processed and changed.",
+        "Stock and almost-out behavior is understandable from the user's actions without knowing internal calculations.",
+        "Article detail and history remain conceptually tied to the article the user selected, including after a rename.",
+        "No technical terminology or internal identifiers are required to understand the journey."
+      ]
+    },
+    {
+      "id": "PO-04",
+      "order": 4,
+      "title": "Platform administration without household privilege confusion",
+      "estimated_minutes": 4,
+      "covers": [
+        "P0-PLATFORM-AUTHORITY"
+      ],
+      "purpose": "Judge whether platform administration communicates its separate authority model clearly and safely.",
+      "steps": [
+        "Open the platform administration area with a role that is allowed to use it.",
+        "Inspect the available administration functions and the way platform context is presented.",
+        "Perform one safe permitted administration action available in the test environment.",
+        "Return to household context and confirm that platform authority is not presented as household membership or household administrator access."
+      ],
+      "acceptance_criteria": [
+        "Platform context is visibly distinct from normal household use.",
+        "Permitted and unavailable actions make sense for the signed-in platform role.",
+        "The interface does not imply that a platform role silently grants household privileges.",
+        "The administration action gives clear product feedback."
+      ]
+    }
+  ],
+  "result_template": "quality/acceptance/po_acceptance_result.template.json",
+  "execution_policy": {
+    "bind_result_to_candidate_sha": true,
+    "allowed_journey_verdicts": [
+      "accepted",
+      "rejected"
+    ],
+    "overall_acceptance_rule": "accepted only when every required journey is accepted and there are no blocking findings",
+    "evidence_boundary": "The PO records verdicts and concise product observations only. Automated test evidence remains the responsibility of the technical release authorities."
+  }
+}
