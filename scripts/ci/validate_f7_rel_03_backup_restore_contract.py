@@ -32,6 +32,24 @@ def load(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def valid_sha(value: object) -> bool:
+    text_value = str(value or "")
+    return len(text_value) == 40 and all(ch in "0123456789abcdef" for ch in text_value)
+
+
+def valid_numeric_id(value: object) -> bool:
+    return str(value or "").isdigit() and int(str(value)) > 0
+
+
+def valid_sha256_digest(value: object) -> bool:
+    text_value = str(value or "")
+    return (
+        text_value.startswith("sha256:")
+        and len(text_value) == 71
+        and all(ch in "0123456789abcdef" for ch in text_value[7:])
+    )
+
+
 def main() -> int:
     contract = load(CONTRACT)
     gate_map = load(MAP)
@@ -81,15 +99,27 @@ def main() -> int:
     require(release_gate.get("status") == "partial", "f7_rel_03_release_gate_remains_partial")
     residuals = {row.get("id"): row for row in release_gate.get("residuals", [])}
     require(set(residuals) == {"F7-REL-01", "F7-REL-02", "F7-REL-03"}, "f7_rel_03_release_residual_set")
+    require(residuals["F7-REL-01"].get("status") == "open", "f7_rel_01_remains_open")
+    require(residuals["F7-REL-02"].get("status") == "open", "f7_rel_02_remains_open")
     rel03 = residuals["F7-REL-03"]
     if contract.get("status") == "in_progress":
         require(rel03.get("status") in {"open", "in_progress"}, "f7_rel_03_map_not_prematurely_closed")
+        require(not contract.get("closure_proof"), "f7_rel_03_no_premature_contract_proof")
     else:
         require(rel03.get("status") == "closed", "f7_rel_03_map_closed")
         require(rel03.get("authority_workflow") == ".github/workflows/f7-rel-03-backup-restore-postgresql-authority.yml", "f7_rel_03_map_workflow")
         require(rel03.get("contract") == "quality/ci/f7_rel_03_backup_restore_contract.json", "f7_rel_03_map_contract")
-        proof = rel03.get("proof") or {}
-        require(all(proof.get(key) for key in ("run", "job", "candidate_sha", "artifact_id")), "f7_rel_03_map_proof_complete")
+        contract_proof = contract.get("closure_proof") or {}
+        map_proof = rel03.get("proof") or {}
+        required_proof_keys = {"run", "job", "candidate_sha", "artifact_id", "artifact_digest"}
+        require(set(contract_proof) == required_proof_keys, "f7_rel_03_contract_proof_keys_exact")
+        require(set(map_proof) == required_proof_keys, "f7_rel_03_map_proof_keys_exact")
+        require(contract_proof == map_proof, "f7_rel_03_contract_map_proof_exact_match")
+        require(valid_numeric_id(map_proof.get("run")), "f7_rel_03_proof_run_valid")
+        require(valid_numeric_id(map_proof.get("job")), "f7_rel_03_proof_job_valid")
+        require(valid_sha(map_proof.get("candidate_sha")), "f7_rel_03_proof_candidate_sha_valid")
+        require(valid_numeric_id(map_proof.get("artifact_id")), "f7_rel_03_proof_artifact_id_valid")
+        require(valid_sha256_digest(map_proof.get("artifact_digest")), "f7_rel_03_proof_artifact_digest_valid")
 
     require(WORKFLOW.is_file(), "f7_rel_03_workflow_exists")
     required_workflow_fragments = [

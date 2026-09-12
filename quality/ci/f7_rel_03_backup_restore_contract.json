@@ -2,7 +2,7 @@
   "schema_version": 1,
   "authority_id": "F7-REL-03",
   "title": "PostgreSQL backup restore startup data-integrity authority",
-  "status": "in_progress",
+  "status": "closed",
   "target_base": "main",
   "source_database": "rezzerv_rel03_source",
   "restore_database": "rezzerv_rel03_restore",
@@ -62,5 +62,12 @@
       "post_start_snapshot_sha256",
       "backend_http_probe"
     ]
+  },
+  "closure_proof": {
+    "run": "34679165901",
+    "job": "103514422700",
+    "candidate_sha": "f637069bf7c1c631bab5cfd610c68e0834481c36",
+    "artifact_id": "10293436959",
+    "artifact_digest": "sha256:d63a40af088e35a0cb37d3d6df06907f4cfb686fd05210ad9cddbbdfe5d7b4f4"
   }
 }
