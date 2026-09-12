@@ -14,6 +14,7 @@ on:
       - 'quality/ci/f7_ci_orchestration_gate_map.json'
       - 'scripts/ci/f7_release_acceptance_gate.py'
       - 'scripts/ci/validate_f7_ci_orchestration_gate_map.py'
+      - '.github/workflows/f7-release-package-authority.yml'
       - '.github/workflows/f7-release-acceptance-gate.yml'
   workflow_dispatch:
     inputs:
