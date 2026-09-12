@@ -118,6 +118,12 @@ jobs:
           grep -F 'PASS approval_validation_rejects_incomplete_receipt' kassa-review-api.log
           grep -F 'KASSA_REVIEW_API_POSTGRESQL_GREEN' kassa-review-api.log
 
+      - name: Reset PostgreSQL data between Kassa authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+
       - name: Validate Wat Inhuis Kassa approval routes directly to inventory
         shell: bash
         run: |
