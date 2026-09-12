@@ -133,8 +133,17 @@
         },
         {
           "id": "F7-REL-03",
-          "status": "open",
-          "description": "Backup -> restore -> startup -> data-integrity proof remains a downstream release-readiness dependency."
+          "status": "closed",
+          "authority_workflow": ".github/workflows/f7-rel-03-backup-restore-postgresql-authority.yml",
+          "contract": "quality/ci/f7_rel_03_backup_restore_contract.json",
+          "proof": {
+            "run": "34679165901",
+            "job": "103514422700",
+            "candidate_sha": "f637069bf7c1c631bab5cfd610c68e0834481c36",
+            "artifact_id": "10293436959",
+            "artifact_digest": "sha256:d63a40af088e35a0cb37d3d6df06907f4cfb686fd05210ad9cddbbdfe5d7b4f4"
+          },
+          "description": "PostgreSQL 17 backup -> restore -> startup -> data-integrity authority is proven with retained machine-readable evidence."
         }
       ]
     }
@@ -185,6 +194,16 @@
       "proof_sha": "b1ff0fbe0f442692bcee21164f57cd66a3ce7a2b",
       "artifact_id": "10282677711",
       "result": "Deep/Nightly canonical schedule and twelve-authority aggregate evidence proven; awaiting merge"
+    },
+    "F7-06": {
+      "status": "proof_complete",
+      "scope": "F7-REL-03",
+      "proof_run": "34679165901",
+      "proof_job": "103514422700",
+      "proof_sha": "f637069bf7c1c631bab5cfd610c68e0834481c36",
+      "artifact_id": "10293436959",
+      "artifact_digest": "sha256:d63a40af088e35a0cb37d3d6df06907f4cfb686fd05210ad9cddbbdfe5d7b4f4",
+      "result": "PostgreSQL 17 backup, restore, real backend startup and post-start data-integrity authority proven; awaiting merge"
     }
   }
 }

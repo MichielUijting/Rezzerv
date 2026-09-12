@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "authority_id": "F7-REL-03",
+  "title": "PostgreSQL backup restore startup data-integrity authority",
+  "status": "closed",
+  "target_base": "main",
+  "source_database": "rezzerv_rel03_source",
+  "restore_database": "rezzerv_rel03_restore",
+  "postgresql_major": 17,
+  "candidate_policy": {
+    "pull_request_actions": ["opened", "reopened", "ready_for_review", "synchronize"],
+    "draft_behavior": "skip_heavy_authority",
+    "manual_fallback": "workflow_dispatch(candidate_ref, candidate_sha)",
+    "exact_sha_required": true
+  },
+  "backup_policy": {
+    "tool": "pg_dump",
+    "format": "custom",
+    "flags": ["--no-owner", "--no-acl"],
+    "artifact_policy": "retain evidence only; do not upload database dump"
+  },
+  "restore_policy": {
+    "tool": "pg_restore",
+    "target": "fresh empty database",
+    "flags": ["--no-owner", "--no-acl", "--exit-on-error"],
+    "owner": "rezzerv_migrator"
+  },
+  "startup_policy": {
+    "image": "backend/Dockerfile",
+    "command": "production image default CMD (runtime_preflight then uvicorn app.session_entrypoint:app)",
+    "database": "restored database",
+    "http_probe": "/openapi.json"
+  },
+  "integrity_policy": {
+    "repository_alembic_head_must_match": true,
+    "runtime_role_remains_dml_only": true,
+    "migrator_role_retains_schema_create": true,
+    "schema_table_count_preserved": true,
+    "typed_integrity_probe_preserved": ["uuid", "text", "numeric", "timestamptz", "jsonb", "bytea"],
+    "source_restore_snapshot_exact_match": true,
+    "restore_post_start_snapshot_exact_match": true
+  },
+  "required_markers": [
+    "F7_REL_03_CANDIDATE_IDENTITY_GREEN",
+    "F7_REL_03_SOURCE_SCHEMA_GREEN",
+    "F7_REL_03_BACKUP_CREATED_GREEN",
+    "F7_REL_03_RESTORE_GREEN",
+    "F7_REL_03_RESTORED_BOUNDARY_GREEN",
+    "F7_REL_03_STARTUP_GREEN",
+    "F7_REL_03_DATA_INTEGRITY_GREEN",
+    "F7_REL_03_BACKUP_RESTORE_GATE_GREEN"
+  ],
+  "evidence": {
+    "format": "json",
+    "retention_days": 30,
+    "fields": [
+      "candidate_sha",
+      "backup_sha256",
+      "backup_bytes",
+      "source_snapshot_sha256",
+      "restore_snapshot_sha256",
+      "post_start_snapshot_sha256",
+      "backend_http_probe"
+    ]
+  },
+  "closure_proof": {
+    "run": "34679165901",
+    "job": "103514422700",
+    "candidate_sha": "f637069bf7c1c631bab5cfd610c68e0834481c36",
+    "artifact_id": "10293436959",
+    "artifact_digest": "sha256:d63a40af088e35a0cb37d3d6df06907f4cfb686fd05210ad9cddbbdfe5d7b4f4"
+  }
+}
