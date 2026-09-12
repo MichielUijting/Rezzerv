@@ -184,15 +184,38 @@ async function proveOwnHistoryOnly(page, householdArticleId, ownEventId, otherEv
   return detailUrl
 }
 
+test('prepare locationless unpacking household', async ({ page }) => {
+  await registerLocationsOffHousehold(page, required('email', email), required('password', password), required('household', householdName))
+  const session = await readSession(page)
+  expect(session.role).toBe('admin')
+  expect(String(session.active_household_id || '')).not.toBe('')
+  writeFileSync('p0-l4-06-setup.json', JSON.stringify({ householdId: session.active_household_id }))
+})
+
+async function loginConfiguredHousehold(page, accountEmail, accountPassword) {
+  await page.goto('/login')
+  await page.getByTestId('login-email').fill(accountEmail)
+  await page.getByTestId('login-password').fill(accountPassword)
+  const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/login' && response.request().method() === 'POST')
+  await page.getByTestId('login-submit').click()
+  expect((await responsePromise).ok()).toBeTruthy()
+  await expect(page).toHaveURL(/\/home$/)
+  const response = await page.request.get('/api/onboarding/capabilities')
+  expect(response.ok()).toBeTruthy()
+  const capabilities = await response.json()
+  expect(capabilities.product_configuration.unpacking_enabled).toBe(true)
+  expect(capabilities.product_configuration.location_tracking_level).toBe('none')
+  await expect(page.getByTestId('home-tile-locaties')).toHaveCount(0)
+}
+
 test('L4-06 purchase identities survive same-name rename through detail and history', async ({ page, request }, testInfo) => {
   test.setTimeout(360_000)
   const accountEmail = required('PLAYWRIGHT_L4_06_EMAIL', email).toLowerCase()
   const accountPassword = required('PLAYWRIGHT_L4_06_PASSWORD', password)
-  const expectedHouseholdName = required('PLAYWRIGHT_L4_06_HOUSEHOLD', householdName)
   const commonName = required('PLAYWRIGHT_L4_06_SHARED_NAME', sharedArticleName)
   const baseURL = required('PLAYWRIGHT_BASE_URL', testInfo.project.use.baseURL)
 
-  await registerLocationsOffHousehold(page, accountEmail, accountPassword, expectedHouseholdName)
+  await loginConfiguredHousehold(page, accountEmail, accountPassword)
   const session = await readSession(page)
   expect(session.role).toBe('admin')
   const householdId = String(session.active_household_id || '')
