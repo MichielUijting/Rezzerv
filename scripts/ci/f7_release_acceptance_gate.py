@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""F7-REL-01 Release Acceptance dispatcher and exact-candidate aggregate gate."""
+"""F7-REL-01 Release Acceptance exact-candidate aggregate gate."""
 from __future__ import annotations
 
 import argparse
@@ -25,6 +25,13 @@ EXPECTED_CAPABILITIES = {
     "acceptance_results",
     "backup_restore_integrity",
 }
+EXPECTED_MODES = {
+    "RELEASE-PACKAGE": "reusable_job",
+    "FULL-REGRESSION": "workflow_dispatch",
+    "POSTGRESQL-ZERO-RESIDUAL": "workflow_dispatch",
+    "F7-REL-03": "workflow_dispatch",
+}
+CANONICAL_PACKAGE_WORKFLOW = ".github/workflows/f7-release-package-authority.yml"
 BAD = {"action_required", "cancelled", "failure", "startup_failure", "timed_out"}
 
 
@@ -61,23 +68,33 @@ def validate_config(cfg: dict) -> None:
 
     ids: list[str] = []
     roles: set[str] = set()
+    modes: dict[str, str] = {}
     for row in authorities:
         aid = row.get("id")
         workflow = row.get("workflow_file")
         inputs = row.get("inputs")
         role = row.get("role")
+        mode = row.get("execution_mode")
         req(isinstance(aid, str) and aid, "authority id missing")
         req(isinstance(workflow, str) and workflow.startswith(".github/workflows/"), f"invalid workflow file: {workflow}")
         req(isinstance(inputs, dict), f"inputs must be object: {aid}")
         req(isinstance(role, str) and role, f"role missing: {aid}")
+        req(mode in {"reusable_job", "workflow_dispatch"}, f"invalid execution mode: {aid}")
         target = ROOT / workflow
         req(target.is_file(), f"missing workflow: {workflow}")
-        req("workflow_dispatch:" in target.read_text(encoding="utf-8"), f"workflow lost workflow_dispatch: {workflow}")
+        text = target.read_text(encoding="utf-8")
+        required_trigger = "workflow_call:" if mode == "reusable_job" else "workflow_dispatch:"
+        req(required_trigger in text, f"workflow lost {required_trigger.rstrip(':')}: {workflow}")
         ids.append(aid)
         roles.add(role)
+        modes[aid] = mode
 
     req(len(ids) == len(set(ids)), "authority ids must be unique")
     req(roles == EXPECTED_ROLES, f"release authority role drift: {sorted(roles)}")
+    req(modes == EXPECTED_MODES, f"release authority execution-mode drift: {modes}")
+    package = next(row for row in authorities if row["id"] == "RELEASE-PACKAGE")
+    req(package["workflow_file"] == CANONICAL_PACKAGE_WORKFLOW, "canonical release-package workflow drift")
+    req(package["inputs"] == {"candidate_ref": "$CANDIDATE_REF", "candidate_sha": "$CANDIDATE_SHA"}, "release-package exact-candidate input drift")
 
     capabilities = cfg.get("required_release_capabilities")
     req(isinstance(capabilities, dict), "required_release_capabilities missing")
@@ -102,6 +119,8 @@ def validate_config(cfg: dict) -> None:
     req("F7-REL-02" in po_policy and "Phase 8/9" in po_policy, "PO acceptance boundary missing")
 
     print("PASS f7_rel_01_four_release_authorities_registered")
+    print("PASS f7_rel_01_execution_modes_fail_closed")
+    print("PASS f7_rel_01_canonical_version_agnostic_package_authority")
     print("PASS f7_rel_01_release_capabilities_complete")
     print("PASS f7_rel_01_full_regression_binds_migration_startup")
     print("PASS f7_rel_01_po_acceptance_boundary_explicit")
@@ -158,37 +177,58 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
     req(bool(args.repo), "repo missing")
     req(bool(args.ref), "candidate ref missing")
     req(bool(args.sha), "candidate SHA missing")
+    req(args.reusable_package_result == "success", f"reusable package authority not green: {args.reusable_package_result}")
+    req(bool(args.parent_run_id), "parent run id missing")
     token = os.getenv("GITHUB_TOKEN", "")
     req(bool(token), "GITHUB_TOKEN missing")
 
     started = datetime.now(timezone.utc)
+    package = next(row for row in cfg["authorities"] if row["id"] == "RELEASE-PACKAGE")
+    package_evidence = {
+        "id": package["id"],
+        "role": package["role"],
+        "workflow_file": package["workflow_file"],
+        "execution_mode": "reusable_job",
+        "run_id": int(args.parent_run_id),
+        "head_sha": args.sha,
+        "conclusion": "success",
+        "evidence_scope": "reusable_exact_candidate_job_in_parent_run",
+    }
     evidence = {
         "gate_id": "F7-REL-01",
         "candidate_ref": args.ref,
         "candidate_sha": args.sha,
         "dispatch_started_at": started.isoformat().replace("+00:00", "Z"),
-        "authorities": [],
+        "bound_authorities": [package_evidence],
         "status": "dispatching",
     }
+
+    dispatched = 0
     for row in cfg["authorities"]:
+        if row["execution_mode"] != "workflow_dispatch":
+            continue
         workflow = row["workflow_file"]
         inputs = render_inputs(row.get("inputs") or {}, args.ref, args.sha)
         payload: dict[str, object] = {"ref": args.ref}
         if inputs:
             payload["inputs"] = inputs
         api_request("POST", workflow_endpoint(args.repo, workflow) + "/dispatches", token, payload)
-        evidence["authorities"].append({
+        evidence["bound_authorities"].append({
             "id": row["id"],
             "role": row["role"],
             "workflow_file": workflow,
+            "execution_mode": "workflow_dispatch",
             "requested_inputs": inputs,
             "status": "dispatched",
         })
+        dispatched += 1
         print(f"F7_REL_01_DISPATCHED={row['id']}:{Path(workflow).name}")
 
     evidence["status"] = "dispatched"
     Path(args.evidence).write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
-    print(f"F7_REL_01_DISPATCHED_COUNT={len(evidence['authorities'])}")
+    print("F7_REL_01_REUSABLE_PACKAGE_BOUND=success")
+    print(f"F7_REL_01_DISPATCHED_COUNT={dispatched}")
+    print(f"F7_REL_01_BOUND_AUTHORITY_COUNT={len(evidence['bound_authorities'])}")
     print("F7_REL_01_DISPATCH_GREEN")
     return 0
 
@@ -225,14 +265,23 @@ def cmd_wait(args: argparse.Namespace) -> int:
     req(evidence.get("candidate_sha") == args.sha, "evidence candidate SHA mismatch")
     req(evidence.get("candidate_ref") == args.ref, "evidence candidate ref mismatch")
 
+    bound = evidence.get("bound_authorities")
+    req(isinstance(bound, list) and len(bound) == 4, "evidence must bind all four authorities")
+    package_rows = [row for row in bound if row.get("id") == "RELEASE-PACKAGE"]
+    req(len(package_rows) == 1, "reusable package evidence missing")
+    package = package_rows[0]
+    req(package.get("execution_mode") == "reusable_job", "package execution mode mismatch")
+    req(package.get("head_sha") == args.sha and package.get("conclusion") == "success", "package proof candidate/result mismatch")
+
     started = parse_time(str(evidence.get("dispatch_started_at"))) - timedelta(seconds=30)
     deadline = time.monotonic() + int(cfg.get("timeout_seconds", 21600))
     poll = int(cfg.get("poll_seconds", 20))
-    resolved: dict[str, dict] = {}
+    resolved: dict[str, dict] = {"RELEASE-PACKAGE": package}
+    dispatched_rows = [row for row in cfg["authorities"] if row["execution_mode"] == "workflow_dispatch"]
 
     while len(resolved) < len(cfg["authorities"]):
         waiting: list[str] = []
-        for row in cfg["authorities"]:
+        for row in dispatched_rows:
             aid = row["id"]
             if aid in resolved:
                 continue
@@ -255,6 +304,7 @@ def cmd_wait(args: argparse.Namespace) -> int:
                 "id": aid,
                 "role": row["role"],
                 "workflow_file": row["workflow_file"],
+                "execution_mode": "workflow_dispatch",
                 "run_id": run.get("id"),
                 "head_sha": run.get("head_sha"),
                 "conclusion": conclusion,
@@ -291,6 +341,8 @@ def main() -> int:
     dispatch.add_argument("--repo", required=True)
     dispatch.add_argument("--ref", required=True)
     dispatch.add_argument("--sha", required=True)
+    dispatch.add_argument("--reusable-package-result", required=True)
+    dispatch.add_argument("--parent-run-id", required=True)
     dispatch.add_argument("--evidence", default="f7-release-acceptance-evidence.json")
     dispatch.set_defaults(func=cmd_dispatch)
 
