@@ -119,15 +119,37 @@ function isTargetProcessResponse(response, batchId) {
   }
 }
 
+test('prepare global-location unpacking household', async ({ page }) => {
+  await registerLocationsOnHousehold(page, required('email', email), required('password', password), required('household', householdName))
+  const session = await readSession(page)
+  expect(session.role).toBe('admin')
+  expect(String(session.active_household_id || '')).not.toBe('')
+  writeFileSync('p0-receipt-inventory-idempotency-setup.json', JSON.stringify({ householdId: session.active_household_id }))
+})
+
+async function loginConfiguredHousehold(page, accountEmail, accountPassword) {
+  await page.goto('/login')
+  await page.getByTestId('login-email').fill(accountEmail)
+  await page.getByTestId('login-password').fill(accountPassword)
+  const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/login' && response.request().method() === 'POST')
+  await page.getByTestId('login-submit').click()
+  expect((await responsePromise).ok()).toBeTruthy()
+  await expect(page).toHaveURL(/\/home$/)
+  const response = await page.request.get('/api/onboarding/capabilities')
+  expect(response.ok()).toBeTruthy()
+  const capabilities = await response.json()
+  expect(capabilities.product_configuration.unpacking_enabled).toBe(true)
+  expect(capabilities.product_configuration.location_tracking_level).toBe('global')
+}
+
 test('L4-05 duplicate Naar voorraad submission is idempotent for inventory and purchase events', async ({ page, request }, testInfo) => {
   test.setTimeout(360_000)
   const accountEmail = required('PLAYWRIGHT_L4_IDEMPOTENCY_EMAIL', email).toLowerCase()
   const accountPassword = required('PLAYWRIGHT_L4_IDEMPOTENCY_PASSWORD', password)
-  const expectedHouseholdName = required('PLAYWRIGHT_L4_IDEMPOTENCY_HOUSEHOLD', householdName)
   const expectedLocationName = required('PLAYWRIGHT_L4_IDEMPOTENCY_LOCATION', locationName)
   const baseURL = required('PLAYWRIGHT_BASE_URL', testInfo.project.use.baseURL)
 
-  await registerLocationsOnHousehold(page, accountEmail, accountPassword, expectedHouseholdName)
+  await loginConfiguredHousehold(page, accountEmail, accountPassword)
   const session = await readSession(page)
   expect(session.role).toBe('admin')
   const householdId = String(session.active_household_id || '')

@@ -235,7 +235,19 @@ jobs:
             -e PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD" \
             -e PLAYWRIGHT_L4_RECEIPT_LOCATION="$PLAYWRIGHT_L4_RECEIPT_LOCATION" \
             -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
-            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-inventory.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-03-browser.log"
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-inventory.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep prepare | tee /work/p0-receipt-inventory-setup.log"
+          household_id="$(jq -er '.householdId' frontend/p0-receipt-inventory-setup.json)"
+          docker compose exec -T -e LOCATIONLESS_TEST_HOUSEHOLD_ID="$household_id" \
+            -e UNPACKING_TEST_LOCATION_LEVEL=global backend \
+            python -u /app/tests/locationless_unpacking_configuration_fixture.py
+          docker run --rm --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_RECEIPT_EMAIL="$PLAYWRIGHT_L4_RECEIPT_EMAIL" \
+            -e PLAYWRIGHT_L4_RECEIPT_PASSWORD="$PLAYWRIGHT_L4_RECEIPT_PASSWORD" \
+            -e PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD" \
+            -e PLAYWRIGHT_L4_RECEIPT_LOCATION="$PLAYWRIGHT_L4_RECEIPT_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-inventory.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep-invert prepare | tee /work/p0-l4-03-browser.log"
           grep -F 'P0_L4_03_RECEIPT_INVENTORY_BROWSER_GREEN' frontend/p0-l4-03-browser.log
           grep -F 'P0_L4_03_ALMOST_OUT_TRANSITION_BROWSER_GREEN' frontend/p0-l4-03-browser.log
           test -s frontend/p0-l4-03-browser-proof.json
@@ -336,7 +348,19 @@ jobs:
             -e PLAYWRIGHT_L4_IDEMPOTENCY_HOUSEHOLD="$PLAYWRIGHT_L4_IDEMPOTENCY_HOUSEHOLD" \
             -e PLAYWRIGHT_L4_IDEMPOTENCY_LOCATION="$PLAYWRIGHT_L4_IDEMPOTENCY_LOCATION" \
             -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
-            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-05-browser.log"
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep prepare | tee /work/p0-receipt-inventory-idempotency-setup.log"
+          household_id="$(jq -er '.householdId' frontend/p0-receipt-inventory-idempotency-setup.json)"
+          docker compose exec -T -e LOCATIONLESS_TEST_HOUSEHOLD_ID="$household_id" \
+            -e UNPACKING_TEST_LOCATION_LEVEL=global backend \
+            python -u /app/tests/locationless_unpacking_configuration_fixture.py
+          docker run --rm --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_IDEMPOTENCY_EMAIL="$PLAYWRIGHT_L4_IDEMPOTENCY_EMAIL" \
+            -e PLAYWRIGHT_L4_IDEMPOTENCY_PASSWORD="$PLAYWRIGHT_L4_IDEMPOTENCY_PASSWORD" \
+            -e PLAYWRIGHT_L4_IDEMPOTENCY_HOUSEHOLD="$PLAYWRIGHT_L4_IDEMPOTENCY_HOUSEHOLD" \
+            -e PLAYWRIGHT_L4_IDEMPOTENCY_LOCATION="$PLAYWRIGHT_L4_IDEMPOTENCY_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-inventory-idempotency.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep-invert prepare | tee /work/p0-l4-05-browser.log"
           grep -F 'P0_L4_05_BROWSER_IDEMPOTENCY_GREEN' frontend/p0-l4-05-browser.log
           test -s frontend/p0-l4-05-browser-proof.json
           proof_json="$(cat frontend/p0-l4-05-browser-proof.json)"
@@ -382,7 +406,21 @@ jobs:
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -v "$GITHUB_WORKSPACE/backend/app/testing/receipt_parsing/raw:/fixtures:ro" \
             -w /work "$PLAYWRIGHT_IMAGE" \
-            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-nonphysical.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-nonphysical-browser.log"
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-nonphysical.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep prepare | tee /work/p0-receipt-nonphysical-setup.log"
+          household_id="$(jq -er '.householdId' frontend/p0-receipt-nonphysical-setup.json)"
+          docker compose exec -T -e LOCATIONLESS_TEST_HOUSEHOLD_ID="$household_id" \
+            -e UNPACKING_TEST_LOCATION_LEVEL=global backend \
+            python -u /app/tests/locationless_unpacking_configuration_fixture.py
+          docker run --rm --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_P0_NONPHYSICAL_EMAIL="$PLAYWRIGHT_P0_NONPHYSICAL_EMAIL" \
+            -e PLAYWRIGHT_P0_NONPHYSICAL_PASSWORD="$PLAYWRIGHT_P0_NONPHYSICAL_PASSWORD" \
+            -e PLAYWRIGHT_P0_NONPHYSICAL_HOUSEHOLD="$PLAYWRIGHT_P0_NONPHYSICAL_HOUSEHOLD" \
+            -e PLAYWRIGHT_P0_NONPHYSICAL_FIXTURE=/fixtures/Jumbo_koopzegels.txt \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -v "$GITHUB_WORKSPACE/backend/app/testing/receipt_parsing/raw:/fixtures:ro" \
+            -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-nonphysical.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep-invert prepare | tee /work/p0-nonphysical-browser.log"
           grep -F 'P0_NONPHYSICAL_RECEIPT_BROWSER_GREEN' frontend/p0-nonphysical-browser.log
           grep -F 'P0_NONPHYSICAL_NO_INVENTORY_MUTATION_BROWSER_GREEN' frontend/p0-nonphysical-browser.log
           test -s frontend/p0-nonphysical-browser-proof.json
@@ -448,7 +486,19 @@ jobs:
             -e PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD" \
             -e PLAYWRIGHT_F6_RECEIPT_LOCATION="$PLAYWRIGHT_F6_RECEIPT_LOCATION" \
             -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
-            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-receipt-controlled-5xx-browser.log"
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep prepare | tee /work/f6-receipt-controlled-5xx-setup.log"
+          household_id="$(jq -er '.householdId' frontend/f6-receipt-controlled-5xx-setup.json)"
+          docker compose exec -T -e LOCATIONLESS_TEST_HOUSEHOLD_ID="$household_id" \
+            -e UNPACKING_TEST_LOCATION_LEVEL=global backend \
+            python -u /app/tests/locationless_unpacking_configuration_fixture.py
+          docker run --rm --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_RECEIPT_EMAIL="$PLAYWRIGHT_F6_RECEIPT_EMAIL" \
+            -e PLAYWRIGHT_F6_RECEIPT_PASSWORD="$PLAYWRIGHT_F6_RECEIPT_PASSWORD" \
+            -e PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD" \
+            -e PLAYWRIGHT_F6_RECEIPT_LOCATION="$PLAYWRIGHT_F6_RECEIPT_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" -w /work "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep-invert prepare | tee /work/f6-receipt-controlled-5xx-browser.log"
           grep -F 'F6_RECEIPT_REAL_500_FEEDBACK_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
           grep -F 'F6_RECEIPT_BROWSER_ROLLBACK_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
           grep -F 'F6_RECEIPT_ALMOST_OUT_UNCHANGED_GREEN' frontend/f6-receipt-controlled-5xx-browser.log

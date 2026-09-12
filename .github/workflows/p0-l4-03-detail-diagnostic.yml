@@ -70,7 +70,22 @@ jobs:
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
             mcr.microsoft.com/playwright:v1.58.2-noble \
-            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-inventory.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-03-browser-diagnostic.log"
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-inventory.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep prepare | tee /work/p0-receipt-inventory-setup.log"
+          household_id="$(jq -er '.householdId' frontend/p0-receipt-inventory-setup.json)"
+          docker compose exec -T -e LOCATIONLESS_TEST_HOUSEHOLD_ID="$household_id" \
+            -e UNPACKING_TEST_LOCATION_LEVEL=global backend \
+            python -u /app/tests/locationless_unpacking_configuration_fixture.py
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_RECEIPT_EMAIL="$PLAYWRIGHT_L4_RECEIPT_EMAIL" \
+            -e PLAYWRIGHT_L4_RECEIPT_PASSWORD="$PLAYWRIGHT_L4_RECEIPT_PASSWORD" \
+            -e PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD" \
+            -e PLAYWRIGHT_L4_RECEIPT_LOCATION="$PLAYWRIGHT_L4_RECEIPT_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-inventory.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep-invert prepare | tee /work/p0-l4-03-browser-diagnostic.log"
 
       - name: Capture backend failure evidence
         if: always()

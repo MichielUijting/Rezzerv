@@ -1,7 +1,8 @@
-"""Enable Uitpakken only for a fresh browser-created locationless test household.
+"""Enable Uitpakken only for a fresh browser-created test household.
 
 Run between browser onboarding and receipt upload in an isolated PostgreSQL
-authority. No receipt, article or inventory state is seeded or processed here.
+authority, preserving its explicitly expected none/global location policy.
+No receipt, article or inventory state is seeded or processed here.
 """
 from __future__ import annotations
 
@@ -20,6 +21,8 @@ from app.testing.postgresql_acceptance_foundation import create_postgresql_runti
 
 def main() -> None:
     household_id = os.environ["LOCATIONLESS_TEST_HOUSEHOLD_ID"].strip()
+    location_level = os.environ.get("UNPACKING_TEST_LOCATION_LEVEL", "none").strip()
+    assert location_level in {"none", "global"}, "Explicit supported location policy required"
     assert household_id and household_id != "0", "Dedicated browser household required"
     engine = create_postgresql_runtime_test_engine()
     try:
@@ -27,7 +30,7 @@ def main() -> None:
             assert str(conn.execute(text("SELECT current_user")).scalar_one()) == "rezzerv_app"
             configuration = resolve_household_product_configuration(conn, household_id)
             assert configuration.inventory_tracking_level == "quantity"
-            assert configuration.location_tracking_level == "none"
+            assert configuration.location_tracking_level == location_level
             assert configuration.unpacking_enabled is False
             for table in ("receipt_tables", "purchase_import_batches", "inventory_events"):
                 assert conn.execute(text(
@@ -37,7 +40,7 @@ def main() -> None:
                 conn, household_id=household_id, unpacking_enabled=True,
             )
             assert configuration.unpacking_enabled is True
-            assert configuration.location_tracking_level == "none"
+            assert configuration.location_tracking_level == location_level
         print("LOCATIONLESS_UNPACKING_CONFIGURATION_GREEN")
     finally:
         engine.dispose()

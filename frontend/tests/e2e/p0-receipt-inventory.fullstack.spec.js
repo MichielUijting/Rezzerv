@@ -196,15 +196,37 @@ async function consumeThroughArticleStock(page, householdArticleId, inventoryId,
   await expect(page.getByTestId('article-stock-mutation-success')).toContainText('Voorraad is afgeboekt.', { timeout: 20_000 })
 }
 
+test('prepare global-location unpacking household', async ({ page }) => {
+  await registerLocationsOnHousehold(page, required('email', email), required('password', password), required('household', householdName))
+  const session = await readSession(page)
+  expect(session.role).toBe('admin')
+  expect(String(session.active_household_id || '')).not.toBe('')
+  writeFileSync('p0-receipt-inventory-setup.json', JSON.stringify({ householdId: session.active_household_id }))
+})
+
+async function loginConfiguredHousehold(page, accountEmail, accountPassword) {
+  await page.goto('/login')
+  await page.getByTestId('login-email').fill(accountEmail)
+  await page.getByTestId('login-password').fill(accountPassword)
+  const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/login' && response.request().method() === 'POST')
+  await page.getByTestId('login-submit').click()
+  expect((await responsePromise).ok()).toBeTruthy()
+  await expect(page).toHaveURL(/\/home$/)
+  const response = await page.request.get('/api/onboarding/capabilities')
+  expect(response.ok()).toBeTruthy()
+  const capabilities = await response.json()
+  expect(capabilities.product_configuration.unpacking_enabled).toBe(true)
+  expect(capabilities.product_configuration.location_tracking_level).toBe('global')
+}
+
 test('L4-03 receipt -> Kassa -> approve -> Uitpakken -> location -> Voorraad -> history -> Bijna-op NEE -> JA', async ({ page, request }, testInfo) => {
   test.setTimeout(360_000)
   const accountEmail = required('PLAYWRIGHT_L4_RECEIPT_EMAIL', email).toLowerCase()
   const accountPassword = required('PLAYWRIGHT_L4_RECEIPT_PASSWORD', password)
-  const expectedHouseholdName = required('PLAYWRIGHT_L4_RECEIPT_HOUSEHOLD', householdName)
   const expectedLocationName = required('PLAYWRIGHT_L4_RECEIPT_LOCATION', locationName)
   const baseURL = required('PLAYWRIGHT_BASE_URL', testInfo.project.use.baseURL)
 
-  await registerLocationsOnHousehold(page, accountEmail, accountPassword, expectedHouseholdName)
+  await loginConfiguredHousehold(page, accountEmail, accountPassword)
   const session = await readSession(page)
   expect(session.role).toBe('admin')
   const householdId = String(session.active_household_id || '')

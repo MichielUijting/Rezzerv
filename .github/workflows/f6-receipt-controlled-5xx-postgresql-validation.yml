@@ -163,7 +163,22 @@ jobs:
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
             mcr.microsoft.com/playwright:v1.58.2-noble \
-            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/f6-receipt-controlled-5xx-browser.log"
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep prepare | tee /work/f6-receipt-controlled-5xx-setup.log"
+          household_id="$(jq -er '.householdId' frontend/f6-receipt-controlled-5xx-setup.json)"
+          docker compose exec -T -e LOCATIONLESS_TEST_HOUSEHOLD_ID="$household_id" \
+            -e UNPACKING_TEST_LOCATION_LEVEL=global backend \
+            python -u /app/tests/locationless_unpacking_configuration_fixture.py
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_F6_RECEIPT_EMAIL="$PLAYWRIGHT_F6_RECEIPT_EMAIL" \
+            -e PLAYWRIGHT_F6_RECEIPT_PASSWORD="$PLAYWRIGHT_F6_RECEIPT_PASSWORD" \
+            -e PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD="$PLAYWRIGHT_F6_RECEIPT_HOUSEHOLD" \
+            -e PLAYWRIGHT_F6_RECEIPT_LOCATION="$PLAYWRIGHT_F6_RECEIPT_LOCATION" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep-invert prepare | tee /work/f6-receipt-controlled-5xx-browser.log"
           grep -F 'F6_RECEIPT_REAL_500_FEEDBACK_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
           grep -F 'F6_RECEIPT_BROWSER_ROLLBACK_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
           grep -F 'F6_RECEIPT_ALMOST_OUT_UNCHANGED_GREEN' frontend/f6-receipt-controlled-5xx-browser.log
