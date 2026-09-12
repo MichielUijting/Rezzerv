@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "gate_id": "F7-REL-01",
+  "title": "Release Acceptance exact-candidate orchestration",
+  "target_base": "main",
+  "poll_seconds": 20,
+  "timeout_seconds": 21600,
+  "candidate_contract": "Dispatch every registered release authority from one candidate branch ref and accept only workflow_dispatch runs whose head_sha exactly equals the requested candidate SHA.",
+  "required_authority_count": 4,
+  "authorities": [
+    {
+      "id": "RELEASE-PACKAGE",
+      "workflow_file": ".github/workflows/pr253-v0112109-release-package.yml",
+      "inputs": {},
+      "role": "package_build"
+    },
+    {
+      "id": "FULL-REGRESSION",
+      "workflow_file": ".github/workflows/f7-full-regression-gate.yml",
+      "inputs": {
+        "candidate_ref": "$CANDIDATE_REF",
+        "candidate_sha": "$CANDIDATE_SHA"
+      },
+      "role": "acceptance_and_migration_startup"
+    },
+    {
+      "id": "POSTGRESQL-ZERO-RESIDUAL",
+      "workflow_file": ".github/workflows/postgresql-zero-residual-gate.yml",
+      "inputs": {},
+      "role": "zero_residual"
+    },
+    {
+      "id": "F7-REL-03",
+      "workflow_file": ".github/workflows/f7-rel-03-backup-restore-postgresql-authority.yml",
+      "inputs": {
+        "candidate_ref": "$CANDIDATE_REF",
+        "candidate_sha": "$CANDIDATE_SHA"
+      },
+      "role": "backup_restore_startup_integrity"
+    }
+  ],
+  "required_release_capabilities": {
+    "package_build": ["RELEASE-PACKAGE"],
+    "postgresql_migration_startup": ["FULL-REGRESSION", "F7-REL-03"],
+    "zero_residual": ["POSTGRESQL-ZERO-RESIDUAL"],
+    "acceptance_results": ["FULL-REGRESSION"],
+    "backup_restore_integrity": ["F7-REL-03"]
+  },
+  "transitive_contracts": {
+    "full_regression_config": "quality/ci/f7_full_regression_gate.json",
+    "required_full_regression_scenario": "P0-MIGRATION-STARTUP",
+    "required_full_regression_authorities": ["P0-MIGRATION-FOUNDATION", "P0-RUNTIME-STARTUP"]
+  },
+  "po_acceptance_policy": "F7-REL-02 remains an explicit Phase 8/9 dependency and is not synthesized by this technical gate."
+}
