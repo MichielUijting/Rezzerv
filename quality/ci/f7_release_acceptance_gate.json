@@ -10,8 +10,11 @@
   "authorities": [
     {
       "id": "RELEASE-PACKAGE",
-      "workflow_file": ".github/workflows/pr253-v0112109-release-package.yml",
-      "inputs": {},
+      "workflow_file": ".github/workflows/f7-release-package-authority.yml",
+      "inputs": {
+        "candidate_ref": "$CANDIDATE_REF",
+        "candidate_sha": "$CANDIDATE_SHA"
+      },
       "role": "package_build"
     },
     {
