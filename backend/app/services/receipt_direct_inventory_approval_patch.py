@@ -151,6 +151,93 @@ def install_receipt_direct_inventory_approval_patch(main_module) -> None:
         receipt_table_id: str,
         authorization: str | None = None,
     ):
+        # A fully processed direct-inventory receipt is already approved. Re-running
+        # the legacy receipt-to-batch synchronization is both unnecessary and can
+        # disturb the canonical household-article identity established by the first
+        # direct processing pass. Treat an identical second approval as a true no-op.
+        already_processed_batch = None
+        with main_module.engine.begin() as conn:
+            receipt_state = conn.execute(
+                text(
+                    """
+                    SELECT household_id, approved_at, approved_by_user_email
+                    FROM receipt_tables
+                    WHERE id = :receipt_table_id
+                    LIMIT 1
+                    """
+                ),
+                {"receipt_table_id": receipt_table_id},
+            ).mappings().first()
+            if receipt_state and receipt_state.get("approved_at") is not None:
+                main_module.require_receipt_write_context(
+                    conn,
+                    receipt_table_id,
+                    authorization,
+                )
+                household_id = str(receipt_state.get("household_id") or "").strip()
+                try:
+                    configuration = resolve_household_product_configuration(
+                        conn,
+                        household_id,
+                    )
+                except LookupError:
+                    configuration = None
+
+                if should_process_approved_receipt_directly_to_inventory(configuration):
+                    batch = conn.execute(
+                        text(
+                            """
+                            SELECT id, import_status
+                            FROM purchase_import_batches
+                            WHERE household_id = :household_id
+                              AND source_type = 'receipt'
+                              AND source_reference = :source_reference
+                            ORDER BY created_at DESC, id DESC
+                            LIMIT 1
+                            """
+                        ),
+                        {
+                            "household_id": household_id,
+                            "source_reference": f"receipt:{receipt_table_id}",
+                        },
+                    ).mappings().first()
+                    if batch:
+                        line_counts = conn.execute(
+                            text(
+                                """
+                                SELECT COUNT(*) AS total_count,
+                                       SUM(
+                                           CASE
+                                               WHEN processing_status = 'processed' THEN 1
+                                               ELSE 0
+                                           END
+                                       ) AS processed_count
+                                FROM purchase_import_lines
+                                WHERE batch_id = :batch_id
+                                """
+                            ),
+                            {"batch_id": str(batch["id"])},
+                        ).mappings().one()
+                        total_count = int(line_counts.get("total_count") or 0)
+                        processed_count = int(line_counts.get("processed_count") or 0)
+                        if total_count > 0 and processed_count == total_count:
+                            already_processed_batch = {
+                                "batch_id": str(batch["id"]),
+                                "status": str(batch.get("import_status") or "processed"),
+                            }
+
+        if already_processed_batch is not None:
+            refreshed = main_module.get_receipt_detail(receipt_table_id, authorization)
+            refreshed["approval_destination"] = "inventory"
+            refreshed["inventory_processing"] = {
+                "batch_id": already_processed_batch["batch_id"],
+                "status": already_processed_batch["status"],
+                "processed_count": 0,
+                "failed_count": 0,
+                "skipped_count": 0,
+            }
+            return refreshed
+
         result = original_approve(receipt_table_id, authorization)
 
         direct_batch_id = None
