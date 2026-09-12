@@ -99,7 +99,7 @@ def main() -> int:
     require(release_gate.get("status") == "partial", "f7_rel_03_release_gate_remains_partial")
     residuals = {row.get("id"): row for row in release_gate.get("residuals", [])}
     require(set(residuals) == {"F7-REL-01", "F7-REL-02", "F7-REL-03"}, "f7_rel_03_release_residual_set")
-    require(residuals["F7-REL-01"].get("status") == "open", "f7_rel_01_remains_open")
+    require(residuals["F7-REL-01"].get("status") == "closed", "f7_rel_01_closed")
     require(residuals["F7-REL-02"].get("status") == "open", "f7_rel_02_remains_open")
     rel03 = residuals["F7-REL-03"]
     if contract.get("status") == "in_progress":

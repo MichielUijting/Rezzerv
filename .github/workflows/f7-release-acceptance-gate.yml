@@ -13,6 +13,7 @@ on:
       - 'quality/ci/f7_release_acceptance_gate.json'
       - 'quality/ci/f7_ci_orchestration_gate_map.json'
       - 'scripts/ci/f7_release_acceptance_gate.py'
+      - 'scripts/ci/validate_f7_rel_01_release_acceptance_contract.py'
       - 'scripts/ci/validate_f7_ci_orchestration_gate_map.py'
       - '.github/workflows/f7-release-package-authority.yml'
       - '.github/workflows/f7-release-acceptance-gate.yml'
@@ -86,7 +87,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile scripts/ci/f7_release_acceptance_gate.py scripts/ci/validate_f7_ci_orchestration_gate_map.py
+          python -m py_compile scripts/ci/f7_release_acceptance_gate.py scripts/ci/validate_f7_rel_01_release_acceptance_contract.py scripts/ci/validate_f7_ci_orchestration_gate_map.py
           python scripts/ci/f7_release_acceptance_gate.py validate-config --config "$GATE_CONFIG" | tee f7-rel01-config.log
           grep -Fx 'PASS f7_rel_01_four_release_authorities_registered' f7-rel01-config.log
           grep -Fx 'PASS f7_rel_01_execution_modes_fail_closed' f7-rel01-config.log
@@ -95,6 +96,8 @@ jobs:
           grep -Fx 'PASS f7_rel_01_full_regression_binds_migration_startup' f7-rel01-config.log
           grep -Fx 'PASS f7_rel_01_po_acceptance_boundary_explicit' f7-rel01-config.log
           grep -Fx 'F7_REL_01_CONFIG_GREEN' f7-rel01-config.log
+          python scripts/ci/validate_f7_rel_01_release_acceptance_contract.py | tee f7-rel01-closure.log
+          grep -Fx 'F7_REL_01_CLOSURE_CONTRACT_GREEN' f7-rel01-closure.log
 
       - name: Validate central F7 gate map before release proof
         shell: bash
@@ -148,6 +151,7 @@ jobs:
             quality/ci/f7_release_acceptance_gate.json
             quality/ci/f7_ci_orchestration_gate_map.json
             f7-rel01-config.log
+            f7-rel01-closure.log
             f7-gate-map.log
             f7-rel01-dispatch.log
             f7-rel01-wait.log

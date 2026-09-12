@@ -2,6 +2,7 @@
   "schema_version": 1,
   "gate_id": "F7-REL-01",
   "title": "Release Acceptance exact-candidate orchestration",
+  "status": "closed",
   "target_base": "main",
   "poll_seconds": 20,
   "timeout_seconds": 21600,
@@ -58,5 +59,12 @@
     "required_full_regression_scenario": "P0-MIGRATION-STARTUP",
     "required_full_regression_authorities": ["P0-MIGRATION-FOUNDATION", "P0-RUNTIME-STARTUP"]
   },
-  "po_acceptance_policy": "F7-REL-02 remains an explicit Phase 8/9 dependency and is not synthesized by this technical gate."
+  "po_acceptance_policy": "F7-REL-02 remains an explicit Phase 8/9 dependency and is not synthesized by this technical gate.",
+  "closure_proof": {
+    "run": "34682184495",
+    "job": "103523224993",
+    "candidate_sha": "84006eef88bb613a2ef9249f446b5692fffb1bb7",
+    "artifact_id": "10294407368",
+    "artifact_digest": "sha256:783a49a473343d1601b02fcf88715db10d011488353d61b57e3276e0cd7067d3"
+  }
 }
