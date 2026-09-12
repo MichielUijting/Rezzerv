@@ -329,7 +329,21 @@ jobs:
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
             "$PLAYWRIGHT_IMAGE" \
-            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-article-identity-history.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-06-browser.log"
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-article-identity-history.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep prepare | tee /work/p0-l4-06-setup.log"
+          household_id="$(jq -er '.householdId' frontend/p0-l4-06-setup.json)"
+          docker compose exec -T -e LOCATIONLESS_TEST_HOUSEHOLD_ID="$household_id" backend \
+            python -u /app/tests/locationless_unpacking_configuration_fixture.py
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_06_EMAIL="$email" \
+            -e PLAYWRIGHT_L4_06_PASSWORD="$password" \
+            -e PLAYWRIGHT_L4_06_HOUSEHOLD="$household" \
+            -e PLAYWRIGHT_L4_06_SHARED_NAME="$shared_name" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            "$PLAYWRIGHT_IMAGE" \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-article-identity-history.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep-invert prepare | tee /work/p0-l4-06-browser.log"
           grep -F 'P0_L4_06_SAME_NAME_DIFFERENT_IDENTITY_GREEN' frontend/p0-l4-06-browser.log
           grep -F 'P0_L4_06_RENAME_IDENTITY_GREEN' frontend/p0-l4-06-browser.log
           grep -F 'P0_L4_06_DETAIL_HISTORY_IDENTITY_GREEN' frontend/p0-l4-06-browser.log
@@ -373,6 +387,8 @@ jobs:
           name: p0-l4-06-article-identity-history-evidence-shared-runner
           path: |
             frontend/p0-l4-06-browser.log
+            frontend/p0-l4-06-setup.json
+            frontend/p0-l4-06-setup.log
             frontend/p0-l4-06-browser-proof.json
             frontend/test-results/
             frontend/playwright-report-fullstack/

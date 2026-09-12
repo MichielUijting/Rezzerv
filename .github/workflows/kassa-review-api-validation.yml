@@ -10,6 +10,10 @@ on:
       - 'backend/alembic.ini'
       - 'backend/alembic/**'
       - 'backend/app/main.py'
+      - 'backend/app/__init__.py'
+      - 'backend/app/services/receipt_direct_inventory_approval_patch.py'
+      - 'backend/app/services/household_product_configuration_service.py'
+      - 'backend/app/services/canonical_direct_location_service.py'
       - 'backend/app/database.py'
       - 'backend/app/schemas/receipts.py'
       - 'backend/app/receipt_ingestion/receipt_line_semantics.py'
@@ -21,6 +25,7 @@ on:
       - 'backend/app/testing/receipt_acceptance/baseline.json'
       - 'quality/acceptance/canonical_scenario_catalog.json'
       - 'backend/tests/kassa_review_api_selftest.py'
+      - 'backend/tests/wat_inhuis_kassa_direct_inventory_selftest.py'
   workflow_dispatch:
 
 permissions:
@@ -91,6 +96,8 @@ jobs:
         run: |
           python -m py_compile \
             backend/tests/kassa_review_api_selftest.py \
+            backend/tests/wat_inhuis_kassa_direct_inventory_selftest.py \
+            backend/app/services/receipt_direct_inventory_approval_patch.py \
             backend/app/main.py \
             backend/app/schemas/receipts.py \
             backend/app/receipt_ingestion/receipt_line_semantics.py
@@ -111,6 +118,22 @@ jobs:
           grep -F 'PASS approval_validation_rejects_incomplete_receipt' kassa-review-api.log
           grep -F 'KASSA_REVIEW_API_POSTGRESQL_GREEN' kassa-review-api.log
 
+      - name: Reset PostgreSQL data between Kassa authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+
+      - name: Validate Wat Inhuis Kassa approval routes directly to inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/wat_inhuis_kassa_direct_inventory_selftest.py | tee wat-inhuis-kassa-direct-inventory.log
+          grep -F 'PASS wat_inhuis_kassa_approval_routes_directly_to_inventory' wat-inhuis-kassa-direct-inventory.log
+          grep -F 'PASS direct_inventory_approval_is_idempotent' wat-inhuis-kassa-direct-inventory.log
+          grep -F 'PASS unpacking_enabled_configuration_keeps_unpacking_boundary' wat-inhuis-kassa-direct-inventory.log
+          grep -F 'WAT_INHUIS_KASSA_DIRECT_INVENTORY_POSTGRESQL_GREEN' wat-inhuis-kassa-direct-inventory.log
+
       - name: Upload F3-04 evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -119,5 +142,6 @@ jobs:
           path: |
             kassa-review-shared-postgresql-foundation.log
             kassa-review-api.log
+            wat-inhuis-kassa-direct-inventory.log
           if-no-files-found: error
           retention-days: 7

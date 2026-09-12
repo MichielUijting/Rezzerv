@@ -215,15 +215,37 @@ async function processOnePhysicalLine(page, batchId, batchBefore, locationName) 
   return { processedLine, targetLocationId }
 }
 
+test('prepare global-location unpacking household', async ({ page }) => {
+  await registerLocationsOnHousehold(page, required('email', email), required('password', password), required('household', householdName))
+  const session = await readSession(page)
+  expect(session.role).toBe('admin')
+  expect(String(session.active_household_id || '')).not.toBe('')
+  writeFileSync('p0-receipt-nonphysical-setup.json', JSON.stringify({ householdId: session.active_household_id }))
+})
+
+async function loginConfiguredHousehold(page, accountEmail, accountPassword) {
+  await page.goto('/login')
+  await page.getByTestId('login-email').fill(accountEmail)
+  await page.getByTestId('login-password').fill(accountPassword)
+  const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/login' && response.request().method() === 'POST')
+  await page.getByTestId('login-submit').click()
+  expect((await responsePromise).ok()).toBeTruthy()
+  await expect(page).toHaveURL(/\/home$/)
+  const response = await page.request.get('/api/onboarding/capabilities')
+  expect(response.ok()).toBeTruthy()
+  const capabilities = await response.json()
+  expect(capabilities.product_configuration.unpacking_enabled).toBe(true)
+  expect(capabilities.product_configuration.location_tracking_level).toBe('global')
+}
+
 test('P0 nonphysical receipt line stays in Kassa and never mutates inventory', async ({ page }) => {
   test.setTimeout(360_000)
   const accountEmail = required('PLAYWRIGHT_P0_NONPHYSICAL_EMAIL', email).toLowerCase()
   const accountPassword = required('PLAYWRIGHT_P0_NONPHYSICAL_PASSWORD', password)
-  const expectedHouseholdName = required('PLAYWRIGHT_P0_NONPHYSICAL_HOUSEHOLD', householdName)
   const receiptFixturePath = required('PLAYWRIGHT_P0_NONPHYSICAL_FIXTURE', fixturePath)
   const locationName = `P0 nonphysical ${Date.now()}`
 
-  await registerLocationsOnHousehold(page, accountEmail, accountPassword, expectedHouseholdName)
+  await loginConfiguredHousehold(page, accountEmail, accountPassword)
   const session = await readSession(page)
   expect(session.role).toBe('admin')
   const householdId = String(session.active_household_id || '')

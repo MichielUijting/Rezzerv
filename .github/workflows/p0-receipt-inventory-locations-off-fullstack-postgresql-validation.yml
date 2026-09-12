@@ -98,7 +98,20 @@ jobs:
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
             mcr.microsoft.com/playwright:v1.58.2-noble \
-            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack | tee /work/p0-l4-04-browser.log"
+            bash -lc "set -o pipefail; npm ci && npx playwright test tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep prepare | tee /work/p0-l4-04-setup.log"
+          household_id="$(jq -er '.householdId' frontend/p0-l4-04-setup.json)"
+          docker compose exec -T -e LOCATIONLESS_TEST_HOUSEHOLD_ID="$household_id" backend \
+            python -u /app/tests/locationless_unpacking_configuration_fixture.py
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_L4_04_EMAIL="$PLAYWRIGHT_L4_04_EMAIL" \
+            -e PLAYWRIGHT_L4_04_PASSWORD="$PLAYWRIGHT_L4_04_PASSWORD" \
+            -e PLAYWRIGHT_L4_04_HOUSEHOLD="$PLAYWRIGHT_L4_04_HOUSEHOLD" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "set -o pipefail; npx playwright test tests/e2e/p0-receipt-inventory-locations-off.fullstack.spec.js --config=playwright.fullstack.config.js --project=chromium-fullstack --grep-invert prepare | tee /work/p0-l4-04-browser.log"
           grep -F 'P0_L4_04_LOCATIONS_OFF_BROWSER_GREEN' frontend/p0-l4-04-browser.log
           grep -F 'P0_L4_04_LOCATIONLESS_INVENTORY_BROWSER_GREEN' frontend/p0-l4-04-browser.log
           test -s frontend/p0-l4-04-browser-proof.json
@@ -230,6 +243,8 @@ jobs:
             p0-l4-04-postgresql-boundary.log
             p0-l4-04-postgresql-end-state.log
             frontend/p0-l4-04-browser.log
+            frontend/p0-l4-04-setup.json
+            frontend/*-setup.log
             frontend/p0-l4-04-browser-proof.json
             frontend/test-results/**
           if-no-files-found: warn
