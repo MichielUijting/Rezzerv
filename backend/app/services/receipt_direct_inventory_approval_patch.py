@@ -117,7 +117,7 @@ def _prepare_receipt_batch_for_direct_inventory(
                     target_location_id = :target_location_id,
                     suggested_location_id = COALESCE(
                         suggested_location_id,
-                        :target_location_id
+                        :suggested_location_id
                     ),
                     article_override_mode = 'auto',
                     location_override_mode = 'auto',
@@ -129,6 +129,7 @@ def _prepare_receipt_batch_for_direct_inventory(
             {
                 "article_id": str(article_id),
                 "target_location_id": direct_location_id,
+                "suggested_location_id": direct_location_id,
                 "line_id": line_id,
                 "batch_id": normalized_batch_id,
             },
