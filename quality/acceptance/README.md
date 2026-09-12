@@ -1,6 +1,6 @@
 # Acceptance quality authorities
 
-Deze map bevat twee verschillende, elkaar aanvullende authorities.
+Deze map bevat drie verschillende, elkaar aanvullende authorities.
 
 ## `functional_acceptance_matrix.json`
 
@@ -22,3 +22,18 @@ De closure is evidence-first:
 - `.github/workflows/p0-residual-matrix-closure.yml` is de CI-gate.
 
 De zeven resterende residuals zijn daarmee de enige P0-testuitbreidingen die na deze eerste residual-closure nog als open implementatiewerk gelden. Centrale bundeling van alle gates tot één releasebeslissing hoort bij Fase 9 en is geen nieuw functioneel P0-scenario.
+
+## `po_acceptance_pack.json`
+
+Dit is de Phase 8 authority voor **F7-REL-02 / PO Acceptance**. Het pack vertaalt alle P0-scenario's waarvoor `manual_po_acceptance=true` naar vier korte, vaste gebruikersjourneys van samen circa 25 minuten.
+
+Belangrijk:
+
+- de PO beoordeelt gebruikersduidelijkheid, flow, feedback, productintentie en rol/context;
+- geautomatiseerde regressie-, database-, API- en CI-bewijzen worden niet handmatig overgedaan;
+- `P0-MIGRATION-STARTUP` blijft bewust technische release-authority en zit niet in het PO-pack;
+- `po_acceptance_result.template.json` start altijd op `pending` en mag nooit automatisch acceptance verzinnen;
+- `scripts/acceptance/validate_po_acceptance_pack.py` controleert fail-closed dat exact alle handmatige P0-scenario's zijn afgedekt, de check kort blijft en `F7-REL-02` open blijft tot een expliciet PO-resultaat;
+- `.github/workflows/f8-po-acceptance-pack-validation.yml` borgt het pack-contract in CI.
+
+De leesbare uitvoering staat in `PO_ACCEPTANCE_PACK.md`.
