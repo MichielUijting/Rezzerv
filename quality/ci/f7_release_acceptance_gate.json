@@ -5,12 +5,13 @@
   "target_base": "main",
   "poll_seconds": 20,
   "timeout_seconds": 21600,
-  "candidate_contract": "Dispatch every registered release authority from one candidate branch ref and accept only workflow_dispatch runs whose head_sha exactly equals the requested candidate SHA.",
+  "candidate_contract": "Bind every registered release authority to one candidate branch ref and accept results only for the exact requested candidate SHA.",
   "required_authority_count": 4,
   "authorities": [
     {
       "id": "RELEASE-PACKAGE",
       "workflow_file": ".github/workflows/f7-release-package-authority.yml",
+      "execution_mode": "reusable_job",
       "inputs": {
         "candidate_ref": "$CANDIDATE_REF",
         "candidate_sha": "$CANDIDATE_SHA"
@@ -20,6 +21,7 @@
     {
       "id": "FULL-REGRESSION",
       "workflow_file": ".github/workflows/f7-full-regression-gate.yml",
+      "execution_mode": "workflow_dispatch",
       "inputs": {
         "candidate_ref": "$CANDIDATE_REF",
         "candidate_sha": "$CANDIDATE_SHA"
@@ -29,12 +31,14 @@
     {
       "id": "POSTGRESQL-ZERO-RESIDUAL",
       "workflow_file": ".github/workflows/postgresql-zero-residual-gate.yml",
+      "execution_mode": "workflow_dispatch",
       "inputs": {},
       "role": "zero_residual"
     },
     {
       "id": "F7-REL-03",
       "workflow_file": ".github/workflows/f7-rel-03-backup-restore-postgresql-authority.yml",
+      "execution_mode": "workflow_dispatch",
       "inputs": {
         "candidate_ref": "$CANDIDATE_REF",
         "candidate_sha": "$CANDIDATE_SHA"
