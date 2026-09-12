@@ -56,7 +56,17 @@ test('L4-01 register -> Wat Inhuis onboarding -> settings projection -> usable a
 
   await expect(page.getByTestId('onboarding-shared-household-minimum')).toBeVisible()
   await page.getByTestId('shared-household-name').fill(expectedHouseholdName)
+
+  // PO-01 regression: an incomplete final step must never fail silently.
+  await expect(page.getByTestId('shared-household-finish')).toBeEnabled()
+  await page.getByTestId('shared-household-finish').click()
+  await expect(page.getByTestId('shared-household-finish-validation')).toHaveText(
+    'Kies eerst of je Inhuis alleen of samen gebruikt.',
+  )
+  await expect(page).toHaveURL(/\/onboarding$/)
+
   await page.getByTestId('shared-household-usage-alone').check()
+  await expect(page.getByTestId('shared-household-finish-validation')).toHaveCount(0)
 
   const householdResponsePromise = page.waitForResponse((response) => (
     response.url().includes('/api/onboarding/shared-household-minimum')
@@ -66,6 +76,7 @@ test('L4-01 register -> Wat Inhuis onboarding -> settings projection -> usable a
   const householdResponse = await householdResponsePromise
   expect(householdResponse.ok()).toBeTruthy()
 
+  // Valid completion returns the user to Home with context-appropriate actions.
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('dynamic-home-navigation')).toBeVisible()
   await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()
