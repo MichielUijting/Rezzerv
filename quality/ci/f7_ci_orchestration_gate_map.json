@@ -123,8 +123,17 @@
       "residuals": [
         {
           "id": "F7-REL-01",
-          "status": "open",
-          "description": "No single Release Acceptance orchestration binds package/build, PostgreSQL migration/startup, zero-residual and acceptance results to one candidate SHA."
+          "status": "closed",
+          "aggregate_workflow": ".github/workflows/f7-release-acceptance-gate.yml",
+          "contract": "quality/ci/f7_release_acceptance_gate.json",
+          "proof": {
+            "run": "34682184495",
+            "job": "103523224993",
+            "candidate_sha": "84006eef88bb613a2ef9249f446b5692fffb1bb7",
+            "artifact_id": "10294407368",
+            "artifact_digest": "sha256:783a49a473343d1601b02fcf88715db10d011488353d61b57e3276e0cd7067d3"
+          },
+          "description": "One exact-candidate Release Acceptance decision now binds package/build, PostgreSQL migration/startup, zero-residual, acceptance results and backup/restore integrity to one candidate SHA."
         },
         {
           "id": "F7-REL-02",
@@ -204,6 +213,16 @@
       "artifact_id": "10293436959",
       "artifact_digest": "sha256:d63a40af088e35a0cb37d3d6df06907f4cfb686fd05210ad9cddbbdfe5d7b4f4",
       "result": "PostgreSQL 17 backup, restore, real backend startup and post-start data-integrity authority proven; awaiting merge"
+    },
+    "F7-07": {
+      "status": "proof_complete",
+      "scope": "F7-REL-01",
+      "proof_run": "34682184495",
+      "proof_job": "103523224993",
+      "proof_sha": "84006eef88bb613a2ef9249f446b5692fffb1bb7",
+      "artifact_id": "10294407368",
+      "artifact_digest": "sha256:783a49a473343d1601b02fcf88715db10d011488353d61b57e3276e0cd7067d3",
+      "result": "Release package/build, PostgreSQL migration/startup, zero-residual, acceptance results and REL-03 integrity bound to one exact candidate SHA; awaiting merge"
     }
   }
 }

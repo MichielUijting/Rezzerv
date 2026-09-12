@@ -1,0 +1,160 @@
+name: F7 REL-01 Release Acceptance exact-candidate gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
+    paths:
+      - 'quality/ci/f7_release_acceptance_gate.json'
+      - 'quality/ci/f7_ci_orchestration_gate_map.json'
+      - 'scripts/ci/f7_release_acceptance_gate.py'
+      - 'scripts/ci/validate_f7_rel_01_release_acceptance_contract.py'
+      - 'scripts/ci/validate_f7_ci_orchestration_gate_map.py'
+      - '.github/workflows/f7-release-package-authority.yml'
+      - '.github/workflows/f7-release-acceptance-gate.yml'
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Branch ref that points to the exact candidate SHA
+        required: true
+        default: main
+        type: string
+      candidate_sha:
+        description: Exact candidate commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: f7-release-acceptance-${{ github.event.pull_request.number || inputs.candidate_sha || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-package-authority:
+    name: Canonical exact-candidate release package
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    uses: ./.github/workflows/f7-release-package-authority.yml
+    with:
+      candidate_ref: ${{ inputs.candidate_ref || github.head_ref }}
+      candidate_sha: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+
+  release-acceptance-gate:
+    name: F7 REL-01 exact-candidate release decision
+    needs:
+      - release-package-authority
+    if: ${{ always() && needs.release-package-authority.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 390
+    env:
+      CANDIDATE_REF: ${{ inputs.candidate_ref || github.head_ref }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+      PACKAGE_AUTHORITY_RESULT: ${{ needs.release-package-authority.result }}
+      GATE_CONFIG: quality/ci/f7_release_acceptance_gate.json
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove Release Acceptance candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test -n "$CANDIDATE_REF"
+          test -n "$CANDIDATE_SHA"
+          test "$actual" = "$CANDIDATE_SHA"
+          test "$PACKAGE_AUTHORITY_RESULT" = 'success'
+          remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_REF" | awk '{print $1}')"
+          test -n "$remote_sha"
+          test "$remote_sha" = "$CANDIDATE_SHA"
+          echo "F7_REL_01_CANDIDATE_REF=$CANDIDATE_REF"
+          echo "F7_REL_01_CANDIDATE_SHA=$CANDIDATE_SHA"
+          echo 'F7_REL_01_REUSABLE_PACKAGE_RESULT=success'
+          echo 'F7_REL_01_CANDIDATE_IDENTITY_GREEN'
+
+      - name: Compile and validate Release Acceptance contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/f7_release_acceptance_gate.py scripts/ci/validate_f7_rel_01_release_acceptance_contract.py scripts/ci/validate_f7_ci_orchestration_gate_map.py
+          python scripts/ci/f7_release_acceptance_gate.py validate-config --config "$GATE_CONFIG" | tee f7-rel01-config.log
+          grep -Fx 'PASS f7_rel_01_four_release_authorities_registered' f7-rel01-config.log
+          grep -Fx 'PASS f7_rel_01_execution_modes_fail_closed' f7-rel01-config.log
+          grep -Fx 'PASS f7_rel_01_canonical_version_agnostic_package_authority' f7-rel01-config.log
+          grep -Fx 'PASS f7_rel_01_release_capabilities_complete' f7-rel01-config.log
+          grep -Fx 'PASS f7_rel_01_full_regression_binds_migration_startup' f7-rel01-config.log
+          grep -Fx 'PASS f7_rel_01_po_acceptance_boundary_explicit' f7-rel01-config.log
+          grep -Fx 'F7_REL_01_CONFIG_GREEN' f7-rel01-config.log
+          python scripts/ci/validate_f7_rel_01_release_acceptance_contract.py | tee f7-rel01-closure.log
+          grep -Fx 'F7_REL_01_CLOSURE_CONTRACT_GREEN' f7-rel01-closure.log
+
+      - name: Validate central F7 gate map before release proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Bind reusable package and dispatch remaining authorities
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_release_acceptance_gate.py dispatch \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --reusable-package-result "$PACKAGE_AUTHORITY_RESULT" \
+            --parent-run-id "$GITHUB_RUN_ID" \
+            --evidence f7-release-acceptance-evidence.json \
+            | tee f7-rel01-dispatch.log
+          grep -Fx 'F7_REL_01_REUSABLE_PACKAGE_BOUND=success' f7-rel01-dispatch.log
+          grep -Fx 'F7_REL_01_DISPATCHED_COUNT=3' f7-rel01-dispatch.log
+          grep -Fx 'F7_REL_01_BOUND_AUTHORITY_COUNT=4' f7-rel01-dispatch.log
+          grep -Fx 'F7_REL_01_DISPATCH_GREEN' f7-rel01-dispatch.log
+
+      - name: Aggregate all Release Acceptance authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_release_acceptance_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --evidence f7-release-acceptance-evidence.json \
+            | tee f7-rel01-wait.log
+          grep -Fx 'F7_REL_01_AGGREGATED_COUNT=4' f7-rel01-wait.log
+          grep -Fx 'F7_REL_01_RELEASE_ACCEPTANCE_GATE_GREEN' f7-rel01-wait.log
+
+      - name: Upload Release Acceptance aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-release-acceptance-${{ github.run_id }}
+          path: |
+            quality/ci/f7_release_acceptance_gate.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-rel01-config.log
+            f7-rel01-closure.log
+            f7-gate-map.log
+            f7-rel01-dispatch.log
+            f7-rel01-wait.log
+            f7-release-acceptance-evidence.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,299 @@
+name: F7 Release Package exact-candidate authority
+
+on:
+  workflow_call:
+    inputs:
+      candidate_ref:
+        required: true
+        type: string
+      candidate_sha:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Branch ref that must still point to the exact candidate SHA
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact candidate commit SHA to package and validate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f7-release-package-${{ inputs.candidate_sha }}
+  cancel-in-progress: true
+
+jobs:
+  release-package:
+    name: Build, boot and package exact release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CANDIDATE_REF: ${{ inputs.candidate_ref }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      PRODUCT_SHA: ${{ inputs.candidate_sha }}
+      REZZERV_FRONTEND_PORT: '5147'
+      REZZERV_APP_BASE_URL: http://127.0.0.1:5147
+      COMPOSE_FILE: docker-compose.yml:docker-compose.postgresql.yml
+      COMPOSE_PROFILES: postgresql
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CANDIDATE_REF"
+          test -n "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_REF" | awk '{print $1}')"
+          test -n "$remote_sha"
+          test "$remote_sha" = "$CANDIDATE_SHA"
+          echo "F7_RELEASE_PACKAGE_CANDIDATE_SHA=$CANDIDATE_SHA"
+          echo 'F7_RELEASE_PACKAGE_CANDIDATE_IDENTITY_GREEN'
+
+      - name: Resolve and validate release version identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          expected = Path('VERSION.txt').read_text(encoding='utf-8').strip()
+          assert expected.startswith('Rezzerv-MVP-v'), expected
+          raw = expected.removeprefix('Rezzerv-MVP-v')
+          parts = raw.split('.')
+          assert len(parts) == 3 and all(part.isdigit() for part in parts), raw
+          package_version = '.'.join(str(int(part)) for part in parts)
+
+          assert Path('backend/VERSION.txt').read_text(encoding='utf-8').strip() == expected
+          for path in ('version.json', 'frontend/version.json', 'frontend/public/version.json'):
+              with open(path, encoding='utf-8') as handle:
+                  assert json.load(handle)['version'] == expected, path
+          with open('frontend/package.json', encoding='utf-8') as handle:
+              assert json.load(handle)['version'] == package_version
+
+          env_file = Path(os.environ['GITHUB_ENV'])
+          with env_file.open('a', encoding='utf-8') as handle:
+              handle.write(f'EXPECTED_VERSION={expected}\n')
+              handle.write(f'EXPECTED_PACKAGE_VERSION={package_version}\n')
+              handle.write(f'PACKAGE_NAME={expected}\n')
+          print(f'F7_RELEASE_PACKAGE_VERSION={expected}')
+          print('F7_RELEASE_PACKAGE_VERSION_SYNC_GREEN')
+          PY
+
+      - name: Build frontend production output
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Build Docker stack without cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          REZZERV_VERSION="$EXPECTED_VERSION" REZZERV_COMMIT="$PRODUCT_SHA" docker compose build --no-cache
+
+      - name: Start stack and validate production runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            REZZERV_VERSION="$EXPECTED_VERSION" REZZERV_COMMIT="$PRODUCT_SHA" docker compose down --volumes --remove-orphans || true
+          }
+          trap cleanup EXIT
+
+          REZZERV_VERSION="$EXPECTED_VERSION" REZZERV_COMMIT="$PRODUCT_SHA" docker compose up -d
+
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:8011/api/health > /tmp/health.json; then
+              break
+            fi
+            if [ "$attempt" = 120 ]; then
+              docker compose ps
+              docker compose logs --no-color --tail=600 backend
+              exit 1
+            fi
+            sleep 2
+          done
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          health = json.loads(Path('/tmp/health.json').read_text(encoding='utf-8'))
+          assert health.get('status') == 'ok', health
+          print('F7_RELEASE_PACKAGE_BACKEND_HEALTH_GREEN')
+          PY
+
+          curl --fail --silent http://127.0.0.1:8011/openapi.json > /tmp/openapi.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/openapi.json').read_text(encoding='utf-8'))
+          assert payload.get('openapi'), payload
+          print('F7_RELEASE_PACKAGE_OPENAPI_GREEN')
+          PY
+
+          curl --fail --silent http://127.0.0.1:8011/api/version > /tmp/backend-version.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/backend-version.json').read_text(encoding='utf-8'))
+          assert payload.get('version') == os.environ['EXPECTED_VERSION'], payload
+          print('F7_RELEASE_PACKAGE_BACKEND_VERSION_GREEN')
+          PY
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:5147/version.json > /tmp/frontend-version.json; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then
+              docker compose ps
+              docker compose logs --no-color --tail=400 frontend
+              exit 1
+            fi
+            sleep 2
+          done
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/frontend-version.json').read_text(encoding='utf-8'))
+          assert payload.get('version') == os.environ['EXPECTED_VERSION'], payload
+          assert payload.get('commit') == os.environ['PRODUCT_SHA'], payload
+          print('F7_RELEASE_PACKAGE_FRONTEND_IDENTITY_GREEN')
+          PY
+
+          curl --fail --silent --output /dev/null http://127.0.0.1:5147/
+          echo 'F7_RELEASE_PACKAGE_FRONTEND_ROOT_GREEN'
+
+          docker compose exec -T backend python - <<'PY'
+          import json, os
+          from app.db import get_runtime_datastore_info
+
+          assert os.environ.get('REZZERV_DATASTORE_POLICY') == 'postgresql-only'
+          assert str(os.environ.get('DATABASE_URL') or '').startswith('postgresql://')
+          assert str(os.environ.get('MIGRATION_DATABASE_URL') or '').startswith('postgresql://')
+          info = get_runtime_datastore_info()
+          assert info.get('datastore') == 'postgresql', info
+          assert info.get('policy') == 'postgresql-only', info
+          assert info.get('host') == 'postgres', info
+          payload = json.dumps(info, sort_keys=True, default=str)
+          assert 'rezzerv-local-only' not in payload, payload
+          print('F7_RELEASE_PACKAGE_RUNTIME_DB_GREEN=postgresql')
+          PY
+
+          docker inspect "$(docker compose ps -q backend)" > /tmp/backend-inspect.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          inspect = json.loads(Path('/tmp/backend-inspect.json').read_text(encoding='utf-8'))[0]
+          mounts = [m for m in (inspect.get('Mounts') or []) if m.get('Destination') == '/app/data']
+          assert not mounts, mounts
+          print('F7_RELEASE_PACKAGE_SQLITE_RUNTIME_MOUNT_ABSENT_GREEN')
+          PY
+
+          docker compose restart backend frontend
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:8011/api/health > /tmp/restart-health.json \
+              && curl --fail --silent http://127.0.0.1:5147/version.json > /tmp/restart-frontend-version.json; then
+              break
+            fi
+            if [ "$attempt" = 120 ]; then
+              docker compose ps
+              docker compose logs --no-color --tail=600
+              exit 1
+            fi
+            sleep 2
+          done
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          health = json.loads(Path('/tmp/restart-health.json').read_text(encoding='utf-8'))
+          frontend = json.loads(Path('/tmp/restart-frontend-version.json').read_text(encoding='utf-8'))
+          assert health.get('status') == 'ok', health
+          assert frontend.get('version') == os.environ['EXPECTED_VERSION'], frontend
+          assert frontend.get('commit') == os.environ['PRODUCT_SHA'], frontend
+          print('F7_RELEASE_PACKAGE_RESTART_GREEN')
+          PY
+
+          cleanup
+          trap - EXIT
+
+      - name: Create standalone release zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$RUNNER_TEMP/$PACKAGE_NAME"
+          archive="$RUNNER_TEMP/$PACKAGE_NAME.zip"
+          rm -rf "$package_root" "$archive"
+          mkdir -p "$package_root"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='frontend/node_modules/' \
+            --exclude='frontend/dist/' \
+            --exclude='backend/.venv/' \
+            --exclude='**/__pycache__/' \
+            --exclude='**/.pytest_cache/' \
+            ./ "$package_root/"
+
+          rm -rf "$package_root/backend/data"
+          mkdir -p "$package_root/backend/data"
+          touch "$package_root/backend/data/.gitkeep"
+          rm -f "$package_root/frontend/VERSION.txt"
+
+          (cd "$RUNNER_TEMP" && zip -qr "$PACKAGE_NAME.zip" "$PACKAGE_NAME")
+          unzip -t "$archive" | tail -n 2
+          test -f "$package_root/VERSION.txt"
+          test -f "$package_root/docker-compose.yml"
+          test -f "$package_root/docker-compose.postgresql.yml"
+          test -f "$package_root/backend/data/.gitkeep"
+          test -f "$package_root/backend/app/db.py"
+          test -f "$package_root/backend/app/migration_db.py"
+          test -f "$package_root/frontend/package.json"
+          test "$(tr -d '\r\n' < "$package_root/VERSION.txt")" = "$EXPECTED_VERSION"
+          test ! -e "$package_root/frontend/VERSION.txt"
+
+          python - "$archive" <<'PY'
+          import sys, zipfile
+          archive = sys.argv[1]
+          with zipfile.ZipFile(archive) as zf:
+              names = zf.namelist()
+          db_files = [name for name in names if name.lower().endswith(('.db', '.sqlite', '.sqlite3'))]
+          runtime_data = [
+              name for name in names
+              if '/backend/data/' in name.lower()
+              and not name.endswith('/backend/data/')
+              and not name.endswith('/backend/data/.gitkeep')
+          ]
+          legacy_frontend_version = [name for name in names if name.lower().endswith('/frontend/version.txt')]
+          assert not db_files, db_files
+          assert not runtime_data, runtime_data
+          assert not legacy_frontend_version, legacy_frontend_version
+          print('F7_RELEASE_PACKAGE_ARCHIVE_RUNTIME_DATA_FREE_GREEN')
+          PY
+
+          sha256sum "$archive" | tee /tmp/release-package.sha256
+          echo "F7_RELEASE_PACKAGE_ZIP_GREEN=$archive"
+
+      - name: Upload exact release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: ${{ runner.temp }}/${{ env.PACKAGE_NAME }}.zip
+          if-no-files-found: error
+          retention-days: 30
