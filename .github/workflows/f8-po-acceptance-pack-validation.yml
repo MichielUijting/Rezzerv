@@ -1,0 +1,40 @@
+name: F8 PO Acceptance Pack contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'quality/acceptance/po_acceptance_pack.json'
+      - 'quality/acceptance/po_acceptance_result.template.json'
+      - 'quality/acceptance/PO_ACCEPTANCE_PACK.md'
+      - 'quality/acceptance/functional_acceptance_matrix.json'
+      - 'quality/ci/f7_ci_orchestration_gate_map.json'
+      - 'scripts/acceptance/validate_po_acceptance_pack.py'
+      - '.github/workflows/f8-po-acceptance-pack-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate fixed PO acceptance pack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile PO acceptance validator
+        run: python -m py_compile scripts/acceptance/validate_po_acceptance_pack.py
+
+      - name: Validate PO acceptance pack
+        run: |
+          set -euo pipefail
+          python scripts/acceptance/validate_po_acceptance_pack.py | tee f8-po-acceptance-pack.log
+          grep -F 'F8_PO_ACCEPTANCE_PACK_GREEN' f8-po-acceptance-pack.log
