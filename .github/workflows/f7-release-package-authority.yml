@@ -1,6 +1,14 @@
 name: F7 Release Package exact-candidate authority
 
 on:
+  workflow_call:
+    inputs:
+      candidate_ref:
+        required: true
+        type: string
+      candidate_sha:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       candidate_ref:
