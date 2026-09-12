@@ -31,7 +31,10 @@ function ariaLiveForVariant(variant) {
 function normalizeFeedback(input) {
   if (!input) return null
   const variant = normalizeVariant(input.variant)
-  const message = String(input.message || '').trim()
+  const rawMessage = String(input.message || '').trim()
+  const message = rawMessage === 'Bon is goedgekeurd voor Uitpakken.'
+    ? 'Bon is goedgekeurd.'
+    : rawMessage
   const detail = String(input.detail || '').trim()
   const technicalDetail = String(input.technicalDetail || '').trim()
   const title = String(input.title || titleForVariant(variant)).trim()
