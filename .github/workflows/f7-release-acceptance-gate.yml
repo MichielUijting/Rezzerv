@@ -37,14 +37,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-package-authority:
+    name: Canonical exact-candidate release package
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    uses: ./.github/workflows/f7-release-package-authority.yml
+    with:
+      candidate_ref: ${{ inputs.candidate_ref || github.head_ref }}
+      candidate_sha: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+
   release-acceptance-gate:
     name: F7 REL-01 exact-candidate release decision
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    needs:
+      - release-package-authority
+    if: ${{ always() && needs.release-package-authority.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 390
     env:
       CANDIDATE_REF: ${{ inputs.candidate_ref || github.head_ref }}
       CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+      PACKAGE_AUTHORITY_RESULT: ${{ needs.release-package-authority.result }}
       GATE_CONFIG: quality/ci/f7_release_acceptance_gate.json
 
     steps:
@@ -62,11 +73,13 @@ jobs:
           test -n "$CANDIDATE_REF"
           test -n "$CANDIDATE_SHA"
           test "$actual" = "$CANDIDATE_SHA"
+          test "$PACKAGE_AUTHORITY_RESULT" = 'success'
           remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_REF" | awk '{print $1}')"
           test -n "$remote_sha"
           test "$remote_sha" = "$CANDIDATE_SHA"
           echo "F7_REL_01_CANDIDATE_REF=$CANDIDATE_REF"
           echo "F7_REL_01_CANDIDATE_SHA=$CANDIDATE_SHA"
+          echo 'F7_REL_01_REUSABLE_PACKAGE_RESULT=success'
           echo 'F7_REL_01_CANDIDATE_IDENTITY_GREEN'
 
       - name: Compile and validate Release Acceptance contract
@@ -76,6 +89,8 @@ jobs:
           python -m py_compile scripts/ci/f7_release_acceptance_gate.py scripts/ci/validate_f7_ci_orchestration_gate_map.py
           python scripts/ci/f7_release_acceptance_gate.py validate-config --config "$GATE_CONFIG" | tee f7-rel01-config.log
           grep -Fx 'PASS f7_rel_01_four_release_authorities_registered' f7-rel01-config.log
+          grep -Fx 'PASS f7_rel_01_execution_modes_fail_closed' f7-rel01-config.log
+          grep -Fx 'PASS f7_rel_01_canonical_version_agnostic_package_authority' f7-rel01-config.log
           grep -Fx 'PASS f7_rel_01_release_capabilities_complete' f7-rel01-config.log
           grep -Fx 'PASS f7_rel_01_full_regression_binds_migration_startup' f7-rel01-config.log
           grep -Fx 'PASS f7_rel_01_po_acceptance_boundary_explicit' f7-rel01-config.log
@@ -88,7 +103,7 @@ jobs:
           python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
           grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
 
-      - name: Dispatch every Release Acceptance authority on exact candidate ref
+      - name: Bind reusable package and dispatch remaining authorities
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -99,9 +114,13 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --ref "$CANDIDATE_REF" \
             --sha "$CANDIDATE_SHA" \
+            --reusable-package-result "$PACKAGE_AUTHORITY_RESULT" \
+            --parent-run-id "$GITHUB_RUN_ID" \
             --evidence f7-release-acceptance-evidence.json \
             | tee f7-rel01-dispatch.log
-          grep -Fx 'F7_REL_01_DISPATCHED_COUNT=4' f7-rel01-dispatch.log
+          grep -Fx 'F7_REL_01_REUSABLE_PACKAGE_BOUND=success' f7-rel01-dispatch.log
+          grep -Fx 'F7_REL_01_DISPATCHED_COUNT=3' f7-rel01-dispatch.log
+          grep -Fx 'F7_REL_01_BOUND_AUTHORITY_COUNT=4' f7-rel01-dispatch.log
           grep -Fx 'F7_REL_01_DISPATCH_GREEN' f7-rel01-dispatch.log
 
       - name: Aggregate all Release Acceptance authorities for exact candidate SHA
