@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "pack_id": "F8-PO-01",
+  "candidate_ref": "main",
+  "candidate_sha": "ed149e993731d7c77efecce56dee8f91728621c6",
+  "executed_at": null,
+  "executed_by": "PO",
+  "overall_verdict": "pending",
+  "journeys": [
+    {
+      "id": "PO-01",
+      "verdict": "pending",
+      "notes": ""
+    },
+    {
+      "id": "PO-02",
+      "verdict": "pending",
+      "notes": ""
+    },
+    {
+      "id": "PO-03",
+      "verdict": "pending",
+      "notes": ""
+    },
+    {
+      "id": "PO-04",
+      "verdict": "pending",
+      "notes": ""
+    }
+  ],
+  "blocking_findings": [],
+  "non_blocking_observations": []
+}
