@@ -1,4 +1,5 @@
 import './receipt-lifecycle-release-b.frontend-regression.js'
+import './kassa-duplicate.frontend-regression.js'
 import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,

@@ -12,6 +12,7 @@ Technical Design Reference:
 """
 
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
@@ -11058,7 +11059,7 @@ async def import_receipt(
         logger.exception('Onverwachte fout bij handmatige bonimport voor household %s', effective_household_id)
         raise HTTPException(status_code=500, detail='De geplakte of gekozen inhoud kon niet volledig als kassabon worden verwerkt.') from exc
     status_code = 200 if result.get("duplicate") else 201
-    return JSONResponse(status_code=status_code, content=result)
+    return JSONResponse(status_code=status_code, content=jsonable_encoder(result))
 
 
 @app.get("/api/receipts/import-batches/{batch_id}")
@@ -11706,6 +11707,15 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
                     rt.reference,
                     rt.notes,
                     rt.approved_at,
+                    (
+                        SELECT pib.import_status
+                        FROM purchase_import_batches pib
+                        WHERE pib.household_id = rt.household_id
+                          AND pib.source_type = 'receipt'
+                          AND pib.source_reference = 'receipt:' || rt.id
+                        ORDER BY pib.created_at DESC, pib.id DESC
+                        LIMIT 1
+                    ) AS import_status,
                     rt.approved_by_user_email,
                     rt.currency,
                     rt.parse_status,

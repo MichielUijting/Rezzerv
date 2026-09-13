@@ -70,6 +70,25 @@ def run() -> int:
             )
 
         with TestClient(main_module.app) as client:
+            def reimport_identical():
+                response = client.post(
+                    '/api/receipts/import',
+                    data={'household_id': TARGET_HOUSEHOLD},
+                    files={'file': ('duplicate.pdf', b'f3-04:wat-inhuis-direct', 'application/pdf')},
+                    headers=headers,
+                )
+                assert response.status_code == 200, response.text
+                assert response.json()['duplicate'] is True, response.text
+                assert response.json()['receipt_table_id'] == receipt['receipt_table_id']
+                detail = client.get(
+                    f"/api/receipts/{receipt['receipt_table_id']}", headers=headers,
+                )
+                assert detail.status_code == 200, detail.text
+                return detail.json()
+
+            active_duplicate = reimport_identical()
+            assert active_duplicate['approved_at'] is None
+            assert active_duplicate['import_status'] is None
             first = client.post(
                 f"/api/receipts/{receipt['receipt_table_id']}/approve",
                 headers=headers,
@@ -117,6 +136,14 @@ def run() -> int:
                 assert all(row["processing_status"] == "processed" for row in line_states)
                 assert all(row["matched_household_article_id"] for row in line_states)
 
+            processed_duplicate = reimport_identical()
+            assert processed_duplicate['approved_at']
+            assert processed_duplicate['import_status'] == 'processed'
+            with engine.begin() as conn:
+                assert int(conn.execute(text(
+                    'SELECT COUNT(*) FROM inventory_events WHERE household_id = :household_id'
+                ), {'household_id': TARGET_HOUSEHOLD}).scalar_one()) == after_first_events
+
             second = client.post(
                 f"/api/receipts/{receipt['receipt_table_id']}/approve",
                 headers=headers,
@@ -141,6 +168,7 @@ def run() -> int:
 
         print("PASS wat_inhuis_kassa_approval_routes_directly_to_inventory")
         print("PASS direct_inventory_approval_is_idempotent")
+        print("PASS active_and_processed_reimport_preserve_identity_and_inventory_events")
         print("PASS unpacking_enabled_configuration_keeps_unpacking_boundary")
         print("WAT_INHUIS_KASSA_DIRECT_INVENTORY_POSTGRESQL_GREEN")
         return 0
