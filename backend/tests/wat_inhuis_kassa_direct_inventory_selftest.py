@@ -166,10 +166,131 @@ def run() -> int:
                     after_second_events,
                 )
 
+            manual_receipt = _seed_receipt(
+                engine,
+                fixture_name="normal_physical",
+                seed_key="wat-inhuis-manual-article",
+            )
+            manual_article_name = "AH M GEHAKT HANDMATIG REGRESSIE"
+            created = client.post(
+                f"/api/receipts/{manual_receipt['receipt_table_id']}/lines",
+                headers=headers,
+                json={
+                    "article_name": manual_article_name,
+                    "quantity": 1,
+                    "unit": "stuk",
+                    "line_total": 4.99,
+                    "is_validated": True,
+                },
+            )
+            assert created.status_code == 200, created.text
+
+            with engine.begin() as conn:
+                manual_line = conn.execute(
+                    text(
+                        """
+                        SELECT id, line_role, inventory_eligible
+                        FROM receipt_table_lines
+                        WHERE receipt_table_id = :receipt_table_id
+                          AND COALESCE(corrected_raw_label, raw_label) = :article_name
+                          AND COALESCE(is_deleted, FALSE) = FALSE
+                        ORDER BY line_index DESC, created_at DESC
+                        LIMIT 1
+                        """
+                    ),
+                    {
+                        "receipt_table_id": manual_receipt["receipt_table_id"],
+                        "article_name": manual_article_name,
+                    },
+                ).mappings().one()
+                assert manual_line["line_role"] == "product", manual_line
+                assert bool(manual_line["inventory_eligible"]) is True, manual_line
+                manual_line_id = str(manual_line["id"])
+
+            manual_approval = client.post(
+                f"/api/receipts/{manual_receipt['receipt_table_id']}/approve",
+                headers=headers,
+            )
+            assert manual_approval.status_code == 200, manual_approval.text
+            manual_payload = manual_approval.json()
+            assert manual_payload["approval_destination"] == "inventory", manual_payload
+            manual_processing = manual_payload.get("inventory_processing") or {}
+            assert int(manual_processing.get("failed_count") or 0) == 0, manual_processing
+            assert int(manual_processing.get("skipped_count") or 0) == 0, manual_processing
+
+            with engine.begin() as conn:
+                manual_import_line = conn.execute(
+                    text(
+                        """
+                        SELECT pil.id, pil.processing_status, pil.matched_household_article_id,
+                               pil.processed_event_id
+                        FROM purchase_import_lines pil
+                        JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+                        WHERE pib.household_id = :household_id
+                          AND pib.source_type = 'receipt'
+                          AND pib.source_reference = :source_reference
+                          AND pil.external_line_ref = :external_line_ref
+                        LIMIT 1
+                        """
+                    ),
+                    {
+                        "household_id": TARGET_HOUSEHOLD,
+                        "source_reference": f"receipt:{manual_receipt['receipt_table_id']}",
+                        "external_line_ref": f"receipt-line:{manual_line_id}",
+                    },
+                ).mappings().one()
+                assert manual_import_line["processing_status"] == "processed", manual_import_line
+                assert manual_import_line["matched_household_article_id"], manual_import_line
+                assert manual_import_line["processed_event_id"], manual_import_line
+
+                manual_article_id = str(manual_import_line["matched_household_article_id"])
+                inventory_row = conn.execute(
+                    text(
+                        """
+                        SELECT naam, aantal
+                        FROM inventory
+                        WHERE household_id = :household_id
+                          AND household_article_id = :article_id
+                          AND COALESCE(status, 'active') = 'active'
+                        LIMIT 1
+                        """
+                    ),
+                    {
+                        "household_id": TARGET_HOUSEHOLD,
+                        "article_id": manual_article_id,
+                    },
+                ).mappings().one()
+                assert inventory_row["naam"] == manual_article_name, inventory_row
+                assert float(inventory_row["aantal"] or 0) == 1.0, inventory_row
+
+                purchase_event = conn.execute(
+                    text(
+                        """
+                        SELECT event_type, quantity, source_reference, source_line_id
+                        FROM inventory_events
+                        WHERE household_id = :household_id
+                          AND household_article_id = :article_id
+                          AND source_reference = :source_reference
+                          AND source_line_id = :source_line_id
+                        ORDER BY created_at DESC, id DESC
+                        LIMIT 1
+                        """
+                    ),
+                    {
+                        "household_id": TARGET_HOUSEHOLD,
+                        "article_id": manual_article_id,
+                        "source_reference": f"receipt:{manual_receipt['receipt_table_id']}",
+                        "source_line_id": str(manual_import_line["id"]),
+                    },
+                ).mappings().one()
+                assert purchase_event["event_type"] == "purchase", purchase_event
+                assert float(purchase_event["quantity"] or 0) == 1.0, purchase_event
+
         print("PASS wat_inhuis_kassa_approval_routes_directly_to_inventory")
         print("PASS direct_inventory_approval_is_idempotent")
         print("PASS active_and_processed_reimport_preserve_identity_and_inventory_events")
         print("PASS unpacking_enabled_configuration_keeps_unpacking_boundary")
+        print("PASS manual_kassa_article_is_product_and_reaches_inventory")
         print("WAT_INHUIS_KASSA_DIRECT_INVENTORY_POSTGRESQL_GREEN")
         return 0
     finally:
