@@ -1,4 +1,4 @@
-name: PR253 v01.12.109 release package
+name: Release package validation
 
 on:
   pull_request:
@@ -10,6 +10,9 @@ on:
       - 'frontend/version.json'
       - 'frontend/public/version.json'
       - 'frontend/package.json'
+      - 'bump-version.bat'
+      - 'sync-version.bat'
+      - 'validate-version-sync.bat'
       - 'frontend/tests/e2e/**'
       - 'backend/app/db.py'
       - 'backend/app/migration_db.py'
@@ -33,18 +36,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr253-v0112109-package-${{ github.event.pull_request.number || github.ref }}
+  group: release-package-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  package-v0112109:
-    name: Build runtime and package v01.12.109
+  package-current-version:
+    name: Build runtime and current release package
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_VERSION: Rezzerv-MVP-v01.12.109
-      EXPECTED_PACKAGE_VERSION: 1.12.109
-      PACKAGE_NAME: Rezzerv-MVP-v01.12.109
       PRODUCT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       REZZERV_FRONTEND_PORT: '5147'
       REZZERV_APP_BASE_URL: http://127.0.0.1:5147
@@ -57,6 +57,32 @@ jobs:
         with:
           ref: ${{ env.PRODUCT_SHA }}
           fetch-depth: 0
+
+      - name: Resolve release identity from VERSION.txt
+        id: release_identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          version = Path('VERSION.txt').read_text(encoding='utf-8').strip()
+          match = re.fullmatch(r'Rezzerv-MVP-v(\d+)\.(\d+)\.(\d+)', version)
+          if not match:
+              raise SystemExit(f'Invalid VERSION.txt identity: {version!r}')
+          package_version = '.'.join(str(int(part)) for part in match.groups())
+          package_name = version
+
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
+              handle.write(f'EXPECTED_VERSION={version}\n')
+              handle.write(f'EXPECTED_PACKAGE_VERSION={package_version}\n')
+              handle.write(f'PACKAGE_NAME={package_name}\n')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              handle.write(f'package_name={package_name}\n')
+          print(f'PACKAGE_IDENTITY={version} ({package_version})')
+          PY
 
       - name: Validate exact release identity
         shell: bash
@@ -261,7 +287,6 @@ jobs:
           archive = sys.argv[1]
           with zipfile.ZipFile(archive) as zf:
               names = zf.namelist()
-          lower_names = [name.lower() for name in names]
           db_files = [
               name for name in names
               if name.lower().endswith(('.db', '.sqlite', '.sqlite3'))
@@ -287,7 +312,7 @@ jobs:
       - name: Upload full release zip
         uses: actions/upload-artifact@v4
         with:
-          name: Rezzerv-MVP-v01.12.109
-          path: ${{ runner.temp }}/Rezzerv-MVP-v01.12.109.zip
+          name: ${{ steps.release_identity.outputs.package_name }}
+          path: ${{ runner.temp }}/${{ steps.release_identity.outputs.package_name }}.zip
           if-no-files-found: error
           retention-days: 30

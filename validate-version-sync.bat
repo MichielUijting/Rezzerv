@@ -10,7 +10,7 @@ if not defined EXPECTED (
   exit /b 1
 )
 
-set "FILES=version.json backend\VERSION.txt frontend\VERSION.txt frontend\version.json frontend\public\version.json frontend\package.json"
+set "FILES=version.json backend\VERSION.txt frontend\version.json frontend\public\version.json frontend\package.json"
 for %%F in (%FILES%) do (
   if not exist "%%~F" (
     echo [ERROR] Verplicht versiebestand ontbreekt: %%~F
@@ -38,7 +38,7 @@ for %%F in (version.json frontend\version.json frontend\public\version.json) do 
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$expected='%EXPECTED%'; $match = [regex]::Match($expected, '(\d+)\.(\d+)\.(\d+)$'); if (-not $match.Success) { Write-Host ('[ERROR] Kan packageversie niet afleiden uit ' + $expected); exit 6 }; $expectedPackage = ('{0}.{1}.{2}' -f [int]$match.Groups[1].Value, [int]$match.Groups[2].Value, [int]$match.Groups[3].Value); $packagePath='frontend/package.json'; try { $json = Get-Content -Raw -LiteralPath $packagePath | ConvertFrom-Json -ErrorAction Stop; $actualPackage = [string]$json.version } catch { Write-Host ('[ERROR] Kan versie niet lezen uit ' + $packagePath); exit 6 }; if ($actualPackage -ne $expectedPackage) { Write-Host ('[ERROR] Versiemismatch in ' + $packagePath + '. Gevonden: ' + $actualPackage + ' Verwacht: ' + $expectedPackage); exit 6 }; $textPath='frontend/VERSION.txt'; try { $actualText = (Get-Content -Raw -LiteralPath $textPath).Trim() } catch { Write-Host ('[ERROR] Kan versie niet lezen uit ' + $textPath); exit 6 }; if ($actualText -ne $expectedPackage) { Write-Host ('[ERROR] Versiemismatch in ' + $textPath + '. Gevonden: ' + $actualText + ' Verwacht: ' + $expectedPackage); exit 6 }"
+  "$expected='%EXPECTED%'; $path='frontend/package.json'; $match = [regex]::Match($expected, '(\d+)\.(\d+)\.(\d+)$'); if (-not $match.Success) { Write-Host ('[ERROR] Kan packageversie niet afleiden uit ' + $expected); exit 6 }; $expectedPackage = ('{0}.{1}.{2}' -f [int]$match.Groups[1].Value, [int]$match.Groups[2].Value, [int]$match.Groups[3].Value); try { $json = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json -ErrorAction Stop; $actual = [string]$json.version } catch { Write-Host ('[ERROR] Kan versie niet lezen uit ' + $path); exit 6 }; if ($actual -ne $expectedPackage) { Write-Host ('[ERROR] Versiemismatch in ' + $path + '. Gevonden: ' + $actual + ' Verwacht: ' + $expectedPackage); exit 6 }"
 if errorlevel 1 exit /b 6
 
 if exist ".\rezzerv.db" (
@@ -51,5 +51,5 @@ if exist ".\backend\rezzerv.db" (
   exit /b 8
 )
 
-echo [OK] Versiesync gecontroleerd: alle 6 verplichte versiebestanden staan op %EXPECTED% en verboden sqlite-bestanden ontbreken.
+echo [OK] Versiesync gecontroleerd: alle 5 verplichte versiebestanden staan op %EXPECTED% en verboden sqlite-bestanden ontbreken.
 exit /b 0

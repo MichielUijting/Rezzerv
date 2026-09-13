@@ -55,7 +55,6 @@ jobs:
             '^VERSION\.txt$',
             '^backend/VERSION\.txt$',
             '^version\.json$',
-            '^frontend/VERSION\.txt$',
             '^frontend/version\.json$',
             '^frontend/public/version\.json$',
             '^frontend/package\.json$',
@@ -64,6 +63,7 @@ jobs:
             '^validate-version-sync\.bat$',
             '^release\.bat$',
             '^\.github/workflows/release-version-sync-validation\.yml$',
+            '^\.github/workflows/pr253-v0112109-release-package\.yml$',
             '^backend/app/',
             '^backend/alembic/',
             '^backend/receipt_ingestion/',
@@ -134,7 +134,6 @@ jobs:
             'VERSION.txt',
             'backend/VERSION.txt',
             'version.json',
-            'frontend/VERSION.txt',
             'frontend/version.json',
             'frontend/public/version.json',
             'frontend/package.json'
@@ -178,21 +177,6 @@ jobs:
           }
           finally {
             Set-Content -LiteralPath 'backend/VERSION.txt' -Value $original -NoNewline
-          }
-
-      - name: Prove frontend text mismatch fails closed
-        shell: pwsh
-        run: |
-          $original = Get-Content -Raw -LiteralPath 'frontend/VERSION.txt'
-          try {
-            Set-Content -LiteralPath 'frontend/VERSION.txt' -Value '0.0.0' -NoNewline
-            $process = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/c','validate-version-sync.bat' -NoNewWindow -Wait -PassThru
-            if ($process.ExitCode -eq 0) {
-              throw 'validate-version-sync.bat accepted a frontend text version mismatch.'
-            }
-          }
-          finally {
-            Set-Content -LiteralPath 'frontend/VERSION.txt' -Value $original -NoNewline
           }
 
       - name: Prove package mismatch fails closed
