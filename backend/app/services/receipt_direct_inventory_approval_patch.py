@@ -197,6 +197,11 @@ def _persist_manual_receipt_line_product_semantics(
                 UPDATE receipt_table_lines
                 SET line_role = 'product',
                     inventory_eligible = 1,
+                    corrected_unit = COALESCE(
+                        NULLIF(BTRIM(corrected_unit), ''),
+                        NULLIF(BTRIM(unit), ''),
+                        'stuk'
+                    ),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :line_id
                   AND receipt_table_id = :receipt_table_id
