@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "policy_id": "F7-FULL-02",
   "target_base": "main",
   "automatic_pull_request_actions": [
@@ -8,11 +8,21 @@
     "ready_for_review",
     "synchronize"
   ],
-  "draft_policy": "Skip the heavy Full Regression job while the pull request is draft.",
+  "draft_policy": "Skip the Full Regression decision job while the pull request is draft.",
   "candidate_ref_source": "github.head_ref",
   "candidate_sha_source": "github.event.pull_request.head.sha",
-  "synchronize_policy": "Every synchronize event for a non-draft pull request creates a new exact candidate and cancels the previous in-progress Full Regression run for that pull request.",
-  "concurrency_policy": "One Full Regression run per pull request or manual candidate; cancel-in-progress is true.",
+  "synchronize_policy": "Every synchronize event for a non-draft pull request creates a new exact candidate and cancels the previous in-progress Full Regression decision for that pull request.",
+  "concurrency_policy": "One Full Regression decision run per pull request or manual candidate; cancel-in-progress is true.",
+  "risk_policy": {
+    "contract": "quality/ci/change_risk_policy.json",
+    "classifier": "scripts/ci/classify_change_risk.py",
+    "preliminary_source": "TEST_LEVEL_PROVISIONAL marker in pull-request body; missing marker fails closed to L",
+    "delta_source": "complete base SHA to exact candidate SHA diff",
+    "decision": "final level is max(preliminary, delta); automatic downgrade is forbidden",
+    "heavy_full_regression_required_for": ["L"],
+    "heavy_full_regression_bypassed_for": ["S", "M"],
+    "manual_dispatch_forces_level": "L"
+  },
   "manual_fallback": {
     "event": "workflow_dispatch",
     "required_inputs": [
@@ -20,5 +30,5 @@
       "candidate_sha"
     ]
   },
-  "required_authority_behavior": "The permanent trigger only selects the candidate. The existing F7-03 Full Regression gate remains responsible for dispatching and aggregating all eleven registered authorities on that exact candidate SHA."
+  "required_authority_behavior": "Every non-draft candidate still enters the Full Regression decision workflow. The fail-closed risk classifier decides whether the eleven F7-03 authorities are required. Final level L dispatches and aggregates all eleven authorities on the exact candidate SHA. Final level S or M records a green risk-authorized bypass; F7-02 remains the merge authority for those lower levels. A manual Full Regression dispatch always forces L."
 }
