@@ -153,7 +153,7 @@ def run() -> int:
                     text(
                         """
                         UPDATE household_articles
-                        SET consumable = FALSE,
+                        SET consumable = 0,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = :article_id
                           AND household_id = :household_id
