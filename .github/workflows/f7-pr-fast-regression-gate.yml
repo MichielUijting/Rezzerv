@@ -17,6 +17,15 @@ on:
         required: true
         default: main
         type: string
+      provisional_level:
+        description: Preliminary S/M/L classification for manual dispatch
+        required: true
+        default: L
+        type: choice
+        options:
+          - S
+          - M
+          - L
 
 permissions:
   contents: read
@@ -35,7 +44,9 @@ jobs:
       CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.sha }}
       BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
       BASE_REF: ${{ inputs.base_ref || github.event.pull_request.base.ref || 'main' }}
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
       GATE_CONFIG: quality/ci/f7_pr_fast_regression_gate.json
+      RISK_POLICY: quality/ci/change_risk_policy.json
 
     steps:
       - name: Checkout exact candidate
@@ -58,6 +69,32 @@ jobs:
             git fetch --no-tags --depth=1 origin "$BASE_SHA"
           fi
           git cat-file -e "${BASE_SHA}^{commit}"
+
+      - name: Classify complete candidate delta
+        id: risk
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/classify_change_risk.py
+          python scripts/ci/classify_change_risk.py --policy "$RISK_POLICY" validate-policy | tee f7-change-risk-policy.log
+          python scripts/ci/classify_change_risk.py --policy "$RISK_POLICY" self-test | tee f7-change-risk-self-test.log
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            python scripts/ci/classify_change_risk.py --policy "$RISK_POLICY" classify \
+              --base-sha "$BASE_SHA" \
+              --head-sha "$CANDIDATE_SHA" \
+              --provisional-level "${{ inputs.provisional_level }}" \
+              --evidence f7-change-risk-evidence.json \
+              | tee f7-change-risk.log
+          else
+            python scripts/ci/classify_change_risk.py --policy "$RISK_POLICY" classify \
+              --base-sha "$BASE_SHA" \
+              --head-sha "$CANDIDATE_SHA" \
+              --pr-body-env PR_BODY \
+              --evidence f7-change-risk-evidence.json \
+              | tee f7-change-risk.log
+          fi
+          grep -Fx 'CHANGE_RISK_CLASSIFICATION_GREEN' f7-change-risk.log
+          grep -E '^CHANGE_RISK_FINAL_LEVEL=[SML]$' f7-change-risk.log
 
       - name: Compile and validate PR Fast Regression authority
         shell: bash
@@ -108,10 +145,15 @@ jobs:
             --base-sha "$BASE_SHA" \
             --head-sha "$CANDIDATE_SHA" \
             --base-ref "$BASE_REF" \
+            --risk-level "${{ steps.risk.outputs.final_level }}" \
             --evidence f7-pr-fast-regression-evidence.json \
             | tee f7-pr-fast-plan.log
           grep -E '^F7_PR_FAST_MODE=(live|preview)$' f7-pr-fast-plan.log
+          grep -E '^F7_PR_FAST_RISK_LEVEL=[SML]$' f7-pr-fast-plan.log
           grep -E '^F7_PR_FAST_EXPECTED_COUNT=[0-5]$' f7-pr-fast-plan.log
+          if [[ "${{ steps.risk.outputs.final_level }}" == "S" ]]; then
+            grep -Fx 'F7_PR_FAST_EXPECTED_COUNT=0' f7-pr-fast-plan.log
+          fi
 
       - name: Run cheap acceptance authorities on exact candidate
         shell: bash
@@ -149,7 +191,12 @@ jobs:
         with:
           name: f7-pr-fast-regression-${{ github.run_id }}
           path: |
+            quality/ci/change_risk_policy.json
             quality/ci/f7_pr_fast_regression_gate.json
+            f7-change-risk-policy.log
+            f7-change-risk-self-test.log
+            f7-change-risk.log
+            f7-change-risk-evidence.json
             f7-pr-fast-config.log
             f7-shared-planner-candidate.log
             f7-pr-fast-plan.log
