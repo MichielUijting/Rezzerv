@@ -109,15 +109,18 @@ export function buildHomeNavigation({ onboarding, visibility }) {
     }
   }
 
+  const primaryKeys = primaryKeysFor(onboarding)
+  if (safeVisibility.canOpenAdmin) primaryKeys.push('instellingen')
+
   const primaryTiles = uniqueTiles(
-    primaryKeysFor(onboarding)
+    primaryKeys
       .map(findTile)
       .filter((tile) => tile && tile.clickable && isVisible(tile, safeVisibility)),
   )
-  const primaryKeys = new Set(primaryTiles.map((tile) => tile.key))
+  const visiblePrimaryKeys = new Set(primaryTiles.map((tile) => tile.key))
   const moreTiles = uniqueTiles(LEGACY_TILES)
     .filter((tile) => tile.clickable)
-    .filter((tile) => !primaryKeys.has(tile.key))
+    .filter((tile) => !visiblePrimaryKeys.has(tile.key))
     .filter((tile) => isVisible(tile, safeVisibility))
 
   return {

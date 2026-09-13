@@ -24,22 +24,20 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
   expect((await registration).status()).toBe(201)
 
   await expect(page.getByTestId('onboarding-use-case-page')).toBeVisible()
-  await page.getByTestId('onboarding-choice-wat_inhuis').check()
+  await page.getByTestId('onboarding-choice-waar_inhuis').check()
   const primary = page.waitForResponse((response) => (
     response.url().includes('/api/onboarding/primary-use-case') && response.request().method() === 'POST'
   ))
   await page.getByTestId('onboarding-primary-continue').click()
   expect((await primary).ok()).toBeTruthy()
 
-  await expect(page.getByTestId('onboarding-wat-inhuis-follow-up')).toBeVisible()
-  await page.getByTestId('wat-inhuis-tracking-quantity').check()
-  await page.getByTestId('wat-inhuis-global-locations-yes').check()
-  await page.getByTestId('wat-inhuis-almost-out-yes').check()
-  await page.getByTestId('wat-inhuis-shopping-yes').check()
+  await expect(page.getByTestId('onboarding-waar-inhuis-follow-up')).toBeVisible()
+  await page.getByTestId('waar-inhuis-unpacking-yes').check()
+  await page.getByTestId('waar-inhuis-receipts-yes').check()
   const product = page.waitForResponse((response) => (
-    response.url().includes('/api/onboarding/wat-inhuis') && response.request().method() === 'POST'
+    response.url().includes('/api/onboarding/waar-inhuis') && response.request().method() === 'POST'
   ))
-  await page.getByTestId('wat-inhuis-finish').click()
+  await page.getByTestId('waar-inhuis-finish').click()
   expect((await product).ok()).toBeTruthy()
 
   await expect(page.getByTestId('onboarding-shared-household-minimum')).toBeVisible()
@@ -55,13 +53,16 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
   const capabilitiesResponse = await page.request.get('/api/onboarding/capabilities')
   expect(capabilitiesResponse.ok()).toBeTruthy()
   const capabilities = await capabilitiesResponse.json()
-  expect(capabilities.product_configuration.location_tracking_level).toBe('global')
+  expect(capabilities.primary_use_case).toBe('waar_inhuis')
+  expect(capabilities.product_configuration.location_tracking_level).toBe('exact')
+  expect(capabilities.product_configuration.unpacking_enabled).toBe(true)
+  expect(capabilities.product_configuration.receipt_processing_enabled).toBe(true)
 }
 
 async function createSpaceThroughUi(page, locationName) {
   await page.goto('/instellingen/locaties')
   await expect(page.getByTestId('settings-locations-page')).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByTestId('settings-locations-page')).toHaveAttribute('data-sublocations-enabled', 'false')
+  await expect(page.getByTestId('settings-locations-page')).toHaveAttribute('data-sublocations-enabled', 'true')
   await page.locator('#new-main-location').fill(locationName)
   const createPromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === '/api/spaces' && response.request().method() === 'POST'
@@ -139,7 +140,7 @@ async function assignLocationToLine(page, lineId, locationName) {
   const locationButton = page.getByTestId(`receipt-line-location-select-${lineId}`)
   await expect(locationButton).toBeVisible({ timeout: 30_000 })
   await locationButton.click()
-  const dialog = page.getByRole('dialog', { name: 'Locatie kiezen' })
+  const dialog = page.getByRole('dialog', { name: 'Locatie / sublocatie kiezen' })
   await expect(dialog).toBeVisible()
   const savePromise = page.waitForResponse((response) => (
     response.url().includes(`/api/purchase-import-lines/${lineId}/target-location`)
@@ -245,7 +246,7 @@ test('F5-09 Niet ingedeeld remains valid in ready-only unpacking', async ({ page
     processedEventId: String(processedLine.processed_event_id),
     articleGroupId: null,
     targetLocationId,
-    locationTrackingLevel: 'global',
+    locationTrackingLevel: 'exact',
     processMode: 'ready_only',
   }, null, 2))
 

@@ -2267,7 +2267,7 @@ export default function KassaPage() {
             setDuplicateNotice('')
             setStatus('Gedeelde bon ontvangen. De bon staat nu in de Kassa.')
           }
-          if (sharedResult.receiptTableId) {
+          if (sharedResult.receiptTableId && !sharedResult.duplicate) {
             try {
               const detail = await fetchJson(`/api/receipts/${encodeURIComponent(sharedResult.receiptTableId)}`)
               const sourceItem = (items || []).find((item) => String(item.receipt_table_id) === String(sharedResult.receiptTableId)) || null
@@ -2299,7 +2299,7 @@ export default function KassaPage() {
   }, [receiptInboxFocusId])
 
   async function announceDuplicate(result, sourceItems = receipts) {
-    const message = formatDuplicateImportMessageV2(result)
+    let message = formatDuplicateImportMessageV2(result)
     const existingReceiptId = getDuplicateReceiptTableId(result)
     setError('')
     setStatus('')
@@ -2317,32 +2317,57 @@ export default function KassaPage() {
       return
     }
 
+    // Read current lifecycle facts before selecting anything. Parser status and
+    // an absent inbox row do not establish that a receipt reached inventory.
+    const existingReceipt = existingReceiptId
+      ? await fetchJson(`/api/receipts/${encodeURIComponent(existingReceiptId)}`)
+      : null
+    const outsideKassa = Boolean(existingReceipt?.approved_at)
+    if (existingReceiptId && !outsideKassa && isAddReceiptRoute) {
+      // The route transition remounts Kassa. Reuse the share hand-off so that
+      // selection and detail are opened in the destination component.
+      navigate(`/kassa?share_status=success&duplicate=1&receipt_table_id=${encodeURIComponent(existingReceiptId)}`)
+      return
+    }
+    if (outsideKassa) {
+      message = existingReceipt.import_status === 'processed'
+        ? 'Deze kassabon is al ingelezen en verwerkt en staat in Voorraad.'
+        : 'Deze kassabon is al ingelezen en goedgekeurd en staat in Uitpakken.'
+      clearTransientReceiptPreview()
+      setOpenedReceiptId('')
+      setOpenedReceipt(null)
+      setReceiptInboxFocusId('')
+      setSelectedReceiptIds([])
+    }
     setDuplicateNotice(message)
     setArchivedDuplicate(null)
     showKassaFeedback('warning', message, {
       title: 'Bon al ingelezen',
-      detail: existingReceiptId ? 'De bestaande kassabon is geopend in Kassa.' : 'Deze upload is niet opnieuw toegevoegd. De bestaande kassabon blijft ongewijzigd in Kassa.',
+      detail: outsideKassa
+        ? 'Deze upload is geweigerd. De bestaande verwerking blijft ongewijzigd.'
+        : existingReceiptId ? 'De bestaande kassabon is geopend in Kassa.' : 'Deze upload is niet opnieuw toegevoegd.',
       key: `kassa-duplicate-receipt-${existingReceiptId || 'unknown'}`,
       dedupeMs: 0,
       testId: 'kassa-duplicate-overlay',
     })
 
-    if (existingReceiptId) {
+    if (existingReceiptId && !outsideKassa) {
       setFilters(DEFAULT_RECEIPT_FILTERS)
       setReceiptInboxFocusId(existingReceiptId)
       setSelectedReceiptIds([existingReceiptId])
       const refreshedItems = await loadReceipts(householdId, {
         preserveDuplicateNotice: true,
         openReceiptId: existingReceiptId,
+        prefetchedDetail: existingReceipt,
       })
       const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
-      await openReceiptDetail(existingReceiptId, itemsForOpen)
+      await openReceiptDetail(existingReceiptId, itemsForOpen, existingReceipt)
       if (isAddReceiptRoute) navigate('/kassa')
     }
 
     try {
       window.requestAnimationFrame(() => {
-        const targetRow = existingReceiptId
+        const targetRow = existingReceiptId && !outsideKassa
           ? document.querySelector(`[data-testid="kassa-row-${existingReceiptId}"]`)
           : null
         const feedback = document.querySelector('[data-testid="receipt-duplicate-feedback"]')

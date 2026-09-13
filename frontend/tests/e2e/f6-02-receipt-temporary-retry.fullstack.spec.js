@@ -23,18 +23,16 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
   expect((await registrationResponsePromise).status()).toBe(201)
 
   await expect(page.getByTestId('onboarding-use-case-page')).toBeVisible()
-  await page.getByTestId('onboarding-choice-wat_inhuis').check()
+  await page.getByTestId('onboarding-choice-waar_inhuis').check()
   const primaryResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/primary-use-case') && response.request().method() === 'POST')
   await page.getByTestId('onboarding-primary-continue').click()
   expect((await primaryResponsePromise).ok()).toBeTruthy()
 
-  await expect(page.getByTestId('onboarding-wat-inhuis-follow-up')).toBeVisible()
-  await page.getByTestId('wat-inhuis-tracking-quantity').check()
-  await page.getByTestId('wat-inhuis-global-locations-yes').check()
-  await page.getByTestId('wat-inhuis-almost-out-yes').check()
-  await page.getByTestId('wat-inhuis-shopping-yes').check()
-  const productResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/wat-inhuis') && response.request().method() === 'POST')
-  await page.getByTestId('wat-inhuis-finish').click()
+  await expect(page.getByTestId('onboarding-waar-inhuis-follow-up')).toBeVisible()
+  await page.getByTestId('waar-inhuis-unpacking-yes').check()
+  await page.getByTestId('waar-inhuis-receipts-yes').check()
+  const productResponsePromise = page.waitForResponse((response) => response.url().includes('/api/onboarding/waar-inhuis') && response.request().method() === 'POST')
+  await page.getByTestId('waar-inhuis-finish').click()
   expect((await productResponsePromise).ok()).toBeTruthy()
 
   await expect(page.getByTestId('onboarding-shared-household-minimum')).toBeVisible()
@@ -44,6 +42,13 @@ async function registerLocationsOnHousehold(page, accountEmail, accountPassword,
   await page.getByTestId('shared-household-finish').click()
   expect((await householdResponsePromise).ok()).toBeTruthy()
   await expect(page).toHaveURL(/\/home$/)
+
+  const capabilitiesResponse = await page.request.get('/api/onboarding/capabilities')
+  expect(capabilitiesResponse.ok()).toBeTruthy()
+  const capabilities = await capabilitiesResponse.json()
+  expect(capabilities.primary_use_case).toBe('waar_inhuis')
+  expect(capabilities.product_configuration.unpacking_enabled).toBe(true)
+  expect(capabilities.product_configuration.receipt_processing_enabled).toBe(true)
 }
 
 async function readSession(page) {
@@ -87,7 +92,9 @@ async function approveReceiptThroughKassa(page, receiptId) {
   await expect(page.getByTestId('receipt-lines-table')).toBeVisible({ timeout: 30_000 })
   const approvalResponsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/receipts/${receiptId}/approve` && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Goedkeuren', exact: true }).click()
-  expect((await approvalResponsePromise).ok()).toBeTruthy()
+  const approvalResponse = await approvalResponsePromise
+  const approvalText = await approvalResponse.text()
+  expect(approvalResponse.ok(), `Approval status ${approvalResponse.status()}: ${approvalText.slice(0, 1000)}`).toBeTruthy()
 }
 
 async function resolveApprovedBatch(page, householdId, receiptId) {

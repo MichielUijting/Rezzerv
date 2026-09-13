@@ -126,7 +126,7 @@ jobs:
         shell: bash
         run: |
           proof='frontend/f5-09-browser-proof.json'
-          test "$(jq -r '.locationTrackingLevel' "$proof")" = 'global'
+          test "$(jq -r '.locationTrackingLevel' "$proof")" = 'exact'
           test "$(jq -r '.processMode' "$proof")" = 'ready_only'
           test "$(jq -r '.articleGroupId' "$proof")" = 'null'
           for key in householdId receiptId batchId lineId incompleteLineId processedEventId targetLocationId; do

@@ -57,6 +57,7 @@ function assertNoLocationsHomeTile(navigation) {
   assert.ok(keys(navigation.primaryTiles).includes('kassa'))
   assert.ok(keys(navigation.primaryTiles).includes('prognoses'))
   assert.ok(keys(navigation.primaryTiles).includes('recepten'))
+  assert.ok(keys(navigation.primaryTiles).includes('instellingen'))
   assert.ok(keys(navigation.primaryTiles).includes('admin'))
   assert.equal(navigation.moreTiles.length, 0)
 }
@@ -80,6 +81,7 @@ function assertNoLocationsHomeTile(navigation) {
   assert.equal(navigation.mode, 'dynamic')
   assert.deepEqual(keys(navigation.primaryTiles), ['bijna-op', 'winkelen', 'kassa'])
   assert.ok(keys(navigation.moreTiles).includes('voorraad'))
+  assert.ok(keys(navigation.moreTiles).includes('instellingen'))
   assert.ok(!keys(navigation.moreTiles).includes('prognoses'))
   assertNoLocationsHomeTile(navigation)
 }
@@ -102,6 +104,7 @@ function assertNoLocationsHomeTile(navigation) {
   })
   assert.deepEqual(keys(navigation.primaryTiles), ['voorraad', 'bijna-op', 'kassa'])
   assert.ok(keys(navigation.moreTiles).includes('winkelen'))
+  assert.ok(keys(navigation.moreTiles).includes('instellingen'))
   assert.ok(!keys(navigation.moreTiles).includes('kassa'))
   assertNoLocationsHomeTile(navigation)
 }
@@ -126,6 +129,7 @@ function assertNoLocationsHomeTile(navigation) {
     keys(navigation.primaryTiles),
     ['voorraad', 'kassabonnen', 'kassa', 'bijna-op'],
   )
+  assert.ok(keys(navigation.moreTiles).includes('instellingen'))
   assert.ok(!keys(navigation.moreTiles).some((key) => keys(navigation.primaryTiles).includes(key)))
   assertNoLocationsHomeTile(navigation)
 }
@@ -147,6 +151,7 @@ function assertNoLocationsHomeTile(navigation) {
     visibility: { ...baseVisibility, canManageLocations: false },
   })
   assert.deepEqual(keys(navigation.primaryTiles), ['voorraad'])
+  assert.ok(keys(navigation.moreTiles).includes('instellingen'))
   assertNoLocationsHomeTile(navigation)
 }
 
@@ -171,7 +176,8 @@ function assertNoLocationsHomeTile(navigation) {
       canManageLocations: false,
     },
   })
-  assert.deepEqual(keys(navigation.primaryTiles), ['winkelen'])
+  assert.deepEqual(keys(navigation.primaryTiles), ['winkelen', 'instellingen'])
+  assert.ok(!keys(navigation.moreTiles).includes('instellingen'))
   assert.ok(keys(navigation.moreTiles).includes('admin'))
   assert.ok(keys(navigation.moreTiles).includes('externe-databases'))
   assert.ok(!keys(navigation.moreTiles).includes('superuser'))

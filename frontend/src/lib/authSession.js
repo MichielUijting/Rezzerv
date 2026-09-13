@@ -1,12 +1,23 @@
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
 const FRONTTEAM_EXTERNAL_DATABASES_PERMISSION = 'frontteam.external_databases.access'
 const SYSTEM_HOUSEHOLD_ACCESS_PERMISSION = 'platform.system_household.access'
+export const AUTH_CONTEXT_CHANGED_EVENT = 'rezzerv-auth-context-changed'
 
 let currentSessionContext = null
 let sessionRequest = null
 
 function safeWindow() {
   return typeof window !== 'undefined' ? window : null
+}
+
+function notifyAuthContextChanged() {
+  const win = safeWindow()
+  if (!win || typeof win.dispatchEvent !== 'function') return
+  try {
+    win.dispatchEvent(new CustomEvent(AUTH_CONTEXT_CHANGED_EVENT, { detail: currentSessionContext }))
+  } catch {
+    try { win.dispatchEvent(new Event(AUTH_CONTEXT_CHANGED_EVENT)) } catch {}
+  }
 }
 
 function normalizeRoleValue(value) {
@@ -97,7 +108,17 @@ export function readStoredAuthContext() { return currentSessionContext }
 export function storeAuthContext(context) {
   currentSessionContext = normalizeSessionContext(context)
   removeLegacyAuthStorage()
+  notifyAuthContextChanged()
   return currentSessionContext
+}
+
+export function updateActiveHouseholdNameInSession(name) {
+  const nextName = String(name || '').trim()
+  if (!nextName || currentSessionContext?.context_type !== 'regular') return currentSessionContext
+  return storeAuthContext({
+    ...currentSessionContext,
+    active_household_name: nextName,
+  })
 }
 
 export function markAuthCheckedForToken() {}
@@ -125,6 +146,7 @@ export function clearAuthSession(message = '') {
   currentSessionContext = null
   sessionRequest = null
   removeLegacyAuthStorage()
+  notifyAuthContextChanged()
   setLoginMessage(message)
 }
 
@@ -203,6 +225,12 @@ export async function fetchJsonWithAuth(url, options = {}) {
   }
 
   const normalizedUrl = String(url || '').split('?')[0]
+  if (response.ok && normalizedUrl === '/api/household/name') {
+    try {
+      const payload = await response.clone().json()
+      updateActiveHouseholdNameInSession(payload?.household_name || payload?.name)
+    } catch {}
+  }
   if (response.ok && normalizedUrl === '/api/household') {
     try {
       const payload = await response.clone().json()
