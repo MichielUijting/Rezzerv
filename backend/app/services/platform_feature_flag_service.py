@@ -11,9 +11,105 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 
+FEATURE_FLAG_NOTIFICATIONS = "notifications"
+FEATURE_FLAG_ALMOST_OUT = "almost_out"
+FEATURE_FLAG_SHOPPING = "shopping"
+FEATURE_FLAG_FORECASTS = "forecasts"
+FEATURE_FLAG_LOANS = "loans"
+FEATURE_FLAG_INVENTORY = "inventory"
+FEATURE_FLAG_PRODUCT_GROUPS = "product_groups"
+FEATURE_FLAG_UNPACKING = "unpacking"
+FEATURE_FLAG_KASSA = "kassa"
+FEATURE_FLAG_LOYALTY_STAMPS = "loyalty_stamps"
+FEATURE_FLAG_EXTERNAL_DATABASES = "external_databases"
+FEATURE_FLAG_CATALOG = "catalog"
+FEATURE_FLAG_CUSTOMER_CARDS = "customer_cards"
+FEATURE_FLAG_RECIPES = "recipes"
+FEATURE_FLAG_ORDERING = "ordering"
+FEATURE_FLAG_RENEWALS = "renewals"
 FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH = "external_product_search"
 
 FEATURE_FLAG_DEFINITIONS = {
+    FEATURE_FLAG_NOTIFICATIONS: {
+        "label": "Meldingen",
+        "description": "Bepaalt platformbreed of de actie Meldingen beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_ALMOST_OUT: {
+        "label": "Bijna op",
+        "description": "Bepaalt platformbreed of de functionaliteit Bijna op beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_SHOPPING: {
+        "label": "Winkelen",
+        "description": "Bepaalt platformbreed of de functionaliteit Winkelen beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_FORECASTS: {
+        "label": "Prognoses",
+        "description": "Bepaalt platformbreed of de functionaliteit Prognoses beschikbaar is.",
+        "default_enabled": False,
+    },
+    FEATURE_FLAG_LOANS: {
+        "label": "Uitlenen",
+        "description": "Bepaalt platformbreed of de functionaliteit Uitlenen beschikbaar is.",
+        "default_enabled": False,
+    },
+    FEATURE_FLAG_INVENTORY: {
+        "label": "Voorraad",
+        "description": "Bepaalt platformbreed of de functionaliteit Voorraad beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_PRODUCT_GROUPS: {
+        "label": "Productgroepen",
+        "description": "Bepaalt platformbreed of Productgroepen beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_UNPACKING: {
+        "label": "Uitpakken",
+        "description": "Bepaalt platformbreed of de functionaliteit Uitpakken beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_KASSA: {
+        "label": "Kassa",
+        "description": "Bepaalt platformbreed of de functionaliteit Kassa beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_LOYALTY_STAMPS: {
+        "label": "Spaartegoeden",
+        "description": "Bepaalt platformbreed of Spaartegoeden beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_EXTERNAL_DATABASES: {
+        "label": "Externe databases",
+        "description": "Bepaalt platformbreed of Externe databases beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_CATALOG: {
+        "label": "Catalogus",
+        "description": "Bepaalt platformbreed of de Catalogus beschikbaar is.",
+        "default_enabled": True,
+    },
+    FEATURE_FLAG_CUSTOMER_CARDS: {
+        "label": "Klantkaarten",
+        "description": "Bepaalt platformbreed of de functionaliteit Klantkaarten beschikbaar is.",
+        "default_enabled": False,
+    },
+    FEATURE_FLAG_RECIPES: {
+        "label": "Recepten",
+        "description": "Bepaalt platformbreed of de functionaliteit Recepten beschikbaar is.",
+        "default_enabled": False,
+    },
+    FEATURE_FLAG_ORDERING: {
+        "label": "Bestellen",
+        "description": "Bepaalt platformbreed of de functionaliteit Bestellen beschikbaar is.",
+        "default_enabled": False,
+    },
+    FEATURE_FLAG_RENEWALS: {
+        "label": "Verlengen",
+        "description": "Bepaalt platformbreed of de functionaliteit Verlengen beschikbaar is.",
+        "default_enabled": False,
+    },
     FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH: {
         "label": "Externe productzoekfunctie",
         "description": (
