@@ -8,7 +8,10 @@ from app.services.platform_feature_flag_service import (
     list_platform_feature_flags,
     set_platform_feature_flag,
 )
-from app.services.session_request_context import require_platform_permission_from_session
+from app.services.session_request_context import (
+    require_platform_permission_from_session,
+    resolve_current_server_session,
+)
 
 
 PLATFORM_FEATURE_FLAGS_MANAGE_PERMISSION = "platform.feature_flags.manage"
@@ -18,6 +21,26 @@ router = APIRouter()
 
 class PlatformFeatureFlagUpdateRequest(BaseModel):
     enabled: bool
+
+
+@router.get("/api/features")
+def get_effective_platform_features() -> dict:
+    """Return only effective global availability to any authenticated user."""
+
+    context = resolve_current_server_session()
+    with engine.connect() as conn:
+        items = list_platform_feature_flags(conn)
+    return {
+        "items": [
+            {
+                "key": item["key"],
+                "enabled": bool(item["enabled"]),
+            }
+            for item in items
+        ],
+        "count": len(items),
+        "context_type": context.context_type,
+    }
 
 
 @router.get("/api/platform/feature-flags")
