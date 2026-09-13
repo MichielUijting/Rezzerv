@@ -7,6 +7,9 @@ from app.services.canonical_direct_location_service import ensure_canonical_dire
 from app.services.household_product_configuration_service import (
     resolve_household_product_configuration,
 )
+from app.services.temporary_consumable_automation_policy import (
+    install_temporary_all_articles_consumable_policy,
+)
 
 _APPROVE_PATH = "/api/receipts/{receipt_table_id}/approve"
 _CREATE_LINE_PATH = "/api/receipts/{receipt_table_id}/lines"
@@ -237,6 +240,7 @@ def _patch_route(app, path: str, endpoint) -> bool:
 
 def install_receipt_direct_inventory_approval_patch(main_module) -> None:
     app = main_module.app
+    install_temporary_all_articles_consumable_policy(main_module)
     if getattr(app.state, "receipt_direct_inventory_approval_patch_installed", False):
         return
 

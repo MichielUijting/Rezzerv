@@ -12,6 +12,7 @@ on:
       - 'backend/app/main.py'
       - 'backend/app/__init__.py'
       - 'backend/app/services/receipt_direct_inventory_approval_patch.py'
+      - 'backend/app/services/temporary_consumable_automation_policy.py'
       - 'backend/app/services/household_product_configuration_service.py'
       - 'backend/app/services/canonical_direct_location_service.py'
       - 'backend/app/database.py'
@@ -26,6 +27,7 @@ on:
       - 'quality/acceptance/canonical_scenario_catalog.json'
       - 'backend/tests/kassa_review_api_selftest.py'
       - 'backend/tests/wat_inhuis_kassa_direct_inventory_selftest.py'
+      - 'backend/tests/temporary_all_articles_consumable_postgresql_selftest.py'
   workflow_dispatch:
 
 permissions:
@@ -97,7 +99,9 @@ jobs:
           python -m py_compile \
             backend/tests/kassa_review_api_selftest.py \
             backend/tests/wat_inhuis_kassa_direct_inventory_selftest.py \
+            backend/tests/temporary_all_articles_consumable_postgresql_selftest.py \
             backend/app/services/receipt_direct_inventory_approval_patch.py \
+            backend/app/services/temporary_consumable_automation_policy.py \
             backend/app/main.py \
             backend/app/schemas/receipts.py \
             backend/app/receipt_ingestion/receipt_line_semantics.py
@@ -135,6 +139,22 @@ jobs:
           grep -F 'PASS manual_kassa_article_is_product_and_reaches_inventory' wat-inhuis-kassa-direct-inventory.log
           grep -F 'WAT_INHUIS_KASSA_DIRECT_INVENTORY_POSTGRESQL_GREEN' wat-inhuis-kassa-direct-inventory.log
 
+      - name: Reset PostgreSQL data before temporary consumable policy proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()'
+
+      - name: Validate temporary all-articles consumable policy in PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/temporary_all_articles_consumable_postgresql_selftest.py | tee temporary-all-articles-consumable.log
+          grep -F 'PASS temporary_policy_keeps_persistent_consumable_false' temporary-all-articles-consumable.log
+          grep -F 'PASS existing_2_is_auto_consumed_before_repurchase_10' temporary-all-articles-consumable.log
+          grep -F 'PASS repurchase_finishes_with_inventory_10' temporary-all-articles-consumable.log
+          grep -F 'TEMPORARY_ALL_ARTICLES_CONSUMABLE_POSTGRESQL_GREEN' temporary-all-articles-consumable.log
+
       - name: Upload F3-04 evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -144,5 +164,6 @@ jobs:
             kassa-review-shared-postgresql-foundation.log
             kassa-review-api.log
             wat-inhuis-kassa-direct-inventory.log
+            temporary-all-articles-consumable.log
           if-no-files-found: error
           retention-days: 7
