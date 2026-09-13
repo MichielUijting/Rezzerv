@@ -9,6 +9,7 @@ from app.services.household_product_configuration_service import (
 )
 
 _APPROVE_PATH = "/api/receipts/{receipt_table_id}/approve"
+_CREATE_LINE_PATH = "/api/receipts/{receipt_table_id}/lines"
 
 
 def should_process_approved_receipt_directly_to_inventory(configuration) -> bool:
@@ -140,12 +141,116 @@ def _prepare_receipt_batch_for_direct_inventory(
     return prepared_count
 
 
+def _manual_receipt_line_id(result, article_name: str) -> str | None:
+    normalized_name = " ".join(str(article_name or "").strip().split()).casefold()
+    candidates = []
+    for line in (result or {}).get("lines") or []:
+        if bool(line.get("is_deleted")):
+            continue
+        display_name = " ".join(
+            str(
+                line.get("display_label")
+                or line.get("corrected_raw_label")
+                or line.get("raw_label")
+                or ""
+            ).strip().split()
+        ).casefold()
+        if display_name != normalized_name:
+            continue
+        candidates.append(line)
+    if not candidates:
+        return None
+    newest = max(
+        candidates,
+        key=lambda line: (
+            int(line.get("line_index") or 0),
+            str(line.get("id") or ""),
+        ),
+    )
+    return str(newest.get("id") or "").strip() or None
+
+
+def _persist_manual_receipt_line_product_semantics(
+    main_module,
+    *,
+    receipt_table_id: str,
+    article_name: str,
+    authorization: str | None,
+    create_result,
+):
+    line_id = _manual_receipt_line_id(create_result, article_name)
+    if not line_id:
+        raise HTTPException(
+            status_code=500,
+            detail="Handmatig toegevoegde bonregel kon niet worden teruggevonden",
+        )
+
+    with main_module.engine.begin() as conn:
+        main_module.require_receipt_write_context(
+            conn,
+            receipt_table_id,
+            authorization,
+        )
+        updated = conn.execute(
+            text(
+                """
+                UPDATE receipt_table_lines
+                SET line_role = 'product',
+                    inventory_eligible = TRUE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :line_id
+                  AND receipt_table_id = :receipt_table_id
+                  AND COALESCE(is_deleted, FALSE) = FALSE
+                """
+            ),
+            {
+                "line_id": line_id,
+                "receipt_table_id": receipt_table_id,
+            },
+        )
+        if int(updated.rowcount or 0) != 1:
+            raise HTTPException(
+                status_code=500,
+                detail="Handmatig toegevoegde bonregel kon niet als voorraadproduct worden vastgelegd",
+            )
+
+    return main_module.get_receipt_detail(receipt_table_id, authorization)
+
+
+def _patch_route(app, path: str, endpoint) -> bool:
+    for route in app.routes:
+        if (
+            getattr(route, "path", None) == path
+            and "POST" in (getattr(route, "methods", set()) or set())
+        ):
+            route.endpoint = endpoint
+            if getattr(route, "dependant", None) is not None:
+                route.dependant.call = endpoint
+            return True
+    return False
+
+
 def install_receipt_direct_inventory_approval_patch(main_module) -> None:
     app = main_module.app
     if getattr(app.state, "receipt_direct_inventory_approval_patch_installed", False):
         return
 
     original_approve = main_module.approve_receipt_table
+    original_create_line = main_module.create_receipt_line
+
+    def create_receipt_line_with_product_semantics(
+        receipt_table_id: str,
+        payload,
+        authorization: str | None = None,
+    ):
+        result = original_create_line(receipt_table_id, payload, authorization)
+        return _persist_manual_receipt_line_product_semantics(
+            main_module,
+            receipt_table_id=receipt_table_id,
+            article_name=getattr(payload, "article_name", ""),
+            authorization=authorization,
+            create_result=result,
+        )
 
     def approve_receipt_table_with_direct_inventory(
         receipt_table_id: str,
@@ -339,20 +444,12 @@ def install_receipt_direct_inventory_approval_patch(main_module) -> None:
         }
         return refreshed
 
+    main_module.create_receipt_line = create_receipt_line_with_product_semantics
     main_module.approve_receipt_table = approve_receipt_table_with_direct_inventory
 
-    patched_route = False
-    for route in app.routes:
-        if (
-            getattr(route, "path", None) == _APPROVE_PATH
-            and "POST" in (getattr(route, "methods", set()) or set())
-        ):
-            route.endpoint = approve_receipt_table_with_direct_inventory
-            if getattr(route, "dependant", None) is not None:
-                route.dependant.call = approve_receipt_table_with_direct_inventory
-            patched_route = True
-            break
-    if not patched_route:
+    if not _patch_route(app, _CREATE_LINE_PATH, create_receipt_line_with_product_semantics):
+        raise RuntimeError("Receipt create-line-route niet gevonden voor productsemantiekpatch")
+    if not _patch_route(app, _APPROVE_PATH, approve_receipt_table_with_direct_inventory):
         raise RuntimeError("Receipt approve-route niet gevonden voor directe voorraadpatch")
 
     app.state.receipt_direct_inventory_approval_patch_installed = True
