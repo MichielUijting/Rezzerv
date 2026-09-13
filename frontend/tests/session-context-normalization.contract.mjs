@@ -9,13 +9,20 @@ function createStorage() {
   }
 }
 
+const dispatchedEvents = []
 globalThis.window = {
   localStorage: createStorage(),
   sessionStorage: createStorage(),
+  dispatchEvent: (event) => {
+    dispatchedEvents.push(String(event?.type || ''))
+    return true
+  },
 }
 
 const {
+  AUTH_CONTEXT_CHANGED_EVENT,
   clearAuthSession,
+  fetchJsonWithAuth,
   isPlatformSuperuserFromContext,
   readStoredAuthContext,
   storeAuthContext,
@@ -51,6 +58,7 @@ const regular = storeAuthContext({
   user_id: 'regular-user',
   context_type: 'regular',
   active_household_id: 'household-1',
+  active_household_name: 'Oude naam',
   role: 'admin',
   display_role: 'admin',
   permissions: { 'admin.access': true },
@@ -58,10 +66,28 @@ const regular = storeAuthContext({
 
 assert.equal(regular.context_type, 'regular')
 assert.equal(regular.active_household_id, 'household-1')
+assert.equal(regular.active_household_name, 'Oude naam')
 assert.equal(regular.role, 'admin')
 assert.equal(regular.display_role, 'admin')
 assert.equal(regular.permissions['admin.access'], true)
 assert.equal(isPlatformSuperuserFromContext(regular), false)
+
+globalThis.fetch = async (url, options = {}) => {
+  assert.equal(url, '/api/household/name')
+  assert.equal(options.method, 'PUT')
+  return new Response(JSON.stringify({ household_name: 'Nieuwe naam' }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+const renameResponse = await fetchJsonWithAuth('/api/household/name', {
+  method: 'PUT',
+  body: JSON.stringify({ name: 'Nieuwe naam' }),
+})
+assert.equal(renameResponse.ok, true)
+assert.equal(readStoredAuthContext().active_household_name, 'Nieuwe naam')
+assert.ok(dispatchedEvents.includes(AUTH_CONTEXT_CHANGED_EVENT))
 
 const system = storeAuthContext({
   user_id: 'system-user',
