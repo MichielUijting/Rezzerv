@@ -2,27 +2,9 @@ name: Release version sync validation
 
 on:
   pull_request:
-    paths:
-      - 'VERSION.txt'
-      - 'backend/VERSION.txt'
-      - 'version.json'
-      - 'frontend/version.json'
-      - 'frontend/public/version.json'
-      - 'frontend/package.json'
-      - 'validate-version-sync.bat'
-      - '.github/workflows/release-version-sync-validation.yml'
   push:
     branches:
       - main
-    paths:
-      - 'VERSION.txt'
-      - 'backend/VERSION.txt'
-      - 'version.json'
-      - 'frontend/version.json'
-      - 'frontend/public/version.json'
-      - 'frontend/package.json'
-      - 'validate-version-sync.bat'
-      - '.github/workflows/release-version-sync-validation.yml'
 
 concurrency:
   group: release-version-sync-${{ github.event.pull_request.number || github.ref }}
@@ -34,10 +16,153 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Validate synchronized release identity
         shell: cmd
         run: validate-version-sync.bat
+
+      - name: Enforce incremented application version
+        shell: pwsh
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            $baseSha = $env:PR_BASE_SHA
+          }
+          else {
+            $baseSha = $env:PUSH_BASE_SHA
+          }
+
+          if ([string]::IsNullOrWhiteSpace($baseSha) -or $baseSha -match '^0+$') {
+            Write-Host '[INFO] Geen vergelijkbare basis-SHA beschikbaar; incrementele controle wordt overgeslagen.'
+            exit 0
+          }
+
+          git cat-file -e "$baseSha^{commit}"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Basiscommit $baseSha is niet beschikbaar in de checkout."
+          }
+
+          $changedPaths = @(git diff --name-only $baseSha HEAD)
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Gewijzigde paden konden niet worden bepaald.'
+          }
+
+          $releaseRelevantPatterns = @(
+            '^VERSION\.txt$',
+            '^backend/VERSION\.txt$',
+            '^version\.json$',
+            '^frontend/version\.json$',
+            '^frontend/public/version\.json$',
+            '^frontend/package\.json$',
+            '^sync-version\.bat$',
+            '^bump-version\.bat$',
+            '^validate-version-sync\.bat$',
+            '^release\.bat$',
+            '^\.github/workflows/release-version-sync-validation\.yml$',
+            '^\.github/workflows/pr253-v0112109-release-package\.yml$',
+            '^backend/app/',
+            '^backend/alembic/',
+            '^backend/receipt_ingestion/',
+            '^backend/data/',
+            '^backend/Dockerfile$',
+            '^backend/requirements\.txt$',
+            '^frontend/src/',
+            '^frontend/public/(?!version\.json$)',
+            '^frontend/index\.html$',
+            '^frontend/nginx\.conf$',
+            '^frontend/Dockerfile$',
+            '^frontend/package-lock\.json$',
+            '^docker-compose.*\.yml$',
+            '^Dockerfile$',
+            '^docker/',
+            '^nginx/',
+            '^config/',
+            '^start\.bat$'
+          )
+
+          $releaseRelevantPaths = @()
+          foreach ($path in $changedPaths) {
+            foreach ($pattern in $releaseRelevantPatterns) {
+              if ($path -match $pattern) {
+                $releaseRelevantPaths += $path
+                break
+              }
+            }
+          }
+
+          if ($releaseRelevantPaths.Count -eq 0) {
+            Write-Host '[OK] Alleen niet-runtimebestanden gewijzigd; geen appversieverhoging vereist.'
+            exit 0
+          }
+
+          $baseVersion = (git show "${baseSha}:VERSION.txt").Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($baseVersion)) {
+            throw 'Basisversie kon niet uit VERSION.txt van de basiscommit worden gelezen.'
+          }
+          $headVersion = (Get-Content -Raw -LiteralPath 'VERSION.txt').Trim()
+
+          function Convert-RezzervVersion([string]$value) {
+            $match = [regex]::Match($value, '^Rezzerv-MVP-v(\d+)\.(\d+)\.(\d+)$')
+            if (-not $match.Success) {
+              throw "Ongeldig Rezzerv-versieformaat: $value"
+            }
+            return [version]::new(
+              [int]$match.Groups[1].Value,
+              [int]$match.Groups[2].Value,
+              [int]$match.Groups[3].Value
+            )
+          }
+
+          $baseParsed = Convert-RezzervVersion $baseVersion
+          $headParsed = Convert-RezzervVersion $headVersion
+          if ($headParsed.CompareTo($baseParsed) -le 0) {
+            Write-Host '[ERROR] Runtime-/release-relevante wijzigingen:'
+            $releaseRelevantPaths | Sort-Object -Unique | ForEach-Object { Write-Host " - $_" }
+            throw "Applicatieversie is niet verhoogd: basis=$baseVersion, kandidaat=$headVersion. Voer bump-version.bat uit en commit de gesynchroniseerde versiebestanden."
+          }
+
+          Write-Host "[OK] Applicatieversie verhoogd: $baseVersion -> $headVersion"
+
+      - name: Prove bump helper advances exactly one patch
+        shell: pwsh
+        run: |
+          $trackedVersionFiles = @(
+            'VERSION.txt',
+            'backend/VERSION.txt',
+            'version.json',
+            'frontend/version.json',
+            'frontend/public/version.json',
+            'frontend/package.json'
+          )
+          $before = (Get-Content -Raw -LiteralPath 'VERSION.txt').Trim()
+          try {
+            & cmd.exe /d /c bump-version.bat
+            if ($LASTEXITCODE -ne 0) {
+              throw "bump-version.bat faalde met exitcode $LASTEXITCODE."
+            }
+            $after = (Get-Content -Raw -LiteralPath 'VERSION.txt').Trim()
+            $beforeMatch = [regex]::Match($before, '^Rezzerv-MVP-v(\d+)\.(\d+)\.(\d+)$')
+            $afterMatch = [regex]::Match($after, '^Rezzerv-MVP-v(\d+)\.(\d+)\.(\d+)$')
+            if (-not $beforeMatch.Success -or -not $afterMatch.Success) {
+              throw 'Versieformaat kon niet worden gecontroleerd.'
+            }
+            if ([int]$afterMatch.Groups[1].Value -ne [int]$beforeMatch.Groups[1].Value -or
+                [int]$afterMatch.Groups[2].Value -ne [int]$beforeMatch.Groups[2].Value -or
+                [int]$afterMatch.Groups[3].Value -ne ([int]$beforeMatch.Groups[3].Value + 1)) {
+              throw "bump-version.bat verhoogde niet exact één patch: $before -> $after"
+            }
+          }
+          finally {
+            git restore -- $trackedVersionFiles
+          }
+          & cmd.exe /d /c validate-version-sync.bat
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Versiesync was na herstel niet meer geldig.'
+          }
 
       - name: Prove backend mismatch fails closed
         shell: pwsh
