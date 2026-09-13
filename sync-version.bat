@@ -33,6 +33,7 @@ echo Syncing version: %VERSION%
 > version.json echo {"version": "%VERSION%"}
 > frontend\version.json echo {"version": "%VERSION%"}
 > frontend\public\version.json echo {"version": "%VERSION%"}
+> frontend\VERSION.txt echo %PACKAGE_VERSION%
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$p='frontend/package.json';" ^
