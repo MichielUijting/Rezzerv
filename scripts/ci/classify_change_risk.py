@@ -58,6 +58,36 @@ def load_policy(path: Path) -> dict:
     return data
 
 
+def validate_integration() -> None:
+    required = [
+        ROOT / ".github/workflows/change-risk-classification.yml",
+        ROOT / ".github/workflows/f7-pr-fast-regression-gate.yml",
+        ROOT / ".github/workflows/f7-full-regression-gate.yml",
+        ROOT / "AGENTS.md",
+        ROOT / "docs/project/CHANGE-RISK-AND-TEST-LEVELS.md",
+        ROOT / "docs/project/README.md",
+    ]
+    for path in required:
+        req(path.is_file(), f"missing risk-policy integration file: {path.relative_to(ROOT)}")
+
+    standalone = required[0].read_text(encoding="utf-8")
+    fast = required[1].read_text(encoding="utf-8")
+    full = required[2].read_text(encoding="utf-8")
+    agents = required[3].read_text(encoding="utf-8")
+    policy_doc = required[4].read_text(encoding="utf-8")
+    project_index = required[5].read_text(encoding="utf-8")
+
+    req("scripts/ci/classify_change_risk.py" in standalone, "standalone classification workflow lost classifier")
+    req("scripts/ci/classify_change_risk.py" in fast, "F7 Fast lost risk classifier")
+    req("--risk-level" in fast and "steps.risk.outputs.final_level" in fast, "F7 Fast lost S cheap-only gate selection")
+    req("scripts/ci/classify_change_risk.py" in full, "F7 Full lost risk classifier")
+    req("steps.risk.outputs.final_level == 'L'" in full, "F7 Full lost L-only heavy dispatch guard")
+    req("F7_FULL_HEAVY_AUTHORITIES_NOT_REQUIRED_GREEN" in full, "F7 Full lost S/M bypass evidence")
+    req("TEST_LEVEL_PROVISIONAL:" in agents, "AGENTS lost preliminary classification contract")
+    req("Automatisch afschalen is verboden" in policy_doc, "policy documentation lost no-downgrade rule")
+    req("CHANGE-RISK-AND-TEST-LEVELS.md" in project_index, "project index lost mandatory S/M/L policy")
+
+
 def git(*args: str) -> str:
     process = subprocess.run(["git", *args], cwd=ROOT, text=True, capture_output=True)
     if process.returncode:
@@ -153,10 +183,13 @@ def classify_paths(policy: dict, paths: list[str], provisional: str) -> dict:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     policy = load_policy(Path(args.policy))
+    validate_integration()
     print(f"CHANGE_RISK_POLICY={policy['policy_id']}")
     print("PASS change_risk_fail_closed_default_L")
     print("PASS change_risk_no_automatic_downgrade")
     print("PASS change_risk_required_gates_S_M_L")
+    print("PASS change_risk_workflow_integration_locked")
+    print("PASS change_risk_agents_contract_locked")
     print("CHANGE_RISK_POLICY_GREEN")
     return 0
 
