@@ -4,7 +4,7 @@ Status: bindend ontwikkel- en CI-proces voor alle nieuwe wijzigingsverzoeken.
 
 ## Doel
 
-Niet iedere wijziging heeft hetzelfde regressierisico. Rezzerv gebruikt daarom drie testniveaus. De classificatie wordt vóór implementatie voorlopig vastgelegd en na implementatie opnieuw, automatisch, bepaald uit de volledige kandidaatdelta. Alleen opschalen is toegestaan; automatisch afschalen is verboden.
+Niet iedere wijziging heeft hetzelfde regressierisico. Rezzerv gebruikt daarom drie testniveaus. De classificatie wordt vóór implementatie voorlopig vastgelegd en na implementatie opnieuw, automatisch, bepaald uit de volledige kandidaatdelta. Alleen opschalen is toegestaan. Automatisch afschalen is verboden.
 
 De machineleesbare bron is `quality/ci/change_risk_policy.json`. De fail-closed classifier is `scripts/ci/classify_change_risk.py`.
 
