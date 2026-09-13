@@ -12,12 +12,15 @@ Deze map is de leesbare ingang voor product, ontwikkeling, kwaliteit, release en
 3. [Functionele hoofdprocessen](FUNCTIONAL-OVERVIEW.md)
 4. [Architectuur en datamodel](ARCHITECTURE-AND-DATA.md)
 5. [Ontwikkel-, test- en releaseproces](DEVELOPMENT-TEST-RELEASE.md)
-6. [Beveiliging en huishoudisolatie](SECURITY-AND-HOUSEHOLD-ISOLATION.md)
-7. [PO-test en acceptatie](PO-ACCEPTANCE.md)
-8. [UI-richtlijnen](UI-STYLEGUIDE-SUMMARY.md)
-9. [Rollen- en accountmodel v2.0](../security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md) —
+6. [Wijzigingsrisico en testniveaus S/M/L](CHANGE-RISK-AND-TEST-LEVELS.md) — verplicht vóór iedere implementatie; voorlopige classificatie bij het verzoek, definitieve fail-closed classificatie uit de volledige kandidaatdelta.
+7. [Beveiliging en huishoudisolatie](SECURITY-AND-HOUSEHOLD-ISOLATION.md)
+8. [PO-test en acceptatie](PO-ACCEPTANCE.md)
+9. [UI-richtlijnen](UI-STYLEGUIDE-SUMMARY.md)
+10. [Rollen- en accountmodel v2.0](../security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md) —
    PO-goedgekeurde functionele SSOT; v1.1 en de 190-check matrix blijven tot
    implementatiestap 9.1 de huidige runtime- en regressiebaseline.
+
+De S/M/L-policy is onderdeel van de ontwikkelwerkwijze. Omdat `AGENTS.md` deze projectindex vóór iedere wijziging verplicht laat lezen, moet ieder nieuw wijzigingsverzoek vóór implementatie een voorlopig testniveau krijgen. CI bepaalt daarna het definitieve niveau opnieuw uit de volledige PR-delta.
 
 ## Bestaande formele kwaliteitsdocumenten
 
