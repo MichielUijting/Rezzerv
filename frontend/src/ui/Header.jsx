@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import BrandLogo from "./BrandLogo.jsx";
-import { fetchAuthContext, readStoredAuthContext } from "../lib/authSession.js";
+import {
+  AUTH_CONTEXT_CHANGED_EVENT,
+  fetchAuthContext,
+  readStoredAuthContext,
+} from "../lib/authSession.js";
 import "./components/header.css";
 
 function activeHouseholdLabel(context) {
@@ -15,7 +19,7 @@ function activeHouseholdLabel(context) {
 
 export default function Header({ title }) {
   const location = useLocation();
-  const authContext = readStoredAuthContext();
+  const [authContext, setAuthContext] = useState(() => readStoredAuthContext());
   const [households, setHouseholds] = useState([]);
   const [switching, setSwitching] = useState(false);
 
@@ -25,6 +29,12 @@ export default function Header({ title }) {
 
   const showUserBox = location.pathname !== "/login" && Boolean(email);
   const showHouseholdLine = location.pathname !== "/login" && Boolean(household);
+
+  useEffect(() => {
+    const syncAuthContext = () => setAuthContext(readStoredAuthContext());
+    window.addEventListener(AUTH_CONTEXT_CHANGED_EVENT, syncAuthContext);
+    return () => window.removeEventListener(AUTH_CONTEXT_CHANGED_EVENT, syncAuthContext);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,7 +57,7 @@ export default function Header({ title }) {
     }
     loadHouseholds();
     return () => { cancelled = true; };
-  }, [email, authContext?.context_type, activeHouseholdId]);
+  }, [email, authContext?.context_type, activeHouseholdId, household]);
 
   async function switchHousehold(event) {
     const nextHouseholdId = String(event.target.value || "").trim();
