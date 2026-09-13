@@ -125,6 +125,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 def cmd_plan(args: argparse.Namespace) -> int:
     cfg = config(args.config)
     validate(cfg)
+    req(args.risk_level in {"S", "M", "L"}, "risk level must be S, M or L")
     req(args.base_sha and args.head_sha and args.base_sha != args.head_sha, "invalid base/head SHA")
     git("cat-file", "-e", f"{args.base_sha}^{{commit}}")
     git("cat-file", "-e", f"{args.head_sha}^{{commit}}")
@@ -132,12 +133,19 @@ def cmd_plan(args: argparse.Namespace) -> int:
     planned = []
     for cluster in cfg["clusters"]:
         matched = [p for p in changed if any(matches(p, pat) for pat in patterns(cluster["manifest"]))]
-        planned.append({**cluster, "selected": bool(matched), "matched_paths": matched})
+        selected = bool(matched) and args.risk_level != "S"
+        planned.append({
+            **cluster,
+            "selected": selected,
+            "matched_paths": matched,
+            "selection_reason": "risk_level_S_cheap_only" if matched and args.risk_level == "S" else ("candidate_delta_match" if matched else "no_candidate_delta_match"),
+        })
     selected = [c for c in planned if c["selected"]]
     mode = "live" if args.base_ref == cfg["target_base"] else "preview"
     evidence = {
         "gate_id": "F7-02",
         "mode": mode,
+        "risk_level": args.risk_level,
         "base_ref": args.base_ref,
         "base_sha": args.base_sha,
         "candidate_sha": args.head_sha,
@@ -149,6 +157,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
     }
     Path(args.evidence).write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(f"F7_PR_FAST_MODE={mode}")
+    print(f"F7_PR_FAST_RISK_LEVEL={args.risk_level}")
     print(f"F7_PR_FAST_CHANGED_COUNT={len(changed)}")
     for cluster in planned:
         print(f"F7_PR_FAST_CLUSTER_{cluster['id']}={'selected' if cluster['selected'] else 'skipped'}")
@@ -156,6 +165,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
             print(f"F7_PR_FAST_MATCH_{cluster['id']}={path}")
     print(f"F7_PR_FAST_EXPECTED_COUNT={len(selected)}")
     output("mode", mode)
+    output("risk_level", args.risk_level)
     output("expected_count", str(len(selected)))
     return 0
 
@@ -249,6 +259,7 @@ def main() -> int:
     p.add_argument("--base-sha", required=True)
     p.add_argument("--head-sha", required=True)
     p.add_argument("--base-ref", required=True)
+    p.add_argument("--risk-level", choices=["S", "M", "L"], required=True)
     p.add_argument("--evidence", default="f7-pr-fast-regression-evidence.json")
     p.set_defaults(func=cmd_plan)
     w = sub.add_parser("wait")
