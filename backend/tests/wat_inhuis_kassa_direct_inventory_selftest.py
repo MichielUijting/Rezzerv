@@ -177,8 +177,7 @@ def run() -> int:
                 headers=headers,
                 json={
                     "article_name": manual_article_name,
-                    "quantity": 1,
-                    "unit": "stuk",
+                    "quantity": 3,
                     "line_total": 4.99,
                     "is_validated": True,
                 },
@@ -189,7 +188,9 @@ def run() -> int:
                 manual_line = conn.execute(
                     text(
                         """
-                        SELECT id, line_role, inventory_eligible
+                        SELECT id, line_role, inventory_eligible,
+                               COALESCE(corrected_quantity, quantity) AS effective_quantity,
+                               COALESCE(corrected_unit, unit) AS effective_unit
                         FROM receipt_table_lines
                         WHERE receipt_table_id = :receipt_table_id
                           AND COALESCE(corrected_raw_label, raw_label) = :article_name
@@ -205,6 +206,8 @@ def run() -> int:
                 ).mappings().one()
                 assert manual_line["line_role"] == "product", manual_line
                 assert bool(manual_line["inventory_eligible"]) is True, manual_line
+                assert float(manual_line["effective_quantity"] or 0) == 3.0, manual_line
+                assert manual_line["effective_unit"] == "stuk", manual_line
                 manual_line_id = str(manual_line["id"])
 
             manual_approval = client.post(
@@ -222,7 +225,8 @@ def run() -> int:
                 manual_import_line = conn.execute(
                     text(
                         """
-                        SELECT pil.id, pil.processing_status, pil.matched_household_article_id,
+                        SELECT pil.id, pil.quantity_raw, pil.unit_raw,
+                               pil.processing_status, pil.matched_household_article_id,
                                pil.processed_event_id
                         FROM purchase_import_lines pil
                         JOIN purchase_import_batches pib ON pib.id = pil.batch_id
@@ -239,6 +243,8 @@ def run() -> int:
                         "external_line_ref": f"receipt-line:{manual_line_id}",
                     },
                 ).mappings().one()
+                assert float(manual_import_line["quantity_raw"] or 0) == 3.0, manual_import_line
+                assert manual_import_line["unit_raw"] == "stuk", manual_import_line
                 assert manual_import_line["processing_status"] == "processed", manual_import_line
                 assert manual_import_line["matched_household_article_id"], manual_import_line
                 assert manual_import_line["processed_event_id"], manual_import_line
@@ -261,7 +267,7 @@ def run() -> int:
                     },
                 ).mappings().one()
                 assert inventory_row["naam"] == manual_article_name, inventory_row
-                assert float(inventory_row["aantal"] or 0) == 1.0, inventory_row
+                assert float(inventory_row["aantal"] or 0) == 3.0, inventory_row
 
                 purchase_event = conn.execute(
                     text(
@@ -284,7 +290,7 @@ def run() -> int:
                     },
                 ).mappings().one()
                 assert purchase_event["event_type"] == "purchase", purchase_event
-                assert float(purchase_event["quantity"] or 0) == 1.0, purchase_event
+                assert float(purchase_event["quantity"] or 0) == 3.0, purchase_event
 
         print("PASS wat_inhuis_kassa_approval_routes_directly_to_inventory")
         print("PASS direct_inventory_approval_is_idempotent")
