@@ -132,6 +132,7 @@ jobs:
           grep -F 'PASS wat_inhuis_kassa_approval_routes_directly_to_inventory' wat-inhuis-kassa-direct-inventory.log
           grep -F 'PASS direct_inventory_approval_is_idempotent' wat-inhuis-kassa-direct-inventory.log
           grep -F 'PASS unpacking_enabled_configuration_keeps_unpacking_boundary' wat-inhuis-kassa-direct-inventory.log
+          grep -F 'PASS manual_kassa_article_is_product_and_reaches_inventory' wat-inhuis-kassa-direct-inventory.log
           grep -F 'WAT_INHUIS_KASSA_DIRECT_INVENTORY_POSTGRESQL_GREEN' wat-inhuis-kassa-direct-inventory.log
 
       - name: Upload F3-04 evidence
