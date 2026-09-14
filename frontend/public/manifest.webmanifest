@@ -1,17 +1,17 @@
 {
-  "name": "Rezzerv",
-  "short_name": "Rezzerv",
+  "name": "Inhuis",
+  "short_name": "Inhuis",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#e8f5e9",
   "theme_color": "#166534",
-  "description": "Rezzerv kassabon-inname en voorraadbeheer",
+  "description": "Inhuis kassabon-inname en voorraadbeheer",
   "icons": [
     {
-      "src": "/rezzerv-share-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/inhuis-app-icon.png",
+      "sizes": "128x128",
+      "type": "image/png",
       "purpose": "any"
     }
   ],
