@@ -23,7 +23,7 @@ on:
       - 'frontend/src/features/home/HomePage.jsx'
       - 'frontend/src/features/home/homeNavigation.js'
       - 'frontend/src/features/superuser/SuperuserDashboardPage.jsx'
-      - 'frontend/src/features/superuser/SuperuserDashboardLegacy.jsx'
+      - 'frontend/src/features/superuser/SuperuserControlPage.jsx'
       - 'frontend/src/features/superuser/SuperuserActionButtonsSection.jsx'
       - 'frontend/src/ui/Button.jsx'
       - 'frontend/src/features/receipts/KassaPage.jsx'
