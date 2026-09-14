@@ -36,7 +36,7 @@ function resolveActionKey({ actionKey, testId, label }) {
 
 async function loadAvailability({ force = false } = {}) {
   if (!force && availability) return availability
-  if (!force && loadPromise) return loadPromise
+  if (loadPromise) return loadPromise
 
   loadPromise = (async () => {
     try {
@@ -75,11 +75,15 @@ export function useActionButtonEnabled({ actionKey = null, testId = null, label 
     listeners.add(listener)
     void loadAvailability()
 
-    const handleChanged = () => { void refreshActionButtonAvailability() }
-    window.addEventListener('rezzerv-action-buttons-changed', handleChanged)
+    const refresh = () => { void refreshActionButtonAvailability() }
+    window.addEventListener('focus', refresh)
+    window.addEventListener('rezzerv-action-buttons-changed', refresh)
+    const timer = window.setInterval(refresh, 30000)
     return () => {
       listeners.delete(listener)
-      window.removeEventListener('rezzerv-action-buttons-changed', handleChanged)
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('rezzerv-action-buttons-changed', refresh)
     }
   }, [resolvedKey])
 
