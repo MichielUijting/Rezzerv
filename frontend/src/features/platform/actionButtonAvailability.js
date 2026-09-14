@@ -43,12 +43,18 @@ export function refreshActionButtonAvailability() {
   return loadAvailability({ force: true })
 }
 
-export function useActionButtonAvailability() {
-  const [snapshot, setSnapshot] = useState(availability || {})
+export function useActionButtonAvailability({ enabled = true } = {}) {
+  const [snapshot, setSnapshot] = useState(() => (enabled ? availability || {} : {}))
 
   useEffect(() => {
+    if (!enabled) {
+      setSnapshot({})
+      return undefined
+    }
+
     const listener = (next) => setSnapshot(next || {})
     listeners.add(listener)
+    setSnapshot(availability || {})
     void loadAvailability()
 
     const refresh = () => { void refreshActionButtonAvailability() }
@@ -61,7 +67,7 @@ export function useActionButtonAvailability() {
       window.removeEventListener('focus', refresh)
       window.removeEventListener('rezzerv-action-buttons-changed', refresh)
     }
-  }, [])
+  }, [enabled])
 
   return snapshot
 }
