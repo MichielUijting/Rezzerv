@@ -17,17 +17,35 @@ from app.services.authorization_foundation_service import write_authorization_au
 FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH = "external_product_search"
 FEATURE_GERECHTEN = "feature.gerechten"
 
-ACTION_KASSA_ADD_RECEIPT = "action.kassa.add_receipt"
-ACTION_KASSA_CHOOSE_FILES = "action.kassa.choose_files"
-ACTION_KASSA_OPEN_CAMERA = "action.kassa.open_camera"
-ACTION_KASSA_CAMERA_CONFIRM = "action.kassa.camera_confirm"
-ACTION_KASSA_DELETE_SELECTED = "action.kassa.delete_selected"
-ACTION_KASSA_LINES_MARK_REVIEWED = "action.kassa.lines_mark_reviewed"
-ACTION_KASSA_LINES_EXPORT = "action.kassa.lines_export"
-ACTION_KASSA_APPROVE_RECEIPT = "action.kassa.approve_receipt"
-ACTION_INVENTORY_ADD_INCIDENTAL_PURCHASE = "action.inventory.add_incidental_purchase"
-ACTION_INVENTORY_SCAN_BARCODE = "action.inventory.scan_barcode"
-ACTION_SHOPPING_COMPLETE = "action.shopping.complete"
+ACTION_HOME_MELDINGEN = "action.home.meldingen"
+ACTION_HOME_BIJNA_OP = "action.home.bijna_op"
+ACTION_HOME_WINKELEN = "action.home.winkelen"
+ACTION_HOME_PROGNOSES = "action.home.prognoses"
+ACTION_HOME_UITLENEN = "action.home.uitlenen"
+ACTION_HOME_VOORRAAD = "action.home.voorraad"
+ACTION_HOME_PRODUCTGROEPEN = "action.home.productgroepen"
+ACTION_HOME_UITPAKKEN = "action.home.uitpakken"
+ACTION_HOME_KASSA = "action.home.kassa"
+ACTION_HOME_SPAARTEGOEDEN = "action.home.spaartegoeden"
+ACTION_HOME_EXTERNE_DATABASES = "action.home.externe_databases"
+ACTION_HOME_CATALOGUS = "action.home.catalogus"
+ACTION_HOME_KLANTKAARTEN = "action.home.klantkaarten"
+ACTION_HOME_BESTELLEN = "action.home.bestellen"
+ACTION_HOME_VERLENGEN = "action.home.verlengen"
+ACTION_HOME_INSTELLINGEN = "action.home.instellingen"
+ACTION_HOME_ADMIN = "action.home.admin"
+ACTION_HOME_SUPERUSER = "action.home.superuser"
+
+
+def _home_action(label: str, home_tile_key: str) -> dict:
+    return {
+        "category": "action_button",
+        "group": "Startpagina",
+        "label": label,
+        "description": f"Bepaalt of {label} als actie op de Startpagina beschikbaar is.",
+        "home_tile_key": home_tile_key,
+        "default_enabled": True,
+    }
 
 
 FEATURE_FLAG_DEFINITIONS = {
@@ -42,98 +60,30 @@ FEATURE_FLAG_DEFINITIONS = {
     },
     FEATURE_GERECHTEN: {
         "category": "functional",
+        "group": "Startpagina",
         "label": "Gerechten",
         "description": "Bepaalt of Gerechten wereldwijd beschikbaar is in Rezzerv.",
+        "home_tile_key": "recepten",
         "default_enabled": False,
     },
-    ACTION_KASSA_ADD_RECEIPT: {
-        "category": "action_button",
-        "group": "Kassa",
-        "label": "Bon toevoegen",
-        "description": "Toont de actie om vanuit Kassa een nieuwe bon toe te voegen.",
-        "test_id": "kassa-add-receipt-button",
-        "default_enabled": True,
-    },
-    ACTION_KASSA_CHOOSE_FILES: {
-        "category": "action_button",
-        "group": "Kassa",
-        "label": "Bestanden kiezen",
-        "description": "Toont de bestandskeuze in de Kassa-bronhub.",
-        "test_id": "kassa-choose-file-button",
-        "default_enabled": True,
-    },
-    ACTION_KASSA_OPEN_CAMERA: {
-        "category": "action_button",
-        "group": "Kassa",
-        "label": "Camera openen",
-        "description": "Toont de camera-actie in de Kassa-bronhub.",
-        "test_id": "kassa-open-camera-button",
-        "default_enabled": True,
-    },
-    ACTION_KASSA_CAMERA_CONFIRM: {
-        "category": "action_button",
-        "group": "Kassa",
-        "label": "Camerafoto bevestigen",
-        "description": "Toont de bevestigingsactie na het fotograferen van een kassabon.",
-        "test_id": "kassa-camera-confirm",
-        "default_enabled": True,
-    },
-    ACTION_KASSA_DELETE_SELECTED: {
-        "category": "action_button",
-        "group": "Kassa",
-        "label": "Geselecteerde bonnen verwijderen",
-        "description": "Toont de bulkactie voor het verwijderen van geselecteerde bonnen.",
-        "test_id": "kassa-delete-selected-button",
-        "default_enabled": True,
-    },
-    ACTION_KASSA_LINES_MARK_REVIEWED: {
-        "category": "action_button",
-        "group": "Kassa",
-        "label": "Bonregels: Alles goed",
-        "description": "Toont de actie om geselecteerde bonregels als gecontroleerd te markeren.",
-        "test_id": "receipt-lines-mark-reviewed",
-        "default_enabled": True,
-    },
-    ACTION_KASSA_LINES_EXPORT: {
-        "category": "action_button",
-        "group": "Kassa",
-        "label": "Bonregels exporteren",
-        "description": "Toont de exportactie bij geselecteerde bonregels.",
-        "test_id": "receipt-export-button",
-        "default_enabled": True,
-    },
-    ACTION_KASSA_APPROVE_RECEIPT: {
-        "category": "action_button",
-        "group": "Kassa",
-        "label": "Kassabon goedkeuren",
-        "description": "Toont de actie om een kassabon goed te keuren.",
-        "match_text": "Goedkeuren",
-        "default_enabled": True,
-    },
-    ACTION_INVENTORY_ADD_INCIDENTAL_PURCHASE: {
-        "category": "action_button",
-        "group": "Voorraad",
-        "label": "Incidentele aankoop toevoegen",
-        "description": "Toont de actie om vanuit Voorraad een incidentele aankoop toe te voegen.",
-        "test_id": "inventory-add-incidental-purchase",
-        "default_enabled": True,
-    },
-    ACTION_INVENTORY_SCAN_BARCODE: {
-        "category": "action_button",
-        "group": "Voorraad",
-        "label": "Barcode scannen",
-        "description": "Toont de camera-actie voor een barcode bij een incidentele aankoop.",
-        "test_id": "inventory-incidental-open-barcode-camera",
-        "default_enabled": True,
-    },
-    ACTION_SHOPPING_COMPLETE: {
-        "category": "action_button",
-        "group": "Winkelen",
-        "label": "Winkelen afgerond",
-        "description": "Toont de actie waarmee de actuele winkellijst wordt afgerond.",
-        "match_text": "Winkelen afgerond",
-        "default_enabled": True,
-    },
+    ACTION_HOME_MELDINGEN: _home_action("Meldingen", "meldingen"),
+    ACTION_HOME_BIJNA_OP: _home_action("Bijna op", "bijna-op"),
+    ACTION_HOME_WINKELEN: _home_action("Winkelen", "winkelen"),
+    ACTION_HOME_PROGNOSES: _home_action("Prognoses", "prognoses"),
+    ACTION_HOME_UITLENEN: _home_action("Uitlenen", "uitlenen"),
+    ACTION_HOME_VOORRAAD: _home_action("Voorraad", "voorraad"),
+    ACTION_HOME_PRODUCTGROEPEN: _home_action("Productgroepen", "productgroepen"),
+    ACTION_HOME_UITPAKKEN: _home_action("Uitpakken", "kassabonnen"),
+    ACTION_HOME_KASSA: _home_action("Kassa", "kassa"),
+    ACTION_HOME_SPAARTEGOEDEN: _home_action("Spaartegoeden", "spaartegoeden"),
+    ACTION_HOME_EXTERNE_DATABASES: _home_action("Externe databases", "externe-databases"),
+    ACTION_HOME_CATALOGUS: _home_action("Catalogus", "catalogus"),
+    ACTION_HOME_KLANTKAARTEN: _home_action("Klantkaarten", "klantkaarten"),
+    ACTION_HOME_BESTELLEN: _home_action("Bestellen", "bestellen"),
+    ACTION_HOME_VERLENGEN: _home_action("Verlengen", "verlengen"),
+    ACTION_HOME_INSTELLINGEN: _home_action("Instellingen", "instellingen"),
+    ACTION_HOME_ADMIN: _home_action("Admin", "admin"),
+    ACTION_HOME_SUPERUSER: _home_action("Superuser", "superuser"),
 }
 
 
@@ -141,6 +91,13 @@ def require_feature_category(flag_key: str, category: str) -> None:
     """Fail closed on unknown keys and keys outside the endpoint's category."""
     _, definition = _definition(flag_key)
     if definition.get("category") != category:
+        raise KeyError(flag_key)
+
+
+def require_home_action(flag_key: str) -> None:
+    """Fail closed unless the key represents an action on the Startpagina."""
+    _, definition = _definition(flag_key)
+    if not str(definition.get("home_tile_key") or "").strip():
         raise KeyError(flag_key)
 
 
@@ -221,8 +178,7 @@ def _serialize_flag(flag_key: str, definition: dict, override: dict | None) -> d
         "group": definition.get("group"),
         "label": definition["label"],
         "description": definition["description"],
-        "test_id": definition.get("test_id"),
-        "match_text": definition.get("match_text"),
+        "home_tile_key": definition.get("home_tile_key"),
         "enabled": enabled,
         "default_enabled": bool(definition["default_enabled"]),
         "source": source,
@@ -231,7 +187,7 @@ def _serialize_flag(flag_key: str, definition: dict, override: dict | None) -> d
     }
 
 
-def list_platform_feature_flags(conn: Connection, *, category: str | None = None) -> list[dict]:
+def _overrides(conn: Connection) -> dict[str, dict]:
     rows = conn.execute(
         text(
             """
@@ -241,11 +197,25 @@ def list_platform_feature_flags(conn: Connection, *, category: str | None = None
             """
         )
     ).mappings().all()
-    overrides = {str(row["flag_key"]): dict(row) for row in rows}
+    return {str(row["flag_key"]): dict(row) for row in rows}
+
+
+def list_platform_feature_flags(conn: Connection, *, category: str | None = None) -> list[dict]:
+    overrides = _overrides(conn)
     return [
         _serialize_flag(flag_key, definition, overrides.get(flag_key))
         for flag_key, definition in FEATURE_FLAG_DEFINITIONS.items()
         if category is None or definition.get("category") == category
+    ]
+
+
+def list_home_action_flags(conn: Connection) -> list[dict]:
+    """Return only availability controls that belong to Startpagina actions."""
+    overrides = _overrides(conn)
+    return [
+        _serialize_flag(flag_key, definition, overrides.get(flag_key))
+        for flag_key, definition in FEATURE_FLAG_DEFINITIONS.items()
+        if str(definition.get("home_tile_key") or "").strip()
     ]
 
 
