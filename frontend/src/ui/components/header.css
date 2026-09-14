@@ -1,5 +1,5 @@
 /* =========================================
-   REZZERV HEADER COMPONENT v1.1
+   INHUIS HEADER COMPONENT v1.1
    Shared header with household context line
 ========================================= */
 
@@ -81,8 +81,9 @@
 }
 
 .rz-header-logo img {
-  height: 28px !important;
+  height: 44px !important;
   width: auto !important;
+  object-fit: contain;
 }
 
 @media (max-width: 900px) {
@@ -93,5 +94,9 @@
 
   .rz-header-subtitle {
     max-width: min(38vw, 300px);
+  }
+
+  .rz-header-logo img {
+    height: 40px !important;
   }
 }
