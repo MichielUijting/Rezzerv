@@ -6,8 +6,10 @@ from pydantic import BaseModel
 from app.db import engine
 from app.services.platform_feature_flag_service import (
     list_platform_feature_flags,
+    list_home_action_flags,
     set_platform_feature_flag,
     require_feature_category,
+    require_home_action,
 )
 from app.services.session_request_context import (
     require_platform_permission_from_session,
@@ -133,16 +135,15 @@ def update_functional_feature(
 
 @router.get("/api/action-buttons")
 def get_action_button_availability() -> dict:
-    """Authenticated product projection used to hide globally disabled UI actions."""
+    """Authenticated projection for the globally managed Startpagina actions."""
     resolve_current_server_session()
     with engine.connect() as conn:
-        items = list_platform_feature_flags(conn, category="action_button")
+        items = list_home_action_flags(conn)
     return {
         "items": [
             {
                 "key": item["key"],
-                "test_id": item.get("test_id"),
-                "match_text": item.get("match_text"),
+                "home_tile_key": item.get("home_tile_key"),
                 "enabled": item["enabled"],
             }
             for item in items
@@ -154,7 +155,7 @@ def get_action_button_availability() -> dict:
 def get_action_buttons() -> dict:
     context = require_platform_permission_from_session(ACTION_BUTTONS_MANAGE_PERMISSION)
     with engine.connect() as conn:
-        items = list_platform_feature_flags(conn, category="action_button")
+        items = list_home_action_flags(conn)
     return {
         "items": items,
         "count": len(items),
@@ -170,7 +171,7 @@ def update_action_button(
 ) -> dict:
     context = require_platform_permission_from_session(ACTION_BUTTONS_MANAGE_PERMISSION)
     try:
-        require_feature_category(flag_key, "action_button")
+        require_home_action(flag_key)
         with engine.begin() as conn:
             item = set_platform_feature_flag(
                 conn,
@@ -179,7 +180,7 @@ def update_action_button(
                 updated_by=context.user_id,
             )
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Onbekende actieknop") from exc
+        raise HTTPException(status_code=404, detail="Onbekende actie op de Startpagina") from exc
     return {
         "item": item,
         "household_context_used": False,

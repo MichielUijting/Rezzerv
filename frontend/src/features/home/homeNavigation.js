@@ -28,8 +28,16 @@ const DYNAMIC_PRIMARY_USE_CASES = new Set([
   'waar_inhuis',
 ])
 
+function isGloballyAvailable(tile, actionButtons) {
+  if (Object.hasOwn(actionButtons || {}, tile.key)) {
+    return actionButtons[tile.key] === true
+  }
+  return true
+}
+
 function isVisible(tile, visibility) {
   if (tile.feature && !isFeatureEnabled(visibility.features, tile.feature)) return false
+  if (!tile.feature && !isGloballyAvailable(tile, visibility.actionButtons)) return false
   if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser
   if (tile.key === 'admin') return visibility.canOpenAdmin
   if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
@@ -91,9 +99,10 @@ function primaryKeysFor(onboarding) {
   return []
 }
 
-export function buildHomeNavigation({ onboarding, visibility, features = {} }) {
+export function buildHomeNavigation({ onboarding, visibility, features = {}, actionButtons = {} }) {
   const safeVisibility = {
     features,
+    actionButtons,
     canOpenAdmin: Boolean(visibility?.canOpenAdmin),
     canOpenExternalDatabases: Boolean(visibility?.canOpenExternalDatabases),
     isPlatformSuperuser: Boolean(visibility?.isPlatformSuperuser),

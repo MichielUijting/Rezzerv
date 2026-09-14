@@ -184,4 +184,31 @@ function assertNoLocationsHomeTile(navigation) {
   assertNoLocationsHomeTile(navigation)
 }
 
+{
+  const navigation = buildHomeNavigation({
+    onboarding: {
+      onboarding_status: 'completed',
+      primary_use_case: 'wat_inhuis',
+      product_configuration: {
+        inventory_tracking_level: 'quantity',
+        location_tracking_level: 'none',
+        shopping_enabled: true,
+        almost_out_enabled: true,
+        receipt_processing_enabled: true,
+        unpacking_enabled: true,
+      },
+    },
+    visibility: baseVisibility,
+    actionButtons: {
+      voorraad: false,
+      winkelen: true,
+      kassa: false,
+    },
+  })
+  assert.deepEqual(keys(navigation.primaryTiles), ['bijna-op', 'winkelen'])
+  assert.ok(!keys(navigation.moreTiles).includes('voorraad'))
+  assert.ok(!keys(navigation.moreTiles).includes('kassa'))
+  assert.ok(keys(navigation.moreTiles).includes('instellingen'))
+}
+
 console.log('DYNAMIC_HOME_NAVIGATION_CONTRACT_GREEN')
