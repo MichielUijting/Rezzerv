@@ -58,8 +58,8 @@ export default function HomePage() {
   const [showMore, setShowMore] = useState(false)
   const visibility = visibilityFromContext(context)
   const features = useFeatureAvailability()
-  const actionButtons = useActionButtonAvailability({ enabled: Boolean(context && context.context_type !== 'none') })
-  const navigation = buildHomeNavigation({ onboarding, visibility, features, actionButtons })
+  const actionAvailability = useActionButtonAvailability({ enabled: Boolean(context && context.context_type !== 'none') })
+  const navigation = buildHomeNavigation({ onboarding, visibility, features, actionButtons: actionAvailability.items })
   const platformNavigation = context?.context_type === 'none'
     ? PLATFORM_NAVIGATION_ITEMS.filter((item) => canCurrentUserPerform(item.permission, context))
     : []
@@ -150,6 +150,21 @@ export default function HomePage() {
                   Uitloggen
                 </Button>
               </div>
+            </Card>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!actionAvailability.ready) {
+    return (
+      <div className="rz-screen" data-testid="home-action-availability-loading">
+        <Header title="Startpagina" />
+        <div className="rz-content">
+          <div className="rz-content-inner">
+            <Card className="rz-card-home">
+              <p role="status">Beschikbare acties laden…</p>
             </Card>
           </div>
         </div>
