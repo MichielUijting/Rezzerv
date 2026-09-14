@@ -111,7 +111,7 @@ def _assert_none_native_route_boundary() -> None:
         "allowNone",
         "<PlatformCapabilityPage item={item} />",
         "...platformRoutes,",
-        "{ path: '/superuser', element: <ProtectedSuperuser><SuperuserDashboardPage /></ProtectedSuperuser> },",
+        "{ path: '/superuser', element: <ProtectedSuperuser><SuperuserControlPage /></ProtectedSuperuser> },",
     )
     for fragment in required_fragments:
         assert fragment in source, f"platform route boundary drifted: missing {fragment!r}"

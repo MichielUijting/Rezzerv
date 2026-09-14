@@ -41,7 +41,7 @@ import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.js
 import HouseholdSupportPage from '../../features/support/HouseholdSupportPage.jsx'
 import PlatformSupportPage from '../../features/support/PlatformSupportPage.jsx'
 import ShoppingPage from '../../features/shopping/ShoppingPage.jsx'
-import SuperuserDashboardPage from '../../features/superuser/SuperuserDashboardPage.jsx'
+import SuperuserControlPage from '../../features/superuser/SuperuserControlPage.jsx'
 import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
@@ -164,7 +164,7 @@ const router = createBrowserRouter([
   { path: '/home', element: <Protected allowNone><HomePage /></Protected> },
   ...platformRoutes,
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
-  { path: '/superuser', element: <ProtectedSuperuser><SuperuserDashboardPage /></ProtectedSuperuser> },
+  { path: '/superuser', element: <ProtectedSuperuser><SuperuserControlPage /></ProtectedSuperuser> },
   { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },

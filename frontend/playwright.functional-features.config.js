@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
 // No auth setup, provisioning, database, or global regression runner.
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: /(?:functional-feature-availability|platform-feature-flags)\.frontend-regression\.spec\.js/,
+  testMatch: /(?:functional-feature-availability|action-button-availability|platform-feature-flags)\.frontend-regression\.spec\.js/,
   workers: 1,
   reporter: 'line',
   outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results-functional-features',

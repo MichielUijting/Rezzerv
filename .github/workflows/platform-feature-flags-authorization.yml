@@ -12,16 +12,26 @@ on:
       - 'backend/tests/platform_feature_flag_migrated_fixture.py'
       - 'backend/tests/test_platform_feature_flags_route_authorization.py'
       - 'backend/tests/test_functional_feature_availability.py'
+      - 'backend/tests/test_action_button_availability.py'
       - 'backend/tests/test_external_database_route_authorization.py'
       - 'frontend/src/features/platform/PlatformFeatureFlagsPage.jsx'
       - 'frontend/src/features/platform/PlatformCapabilityPage.jsx'
       - 'frontend/src/features/platform/featureAvailability.js'
       - 'frontend/src/features/platform/useFeatureAvailability.js'
+      - 'frontend/src/features/platform/actionButtonAvailability.js'
       - 'frontend/src/features/platform/platformNavigation.js'
       - 'frontend/src/features/home/HomePage.jsx'
       - 'frontend/src/features/home/homeNavigation.js'
+      - 'frontend/src/features/superuser/SuperuserDashboardPage.jsx'
+      - 'frontend/src/features/superuser/SuperuserControlPage.jsx'
+      - 'frontend/src/features/superuser/SuperuserActionButtonsSection.jsx'
+      - 'frontend/src/ui/Button.jsx'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'frontend/src/pages/Voorraad.jsx'
+      - 'frontend/src/features/shopping/ShoppingPage.jsx'
       - 'frontend/tests/functional-feature-availability.contract.mjs'
       - 'frontend/tests/e2e/functional-feature-availability.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/action-button-availability.frontend-regression.spec.js'
       - 'frontend/playwright.functional-features.config.js'
       - 'frontend/tests/e2e/platform-feature-flags.frontend-regression.spec.js'
       - 'frontend/package.json'
@@ -92,12 +102,13 @@ jobs:
             tests/platform_feature_flag_migrated_fixture.py \
             tests/test_platform_feature_flags_route_authorization.py \
             tests/test_functional_feature_availability.py \
+            tests/test_action_button_availability.py \
             tests/test_external_database_route_authorization.py
 
       - name: Run platform Featureflags authorization and runtime tests
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_platform_feature_flags_route_authorization.py tests/test_external_database_route_authorization.py tests/test_functional_feature_availability.py
+        run: pytest -q tests/test_platform_feature_flags_route_authorization.py tests/test_external_database_route_authorization.py tests/test_functional_feature_availability.py tests/test_action_button_availability.py
 
   feature-availability-frontend:
     runs-on: ubuntu-latest

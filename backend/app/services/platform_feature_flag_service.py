@@ -17,6 +17,19 @@ from app.services.authorization_foundation_service import write_authorization_au
 FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH = "external_product_search"
 FEATURE_GERECHTEN = "feature.gerechten"
 
+ACTION_KASSA_ADD_RECEIPT = "action.kassa.add_receipt"
+ACTION_KASSA_CHOOSE_FILES = "action.kassa.choose_files"
+ACTION_KASSA_OPEN_CAMERA = "action.kassa.open_camera"
+ACTION_KASSA_CAMERA_CONFIRM = "action.kassa.camera_confirm"
+ACTION_KASSA_DELETE_SELECTED = "action.kassa.delete_selected"
+ACTION_KASSA_LINES_MARK_REVIEWED = "action.kassa.lines_mark_reviewed"
+ACTION_KASSA_LINES_EXPORT = "action.kassa.lines_export"
+ACTION_KASSA_APPROVE_RECEIPT = "action.kassa.approve_receipt"
+ACTION_INVENTORY_ADD_INCIDENTAL_PURCHASE = "action.inventory.add_incidental_purchase"
+ACTION_INVENTORY_SCAN_BARCODE = "action.inventory.scan_barcode"
+ACTION_SHOPPING_COMPLETE = "action.shopping.complete"
+
+
 FEATURE_FLAG_DEFINITIONS = {
     FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH: {
         "category": "technical",
@@ -32,6 +45,94 @@ FEATURE_FLAG_DEFINITIONS = {
         "label": "Gerechten",
         "description": "Bepaalt of Gerechten wereldwijd beschikbaar is in Rezzerv.",
         "default_enabled": False,
+    },
+    ACTION_KASSA_ADD_RECEIPT: {
+        "category": "action_button",
+        "group": "Kassa",
+        "label": "Bon toevoegen",
+        "description": "Toont de actie om vanuit Kassa een nieuwe bon toe te voegen.",
+        "test_id": "kassa-add-receipt-button",
+        "default_enabled": True,
+    },
+    ACTION_KASSA_CHOOSE_FILES: {
+        "category": "action_button",
+        "group": "Kassa",
+        "label": "Bestanden kiezen",
+        "description": "Toont de bestandskeuze in de Kassa-bronhub.",
+        "test_id": "kassa-choose-file-button",
+        "default_enabled": True,
+    },
+    ACTION_KASSA_OPEN_CAMERA: {
+        "category": "action_button",
+        "group": "Kassa",
+        "label": "Camera openen",
+        "description": "Toont de camera-actie in de Kassa-bronhub.",
+        "test_id": "kassa-open-camera-button",
+        "default_enabled": True,
+    },
+    ACTION_KASSA_CAMERA_CONFIRM: {
+        "category": "action_button",
+        "group": "Kassa",
+        "label": "Camerafoto bevestigen",
+        "description": "Toont de bevestigingsactie na het fotograferen van een kassabon.",
+        "test_id": "kassa-camera-confirm",
+        "default_enabled": True,
+    },
+    ACTION_KASSA_DELETE_SELECTED: {
+        "category": "action_button",
+        "group": "Kassa",
+        "label": "Geselecteerde bonnen verwijderen",
+        "description": "Toont de bulkactie voor het verwijderen van geselecteerde bonnen.",
+        "test_id": "kassa-delete-selected-button",
+        "default_enabled": True,
+    },
+    ACTION_KASSA_LINES_MARK_REVIEWED: {
+        "category": "action_button",
+        "group": "Kassa",
+        "label": "Bonregels: Alles goed",
+        "description": "Toont de actie om geselecteerde bonregels als gecontroleerd te markeren.",
+        "test_id": "receipt-lines-mark-reviewed",
+        "default_enabled": True,
+    },
+    ACTION_KASSA_LINES_EXPORT: {
+        "category": "action_button",
+        "group": "Kassa",
+        "label": "Bonregels exporteren",
+        "description": "Toont de exportactie bij geselecteerde bonregels.",
+        "test_id": "receipt-export-button",
+        "default_enabled": True,
+    },
+    ACTION_KASSA_APPROVE_RECEIPT: {
+        "category": "action_button",
+        "group": "Kassa",
+        "label": "Kassabon goedkeuren",
+        "description": "Toont de actie om een kassabon goed te keuren.",
+        "match_text": "Goedkeuren",
+        "default_enabled": True,
+    },
+    ACTION_INVENTORY_ADD_INCIDENTAL_PURCHASE: {
+        "category": "action_button",
+        "group": "Voorraad",
+        "label": "Incidentele aankoop toevoegen",
+        "description": "Toont de actie om vanuit Voorraad een incidentele aankoop toe te voegen.",
+        "test_id": "inventory-add-incidental-purchase",
+        "default_enabled": True,
+    },
+    ACTION_INVENTORY_SCAN_BARCODE: {
+        "category": "action_button",
+        "group": "Voorraad",
+        "label": "Barcode scannen",
+        "description": "Toont de camera-actie voor een barcode bij een incidentele aankoop.",
+        "test_id": "inventory-incidental-open-barcode-camera",
+        "default_enabled": True,
+    },
+    ACTION_SHOPPING_COMPLETE: {
+        "category": "action_button",
+        "group": "Winkelen",
+        "label": "Winkelen afgerond",
+        "description": "Toont de actie waarmee de actuele winkellijst wordt afgerond.",
+        "match_text": "Winkelen afgerond",
+        "default_enabled": True,
     },
 }
 
@@ -116,8 +217,12 @@ def _serialize_flag(flag_key: str, definition: dict, override: dict | None) -> d
 
     return {
         "key": flag_key,
+        "category": definition.get("category"),
+        "group": definition.get("group"),
         "label": definition["label"],
         "description": definition["description"],
+        "test_id": definition.get("test_id"),
+        "match_text": definition.get("match_text"),
         "enabled": enabled,
         "default_enabled": bool(definition["default_enabled"]),
         "source": source,
@@ -187,18 +292,20 @@ def set_platform_feature_flag(
     enabled: bool,
     updated_by: str,
 ) -> dict:
-    normalized_key, _definition_value = _definition(flag_key)
+    normalized_key, definition = _definition(flag_key)
     actor_id = str(updated_by or "").strip()
     if not actor_id:
         raise ValueError("updated_by is verplicht")
 
-    functional = _definition_value.get("category") == "functional"
-    if functional:
+    managed_category = definition.get("category") in {"functional", "action_button"}
+    if managed_category:
         # Serialize even the first write (there is no row to lock yet).
         # This keeps audit old/new values correct for concurrent PostgreSQL writers.
         if conn.dialect.name == "postgresql":
-            conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
-                         {"key": "platform_feature_flags:" + normalized_key})
+            conn.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                {"key": "platform_feature_flags:" + normalized_key},
+            )
         previous = is_platform_feature_enabled(conn, normalized_key)
 
     result = conn.execute(
@@ -234,11 +341,20 @@ def set_platform_feature_flag(
                 "updated_by": actor_id,
             },
         )
-    if functional and previous != bool(enabled):
+    if managed_category and previous != bool(enabled):
+        audit_action = (
+            "platform.functional_feature.updated"
+            if definition.get("category") == "functional"
+            else "platform.action_button.updated"
+        )
         write_authorization_audit(
-            conn, actor_user_id=actor_id, actor_type="platform",
-            action="platform.functional_feature.updated",
-            object_type="platform_feature_flag", object_id=normalized_key,
-            old_value={"enabled": previous}, new_value={"enabled": bool(enabled)},
+            conn,
+            actor_user_id=actor_id,
+            actor_type="platform",
+            action=audit_action,
+            object_type="platform_feature_flag",
+            object_id=normalized_key,
+            old_value={"enabled": previous},
+            new_value={"enabled": bool(enabled)},
         )
     return get_platform_feature_flag(conn, normalized_key)
