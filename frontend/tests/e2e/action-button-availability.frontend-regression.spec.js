@@ -49,6 +49,7 @@ async function mockApi(page, actor, state) {
 
     if (path === '/api/action-buttons') {
       state.productReads++
+      if (state.productGate?.promise) await state.productGate.promise
       return json({ items: [
         { key: shoppingKey, home_tile_key: 'winkelen', enabled: state.shoppingEnabled },
         { key: inventoryKey, home_tile_key: 'voorraad', enabled: state.inventoryEnabled },
@@ -126,6 +127,35 @@ test('Superuser manages Startpagina actions with an inline confirmation on the s
   await expect(item).toContainText('Niet beschikbaar')
   await expect(item.getByTestId('superuser-action-button-confirmation')).toHaveCount(0)
   expect(state.updates).toEqual([{ key: shoppingKey, payload: { enabled: false } }])
+})
+
+test('Startpagina waits for the current server projection before rendering managed actions', async ({ page }) => {
+  let releaseProjection
+  const productGate = {
+    promise: new Promise((resolve) => { releaseProjection = resolve }),
+  }
+  const state = {
+    shoppingEnabled: false,
+    inventoryEnabled: true,
+    gerechtenEnabled: false,
+    productReads: 0,
+    managementReads: 0,
+    updates: [],
+    productGate,
+  }
+  await mockApi(page, 'member', state)
+
+  await page.goto('/home')
+  await expect.poll(() => state.productReads).toBeGreaterThan(0)
+  await expect(page.getByTestId('home-action-availability-loading')).toBeVisible()
+  await expect(page.getByTestId('home-tile-winkelen')).toHaveCount(0)
+  await expect(page.getByTestId('home-tile-voorraad')).toHaveCount(0)
+
+  releaseProjection()
+
+  await expect(page.getByTestId('home-action-availability-loading')).toHaveCount(0)
+  await expect(page.getByTestId('home-tile-winkelen')).toHaveCount(0)
+  await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()
 })
 
 test('disabled Startpagina action hides only the home tile and leaves internal buttons intact', async ({ page }) => {
