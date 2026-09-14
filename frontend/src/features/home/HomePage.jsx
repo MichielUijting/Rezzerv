@@ -58,7 +58,7 @@ export default function HomePage() {
   const [showMore, setShowMore] = useState(false)
   const visibility = visibilityFromContext(context)
   const features = useFeatureAvailability()
-  const actionButtons = useActionButtonAvailability()
+  const actionButtons = useActionButtonAvailability({ enabled: Boolean(context && context.context_type !== 'none') })
   const navigation = buildHomeNavigation({ onboarding, visibility, features, actionButtons })
   const platformNavigation = context?.context_type === 'none'
     ? PLATFORM_NAVIGATION_ITEMS.filter((item) => canCurrentUserPerform(item.permission, context))
