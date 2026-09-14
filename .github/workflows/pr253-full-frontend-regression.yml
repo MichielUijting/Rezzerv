@@ -178,6 +178,7 @@ jobs:
         run: |
           docker run --rm \
             --add-host=host.docker.internal:host-gateway \
+            -e CI=true \
             -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
             -e PLAYWRIGHT_API_URL="$PLAYWRIGHT_API_URL" \
             -e PLAYWRIGHT_TEST_ADMIN_EMAIL="$PLAYWRIGHT_TEST_ADMIN_EMAIL" \
