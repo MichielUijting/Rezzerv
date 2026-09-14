@@ -6,7 +6,7 @@ import { fetchJsonWithAuth } from '../../lib/authSession.js'
 async function loadActionButtons() {
   const response = await fetchJsonWithAuth('/api/platform/action-buttons')
   const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload?.detail || 'Actieknoppen konden niet worden geladen.')
+  if (!response.ok) throw new Error(payload?.detail || 'Acties op de Startpagina konden niet worden geladen.')
   return Array.isArray(payload?.items) ? payload.items : []
 }
 
@@ -17,7 +17,7 @@ async function saveActionButton(key, enabled) {
     body: JSON.stringify({ enabled }),
   })
   const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload?.detail || 'Actieknop kon niet worden gewijzigd.')
+  if (!response.ok) throw new Error(payload?.detail || 'Actie op de Startpagina kon niet worden gewijzigd.')
   return payload?.item
 }
 
@@ -33,7 +33,7 @@ export default function SuperuserActionButtonsSection() {
     setLoading(true)
     loadActionButtons()
       .then((nextItems) => { if (active) { setItems(nextItems); setError('') } })
-      .catch((requestError) => { if (active) setError(requestError?.message || 'Actieknoppen konden niet worden geladen.') })
+      .catch((requestError) => { if (active) setError(requestError?.message || 'Acties op de Startpagina konden niet worden geladen.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [])
@@ -41,7 +41,7 @@ export default function SuperuserActionButtonsSection() {
   const groupedItems = useMemo(() => {
     const groups = new Map()
     for (const item of items) {
-      const group = String(item.group || 'Overig')
+      const group = String(item.group || 'Startpagina')
       if (!groups.has(group)) groups.set(group, [])
       groups.get(group).push(item)
     }
@@ -64,7 +64,7 @@ export default function SuperuserActionButtonsSection() {
       setPending(null)
       window.dispatchEvent(new Event('rezzerv-action-buttons-changed'))
     } catch (requestError) {
-      setError(requestError?.message || 'Actieknop kon niet worden gewijzigd.')
+      setError(requestError?.message || 'Actie op de Startpagina kon niet worden gewijzigd.')
     } finally {
       setSaving(false)
     }
@@ -72,18 +72,18 @@ export default function SuperuserActionButtonsSection() {
 
   return (
     <section aria-label="Actieknoppen" data-testid="superuser-action-buttons">
-      <h2 style={{ marginTop: 0, fontSize: 20 }}>Actieknoppen</h2>
+      <h2 style={{ marginTop: 0, fontSize: 20 }}>Actieknoppen op de Startpagina</h2>
       <p style={{ marginTop: 0 }}>
-        Bepaal hier platformbreed welke geregistreerde actieknoppen zichtbaar zijn. De instelling geldt voor alle gebruikers en huishoudens.
+        Bepaal hier platformbreed welke acties op de Startpagina beschikbaar zijn. De instelling geldt voor alle gebruikers en huishoudens.
       </p>
       <p>
-        Dit wijzigt alleen de beschikbaarheid in de gebruikersinterface. Bestaande rollen, permissies en backend-autorisatie blijven ongewijzigd en leidend.
+        Dit wijzigt alleen de beschikbaarheid van de tegel op de Startpagina. Knoppen binnen Kassa, Voorraad, Winkelen of andere functionaliteiten worden hierdoor niet gewijzigd.
       </p>
-      <p>Alle bestaande actieknoppen staan standaard aan. Een wijziging wordt pas opgeslagen na een tweede bevestiging.</p>
+      <p>Bestaande rollen, permissies en backend-autorisatie blijven ongewijzigd en leidend. Een wijziging wordt pas opgeslagen na een tweede bevestiging.</p>
 
-      {loading ? <p role="status">Actieknoppen laden…</p> : null}
+      {loading ? <p role="status">Acties op de Startpagina laden…</p> : null}
       {error ? <p role="alert">{error}</p> : null}
-      {!loading && !error && items.length === 0 ? <p>Geen actieknoppen geregistreerd.</p> : null}
+      {!loading && !error && items.length === 0 ? <p>Geen acties op de Startpagina geregistreerd.</p> : null}
 
       {!loading ? groupedItems.map(([group, groupItems]) => (
         <div key={group} style={{ marginTop: 20 }}>
@@ -120,7 +120,7 @@ export default function SuperuserActionButtonsSection() {
           <div data-testid="superuser-action-button-confirmation">
             <h3>Wijziging bevestigen</h3>
             <p>
-              <strong>{pending.label}</strong> wordt platformbreed{' '}
+              <strong>{pending.label}</strong> wordt op de Startpagina platformbreed{' '}
               <strong>{pending.enabled ? 'beschikbaar' : 'niet beschikbaar'}</strong>.
             </p>
             <p>Deze wijziging geeft geen extra rechten en omzeilt geen bestaande autorisatie.</p>
