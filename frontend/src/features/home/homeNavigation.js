@@ -1,3 +1,5 @@
+import { FEATURE_GERECHTEN, isFeatureEnabled } from '../platform/featureAvailability.js'
+
 const LEGACY_TILES = [
   { key: 'meldingen', label: 'Meldingen', icon: '✉️', clickable: true },
   { key: 'bijna-op', label: 'Bijna op', icon: '📉', clickable: true },
@@ -12,7 +14,7 @@ const LEGACY_TILES = [
   { key: 'externe-databases', label: 'Externe databases', icon: '🗄️', clickable: true },
   { key: 'catalogus', label: 'Catalogus', icon: 'CAT', clickable: true },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳', clickable: false },
-  { key: 'recepten', label: 'Gerechten', icon: '🍳', clickable: false, defaultAvailable: false },
+  { key: 'recepten', label: 'Gerechten', icon: '🍳', clickable: false, feature: FEATURE_GERECHTEN },
   { key: 'bestellen', label: 'Bestellen', icon: '📋', clickable: false },
   { key: 'verlengen', label: 'Verlengen', icon: '⏳', clickable: false },
   { key: 'instellingen', label: 'Instellingen', icon: '⚙️', clickable: true },
@@ -30,11 +32,12 @@ function isGloballyAvailable(tile, actionButtons) {
   if (Object.hasOwn(actionButtons || {}, tile.key)) {
     return actionButtons[tile.key] === true
   }
-  return tile.defaultAvailable !== false
+  return true
 }
 
 function isVisible(tile, visibility) {
-  if (!isGloballyAvailable(tile, visibility.actionButtons)) return false
+  if (tile.feature && !isFeatureEnabled(visibility.features, tile.feature)) return false
+  if (!tile.feature && !isGloballyAvailable(tile, visibility.actionButtons)) return false
   if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser
   if (tile.key === 'admin') return visibility.canOpenAdmin
   if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
@@ -96,8 +99,9 @@ function primaryKeysFor(onboarding) {
   return []
 }
 
-export function buildHomeNavigation({ onboarding, visibility, actionButtons = {} }) {
+export function buildHomeNavigation({ onboarding, visibility, features = {}, actionButtons = {} }) {
   const safeVisibility = {
+    features,
     actionButtons,
     canOpenAdmin: Boolean(visibility?.canOpenAdmin),
     canOpenExternalDatabases: Boolean(visibility?.canOpenExternalDatabases),
