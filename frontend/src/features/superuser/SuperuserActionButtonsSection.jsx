@@ -49,7 +49,7 @@ export default function SuperuserActionButtonsSection() {
   }, [items])
 
   function propose(item) {
-    if (saving || pending) return
+    if (saving) return
     setError('')
     setPending({ key: item.key, label: item.label || item.key, enabled: !Boolean(item.enabled) })
   }
@@ -89,52 +89,56 @@ export default function SuperuserActionButtonsSection() {
         <div key={group} style={{ marginTop: 20 }}>
           <h3 style={{ fontSize: 17 }}>{group}</h3>
           <div style={{ display: 'grid', gap: 12 }}>
-            {groupItems.map((item) => (
-              <Card key={item.key} className="rz-card-home">
-                <div data-testid={`superuser-action-button-${item.key}`}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ minWidth: 0, flex: '1 1 420px' }}>
-                      <strong>{item.label || item.key}</strong>
-                      <p style={{ margin: '6px 0' }}>{item.description}</p>
-                      <div style={{ fontSize: 13, color: '#475467' }}>Sleutel: {item.key}</div>
-                      <div style={{ marginTop: 6 }}>Status: <strong>{item.enabled ? 'Beschikbaar' : 'Niet beschikbaar'}</strong></div>
+            {groupItems.map((item) => {
+              const isPending = pending?.key === item.key
+              return (
+                <Card key={item.key} className="rz-card-home">
+                  <div data-testid={`superuser-action-button-${item.key}`}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0, flex: '1 1 420px' }}>
+                        <strong>{item.label || item.key}</strong>
+                        <p style={{ margin: '6px 0' }}>{item.description}</p>
+                        <div style={{ fontSize: 13, color: '#475467' }}>Sleutel: {item.key}</div>
+                        <div style={{ marginTop: 6 }}>Status: <strong>{item.enabled ? 'Beschikbaar' : 'Niet beschikbaar'}</strong></div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant={item.enabled ? 'secondary' : 'primary'}
+                        disabled={saving || isPending}
+                        onClick={() => propose(item)}
+                      >
+                        {item.enabled ? 'Uitschakelen' : 'Inschakelen'}
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant={item.enabled ? 'secondary' : 'primary'}
-                      disabled={saving || Boolean(pending)}
-                      onClick={() => propose(item)}
-                    >
-                      {item.enabled ? 'Uitschakelen' : 'Inschakelen'}
-                    </Button>
+
+                    {isPending ? (
+                      <div
+                        data-testid="superuser-action-button-confirmation"
+                        style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #d0d5dd' }}
+                      >
+                        <h4 style={{ margin: '0 0 8px 0' }}>Wijziging bevestigen</h4>
+                        <p style={{ margin: '0 0 8px 0' }}>
+                          <strong>{pending.label}</strong> wordt op de Startpagina platformbreed{' '}
+                          <strong>{pending.enabled ? 'beschikbaar' : 'niet beschikbaar'}</strong>.
+                        </p>
+                        <p style={{ margin: '0 0 12px 0' }}>Deze wijziging geeft geen extra rechten en omzeilt geen bestaande autorisatie.</p>
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          <Button type="button" disabled={saving} onClick={confirm}>
+                            {saving ? 'Opslaan…' : 'Definitief bevestigen'}
+                          </Button>
+                          <Button type="button" variant="secondary" disabled={saving} onClick={() => setPending(null)}>
+                            Annuleren
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              )
+            })}
           </div>
         </div>
       )) : null}
-
-      {pending ? (
-        <Card className="rz-card-home" style={{ marginTop: 20 }}>
-          <div data-testid="superuser-action-button-confirmation">
-            <h3>Wijziging bevestigen</h3>
-            <p>
-              <strong>{pending.label}</strong> wordt op de Startpagina platformbreed{' '}
-              <strong>{pending.enabled ? 'beschikbaar' : 'niet beschikbaar'}</strong>.
-            </p>
-            <p>Deze wijziging geeft geen extra rechten en omzeilt geen bestaande autorisatie.</p>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Button type="button" disabled={saving} onClick={confirm}>
-                {saving ? 'Opslaan…' : 'Definitief bevestigen'}
-              </Button>
-              <Button type="button" variant="secondary" disabled={saving} onClick={() => setPending(null)}>
-                Annuleren
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : null}
     </section>
   )
 }
