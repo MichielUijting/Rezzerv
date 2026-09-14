@@ -26,13 +26,30 @@ class PlatformFeatureFlagUpdateRequest(BaseModel):
     enabled: bool
 
 
+def _technical_flag_contract(item: dict) -> dict:
+    """Keep the pre-existing technical Feature Flags response shape stable."""
+    return {
+        "key": item["key"],
+        "label": item["label"],
+        "description": item["description"],
+        "enabled": item["enabled"],
+        "default_enabled": item["default_enabled"],
+        "source": item["source"],
+        "updated_by": item["updated_by"],
+        "updated_at": item["updated_at"],
+    }
+
+
 @router.get("/api/platform/feature-flags")
 def get_platform_feature_flags() -> dict:
     context = require_platform_permission_from_session(
         PLATFORM_FEATURE_FLAGS_MANAGE_PERMISSION
     )
     with engine.connect() as conn:
-        items = list_platform_feature_flags(conn, category="technical")
+        items = [
+            _technical_flag_contract(item)
+            for item in list_platform_feature_flags(conn, category="technical")
+        ]
     return {
         "items": items,
         "count": len(items),
@@ -52,12 +69,12 @@ def update_platform_feature_flag(
     try:
         require_feature_category(flag_key, "technical")
         with engine.begin() as conn:
-            item = set_platform_feature_flag(
+            item = _technical_flag_contract(set_platform_feature_flag(
                 conn,
                 flag_key,
                 enabled=payload.enabled,
                 updated_by=context.user_id,
-            )
+            ))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Onbekende platformfeatureflag") from exc
 
