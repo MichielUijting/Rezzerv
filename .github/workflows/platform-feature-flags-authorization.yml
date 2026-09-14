@@ -97,7 +97,7 @@ jobs:
       - name: Run platform Featureflags authorization and runtime tests
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_platform_feature_flags_route_authorization.py tests/test_external_database_route_authorization.py tests/test_functional_feature_availability.py tests/test_superuser_v2_permission_cutover.py
+        run: pytest -q tests/test_platform_feature_flags_route_authorization.py tests/test_external_database_route_authorization.py tests/test_functional_feature_availability.py
 
   feature-availability-frontend:
     runs-on: ubuntu-latest

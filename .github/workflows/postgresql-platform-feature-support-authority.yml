@@ -87,7 +87,7 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/platform-feature-support-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/platform-feature-support-migration.log
-          grep -F "'revision': '20260829_14'" /tmp/platform-feature-support-migration.log
+          grep -F "'revision': '20260908_01'" /tmp/platform-feature-support-migration.log
 
       - name: Prove platform feature/support paths work with DML-only runtime role
         working-directory: backend

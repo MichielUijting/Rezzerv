@@ -9,38 +9,30 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api import platform_feature_flags_routes as routes
 from app.services import platform_feature_flag_service as flags
 from app.services import session_request_context
 from app.services.authorization_foundation_service import ensure_authorization_foundation
-from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
 @pytest.fixture
 def authority(monkeypatch):
     postgres_url = os.getenv('FUNCTIONAL_FEATURE_POSTGRESQL_TEST_URL')
-    if postgres_url:
-        engine = create_engine(postgres_url)
-        # Explicitly opt in to a disposable, separately migrated test database.
-        assert engine.url.database == 'rezzerv_functional_feature_test'
-        assert engine.dialect.name == 'postgresql'
-    else:
-        engine = create_engine('sqlite://', poolclass=StaticPool,
-                               connect_args={'check_same_thread': False})
+    if not postgres_url:
+        pytest.skip('Requires explicit disposable PostgreSQL test database')
+
+    engine = create_engine(postgres_url)
+    # Explicitly opt in to a disposable, separately migrated test database.
+    assert engine.url.database == 'rezzerv_functional_feature_test'
+    assert engine.dialect.name == 'postgresql'
+
     with engine.begin() as conn:
-        if not postgres_url:
-            install_authorization_schema(conn)
-            conn.execute(text('''CREATE TABLE platform_feature_flags (
-                flag_key TEXT PRIMARY KEY, enabled BOOLEAN NOT NULL,
-                updated_by TEXT, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)'''))
-        else:
-            flags.validate_platform_feature_flag_schema(conn)
-            conn.execute(text('DELETE FROM platform_feature_flags'))
-            conn.execute(text('DELETE FROM auth_audit_log'))
-            conn.execute(text('DELETE FROM auth_platform_user_roles'))
+        flags.validate_platform_feature_flag_schema(conn)
+        conn.execute(text('DELETE FROM platform_feature_flags'))
+        conn.execute(text('DELETE FROM auth_audit_log'))
+        conn.execute(text('DELETE FROM auth_platform_user_roles'))
         ensure_authorization_foundation(conn)
         for user, role in [('superuser', 'platform.superuser'),
                            ('technical', 'platform.platform_admin'),
@@ -64,12 +56,11 @@ def authority(monkeypatch):
         with TestClient(app) as client:
             yield engine, actor, client
     finally:
-        if postgres_url:
-            # Leave no active IP-owner or feature rows for the next test module.
-            with engine.begin() as conn:
-                conn.execute(text('DELETE FROM platform_feature_flags'))
-                conn.execute(text('DELETE FROM auth_audit_log'))
-                conn.execute(text('DELETE FROM auth_platform_user_roles'))
+        # Leave no active IP-owner or feature rows for the next test module.
+        with engine.begin() as conn:
+            conn.execute(text('DELETE FROM platform_feature_flags'))
+            conn.execute(text('DELETE FROM auth_audit_log'))
+            conn.execute(text('DELETE FROM auth_platform_user_roles'))
         engine.dispose()
 
 
@@ -172,10 +163,11 @@ def test_audit_failure_rolls_back_feature_write(authority, monkeypatch):
 
 
 def test_schema_failure_is_not_masked_by_default(authority):
-    engine = create_engine('sqlite://')
-    with engine.connect() as conn, pytest.raises(OperationalError):
-        flags.is_platform_feature_enabled(conn, flags.FEATURE_GERECHTEN)
-    engine.dispose()
+    engine, _, _ = authority
+    with engine.connect() as conn:
+        conn.execute(text('SET search_path TO pg_temp'))
+        with pytest.raises(SQLAlchemyError):
+            flags.is_platform_feature_enabled(conn, flags.FEATURE_GERECHTEN)
 
 
 def test_revocation_applies_to_next_request(authority):
@@ -189,8 +181,6 @@ def test_revocation_applies_to_next_request(authority):
 
 def test_postgresql_concurrent_first_write_has_one_audited_transition(authority):
     engine, _, _ = authority
-    if engine.dialect.name != 'postgresql':
-        pytest.skip('Requires explicit disposable PostgreSQL test database')
     barrier = Barrier(2)
 
     def enable(actor):

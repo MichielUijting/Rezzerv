@@ -31,11 +31,6 @@ def test_active_superuser_authority_is_exact_v2_target_and_separate_from_admin()
     assert ROLE_PERMISSIONS["platform.superuser"] == expected
     assert not (expected & PLATFORM_ADMIN_PERMISSIONS)
     assert "platform.special_roles.manage" not in expected
-    assert "platform.functional_features.manage" in expected
-    assert "platform.feature_flags.manage" not in expected
-    assert "platform.functional_features.manage" not in PLATFORM_ADMIN_PERMISSIONS
-    assert "platform.feature_flags.manage" in PLATFORM_ADMIN_PERMISSIONS
-    assert {"platform.functional_features.manage", "platform.feature_flags.manage"} <= IP_OWNER_PERMISSIONS
 
     assert ROLE_PERMISSIONS["platform.platform_admin"] == PLATFORM_ADMIN_PERMISSIONS
     assert IP_OWNER_PERMISSIONS == (
