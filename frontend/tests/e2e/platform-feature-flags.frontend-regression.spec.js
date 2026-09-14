@@ -31,6 +31,7 @@ const defaultFlag = {
 }
 
 async function mockSession(page, session) {
+  await page.route('**/api/features', (route) => route.fulfill({ json: { features: {} } }))
   await page.route('**/api/session', async (route) => {
     await route.fulfill({
       status: 200,

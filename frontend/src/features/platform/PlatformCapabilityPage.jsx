@@ -14,6 +14,9 @@ import PlatformTestFixturesPage from './PlatformTestFixturesPage.jsx'
 import PlatformUsersPage from './PlatformUsersPage.jsx'
 
 export default function PlatformCapabilityPage({ item }) {
+  if (item?.key === 'functional-features') {
+    return <PlatformFeatureFlagsPage functional />
+  }
   if (item?.key === 'diagnostics') {
     return <PlatformDiagnosticsPage />
   }

@@ -56,7 +56,7 @@ function assertNoLocationsHomeTile(navigation) {
   assert.ok(keys(navigation.primaryTiles).includes('voorraad'))
   assert.ok(keys(navigation.primaryTiles).includes('kassa'))
   assert.ok(keys(navigation.primaryTiles).includes('prognoses'))
-  assert.ok(keys(navigation.primaryTiles).includes('recepten'))
+  assert.ok(!keys(navigation.primaryTiles).includes('recepten'))
   assert.ok(keys(navigation.primaryTiles).includes('instellingen'))
   assert.ok(keys(navigation.primaryTiles).includes('admin'))
   assert.equal(navigation.moreTiles.length, 0)

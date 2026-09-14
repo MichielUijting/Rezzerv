@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FRONTEND = ROOT / "frontend"
 
 EXPECTED_CAPABILITIES = (
+    ("functional-features", "platform.functional_features.manage", "/platform/functionaliteiten", "PlatformFeatureFlagsPage"),
     ("diagnostics", "platform.diagnostics.view", "/platform/diagnostiek", "PlatformDiagnosticsPage"),
     ("logs", "platform.logs.view", "/platform/logs", "PlatformLogsPage"),
     ("audit", "platform.audit.view", "/platform/audit", "PlatformAuditPage"),
@@ -30,7 +31,9 @@ EXPECTED_CAPABILITIES = (
     ("permissions", "platform.permissions.manage", "/platform/autorisaties", "PlatformAuthorizationsPage"),
 )
 
-EXPECTED_PLATFORM_ADMIN_PERMISSIONS = frozenset(item[1] for item in EXPECTED_CAPABILITIES)
+EXPECTED_PLATFORM_ADMIN_PERMISSIONS = frozenset(
+    item[1] for item in EXPECTED_CAPABILITIES if item[0] != "functional-features"
+)
 
 EXPECTED_REGRESSION_SPECS = (
     "tests/e2e/session-none-context.frontend-regression.spec.js",
@@ -64,17 +67,22 @@ def _assert_navigation_matrix() -> None:
 
 
 def _assert_authorization_matrix() -> None:
+    functional_permission = "platform.functional_features.manage"
+
     assert frozenset(PLATFORM_ADMIN_PERMISSIONS) == EXPECTED_PLATFORM_ADMIN_PERMISSIONS
     assert frozenset(ROLE_PERMISSIONS["platform.platform_admin"]) == EXPECTED_PLATFORM_ADMIN_PERMISSIONS
+    assert functional_permission not in PLATFORM_ADMIN_PERMISSIONS
 
     ip_owner = frozenset(ROLE_PERMISSIONS["platform.ip_owner"])
     assert EXPECTED_PLATFORM_ADMIN_PERMISSIONS <= ip_owner
+    assert functional_permission in ip_owner
     assert "platform.special_roles.manage" in ip_owner
     assert "platform.special_roles.manage" not in ROLE_PERMISSIONS["platform.platform_admin"]
 
     superuser = frozenset(ROLE_PERMISSIONS["platform.superuser"])
     assert superuser == frozenset(ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS)
     assert superuser == frozenset(V2_SUPERUSER_TARGET_PERMISSIONS)
+    assert functional_permission in superuser
     assert not (superuser & EXPECTED_PLATFORM_ADMIN_PERMISSIONS)
     assert "platform.special_roles.manage" not in superuser
 
@@ -83,6 +91,10 @@ def _assert_every_capability_has_concrete_page() -> None:
     source = _read("frontend/src/features/platform/PlatformCapabilityPage.jsx")
     for key, _permission, _route, page in EXPECTED_CAPABILITIES:
         assert f"import {page} from './{page}.jsx'" in source, f"missing import for {page}"
+        if key == "functional-features":
+            assert "if (item?.key === 'functional-features')" in source
+            assert "return <PlatformFeatureFlagsPage functional />" in source
+            continue
         dispatch = re.compile(
             rf"if \(item\?\.key === '{re.escape(key)}'\) \{{\s*return <{re.escape(page)} />\s*\}}",
             re.DOTALL,

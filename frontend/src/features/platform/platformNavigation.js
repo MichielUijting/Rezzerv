@@ -6,6 +6,15 @@ export const PLATFORM_NAVIGATION_GROUPS = Object.freeze([
 
 export const PLATFORM_NAVIGATION_ITEMS = Object.freeze([
   {
+    key: 'functional-features',
+    group: 'operations',
+    permission: 'platform.functional_features.manage',
+    label: 'Functionaliteiten',
+    icon: '🚩',
+    route: '/platform/functionaliteiten',
+    description: 'Beheer de globale beschikbaarheid van functionaliteiten.',
+  },
+  {
     key: 'diagnostics',
     group: 'insight',
     permission: 'platform.diagnostics.view',

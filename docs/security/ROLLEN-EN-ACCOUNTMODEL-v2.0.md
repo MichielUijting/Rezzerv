@@ -86,6 +86,10 @@ Superuser is een speciaal functioneel platformaccount.
 - Heeft geen persoonlijk of regulier gebruikershuishouden.
 - Heeft wel toegang tot het gemeenschappelijke systeemhuishouden 0.
 - Voert functioneel platformbeheer uit.
+- Beheert globale functionele beschikbaarheid met
+  `platform.functional_features.manage`. De eerste functionele feature is
+  `feature.gerechten`, standaard UIT, ook voor Superusers in productgebruik.
+  Dit geeft geen technische `platform.feature_flags.manage`-bevoegdheid.
 - Ontvangt en beantwoordt Frontteammeldingen.
 - Stuurt meldingen en peilingen naar Frontteamleden.
 - Beheert de centrale catalogus en universele artikelen.
@@ -108,6 +112,8 @@ Platformbeheerder is een speciaal technisch platformaccount.
 - Krijgt alleen toegang tot huishouden 0 wanneer hetzelfde account ook een rol
   of bevoegdheid heeft die deze toegang verleent, bijvoorbeeld Superuser.
 - Krijgt niet automatisch functionele Superuserrechten.
+- Beheert technische featureflags met `platform.feature_flags.manage`, maar
+  krijgt niet `platform.functional_features.manage`.
 - Beheert technisch onder andere:
   - technische status en diagnose;
   - logging en foutonderzoek;
@@ -231,6 +237,27 @@ gebruikershuishouden. De combinatie Superuser + Platformbeheerder geeft niet de
 IP-owner-only permission `platform.special_roles.manage`.
 
 ## 8. Bestaande en toekomstige functionaliteit
+
+### Globale functionele beschikbaarheid
+
+Functionele en technische flags delen de canonical definities en de tabel
+`platform_feature_flags`. Afzonderlijke API-categoriegrenzen vereisen respectievelijk
+`platform.functional_features.manage` en `platform.feature_flags.manage` en
+weigeren sleutels uit de andere categorie. IP-eigenaar krijgt beide via de
+bestaande permission-union. Geen categorie verleent gebruikspermissies.
+
+Er is uitsluitend globale AAN/UIT-beschikbaarheid: geen user-, household-,
+role-, groeps- of abonnements-overrides. Bestaande onboardingvoorkeuren zoals
+`recipes_enabled` kunnen een globale UIT-status niet opheffen.
+Een ontbrekende opgeslagen waarde voor `feature.gerechten` betekent UIT;
+`external_product_search` behoudt zijn bestaande standaard AAN.
+Wijzigingen aan functionele beschikbaarheid worden transactioneel vastgelegd in
+het bestaande `auth_audit_log`, inclusief actor, sleutel, oude/nieuwe status en tijd.
+
+De bestaande Gerechten-tegel (interne navigatiesleutel `recepten`) is een
+niet-klikbare placeholder zonder productroute of API. AAN herstelt uitsluitend
+de bestaande zichtbaarheid volgens het normale navigatiebeleid. Nieuwe
+Gerechten-productfunctionaliteit valt buiten deze stap.
 
 ### Bestaand en in 9.1 gericht gecontroleerd
 
