@@ -90,7 +90,7 @@ async function mockApi(page, actor, state) {
   })
 }
 
-test('Superuser manages Startpagina actions from the Actieknoppen tab with confirmation', async ({ page }) => {
+test('Superuser manages Startpagina actions with an inline confirmation on the selected action', async ({ page }) => {
   const state = {
     shoppingEnabled: true,
     inventoryEnabled: true,
@@ -109,14 +109,22 @@ test('Superuser manages Startpagina actions from the Actieknoppen tab with confi
   await expect(page.getByTestId('superuser-action-buttons')).toContainText('Actieknoppen op de Startpagina')
   await expect.poll(() => state.managementReads).toBeGreaterThan(0)
   const item = page.getByTestId(`superuser-action-button-${shoppingKey}`)
+  const otherItem = page.getByTestId(`superuser-action-button-${inventoryKey}`)
   await expect(item).toContainText('Beschikbaar')
 
   await item.getByRole('button', { name: 'Uitschakelen', exact: true }).click()
   expect(state.updates).toEqual([])
-  await expect(page.getByTestId('superuser-action-button-confirmation')).toBeVisible()
-  await page.getByRole('button', { name: 'Definitief bevestigen', exact: true }).click()
+
+  const confirmation = item.getByTestId('superuser-action-button-confirmation')
+  await expect(confirmation).toBeVisible()
+  await expect(confirmation).toContainText('Winkelen')
+  await expect(item.getByRole('button', { name: 'Uitschakelen', exact: true })).toBeDisabled()
+  await expect(otherItem.getByRole('button', { name: 'Uitschakelen', exact: true })).toBeEnabled()
+
+  await confirmation.getByRole('button', { name: 'Definitief bevestigen', exact: true }).click()
 
   await expect(item).toContainText('Niet beschikbaar')
+  await expect(item.getByTestId('superuser-action-button-confirmation')).toHaveCount(0)
   expect(state.updates).toEqual([{ key: shoppingKey, payload: { enabled: false } }])
 })
 
