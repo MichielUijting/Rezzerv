@@ -6,8 +6,8 @@ import { API_BASE_URL } from '../../lib/apiClient.js'
 
 const FEATURE_FLAGS_ENDPOINT = '/api/platform/feature-flags'
 
-async function fetchPlatformFeatureFlags() {
-  const response = await fetch(`${API_BASE_URL}${FEATURE_FLAGS_ENDPOINT}`, {
+async function fetchPlatformFeatureFlags(endpoint) {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: 'GET',
     credentials: 'include',
     headers: { Accept: 'application/json' },
@@ -20,8 +20,8 @@ async function fetchPlatformFeatureFlags() {
   return payload
 }
 
-async function persistPlatformFeatureFlag(flagKey, enabled) {
-  const response = await fetch(`${API_BASE_URL}${FEATURE_FLAGS_ENDPOINT}/${encodeURIComponent(flagKey)}`, {
+async function persistPlatformFeatureFlag(flagKey, enabled, endpoint) {
+  const response = await fetch(`${API_BASE_URL}${endpoint}/${encodeURIComponent(flagKey)}`, {
     method: 'PUT',
     credentials: 'include',
     headers: {
@@ -37,7 +37,8 @@ async function persistPlatformFeatureFlag(flagKey, enabled) {
   return payload?.item
 }
 
-export default function PlatformFeatureFlagsPage() {
+export default function PlatformFeatureFlagsPage({ functional = false }) {
+  const endpoint = functional ? '/api/platform/functional-features' : FEATURE_FLAGS_ENDPOINT
   const [loading, setLoading] = React.useState(true)
   const [items, setItems] = React.useState([])
   const [error, setError] = React.useState('')
@@ -47,7 +48,9 @@ export default function PlatformFeatureFlagsPage() {
   React.useEffect(() => {
     let active = true
     setLoading(true)
-    fetchPlatformFeatureFlags()
+    setItems([])
+    setPendingChange(null)
+    fetchPlatformFeatureFlags(endpoint)
       .then((payload) => {
         if (!active) return
         setItems(Array.isArray(payload?.items) ? payload.items : [])
@@ -64,7 +67,7 @@ export default function PlatformFeatureFlagsPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [endpoint])
 
   const proposeChange = (item) => {
     if (updating) return
@@ -84,11 +87,13 @@ export default function PlatformFeatureFlagsPage() {
       const updatedItem = await persistPlatformFeatureFlag(
         pendingChange.key,
         pendingChange.enabled,
+        endpoint,
       )
       setItems((currentItems) => currentItems.map((item) => (
         item.key === updatedItem?.key ? updatedItem : item
       )))
       setPendingChange(null)
+      if (functional) window.dispatchEvent(new Event('rezzerv-features-changed'))
     } catch (requestError) {
       setError(requestError?.message || 'Featureflag wijzigen is mislukt.')
     } finally {
@@ -98,13 +103,13 @@ export default function PlatformFeatureFlagsPage() {
 
   return (
     <div className="rz-screen" data-testid="platform-feature-flags-page">
-      <Header title="Featureflags" />
+      <Header title={functional ? 'Functionaliteiten' : 'Featureflags'} />
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card className="rz-card-home">
-            <h2>Platformbrede featureflags</h2>
+            <h2>{functional ? 'Globale beschikbaarheid van functionaliteiten' : 'Platformbrede featureflags'}</h2>
             <p>Featureflags bepalen beschikbaarheid van functionaliteit en verlenen nooit extra permissies.</p>
-            <p>Er is geen actief huishouden en deze pagina valt nooit terug op huishouden 0.</p>
+            <p>{functional ? 'Deze instelling geldt voor iedereen, ook voor Superusers.' : 'Er is geen actief huishouden en deze pagina valt nooit terug op huishouden 0.'}</p>
             <p>Een wijziging wordt pas opgeslagen na een expliciete tweede bevestiging.</p>
 
             {loading ? <p data-testid="platform-feature-flags-loading">Featureflags laden…</p> : null}
@@ -117,6 +122,7 @@ export default function PlatformFeatureFlagsPage() {
               <div key={item.key} data-testid={`platform-feature-flag-${item.key}`}>
                 <Card className="rz-card-home">
                   <h3>{item.label || item.key}</h3>
+                  {functional && <p>Sleutel: {item.key}</p>}
                   <p>{item.description}</p>
                   <p>Status: <strong>{item.enabled ? 'Ingeschakeld' : 'Uitgeschakeld'}</strong></p>
                   <p>Standaard: {item.default_enabled ? 'ingeschakeld' : 'uitgeschakeld'}</p>

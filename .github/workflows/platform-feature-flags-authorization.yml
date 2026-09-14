@@ -11,9 +11,18 @@ on:
       - 'backend/app/services/session_request_context.py'
       - 'backend/tests/platform_feature_flag_migrated_fixture.py'
       - 'backend/tests/test_platform_feature_flags_route_authorization.py'
+      - 'backend/tests/test_functional_feature_availability.py'
       - 'backend/tests/test_external_database_route_authorization.py'
       - 'frontend/src/features/platform/PlatformFeatureFlagsPage.jsx'
       - 'frontend/src/features/platform/PlatformCapabilityPage.jsx'
+      - 'frontend/src/features/platform/featureAvailability.js'
+      - 'frontend/src/features/platform/useFeatureAvailability.js'
+      - 'frontend/src/features/platform/platformNavigation.js'
+      - 'frontend/src/features/home/HomePage.jsx'
+      - 'frontend/src/features/home/homeNavigation.js'
+      - 'frontend/tests/functional-feature-availability.contract.mjs'
+      - 'frontend/tests/e2e/functional-feature-availability.frontend-regression.spec.js'
+      - 'frontend/playwright.functional-features.config.js'
       - 'frontend/tests/e2e/platform-feature-flags.frontend-regression.spec.js'
       - 'frontend/package.json'
       - '.github/workflows/platform-feature-flags-authorization.yml'
@@ -21,6 +30,22 @@ on:
 jobs:
   platform-feature-flags-authorization:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rezzerv_functional_feature_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d rezzerv_functional_feature_test"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv_functional_feature_test
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:migration-pass@127.0.0.1:5432/rezzerv_functional_feature_test
+      FUNCTIONAL_FEATURE_POSTGRESQL_TEST_URL: postgresql+psycopg://rezzerv_app:runtime-pass@127.0.0.1:5432/rezzerv_functional_feature_test
     defaults:
       run:
         working-directory: backend
@@ -36,7 +61,26 @@ jobs:
       - name: Install focused test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest fastapi pydantic sqlalchemy alembic httpx
+          python -m pip install pytest fastapi pydantic sqlalchemy alembic httpx 'psycopg[binary]'
+
+      - name: Configure isolated migration and runtime roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d rezzerv_functional_feature_test -v ON_ERROR_STOP=1 <<'SQL'
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          CREATE ROLE rezzerv_migrator LOGIN PASSWORD 'migration-pass';
+          CREATE ROLE rezzerv_app LOGIN PASSWORD 'runtime-pass';
+          GRANT CONNECT ON DATABASE rezzerv_functional_feature_test TO rezzerv_migrator, rezzerv_app;
+          GRANT USAGE, CREATE ON SCHEMA public TO rezzerv_migrator;
+          GRANT USAGE ON SCHEMA public TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO rezzerv_app;
+          SQL
+          python -m alembic upgrade head
+          python -m app.testing.postgresql_acceptance_foundation
 
       - name: Compile platform Featureflags boundary and tests
         run: |
@@ -47,10 +91,26 @@ jobs:
             app/services/external_database_route_authorization.py \
             tests/platform_feature_flag_migrated_fixture.py \
             tests/test_platform_feature_flags_route_authorization.py \
+            tests/test_functional_feature_availability.py \
             tests/test_external_database_route_authorization.py
 
       - name: Run platform Featureflags authorization and runtime tests
         env:
           PYTHONPATH: .
-          DATABASE_URL: 'sqlite:///:memory:'
-        run: pytest -q tests/test_platform_feature_flags_route_authorization.py tests/test_external_database_route_authorization.py
+        run: pytest -q tests/test_platform_feature_flags_route_authorization.py tests/test_external_database_route_authorization.py tests/test_functional_feature_availability.py tests/test_superuser_v2_permission_cutover.py
+
+  feature-availability-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --ignore-scripts
+      - run: node tests/functional-feature-availability.contract.mjs && node tests/dynamic-home-navigation.contract.mjs && node tests/session-context-normalization.contract.mjs
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config playwright.functional-features.config.js

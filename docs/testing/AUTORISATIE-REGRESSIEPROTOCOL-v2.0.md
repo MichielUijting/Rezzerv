@@ -43,6 +43,13 @@ Iedere relevante regressie moet waar van toepassing bewijzen:
 
 Exact `V2_SUPERUSER_TARGET_PERMISSIONS`. Geen overlap met `PLATFORM_ADMIN_PERMISSIONS` en geen `platform.special_roles.manage`.
 
+Functionele beschikbaarheid: Superuser heeft `platform.functional_features.manage`
+en geen `platform.feature_flags.manage`; Platformbeheerder-only precies andersom;
+IP-eigenaar beide. Beide beheer-API's weigeren sleutels uit de andere categorie.
+De globale UIT-status geldt ook voor Superuser/IP-eigenaar bij productgebruik.
+Gerichte regressie: `test_functional_feature_availability.py` en
+`functional-feature-availability.contract.mjs` plus de gelijknamige Playwrighttest.
+
 ### Platformbeheerder
 
 Exact `PLATFORM_ADMIN_PERMISSIONS`. Geen functionele Superuserrechten of automatische H0-toegang.

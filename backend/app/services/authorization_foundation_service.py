@@ -72,6 +72,7 @@ PLATFORM_PERMISSIONS = (
 )
 
 V2_PLATFORM_PERMISSIONS = (
+    "platform.functional_features.manage",
     "platform.system_household.access",
     "platform.special_roles.manage",
     "platform.frontteam_messages.create",
@@ -142,6 +143,7 @@ FRONTTEAM_PLATFORM_PERMISSIONS = {
 }
 
 V2_SUPERUSER_TARGET_PERMISSIONS = {
+    "platform.functional_features.manage",
     "platform.households.search",
     "platform.households.view_metadata",
     "platform.support_access.request",

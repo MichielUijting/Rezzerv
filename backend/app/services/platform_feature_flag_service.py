@@ -9,12 +9,17 @@ from __future__ import annotations
 import sqlalchemy as sa
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
+from fastapi import HTTPException
+
+from app.services.authorization_foundation_service import write_authorization_audit
 
 
 FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH = "external_product_search"
+FEATURE_GERECHTEN = "feature.gerechten"
 
 FEATURE_FLAG_DEFINITIONS = {
     FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH: {
+        "category": "technical",
         "label": "Externe productzoekfunctie",
         "description": (
             "Schakelt platformbreed de externe productzoekroutes die onder "
@@ -22,7 +27,30 @@ FEATURE_FLAG_DEFINITIONS = {
         ),
         "default_enabled": True,
     },
+    FEATURE_GERECHTEN: {
+        "category": "functional",
+        "label": "Gerechten",
+        "description": "Bepaalt of Gerechten wereldwijd beschikbaar is in Rezzerv.",
+        "default_enabled": False,
+    },
 }
+
+
+def require_feature_category(flag_key: str, category: str) -> None:
+    """Fail closed on unknown keys and keys outside the endpoint's category."""
+    _, definition = _definition(flag_key)
+    if definition.get("category") != category:
+        raise KeyError(flag_key)
+
+
+def require_platform_feature_enabled(conn: Connection, flag_key: str) -> None:
+    """Availability check to run after a route's normal session/permission checks."""
+    if not is_platform_feature_enabled(conn, flag_key):
+        _, definition = _definition(flag_key)
+        raise HTTPException(
+            status_code=503,
+            detail=f"{definition['label']} is platformbreed uitgeschakeld",
+        )
 
 
 def validate_platform_feature_flag_schema(conn: Connection) -> None:
@@ -98,7 +126,7 @@ def _serialize_flag(flag_key: str, definition: dict, override: dict | None) -> d
     }
 
 
-def list_platform_feature_flags(conn: Connection) -> list[dict]:
+def list_platform_feature_flags(conn: Connection, *, category: str | None = None) -> list[dict]:
     rows = conn.execute(
         text(
             """
@@ -112,6 +140,7 @@ def list_platform_feature_flags(conn: Connection) -> list[dict]:
     return [
         _serialize_flag(flag_key, definition, overrides.get(flag_key))
         for flag_key, definition in FEATURE_FLAG_DEFINITIONS.items()
+        if category is None or definition.get("category") == category
     ]
 
 
@@ -163,6 +192,15 @@ def set_platform_feature_flag(
     if not actor_id:
         raise ValueError("updated_by is verplicht")
 
+    functional = _definition_value.get("category") == "functional"
+    if functional:
+        # Serialize even the first write (there is no row to lock yet).
+        # This keeps audit old/new values correct for concurrent PostgreSQL writers.
+        if conn.dialect.name == "postgresql":
+            conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                         {"key": "platform_feature_flags:" + normalized_key})
+        previous = is_platform_feature_enabled(conn, normalized_key)
+
     result = conn.execute(
         text(
             """
@@ -195,5 +233,12 @@ def set_platform_feature_flag(
                 "enabled": bool(enabled),
                 "updated_by": actor_id,
             },
+        )
+    if functional and previous != bool(enabled):
+        write_authorization_audit(
+            conn, actor_user_id=actor_id, actor_type="platform",
+            action="platform.functional_feature.updated",
+            object_type="platform_feature_flag", object_id=normalized_key,
+            old_value={"enabled": previous}, new_value={"enabled": bool(enabled)},
         )
     return get_platform_feature_flag(conn, normalized_key)

@@ -157,6 +157,19 @@ Known cleanup candidates:
 
 ### TD-05 — Datastore en storage
 
+Globale featurebeschikbaarheid gebruikt
+`services/platform_feature_flag_service.py` als centrale definitie- en
+opslagservice en `api/platform_feature_flags_routes.py` als API-boundary (TD-02).
+`GET /api/features` publiceert alleen functionele booleans aan geldige sessies.
+Technisch beheer en functioneel beheer gebruiken afzonderlijke endpoints,
+permissions en categorievalidatie op dezelfde tabel. Ontbrekende waarden gebruiken
+de geregistreerde default zonder writes of schemamutatie. Functionele writes en
+de bestaande authorization-audit worden samen gecommit; een transactionele
+PostgreSQL advisory lock per sleutel serialiseert ook de eerste write.
+`require_platform_feature_enabled` volgt het bestaande 503-patroon en dient na
+de normale sessie-/autorisatiecontrole te worden toegepast op productroutes.
+Gerechten heeft in deze stap nog geen dergelijke route.
+
 Verantwoordelijkheid:
 
 - databaseverbinding;

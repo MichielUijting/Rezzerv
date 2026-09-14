@@ -21,6 +21,7 @@ import {
   PLATFORM_NAVIGATION_ITEMS,
 } from '../platform/platformNavigation.js'
 import { buildHomeNavigation } from './homeNavigation.js'
+import useFeatureAvailability from '../platform/useFeatureAvailability.js'
 
 function visibilityFromContext(context) {
   return {
@@ -55,7 +56,8 @@ export default function HomePage() {
   const [onboarding, setOnboarding] = useState(() => readHouseholdOnboarding(initialContext))
   const [showMore, setShowMore] = useState(false)
   const visibility = visibilityFromContext(context)
-  const navigation = buildHomeNavigation({ onboarding, visibility })
+  const features = useFeatureAvailability()
+  const navigation = buildHomeNavigation({ onboarding, visibility, features })
   const platformNavigation = context?.context_type === 'none'
     ? PLATFORM_NAVIGATION_ITEMS.filter((item) => canCurrentUserPerform(item.permission, context))
     : []
@@ -181,6 +183,11 @@ export default function HomePage() {
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card className="rz-card-home">
+            {canCurrentUserPerform('platform.functional_features.manage', context) && (
+              <Button type="button" onClick={() => navigate('/platform/functionaliteiten')}>
+                Functionaliteiten
+              </Button>
+            )}
             {navigation.mode === 'legacy' ? (
               <div
                 className="rz-tile-grid"
