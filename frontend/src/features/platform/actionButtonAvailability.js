@@ -1,73 +1,61 @@
 import { useEffect, useState } from 'react'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
-let availability = null
-let loadPromise = null
-const listeners = new Set()
-
-function publish(nextAvailability) {
-  availability = nextAvailability
-  for (const listener of listeners) listener(availability)
-}
-
-async function loadAvailability({ force = false } = {}) {
-  if (!force && availability) return availability
-  if (loadPromise) return loadPromise
-
-  loadPromise = (async () => {
-    try {
-      const response = await fetchJsonWithAuth('/api/action-buttons')
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload?.detail || 'Acties op de Startpagina konden niet worden geladen.')
-      const next = Object.fromEntries(
-        (payload.items || [])
-          .filter((item) => item?.home_tile_key)
-          .map((item) => [String(item.home_tile_key), Boolean(item.enabled)]),
-      )
-      publish(next)
-      return next
-    } catch {
-      // Home-action availability is additive to authorization. When the projection
-      // is temporarily unavailable, homeNavigation falls back to each tile's
-      // explicit default so existing navigation remains deterministic.
-      return availability || {}
-    } finally {
-      loadPromise = null
-    }
-  })()
-
-  return loadPromise
+async function fetchAvailability() {
+  const response = await fetchJsonWithAuth('/api/action-buttons')
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload?.detail || 'Acties op de Startpagina konden niet worden geladen.')
+  return Object.fromEntries(
+    (payload.items || [])
+      .filter((item) => item?.home_tile_key)
+      .map((item) => [String(item.home_tile_key), Boolean(item.enabled)]),
+  )
 }
 
 export function refreshActionButtonAvailability() {
-  return loadAvailability({ force: true })
+  window.dispatchEvent(new Event('rezzerv-action-buttons-changed'))
 }
 
 export function useActionButtonAvailability({ enabled = true } = {}) {
-  const [snapshot, setSnapshot] = useState(() => (enabled ? availability || {} : {}))
+  const [state, setState] = useState(() => ({
+    items: {},
+    ready: !enabled,
+  }))
 
   useEffect(() => {
+    let active = true
+
     if (!enabled) {
-      setSnapshot({})
-      return undefined
+      setState({ items: {}, ready: true })
+      return () => { active = false }
     }
 
-    const listener = (next) => setSnapshot(next || {})
-    listeners.add(listener)
-    setSnapshot(availability || {})
-    void loadAvailability()
+    async function refresh() {
+      setState((current) => ({ items: current.ready ? current.items : {}, ready: false }))
+      try {
+        const items = await fetchAvailability()
+        if (active) setState({ items, ready: true })
+      } catch {
+        // Availability remains additive to authorization. If the projection cannot
+        // be read, fall back to the explicit product defaults after the request
+        // completes rather than carrying state across users or sessions.
+        if (active) setState({ items: {}, ready: true })
+      }
+    }
 
-    const refresh = () => { void refreshActionButtonAvailability() }
-    window.addEventListener('focus', refresh)
-    window.addEventListener('rezzerv-action-buttons-changed', refresh)
-    const timer = window.setInterval(refresh, 30000)
+    void refresh()
+    const handleRefresh = () => { void refresh() }
+    window.addEventListener('focus', handleRefresh)
+    window.addEventListener('rezzerv-action-buttons-changed', handleRefresh)
+    const timer = window.setInterval(handleRefresh, 30000)
+
     return () => {
-      listeners.delete(listener)
+      active = false
       window.clearInterval(timer)
-      window.removeEventListener('focus', refresh)
-      window.removeEventListener('rezzerv-action-buttons-changed', refresh)
+      window.removeEventListener('focus', handleRefresh)
+      window.removeEventListener('rezzerv-action-buttons-changed', handleRefresh)
     }
   }, [enabled])
 
-  return snapshot
+  return state
 }
