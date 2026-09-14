@@ -11,10 +11,20 @@ const headerCss = fs.readFileSync(path.join(frontendRoot, 'src/ui/components/hea
 const indexHtml = fs.readFileSync(path.join(frontendRoot, 'index.html'), 'utf8')
 const manifest = JSON.parse(fs.readFileSync(path.join(frontendRoot, 'public/manifest.webmanifest'), 'utf8'))
 
-assert.match(brandLogo, /\/inhuis-logo-white\.png/)
-assert.match(brandLogo, /alt="Inhuis"/)
+assert.match(brandLogo, /className="rz-brandlogo-header"/)
+assert.match(brandLogo, /className="rz-brandlogo-header-icon"/)
+assert.match(brandLogo, /className="rz-brandlogo-header-name">Inhuis<\/span>/)
+assert.match(brandLogo, /stroke="currentColor"/)
+assert.match(brandLogo, /aria-label="Inhuis"/)
 assert.doesNotMatch(brandLogo, /REZZERV_LOGO_WHITE/)
-assert.match(headerCss, /\.rz-header-logo img[\s\S]*height:\s*44px/)
+
+assert.match(headerCss, /\.rz-header-logo[\s\S]*margin-left:\s*auto/)
+assert.match(headerCss, /\.rz-header-logo[\s\S]*align-items:\s*center/)
+assert.match(headerCss, /\.rz-header-logo[\s\S]*justify-content:\s*flex-end/)
+assert.match(headerCss, /\.rz-brandlogo-header[\s\S]*color:\s*#FFFFFF/i)
+assert.match(headerCss, /\.rz-brandlogo-header[\s\S]*align-items:\s*center/)
+assert.match(headerCss, /\.rz-brandlogo-header-name[\s\S]*color:\s*#FFFFFF/i)
+
 assert.match(indexHtml, /<title>Inhuis<\/title>/)
 assert.equal(manifest.name, 'Inhuis')
 assert.equal(manifest.short_name, 'Inhuis')
