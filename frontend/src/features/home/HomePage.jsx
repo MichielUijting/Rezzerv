@@ -21,6 +21,7 @@ import {
   PLATFORM_NAVIGATION_ITEMS,
 } from '../platform/platformNavigation.js'
 import { buildHomeNavigation } from './homeNavigation.js'
+import useFeatureAvailability from '../platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../platform/actionButtonAvailability.js'
 
 function visibilityFromContext(context) {
@@ -56,8 +57,9 @@ export default function HomePage() {
   const [onboarding, setOnboarding] = useState(() => readHouseholdOnboarding(initialContext))
   const [showMore, setShowMore] = useState(false)
   const visibility = visibilityFromContext(context)
+  const features = useFeatureAvailability()
   const actionButtons = useActionButtonAvailability()
-  const navigation = buildHomeNavigation({ onboarding, visibility, actionButtons })
+  const navigation = buildHomeNavigation({ onboarding, visibility, features, actionButtons })
   const platformNavigation = context?.context_type === 'none'
     ? PLATFORM_NAVIGATION_ITEMS.filter((item) => canCurrentUserPerform(item.permission, context))
     : []
