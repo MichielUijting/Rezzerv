@@ -51,10 +51,17 @@ async function mockApi(page, actor, state) {
     const json = (payload, status = 200) => route.fulfill({ status, json: payload })
 
     if (path === '/api/session') return json({
-      user: { id: actor, email: `${actor}@example.test` }, user_id: actor, email: `${actor}@example.test`,
-      permissions, supported_permissions: Object.keys(permissions), context_type: superuser ? 'system' : 'regular',
-      active_household_id: superuser ? '0' : 'test-household', role: superuser ? 'owner' : 'member',
-      display_role: superuser ? 'owner' : 'member', is_platform_superuser: superuser, is_frontteam: false,
+      user: { id: actor, email: `${actor}@example.test` },
+      user_id: actor,
+      email: `${actor}@example.test`,
+      permissions,
+      supported_permissions: Object.keys(permissions),
+      context_type: superuser ? 'system' : 'regular',
+      active_household_id: superuser ? '0' : 'test-household',
+      role: superuser ? 'owner' : 'member',
+      display_role: superuser ? 'owner' : 'member',
+      is_platform_superuser: superuser,
+      is_frontteam: false,
     })
     if (path === '/api/onboarding') return json({ onboarding_status: 'completed', primary_use_case: null })
     if (path === '/api/features') return json({ features: { [gerechtenKey]: state.gerechtenEnabled } })
@@ -62,7 +69,14 @@ async function mockApi(page, actor, state) {
     if (path === '/api/action-buttons') {
       state.productReads++
       if (state.productGate?.promise) await state.productGate.promise
-      return json({ items: orderedItems(state).map(({ key, home_tile_key, enabled, sort_order }) => ({ key, home_tile_key, enabled, sort_order })) })
+      return json({
+        items: orderedItems(state).map(({ key, home_tile_key, enabled, sort_order }) => ({
+          key,
+          home_tile_key,
+          enabled,
+          sort_order,
+        })),
+      })
     }
 
     if (path === '/api/platform/action-buttons') {
@@ -93,14 +107,20 @@ async function mockApi(page, actor, state) {
     if (path === '/api/shopping-list') return json({ items: [{
       id: 'shopping-1', article_name: 'Melk', product_type_name: 'Zuivel', size: '', note: '', checked: false,
     }], item_count: 1 })
-    return json({}, 404)
+
+    return json({}, 404) // Never forward a test request to a real backend.
   })
 }
 
 function initialState(overrides = {}) {
   return {
-    shoppingEnabled: true, inventoryEnabled: true, gerechtenEnabled: false,
-    productReads: 0, managementReads: 0, updates: [], orderUpdates: [],
+    shoppingEnabled: true,
+    inventoryEnabled: true,
+    gerechtenEnabled: false,
+    productReads: 0,
+    managementReads: 0,
+    updates: [],
+    orderUpdates: [],
     order: [shoppingKey, inventoryKey, gerechtenKey],
     ...overrides,
   }
@@ -109,18 +129,31 @@ function initialState(overrides = {}) {
 test('Superuser manages Startpagina actions with an inline confirmation on the selected action', async ({ page }) => {
   const state = initialState()
   await mockApi(page, 'superuser', state)
+
   await page.goto('/superuser')
-  await page.getByTestId('superuser-control-tab-action-buttons').click()
+  const actionTab = page.getByTestId('superuser-control-tab-action-buttons')
+  await expect(actionTab).toBeVisible()
+  await actionTab.click()
+
+  await expect(page.getByTestId('superuser-action-buttons')).toContainText('Actieknoppen op de Startpagina')
   await expect.poll(() => state.managementReads).toBeGreaterThan(0)
   const item = page.getByTestId(`superuser-action-button-${shoppingKey}`)
   const otherItem = page.getByTestId(`superuser-action-button-${inventoryKey}`)
+  await expect(item).toContainText('Beschikbaar')
+
   await item.getByRole('button', { name: 'Uitschakelen', exact: true }).click()
+  expect(state.updates).toEqual([])
+
   const confirmation = item.getByTestId('superuser-action-button-confirmation')
   await expect(confirmation).toBeVisible()
+  await expect(confirmation).toContainText('Winkelen')
   await expect(item.getByRole('button', { name: 'Uitschakelen', exact: true })).toBeDisabled()
   await expect(otherItem.getByRole('button', { name: 'Uitschakelen', exact: true })).toBeEnabled()
+
   await confirmation.getByRole('button', { name: 'Definitief bevestigen', exact: true }).click()
+
   await expect(item).toContainText('Niet beschikbaar')
+  await expect(item.getByTestId('superuser-action-button-confirmation')).toHaveCount(0)
   expect(state.updates).toEqual([{ key: shoppingKey, payload: { enabled: false } }])
 })
 
@@ -149,10 +182,15 @@ test('Startpagina waits for the current server projection before rendering manag
     productGate: { promise: new Promise((resolve) => { releaseProjection = resolve }) },
   })
   await mockApi(page, 'member', state)
+
   await page.goto('/home')
   await expect.poll(() => state.productReads).toBeGreaterThan(0)
   await expect(page.getByTestId('home-action-availability-loading')).toBeVisible()
+  await expect(page.getByTestId('home-tile-winkelen')).toHaveCount(0)
+  await expect(page.getByTestId('home-tile-voorraad')).toHaveCount(0)
+
   releaseProjection()
+
   await expect(page.getByTestId('home-action-availability-loading')).toHaveCount(0)
   await expect(page.getByTestId('home-tile-winkelen')).toHaveCount(0)
   await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()
@@ -161,28 +199,36 @@ test('Startpagina waits for the current server projection before rendering manag
 test('ordinary user sees enabled Startpagina actions in the server-managed order', async ({ page }) => {
   const state = initialState({ order: [inventoryKey, shoppingKey, gerechtenKey] })
   await mockApi(page, 'member', state)
+
   await page.goto('/home')
   await expect.poll(() => state.productReads).toBeGreaterThan(0)
   const navigation = page.getByTestId('legacy-home-navigation')
-  const positions = await navigation.locator('[data-testid^="home-tile-"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-testid')))
+  const positions = await navigation
+    .locator('[data-testid^="home-tile-"]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-testid')))
   expect(positions.indexOf('home-tile-voorraad')).toBeLessThan(positions.indexOf('home-tile-winkelen'))
 })
 
 test('disabled Startpagina action hides only the home tile and leaves internal buttons intact', async ({ page }) => {
   const state = initialState({ shoppingEnabled: false })
   await mockApi(page, 'member', state)
+
   await page.goto('/home')
   await expect.poll(() => state.productReads).toBeGreaterThan(0)
   await expect(page.getByTestId('home-tile-winkelen')).toHaveCount(0)
   await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()
+
   await page.goto('/winkelen')
   await expect(page.getByTestId('shopping-page')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Winkelen afgerond', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Toevoegen', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Verwijderen', exact: true })).toBeVisible()
 })
 
 test('ordinary member cannot enter Superuser Startpagina-action management', async ({ page }) => {
   const state = initialState()
   await mockApi(page, 'member', state)
+
   await page.goto('/superuser')
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('superuser-control-tab-action-buttons')).toHaveCount(0)
