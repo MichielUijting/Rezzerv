@@ -102,7 +102,7 @@ export default function CatalogGpcActionPage() {
       if (data?.assignment) {
         setFeedback('De bestaande bevestigde GPC-classificatie is gevonden.')
       } else if (candidate && !isSuggestionRejected(article.id, candidate)) {
-        setFeedback('Rezzerv heeft een voorstel gevonden. Je kunt dit bevestigen, negeren of een andere Brick zoeken.')
+        setFeedback('Inhuis heeft een voorstel gevonden. Je kunt dit bevestigen, negeren of een andere Brick zoeken.')
       } else {
         setFeedback('Voor dit artikel is nog geen bevestigde GPC Brick opgeslagen. Zoek en selecteer een Brick.')
         setBrickEditorOpen(true)

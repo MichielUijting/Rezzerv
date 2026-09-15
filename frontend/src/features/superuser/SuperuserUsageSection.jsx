@@ -47,7 +47,7 @@ export default function SuperuserUsageSection({ onOpenHousehold }) {
         Dit tabblad gaat dus over gebruiksvolume en activiteit; <strong>Overzicht</strong> gaat over platformstatus en aandachtspunten.
       </p>
       <p>
-        Er wordt uitsluitend gebruikgemaakt van gegevens die Rezzerv al voor de normale werking vastlegt. Er is geen nieuwe gebruikers- of schermtracking toegevoegd.
+        Er wordt uitsluitend gebruikgemaakt van gegevens die Inhuis al voor de normale werking vastlegt. Er is geen nieuwe gebruikers- of schermtracking toegevoegd.
       </p>
 
       <h2 style={{ fontSize: 20, marginBottom: 8 }}>Operationeel gebruik per huishouden</h2>

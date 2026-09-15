@@ -38,16 +38,16 @@ export function mapBarcodeCameraErrorToUserMessage(error) {
     return 'Camera voor barcode scannen kon niet worden gestart met de huidige camera-instellingen. Probeer het opnieuw of kies een andere camera.'
   }
   if (normalized.includes('notallowederror') || normalized.includes('permission denied') || normalized.includes('permission dismissed') || normalized.includes('permission')) {
-    return 'Rezzerv heeft nog geen toegang tot je camera. Geef cameratoegang en probeer het opnieuw.'
+    return 'Inhuis heeft nog geen toegang tot je camera. Geef cameratoegang en probeer het opnieuw.'
   }
   if (normalized.includes('notfounderror') || normalized.includes('devices not found') || normalized.includes('requested device not found') || normalized.includes('camera not found')) {
     return 'Er is geen bruikbare camera gevonden voor barcode scannen op dit apparaat.'
   }
   if (normalized.includes('overconstrainederror') || normalized.includes('constraint')) {
-    return 'De gekozen camera-instellingen worden niet ondersteund op dit apparaat. Rezzerv probeert daarom een eenvoudigere camera-instelling.'
+    return 'De gekozen camera-instellingen worden niet ondersteund op dit apparaat. Inhuis probeert daarom een eenvoudigere camera-instelling.'
   }
   if (normalized.includes('securityerror') || normalized.includes('insecure context')) {
-    return 'Barcode scannen werkt alleen in een veilige verbinding. Open Rezzerv via https of localhost en probeer het opnieuw.'
+    return 'Barcode scannen werkt alleen in een veilige verbinding. Open Inhuis via https of localhost en probeer het opnieuw.'
   }
   if (normalized.includes('aborterror')) return 'Het openen van de camera is onderbroken. Probeer het opnieuw.'
   return 'Camera voor barcode scannen kon niet worden gestart. Probeer het opnieuw of vul de barcode handmatig in.'

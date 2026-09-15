@@ -15,7 +15,7 @@ const TECHNICAL_ACTIONS = Object.freeze([
   {
     key: 'gpc-nl',
     title: 'GS1 GPC NL bijwerken',
-    description: 'Importeer de actuele Nederlandse GS1 GPC-publicatie als centrale Rezzerv-referentiedata.',
+    description: 'Importeer de actuele Nederlandse GS1 GPC-publicatie als centrale Inhuis-referentiedata.',
     endpoint: '/api/admin/product-groups/import-gpc-nl',
     confirmLabel: 'GPC NL-import bevestigen',
   },

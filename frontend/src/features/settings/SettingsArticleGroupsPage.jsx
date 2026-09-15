@@ -359,7 +359,7 @@ export default function SettingsArticleGroupsPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'rezzerv-huishoudartikelen.csv'
+    anchor.download = 'inhuis-huishoudartikelen.csv'
     anchor.click()
     URL.revokeObjectURL(url)
   }

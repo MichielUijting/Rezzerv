@@ -24,7 +24,7 @@ export default function HouseholdSupportPage() {
   const { showFeedback } = useAppFeedback()
   const query = useMemo(() => new URLSearchParams(location.search), [location.search])
   const originRoute = query.get('from') || '/meldingen'
-  const originScreen = query.get('screen') || 'Rezzerv'
+  const originScreen = query.get('screen') || 'Inhuis'
   const currentUserId = String(readStoredAuthContext()?.user_id || readStoredAuthContext()?.email || '').trim().toLowerCase()
 
   const [threads, setThreads] = useState([])

@@ -121,7 +121,7 @@ export async function runBrowserSmokeTests() {
       await navigateFrame(frame, '/login')
       const doc = getFrameDocument(frame)
       const emailInput = await waitForCondition(
-        () => doc?.querySelector('input[placeholder="admin@rezzerv.local"]'),
+        () => doc?.querySelector('[data-testid="login-email"]'),
         WAIT_TIMEOUT,
         'E-mailveld niet gevonden op loginpagina'
       )

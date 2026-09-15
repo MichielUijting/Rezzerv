@@ -1491,7 +1491,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
       .join('\n')
     window.__rezzervLastDownload = {
-      filename: 'rezzerv-kassabondetail.csv',
+      filename: 'inhuis-kassabondetail.csv',
       csv,
       rowCount: rows.length,
       source: 'receipt-detail',
@@ -1500,7 +1500,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'rezzerv-kassabondetail.csv'
+    link.download = 'inhuis-kassabondetail.csv'
     document.body.appendChild(link)
     link.click()
     link.remove()

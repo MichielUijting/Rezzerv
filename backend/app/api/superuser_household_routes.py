@@ -364,7 +364,7 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
         key = str(screen_key or "").strip().lower()
         selected_user_id = str(user_id or "").strip() or None
         if key not in SCREEN_KEYS:
-            raise HTTPException(status_code=404, detail="Onbekend read-only Rezzerv-scherm")
+            raise HTTPException(status_code=404, detail="Onbekend read-only Inhuis-scherm")
         with engine.begin() as conn:
             context = _require_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
             if not _household_exists(conn, household_id):

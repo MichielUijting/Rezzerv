@@ -36,7 +36,7 @@ export default function SuperuserControlPage() {
         <SuperuserDashboardPage />
       ) : (
         <div className="rz-screen" data-testid="superuser-action-buttons-page">
-          <Header title="Rezzerv Beheercentrum" />
+          <Header title="Inhuis Beheercentrum" />
           <div className="rz-content">
             <div className="rz-content-inner">
               <ScreenCard fullWidth>

@@ -231,7 +231,7 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
         )
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "purpose": "Rezzerv receipt parser diagnose v2 voor generieke parserverbetering zonder bonspecifieke fixes.",
+        "purpose": "Inhuis receipt parser diagnose v2 voor generieke parserverbetering zonder bonspecifieke fixes.",
         "runtime_datastore": datastore_info,
         "summary": {"returned_receipts": len(diagnoses), "status_counts_nl": status_counts},
         "diagnosis_scope": {
@@ -260,5 +260,5 @@ def download_receipt_parser_diagnosis(
     limit: int = Query(500, ge=1, le=2000, description="Maximaal aantal kassabonnen in de diagnose."),
 ):
     diagnosis = build_receipt_parser_diagnosis(include_deleted=include_deleted, limit=limit)
-    filename = f"rezzerv_receipt_parser_diagnosis_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    filename = f"inhuis_receipt_parser_diagnosis_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
     return JSONResponse(content=diagnosis, headers={"Content-Disposition": f'attachment; filename="{filename}"'})

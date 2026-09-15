@@ -96,7 +96,7 @@ def default_invitation_email_configuration() -> InvitationEmailConfiguration:
         api_key=str(RESEND_API_KEY or "").strip(),
         api_base_url=str(RESEND_API_BASE_URL or "").rstrip("/"),
         from_email=str(REZZERV_NOTIFICATION_FROM_EMAIL or "").strip(),
-        from_name=str(REZZERV_NOTIFICATION_FROM_NAME or "Rezzerv").strip() or "Rezzerv",
+        from_name=str(REZZERV_NOTIFICATION_FROM_NAME or "Inhuis").strip() or "Inhuis",
         app_base_url=str(REZZERV_APP_BASE_URL or "").rstrip("/"),
     )
 

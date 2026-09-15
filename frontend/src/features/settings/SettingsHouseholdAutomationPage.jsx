@@ -158,7 +158,7 @@ export default function SettingsHouseholdAutomationPage() {
           <div>
             <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Huishoudautomatisering</h2>
             <p style={{ margin: 0, color: '#667085' }}>
-              Deze instelling geldt voor het hele huishouden. Kies hoe Rezzerv verbruiksartikelen automatisch moet afboeken bij een nieuwe aankoop.
+              Deze instelling geldt voor het hele huishouden. Kies hoe Inhuis verbruiksartikelen automatisch moet afboeken bij een nieuwe aankoop.
             </p>
             {!isLoading && !canEdit ? (
               <p style={{ margin: '8px 0 0 0', color: '#b54708', fontWeight: 600 }}>

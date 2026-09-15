@@ -105,7 +105,7 @@ export default function ReceiptDebugExportButton() {
         }
         throw new Error(errorMessage || 'Debugexport downloaden mislukt.')
       }
-      downloadBlob(new Blob([bodyText], { type: 'application/json;charset=utf-8' }), `rezzerv-kassa-debug-${receiptId}.json`)
+      downloadBlob(new Blob([bodyText], { type: 'application/json;charset=utf-8' }), `inhuis-kassa-debug-${receiptId}.json`)
       setMessage('Debug JSON is gedownload.')
     } catch (error) {
       setMessage(normalizeErrorMessage(error?.message) || 'Debugexport downloaden mislukt.')

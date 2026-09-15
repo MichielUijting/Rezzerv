@@ -59,7 +59,7 @@ def get_receipt_parser_quality(householdId: str = '1'):
 def download_receipt_parser_quality(householdId: str = '1'):
     payload = build_receipt_parser_diagnosis(engine, householdId)
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    filename = f'rezzerv_receipt_parser_quality_{timestamp}.json'
+    filename = f'inhuis_receipt_parser_quality_{timestamp}.json'
     return Response(
         content=json.dumps(payload, ensure_ascii=False, indent=2),
         media_type='application/json; charset=utf-8',

@@ -130,7 +130,7 @@ export function normalizeErrorMessage(value) {
     const normalized = value.trim()
     if (!normalized) return 'Verzoek mislukt'
     if (/413\s+Request\s+Entity\s+Too\s+Large/i.test(normalized)) {
-      return "De foto is te groot om te uploaden. Probeer opnieuw; camerafoto's worden in Rezzerv automatisch verkleind."
+      return "De foto is te groot om te uploaden. Probeer opnieuw; camerafoto's worden in Inhuis automatisch verkleind."
     }
     if (/^<html[\s>]/i.test(normalized) || /^<!doctype\s+html/i.test(normalized)) {
       return 'Upload mislukt. De server gaf een technische fout terug.'
@@ -297,7 +297,7 @@ export function StoreArticleSelector({
         <div className="rz-modal-backdrop" role="presentation">
           <div className="rz-modal-card" data-testid={`store-create-article-modal-${lineId}`} role="dialog" aria-modal="true" aria-labelledby={`store-create-article-title-${lineId}`}>
             <h3 id={`store-create-article-title-${lineId}`} className="rz-modal-title">Nieuw artikel aanmaken</h3>
-            <p className="rz-modal-text">Maak een nieuw Rezzerv-artikel aan voor deze winkelregel.</p>
+            <p className="rz-modal-text">Maak een nieuw Inhuis-artikel aan voor deze winkelregel.</p>
             <div className="rz-store-modal-field">
               <label className="rz-store-modal-label" htmlFor={`store-create-article-input-${lineId}`}>Artikelnaam</label>
               <input

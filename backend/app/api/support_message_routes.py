@@ -78,7 +78,7 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
     role = str(runtime.get("role") or runtime.get("display_role") or "").strip().lower()
     return {
         "user_id": str(runtime.get("user_id") or runtime.get("email") or ""),
-        "name": str(runtime.get("name") or runtime.get("display_name") or runtime.get("email") or "Rezzerv-gebruiker"),
+        "name": str(runtime.get("name") or runtime.get("display_name") or runtime.get("email") or "Inhuis-gebruiker"),
         "role": role or "household.member",
         "household_id": str(context.active_household_id),
     }
@@ -326,7 +326,7 @@ def export_platform_support_threads(status: str | None = Query(None), authorizat
         return Response(
             content=csv_text,
             media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": "attachment; filename=rezzerv-meldingen.csv"},
+            headers={"Content-Disposition": "attachment; filename=inhuis-meldingen.csv"},
         )
     except SupportMessageError as exc:
         _support_error(exc)

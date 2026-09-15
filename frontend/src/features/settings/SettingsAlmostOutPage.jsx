@@ -154,7 +154,7 @@ export default function SettingsAlmostOutPage() {
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Bijna op voorspelling</h2>
               <p style={{ margin: 0, color: '#667085' }}>
-                Stel hier huishoudbreed in of Rezzerv artikelen al op <strong>Bijna op</strong> zet wanneer verwacht wordt dat ze binnen een aantal dagen uit voorraad raken.
+                Stel hier huishoudbreed in of Inhuis artikelen al op <strong>Bijna op</strong> zet wanneer verwacht wordt dat ze binnen een aantal dagen uit voorraad raken.
               </p>
               {!isLoading && !canEdit ? (
                 <p style={{ margin: '8px 0 0 0', color: '#b54708', fontWeight: 600 }}>
@@ -166,7 +166,7 @@ export default function SettingsAlmostOutPage() {
             <div className="rz-automation-setting-card">
               <div className="rz-automation-setting-copy">
                 <div className="rz-automation-setting-title">Gebruik voorspelde uitputting</div>
-                <div className="rz-automation-setting-text">Rezzerv gebruikt de gemiddelde tijd tussen aankopen per huishoudartikel om te schatten wanneer de voorraad op raakt.</div>
+                <div className="rz-automation-setting-text">Inhuis gebruikt de gemiddelde tijd tussen aankopen per huishoudartikel om te schatten wanneer de voorraad op raakt.</div>
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', fontWeight: 600 }}>
                 <input

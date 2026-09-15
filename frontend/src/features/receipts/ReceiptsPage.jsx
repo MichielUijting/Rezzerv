@@ -140,7 +140,7 @@ export default function ReceiptsPage() {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'rezzerv-kassabonnen.csv'
+    link.download = 'inhuis-kassabonnen.csv'
     document.body.appendChild(link)
     link.click()
     link.remove()

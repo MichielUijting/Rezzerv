@@ -94,7 +94,7 @@ def receipt_po_status_delta(householdId: str = '1'):
 def receipt_po_status_delta_download(householdId: str = '1'):
     payload = build_po_status_delta_report(household_id=householdId)
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    filename = f'rezzerv_po_status_delta_r7c20b_{timestamp}.json'
+    filename = f'inhuis_po_status_delta_r7c20b_{timestamp}.json'
     return Response(
         content=json.dumps(payload, ensure_ascii=False, indent=2),
         media_type='application/json; charset=utf-8',

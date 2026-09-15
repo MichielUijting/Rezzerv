@@ -47,7 +47,7 @@ def household_support_actor(authorization: str | None = None) -> dict[str, str]:
             runtime.get("name")
             or runtime.get("display_name")
             or runtime.get("email")
-            or "Rezzerv-gebruiker"
+            or "Inhuis-gebruiker"
         ),
         "role": role or "household.member",
         "household_id": str(context.active_household_id),

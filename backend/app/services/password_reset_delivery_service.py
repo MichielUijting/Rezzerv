@@ -47,7 +47,7 @@ def _redact(value: Any, *secrets: str) -> str:
 
 
 def _sender_value() -> str:
-    name = str(REZZERV_NOTIFICATION_FROM_NAME or "Rezzerv").strip() or "Rezzerv"
+    name = str(REZZERV_NOTIFICATION_FROM_NAME or "Inhuis").strip() or "Inhuis"
     address = str(REZZERV_NOTIFICATION_FROM_EMAIL or "").strip()
     return f"{name} <{address}>"
 

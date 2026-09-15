@@ -12,7 +12,7 @@ def resolve_registered_inbound_source(module: Any, recipient_addresses: list[str
         if str(value or "").strip()
     })
     if not normalized_addresses:
-        raise HTTPException(status_code=400, detail="De inkomende e-mail bevat geen bruikbaar Rezzerv-ontvangstadres.")
+        raise HTTPException(status_code=400, detail="De inkomende e-mail bevat geen bruikbaar Inhuis-ontvangstadres.")
 
     placeholders = ", ".join(f":address_{index}" for index, _ in enumerate(normalized_addresses))
     parameters = {
@@ -57,7 +57,7 @@ def resolve_registered_inbound_source(module: Any, recipient_addresses: list[str
     if not unique_rows:
         raise HTTPException(
             status_code=400,
-            detail="Deze inkomende e-mail past niet bij een vooraf geregistreerd actief Rezzerv-adres.",
+            detail="Deze inkomende e-mail past niet bij een vooraf geregistreerd actief Inhuis-adres.",
         )
     if len(unique_rows) != 1:
         raise HTTPException(
