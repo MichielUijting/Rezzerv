@@ -473,7 +473,7 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
 
             <div className="rz-stock-table-actions" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <Button type="button" variant="secondary" disabled={selectedLocationIds.length === 0} onClick={() => downloadCsv('rezzerv-locaties.csv', ['Locatie,Actief', ...locations.filter((item) => selectedLocationIds.includes(String(item.id))).map((item) => { const draft = locationDrafts[String(item.id)] || item; return [draft.naam, draft.active ? 'Ja' : 'Nee'].map(csvEscape).join(',') })])}>Exporteren</Button>
+                <Button type="button" variant="secondary" disabled={selectedLocationIds.length === 0} onClick={() => downloadCsv('inhuis-locaties.csv', ['Locatie,Actief', ...locations.filter((item) => selectedLocationIds.includes(String(item.id))).map((item) => { const draft = locationDrafts[String(item.id)] || item; return [draft.naam, draft.active ? 'Ja' : 'Nee'].map(csvEscape).join(',') })])}>Exporteren</Button>
                 <Button type="button" variant="secondary" disabled={selectedLocationIds.length === 0 || isSaving} onClick={deleteLocations}>Verwijderen</Button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-testid="new-main-location-row">
@@ -510,7 +510,7 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
               />
               <div className="rz-stock-table-actions" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <Button type="button" variant="secondary" disabled={selectedSublocationIds.length === 0} onClick={() => downloadCsv('rezzerv-sublocaties.csv', ['Sublocatie,Locatie,Actief', ...sublocations.filter((item) => selectedSublocationIds.includes(String(item.id))).map((item) => { const draft = sublocationDrafts[String(item.id)] || item; return [draft.naam, item.space_name || '', draft.active ? 'Ja' : 'Nee'].map(csvEscape).join(',') })])}>Exporteren</Button>
+                  <Button type="button" variant="secondary" disabled={selectedSublocationIds.length === 0} onClick={() => downloadCsv('inhuis-sublocaties.csv', ['Sublocatie,Locatie,Actief', ...sublocations.filter((item) => selectedSublocationIds.includes(String(item.id))).map((item) => { const draft = sublocationDrafts[String(item.id)] || item; return [draft.naam, item.space_name || '', draft.active ? 'Ja' : 'Nee'].map(csvEscape).join(',') })])}>Exporteren</Button>
                   <Button type="button" variant="secondary" disabled={selectedSublocationIds.length === 0 || isSaving} onClick={deleteSublocations}>Verwijderen</Button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-testid="new-sublocation-row">

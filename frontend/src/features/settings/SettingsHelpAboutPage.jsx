@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
-import { getRezzervVersionTag } from '../../ui/version.js'
+import { formatInhuisVersionLabel, getRezzervVersionTag } from '../../ui/version.js'
 
 function InfoRow({ title, description, to, linkLabel, testId }) {
   return (
@@ -48,7 +48,7 @@ export default function SettingsHelpAboutPage() {
               <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>Actuele applicatieversie.</p>
             </div>
             <div data-testid="help-about-version" style={{ fontWeight: 600 }}>
-              Versie {version}
+              {formatInhuisVersionLabel(version)}
             </div>
           </section>
 

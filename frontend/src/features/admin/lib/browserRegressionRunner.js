@@ -1350,7 +1350,7 @@ export async function runBrowserRegressionTests() {
       await ensureInventoryTableQuantity(frame, 'Melk', afterMelk)
     }, results)
 
-    await runScenario('Nieuw artikel aanmaken opent een Rezzerv-modal zonder browserprompt', async () => {
+    await runScenario('Nieuw artikel aanmaken opent een Inhuis-modal zonder browserprompt', async () => {
       await prepareRegressionFixture(frame)
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       const searchInput = await waitForCondition(() => getStoreLineArticleSearchInput(frame, 'Banaan'), WAIT_TIMEOUT, 'Zoekveld voor Banaan niet gevonden')
@@ -1358,7 +1358,7 @@ export async function runBrowserRegressionTests() {
       const modal = await ensureStoreCreateArticleModal(frame, 'Banaan')
       const input = modal.querySelector('[data-testid^="store-create-article-input-"]') || modal.querySelector('input')
       if (!input) throw new Error('Invoerveld in nieuw artikel-modal ontbreekt')
-      if (!borderMatchesBrand(input)) throw new Error('Nieuw artikel-modal gebruikt geen Rezzerv-stijl voor het invoerveld')
+      if (!borderMatchesBrand(input)) throw new Error('Nieuw artikel-modal gebruikt geen Inhuis-stijl voor het invoerveld')
       await closeStoreCreateArticleModal(frame)
     }, results)
 

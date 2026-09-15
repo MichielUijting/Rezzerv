@@ -81,7 +81,7 @@ export default function PlatformLogsPage() {
         <div className="rz-content-inner">
           <Card className="rz-card-home">
             <h2>Platformlogs</h2>
-            <p>Bekijk recente operationele runtime-logrecords uit de Rezzerv-backend.</p>
+            <p>Bekijk recente operationele runtime-logrecords uit de Inhuis-backend.</p>
             <p>
               Deze weergave is read-only en staat los van Audit. Audit registreert platformhandelingen;
               Logs toont technische runtimegebeurtenissen.

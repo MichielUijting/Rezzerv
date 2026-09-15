@@ -34,7 +34,7 @@ def test_superuser_route_has_dedicated_guard_and_manage_center_page():
     assert "ProtectedSuperuser" in router
     assert "path: '/superuser'" in router
     assert "isPlatformSuperuserFromContext" in guard
-    assert "Rezzerv Beheercentrum" in page
+    assert "Inhuis Beheercentrum" in page
     assert "'/api/superuser/bootstrap'" in page
     assert "'/api/superuser/audit/open'" in page
     assert "alleen lezen" in page

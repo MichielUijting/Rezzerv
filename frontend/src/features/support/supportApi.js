@@ -99,7 +99,7 @@ export function downloadPlatformSupportCsv(status = '') {
     const href = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = href
-    anchor.download = 'rezzerv-meldingen.csv'
+    anchor.download = 'inhuis-meldingen.csv'
     anchor.click()
     URL.revokeObjectURL(href)
   })

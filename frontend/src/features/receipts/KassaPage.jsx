@@ -851,7 +851,7 @@ function ReceiptUploadProgressOverlay({ uploadProgress }) {
 
   const percent = Math.max(5, Math.min(100, Math.round(Number(uploadProgress?.percent || 0))))
   const label = String(uploadProgress?.label || 'Kassabon verwerken...')
-  const detail = String(uploadProgress?.detail || 'Rezzerv verwerkt je bestand.')
+  const detail = String(uploadProgress?.detail || 'Inhuis verwerkt je bestand.')
   const currentStepKey = String(uploadProgress?.stepKey || 'processing')
   const currentStepIndex = Math.max(0, RECEIPT_IMPORT_STEPS.findIndex((step) => step.key === currentStepKey))
 
@@ -933,7 +933,7 @@ function ReceiptProcessingInfoCard({ transientPreview }) {
         <div>
           <div style={{ fontWeight: 700, fontSize: '24px' }}>OCR-voorbereiding</div>
           <div style={{ color: '#667085', marginTop: '4px' }}>
-            Rezzerv verwerkt deze bon nu en zet daarna de detailweergave klaar.
+            Inhuis verwerkt deze bon nu en zet daarna de detailweergave klaar.
           </div>
         </div>
 
@@ -1359,7 +1359,7 @@ async function saveLine(lineId, overrides = null) {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `rezzerv-kassa-${receipt?.id || 'bon'}.csv`
+    link.download = `inhuis-kassa-${receipt?.id || 'bon'}.csv`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -1386,7 +1386,7 @@ async function saveLine(lineId, overrides = null) {
       const payload = await response.json()
       const debugReceiptId = String(payload?.receipt?.id || receiptId)
       const json = JSON.stringify(payload, null, 2)
-      const downloadFilename = `rezzerv-kassa-debug-${debugReceiptId}.json`
+      const downloadFilename = `inhuis-kassa-debug-${debugReceiptId}.json`
       window.__rezzervLastDownload = {
         filename: downloadFilename,
         source: 'receipt-debug',
@@ -1742,15 +1742,15 @@ function ReceiptSourceHubContent({
         <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '10px' }}>
-              <div style={{ fontSize: '18px', fontWeight: 700 }}>Persoonlijk Rezzerv-adres</div>
+              <div style={{ fontSize: '18px', fontWeight: 700 }}>Persoonlijk Inhuis-adres</div>
               <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
                 <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Status</div>
                 <div style={{ fontSize: '15px', fontWeight: 700 }}>{forwardingStatusLabel}</div>
                 <div style={{ fontSize: '13px', color: '#667085' }}>
                   {routeIsPublic && resendConfigured
-                    ? 'Dit adres kan automatisch bonmails ontvangen zodra Resend naar jouw publieke Rezzerv-webhook post.'
+                    ? 'Dit adres kan automatisch bonmails ontvangen zodra Resend naar jouw publieke Inhuis-webhook post.'
                     : routeIsPublic
-                      ? 'Het doorstuuradres is publiek, maar de Resend-inbound API-sleutel ontbreekt nog in Rezzerv. Gebruik voorlopig de centrale landingsplaats of .eml als fallback.'
+                      ? 'Het doorstuuradres is publiek, maar de Resend-inbound API-sleutel ontbreekt nog in Inhuis. Gebruik voorlopig de centrale landingsplaats of .eml als fallback.'
                       : `Deze lokale build gebruikt nu ${routeDomain || 'een lokaal domein'}. Daardoor werkt automatisch ontvangen nog niet rechtstreeks vanaf internetmail.`}
                 </div>
               </div>
@@ -1774,12 +1774,12 @@ function ReceiptSourceHubContent({
                 <div style={{ fontSize: '13px', color: '#667085' }}>
                   {latestInbound
                     ? `Laatst ontvangen: ${formatDateTime(latestInbound.received_at || latestInbound.webhook_received_at)}`
-                    : 'Zodra Resend een mail aan Rezzerv doorstuurt, zie je dat hier terug.'}
+                    : 'Zodra Resend een mail aan Inhuis doorstuurt, zie je dat hier terug.'}
                 </div>
                 {latestInbound?.sender_email ? (
                   <div style={{ fontSize: '13px', color: '#667085' }}>Afzender: {latestInbound.sender_name ? `${latestInbound.sender_name} <${latestInbound.sender_email}>` : latestInbound.sender_email}</div>
                 ) : null}
-                <div style={{ fontSize: '13px', color: '#667085' }}>Webhook-pad in Rezzerv: <strong>{webhookEndpointPath}</strong></div>
+                <div style={{ fontSize: '13px', color: '#667085' }}>Webhook-pad in Inhuis: <strong>{webhookEndpointPath}</strong></div>
               </div>
             </div>
           </ScreenCard>
@@ -1805,9 +1805,9 @@ function ReceiptSourceHubContent({
                 <div>
                   <div style={{ fontWeight: 700, marginBottom: '4px' }}>Gmail</div>
                   <ol style={{ margin: 0, paddingLeft: '20px', display: 'grid', gap: '4px' }}>
-                    <li>Open Gmail instellingen en voeg dit Rezzerv-adres toe als doorstuuradres.</li>
+                    <li>Open Gmail instellingen en voeg dit Inhuis-adres toe als doorstuuradres.</li>
                     <li>Bevestig het adres wanneer Gmail daar om vraagt.</li>
-                    <li>Maak daarna een filter voor kassabonmails en kies als actie: doorsturen naar Rezzerv.</li>
+                    <li>Maak daarna een filter voor kassabonmails en kies als actie: doorsturen naar Inhuis.</li>
                   </ol>
                 </div>
                 <div>
@@ -1815,7 +1815,7 @@ function ReceiptSourceHubContent({
                   <ol style={{ margin: 0, paddingLeft: '20px', display: 'grid', gap: '4px' }}>
                     <li>Open regels in Outlook.</li>
                     <li>Maak een regel voor kassabonmails of bekende winkels.</li>
-                    <li>Kies als actie: doorsturen of redirecten naar dit Rezzerv-adres.</li>
+                    <li>Kies als actie: doorsturen of redirecten naar dit Inhuis-adres.</li>
                   </ol>
                 </div>
               </div>
@@ -2750,17 +2750,17 @@ export default function KassaPage() {
 
   function beginUploadProgress(kindLabel = 'de kassabon') {
     clearUploadProgressTimers()
-    setUploadProgressState(true, 'Bestand voorbereiden...', `Rezzerv bereidt ${kindLabel} voor.`, 10, 'preparing')
-    scheduleUploadProgressStep(180, 'Bon versturen...', 'Het bestand wordt veilig naar Rezzerv verstuurd.', 24, 'uploading')
-    scheduleUploadProgressStep(650, 'Afbeelding optimaliseren...', 'Rezzerv maakt de bon geschikt voor betrouwbare herkenning.', 36, 'optimizing')
-    scheduleUploadProgressStep(1550, 'Tekst en bedragen herkennen...', 'Rezzerv herkent tekst, aantallen en bedragen op de kassabon.', 49, 'recognizing')
-    scheduleUploadProgressStep(2850, 'Winkel en bonkop bepalen...', 'Rezzerv bepaalt de winkel, aankoopdatum en het totaalbedrag.', 61, 'reading_header')
-    scheduleUploadProgressStep(4300, 'Artikelregels structureren...', 'Rezzerv zet de herkende bonregels om naar controleerbare artikelen.', 72, 'structuring_lines')
+    setUploadProgressState(true, 'Bestand voorbereiden...', `Inhuis bereidt ${kindLabel} voor.`, 10, 'preparing')
+    scheduleUploadProgressStep(180, 'Bon versturen...', 'Het bestand wordt veilig naar Inhuis verstuurd.', 24, 'uploading')
+    scheduleUploadProgressStep(650, 'Afbeelding optimaliseren...', 'Inhuis maakt de bon geschikt voor betrouwbare herkenning.', 36, 'optimizing')
+    scheduleUploadProgressStep(1550, 'Tekst en bedragen herkennen...', 'Inhuis herkent tekst, aantallen en bedragen op de kassabon.', 49, 'recognizing')
+    scheduleUploadProgressStep(2850, 'Winkel en bonkop bepalen...', 'Inhuis bepaalt de winkel, aankoopdatum en het totaalbedrag.', 61, 'reading_header')
+    scheduleUploadProgressStep(4300, 'Artikelregels structureren...', 'Inhuis zet de herkende bonregels om naar controleerbare artikelen.', 72, 'structuring_lines')
   }
 
   async function completeUploadProgress(kindLabel = 'De kassabon') {
     clearUploadProgressTimers()
-    setUploadProgressState(true, 'Kassa bijwerken...', `${kindLabel} is verwerkt. Rezzerv werkt nu de inbox bij.`, 80, 'refreshing')
+    setUploadProgressState(true, 'Kassa bijwerken...', `${kindLabel} is verwerkt. Inhuis werkt nu de inbox bij.`, 80, 'refreshing')
     await new Promise((resolve) => window.setTimeout(resolve, 160))
     setUploadProgressState(true, 'Gereed...', `${kindLabel} staat klaar in Kassa.`, 100, 'ready')
     await new Promise((resolve) => window.setTimeout(resolve, 420))
@@ -2848,7 +2848,7 @@ export default function KassaPage() {
         return
       }
       await navigator.clipboard.writeText(route.route_address)
-      setStatus('Het Rezzerv e-mailadres is gekopieerd.')
+      setStatus('Het Inhuis e-mailadres is gekopieerd.')
       setError('')
       setDuplicateNotice('')
     } catch (err) {
@@ -2879,8 +2879,8 @@ export default function KassaPage() {
     setDuplicateNotice('')
     try {
       const preparedFile = await prepareCameraUploadFile(cameraDraft.file)
-      setUploadProgressState(true, 'Tekst en bedragen herkennen...', 'Rezzerv analyseert de gefotografeerde kassabon.', 49, 'recognizing')
-      const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
+      setUploadProgressState(true, 'Tekst en bedragen herkennen...', 'Inhuis analyseert de gefotografeerde kassabon.', 49, 'recognizing')
+      const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Inhuis')
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
       if (result?.duplicate) {
@@ -2915,7 +2915,7 @@ export default function KassaPage() {
           setDuplicateNotice('')
           setStatus('Foto verwerkt. De bon staat nu in de Kassa.')
         } else {
-          setStatus('Foto opgeslagen, maar Rezzerv herkent nog geen bruikbare kassabon. Controleer de foto of probeer opnieuw.')
+          setStatus('Foto opgeslagen, maar Inhuis herkent nog geen bruikbare kassabon. Controleer de foto of probeer opnieuw.')
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
@@ -3018,7 +3018,7 @@ export default function KassaPage() {
         setDuplicateNotice('')
         setEmailRouteError('')
         clearTechnicalUploadError()
-        setStatus(result?.receipt_table_id ? 'Picnic e-mailbon ontvangen. De bon staat nu in de Kassa.' : 'Picnic e-mail verwerkt, maar Rezzerv herkent nog geen bruikbare kassabon. Controleer het e-mailbestand.')
+        setStatus(result?.receipt_table_id ? 'Picnic e-mailbon ontvangen. De bon staat nu in de Kassa.' : 'Picnic e-mail verwerkt, maar Inhuis herkent nog geen bruikbare kassabon. Controleer het e-mailbestand.')
         await completeUploadProgress('De Picnic e-mailbon')
 
         if (isAddReceiptRoute) navigate('/kassa')
@@ -3111,7 +3111,7 @@ export default function KassaPage() {
           setDuplicateNotice('')
           setStatus('Bon toegevoegd. De bon staat nu in de Kassa.')
         } else {
-          setStatus('Bestand opgeslagen, maar Rezzerv herkent nog geen bruikbare kassabon. Controleer het bestand of probeer opnieuw.')
+          setStatus('Bestand opgeslagen, maar Inhuis herkent nog geen bruikbare kassabon. Controleer het bestand of probeer opnieuw.')
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {

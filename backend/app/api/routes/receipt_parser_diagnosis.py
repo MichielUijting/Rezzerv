@@ -260,5 +260,5 @@ def download_receipt_parser_diagnosis(
     limit: int = Query(500, ge=1, le=2000, description="Maximaal aantal kassabonnen in de diagnose."),
 ):
     diagnosis = build_receipt_parser_diagnosis(include_deleted=include_deleted, limit=limit)
-    filename = f"rezzerv_receipt_parser_diagnosis_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    filename = f"inhuis_receipt_parser_diagnosis_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
     return JSONResponse(content=diagnosis, headers={"Content-Disposition": f'attachment; filename="{filename}"'})

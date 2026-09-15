@@ -28,3 +28,16 @@ export function getRezzervVersionTag() {
 
   return "dev"
 }
+
+export function formatInhuisVersionLabel(value) {
+  const normalized = normalizeVersion(value)
+  if (!normalized) return "Inhuis"
+
+  const unbranded = normalized
+    .replace(/^rezzerv(?:-mvp)?(?:-|\s)*/i, "")
+    .trim()
+
+  if (!unbranded) return "Inhuis"
+  if (/^v/i.test(unbranded) || /^dev$/i.test(unbranded)) return `Inhuis ${unbranded}`
+  return `Inhuis v${unbranded}`
+}

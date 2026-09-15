@@ -490,7 +490,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     if (!selectedRows.length) { onMessage?.('Selecteer eerst een of meer bonartikelen om te exporteren.'); return }
     const rows = [['Bonartikel', 'Winkelketen', 'Catalogus', 'Score', '(Kand.) artikel', 'Producttype', '(Kand.) GTIN/EAN', 'Omvang / gewicht', 'Prijs', 'Externe kandidaten'], ...selectedRows.map((item) => [item.receiptLineText, item.retailerCode, item.catalogLinked ? 'Gekoppeld' : 'Niet gekoppeld', scoreText(item.bestCandidateScore), item.bestCandidateName || '-', item.productType || '-', item.bestCandidateCode || '-', item.quantity, numberText(item.price), item.candidateCount])]
     const blob = new Blob([rows.map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'rezzerv-externe-databases-bonartikelen.csv'; link.click(); URL.revokeObjectURL(url); onMessage?.(`Export gemaakt voor ${selectedRows.length} bonartikel(en).`)
+    const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'inhuis-externe-databases-bonartikelen.csv'; link.click(); URL.revokeObjectURL(url); onMessage?.(`Export gemaakt voor ${selectedRows.length} bonartikel(en).`)
   }
   async function processSelectedCandidate() {
     if (!selectedItem || !selectedCandidate || !selectedCandidateCanBeLinked) return

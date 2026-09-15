@@ -326,7 +326,7 @@ def export_platform_support_threads(status: str | None = Query(None), authorizat
         return Response(
             content=csv_text,
             media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": "attachment; filename=rezzerv-meldingen.csv"},
+            headers={"Content-Disposition": "attachment; filename=inhuis-meldingen.csv"},
         )
     except SupportMessageError as exc:
         _support_error(exc)

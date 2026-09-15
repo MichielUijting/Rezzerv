@@ -52,7 +52,7 @@ test.describe('Hulp & Over frontend-regressie', () => {
 
     await expect(page).toHaveURL(/\/instellingen\/hulp-over$/)
     await expect(page.getByTestId('settings-help-about-page')).toBeVisible()
-    await expect(page.getByTestId('help-about-version')).toHaveText('Versie 1.12.109-test')
+    await expect(page.getByTestId('help-about-version')).toHaveText('Inhuis v1.12.109-test')
     await expect(page.getByTestId('help-about-support-link')).toHaveAttribute('href', '/meldingen')
     await expect(page.getByTestId('help-about-privacy-link')).toHaveAttribute('href', '/instellingen/privacy-datadeling')
     await expectNoConsoleErrors(consoleErrors)

@@ -26,7 +26,7 @@ export function createCsvContent(columns = [], rows = [], separator = DEFAULT_SE
   return ['\ufeff' + headerRow, ...dataRows].join('\r\n')
 }
 
-export function downloadCsv({ columns = [], rows = [], filenamePrefix = 'rezzerv-export', separator = DEFAULT_SEPARATOR }) {
+export function downloadCsv({ columns = [], rows = [], filenamePrefix = 'inhuis-export', separator = DEFAULT_SEPARATOR }) {
   const csv = createCsvContent(columns, rows, separator)
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = window.URL.createObjectURL(blob)

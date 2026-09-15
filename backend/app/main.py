@@ -15533,7 +15533,7 @@ def export_receipt_export_fixture(batchId: Optional[str] = Query(default=None), 
     ]
     csv = ';'.join(csv_escape(value) for value in header) + '\n' + ';'.join(csv_escape(value) for value in data)
     headers = {
-        'Content-Disposition': 'attachment; filename="rezzerv-export-testdataset.csv"',
+        'Content-Disposition': 'attachment; filename="inhuis-export-testdataset.csv"',
         'X-Rezzerv-Row-Count': '1',
         'X-Rezzerv-Source': 'receipt-export-fixture',
     }

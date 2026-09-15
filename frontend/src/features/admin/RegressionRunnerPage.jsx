@@ -1,5 +1,5 @@
 ﻿import React from 'react'
-import { getRezzervVersionTag } from '../../ui/version'
+import { formatInhuisVersionLabel, getRezzervVersionTag } from '../../ui/version'
 import { runKassaSupermarketRegressionTests, runLayer1Tests, runLayer2Tests, runLayer3Tests, submitTestResults } from './services/adminTestingService'
 import { runLayer1RegressionTests } from './lib/layer1RegressionRunner'
 import { runLayer2RouteTests } from './lib/layer2RouteRunner'
@@ -207,8 +207,8 @@ export default function RegressionRunnerPage() {
 
   return (
     <main data-testid="regression-runner-page" style={{ padding: 24, fontFamily: 'Arial, sans-serif' }}>
-      <h1>Rezzerv regressierunner</h1>
-      <p data-testid="regression-runner-version">Rezzerv v{getRezzervVersionTag()}</p>
+      <h1>Inhuis regressierunner</h1>
+      <p data-testid="regression-runner-version">{formatInhuisVersionLabel(getRezzervVersionTag())}</p>
       <p data-testid="regression-runner-status" data-status={status}>{status}</p>
       {error ? <p data-testid="regression-runner-error">{error}</p> : null}
       <pre data-testid="regression-runner-json" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{report ? JSON.stringify(report, null, 2) : ''}</pre>

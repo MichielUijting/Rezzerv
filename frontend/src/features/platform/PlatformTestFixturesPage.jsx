@@ -16,7 +16,7 @@ const FIXTURE_ACTIONS = Object.freeze([
   {
     key: 'inventory-ensure',
     title: 'Regressievoorraad garanderen',
-    description: 'Maak de vaste regressievoorraad aan of herstel ontbrekende fixturedata voor de Rezzerv-testomgeving.',
+    description: 'Maak de vaste regressievoorraad aan of herstel ontbrekende fixturedata voor de Inhuis-testomgeving.',
     endpoint: '/api/testing/fixtures/inventory/ensure',
     confirmLabel: 'Regressievoorraad garanderen',
   },
@@ -108,7 +108,7 @@ export default function PlatformTestFixturesPage() {
         <div className="rz-content-inner">
           <Card className="rz-card-home">
             <h2>Platformbrede regressiefixtures</h2>
-            <p>Beheer uitsluitend de vaste Rezzerv-regressiefixturedata waarvoor je expliciet bent geautoriseerd.</p>
+            <p>Beheer uitsluitend de vaste Inhuis-regressiefixturedata waarvoor je expliciet bent geautoriseerd.</p>
             <p>Deze pagina kiest geen huishoudcontext. Household-gerichte diagnostiek is hier bewust niet beschikbaar.</p>
             <p>De receipt-exportdownload is hier eveneens niet beschikbaar, omdat die route zonder identifiers zelf testdata kan genereren.</p>
 

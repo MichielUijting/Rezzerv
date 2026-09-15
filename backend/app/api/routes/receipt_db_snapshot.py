@@ -188,7 +188,7 @@ def download_receipt_db_snapshot(
     limit: int = Query(500, ge=1, le=2000, description="Maximaal aantal kassabonnen in de snapshot."),
 ):
     snapshot = build_receipt_db_snapshot(include_deleted=include_deleted, limit=limit)
-    filename = f"rezzerv_receipt_db_snapshot_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    filename = f"inhuis_receipt_db_snapshot_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
     return JSONResponse(
         content=snapshot,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},

@@ -77,7 +77,7 @@ async function downloadDebugJson(button) {
       throw new Error(message || 'Debugexport downloaden mislukt.')
     }
     const blob = new Blob([bodyText], { type: 'application/json;charset=utf-8' })
-    downloadBlob(blob, `rezzerv-kassa-debug-${receiptId}.json`)
+    downloadBlob(blob, `inhuis-kassa-debug-${receiptId}.json`)
   } catch (error) {
     window.alert(`Debugexport downloaden mislukt: ${error?.message || error}`)
   } finally {

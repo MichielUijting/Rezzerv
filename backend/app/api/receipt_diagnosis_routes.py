@@ -109,7 +109,7 @@ def _receipt_index_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def _download_json(payload: dict, filename_hint: str) -> Response:
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    filename = f'rezzerv-kassa-{filename_hint}-{timestamp}.json'
+    filename = f'inhuis-kassa-{filename_hint}-{timestamp}.json'
     return Response(
         content=json.dumps(payload, ensure_ascii=False, indent=2),
         media_type='application/json; charset=utf-8',
