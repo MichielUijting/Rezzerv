@@ -1,5 +1,5 @@
 /* =========================================
-   INHUIS HEADER COMPONENT v1.1
+   INHUIS HEADER COMPONENT v1.4
    Shared header with household context line
 ========================================= */
 
@@ -75,15 +75,25 @@
 }
 
 .rz-header-logo {
+  margin-left: auto;
+  align-self: stretch;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex: 0 0 auto;
+  min-width: 0;
 }
 
-.rz-header-logo img {
-  height: 44px !important;
-  width: auto !important;
+.rz-brandlogo-header-image {
+  display: block;
+  height: 44px;
+  width: auto;
+  max-width: 100%;
   object-fit: contain;
+  object-position: right center;
+  flex: 0 0 auto;
+  transform: scale(1.2);
+  transform-origin: right center;
 }
 
 @media (max-width: 900px) {
@@ -96,7 +106,7 @@
     max-width: min(38vw, 300px);
   }
 
-  .rz-header-logo img {
-    height: 40px !important;
+  .rz-brandlogo-header-image {
+    height: 40px;
   }
 }
