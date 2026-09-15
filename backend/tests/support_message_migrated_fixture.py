@@ -10,7 +10,7 @@ from app.testing.postgresql_onboarding_selftest_fixture import (
 )
 
 
-HEAD_REVISION = "20260908_01"
+HEAD_REVISION = "20260915_01"
 
 
 def migrated_support_engine():
