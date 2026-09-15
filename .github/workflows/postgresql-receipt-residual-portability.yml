@@ -95,7 +95,10 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/receipt-residual-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/receipt-residual-migration.log
-          grep -F "'revision': '20260908_01'" /tmp/receipt-residual-migration.log
+          canonical_head="$(alembic heads | awk '$2 == "(head)" {print $1}')"
+          test -n "$canonical_head"
+          test "$(printf '%s\n' "$canonical_head" | wc -l)" -eq 1
+          grep -F "'revision': '${canonical_head}'" /tmp/receipt-residual-migration.log
 
       - name: Reproduce household members role audit query on PostgreSQL
         working-directory: backend
