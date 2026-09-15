@@ -8,8 +8,8 @@ from typing import Sequence
 
 from app.maintenance import postgresql_data_migration as migration
 
-HEAD_REVISION = "20260908_01"
-EXPECTED_APPLICATION_TABLES = 88
+HEAD_REVISION = "20260915_01"
+EXPECTED_APPLICATION_TABLES = 89
 
 
 def _assert_snapshot_storage_integrity(connection: sqlite3.Connection) -> None:
