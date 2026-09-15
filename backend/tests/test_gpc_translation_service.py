@@ -10,13 +10,11 @@ from app.services.gpc_translation_service import (
     import_gpc_translations_csv,
     translation_coverage,
 )
+from app.testing.postgresql_acceptance_foundation import expected_alembic_head
 from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
     reset_postgresql_test_database,
 )
-
-
-HEAD_REVISION = "20260908_01"
 
 
 def _engine():
@@ -24,7 +22,7 @@ def _engine():
     engine = create_postgresql_runtime_test_engine()
     with engine.begin() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert revision == HEAD_REVISION
+        assert revision == expected_alembic_head()
         conn.execute(text("INSERT INTO gpc_segments VALUES ('50000000', 'Food/Beverage/Tobacco')"))
         conn.execute(text("INSERT INTO gpc_families VALUES ('50100000', 'Fruits/Vegetables/Nuts/Seeds', '50000000')"))
         conn.execute(text("INSERT INTO gpc_classes VALUES ('50101700', 'Vegetables - Unprepared/Unprocessed', '50100000')"))
