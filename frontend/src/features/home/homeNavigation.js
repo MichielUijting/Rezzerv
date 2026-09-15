@@ -22,16 +22,10 @@ const LEGACY_TILES = [
   { key: 'superuser', label: 'Superuser', icon: '🛡️', clickable: true },
 ]
 
-const DYNAMIC_PRIMARY_USE_CASES = new Set([
-  'inhuis_halen',
-  'wat_inhuis',
-  'waar_inhuis',
-])
+const DYNAMIC_PRIMARY_USE_CASES = new Set(['inhuis_halen', 'wat_inhuis', 'waar_inhuis'])
 
 function isGloballyAvailable(tile, actionButtons) {
-  if (Object.hasOwn(actionButtons || {}, tile.key)) {
-    return actionButtons[tile.key] === true
-  }
+  if (Object.hasOwn(actionButtons || {}, tile.key)) return actionButtons[tile.key] === true
   return true
 }
 
@@ -54,6 +48,19 @@ function uniqueTiles(tiles) {
   })
 }
 
+function sortTilesByActionOrder(tiles, actionOrder) {
+  if (!Array.isArray(actionOrder) || actionOrder.length === 0) return tiles
+  const rank = new Map(actionOrder.map((key, index) => [String(key), index]))
+  return tiles
+    .map((tile, originalIndex) => ({ tile, originalIndex }))
+    .sort((a, b) => {
+      const aRank = rank.has(a.tile.key) ? rank.get(a.tile.key) : 10000 + a.originalIndex
+      const bRank = rank.has(b.tile.key) ? rank.get(b.tile.key) : 10000 + b.originalIndex
+      return aRank - bRank || a.originalIndex - b.originalIndex
+    })
+    .map(({ tile }) => tile)
+}
+
 function findTile(key) {
   return LEGACY_TILES.find((tile) => tile.key === key) || null
 }
@@ -70,36 +77,18 @@ function primaryKeysFor(onboarding) {
   const unpackingEnabled = Boolean(configuration.unpacking_enabled)
 
   if (primaryUseCase === 'inhuis_halen') {
-    return [
-      almostOutEnabled ? 'bijna-op' : null,
-      shoppingEnabled ? 'winkelen' : null,
-      receiptProcessingEnabled ? 'kassa' : null,
-    ].filter(Boolean)
+    return [almostOutEnabled ? 'bijna-op' : null, shoppingEnabled ? 'winkelen' : null, receiptProcessingEnabled ? 'kassa' : null].filter(Boolean)
   }
-
   if (primaryUseCase === 'wat_inhuis') {
-    return [
-      inventoryEnabled ? 'voorraad' : null,
-      almostOutEnabled ? 'bijna-op' : null,
-      shoppingEnabled ? 'winkelen' : null,
-      receiptProcessingEnabled ? 'kassa' : null,
-    ].filter(Boolean)
+    return [inventoryEnabled ? 'voorraad' : null, almostOutEnabled ? 'bijna-op' : null, shoppingEnabled ? 'winkelen' : null, receiptProcessingEnabled ? 'kassa' : null].filter(Boolean)
   }
-
   if (primaryUseCase === 'waar_inhuis') {
-    return [
-      inventoryEnabled ? 'voorraad' : null,
-      unpackingEnabled ? 'kassabonnen' : null,
-      receiptProcessingEnabled ? 'kassa' : null,
-      almostOutEnabled ? 'bijna-op' : null,
-      shoppingEnabled ? 'winkelen' : null,
-    ].filter(Boolean)
+    return [inventoryEnabled ? 'voorraad' : null, unpackingEnabled ? 'kassabonnen' : null, receiptProcessingEnabled ? 'kassa' : null, almostOutEnabled ? 'bijna-op' : null, shoppingEnabled ? 'winkelen' : null].filter(Boolean)
   }
-
   return []
 }
 
-export function buildHomeNavigation({ onboarding, visibility, features = {}, actionButtons = {} }) {
+export function buildHomeNavigation({ onboarding, visibility, features = {}, actionButtons = {}, actionOrder = [] }) {
   const safeVisibility = {
     features,
     actionButtons,
@@ -110,14 +99,13 @@ export function buildHomeNavigation({ onboarding, visibility, features = {}, act
   const configuration = onboarding?.product_configuration
   const primaryUseCase = String(onboarding?.primary_use_case || '').trim().toLowerCase()
 
-  if (
-    !configuration
-    || typeof configuration !== 'object'
-    || !DYNAMIC_PRIMARY_USE_CASES.has(primaryUseCase)
-  ) {
+  if (!configuration || typeof configuration !== 'object' || !DYNAMIC_PRIMARY_USE_CASES.has(primaryUseCase)) {
     return {
       mode: 'legacy',
-      primaryTiles: LEGACY_TILES.filter((tile) => isVisible(tile, safeVisibility)),
+      primaryTiles: sortTilesByActionOrder(
+        LEGACY_TILES.filter((tile) => isVisible(tile, safeVisibility)),
+        actionOrder,
+      ),
       moreTiles: [],
     }
   }
@@ -125,22 +113,21 @@ export function buildHomeNavigation({ onboarding, visibility, features = {}, act
   const primaryKeys = primaryKeysFor(onboarding)
   if (safeVisibility.canOpenAdmin) primaryKeys.push('instellingen')
 
-  const primaryTiles = uniqueTiles(
+  const primaryTiles = sortTilesByActionOrder(uniqueTiles(
     primaryKeys
       .map(findTile)
       .filter((tile) => tile && tile.clickable && isVisible(tile, safeVisibility)),
-  )
+  ), actionOrder)
   const visiblePrimaryKeys = new Set(primaryTiles.map((tile) => tile.key))
-  const moreTiles = uniqueTiles(LEGACY_TILES)
-    .filter((tile) => tile.clickable)
-    .filter((tile) => !visiblePrimaryKeys.has(tile.key))
-    .filter((tile) => isVisible(tile, safeVisibility))
+  const moreTiles = sortTilesByActionOrder(
+    uniqueTiles(LEGACY_TILES)
+      .filter((tile) => tile.clickable)
+      .filter((tile) => !visiblePrimaryKeys.has(tile.key))
+      .filter((tile) => isVisible(tile, safeVisibility)),
+    actionOrder,
+  )
 
-  return {
-    mode: 'dynamic',
-    primaryTiles,
-    moreTiles,
-  }
+  return { mode: 'dynamic', primaryTiles, moreTiles }
 }
 
 export { LEGACY_TILES }
