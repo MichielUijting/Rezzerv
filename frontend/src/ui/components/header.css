@@ -1,5 +1,5 @@
 /* =========================================
-   INHUIS HEADER COMPONENT v1.3
+   INHUIS HEADER COMPONENT v1.4
    Shared header with household context line
 ========================================= */
 
@@ -92,6 +92,8 @@
   object-fit: contain;
   object-position: right center;
   flex: 0 0 auto;
+  transform: scale(1.2);
+  transform-origin: right center;
 }
 
 @media (max-width: 900px) {
