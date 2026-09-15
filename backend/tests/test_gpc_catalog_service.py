@@ -5,13 +5,12 @@ from pathlib import Path
 from sqlalchemy import text
 
 from app.services.gpc_catalog_service import import_gpc_xml
+from app.testing.postgresql_acceptance_foundation import expected_alembic_head
 from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
     reset_postgresql_test_database,
 )
 
-
-HEAD_REVISION = "20260908_01"
 
 SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <schema>
@@ -35,7 +34,7 @@ def _postgresql_engine():
     engine = create_postgresql_runtime_test_engine()
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == HEAD_REVISION
+    assert revision == expected_alembic_head()
     return engine
 
 
