@@ -5,11 +5,16 @@ async function fetchAvailability() {
   const response = await fetchJsonWithAuth('/api/action-buttons')
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload?.detail || 'Acties op de Startpagina konden niet worden geladen.')
-  return Object.fromEntries(
-    (payload.items || [])
-      .filter((item) => item?.home_tile_key)
-      .map((item) => [String(item.home_tile_key), Boolean(item.enabled)]),
+
+  const rows = (payload.items || []).filter((item) => item?.home_tile_key)
+  const items = Object.fromEntries(
+    rows.map((item) => [String(item.home_tile_key), Boolean(item.enabled)]),
   )
+  const order = [...rows]
+    .sort((a, b) => Number(a?.sort_order ?? 9999) - Number(b?.sort_order ?? 9999))
+    .map((item) => String(item.home_tile_key))
+
+  return { items, order }
 }
 
 export function refreshActionButtonAvailability() {
@@ -19,6 +24,7 @@ export function refreshActionButtonAvailability() {
 export function useActionButtonAvailability({ enabled = true } = {}) {
   const [state, setState] = useState(() => ({
     items: {},
+    order: [],
     ready: !enabled,
   }))
 
@@ -26,20 +32,21 @@ export function useActionButtonAvailability({ enabled = true } = {}) {
     let active = true
 
     if (!enabled) {
-      setState({ items: {}, ready: true })
+      setState({ items: {}, order: [], ready: true })
       return () => { active = false }
     }
 
     async function refresh() {
-      setState((current) => ({ items: current.ready ? current.items : {}, ready: false }))
+      setState((current) => ({
+        items: current.ready ? current.items : {},
+        order: current.ready ? current.order : [],
+        ready: false,
+      }))
       try {
-        const items = await fetchAvailability()
-        if (active) setState({ items, ready: true })
+        const projection = await fetchAvailability()
+        if (active) setState({ ...projection, ready: true })
       } catch {
-        // Availability remains additive to authorization. If the projection cannot
-        // be read, fall back to the explicit product defaults after the request
-        // completes rather than carrying state across users or sessions.
-        if (active) setState({ items: {}, ready: true })
+        if (active) setState({ items: {}, order: [], ready: true })
       }
     }
 
