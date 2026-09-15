@@ -24,6 +24,8 @@ assert.match(headerCss, /\.rz-header-logo[\s\S]*justify-content:\s*flex-end/)
 assert.match(headerCss, /\.rz-brandlogo-header-image[\s\S]*height:\s*44px/)
 assert.match(headerCss, /\.rz-brandlogo-header-image[\s\S]*object-fit:\s*contain/)
 assert.match(headerCss, /\.rz-brandlogo-header-image[\s\S]*object-position:\s*right center/)
+assert.match(headerCss, /\.rz-brandlogo-header-image[\s\S]*transform:\s*scale\(1\.2\)/)
+assert.match(headerCss, /\.rz-brandlogo-header-image[\s\S]*transform-origin:\s*right center/)
 
 assert.match(indexHtml, /<title>Inhuis<\/title>/)
 assert.equal(manifest.name, 'Inhuis')
