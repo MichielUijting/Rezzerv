@@ -8,17 +8,19 @@ import tempfile
 
 from sqlalchemy import create_engine, text
 
+from app.testing.postgresql_acceptance_foundation import expected_alembic_head
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_ROOT / "alembic.ini"
-HEAD_REVISION = "20260908_01"
 
 
 def _assert_head(engine):
+    expected_revision = expected_alembic_head()
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    if revision != HEAD_REVISION:
+    if revision != expected_revision:
         engine.dispose()
-        raise AssertionError(f"Expected Alembic revision {HEAD_REVISION}, got {revision}")
+        raise AssertionError(f"Expected Alembic revision {expected_revision}, got {revision}")
     return engine
 
 

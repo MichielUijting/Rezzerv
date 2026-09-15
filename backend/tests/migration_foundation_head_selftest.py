@@ -6,9 +6,10 @@ from sqlalchemy import create_engine, inspect, text
 import migration_foundation_selftest as foundation_test
 
 
-HEAD_REVISION = "20260908_01"
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 88
+HEAD_REVISION = "20260915_01"
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 89
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
+HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
 QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
@@ -17,6 +18,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     "receipt_sources",
     "raw_receipts",
     PASSWORD_RESET_TABLE,
+    HOME_ACTION_ORDER_TABLE,
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
@@ -53,11 +55,11 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
     """Delegate migration-owned head objects to exact semantic validation.
 
     The receipt objects rebuilt at 20260830_02, the password-reset table at
-    20260902_01, the receipt quantity-column rebuilds at 20260903_01 and the
-    inventory quantity-column rebuilds at 20260908_01 are migration-owned
-    extensions to the immutable SQLite baseline. Their contracts are validated
-    semantically below. Every unrelated schema block remains in the immutable
-    byte comparison.
+    20260902_01, the receipt quantity-column rebuilds at 20260903_01, the
+    inventory quantity-column rebuilds at 20260908_01 and the Startpagina action
+    order table at 20260915_01 are migration-owned extensions to the immutable
+    SQLite baseline. Their contracts are validated semantically below. Every
+    unrelated schema block remains in the immutable byte comparison.
     """
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
     retained: list[str] = []
@@ -321,6 +323,67 @@ def _assert_password_reset_authority(connection) -> None:
         print("SQLITE_PASSWORD_RESET_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_home_action_order_authority(connection) -> None:
+    inspector = inspect(connection)
+    if HOME_ACTION_ORDER_TABLE not in set(inspector.get_table_names()):
+        raise AssertionError("Alembic head is missing platform_home_action_order")
+
+    columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns(HOME_ACTION_ORDER_TABLE)
+    }
+    expected_columns = {"flag_key", "sort_order", "updated_by", "updated_at"}
+    missing = expected_columns - set(columns)
+    if missing:
+        raise AssertionError(
+            f"{HOME_ACTION_ORDER_TABLE} mist canonical kolommen: {sorted(missing)}"
+        )
+    for column_name in expected_columns:
+        if bool(columns[column_name].get("nullable")):
+            raise AssertionError(
+                f"{HOME_ACTION_ORDER_TABLE}.{column_name} must be NOT NULL"
+            )
+
+    primary_key = tuple(
+        inspector.get_pk_constraint(HOME_ACTION_ORDER_TABLE).get("constrained_columns") or ()
+    )
+    if primary_key != ("flag_key",):
+        raise AssertionError(
+            f"{HOME_ACTION_ORDER_TABLE} primary key drift: {primary_key!r}"
+        )
+
+    unique_sets = {
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_unique_constraints(HOME_ACTION_ORDER_TABLE)
+    }
+    unique_sets.update(
+        tuple(item.get("column_names") or ())
+        for item in inspector.get_indexes(HOME_ACTION_ORDER_TABLE)
+        if bool(item.get("unique"))
+    )
+    if ("sort_order",) not in unique_sets:
+        raise AssertionError(
+            f"{HOME_ACTION_ORDER_TABLE}.sort_order must remain unique"
+        )
+
+    if not isinstance(columns["sort_order"]["type"], sa.Integer):
+        raise AssertionError(
+            f"{HOME_ACTION_ORDER_TABLE}.sort_order must be INTEGER"
+        )
+
+    if connection.dialect.name == "postgresql":
+        updated_at_type = columns["updated_at"]["type"]
+        if not isinstance(updated_at_type, sa.DateTime) or not bool(
+            getattr(updated_at_type, "timezone", False)
+        ):
+            raise AssertionError(
+                f"Expected TIMESTAMPTZ for {HOME_ACTION_ORDER_TABLE}.updated_at, got {updated_at_type}"
+            )
+        print("POSTGRESQL_HOME_ACTION_ORDER_SCHEMA_AUTHORITY_GREEN")
+    else:
+        print("SQLITE_HOME_ACTION_ORDER_SCHEMA_AUTHORITY_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -338,10 +401,11 @@ def main() -> None:
             _assert_quantity_precision_authority(connection)
             _assert_inventory_quantity_precision_authority(connection)
             _assert_password_reset_authority(connection)
+            _assert_home_action_order_authority(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260908_01_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_20260915_01_GREEN")
 
 
 if __name__ == "__main__":

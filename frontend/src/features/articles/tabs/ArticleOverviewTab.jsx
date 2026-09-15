@@ -5,6 +5,7 @@ import { fetchJsonWithAuth, isHouseholdAdminFromContext, isHouseholdViewerFromCo
 import { getFieldsByTabAndGroup } from '../config/articleFieldHelpers'
 import { ARTICLE_TABS } from '../config/articleFieldConstants'
 import { resolveArticleFieldValue, EMPTY_VALUE } from '../lib/articleFieldValueResolver'
+import { mergeIncomingFormStatePreservingDirtyFields } from '../lib/householdSettingsFormState'
 import { AUTO_CONSUME_MODES, fetchArticleAutoConsumeMode, getArticleAutoConsumeMode, saveArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
 import { sortOptionObjects } from '../../../ui/sorting'
 
@@ -377,6 +378,8 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   const resolvedArticleId = String(articleData?.household_article_id || articleData?.article_id || articleData?.id || '').trim()
   const settings = articleData?.settings && typeof articleData.settings === 'object' ? articleData.settings : {}
   const [formState, setFormState] = useState(() => buildHouseholdSettingsFormState(settings))
+  const dirtyFieldsRef = useRef(new Set())
+  const formArticleIdRef = useRef(resolvedArticleId)
   const [statusMessage, setStatusMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -385,9 +388,21 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   const [sublocationOptions, setSublocationOptions] = useState([])
 
   useEffect(() => {
-    setFormState(buildHouseholdSettingsFormState(settings))
+    const incomingState = buildHouseholdSettingsFormState(settings)
+    if (formArticleIdRef.current !== resolvedArticleId) {
+      formArticleIdRef.current = resolvedArticleId
+      dirtyFieldsRef.current.clear()
+      setFormState(incomingState)
+    } else {
+      setFormState((current) => mergeIncomingFormStatePreservingDirtyFields(
+        current,
+        incomingState,
+        dirtyFieldsRef.current,
+      ))
+    }
     setErrorMessage('')
   }, [
+    resolvedArticleId,
     settings?.min_stock,
     settings?.ideal_stock,
     settings?.favorite_store,
@@ -436,6 +451,8 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   }, [sublocationOptions, formState.default_location_id])
 
   function updateField(key, value) {
+    dirtyFieldsRef.current.add(key)
+    if (key === 'default_location_id') dirtyFieldsRef.current.add('default_sublocation_id')
     setFormState((current) => {
       const next = { ...current, [key]: value }
       if (key === 'default_location_id') {
@@ -472,6 +489,7 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data?.detail || 'Huishoudinstellingen konden niet worden opgeslagen.')
       const nextSettings = data?.settings && typeof data.settings === 'object' ? data.settings : payload
+      dirtyFieldsRef.current.clear()
       setFormState(buildHouseholdSettingsFormState(nextSettings))
       if (typeof onDetailsSaved === 'function') onDetailsSaved({ settings: nextSettings })
       setStatusMessage('Wijziging verwerkt.')

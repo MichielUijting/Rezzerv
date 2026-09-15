@@ -12,14 +12,8 @@ import {
   logoutServerSession,
   readStoredAuthContext,
 } from '../../lib/authSession.js'
-import {
-  fetchHouseholdOnboarding,
-  readHouseholdOnboarding,
-} from '../onboarding/onboardingState.js'
-import {
-  PLATFORM_NAVIGATION_GROUPS,
-  PLATFORM_NAVIGATION_ITEMS,
-} from '../platform/platformNavigation.js'
+import { fetchHouseholdOnboarding, readHouseholdOnboarding } from '../onboarding/onboardingState.js'
+import { PLATFORM_NAVIGATION_GROUPS, PLATFORM_NAVIGATION_ITEMS } from '../platform/platformNavigation.js'
 import { buildHomeNavigation } from './homeNavigation.js'
 import useFeatureAvailability from '../platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../platform/actionButtonAvailability.js'
@@ -34,20 +28,10 @@ function visibilityFromContext(context) {
 }
 
 const TILE_ROUTES = {
-  meldingen: '/meldingen',
-  'bijna-op': '/bijna-op',
-  winkelen: '/winkelen',
-  voorraad: '/voorraad',
-  productgroepen: '/productgroepen',
-  kassabonnen: '/kassabonnen',
-  kassa: '/kassa',
-  spaartegoeden: '/spaartegoeden',
-  'externe-databases': '/externe-databases',
-  catalogus: '/catalogus',
-  instellingen: '/instellingen',
-  locaties: '/instellingen/locaties',
-  admin: '/admin',
-  superuser: '/superuser',
+  meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
+  productgroepen: '/productgroepen', kassabonnen: '/kassabonnen', kassa: '/kassa',
+  spaartegoeden: '/spaartegoeden', 'externe-databases': '/externe-databases', catalogus: '/catalogus',
+  instellingen: '/instellingen', locaties: '/instellingen/locaties', admin: '/admin', superuser: '/superuser',
 }
 
 export default function HomePage() {
@@ -59,26 +43,27 @@ export default function HomePage() {
   const visibility = visibilityFromContext(context)
   const features = useFeatureAvailability()
   const actionAvailability = useActionButtonAvailability({ enabled: Boolean(context && context.context_type !== 'none') })
-  const navigation = buildHomeNavigation({ onboarding, visibility, features, actionButtons: actionAvailability.items })
+  const navigation = buildHomeNavigation({
+    onboarding,
+    visibility,
+    features,
+    actionButtons: actionAvailability.items,
+    actionOrder: actionAvailability.order,
+  })
   const platformNavigation = context?.context_type === 'none'
     ? PLATFORM_NAVIGATION_ITEMS.filter((item) => canCurrentUserPerform(item.permission, context))
     : []
   const platformGroups = PLATFORM_NAVIGATION_GROUPS
-    .map((group) => ({
-      ...group,
-      items: platformNavigation.filter((item) => item.group === group.key),
-    }))
+    .map((group) => ({ ...group, items: platformNavigation.filter((item) => item.group === group.key) }))
     .filter((group) => group.items.length > 0)
 
   useEffect(() => {
     let cancelled = false
-
     async function refreshHomeContext() {
       try {
         const nextContext = await fetchAuthContext()
         if (cancelled) return
         setContext(nextContext)
-
         if (nextContext?.context_type === 'regular') {
           const nextOnboarding = await fetchHouseholdOnboarding(nextContext, { force: true })
           if (!cancelled) setOnboarding(nextOnboarding)
@@ -89,11 +74,8 @@ export default function HomePage() {
         // AuthGuard remains authoritative for session failures.
       }
     }
-
     refreshHomeContext()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [])
 
   async function logout() {
@@ -105,54 +87,37 @@ export default function HomePage() {
     return (
       <div className="rz-screen" data-testid="none-session-home">
         <Header title="Platformbeheerder" />
-        <div className="rz-content">
-          <div className="rz-content-inner">
-            <Card className="rz-card-home">
-              <h2>Platformbeheer</h2>
-              <p>Er is geen huishoudcontext actief. Je ziet alleen platformfuncties waarvoor je geautoriseerd bent.</p>
-
-              {platformGroups.length > 0 ? (
-                <div data-testid="platform-home-navigation">
-                  {platformGroups.map((group) => (
-                    <div key={group.key} data-testid={`platform-home-group-${group.key}`} style={{ marginTop: '20px' }}>
-                      <h3 style={{ margin: '0 0 12px 0', fontSize: '17px' }}>{group.label}</h3>
-                      <div className="rz-tile-grid" role="navigation" aria-label={group.label}>
-                        {group.items.map((item) => (
-                          <div
-                            key={item.key}
-                            className="rz-tile"
-                            data-testid={`platform-home-tile-${item.key}`}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => navigate(item.route)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                navigate(item.route)
-                              }
-                            }}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <div className="rz-tile-icon" aria-hidden="true">{item.icon}</div>
-                            <div className="rz-tile-label">{item.label}</div>
-                          </div>
-                        ))}
-                      </div>
+        <div className="rz-content"><div className="rz-content-inner">
+          <Card className="rz-card-home">
+            <h2>Platformbeheer</h2>
+            <p>Er is geen huishoudcontext actief. Je ziet alleen platformfuncties waarvoor je geautoriseerd bent.</p>
+            {platformGroups.length > 0 ? (
+              <div data-testid="platform-home-navigation">
+                {platformGroups.map((group) => (
+                  <div key={group.key} data-testid={`platform-home-group-${group.key}`} style={{ marginTop: '20px' }}>
+                    <h3 style={{ margin: '0 0 12px 0', fontSize: '17px' }}>{group.label}</h3>
+                    <div className="rz-tile-grid" role="navigation" aria-label={group.label}>
+                      {group.items.map((item) => (
+                        <div key={item.key} className="rz-tile" data-testid={`platform-home-tile-${item.key}`} role="button" tabIndex={0}
+                          onClick={() => navigate(item.route)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate(item.route) }
+                          }}
+                          style={{ cursor: 'pointer' }}>
+                          <div className="rz-tile-icon" aria-hidden="true">{item.icon}</div>
+                          <div className="rz-tile-label">{item.label}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p data-testid="platform-home-empty">Voor deze account zijn geen platformfuncties beschikbaar.</p>
-              )}
-
-              <div style={{ marginTop: '24px' }}>
-                <Button type="button" variant="secondary" onClick={logout} data-testid="none-session-logout">
-                  Uitloggen
-                </Button>
+                  </div>
+                ))}
               </div>
-            </Card>
-          </div>
-        </div>
+            ) : <p data-testid="platform-home-empty">Voor deze account zijn geen platformfuncties beschikbaar.</p>}
+            <div style={{ marginTop: '24px' }}>
+              <Button type="button" variant="secondary" onClick={logout} data-testid="none-session-logout">Uitloggen</Button>
+            </div>
+          </Card>
+        </div></div>
       </div>
     )
   }
@@ -161,13 +126,9 @@ export default function HomePage() {
     return (
       <div className="rz-screen" data-testid="home-action-availability-loading">
         <Header title="Startpagina" />
-        <div className="rz-content">
-          <div className="rz-content-inner">
-            <Card className="rz-card-home">
-              <p role="status">Beschikbare acties laden…</p>
-            </Card>
-          </div>
-        </div>
+        <div className="rz-content"><div className="rz-content-inner">
+          <Card className="rz-card-home"><p role="status">Beschikbare acties laden…</p></Card>
+        </div></div>
       </div>
     )
   }
@@ -181,13 +142,8 @@ export default function HomePage() {
     const route = TILE_ROUTES[tile.key]
     const clickable = Boolean(tile.clickable && route)
     return (
-      <div
-        key={tile.key}
-        className="rz-tile"
-        data-testid={`home-tile-${tile.key}`}
-        onClick={() => clickable && openTile(tile)}
-        style={{ cursor: clickable ? 'pointer' : 'default' }}
-      >
+      <div key={tile.key} className="rz-tile" data-testid={`home-tile-${tile.key}`}
+        onClick={() => clickable && openTile(tile)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
         <div className="rz-tile-icon" aria-hidden="true">{tile.icon}</div>
         <div className="rz-tile-label">{tile.label}</div>
       </div>
@@ -197,58 +153,37 @@ export default function HomePage() {
   return (
     <div className="rz-screen">
       <Header title="Startpagina" />
-      <div className="rz-content">
-        <div className="rz-content-inner">
-          <Card className="rz-card-home">
-            {canCurrentUserPerform('platform.functional_features.manage', context) && (
-              <Button type="button" onClick={() => navigate('/platform/functionaliteiten')}>
-                Functionaliteiten
-              </Button>
-            )}
-            {navigation.mode === 'legacy' ? (
-              <div
-                className="rz-tile-grid"
-                role="navigation"
-                aria-label="Acties"
-                data-testid="legacy-home-navigation"
-              >
+      <div className="rz-content"><div className="rz-content-inner">
+        <Card className="rz-card-home">
+          {canCurrentUserPerform('platform.functional_features.manage', context) && (
+            <Button type="button" onClick={() => navigate('/platform/functionaliteiten')}>Functionaliteiten</Button>
+          )}
+          {navigation.mode === 'legacy' ? (
+            <div className="rz-tile-grid" role="navigation" aria-label="Acties" data-testid="legacy-home-navigation">
+              {navigation.primaryTiles.map(renderTile)}
+            </div>
+          ) : (
+            <div data-testid="dynamic-home-navigation">
+              <h2 style={{ margin: '0 0 14px 0', fontSize: '20px' }}>Voor jou</h2>
+              <div className="rz-tile-grid" role="navigation" aria-label="Belangrijkste acties">
                 {navigation.primaryTiles.map(renderTile)}
               </div>
-            ) : (
-              <div data-testid="dynamic-home-navigation">
-                <h2 style={{ margin: '0 0 14px 0', fontSize: '20px' }}>Voor jou</h2>
-                <div className="rz-tile-grid" role="navigation" aria-label="Belangrijkste acties">
-                  {navigation.primaryTiles.map(renderTile)}
+              {navigation.moreTiles.length > 0 && (
+                <div style={{ marginTop: '20px' }}>
+                  <Button type="button" variant="secondary" onClick={() => setShowMore((current) => !current)} data-testid="home-more-toggle">
+                    {showMore ? 'Minder tonen' : 'Meer'}
+                  </Button>
+                  {showMore && (
+                    <div className="rz-tile-grid" role="navigation" aria-label="Meer acties" data-testid="home-more-navigation" style={{ marginTop: '14px' }}>
+                      {navigation.moreTiles.map(renderTile)}
+                    </div>
+                  )}
                 </div>
-
-                {navigation.moreTiles.length > 0 && (
-                  <div style={{ marginTop: '20px' }}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => setShowMore((current) => !current)}
-                      data-testid="home-more-toggle"
-                    >
-                      {showMore ? 'Minder tonen' : 'Meer'}
-                    </Button>
-                    {showMore && (
-                      <div
-                        className="rz-tile-grid"
-                        role="navigation"
-                        aria-label="Meer acties"
-                        data-testid="home-more-navigation"
-                        style={{ marginTop: '14px' }}
-                      >
-                        {navigation.moreTiles.map(renderTile)}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
+              )}
+            </div>
+          )}
+        </Card>
+      </div></div>
     </div>
   )
 }

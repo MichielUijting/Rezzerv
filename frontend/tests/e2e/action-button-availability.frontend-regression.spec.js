@@ -5,7 +5,14 @@ const shoppingKey = 'action.home.winkelen'
 const inventoryKey = 'action.home.voorraad'
 const gerechtenKey = 'feature.gerechten'
 
-function actionItem(key, homeTileKey, label, enabled) {
+function metadata(key) {
+  if (key === shoppingKey) return ['winkelen', 'Winkelen']
+  if (key === inventoryKey) return ['voorraad', 'Voorraad']
+  return ['recepten', 'Gerechten']
+}
+
+function actionItem(key, enabled, sortOrder) {
+  const [homeTileKey, label] = metadata(key)
   return {
     key,
     category: key === gerechtenKey ? 'functional' : 'action_button',
@@ -14,11 +21,22 @@ function actionItem(key, homeTileKey, label, enabled) {
     description: `${label} op de Startpagina platformbreed beheren.`,
     home_tile_key: homeTileKey,
     enabled,
+    sort_order: sortOrder,
     default_enabled: key === gerechtenKey ? false : true,
     source: enabled === (key !== gerechtenKey) ? 'default' : 'override',
     updated_by: null,
     updated_at: null,
   }
+}
+
+function enabledFor(state, key) {
+  if (key === shoppingKey) return state.shoppingEnabled
+  if (key === inventoryKey) return state.inventoryEnabled
+  return state.gerechtenEnabled
+}
+
+function orderedItems(state) {
+  return state.order.map((key, index) => actionItem(key, enabledFor(state, key), index))
 }
 
 async function mockApi(page, actor, state) {
@@ -46,25 +64,33 @@ async function mockApi(page, actor, state) {
       is_frontteam: false,
     })
     if (path === '/api/onboarding') return json({ onboarding_status: 'completed', primary_use_case: null })
+    if (path === '/api/features') return json({ features: { [gerechtenKey]: state.gerechtenEnabled } })
 
     if (path === '/api/action-buttons') {
       state.productReads++
       if (state.productGate?.promise) await state.productGate.promise
-      return json({ items: [
-        { key: shoppingKey, home_tile_key: 'winkelen', enabled: state.shoppingEnabled },
-        { key: inventoryKey, home_tile_key: 'voorraad', enabled: state.inventoryEnabled },
-        { key: gerechtenKey, home_tile_key: 'recepten', enabled: state.gerechtenEnabled },
-      ] })
+      return json({
+        items: orderedItems(state).map(({ key, home_tile_key, enabled, sort_order }) => ({
+          key,
+          home_tile_key,
+          enabled,
+          sort_order,
+        })),
+      })
     }
 
     if (path === '/api/platform/action-buttons') {
       state.managementReads++
       if (!superuser) return json({}, 403)
-      return json({ items: [
-        actionItem(shoppingKey, 'winkelen', 'Winkelen', state.shoppingEnabled),
-        actionItem(inventoryKey, 'voorraad', 'Voorraad', state.inventoryEnabled),
-        actionItem(gerechtenKey, 'recepten', 'Gerechten', state.gerechtenEnabled),
-      ] })
+      return json({ items: orderedItems(state) })
+    }
+
+    if (path === '/api/platform/action-buttons/order' && request.method() === 'PUT') {
+      if (!superuser) return json({}, 403)
+      const payload = request.postDataJSON()
+      state.orderUpdates.push(payload.keys)
+      state.order = [...payload.keys]
+      return json({ items: orderedItems(state) })
     }
 
     if (path.startsWith('/api/platform/action-buttons/') && request.method() === 'PUT') {
@@ -75,12 +101,7 @@ async function mockApi(page, actor, state) {
       if (key === shoppingKey) state.shoppingEnabled = payload.enabled
       if (key === inventoryKey) state.inventoryEnabled = payload.enabled
       if (key === gerechtenKey) state.gerechtenEnabled = payload.enabled
-      const metadata = key === shoppingKey
-        ? ['winkelen', 'Winkelen']
-        : key === inventoryKey
-          ? ['voorraad', 'Voorraad']
-          : ['recepten', 'Gerechten']
-      return json({ item: actionItem(key, metadata[0], metadata[1], payload.enabled) })
+      return json({ item: actionItem(key, payload.enabled, state.order.indexOf(key)) })
     }
 
     if (path === '/api/shopping-list') return json({ items: [{
@@ -91,15 +112,22 @@ async function mockApi(page, actor, state) {
   })
 }
 
-test('Superuser manages Startpagina actions with an inline confirmation on the selected action', async ({ page }) => {
-  const state = {
+function initialState(overrides = {}) {
+  return {
     shoppingEnabled: true,
     inventoryEnabled: true,
     gerechtenEnabled: false,
     productReads: 0,
     managementReads: 0,
     updates: [],
+    orderUpdates: [],
+    order: [shoppingKey, inventoryKey, gerechtenKey],
+    ...overrides,
   }
+}
+
+test('Superuser manages Startpagina actions with an inline confirmation on the selected action', async ({ page }) => {
+  const state = initialState()
   await mockApi(page, 'superuser', state)
 
   await page.goto('/superuser')
@@ -129,20 +157,30 @@ test('Superuser manages Startpagina actions with an inline confirmation on the s
   expect(state.updates).toEqual([{ key: shoppingKey, payload: { enabled: false } }])
 })
 
+test('Superuser drags an action before another action and persists the shifted order', async ({ page }) => {
+  const state = initialState()
+  await mockApi(page, 'superuser', state)
+  await page.goto('/superuser')
+  await page.getByTestId('superuser-control-tab-action-buttons').click()
+  await expect.poll(() => state.managementReads).toBeGreaterThan(0)
+
+  const inventory = page.getByTestId(`superuser-action-order-item-${inventoryKey}`)
+  const shopping = page.getByTestId(`superuser-action-order-item-${shoppingKey}`)
+  await inventory.dragTo(shopping)
+
+  await expect.poll(() => state.orderUpdates.length).toBe(1)
+  expect(state.orderUpdates[0]).toEqual([inventoryKey, shoppingKey, gerechtenKey])
+  await expect(inventory).toHaveAttribute('data-sort-order', '0')
+  await expect(shopping).toHaveAttribute('data-sort-order', '1')
+  await expect(page.getByTestId('superuser-action-order-status')).toContainText('Voorraad staat nu voor Winkelen')
+})
+
 test('Startpagina waits for the current server projection before rendering managed actions', async ({ page }) => {
   let releaseProjection
-  const productGate = {
-    promise: new Promise((resolve) => { releaseProjection = resolve }),
-  }
-  const state = {
+  const state = initialState({
     shoppingEnabled: false,
-    inventoryEnabled: true,
-    gerechtenEnabled: false,
-    productReads: 0,
-    managementReads: 0,
-    updates: [],
-    productGate,
-  }
+    productGate: { promise: new Promise((resolve) => { releaseProjection = resolve }) },
+  })
   await mockApi(page, 'member', state)
 
   await page.goto('/home')
@@ -158,15 +196,21 @@ test('Startpagina waits for the current server projection before rendering manag
   await expect(page.getByTestId('home-tile-voorraad')).toBeVisible()
 })
 
+test('ordinary user sees enabled Startpagina actions in the server-managed order', async ({ page }) => {
+  const state = initialState({ order: [inventoryKey, shoppingKey, gerechtenKey] })
+  await mockApi(page, 'member', state)
+
+  await page.goto('/home')
+  await expect.poll(() => state.productReads).toBeGreaterThan(0)
+  const navigation = page.getByTestId('legacy-home-navigation')
+  const positions = await navigation
+    .locator('[data-testid^="home-tile-"]')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-testid')))
+  expect(positions.indexOf('home-tile-voorraad')).toBeLessThan(positions.indexOf('home-tile-winkelen'))
+})
+
 test('disabled Startpagina action hides only the home tile and leaves internal buttons intact', async ({ page }) => {
-  const state = {
-    shoppingEnabled: false,
-    inventoryEnabled: true,
-    gerechtenEnabled: false,
-    productReads: 0,
-    managementReads: 0,
-    updates: [],
-  }
+  const state = initialState({ shoppingEnabled: false })
   await mockApi(page, 'member', state)
 
   await page.goto('/home')
@@ -182,15 +226,9 @@ test('disabled Startpagina action hides only the home tile and leaves internal b
 })
 
 test('ordinary member cannot enter Superuser Startpagina-action management', async ({ page }) => {
-  const state = {
-    shoppingEnabled: true,
-    inventoryEnabled: true,
-    gerechtenEnabled: false,
-    productReads: 0,
-    managementReads: 0,
-    updates: [],
-  }
+  const state = initialState()
   await mockApi(page, 'member', state)
+
   await page.goto('/superuser')
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('superuser-control-tab-action-buttons')).toHaveCount(0)

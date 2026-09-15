@@ -2,23 +2,23 @@ from __future__ import annotations
 
 from sqlalchemy import inspect, text
 
+from app.testing.postgresql_acceptance_foundation import expected_alembic_head
 from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
     reset_postgresql_test_database,
 )
-
-HEAD_REVISION = "20260908_01"
 
 
 def migrated_postgresql_engine():
     """Return a clean canonical PostgreSQL test engine at the locked Alembic head."""
     reset_postgresql_test_database()
     engine = create_postgresql_runtime_test_engine()
+    expected_revision = expected_alembic_head()
     with engine.connect() as conn:
         revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    if revision != HEAD_REVISION:
+    if revision != expected_revision:
         engine.dispose()
-        raise AssertionError(f"Expected Alembic revision {HEAD_REVISION}, got {revision}")
+        raise AssertionError(f"Expected Alembic revision {expected_revision}, got {revision}")
     return engine
 
 

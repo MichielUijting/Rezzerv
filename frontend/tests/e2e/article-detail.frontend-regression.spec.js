@@ -1,7 +1,58 @@
 import { test, expect } from '@playwright/test';
+import { mergeIncomingFormStatePreservingDirtyFields } from '../../src/features/articles/lib/householdSettingsFormState.js';
 import { attachConsoleErrorCollector } from './helpers/rezzervAssertions.js';
 
 test.describe('Artikeldetail frontend-regressie', () => {
+  test('Late huishoudinstellingen overschrijven geen velden die de gebruiker al heeft gewijzigd', () => {
+    const dirtyFields = new Set();
+    let formState = {
+      min_stock: '',
+      ideal_stock: '',
+      notes: '',
+    };
+
+    dirtyFields.add('min_stock');
+    formState = { ...formState, min_stock: '0' };
+    formState = mergeIncomingFormStatePreservingDirtyFields(
+      formState,
+      { min_stock: '', ideal_stock: '', notes: 'serverwaarde' },
+      dirtyFields,
+    );
+
+    expect(formState).toEqual({
+      min_stock: '0',
+      ideal_stock: '',
+      notes: 'serverwaarde',
+    });
+
+    dirtyFields.add('ideal_stock');
+    formState = { ...formState, ideal_stock: '1' };
+    formState = mergeIncomingFormStatePreservingDirtyFields(
+      formState,
+      { min_stock: '', ideal_stock: '9', notes: 'nieuwere serverwaarde' },
+      dirtyFields,
+    );
+
+    expect(formState).toEqual({
+      min_stock: '0',
+      ideal_stock: '1',
+      notes: 'nieuwere serverwaarde',
+    });
+
+    dirtyFields.clear();
+    formState = mergeIncomingFormStatePreservingDirtyFields(
+      formState,
+      { min_stock: '2', ideal_stock: '3', notes: 'opgeslagen serverwaarde' },
+      dirtyFields,
+    );
+
+    expect(formState).toEqual({
+      min_stock: '2',
+      ideal_stock: '3',
+      notes: 'opgeslagen serverwaarde',
+    });
+  });
+
   test('Stabiele artikelroute gebruikt de universele naam, conditionele Locaties en standaard meldingoverlay', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     const failedResponses = [];
