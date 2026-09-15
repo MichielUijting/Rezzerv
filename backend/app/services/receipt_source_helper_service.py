@@ -150,7 +150,7 @@ def ensure_household_email_source(household_id: str) -> dict[str, Any]:
 def ensure_household_gmail_source(household_id: str, label_name: str) -> dict[str, Any]:
     engine, text, normalize_household_id, serialize_receipt_source = _require_configured()
     effective_household_id = normalize_household_id(household_id)
-    effective_label_name = str(label_name or '').strip() or 'Rezzerv/Bonnen'
+    effective_label_name = str(label_name or '').strip() or 'Inhuis/Bonnen'
     source_id = f'{effective_household_id}-gmail-label'
     with engine.begin() as conn:
         row = conn.execute(

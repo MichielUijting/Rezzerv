@@ -231,7 +231,7 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
         )
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "purpose": "Rezzerv receipt parser diagnose v2 voor generieke parserverbetering zonder bonspecifieke fixes.",
+        "purpose": "Inhuis receipt parser diagnose v2 voor generieke parserverbetering zonder bonspecifieke fixes.",
         "runtime_datastore": datastore_info,
         "summary": {"returned_receipts": len(diagnoses), "status_counts_nl": status_counts},
         "diagnosis_scope": {

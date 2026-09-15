@@ -1720,7 +1720,7 @@ function ReceiptSourceHubContent({
                 outline: 'none',
                 boxShadow: isLandingDropActive ? '0 0 0 4px rgba(18,183,106,0.12)' : 'none',
               }}
-              aria-label="Sleep een .eml, .pdf of bonfoto naar Rezzerv, klik om een bestand te kiezen of plak vanuit het klembord"
+              aria-label="Sleep een .eml, .pdf of bonfoto naar Inhuis, klik om een bestand te kiezen of plak vanuit het klembord"
               data-testid="kassa-email-dropzone"
             >
               <div style={{ fontSize: '22px', fontWeight: 700, color: '#166534' }}>Sleep hier je kassabon of e-mail</div>

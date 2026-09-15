@@ -30,13 +30,13 @@ GMAIL_OAUTH_SCOPES = tuple(
     if scope.strip()
 )
 GMAIL_STATE_SECRET = (os.getenv('REZZERV_GMAIL_STATE_SECRET', 'rezzerv-gmail-dev-secret') or 'rezzerv-gmail-dev-secret').encode('utf-8')
-GMAIL_DEFAULT_LABEL_NAME = os.getenv('REZZERV_GMAIL_LABEL_NAME', 'Rezzerv/Bonnen').strip() or 'Rezzerv/Bonnen'
+GMAIL_DEFAULT_LABEL_NAME = os.getenv('REZZERV_GMAIL_LABEL_NAME', 'Inhuis/Bonnen').strip() or 'Inhuis/Bonnen'
 GMAIL_SYNC_BATCH_SIZE = max(1, min(int(os.getenv('REZZERV_GMAIL_SYNC_BATCH_SIZE', '25') or '25'), 100))
 RECEIPT_EMAIL_DOMAIN = (os.getenv('REZZERV_RECEIPT_EMAIL_DOMAIN', 'rezzerv.local') or 'rezzerv.local').strip() or 'rezzerv.local'
 RESEND_API_KEY = (os.getenv('REZZERV_RESEND_API_KEY', '') or '').strip()
 RESEND_API_BASE_URL = (os.getenv('REZZERV_RESEND_API_BASE_URL', 'https://api.resend.com') or 'https://api.resend.com').rstrip('/')
 REZZERV_NOTIFICATION_FROM_EMAIL = (os.getenv('REZZERV_NOTIFICATION_FROM_EMAIL', '') or '').strip()
-REZZERV_NOTIFICATION_FROM_NAME = (os.getenv('REZZERV_NOTIFICATION_FROM_NAME', 'Rezzerv') or 'Rezzerv').strip() or 'Rezzerv'
+REZZERV_NOTIFICATION_FROM_NAME = (os.getenv('REZZERV_NOTIFICATION_FROM_NAME', 'Inhuis') or 'Inhuis').strip() or 'Inhuis'
 REZZERV_APP_BASE_URL = (os.getenv('REZZERV_APP_BASE_URL', 'http://localhost:5174') or 'http://localhost:5174').rstrip('/')
 REZZERV_EMAIL_ENABLED = str(os.getenv('REZZERV_EMAIL_ENABLED', 'false') or 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
 

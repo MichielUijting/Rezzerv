@@ -402,7 +402,7 @@ async function setStoreImportSimplificationLevel(frame, level) {
 async function ensureLoggedIn(frame) {
   await navigateFrame(frame, '/login')
   const doc = getFrameDocument(frame)
-  const emailInput = await waitForCondition(() => doc?.querySelector('input[placeholder="admin@rezzerv.local"]'), WAIT_TIMEOUT, 'E-mailveld niet gevonden')
+  const emailInput = await waitForCondition(() => doc?.querySelector('[data-testid="login-email"]'), WAIT_TIMEOUT, 'E-mailveld niet gevonden')
   const passwordInput = doc.querySelector('input[type="password"]')
   const submitButton = Array.from(doc.querySelectorAll('button')).find((button) => button.textContent?.includes('Inloggen'))
   if (!passwordInput || !submitButton) throw new Error('Loginformulier is onvolledig')

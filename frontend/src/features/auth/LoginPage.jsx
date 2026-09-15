@@ -10,8 +10,8 @@ import { fetchAuthContext, getLoginMessage } from '../../lib/authSession.js'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 
 export default function LoginPage({ onLoggedIn }) {
-  const [email, setEmail] = useState('admin@rezzerv.local')
-  const [password, setPassword] = useState('Rezzerv123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -47,7 +47,7 @@ export default function LoginPage({ onLoggedIn }) {
                 label="E-mail"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@rezzerv.local"
+                placeholder="naam@voorbeeld.nl"
                 autoComplete="email"
                 data-testid="login-email"
               />
@@ -56,7 +56,7 @@ export default function LoginPage({ onLoggedIn }) {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Rezzerv123"
+                placeholder="Je wachtwoord"
                 autoComplete="current-password"
                 data-testid="login-password"
               />

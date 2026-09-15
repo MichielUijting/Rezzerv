@@ -62,7 +62,7 @@ FEATURE_FLAG_DEFINITIONS = {
         "category": "functional",
         "group": "Startpagina",
         "label": "Gerechten",
-        "description": "Bepaalt of Gerechten wereldwijd beschikbaar is in Rezzerv.",
+        "description": "Bepaalt of Gerechten wereldwijd beschikbaar is in Inhuis.",
         "home_tile_key": "recepten",
         "default_enabled": False,
     },

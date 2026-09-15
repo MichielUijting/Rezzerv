@@ -3382,7 +3382,7 @@ def get_article_product_details(conn, household_id: str, article_name: str | Non
             'source_name': 'internal_catalog',
             'configured': True,
             'enabled': True,
-            'notes': 'Rezzerv controleert eerst de interne productcatalogus.',
+            'notes': 'Inhuis controleert eerst de interne productcatalogus.',
         },
         *get_configured_product_sources(),
     ]
@@ -9577,7 +9577,7 @@ def sync_gmail_receipts(household_id: str) -> dict[str, Any]:
     effective_household_id = str(household_id or '1').strip() or '1'
     account = get_receipt_gmail_account(effective_household_id, create_if_missing=True)
     if not gmail_is_configured():
-        raise HTTPException(status_code=503, detail='De Gmail-koppeling is nog niet geconfigureerd in Rezzerv.')
+        raise HTTPException(status_code=503, detail='De Gmail-koppeling is nog niet geconfigureerd in Inhuis.')
     if not account.get('connected'):
         raise HTTPException(status_code=400, detail='Gmail is nog niet gekoppeld voor dit huishouden.')
 
@@ -9677,7 +9677,7 @@ def resend_is_configured() -> bool:
 
 def resend_json_request(path: str, method: str = 'GET', *, data: Any = None, timeout: float = 30.0) -> dict[str, Any]:
     if not resend_is_configured():
-        raise HTTPException(status_code=503, detail='De Resend API-sleutel is nog niet geconfigureerd in Rezzerv.')
+        raise HTTPException(status_code=503, detail='De Resend API-sleutel is nog niet geconfigureerd in Inhuis.')
     url = f"{RESEND_API_BASE_URL}/{path.lstrip('/')}"
     request_headers = {
         'Accept': 'application/json',
@@ -9747,7 +9747,7 @@ def send_household_invitation_email(recipient_email: str, household_name: str, d
     else:
         display_role_text = 'lid'
     login_url = f"{REZZERV_APP_BASE_URL}/login"
-    subject = f"Je bent uitgenodigd voor Rezzerv als {display_role_text}"
+    subject = f"Je bent uitgenodigd voor Inhuis als {display_role_text}"
     html_password = ''
     text_password = ''
     if str(password_value or '').strip():
@@ -9756,23 +9756,23 @@ def send_household_invitation_email(recipient_email: str, household_name: str, d
         text_password = f"Tijdelijk wachtwoord: {str(password_value or '').strip()}\nWijzig dit tijdelijke wachtwoord zodra daarvoor een functie beschikbaar is."
     html_body = (
         f"<p>Hallo,</p>"
-        f"<p>Je bent toegevoegd aan <strong>{html.escape(str(household_name or 'Mijn huishouden'))}</strong> in Rezzerv als <strong>{display_role_text}</strong>.</p>"
+        f"<p>Je bent toegevoegd aan <strong>{html.escape(str(household_name or 'Mijn huishouden'))}</strong> in Inhuis als <strong>{display_role_text}</strong>.</p>"
         f"{html_password}"
         f"<p>Log in via <a href=\"{html.escape(login_url)}\">{html.escape(login_url)}</a> met je e-mailadres <strong>{html.escape(normalized_email)}</strong>.</p>"
         + ("<p>Gebruik je bestaande wachtwoord om in te loggen.</p>" if not html_password else "")
-        + "<p>Groet,<br>Rezzerv</p>"
+        + "<p>Groet,<br>Inhuis</p>"
     )
     text_parts = [
         'Hallo,',
         '',
-        f'Je bent toegevoegd aan {str(household_name or "Mijn huishouden")} in Rezzerv als {display_role_text}.',
+        f'Je bent toegevoegd aan {str(household_name or "Mijn huishouden")} in Inhuis als {display_role_text}.',
         f'Log in via {login_url} met je e-mailadres {normalized_email}.',
     ]
     if text_password:
         text_parts.extend(['', text_password])
     else:
         text_parts.extend(['', 'Gebruik je bestaande wachtwoord om in te loggen.'])
-    text_parts.extend(['', 'Groet,', 'Rezzerv'])
+    text_parts.extend(['', 'Groet,', 'Inhuis'])
     resend_json_request(
         '/emails',
         method='POST',
@@ -9853,7 +9853,7 @@ def resolve_household_email_source(recipient_addresses: list[str]) -> dict[str, 
         source = ensure_household_email_source(normalized_household)
         if str(source.get('route_address') or '').strip().lower() == recipient:
             return source
-    raise HTTPException(status_code=400, detail='Deze inkomende e-mail past niet bij een bekend Rezzerv-adres.')
+    raise HTTPException(status_code=400, detail='Deze inkomende e-mail past niet bij een bekend Inhuis-adres.')
 
 
 def get_resend_received_email(email_id: str) -> dict[str, Any]:
@@ -11274,7 +11274,7 @@ def get_receipt_gmail_connect_url(
     authorization: Optional[str] = Header(None),
 ):
     if not gmail_is_configured():
-        raise HTTPException(status_code=503, detail='De Gmail-koppeling is nog niet geconfigureerd in Rezzerv. Voeg eerst Google OAuth clientgegevens toe.')
+        raise HTTPException(status_code=503, detail='De Gmail-koppeling is nog niet geconfigureerd in Inhuis. Voeg eerst Google OAuth clientgegevens toe.')
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
     redirect_uri = resolve_gmail_redirect_uri(request)
     return {
@@ -11310,7 +11310,7 @@ def handle_receipt_gmail_callback(
 <html lang="nl">
   <head>
     <meta charset="utf-8" />
-    <title>Rezzerv Gmail koppeling</title>
+    <title>Inhuis Gmail koppeling</title>
   </head>
   <body>
     <p>{message_text}</p>
@@ -11367,7 +11367,7 @@ def handle_receipt_gmail_callback(
     )
     label_id, _ = ensure_gmail_label(account)
     upsert_receipt_gmail_account(effective_household_id, {'label_id': label_id, 'sync_status': 'connected', 'last_error': None})
-    return render_popup('success', 'Gmail is gekoppeld aan Rezzerv.', connected_email=connected_email)
+    return render_popup('success', 'Gmail is gekoppeld aan Inhuis.', connected_email=connected_email)
 
 
 @app.post("/api/receipts/gmail/sync")

@@ -157,7 +157,7 @@ class RezzervLegacyScannerAdapter:
                 status="failed",
                 error=ScannerErrorV1(
                     code="NO_RECEIPT_DETECTED",
-                    message="De inhoud is door de Rezzerv legacy scanner niet als kassabon herkend.",
+                    message="De inhoud is door de Inhuis kassabonscanner niet als kassabon herkend.",
                     retryable=False,
                     provider_reference=result_id,
                 ),

@@ -40,7 +40,7 @@ def _require_platform_superuser(conn, raw_session_id: str | None):
     if not granted:
         raise HTTPException(
             status_code=403,
-            detail="Alleen de platform-supergebruiker heeft toegang tot het Rezzerv Beheercentrum",
+            detail="Alleen de platform-supergebruiker heeft toegang tot het Inhuis Beheercentrum",
         )
     return context
 
@@ -443,7 +443,7 @@ def create_superuser_router(engine: Engine) -> APIRouter:
                 actor_type="platform_superuser",
                 action="superuser.manage_center.opened",
                 object_type="superuser_manage_center",
-                reason="Superuser opende Rezzerv Beheercentrum",
+                reason="Superuser opende Inhuis Beheercentrum",
             )
         return None
 

@@ -159,7 +159,7 @@ def build_receipt_db_snapshot(include_deleted: bool = False, limit: int = 500) -
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "purpose": "Rezzerv kassabon database snapshot voor scrumteam-analyse na een PO-run.",
+        "purpose": "Inhuis kassabon database snapshot voor scrumteam-analyse na een PO-run.",
         "runtime_datastore": datastore_info,
         "summary": {
             "total_receipt_tables": total_receipt_tables,
