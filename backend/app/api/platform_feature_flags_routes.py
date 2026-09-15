@@ -8,6 +8,7 @@ from app.services.platform_feature_flag_service import (
     list_platform_feature_flags,
     list_home_action_flags,
     set_platform_feature_flag,
+    set_home_action_order,
     require_feature_category,
     require_home_action,
 )
@@ -28,8 +29,11 @@ class PlatformFeatureFlagUpdateRequest(BaseModel):
     enabled: bool
 
 
+class PlatformHomeActionOrderUpdateRequest(BaseModel):
+    keys: list[str]
+
+
 def _technical_flag_contract(item: dict) -> dict:
-    """Keep the pre-existing technical Feature Flags response shape stable."""
     return {
         "key": item["key"],
         "label": item["label"],
@@ -44,52 +48,26 @@ def _technical_flag_contract(item: dict) -> dict:
 
 @router.get("/api/platform/feature-flags")
 def get_platform_feature_flags() -> dict:
-    context = require_platform_permission_from_session(
-        PLATFORM_FEATURE_FLAGS_MANAGE_PERMISSION
-    )
+    context = require_platform_permission_from_session(PLATFORM_FEATURE_FLAGS_MANAGE_PERMISSION)
     with engine.connect() as conn:
-        items = [
-            _technical_flag_contract(item)
-            for item in list_platform_feature_flags(conn, category="technical")
-        ]
-    return {
-        "items": items,
-        "count": len(items),
-        "household_context_used": False,
-        "context_type": context.context_type,
-    }
+        items = [_technical_flag_contract(item) for item in list_platform_feature_flags(conn, category="technical")]
+    return {"items": items, "count": len(items), "household_context_used": False, "context_type": context.context_type}
 
 
 @router.put("/api/platform/feature-flags/{flag_key}")
-def update_platform_feature_flag(
-    flag_key: str,
-    payload: PlatformFeatureFlagUpdateRequest,
-) -> dict:
-    context = require_platform_permission_from_session(
-        PLATFORM_FEATURE_FLAGS_MANAGE_PERMISSION
-    )
+def update_platform_feature_flag(flag_key: str, payload: PlatformFeatureFlagUpdateRequest) -> dict:
+    context = require_platform_permission_from_session(PLATFORM_FEATURE_FLAGS_MANAGE_PERMISSION)
     try:
         require_feature_category(flag_key, "technical")
         with engine.begin() as conn:
-            item = _technical_flag_contract(set_platform_feature_flag(
-                conn,
-                flag_key,
-                enabled=payload.enabled,
-                updated_by=context.user_id,
-            ))
+            item = _technical_flag_contract(set_platform_feature_flag(conn, flag_key, enabled=payload.enabled, updated_by=context.user_id))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Onbekende platformfeatureflag") from exc
-
-    return {
-        "item": item,
-        "household_context_used": False,
-        "context_type": context.context_type,
-    }
+    return {"item": item, "household_context_used": False, "context_type": context.context_type}
 
 
 @router.get("/api/features")
 def get_feature_availability() -> dict:
-    """Authenticated product projection; no actor or management metadata."""
     resolve_current_server_session()
     with engine.connect() as conn:
         items = list_platform_feature_flags(conn, category="functional")
@@ -101,41 +79,24 @@ def get_functional_features() -> dict:
     context = require_platform_permission_from_session(FUNCTIONAL_FEATURES_MANAGE_PERMISSION)
     with engine.connect() as conn:
         items = list_platform_feature_flags(conn, category="functional")
-    return {
-        "items": items,
-        "count": len(items),
-        "household_context_used": False,
-        "context_type": context.context_type,
-    }
+    return {"items": items, "count": len(items), "household_context_used": False, "context_type": context.context_type}
 
 
 @router.put("/api/platform/functional-features/{flag_key}")
-def update_functional_feature(
-    flag_key: str,
-    payload: PlatformFeatureFlagUpdateRequest,
-) -> dict:
+def update_functional_feature(flag_key: str, payload: PlatformFeatureFlagUpdateRequest) -> dict:
     context = require_platform_permission_from_session(FUNCTIONAL_FEATURES_MANAGE_PERMISSION)
     try:
         require_feature_category(flag_key, "functional")
         with engine.begin() as conn:
-            item = set_platform_feature_flag(
-                conn,
-                flag_key,
-                enabled=payload.enabled,
-                updated_by=context.user_id,
-            )
+            item = set_platform_feature_flag(conn, flag_key, enabled=payload.enabled, updated_by=context.user_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Onbekende functionele feature") from exc
-    return {
-        "item": item,
-        "household_context_used": False,
-        "context_type": context.context_type,
-    }
+    return {"item": item, "household_context_used": False, "context_type": context.context_type}
 
 
 @router.get("/api/action-buttons")
 def get_action_button_availability() -> dict:
-    """Authenticated projection for the globally managed Startpagina actions."""
+    """Authenticated product projection for globally managed Startpagina actions."""
     resolve_current_server_session()
     with engine.connect() as conn:
         items = list_home_action_flags(conn)
@@ -145,6 +106,7 @@ def get_action_button_availability() -> dict:
                 "key": item["key"],
                 "home_tile_key": item.get("home_tile_key"),
                 "enabled": item["enabled"],
+                "sort_order": item["sort_order"],
             }
             for item in items
         ]
@@ -156,6 +118,19 @@ def get_action_buttons() -> dict:
     context = require_platform_permission_from_session(ACTION_BUTTONS_MANAGE_PERMISSION)
     with engine.connect() as conn:
         items = list_home_action_flags(conn)
+    return {"items": items, "count": len(items), "household_context_used": False, "context_type": context.context_type}
+
+
+# Keep this concrete route before /{flag_key}; otherwise "order" would be
+# interpreted as an action key by FastAPI.
+@router.put("/api/platform/action-buttons/order")
+def update_action_button_order(payload: PlatformHomeActionOrderUpdateRequest) -> dict:
+    context = require_platform_permission_from_session(ACTION_BUTTONS_MANAGE_PERMISSION)
+    try:
+        with engine.begin() as conn:
+            items = set_home_action_order(conn, payload.keys, updated_by=context.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
         "items": items,
         "count": len(items),
@@ -165,24 +140,12 @@ def get_action_buttons() -> dict:
 
 
 @router.put("/api/platform/action-buttons/{flag_key}")
-def update_action_button(
-    flag_key: str,
-    payload: PlatformFeatureFlagUpdateRequest,
-) -> dict:
+def update_action_button(flag_key: str, payload: PlatformFeatureFlagUpdateRequest) -> dict:
     context = require_platform_permission_from_session(ACTION_BUTTONS_MANAGE_PERMISSION)
     try:
         require_home_action(flag_key)
         with engine.begin() as conn:
-            item = set_platform_feature_flag(
-                conn,
-                flag_key,
-                enabled=payload.enabled,
-                updated_by=context.user_id,
-            )
+            item = set_platform_feature_flag(conn, flag_key, enabled=payload.enabled, updated_by=context.user_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Onbekende actie op de Startpagina") from exc
-    return {
-        "item": item,
-        "household_context_used": False,
-        "context_type": context.context_type,
-    }
+    return {"item": item, "household_context_used": False, "context_type": context.context_type}
