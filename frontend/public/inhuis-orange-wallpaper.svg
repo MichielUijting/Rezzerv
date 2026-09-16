@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1600" role="img" aria-label="Abstracte oranje achtergrond">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbf6f0"/>
+      <stop offset="0.52" stop-color="#f7eadf"/>
+      <stop offset="1" stop-color="#f2dfd0"/>
+    </linearGradient>
+    <filter id="blurLarge" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="38"/>
+    </filter>
+    <filter id="blurSoft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+
+  <rect width="900" height="1600" fill="url(#base)"/>
+
+  <g filter="url(#blurLarge)" opacity="0.72">
+    <ellipse cx="120" cy="210" rx="260" ry="205" fill="#E9A36C"/>
+    <ellipse cx="770" cy="340" rx="285" ry="230" fill="#F0B17A"/>
+    <ellipse cx="325" cy="690" rx="310" ry="240" fill="#D9824D" opacity="0.54"/>
+    <ellipse cx="790" cy="900" rx="250" ry="300" fill="#E79660" opacity="0.58"/>
+    <ellipse cx="95" cy="1170" rx="260" ry="270" fill="#F0B488" opacity="0.70"/>
+    <ellipse cx="560" cy="1420" rx="330" ry="250" fill="#CE7444" opacity="0.46"/>
+  </g>
+
+  <g filter="url(#blurSoft)" opacity="0.48">
+    <path d="M-80 490 C100 395 265 420 360 520 C430 594 385 720 250 742 C94 768 -33 650 -80 490 Z" fill="#E88F55"/>
+    <path d="M520 70 C692 18 895 90 970 225 C1008 294 933 390 820 382 C680 372 570 268 520 70 Z" fill="#F2B982"/>
+    <path d="M460 1010 C595 920 790 945 920 1050 C1000 1115 964 1255 845 1295 C690 1346 525 1218 460 1010 Z" fill="#DA7A45"/>
+  </g>
+
+  <g opacity="0.26" fill="#FFF8F1">
+    <ellipse cx="505" cy="385" rx="175" ry="130"/>
+    <ellipse cx="235" cy="960" rx="190" ry="145"/>
+    <ellipse cx="735" cy="1325" rx="170" ry="125"/>
+  </g>
+
+  <rect width="900" height="1600" fill="#FFFFFF" opacity="0.10"/>
+</svg>
