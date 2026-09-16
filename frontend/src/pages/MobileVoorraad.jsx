@@ -104,7 +104,7 @@ async function loadMobileInventory() {
   )
 }
 
-export default function MobileVoorraad() {
+export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const navigate = useNavigate()
   const [rows, setRows] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -131,10 +131,17 @@ export default function MobileVoorraad() {
     reload()
   }, [])
 
+  useEffect(() => {
+    if (locationTrackingEnabled) return
+    setLocationFilter('')
+    setSortKey((current) => current === 'location' ? 'name' : current)
+  }, [locationTrackingEnabled])
+
   const locationOptions = useMemo(() => {
+    if (!locationTrackingEnabled) return []
     return [...new Set(rows.map((row) => row.location).filter((value) => value && value !== 'Geen locatie'))]
       .sort((a, b) => a.localeCompare(b, 'nl'))
-  }, [rows])
+  }, [locationTrackingEnabled, rows])
 
   const articleGroupOptions = useMemo(() => {
     return [...new Set(rows.map((row) => row.articleGroup).filter(Boolean))]
@@ -144,26 +151,22 @@ export default function MobileVoorraad() {
   const filteredRows = useMemo(() => {
     const needle = normalizeText(query)
     const nextRows = rows.filter((row) => {
-      if (locationFilter && row.location !== locationFilter) return false
+      if (locationTrackingEnabled && locationFilter && row.location !== locationFilter) return false
       if (groupFilter && row.articleGroup !== groupFilter) return false
       if (!needle) return true
-      return [
-        row.householdName,
-        row.productName,
-        row.articleGroup,
-        row.location,
-        row.sublocation,
-      ].some((value) => normalizeText(value).includes(needle))
+      const searchableValues = [row.householdName, row.productName, row.articleGroup]
+      if (locationTrackingEnabled) searchableValues.push(row.location, row.sublocation)
+      return searchableValues.some((value) => normalizeText(value).includes(needle))
     })
 
     return nextRows.sort((a, b) => {
       if (sortKey === 'quantity') return b.quantity - a.quantity || a.householdName.localeCompare(b.householdName, 'nl')
-      if (sortKey === 'location') return a.location.localeCompare(b.location, 'nl') || a.householdName.localeCompare(b.householdName, 'nl')
+      if (locationTrackingEnabled && sortKey === 'location') return a.location.localeCompare(b.location, 'nl') || a.householdName.localeCompare(b.householdName, 'nl')
       return a.householdName.localeCompare(b.householdName, 'nl')
     })
-  }, [groupFilter, locationFilter, query, rows, sortKey])
+  }, [groupFilter, locationFilter, locationTrackingEnabled, query, rows, sortKey])
 
-  const hasActiveFilters = Boolean(query || locationFilter || groupFilter)
+  const hasActiveFilters = Boolean(query || groupFilter || (locationTrackingEnabled && locationFilter))
 
   function clearFilters() {
     setQuery('')
@@ -172,7 +175,11 @@ export default function MobileVoorraad() {
   }
 
   return (
-    <div className="rz-screen rz-mobile-inventory-screen" data-testid="mobile-inventory-page">
+    <div
+      className="rz-screen rz-mobile-inventory-screen"
+      data-testid="mobile-inventory-page"
+      data-location-tracking={locationTrackingEnabled ? 'enabled' : 'disabled'}
+    >
       <Header title="Voorraad" />
       <main className="rz-mobile-inventory-content">
         <section className="rz-mobile-inventory-toolbar" aria-label="Voorraad zoeken en filteren">
@@ -183,19 +190,21 @@ export default function MobileVoorraad() {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Zoek artikel, groep of locatie"
+              placeholder={locationTrackingEnabled ? 'Zoek artikel, groep of locatie' : 'Zoek artikel of groep'}
               autoComplete="off"
             />
           </label>
 
-          <div className="rz-mobile-inventory-filter-grid">
-            <label className="rz-mobile-inventory-field">
-              <span className="rz-mobile-inventory-label">Locatie</span>
-              <select className="rz-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
-                <option value="">Alle locaties</option>
-                {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-              </select>
-            </label>
+          <div className={`rz-mobile-inventory-filter-grid${locationTrackingEnabled ? '' : ' rz-mobile-inventory-filter-grid--single'}`}>
+            {locationTrackingEnabled ? (
+              <label className="rz-mobile-inventory-field" data-testid="mobile-inventory-location-filter">
+                <span className="rz-mobile-inventory-label">Locatie</span>
+                <select className="rz-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+                  <option value="">Alle locaties</option>
+                  {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>
+            ) : null}
             <label className="rz-mobile-inventory-field">
               <span className="rz-mobile-inventory-label">Artikelgroep</span>
               <select className="rz-input" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
@@ -211,7 +220,7 @@ export default function MobileVoorraad() {
               <select className="rz-input" value={sortKey} onChange={(event) => setSortKey(event.target.value)}>
                 <option value="name">Naam A–Z</option>
                 <option value="quantity">Aantal hoog–laag</option>
-                <option value="location">Locatie A–Z</option>
+                {locationTrackingEnabled ? <option value="location">Locatie A–Z</option> : null}
               </select>
             </label>
             {hasActiveFilters ? (
@@ -253,7 +262,11 @@ export default function MobileVoorraad() {
                     ) : null}
                     <div className="rz-mobile-inventory-card-meta">
                       <span>{row.articleGroup || 'Niet ingedeeld'}</span>
-                      <span>{row.sublocation ? `${row.location} / ${row.sublocation}` : row.location}</span>
+                      {locationTrackingEnabled ? (
+                        <span data-testid={`mobile-inventory-location-${row.detailId || row.id}`}>
+                          {row.sublocation ? `${row.location} / ${row.sublocation}` : row.location}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="rz-mobile-inventory-card-side">
