@@ -1,13 +1,14 @@
 /* =========================================
-   INHUIS HEADER COMPONENT v1.2
+   INHUIS HEADER COMPONENT v1.3
    Shared header with household context line
 ========================================= */
 
 .rz-header {
-  min-height: 56px; /* styleguide baseline */
+  min-height: 58px;
   width: 100%;
-  background: var(--color-brand-primary, var(--color-brand-green));
+  background: rgba(16, 72, 50, 0.98);
   position: relative;
+  z-index: 5;
 
   display: flex;
   align-items: center;
@@ -15,6 +16,7 @@
 
   padding: 6px var(--space-lg, var(--m-std));
   gap: 16px;
+  box-shadow: 0 5px 18px rgba(8, 41, 29, 0.18);
 }
 
 .rz-header-left {
@@ -32,12 +34,13 @@
 
 .rz-header-title {
   color: #FFFFFF;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 
 .rz-header-subtitle {
-  color: rgba(255, 255, 255, 0.94);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 13px;
   font-weight: 400;
   line-height: 1.15;
@@ -57,7 +60,7 @@
 }
 
 .rz-userbox {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.96);
   border-radius: var(--radius-sm, 4px);
   padding: 6px 16px;
   text-align: center;
@@ -83,10 +86,12 @@
 }
 
 .rz-header-logo img {
-  height: 48px !important;
+  display: block;
+  height: 50px !important;
   width: auto !important;
   object-fit: contain;
   background: transparent;
+  filter: none;
 }
 
 @media (max-width: 900px) {
@@ -100,15 +105,19 @@
   }
 
   .rz-header-logo img {
-    height: 44px !important;
+    height: 46px !important;
   }
 }
 
 @media (max-width: 720px) {
   .rz-header {
-    min-height: 60px;
-    padding: 6px 14px;
-    gap: 12px;
+    min-height: 66px;
+    padding: 7px 14px;
+    gap: 14px;
+    background: rgba(13, 69, 47, 0.97);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
   .rz-header-subtitle,
@@ -117,10 +126,14 @@
   }
 
   .rz-header-title {
-    font-size: 18px;
+    font-size: 19px;
+  }
+
+  .rz-header-logo {
+    min-width: 58px;
   }
 
   .rz-header-logo img {
-    height: 46px !important;
+    height: 52px !important;
   }
 }
