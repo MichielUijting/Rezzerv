@@ -1,23 +1,23 @@
 .rz-mobile-inventory-screen {
   min-height: 100vh;
-  background: #f2f7f3;
+  background: linear-gradient(180deg, #f5faf6 0%, #edf6ef 100%);
 }
 
 .rz-mobile-inventory-content {
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  padding: 14px 14px calc(24px + env(safe-area-inset-bottom));
+  padding: 16px 14px calc(28px + env(safe-area-inset-bottom));
 }
 
 .rz-mobile-inventory-toolbar {
   display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid #d9e4dc;
+  gap: 13px;
+  padding: 15px;
+  border: 2px solid #b4d2bd;
   border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfefc 100%);
+  box-shadow: 0 8px 22px rgba(21, 71, 52, 0.08);
 }
 
 .rz-mobile-inventory-field,
@@ -28,9 +28,10 @@
 }
 
 .rz-mobile-inventory-label {
-  color: #344054;
+  color: #244936;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .rz-mobile-inventory-search .rz-input,
@@ -38,12 +39,25 @@
   width: 100%;
   min-width: 0;
   font-size: 16px;
+  border-width: 2px;
+  border-color: #315b45;
+  background: #fff;
+}
+
+.rz-mobile-inventory-search .rz-input:focus,
+.rz-mobile-inventory-toolbar .rz-input:focus {
+  border-color: #0f5b32;
+  box-shadow: 0 0 0 3px rgba(15, 91, 50, 0.12);
 }
 
 .rz-mobile-inventory-filter-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
+}
+
+.rz-mobile-inventory-filter-grid--single {
+  grid-template-columns: 1fr;
 }
 
 .rz-mobile-inventory-toolbar-row {
@@ -59,30 +73,49 @@
 }
 
 .rz-mobile-inventory-summary {
-  padding: 12px 4px 8px;
-  color: #667085;
+  padding: 13px 4px 9px;
+  color: #476353;
   font-size: 14px;
+  font-weight: 600;
 }
 
 .rz-mobile-inventory-list {
   display: grid;
-  gap: 10px;
+  gap: 11px;
 }
 
 .rz-mobile-inventory-card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  min-height: 92px;
-  padding: 14px;
-  border: 1px solid #d9e4dc;
-  border-radius: 16px;
-  background: #fff;
+  min-height: 94px;
+  padding: 15px 14px 15px 18px;
+  overflow: hidden;
+  border: 2px solid #c5d9cb;
+  border-radius: 17px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfefc 100%);
   color: #111827;
   text-decoration: none;
-  box-shadow: 0 3px 12px rgba(16, 24, 40, 0.05);
+  box-shadow: 0 5px 15px rgba(21, 71, 52, 0.07);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.rz-mobile-inventory-card::before {
+  content: '';
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: #4f9f6c;
+}
+
+.rz-mobile-inventory-card:hover {
+  border-color: #8fbea0;
+  background: #f8fcf9;
+  box-shadow: 0 7px 18px rgba(21, 71, 52, 0.11);
 }
 
 .rz-mobile-inventory-card:focus-visible {
@@ -101,14 +134,14 @@
 .rz-mobile-inventory-card-main {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 5px;
 }
 
 .rz-mobile-inventory-card-title {
   overflow: hidden;
-  color: #1a1a1a;
+  color: #153c2b;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 750;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -116,7 +149,7 @@
 
 .rz-mobile-inventory-card-product {
   overflow: hidden;
-  color: #667085;
+  color: #5e7467;
   font-size: 14px;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -127,7 +160,7 @@
   display: flex;
   gap: 6px 10px;
   flex-wrap: wrap;
-  color: #667085;
+  color: #587063;
   font-size: 12px;
   line-height: 1.35;
 }
@@ -135,6 +168,12 @@
 .rz-mobile-inventory-card-meta span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.rz-mobile-inventory-card-meta span + span::before {
+  content: '•';
+  margin-right: 8px;
+  color: #7ea88d;
 }
 
 .rz-mobile-inventory-card-side {
@@ -147,21 +186,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 36px;
-  padding: 6px 10px;
+  min-width: 46px;
+  min-height: 38px;
+  padding: 6px 11px;
+  border: 2px solid #aed3b9;
   border-radius: 999px;
-  background: #eef8f1;
-  color: #154734;
+  background: #e8f6ec;
+  color: #0f5b32;
   font-size: 16px;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 750;
 }
 
 .rz-mobile-inventory-chevron {
-  color: #667085;
+  color: #2f6848;
   font-size: 30px;
-  font-weight: 300;
+  font-weight: 400;
   line-height: 1;
 }
 
@@ -170,23 +210,24 @@
   gap: 10px;
   margin-top: 8px;
   padding: 18px;
-  border: 1px solid #d9e4dc;
+  border: 2px solid #c5d9cb;
   border-radius: 16px;
   background: #fff;
   color: #475467;
 }
 
 .rz-mobile-inventory-state--error {
-  border-color: #f4c7c3;
+  border-color: #e8a8a2;
   color: #b42318;
 }
 
 .rz-mobile-inventory-actions {
   display: grid;
-  margin-top: 16px;
+  margin-top: 18px;
 }
 
-.rz-mobile-inventory-actions .rz-btn {
+.rz-mobile-inventory-actions .rz-button-primary,
+.rz-mobile-inventory-actions .rz-button-secondary {
   width: 100%;
   min-height: 48px;
 }
@@ -207,6 +248,6 @@
   }
 
   .rz-mobile-inventory-card {
-    padding: 13px 12px;
+    padding: 14px 12px 14px 16px;
   }
 }
