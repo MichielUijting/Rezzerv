@@ -1,9 +1,9 @@
 .rz-mobile-inventory-screen {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(14, 55, 39, 0.16) 0%, rgba(14, 55, 39, 0.30) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(239, 246, 235, 0.14) 100%),
     url('/inhuis-forest-background.svg') center top / cover no-repeat;
-  background-color: #264a37;
+  background-color: #c8d7bd;
 }
 
 .rz-mobile-inventory-content {
