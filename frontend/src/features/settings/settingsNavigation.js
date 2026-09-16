@@ -160,7 +160,7 @@ const SETTINGS_TILES = [
   {
     key: 'help-about',
     title: 'Hulp & Over',
-    description: 'Versie, ondersteuning en privacy',
+    description: 'Ondersteuning en privacy',
     to: '/instellingen/hulp-over',
     relevance: 'always',
     section: 'help',
