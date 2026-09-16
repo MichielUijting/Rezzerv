@@ -1,6 +1,5 @@
 import "./ui/tokens.css";
 import "./ui/base.css";
-import "./ui/typography.css";
 import "./ui/form-controls.css";
 import "./ui/components/button.css";
 import "./ui/components/card.css";
@@ -8,6 +7,7 @@ import "./ui/components/header.css";
 import "./ui/components/table.css";
 import "./styles.css";
 import "./features/articles/articleDetailMutationPolicy.css";
+import "./ui/typography.css";
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
