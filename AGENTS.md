@@ -7,11 +7,14 @@ Deze regels gelden voor de volledige repository.
 Lees vóór iedere wijziging minimaal:
 
 1. `docs/project/README.md`
-2. `docs/project/PRODUCT-VISION.md`
-3. `docs/project/FUNCTIONAL-OVERVIEW.md`
-4. `docs/project/ARCHITECTURE-AND-DATA.md`
-5. `docs/project/DEVELOPMENT-TEST-RELEASE.md`
-6. het specifieke contract en de bestaande implementatie van het geraakte domein.
+2. `docs/project/CHATGPT-CODEX-WORKRULES.md`
+3. `docs/project/PRODUCT-VISION.md`
+4. `docs/project/FUNCTIONAL-OVERVIEW.md`
+5. `docs/project/ARCHITECTURE-AND-DATA.md`
+6. `docs/project/DEVELOPMENT-TEST-RELEASE.md`
+7. het specifieke contract en de bestaande implementatie van het geraakte domein.
+
+`docs/project/CHATGPT-CODEX-WORKRULES.md` bevat de bindende PO-werkafspraken voor ChatGPT/Codex. Die afspraken regelen onder meer branch-/PR-werkwijze, PO-beslismomenten, versie-/CI-volgorde, lokale PO-scripts en verplichte opleverrapportage. Zij vervangen geen hardere functionele, security-, identity-, data- of architectuurcontracten.
 
 `docs/project/README.md` is uitsluitend de index van de projectdocumentatie. Het
 is geen autoriteit voor de actuele commit, releaseversie, branchstatus of
@@ -78,6 +81,11 @@ voordat je de conflicterende wijziging uitvoert.
   gebruiker expliciet anders opdraagt.
 - Maak geen branch of worktree wanneer de taak uitsluitend analyse, review of
   rapportage vraagt.
+- Controleer vóór een wijziging de actuele `main`, de bedoelde branch/PR en
+  relevante open PR's; oude chatcontext of een historische SHA is geen actuele
+  technische waarheid.
+- Meld relevante open branches/PR's met wijzigingen die nog niet in `main` zitten
+  wanneer zij de actuele taak, mergevolgorde of release kunnen beïnvloeden.
 
 ## 3. Gevaarlijke en muterende scripts
 
@@ -99,6 +107,13 @@ Een scriptnaam of documentatieclaim is geen voldoende bewijs dat het script
 read-only is. Inspecteer bij twijfel eerst de inhoud. Meld wat het script doet,
 welke mutaties mogelijk zijn en vraag expliciete toestemming voordat je het
 uitvoert.
+
+Voor scripts die de PO zelf lokaal moet uitvoeren gelden aanvullend de
+PO-werkafspraken uit `docs/project/CHATGPT-CODEX-WORKRULES.md`: voerbaar vanuit
+de repository-root, beginnen met `CLS`, opnieuw `CLS` vlak vóór relevante
+terugkoppeloutput, duidelijke gewone-taalmeldingen en geen onnodig handmatig
+verplaatsen/vervangen van bestanden door de PO. Leg geen persoonsgebonden
+absolute lokale paden vast in de publieke repository.
 
 ## 4. Harde domeincontracten
 
@@ -165,6 +180,10 @@ uitvoert.
 - Voeg geen schermspecifieke styleguide-afwijking toe zonder expliciete opdracht.
 - UI-afscherming vervangt nooit backendautorisatie.
 - Gebruik canonieke backend-ID’s; presentatievelden zijn geen structurele sleutels.
+- De gebruikerszichtbare productnaam is `Inhuis`. Bestaande interne technische
+  naamgeving `Rezzerv` mag blijven wanneer wijziging geen functionele waarde heeft
+  of onnodig regressierisico veroorzaakt; interne rebranding is een afzonderlijk
+  expliciet doel.
 
 ## 6. Backend en gevoelige bestanden
 
@@ -244,15 +263,34 @@ testartefacten in de werkmap achter.
 - Wijzig geen applicatiecode rechtstreeks op `main`.
 - Gebruik voor echte wijzigingen een aparte taakbranch of worktree, tenzij
   expliciet anders opgedragen.
-- Maak geen commit, branch, worktree, tag, push, PR, merge of release zonder
-  expliciete opdracht.
-- Voer geen release- of versieverhoging uit tenzij dit expliciet is gevraagd.
+- Een concrete PO-opdracht om een taak in GitHub uit te voeren geldt als
+  taakgebonden toestemming om de benodigde branch, commits/pushes en PR aan te
+  maken of bij te werken. Daarvoor is niet voor iedere tussenhandeling een aparte
+  bevestiging nodig, tenzij de PO de scope beperkt.
+- Alleen de PO is gemachtigd om een PR te mergen. ChatGPT/Codex mag een PR niet
+  zelf mergen, ook niet wanneer CI groen is of de PR Ready staat. ChatGPT/Codex
+  bereidt de merge voor en rapporteert de exacte kandidaat; de mergehandeling
+  blijft bij de PO.
+- Tag, release, deployment of productie-omschakeling vereist altijd een
+  afzonderlijke expliciete PO-GO.
 - `VERSION.txt` is de primaire releaseversie; afgeleide versiebestanden moeten
   synchroon blijven.
+- Bij runtime-/release-relevante wijzigingen mag ChatGPT/Codex binnen de
+  opgedragen taak de vereiste patchversie zelfstandig verhogen als onderdeel van
+  het gereedmaken van de definitieve kandidaat vóór Ready. Uitsluitend
+  documentatie-/analysewijzigingen krijgen geen bump wanneer de releasepolicy dat
+  niet vereist.
+- Houd een PR tijdens ontwikkeling standaard Draft. Maak hem pas Ready wanneer
+  code/scope definitief zijn, de vereiste versie is gezet en de toepasselijke
+  normale/preflightchecks groen zijn.
+- Start zware exact-candidate/Full Regression-gates zo veel mogelijk slechts één
+  keer op de definitieve SHA. Een SHA-wijziging na zo'n proof maakt de oude proof
+  ongeldig en vereist een nieuwe kandidaatcontrole.
 - Eén PR of release heeft één doel.
 - Geen merge of release bij rode of onduidelijke relevante regressie.
 - Technisch groen is niet hetzelfde als functionele PO-acceptatie.
-- Een formele merge vereist expliciete PO-GO en controle van de bedoelde head-SHA.
+- Een formele merge vereist controle van de bedoelde head-SHA en blijft een
+  PO-handeling.
 - Een formele release volgt de Scope Gate, QA/QC Gate en Packaging Gate uit
   `Rezzerv-Release-Gate_v1.10.md`.
 
@@ -262,9 +300,15 @@ Rapporteer na iedere taak:
 
 - exact welke bestanden zijn gewijzigd;
 - wat functioneel en technisch is veranderd;
+- branch, PR-nummer en actuele head-SHA;
+- applicatieversie of waarom geen versiebump van toepassing is;
 - welke tests en controles zijn uitgevoerd en hun resultaat;
 - welke relevante tests niet zijn uitgevoerd;
 - resterende risico’s, aannames en bekende beperkingen;
-- de uitkomst van `git status --short`.
+- relevante open branches/PR's met wijzigingen die nog niet in `main` zitten en
+  de actuele taak/mergevolgorde kunnen beïnvloeden;
+- de uitkomst van `git status --short` wanneer een lokale worktree beschikbaar is;
+  wanneer via een connector zonder lokale worktree wordt gewerkt, meld dat
+  expliciet en rapporteer in plaats daarvan branch-/commitstatus uit GitHub.
 
 Als niets is gewijzigd, meld dat expliciet.
