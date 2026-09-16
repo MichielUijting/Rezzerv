@@ -27,7 +27,7 @@ import SettingsMyAccountPage from '../../features/settings/SettingsMyAccountPage
 import SettingsHelpAboutPage from '../../features/settings/SettingsHelpAboutPage.jsx'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
 import { SETTINGS_ROOT_POLICY, getSettingsTile } from '../../features/settings/settingsNavigation.js'
-import Voorraad from '../../pages/Voorraad'
+import VoorraadResponsive from '../../pages/VoorraadResponsive.jsx'
 import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
 import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
 import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurchasePage.jsx'
@@ -166,7 +166,7 @@ const router = createBrowserRouter([
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/superuser', element: <ProtectedSuperuser><SuperuserControlPage /></ProtectedSuperuser> },
   { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
-  { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
+  { path: '/voorraad', element: <Protected><VoorraadResponsive /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
   { path: '/winkelen', element: <ProtectedPermission permission="shopping_list.view" message="Je rol mag Winkelen niet bekijken."><ShoppingPage /></ProtectedPermission> },
   { path: '/spaartegoeden', element: <Protected><LoyaltyStampsPage /></Protected> },

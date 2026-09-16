@@ -1,0 +1,212 @@
+.rz-mobile-inventory-screen {
+  min-height: 100vh;
+  background: #f2f7f3;
+}
+
+.rz-mobile-inventory-content {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 14px 14px calc(24px + env(safe-area-inset-bottom));
+}
+
+.rz-mobile-inventory-toolbar {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d9e4dc;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05);
+}
+
+.rz-mobile-inventory-field,
+.rz-mobile-inventory-sort {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rz-mobile-inventory-label {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rz-mobile-inventory-search .rz-input,
+.rz-mobile-inventory-toolbar .rz-input {
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+
+.rz-mobile-inventory-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.rz-mobile-inventory-toolbar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.rz-mobile-inventory-clear {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.rz-mobile-inventory-summary {
+  padding: 12px 4px 8px;
+  color: #667085;
+  font-size: 14px;
+}
+
+.rz-mobile-inventory-list {
+  display: grid;
+  gap: 10px;
+}
+
+.rz-mobile-inventory-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid #d9e4dc;
+  border-radius: 16px;
+  background: #fff;
+  color: #111827;
+  text-decoration: none;
+  box-shadow: 0 3px 12px rgba(16, 24, 40, 0.05);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rz-mobile-inventory-card:focus-visible {
+  outline: 3px solid rgba(46, 125, 77, 0.3);
+  outline-offset: 2px;
+}
+
+.rz-mobile-inventory-card:active {
+  transform: translateY(1px);
+}
+
+.rz-mobile-inventory-card--disabled {
+  opacity: 0.72;
+}
+
+.rz-mobile-inventory-card-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.rz-mobile-inventory-card-title {
+  overflow: hidden;
+  color: #1a1a1a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rz-mobile-inventory-card-product {
+  overflow: hidden;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rz-mobile-inventory-card-meta {
+  display: flex;
+  gap: 6px 10px;
+  flex-wrap: wrap;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.rz-mobile-inventory-card-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rz-mobile-inventory-card-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rz-mobile-inventory-quantity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef8f1;
+  color: #154734;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.rz-mobile-inventory-chevron {
+  color: #667085;
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.rz-mobile-inventory-state {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 18px;
+  border: 1px solid #d9e4dc;
+  border-radius: 16px;
+  background: #fff;
+  color: #475467;
+}
+
+.rz-mobile-inventory-state--error {
+  border-color: #f4c7c3;
+  color: #b42318;
+}
+
+.rz-mobile-inventory-actions {
+  display: grid;
+  margin-top: 16px;
+}
+
+.rz-mobile-inventory-actions .rz-btn {
+  width: 100%;
+  min-height: 48px;
+}
+
+@media (max-width: 520px) {
+  .rz-mobile-inventory-content {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .rz-mobile-inventory-filter-grid,
+  .rz-mobile-inventory-toolbar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .rz-mobile-inventory-clear {
+    width: 100%;
+  }
+
+  .rz-mobile-inventory-card {
+    padding: 13px 12px;
+  }
+}
