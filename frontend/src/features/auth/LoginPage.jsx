@@ -1,13 +1,13 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Input from '../../ui/Input.jsx'
 import Button from '../../ui/Button.jsx'
 import { apiPost } from '../../lib/apiClient.js'
-import { useState } from 'react'
 import { fetchAuthContext, getLoginMessage } from '../../lib/authSession.js'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { formatInhuisVersionLabel, getRezzervVersionTag } from '../../ui/version.js'
 
 export default function LoginPage({ onLoggedIn }) {
   const [email, setEmail] = useState('')
@@ -16,8 +16,15 @@ export default function LoginPage({ onLoggedIn }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [loginMessage] = useState(() => getLoginMessage())
+  const [version, setVersion] = useState(getRezzervVersionTag())
 
   useDismissOnComponentClick([() => setError('')], Boolean(error))
+
+  useEffect(() => {
+    const refreshVersion = () => setVersion(getRezzervVersionTag())
+    window.addEventListener('rezzerv-version-ready', refreshVersion)
+    return () => window.removeEventListener('rezzerv-version-ready', refreshVersion)
+  }, [])
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -89,6 +96,7 @@ export default function LoginPage({ onLoggedIn }) {
           </Card>
         </div>
       </div>
+      <div className="rz-buildtag" aria-hidden="true" data-testid="build-tag">{formatInhuisVersionLabel(version)}</div>
     </div>
   )
 }
