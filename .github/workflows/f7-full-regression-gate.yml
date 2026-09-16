@@ -38,6 +38,7 @@ jobs:
       CANDIDATE_REF: ${{ inputs.candidate_ref || github.head_ref }}
       CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
       BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
       GATE_CONFIG: quality/ci/f7_full_regression_gate.json
       TRIGGER_POLICY: quality/ci/f7_full_regression_trigger_policy.json
       TRIGGER_EVENT: ${{ github.event_name }}
@@ -84,6 +85,17 @@ jobs:
           python -m py_compile scripts/ci/validate_release_preflight.py
           python scripts/ci/validate_release_preflight.py --base-sha "$BASE_SHA" | tee f7-version-preflight.log
           grep -Fx 'F7_VERSION_PREFLIGHT_GREEN' f7-version-preflight.log
+
+      - name: Fail fast on UI styleguide governance
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$BASE_SHA"
+          python -m py_compile scripts/ci/validate_ui_styleguide.py
+          python scripts/ci/validate_ui_styleguide.py --event pull_request --base-sha "$BASE_SHA" | tee f7-ui-styleguide-preflight.log
+          grep -Fx 'UI_STYLEGUIDE_DOCUMENT_GREEN' f7-ui-styleguide-preflight.log
+          grep -Fx 'UI_STYLEGUIDE_CHANGE_POLICY_GREEN' f7-ui-styleguide-preflight.log
 
       - name: Compile and validate Full Regression contract and trigger policy
         shell: bash
@@ -149,6 +161,7 @@ jobs:
             quality/ci/f7_full_regression_trigger_policy.json
             quality/ci/f7_ci_orchestration_gate_map.json
             f7-version-preflight.log
+            f7-ui-styleguide-preflight.log
             f7-full-config.log
             f7-trigger-policy.log
             f7-full-dispatch.log

@@ -15,6 +15,14 @@
 - [ ] Versiebump is vereist en vóór Ready uitgevoerd, of aantoonbaar niet vereist
 - [ ] `VERSION.txt` en alle afgeleide versiebestanden zijn synchroon
 
+## Styleguide
+- STYLEGUIDE_IMPACT: `<updated | reviewed-no-change | not-applicable>`
+- STYLEGUIDE_REASON: `<concrete toelichting>`
+- [ ] UI/styleguide-impact is bewust beoordeeld
+- [ ] Bij styling/tokens/shared-UI/Inhuis-visual-assets is `docs/project/UI-STYLEGUIDE-SUMMARY.md` in dezelfde PR bijgewerkt
+- [ ] Bij overige UI-wijzigingen zonder styleguidewijziging is `reviewed-no-change` gemotiveerd
+- [ ] `UI styleguide governance validation` is groen wanneer van toepassing
+
 ## Verplichte kandidaatcontrole
 - [ ] PR heeft één doel en bevat geen scope creep
 - [ ] PR is tijdens ontwikkeling Draft gebleven

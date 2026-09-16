@@ -14,7 +14,7 @@ Deze map is de leesbare ingang voor product, ontwikkeling, kwaliteit, release en
 5. [Ontwikkel-, test- en releaseproces](DEVELOPMENT-TEST-RELEASE.md)
 6. [Beveiliging en huishoudisolatie](SECURITY-AND-HOUSEHOLD-ISOLATION.md)
 7. [PO-test en acceptatie](PO-ACCEPTANCE.md)
-8. [UI-richtlijnen](UI-STYLEGUIDE-SUMMARY.md)
+8. [Canonieke Inhuis UI-styleguide](UI-STYLEGUIDE-SUMMARY.md)
 9. [Rollen- en accountmodel v2.0](../security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md) —
    PO-goedgekeurde functionele SSOT; v1.1 en de 190-check matrix blijven tot
    implementatiestap 9.1 de huidige runtime- en regressiebaseline.
