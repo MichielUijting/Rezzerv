@@ -1,12 +1,37 @@
 /* =========================================
    INHUIS TYPOGRAPHY
-   One typeface throughout the application.
+   One typeface and exactly two text sizes throughout the application.
 ========================================= */
 
 html,
 body,
 #root {
   font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body);
+}
+
+/*
+ * Normalise all user-visible text to the body size, including legacy screen
+ * rules and inline fontSize declarations. aria-hidden elements are decorative
+ * icons/symbols rather than text and keep their independent visual sizing.
+ */
+body *:not([aria-hidden="true"]) {
+  font-size: var(--font-size-ui-body) !important;
+}
+
+/* Titles and explicit main emphasis use the one larger text size. */
+body :is(
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  [class*="-title"],
+  [class*="-heading"],
+  [data-rz-text-size="title"]
+) {
+  font-size: var(--font-size-ui-title) !important;
 }
 
 button,
