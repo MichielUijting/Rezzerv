@@ -15,10 +15,11 @@ const headerCss = fs.readFileSync(path.join(frontendRoot, 'src/ui/components/hea
 const indexHtml = fs.readFileSync(path.join(frontendRoot, 'index.html'), 'utf8')
 const manifest = JSON.parse(fs.readFileSync(path.join(frontendRoot, 'public/manifest.webmanifest'), 'utf8'))
 
-assert.match(brandLogo, /data:image\/png;base64,/)
+assert.match(brandLogo, /\/inhuis-logo-white\.png/)
+assert.doesNotMatch(brandLogo, /data:image\/png;base64,/)
 assert.match(brandLogo, /alt="Inhuis"/)
 assert.doesNotMatch(brandLogo, /REZZERV_LOGO_WHITE/)
-assert.doesNotMatch(brandLogo, /\/inhuis-logo-white\.png/)
+assert.ok(fs.existsSync(path.join(frontendRoot, 'public/inhuis-logo-white.png')))
 assert.match(headerCss, /\.rz-header-logo img[\s\S]*height:\s*50px/)
 assert.match(headerCss, /background:\s*transparent/)
 assert.match(headerCss, /@media \(max-width: 720px\)[\s\S]*\.rz-header-subtitle,[\s\S]*\.rz-userbox-wrapper[\s\S]*display:\s*none/)
