@@ -1,0 +1,18 @@
+/* =========================================
+   INHUIS TYPOGRAPHY
+   One typeface throughout the application.
+========================================= */
+
+html,
+body,
+#root {
+  font-family: var(--font-family-base);
+}
+
+button,
+input,
+select,
+textarea,
+option {
+  font-family: inherit;
+}
