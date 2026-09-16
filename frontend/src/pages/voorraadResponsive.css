@@ -1,0 +1,17 @@
+.rz-inventory-presentation {
+  min-height: 100vh;
+}
+
+.rz-inventory-presentation--locationless .rz-stock-table col:nth-child(5),
+.rz-inventory-presentation--locationless .rz-stock-table col:nth-child(6),
+.rz-inventory-presentation--locationless .rz-stock-table th:nth-child(5),
+.rz-inventory-presentation--locationless .rz-stock-table th:nth-child(6),
+.rz-inventory-presentation--locationless .rz-stock-table td:nth-child(5),
+.rz-inventory-presentation--locationless .rz-stock-table td:nth-child(6) {
+  display: none;
+}
+
+.rz-inventory-presentation--locationless .rz-stock-table {
+  width: 604px !important;
+  min-width: 604px !important;
+}

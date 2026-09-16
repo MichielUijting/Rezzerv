@@ -18,7 +18,9 @@ const manifest = JSON.parse(fs.readFileSync(path.join(frontendRoot, 'public/mani
 assert.match(brandLogo, /\/inhuis-logo-white\.png/)
 assert.match(brandLogo, /alt="Inhuis"/)
 assert.doesNotMatch(brandLogo, /REZZERV_LOGO_WHITE/)
-assert.match(headerCss, /\.rz-header-logo img[\s\S]*height:\s*44px/)
+assert.match(headerCss, /\.rz-header-logo img[\s\S]*height:\s*48px/)
+assert.match(headerCss, /background:\s*transparent/)
+assert.match(headerCss, /@media \(max-width: 720px\)[\s\S]*\.rz-header-subtitle,[\s\S]*\.rz-userbox-wrapper[\s\S]*display:\s*none/)
 assert.match(indexHtml, /<title>Inhuis<\/title>/)
 assert.equal(manifest.name, 'Inhuis')
 assert.equal(manifest.short_name, 'Inhuis')
@@ -29,13 +31,20 @@ assert.ok(fs.existsSync(path.join(frontendRoot, 'public/inhuis-app-icon.png')))
 
 // User-visible branding guardrails. Technical REZZERV_* keys, events, storage keys,
 // provider/class names and test credentials may intentionally remain Rezzerv internally.
+const appSource = readFrontend('src/App.jsx')
 const loginPage = readFrontend('src/features/auth/LoginPage.jsx')
+const helpAboutPage = readFrontend('src/features/settings/SettingsHelpAboutPage.jsx')
 const kassaPage = readFrontend('src/features/receipts/KassaPage.jsx')
 const shareIcon = readFrontend('public/rezzerv-share-icon.svg')
 
 assert.doesNotMatch(loginPage, /admin@rezzerv\.local/)
 assert.doesNotMatch(loginPage, /Rezzerv123/)
 assert.match(loginPage, /placeholder="naam@voorbeeld\.nl"/)
+assert.match(loginPage, /data-testid="build-tag"/)
+assert.match(loginPage, /formatInhuisVersionLabel\(version\)/)
+assert.doesNotMatch(appSource, /data-testid="build-tag"/)
+assert.doesNotMatch(helpAboutPage, /help-about-version/)
+assert.doesNotMatch(helpAboutPage, /getRezzervVersionTag|formatInhuisVersionLabel/)
 assert.match(shareIcon, /aria-label="Inhuis"/)
 assert.doesNotMatch(kassaPage, /aria-label="[^"]*Rezzerv/)
 
