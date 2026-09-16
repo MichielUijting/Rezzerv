@@ -1,6 +1,5 @@
-
 /* =========================================
-   REZZERV DESIGN TOKENS v1.0
+   INHUIS DESIGN TOKENS v1.1
 ========================================= */
 
 :root {
@@ -14,6 +13,10 @@
   --color-text-inverse: #FFFFFF;
 
   --color-border-default: #CFE8D6;
+
+  /* ================= Typography ================= */
+
+  --font-family-base: Arial, sans-serif;
 
   /* ================= Radius ================= */
 

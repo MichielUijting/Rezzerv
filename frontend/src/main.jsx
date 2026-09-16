@@ -1,5 +1,6 @@
 import "./ui/tokens.css";
 import "./ui/base.css";
+import "./ui/typography.css";
 import "./ui/form-controls.css";
 import "./ui/components/button.css";
 import "./ui/components/card.css";

@@ -1,12 +1,12 @@
 /* =========================================
-   INHUIS HEADER COMPONENT v1.3
+   INHUIS HEADER COMPONENT v1.4
    Shared header with household context line
 ========================================= */
 
 .rz-header {
   min-height: 58px;
   width: 100%;
-  background: rgba(16, 72, 50, 0.98);
+  background: var(--color-brand-primary);
   position: relative;
   z-index: 5;
 
@@ -34,9 +34,8 @@
 
 .rz-header-title {
   color: #FFFFFF;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.15;
-  letter-spacing: -0.01em;
 }
 
 .rz-header-subtitle {
@@ -70,7 +69,7 @@
 
 .rz-userbox div {
   font-size: 14px;
-  font-weight: normal;
+  font-weight: 400;
   color: var(--color-text-primary, var(--color-text-default));
   white-space: nowrap;
   overflow: hidden;
@@ -111,13 +110,11 @@
 
 @media (max-width: 720px) {
   .rz-header {
-    min-height: 66px;
+    min-height: 64px;
     padding: 7px 14px;
     gap: 14px;
-    background: rgba(13, 69, 47, 0.97);
+    background: var(--color-brand-primary);
     border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
   }
 
   .rz-header-subtitle,
@@ -126,7 +123,7 @@
   }
 
   .rz-header-title {
-    font-size: 19px;
+    font-size: 18px;
   }
 
   .rz-header-logo {
@@ -134,6 +131,6 @@
   }
 
   .rz-header-logo img {
-    height: 52px !important;
+    height: 50px !important;
   }
 }
