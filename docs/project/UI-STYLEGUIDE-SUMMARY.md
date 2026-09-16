@@ -8,6 +8,14 @@
 - tekstkleur `#1A1A1A`;
 - inputs, filters en knoppen niet vet.
 
+## Typografie
+
+- gebruikerszichtbare tekst gebruikt overal Arial via het centrale typografietoken;
+- per applicatiescherm zijn exact twee tekstgroottes toegestaan: `14px` voor normale UI-tekst en `16px` voor titels en hoofdnadruk;
+- extra hiërarchie wordt gemaakt met gewicht, kleur en witruimte, niet met een derde tekstgrootte;
+- decoratieve iconen en symbolen zijn geen tekst en mogen voor hun visuele functie onafhankelijk worden geschaald;
+- schermspecifieke `font-size`-afwijkingen zijn niet leidend: de centrale typografielaag bepaalt de uiteindelijke tekstgrootte.
+
 ## Tabellen
 
 - zoek- en filterregel direct boven kolomtitels;

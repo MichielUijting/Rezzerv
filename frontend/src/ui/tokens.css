@@ -17,6 +17,8 @@
   /* ================= Typography ================= */
 
   --font-family-base: Arial, sans-serif;
+  --font-size-ui-body: 14px;
+  --font-size-ui-title: 16px;
 
   /* ================= Radius ================= */
 
