@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import {
   MOBILE_INVENTORY_MEDIA_QUERY,
   isMobileInventoryEligibleContext,
@@ -76,6 +76,8 @@ const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', imp
 const selectorSource = readFileSync(new URL('../src/pages/VoorraadResponsive.jsx', import.meta.url), 'utf8')
 const selectorCss = readFileSync(new URL('../src/pages/voorraadResponsive.css', import.meta.url), 'utf8')
 const mobileSource = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
+const mobileCss = readFileSync(new URL('../src/pages/mobileVoorraad.css', import.meta.url), 'utf8')
+const forestWallpaper = new URL('../public/inhuis-forest-background.svg', import.meta.url)
 
 assert.match(routerSource, /import VoorraadResponsive from '\.\.\/\.\.\/pages\/VoorraadResponsive\.jsx'/)
 assert.match(routerSource, /path: '\/voorraad'.*<VoorraadResponsive \/>/)
@@ -96,5 +98,12 @@ assert.match(mobileSource, /locationTrackingEnabled \? 'Zoek artikel, groep of l
 assert.match(mobileSource, /locationTrackingEnabled \? <option value="location">Locatie A–Z<\/option> : null/)
 assert.match(mobileSource, /\/api\/dev\/inventory-preview/)
 assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
+
+assert.equal(existsSync(forestWallpaper), true)
+assert.match(mobileCss, /\/inhuis-forest-background\.svg/)
+assert.match(mobileCss, /backdrop-filter:\s*blur\(/)
+assert.match(mobileCss, /data-location-tracking='disabled'[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/)
+assert.match(mobileCss, /rz-mobile-inventory-card-meta span:first-child[\s\S]*border-radius:\s*999px/)
+assert.match(mobileCss, /rz-mobile-inventory-actions[\s\S]*position:\s*sticky/)
 
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')
