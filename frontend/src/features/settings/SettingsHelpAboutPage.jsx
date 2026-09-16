@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
-import { formatInhuisVersionLabel, getRezzervVersionTag } from '../../ui/version.js'
 
 function InfoRow({ title, description, to, linkLabel, testId }) {
   return (
@@ -23,14 +21,6 @@ function InfoRow({ title, description, to, linkLabel, testId }) {
 }
 
 export default function SettingsHelpAboutPage() {
-  const [version, setVersion] = useState(getRezzervVersionTag())
-
-  useEffect(() => {
-    const refreshVersion = () => setVersion(getRezzervVersionTag())
-    window.addEventListener('rezzerv-version-ready', refreshVersion)
-    return () => window.removeEventListener('rezzerv-version-ready', refreshVersion)
-  }, [])
-
   return (
     <AppShell title="Instellingen" showExit={false}>
       <Card>
@@ -41,16 +31,6 @@ export default function SettingsHelpAboutPage() {
               <p style={{ margin: 0, color: '#667085' }}>Ondersteuning en informatie over Inhuis.</p>
             </div>
           </div>
-
-          <section style={{ display: 'grid', gap: '8px' }} aria-labelledby="help-about-version-title">
-            <div>
-              <h3 id="help-about-version-title" style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Over Inhuis</h3>
-              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>Actuele applicatieversie.</p>
-            </div>
-            <div data-testid="help-about-version" style={{ fontWeight: 600 }}>
-              {formatInhuisVersionLabel(version)}
-            </div>
-          </section>
 
           <InfoRow
             title="Hulp & contact"
