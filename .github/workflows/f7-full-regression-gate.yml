@@ -37,6 +37,7 @@ jobs:
     env:
       CANDIDATE_REF: ${{ inputs.candidate_ref || github.head_ref }}
       CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
       GATE_CONFIG: quality/ci/f7_full_regression_gate.json
       TRIGGER_POLICY: quality/ci/f7_full_regression_trigger_policy.json
       TRIGGER_EVENT: ${{ github.event_name }}
@@ -47,7 +48,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ env.CANDIDATE_SHA }}
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Prove permanent trigger event and exact candidate identity
         shell: bash
@@ -73,6 +74,16 @@ jobs:
           echo "F7_FULL_CANDIDATE_REF=$CANDIDATE_REF"
           echo "F7_FULL_CANDIDATE_SHA=$CANDIDATE_SHA"
           echo 'F7_FULL_CANDIDATE_IDENTITY_GREEN'
+
+      - name: Fail fast on release version preflight
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$BASE_SHA"
+          python -m py_compile scripts/ci/validate_release_preflight.py
+          python scripts/ci/validate_release_preflight.py --base-sha "$BASE_SHA" | tee f7-version-preflight.log
+          grep -Fx 'F7_VERSION_PREFLIGHT_GREEN' f7-version-preflight.log
 
       - name: Compile and validate Full Regression contract and trigger policy
         shell: bash
@@ -137,6 +148,7 @@ jobs:
             quality/ci/f7_full_regression_gate.json
             quality/ci/f7_full_regression_trigger_policy.json
             quality/ci/f7_ci_orchestration_gate_map.json
+            f7-version-preflight.log
             f7-full-config.log
             f7-trigger-policy.log
             f7-full-dispatch.log
