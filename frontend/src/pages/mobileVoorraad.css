@@ -186,8 +186,7 @@
   margin-top: 16px;
 }
 
-.rz-mobile-inventory-actions .rz-button-primary,
-.rz-mobile-inventory-actions .rz-button-secondary {
+.rz-mobile-inventory-actions .rz-btn {
   width: 100%;
   min-height: 48px;
 }
