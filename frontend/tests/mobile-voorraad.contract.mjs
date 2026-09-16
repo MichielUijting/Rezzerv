@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   MOBILE_INVENTORY_MEDIA_QUERY,
   isMobileInventoryEligibleContext,
@@ -70,5 +71,18 @@ assert.equal(MOBILE_INVENTORY_MEDIA_QUERY, '(max-width: 720px)')
 assert.equal(isMobileInventoryViewport({ matches: true }), true)
 assert.equal(isMobileInventoryViewport({ matches: false }), false)
 assert.equal(isMobileInventoryViewport(null), false)
+
+const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
+const selectorSource = readFileSync(new URL('../src/pages/VoorraadResponsive.jsx', import.meta.url), 'utf8')
+const mobileSource = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
+
+assert.match(routerSource, /import VoorraadResponsive from '\.\.\/\.\.\/pages\/VoorraadResponsive\.jsx'/)
+assert.match(routerSource, /path: '\/voorraad'.*<VoorraadResponsive \/>/)
+assert.match(selectorSource, /isMobileViewport && isMobileInventoryEligibleContext\(context\)/)
+assert.match(selectorSource, /return <Voorraad \/>/)
+assert.match(mobileSource, /data-testid="mobile-inventory-page"/)
+assert.match(mobileSource, /data-testid="mobile-inventory-add-incidental-purchase"/)
+assert.match(mobileSource, /\/api\/dev\/inventory-preview/)
+assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
 
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')
