@@ -1,5 +1,5 @@
 /* =========================================
-   INHUIS DESIGN TOKENS v1.1
+   INHUIS DESIGN TOKENS v1.2
 ========================================= */
 
 :root {
@@ -7,6 +7,8 @@
   /* ================= Colors ================= */
 
   --color-brand-primary: #1A3E2B;
+  --color-ui-primary: #00FA9A;
+  --color-ui-primary-text: #1A1A1A;
   --color-brand-light: #D9F5E0;
 
   --color-text-primary: #1A1A1A;

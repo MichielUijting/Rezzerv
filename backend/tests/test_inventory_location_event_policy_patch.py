@@ -64,8 +64,21 @@ def _fake_main_module():
             "kwargs": kwargs,
         }
 
+    def build_location_payload_from_inventory_row(inventory_row):
+        space_id = inventory_row.get("space_id")
+        sublocation_id = inventory_row.get("sublocation_id")
+        return {
+            "location_id": sublocation_id or space_id,
+            "space_id": space_id,
+            "sublocation_id": sublocation_id,
+            "location_label": inventory_row.get("location_label") or "",
+        }
+
     module.require_resolved_location = require_resolved_location
     module.create_inventory_event = create_inventory_event
+    module.build_location_payload_from_inventory_row = (
+        build_location_payload_from_inventory_row
+    )
     return module
 
 
@@ -123,6 +136,98 @@ def test_manual_inventory_event_allows_null_location_when_household_locations_ar
 
     assert result["resolved_location"] == _locationless_payload()
     assert policy_patch._processing_household_id.get() is None
+
+
+@pytest.mark.parametrize("event_type", ["consume", "manual_adjustment"])
+def test_existing_inventory_row_ignores_historical_location_when_household_is_locationless(
+    monkeypatch,
+    event_type,
+):
+    module = _fake_main_module()
+    resolver_calls = []
+
+    monkeypatch.setattr(
+        policy_patch,
+        "resolve_household_product_configuration",
+        lambda conn, household_id: SimpleNamespace(location_tracking_level="none"),
+    )
+
+    def strict_locationless_resolver(conn, household_id, **kwargs):
+        resolver_calls.append(dict(kwargs))
+        if kwargs.get("space_id") or kwargs.get("sublocation_id"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Dit huishouden gebruikt voorraad zonder locatie; "
+                    "space_id en sublocation_id zijn niet toegestaan"
+                ),
+            )
+        return _locationless_payload()
+
+    monkeypatch.setattr(
+        policy_patch,
+        "resolve_inventory_location",
+        strict_locationless_resolver,
+    )
+    policy_patch.install_inventory_location_event_policy_patch(module)
+
+    persisted_location = module.build_location_payload_from_inventory_row(
+        {
+            "space_id": "historical-space",
+            "sublocation_id": None,
+            "location_label": "Oude locatie",
+        }
+    )
+    result = module.create_inventory_event(
+        object(),
+        household_id="household-none",
+        resolved_location=persisted_location,
+        event_type=event_type,
+        source="manual_inventory_api",
+        quantity=-1 if event_type == "consume" else 1,
+    )
+
+    assert result["resolved_location"] == _locationless_payload()
+    assert resolver_calls == [{}]
+    assert policy_patch._processing_household_id.get() is None
+
+
+def test_locationless_household_still_rejects_new_explicit_location_input(monkeypatch):
+    module = _fake_main_module()
+
+    def reject_explicit_location(conn, household_id, **kwargs):
+        if kwargs.get("space_id") or kwargs.get("sublocation_id"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Dit huishouden gebruikt voorraad zonder locatie; "
+                    "space_id en sublocation_id zijn niet toegestaan"
+                ),
+            )
+        return _locationless_payload()
+
+    monkeypatch.setattr(
+        policy_patch,
+        "resolve_inventory_location",
+        reject_explicit_location,
+    )
+    policy_patch.install_inventory_location_event_policy_patch(module)
+
+    with pytest.raises(HTTPException) as exc_info:
+        module.create_inventory_event(
+            object(),
+            household_id="household-none",
+            resolved_location=_location_payload(),
+            event_type="consume",
+            source="manual_inventory_api",
+            quantity=-1,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == (
+        "Dit huishouden gebruikt voorraad zonder locatie; "
+        "space_id en sublocation_id zijn niet toegestaan"
+    )
 
 
 def test_manual_inventory_event_keeps_locations_required_when_policy_requires_them(monkeypatch):

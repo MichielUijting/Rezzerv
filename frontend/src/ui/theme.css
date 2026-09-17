@@ -1,0 +1,58 @@
+/* Inhuis primary UI surface theme.
+   Keep dark brand ink for text/icons on light surfaces; use mint for the
+   dominant interactive surfaces and dark foregrounds on that mint. */
+
+:root {
+  /* Bridge the legacy login/action token to the canonical Inhuis UI token. */
+  --rz-accent: var(--color-ui-primary);
+}
+
+.rz-header {
+  background: var(--color-ui-primary);
+}
+
+.rz-header .rz-header-title,
+.rz-header .rz-header-subtitle {
+  color: var(--color-ui-primary-text);
+}
+
+.rz-header .rz-header-logo img {
+  filter: brightness(0) saturate(100%);
+}
+
+button.rz-button-primary,
+a.rz-button-primary[role="button"],
+button.rz-button-secondary,
+a.rz-button-secondary[role="button"] {
+  background: var(--color-ui-primary);
+  color: var(--color-ui-primary-text);
+}
+
+.rz-table thead tr.rz-table-header th,
+.rz-table thead tr:first-child th {
+  background: var(--color-ui-primary);
+  color: var(--color-ui-primary-text);
+}
+
+.rz-table-header .rz-sort-button,
+.rz-table-header .rz-sort-button span:first-child {
+  color: var(--color-ui-primary-text);
+}
+
+.rz-column-resize-handle:hover,
+.rz-table--resizable-columns thead tr:first-child th:hover::after {
+  background: rgba(26, 26, 26, 0.18);
+}
+
+.rz-mobile-inventory-screen .rz-mobile-inventory-summary,
+.rz-mobile-article-screen .rz-mobile-article-action-row--primary {
+  background: var(--color-ui-primary);
+  color: var(--color-ui-primary-text);
+}
+
+@media (max-width: 720px) {
+  .rz-header {
+    background: var(--color-ui-primary);
+    border-bottom-color: rgba(26, 26, 26, 0.18);
+  }
+}
