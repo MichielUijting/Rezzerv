@@ -53,6 +53,19 @@ Deze regels vullen `AGENTS.md` en `docs/project/DEVELOPMENT-TEST-RELEASE.md` aan
 25. Security, huishoudisolatie, autorisatie, artikelidentiteit, database-authority en andere harde domeincontracten uit `AGENTS.md` blijven altijd van kracht. Secrets, persoonsgegevens, credentials, productiedata en lokale gevoelige informatie worden nooit naar de publieke repository gepusht.
 26. De gebruikerszichtbare productnaam is **Inhuis**. Bestaande interne technische naamgeving `Rezzerv` mag blijven bestaan wanneer wijzigen daarvan geen functionele waarde heeft of onnodig regressierisico veroorzaakt. Rebranding van interne identifiers gebeurt alleen als afzonderlijk expliciet doel.
 
+## 7. ChatGPT-doorlooptijd, toolgebruik en CI-monitoring
+
+27. ChatGPT/Codex werkt in **duurzame controlepunten**. Na een logisch afgerond mutatieblok — bijvoorbeeld branch aangemaakt, code gecommit/pusht of Draft-PR geopend — wordt de duurzame GitHub-status vastgelegd en aan de PO teruggekoppeld voordat een nieuwe lange controlefase begint.
+28. Een ChatGPT-beurt wordt niet gevuld met doorlopend pollen van GitHub Actions. Per logisch controlepunt wordt normaal één actuele CI-snapshot opgehaald. Dezelfde workflow- of statusbron wordt binnen dezelfde beurt niet herhaald bevraagd tenzij nieuwe informatie of een concrete fout dat noodzakelijk maakt.
+29. Als verdere voortgang uitsluitend afhangt van een extern proces dat nog `queued` of `in_progress` is, stopt ChatGPT/Codex met aanvullende status-toolcalls en rapporteert de actuele stand. Een nieuwe statuscontrole gebeurt bij een volgende PO-vraag of wanneer een latere taakstap aantoonbaar een verse status vereist.
+30. CI-controle is **gericht**: controleer eerst de kandidaat-SHA en de voor de taak relevante gates. Vermijd het herhaald volledig ophalen van tientallen niet-relevante workflows wanneer één gerichte gate of job voldoende antwoord geeft.
+31. Bij een mislukte workflow wordt eerst de mislukte job/stap en de directe afhankelijkheid onderzocht. Er volgt niet automatisch een nieuwe brede scan van alle workflows zolang die geen besluit kan veranderen.
+32. Lange technische werkzaamheden krijgen zichtbare tussenrapportage. Na enkele betekenisvolle toolacties of een duurzaam controlepunt meldt ChatGPT/Codex kort wat al vaststaat, wat nog loopt en of actie van de PO nodig is. De terugkoppeling mag niet onnodig worden uitgesteld tot alle externe CI klaar is.
+33. Toolcalls worden alleen voortgezet wanneer de uitkomst een concrete vervolgbeslissing kan beïnvloeden. Als extra controles op dat moment geen nieuwe actie mogelijk maken, wordt de beurt afgesloten met de actuele status in plaats van verder synchroon te controleren.
+34. Een ChatGPT-time-out of afgebroken antwoord maakt reeds uitgevoerde GitHub-mutaties niet automatisch ongeldig. Bij hervatting controleert ChatGPT/Codex eerst branch, head-SHA en PR-status en gaat verder vanaf het laatste aantoonbaar duurzame controlepunt. Branches, commits, pushes of PR's worden nooit blind opnieuw aangemaakt.
+35. Een gebruikersinterventie tijdens lang werk heeft voorrang op verdere monitoring. ChatGPT/Codex beantwoordt of verwerkt de nieuwe instructie eerst en hervat alleen daarna de relevante technische stap; lopende externe CI hoeft daarvoor niet synchroon te worden afgewacht.
+36. Deze doorlooptijdregels veranderen geen kwaliteits- of mergegate. Verplichte checks mogen niet worden overgeslagen; alleen de **wijze en frequentie van statusopvraging** wordt begrensd om ChatGPT-time-outs en nutteloos toolgebruik te voorkomen.
+
 ## Verplichte afsluitcontrole per taak
 
 Vóór oplevering controleert ChatGPT/Codex ten minste:
@@ -65,4 +78,6 @@ Vóór oplevering controleert ChatGPT/Codex ten minste:
 - is een eerdere exact-candidate-proof nog geldig voor de huidige head-SHA;
 - zijn relevante open PR's/branches die nog niet in `main` zitten gemeld;
 - is duidelijk dat de mergehandeling bij de PO blijft en dat release/deployment een expliciete PO-GO vereist;
-- zijn er geen secrets, lokale persoonsgebonden paden of andere gevoelige gegevens toegevoegd.
+- zijn er geen secrets, lokale persoonsgebonden paden of andere gevoelige gegevens toegevoegd;
+- is CI-monitoring beëindigd zodra verdere voortgang alleen nog van externe wachttijd afhing, in plaats van binnen één ChatGPT-beurt te blijven pollen;
+- is na een eventuele time-out eerst de duurzame GitHub-status geverifieerd voordat werk is hervat.
