@@ -294,7 +294,10 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
           </section>
         ) : null}
 
-        <div className="rz-mobile-inventory-actions">
+        <div
+          className="rz-mobile-inventory-actions"
+          style={{ bottom: 'calc(var(--size-app-bar-mobile) + 10px + env(safe-area-inset-bottom))' }}
+        >
           <Button
             type="button"
             variant="primary"
