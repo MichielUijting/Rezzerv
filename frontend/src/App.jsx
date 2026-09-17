@@ -7,6 +7,14 @@ export default function App() {
     <AppFeedbackProvider>
       <AppRouter />
       <div
+        data-testid="app-feedback-bar-scroll-clearance"
+        aria-hidden="true"
+        style={{
+          height: 'calc(var(--size-app-bar-mobile) + env(safe-area-inset-bottom))',
+          pointerEvents: 'none',
+        }}
+      />
+      <div
         className="rz-app-feedback-bar-base"
         data-testid="app-feedback-bar-base"
         aria-hidden="true"
