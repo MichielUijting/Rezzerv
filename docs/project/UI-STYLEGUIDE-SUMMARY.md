@@ -42,7 +42,9 @@ Regels:
 ## Kleuren
 
 Centrale tokens:
-- `--color-brand-primary`: `#1A3E2B`
+- `--color-brand-primary`: `#1A3E2B` (donkere brand-ink voor tekst, iconen en focus op lichte surfaces)
+- `--color-ui-primary`: `#00FA9A` (primaire mintkleur voor dominante UI-surfaces)
+- `--color-ui-primary-text`: `#1A1A1A` (tekst/iconen op de mintkleur)
 - `--color-brand-light`: `#D9F5E0`
 - `--color-text-primary`: `#1A1A1A`
 - `--color-text-inverse`: `#FFFFFF`
@@ -50,10 +52,12 @@ Centrale tokens:
 - `--color-table-grid`: `#8FD19E`
 
 Gebruik:
-- donkergroen is de primaire Inhuis-merkkleur voor header, primaire acties, focus/accent en geselecteerde status;
+- mint `#00FA9A` is de primaire Inhuis-UI-kleur voor de header, primaire gekleurde acties en tabelheaders;
+- donkergroen `#1A3E2B` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
 - normale tekst gebruikt de primaire donkere tekstkleur;
-- tekst op donkergroen gebruikt wit;
+- tekst en iconen op mint gebruiken `--color-ui-primary-text`; wit is niet de standaardvoorgrond op mint;
 - lichte groentinten zijn ondersteunend en concurreren niet met de primaire actie;
+- de legacy-token `--rz-accent` wordt centraal gekoppeld aan `--color-ui-primary`, zodat oudere primaire acties dezelfde mintkleur gebruiken;
 - voeg geen nieuwe dominante merkkleur toe zonder expliciete PO-beslissing en styleguide-update;
 - fout-, waarschuwing- en succeskleuren mogen semantisch afwijken, maar worden niet als alternatieve merkkleur ingezet.
 
@@ -116,10 +120,10 @@ Voor een native mobiele shell geldt hetzelfde route-/stackmodel, maar zonder zic
 ## Header en branding
 
 - standaard headerhoogte: `56px`;
-- achtergrond: `--color-brand-primary`;
-- schermtitel links, in wit;
+- achtergrond: `--color-ui-primary` (`#00FA9A`);
+- schermtitel links gebruikt `--color-ui-primary-text`;
 - gebruikerszichtbaar merk is **Inhuis**;
-- het witte Inhuis-logo staat rechts en blijft volledig binnen de header;
+- het Inhuis-logo staat rechts, wordt donker weergegeven op de mintkleur en blijft volledig binnen de header;
 - titel en logo zijn verticaal gecentreerd;
 - interne technische naamgeving `Rezzerv` mag in code blijven maar wordt niet als gebruikersmerk getoond.
 
@@ -143,7 +147,7 @@ Deze achtergrond is een kernflowreferentie, geen verplicht decor voor ieder behe
 - op mobiel is een touchhoogte van minimaal ongeveer `44px` het uitgangspunt;
 - labels zijn duidelijk maar visueel ondergeschikt aan de inhoud;
 - filters worden logisch gegroepeerd en blijven leesbaar bij smalle schermen;
-- focus gebruikt de primaire merkkleur en mag niet alleen door kleurverschil onzichtbaar subtiel zijn.
+- focus gebruikt de donkere brand-ink en mag niet alleen door kleurverschil onzichtbaar subtiel zijn.
 
 ## Cards en lijstregels
 
@@ -166,7 +170,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 
 ## Knoppen en acties
 
-- primaire knop: donkergroen met witte tekst;
+- primaire knop: mint `#00FA9A` met donkere tekst/iconen;
 - knoptekst is `14px` en niet vet (`font-weight: 400`);
 - per scherm is bij voorkeur één dominante primaire actie;
 - secundaire acties krijgen minder visueel gewicht;
@@ -186,7 +190,8 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - Nederlandse decimaalnotatie wordt gebruikt waar van toepassing;
 - lege cellen zijn visueel ondergeschikt;
 - sortering is beschikbaar waar het tabelcontract dit voorschrijft;
-- actieve kolom gebruikt donkergroen;
+- tabelheaders gebruiken de primaire mintkleur met donkere tekst en donkere sorteer-/resize-indicatoren;
+- actieve kolom/focus op lichte surfaces gebruikt de donkere brand-ink;
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
 - hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen in plaats van schermspecifieke tabellen.
 
@@ -197,6 +202,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - klikbare iconen hebben een bruikbaar touch-/klikgebied, onafhankelijk van hun getekende formaat;
 - interactieve elementen hebben een zichtbare focusstatus;
 - kleur is nooit het enige signaal voor betekenis;
+- tekst en iconen op `#00FA9A` zijn donker voor voldoende contrast;
 - leesbaarheid en contrast gaan voor decoratieve transparantie.
 
 ## Centrale componenten

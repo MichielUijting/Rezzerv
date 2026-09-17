@@ -8,6 +8,7 @@ import "./ui/components/table.css";
 import "./styles.css";
 import "./features/articles/articleDetailMutationPolicy.css";
 import "./ui/typography.css";
+import "./ui/theme.css";
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'

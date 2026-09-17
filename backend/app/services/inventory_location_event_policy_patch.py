@@ -4,10 +4,20 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 
-from app.services.inventory_location_policy_service import resolve_inventory_location
+from app.services.household_product_configuration_service import (
+    resolve_household_product_configuration,
+)
+from app.services.inventory_location_policy_service import (
+    LOCATION_NONE,
+    resolve_inventory_location,
+)
 from app.services.purchase_import_location_policy_patch import (
     _processing_household_id,
 )
+
+
+class _PersistedInventoryLocation(dict):
+    """Trusted marker for a location copied from an existing inventory row."""
 
 
 def resolve_event_location_for_active_batch(
@@ -40,8 +50,30 @@ def _canonical_event_location(
     conn,
     household_id: str,
     resolved_location: dict[str, Any] | None,
+    *,
+    source: str | None = None,
+    event_type: str | None = None,
 ) -> dict[str, Any]:
     candidate = dict(resolved_location or {})
+    uses_persisted_row_location = isinstance(
+        resolved_location,
+        _PersistedInventoryLocation,
+    )
+    is_manual_existing_row_mutation = (
+        uses_persisted_row_location
+        and source == "manual_inventory_api"
+        and event_type in {"consume", "manual_adjustment"}
+    )
+
+    if is_manual_existing_row_mutation:
+        configuration = resolve_household_product_configuration(conn, household_id)
+        if configuration.location_tracking_level == LOCATION_NONE:
+            # The row may still contain a location from an older household setup.
+            # For an explicitly locationless household that persisted location is
+            # historical state, not new API input. Resolve the canonical NULL/NULL
+            # location without weakening validation of supplied locations.
+            return resolve_inventory_location(conn, household_id)
+
     return resolve_inventory_location(
         conn,
         household_id,
@@ -57,6 +89,11 @@ def install_inventory_location_event_policy_patch(main_module) -> None:
 
     legacy_require_resolved_location = main_module.require_resolved_location
     legacy_create_inventory_event = main_module.create_inventory_event
+    legacy_build_location_payload_from_inventory_row = getattr(
+        main_module,
+        "build_location_payload_from_inventory_row",
+        None,
+    )
 
     def require_resolved_location_with_household_policy(resolved_location):
         return resolve_event_location_for_active_batch(
@@ -76,6 +113,8 @@ def install_inventory_location_event_policy_patch(main_module) -> None:
                 conn,
                 str(household_id),
                 resolved_location,
+                source=kwargs.get("source"),
+                event_type=kwargs.get("event_type"),
             )
         except LookupError:
             # Legacy/test households without canonical product configuration keep
@@ -111,6 +150,16 @@ def install_inventory_location_event_policy_patch(main_module) -> None:
             )
         finally:
             _processing_household_id.reset(token)
+
+    if callable(legacy_build_location_payload_from_inventory_row):
+        def build_location_payload_from_inventory_row_with_origin(inventory_row):
+            return _PersistedInventoryLocation(
+                legacy_build_location_payload_from_inventory_row(inventory_row)
+            )
+
+        main_module.build_location_payload_from_inventory_row = (
+            build_location_payload_from_inventory_row_with_origin
+        )
 
     main_module.require_resolved_location = (
         require_resolved_location_with_household_policy
