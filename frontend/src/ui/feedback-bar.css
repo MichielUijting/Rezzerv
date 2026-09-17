@@ -1,0 +1,19 @@
+/* Permanent Inhuis bottom bar. App feedback is rendered above this base layer. */
+.rz-app-feedback-bar-base {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9998;
+  width: 100%;
+  height: var(--size-app-bar);
+  background: var(--color-ui-primary);
+  box-shadow: 0 -5px 18px rgba(8, 41, 29, 0.18);
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .rz-app-feedback-bar-base {
+    height: var(--size-app-bar-mobile);
+  }
+}
