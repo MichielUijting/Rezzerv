@@ -86,6 +86,7 @@ Regels:
 - nieuwe gedeelde componenten gebruiken waar mogelijk de centrale tokens;
 - willekeurige bijna-gelijke spacing- of radiuswaarden worden niet als nieuwe standaard toegevoegd;
 - op mobiel hebben veldachtige rijen links en rechts standaard ongeveer één teken (`1ch`) interne ademruimte; bestaande grotere padding van echte invoervelden blijft behouden;
+- de `1ch`-binnenmarge hoort bij de mobiele rijcomponent zelf en blijft dus gelden bij browserzoom of responsive emulatie, onafhankelijk van CSS-breakpoints;
 - als een bestaande afwijking wordt aangeraakt, wordt bewust gekozen: behouden als expliciete uitzondering of convergeren naar een centraal token.
 
 ## Schermopbouw
@@ -259,6 +260,7 @@ Vaste regels:
 - aparte snelle acties **Voorraad aanpassen** en **Afboeken** worden niet getoond;
 - de rij **Locatie** wordt alleen getoond wanneer **Waar Inhuis** actief is (`location_tracking_level != none`);
 - bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+` en `−` werken;
+- detail- en actierijen houden altijd de centrale `1ch`-binnenmarge aan, ook bij browserzoom of responsive emulatie;
 - het detailscherm heeft geen vaste algemene `Opslaan`-knop; een specifieke instelling wordt direct/expliciet opgeslagen vanuit zijn eigen interactie;
 - de gebruikerszichtbare term voor de shoppingmodule blijft **Winkelen**.
 
