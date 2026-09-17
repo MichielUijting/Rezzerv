@@ -1,7 +1,7 @@
 # Inhuis UI-styleguide
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
-Laatst inhoudelijk vastgesteld door de PO: 16 september 2026.
+Laatst inhoudelijk vastgesteld door de PO: 17 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
@@ -94,6 +94,24 @@ Voor mobiele kernschermen is de standaardvolgorde:
 4. één dominante primaire actie waar nodig.
 
 Alle onderdelen volgen één horizontale uitlijning en herhaalbare spacing. Een scherm introduceert geen eigen navigatie- of actiepatroon wanneer een bestaand centraal patroon beschikbaar is.
+
+## Mobiele navigatie
+
+Inhuis gebruikt op mobiel twee navigatieniveaus:
+- hoofdmodules worden rechtstreeks geopend vanuit de centrale hoofd-/tabnavigatie;
+- details en vervolgstappen liggen op een navigatiestack boven de module waaruit zij zijn geopend.
+
+Voor de huidige browserapp geldt:
+- de browsergeschiedenis blijft leidend voor terugnavigatie;
+- voeg geen schermspecifieke `navigate(-1)`, `history.back()` of hard gecodeerde "terug naar Voorraad"-actie toe zolang de webapp in de browser draait;
+- een detailroute wordt normaal via routing geopend, zodat de bestaande browserknoppen functioneel blijven;
+- terugkeren naar een lijst hoort de gebruikerscontext zo veel mogelijk te behouden, waaronder zoek-/filter-/sorteringscontext en scrollpositie wanneer die state door het scherm wordt beheerd.
+
+Voor een native mobiele shell geldt hetzelfde route-/stackmodel, maar zonder zichtbare browserbediening:
+- een terugpijl in de app, de iOS edge-swipe en Android systeem-back voeren semantisch dezelfde actie uit: één niveau van de huidige navigatiestack terug;
+- terug betekent terug naar de herkomstcontext en wordt niet hard gecodeerd naar een vaste hoofdmodule;
+- een sprong naar een hoofdmodule is een directe modulewissel en geen terugactie;
+- snelle mutatieacties die geen nieuw scherm nodig hebben houden de gebruiker op het huidige detailscherm en tonen daar succes- of foutfeedback.
 
 ## Header en branding
 
@@ -208,6 +226,32 @@ Voor de mobiele kernflow **Voorraad → Bijna op → Winkelen → Kassa → Uitp
 - focus- en touchregels.
 
 Functionele verschillen tussen deze schermen mogen zichtbaar zijn, maar ze voelen als één applicatie en niet als losse modules.
+
+## Mobiel Voorraad-artikeldetail
+
+Het mobiele detailscherm van een voorraadartikel is een vereenvoudigde presentatie van bestaande Voorraad-functionaliteit en introduceert geen parallel domeinmodel.
+
+Vaste regels:
+- het scherm gebruikt hetzelfde huishoudartikel en dezelfde voorraad-/historie-/settings-API's als het bestaande desktop-detailscherm;
+- de actuele voorraad staat bovenaan met een directe `−`- en `+`-bediening;
+- `−` verlaagt de voorraad met één via de bestaande afboek-/inventory-eventlogica;
+- `+` verhoogt de voorraad met één via de bestaande handmatige voorraadcorrectie;
+- daarom zijn aparte snelle acties **Voorraad aanpassen** en **Afboeken** op dit mobiele scherm overbodig en worden zij niet getoond;
+- de rij **Locatie** wordt alleen getoond wanneer **Waar Inhuis** actief is (`location_tracking_level != none`); zonder Waar Inhuis vervalt Locatie volledig uit dit detailscherm;
+- bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+` en `−` werken;
+- het detailscherm heeft geen vaste algemene `Opslaan`-knop; een specifieke instelling wordt direct/expliciet opgeslagen vanuit zijn eigen interactie;
+- de gebruikerszichtbare term voor de shoppingmodule blijft **Winkelen**; gebruik niet de term "boodschappen" als alternatieve modulenaam.
+
+De sectie **Snelle acties** bevat precies de functionele acties:
+1. **Voorkeurswinkel** — toont/bewerkt de bestaande huishoudinstelling `favorite_store`;
+2. **Aankoophistorie** — toont uitsluitend aankoopgebeurtenissen van het huidige huishoudartikel;
+3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve lijst in **Winkelen**, opent geen extra detailscherm en laat de gebruiker op het voorraadartikel staan met directe feedback.
+
+Niet opnemen als nieuwe mobiele functionaliteit:
+- `Naar boodschappen`;
+- `Verbruik registreren`;
+- een los verwijder-/archiveerpatroon dat niet al functioneel is overeengekomen;
+- een generieke Opslaan-knop voor het gehele detailscherm.
 
 ## Wijzigings- en governance-regel
 
