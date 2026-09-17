@@ -5,6 +5,12 @@ Laatst inhoudelijk vastgesteld door de PO: 17 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
+De actuele mobiele visuele baseline wordt gevormd door twee door de PO beoordeelde schermtypen:
+- **Voorraad** als referentie voor mobiele lijst-, zoek- en filterschermen;
+- **Voorraad-artikeldetail** als referentie voor mobiele detail-, veld- en snelle-actieschermen.
+
+Nieuwe mobiele kernschermen sluiten aantoonbaar aan op deze twee referenties, tenzij de PO expliciet een afwijkend patroon vaststelt.
+
 Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
@@ -36,7 +42,8 @@ Regels:
 - knoptekst gebruikt normaal gewicht (`font-weight: 400`) en is niet vet;
 - titels/hoofdnadruk mogen semibold/bold zijn wanneer dat voor hiërarchie nodig is;
 - decoratieve iconen en symbolen zijn geen tekst en mogen onafhankelijk worden geschaald;
-- nieuwe UI-code introduceert geen derde gebruikerszichtbare tekstmaat.
+- nieuwe UI-code introduceert geen derde gebruikerszichtbare tekstmaat;
+- de twee mobiele referentieschermen worden beoordeeld op de **uiteindelijk gerenderde** typografie: centrale normalisatie naar `14px`/`16px` is leidend boven historische lokale CSS-declaraties met andere maten.
 
 ## Kleuren
 
@@ -93,12 +100,18 @@ Regels:
 
 Voor mobiele kernschermen is de standaardvolgorde:
 1. header;
-2. zoeken/filteren/context;
-3. hoofdinhoud in cards/lijst/tabel;
+2. zoeken/filteren/context of een compacte hero/contextcard;
+3. hoofdinhoud in cards/lijst/tabel of detailsecties;
 4. één dominante primaire actie waar nodig;
 5. permanente onderste meldingenbalk; tijdelijke feedback verschijnt in die balk.
 
 Alle onderdelen volgen één horizontale uitlijning en herhaalbare spacing. Een scherm introduceert geen eigen navigatie- of actiepatroon wanneer een bestaand centraal patroon beschikbaar is.
+
+Voor de twee mobiele referentieschermen geldt daarnaast:
+- de hoofdinhoud staat gecentreerd en wordt niet breder dan `720px`;
+- op smalle mobiele breedtes is circa `10px` horizontale buitenruimte de referentie; op ruimere mobiele breedtes circa `14px`;
+- opeenvolgende cards/lijstitems houden een rustig, herhaalbaar verticaal ritme van ongeveer `10–12px` aan;
+- de scherminhoud reserveert onderaan altijd voldoende scrollruimte voor de permanente meldingenbalk en eventuele safe-area.
 
 ## Mobiele navigatie
 
@@ -122,6 +135,8 @@ Voor een native mobiele shell geldt hetzelfde route-/stackmodel, maar zonder zic
 - standaard headerhoogte: `58px` op grotere schermen en `64px` op mobiel;
 - achtergrond: `--color-ui-primary` (`#008000`);
 - schermtitel en subtitel gebruiken wit (`--color-ui-primary-text`);
+- op mobiel staat de schermtitel links en het witte Inhuis-logo rechts;
+- secundaire headercontext zoals subtitel/userbox wordt op het compacte mobiele patroon niet tussen titel en logo gepropt;
 - gebruikerszichtbaar merk is **Inhuis**;
 - het witte Inhuis-logo staat rechts, is verticaal gecentreerd en blijft volledig binnen de header;
 - interne technische naamgeving `Rezzerv` mag in code blijven maar wordt niet als gebruikersmerk getoond.
@@ -133,10 +148,62 @@ De mobiele Voorraad-weergave is de visuele referentie voor de kernflow:
 - asset `/inhuis-green-wallpaper.svg`;
 - basisachtergrond `#EEF7F0`;
 - cards en filter-/zoekoppervlakken zijn wit of vrijwel wit en duidelijk leesbaar boven de achtergrond;
+- mobiele cards gebruiken een rustige lichte rand, royale afronding en een zachte groengetinte schaduw; zware zwarte schaduwen passen niet bij de referentie;
 - achtergronddecoratie concurreert nooit met tekst of bediening;
 - transparantie/blur mag ondersteunend worden gebruikt, maar leesbaarheid en contrast gaan voor.
 
 De eerdere oranje achtergrond is geen actuele visuele referentie meer.
+
+## Mobiele referentieschermen
+
+De huidige schermen **Voorraad** en **Voorraad-artikeldetail** zijn samen de concrete visuele baseline voor verdere mobiele kernschermen. Zij delen dezelfde shell maar gebruiken twee verschillende inhoudspatronen.
+
+### Referentie A — mobiele lijstweergave: Voorraad
+
+Gebruik dit patroon voor schermen waar de gebruiker zoekt, filtert en een item uit een verzameling kiest.
+
+Vaste kenmerken:
+- bovenaan staat na de header één witte zoek-/filtercard;
+- het zoekveld krijgt de meeste breedte en staat visueel als eerste ingang van de lijst;
+- zoek-, select- en filtervelden hebben minimaal circa `44px` touchhoogte; een prominent zoekveld mag circa `50px` hoog zijn;
+- een compacte status-/aantalbadge mag tussen filtercard en lijst staan, maar blijft visueel ondergeschikt aan de primaire actie;
+- lijstitems zijn witte afgeronde cards met één duidelijk klikdoel over de gehele card;
+- primaire itemnaam staat links als hoofdnadruk; artikelgroep/metadata staat daaronder in lichtere chip-/metadatavorm;
+- hoeveelheid/status staat rechts in een compacte pill en een chevron maakt navigatie herkenbaar;
+- een lijstitem heeft voldoende touchhoogte; de huidige Voorraadreferentie gebruikt ongeveer `80px` of meer;
+- lijstitems staan met ongeveer `10px` verticale tussenruimte onder elkaar;
+- één schermbrede primaire vervolgactie mag onder de lijst sticky zijn, maar moet volledig boven de permanente meldingenbalk kunnen komen en bereikbaar blijven door te scrollen.
+
+### Referentie B — mobiel detailscherm: Voorraad-artikeldetail
+
+Gebruik dit patroon voor een enkel object met actuele status, velden en gerichte vervolghandelingen.
+
+Vaste kenmerken:
+- de eerste card is een compacte hero/contextcard met objectnaam/status links en directe kernbediening rechts;
+- directe plus/min-bediening gebruikt minimaal `44 × 44px` touchdoelen;
+- aanvullende informatie staat in afzonderlijke witte sectiecards met duidelijke `16px` sectietitel;
+- veldachtige detailregels zijn tweekoloms: label links, waarde/status rechts;
+- detail- en actierijen hebben links en rechts minimaal `1ch` interne ademruimte;
+- snelle acties zijn als volledige rij klikbaar waar passend; de belangrijkste vervolgstap mag als volle groene rij/knop worden weergegeven;
+- waarden rechts mogen semibold zijn om scanbaarheid te verbeteren, zonder een derde tekstgrootte te introduceren;
+- cards volgen hetzelfde horizontale ritme, dezelfde lichte surfacefamilie en dezelfde achtergrond als de lijstweergave.
+
+### Gedeelde mobiele shell
+
+Voor beide referenties geldt:
+- `64px` groene header op mobiel;
+- `#008000` voor header, primaire actie en permanente meldingenbalk;
+- witte tekst/iconen op primaire groene surfaces;
+- lichtgroen gevlekte pagina-achtergrond;
+- witte of vrijwel witte contentcards;
+- uitsluitend `14px` bodytekst en `16px` titel/hoofdnadruk in de uiteindelijke rendering;
+- minimaal circa `44px` voor primaire touchdoelen;
+- permanente meldingenbalk van `64px` onderin;
+- document-/scrollinhoud reserveert minimaal de balkhoogte plus `env(safe-area-inset-bottom)` zodat de laatste inhoud of actie volledig boven de balk kan worden gebracht;
+- sticky acties gebruiken een bottom-offset boven de meldingenbalk en mogen niet achter de balk eindigen;
+- browserzoom of responsive emulatie mag deze basisafstand, `1ch`-veldmarges of bereikbaarheid van de onderste actie niet laten verdwijnen.
+
+Deze twee schermen zijn een **patroonreferentie**, geen opdracht om functionele inhoud letterlijk te kopiëren. Nieuwe modules gebruiken dezelfde visuele grammatica met hun eigen domeininhoud.
 
 ## Meldingen en feedback
 
@@ -149,7 +216,9 @@ Voor passieve applicatiemeldingen geldt één centraal patroon:
 - bij een melding verschijnt de feedbackinhoud op dezelfde balklaag;
 - de melding mag een compacte OK- of detailactie bevatten zolang de balkhoogte gelijk blijft;
 - technische details mogen op verzoek boven de balk worden uitgeklapt, maar de meldingenbalk zelf verandert niet van hoogte;
-- tijdelijke mobiele artikelfeedback volgt hetzelfde patroon.
+- tijdelijke mobiele artikelfeedback volgt hetzelfde patroon;
+- de permanente balk ligt visueel boven de pagina-inhoud, maar mag functioneel nooit de laatste content of actie onbereikbaar maken;
+- iedere mobiele scrollcontext reserveert daarom onderaan minimaal de balkhoogte plus eventuele safe-area; de scrollbar moet ver genoeg doorlopen om de laatste actie volledig boven de balk te brengen.
 
 Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een expliciete keuze moet bevestigen blijven dialogen; zij zijn geen passieve melding en worden niet in de onderste balk gepropt.
 
@@ -191,7 +260,8 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - secundaire acties krijgen minder visueel gewicht;
 - volledige-breedteknoppen zijn op mobiel passend wanneer één duidelijke vervolgstap centraal staat;
 - disabled-, hover-, active- en focusstatus zijn zichtbaar en consistent;
-- de primaire actie mag sticky onderaan staan als dit content en meldingenbalk niet blokkeert.
+- de primaire actie mag sticky onderaan staan als dit content en meldingenbalk niet blokkeert;
+- een sticky mobiele actie krijgt expliciet voldoende bottom-offset boven de permanente meldingenbalk en de scrollcontainer reserveert daarnaast voldoende eindruimte om de actie volledig zichtbaar en bereikbaar te maken.
 
 ## Tabellen
 
@@ -245,7 +315,7 @@ Voor de mobiele kernflow **Voorraad → Bijna op → Winkelen → Kassa → Uitp
 - zoek-/filtertaal;
 - card- en statuspatronen;
 - primaire-actielogica;
-- permanente onderste meldingenbalk;
+- permanente onderste meldingenbalk met verplichte scroll-clearance;
 - focus- en touchregels.
 
 Functionele verschillen tussen deze schermen mogen zichtbaar zijn, maar ze voelen als één applicatie en niet als losse modules.
