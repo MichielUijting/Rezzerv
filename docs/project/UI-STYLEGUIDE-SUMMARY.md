@@ -36,28 +36,27 @@ Regels:
 - knoptekst gebruikt normaal gewicht (`font-weight: 400`) en is niet vet;
 - titels/hoofdnadruk mogen semibold/bold zijn wanneer dat voor hiërarchie nodig is;
 - decoratieve iconen en symbolen zijn geen tekst en mogen onafhankelijk worden geschaald;
-- bestaande lokale `font-size`-waarden die door `frontend/src/ui/typography.css` naar 14/16 px worden genormaliseerd zijn geen precedent voor nieuwe code;
 - nieuwe UI-code introduceert geen derde gebruikerszichtbare tekstmaat.
 
 ## Kleuren
 
 Centrale tokens:
-- `--color-brand-primary`: `#1A3E2B` (donkere brand-ink voor tekst, iconen en focus op lichte surfaces)
-- `--color-ui-primary`: `#00FA9A` (primaire mintkleur voor dominante UI-surfaces)
-- `--color-ui-primary-text`: `#1A1A1A` (tekst/iconen op de mintkleur)
-- `--color-brand-light`: `#D9F5E0`
-- `--color-text-primary`: `#1A1A1A`
-- `--color-text-inverse`: `#FFFFFF`
-- `--color-border-default`: `#CFE8D6`
-- `--color-table-grid`: `#8FD19E`
+- `--color-brand-primary`: `#1A3E2B` — donkere brand-ink voor tekst, iconen en focus op lichte surfaces;
+- `--color-ui-primary`: `#008000` — primaire donkergroene UI-kleur voor dominante gekleurde surfaces;
+- `--color-ui-primary-text`: `#FFFFFF` — tekst en iconen op primaire groene surfaces;
+- `--color-brand-light`: `#D9F5E0`;
+- `--color-text-primary`: `#1A1A1A`;
+- `--color-text-inverse`: `#FFFFFF`;
+- `--color-border-default`: `#CFE8D6`;
+- `--color-table-grid`: `#8FD19E`.
 
 Gebruik:
-- mint `#00FA9A` is de primaire Inhuis-UI-kleur voor de header, primaire gekleurde acties en tabelheaders;
-- donkergroen `#1A3E2B` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
+- `#008000` is de primaire Inhuis-UI-kleur voor header, primaire gekleurde acties, tabelheaders en de meldingenbalk;
+- tekst en iconen op `#008000` zijn wit;
+- `#1A3E2B` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
 - normale tekst gebruikt de primaire donkere tekstkleur;
-- tekst en iconen op mint gebruiken `--color-ui-primary-text`; wit is niet de standaardvoorgrond op mint;
 - lichte groentinten zijn ondersteunend en concurreren niet met de primaire actie;
-- de legacy-token `--rz-accent` wordt centraal gekoppeld aan `--color-ui-primary`, zodat oudere primaire acties dezelfde mintkleur gebruiken;
+- de legacy-token `--rz-accent` wordt centraal gekoppeld aan `--color-ui-primary`;
 - voeg geen nieuwe dominante merkkleur toe zonder expliciete PO-beslissing en styleguide-update;
 - fout-, waarschuwing- en succeskleuren mogen semantisch afwijken, maar worden niet als alternatieve merkkleur ingezet.
 
@@ -69,6 +68,7 @@ Centrale spacingtokens:
 - `--space-md`: `16px`
 - `--space-lg`: `24px`
 - `--space-xl`: `32px`
+- `--space-mobile-field-inline`: `1ch`
 
 Centrale radiustokens:
 - `--radius-sm`: `4px`
@@ -85,17 +85,17 @@ Centrale elevationtokens:
 Regels:
 - nieuwe gedeelde componenten gebruiken waar mogelijk de centrale tokens;
 - willekeurige bijna-gelijke spacing- of radiuswaarden worden niet als nieuwe standaard toegevoegd;
-- bestaande schermspecifieke waarden worden niet automatisch als nieuwe token beschouwd;
+- op mobiel hebben veldachtige rijen links en rechts standaard ongeveer één teken (`1ch`) interne ademruimte; bestaande grotere padding van echte invoervelden blijft behouden;
 - als een bestaande afwijking wordt aangeraakt, wordt bewust gekozen: behouden als expliciete uitzondering of convergeren naar een centraal token.
 
 ## Schermopbouw
 
 Voor mobiele kernschermen is de standaardvolgorde:
-
 1. header;
 2. zoeken/filteren/context;
 3. hoofdinhoud in cards/lijst/tabel;
-4. één dominante primaire actie waar nodig.
+4. één dominante primaire actie waar nodig;
+5. tijdelijke feedback uitsluitend in de centrale onderste meldingenbalk.
 
 Alle onderdelen volgen één horizontale uitlijning en herhaalbare spacing. Een scherm introduceert geen eigen navigatie- of actiepatroon wanneer een bestaand centraal patroon beschikbaar is.
 
@@ -105,39 +105,50 @@ Inhuis gebruikt op mobiel twee navigatieniveaus:
 - hoofdmodules worden rechtstreeks geopend vanuit de centrale hoofd-/tabnavigatie;
 - details en vervolgstappen liggen op een navigatiestack boven de module waaruit zij zijn geopend.
 
-Voor de huidige browserapp geldt:
+Voor de browserapp geldt:
 - de browsergeschiedenis blijft leidend voor terugnavigatie;
-- voeg geen schermspecifieke `navigate(-1)`, `history.back()` of hard gecodeerde "terug naar Voorraad"-actie toe zolang de webapp in de browser draait;
-- een detailroute wordt normaal via routing geopend, zodat de bestaande browserknoppen functioneel blijven;
-- terugkeren naar een lijst hoort de gebruikerscontext zo veel mogelijk te behouden, waaronder zoek-/filter-/sorteringscontext en scrollpositie wanneer die state door het scherm wordt beheerd.
+- voeg geen schermspecifieke `navigate(-1)`, `history.back()` of hard gecodeerde terugactie toe zolang de webapp in de browser draait;
+- een detailroute wordt normaal via routing geopend;
+- terugkeren naar een lijst hoort zoek-/filter-/sorteringscontext en scrollpositie zo veel mogelijk te behouden.
 
 Voor een native mobiele shell geldt hetzelfde route-/stackmodel, maar zonder zichtbare browserbediening:
-- een terugpijl in de app, de iOS edge-swipe en Android systeem-back voeren semantisch dezelfde actie uit: één niveau van de huidige navigatiestack terug;
-- terug betekent terug naar de herkomstcontext en wordt niet hard gecodeerd naar een vaste hoofdmodule;
-- een sprong naar een hoofdmodule is een directe modulewissel en geen terugactie;
-- snelle mutatieacties die geen nieuw scherm nodig hebben houden de gebruiker op het huidige detailscherm en tonen daar succes- of foutfeedback.
+- terugpijl, iOS edge-swipe en Android systeem-back voeren semantisch dezelfde stap terug uit;
+- terug betekent terug naar de herkomstcontext en niet naar een hard gecodeerde hoofdmodule;
+- een sprong naar een hoofdmodule is een modulewissel en geen terugactie.
 
 ## Header en branding
 
-- standaard headerhoogte: `56px`;
-- achtergrond: `--color-ui-primary` (`#00FA9A`);
-- schermtitel links gebruikt `--color-ui-primary-text`;
+- standaard headerhoogte: `58px` op grotere schermen en `64px` op mobiel;
+- achtergrond: `--color-ui-primary` (`#008000`);
+- schermtitel en subtitel gebruiken wit (`--color-ui-primary-text`);
 - gebruikerszichtbaar merk is **Inhuis**;
-- het Inhuis-logo staat rechts, wordt donker weergegeven op de mintkleur en blijft volledig binnen de header;
-- titel en logo zijn verticaal gecentreerd;
+- het witte Inhuis-logo staat rechts, is verticaal gecentreerd en blijft volledig binnen de header;
 - interne technische naamgeving `Rezzerv` mag in code blijven maar wordt niet als gebruikersmerk getoond.
 
 ## Mobiele achtergrond en surfaces
 
-De huidige mobiele Voorraad-weergave is de visuele referentie voor de kernflow:
-- zachte, warme achtergrond;
-- asset `/inhuis-orange-wallpaper.svg`;
-- basisachtergrond `#f5e7db`;
+De mobiele Voorraad-weergave is de visuele referentie voor de kernflow:
+- lichtgroen, zacht gevlekt en laag in contrast;
+- asset `/inhuis-green-wallpaper.svg`;
+- basisachtergrond `#EEF7F0`;
 - cards en filter-/zoekoppervlakken zijn wit of vrijwel wit en duidelijk leesbaar boven de achtergrond;
-- achtergronddecoratie blijft laag in contrast en concurreert nooit met tekst of bediening;
+- achtergronddecoratie concurreert nooit met tekst of bediening;
 - transparantie/blur mag ondersteunend worden gebruikt, maar leesbaarheid en contrast gaan voor.
 
-Deze achtergrond is een kernflowreferentie, geen verplicht decor voor ieder beheer- of desktop-scherm.
+De eerdere oranje achtergrond is geen actuele visuele referentie meer.
+
+## Meldingen en feedback
+
+Voor passieve applicatiemeldingen geldt één centraal patroon:
+- succes-, fout-, waarschuwing-, informatie- en voortgangsmeldingen worden niet midden in het scherm geplaatst;
+- zij verschijnen in een vaste onderste balk over de volle schermbreedte;
+- de balk heeft dezelfde hoogte als de header: `58px` op grotere schermen en `64px` op mobiel;
+- achtergrond is `#008000` en tekst/iconen zijn wit;
+- de melding mag een compacte OK- of detailactie bevatten zolang de balkhoogte gelijk blijft;
+- technische details mogen op verzoek boven de balk worden uitgeklapt, maar de meldingenbalk zelf verandert niet van hoogte;
+- tijdelijke mobiele artikelfeedback volgt hetzelfde patroon.
+
+Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een expliciete keuze moet bevestigen blijven dialogen; zij zijn geen passieve melding en worden niet in de onderste balk gepropt.
 
 ## Zoeken, invoer en filters
 
@@ -145,6 +156,7 @@ Deze achtergrond is een kernflowreferentie, geen verplicht decor voor ieder behe
 - tekst is `14px`;
 - interactieve velden hebben voldoende hoogte en een duidelijk focusbeeld;
 - op mobiel is een touchhoogte van minimaal ongeveer `44px` het uitgangspunt;
+- veldachtige mobiele rijen houden links en rechts minimaal de centrale `1ch`-marge aan;
 - labels zijn duidelijk maar visueel ondergeschikt aan de inhoud;
 - filters worden logisch gegroepeerd en blijven leesbaar bij smalle schermen;
 - focus gebruikt de donkere brand-ink en mag niet alleen door kleurverschil onzichtbaar subtiel zijn.
@@ -166,17 +178,17 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - badges/chips gebruiken `14px`; zij ogen compacter door padding, achtergrond en gewicht, niet door kleinere tekst;
 - aantallen gebruiken eveneens `14px`;
 - pill-/chipvormen zijn ondersteunend en mogen niet sterker concurreren dan de primaire schermactie;
-- numerieke aantallen mogen tabular numerals gebruiken voor rust en uitlijning.
+- numerieke aantallen mogen tabular numerals gebruiken.
 
 ## Knoppen en acties
 
-- primaire knop: mint `#00FA9A` met donkere tekst/iconen;
+- primaire knop: `#008000` met witte tekst/iconen;
 - knoptekst is `14px` en niet vet (`font-weight: 400`);
 - per scherm is bij voorkeur één dominante primaire actie;
 - secundaire acties krijgen minder visueel gewicht;
 - volledige-breedteknoppen zijn op mobiel passend wanneer één duidelijke vervolgstap centraal staat;
 - disabled-, hover-, active- en focusstatus zijn zichtbaar en consistent;
-- de primaire actie mag sticky onderaan staan als dit de kernflow ondersteunt zonder content te blokkeren.
+- de primaire actie mag sticky onderaan staan als dit content en meldingenbalk niet blokkeert.
 
 ## Tabellen
 
@@ -188,21 +200,20 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - checkboxkolommen zijn gecentreerd;
 - titel, filter en cellen van één kolom gebruiken exact dezelfde uitlijning;
 - Nederlandse decimaalnotatie wordt gebruikt waar van toepassing;
-- lege cellen zijn visueel ondergeschikt;
 - sortering is beschikbaar waar het tabelcontract dit voorschrijft;
-- tabelheaders gebruiken de primaire mintkleur met donkere tekst en donkere sorteer-/resize-indicatoren;
+- tabelheaders gebruiken `#008000` met witte tekst en witte sorteer-/resize-indicatoren;
 - actieve kolom/focus op lichte surfaces gebruikt de donkere brand-ink;
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
-- hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen in plaats van schermspecifieke tabellen.
+- hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen.
 
 ## Iconen en toegankelijkheid
 
 - iconen zijn functioneel, eenvoudig en consistent;
-- iconen tellen niet mee als één van de twee tekstgroottes wanneer zij decoratief/semantisch als icoon zijn gemarkeerd;
-- klikbare iconen hebben een bruikbaar touch-/klikgebied, onafhankelijk van hun getekende formaat;
+- iconen tellen niet mee als één van de twee tekstgroottes wanneer zij als icoon zijn gemarkeerd;
+- klikbare iconen hebben een bruikbaar touch-/klikgebied;
 - interactieve elementen hebben een zichtbare focusstatus;
 - kleur is nooit het enige signaal voor betekenis;
-- tekst en iconen op `#00FA9A` zijn donker voor voldoende contrast;
+- tekst en iconen op `#008000` zijn wit voor voldoende contrast;
 - leesbaarheid en contrast gaan voor decoratieve transparantie.
 
 ## Centrale componenten
@@ -210,6 +221,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 Nieuwe schermen hergebruiken waar passend bestaande centrale componenten en patronen, waaronder:
 - `AppShell`;
 - header/branding;
+- `AppFeedbackProvider` voor passieve applicatiemeldingen;
 - `Card`;
 - `Button`;
 - inputs/search/selects;
@@ -225,10 +237,12 @@ Maak geen lokale variant van een bestaand component alleen om kleine visuele ver
 Voor de mobiele kernflow **Voorraad → Bijna op → Winkelen → Kassa → Uitpakken** gelden dezelfde:
 - typografie;
 - merk- en surfacekleuren;
-- spacinglogica;
+- lichtgroen gevlekte achtergrond waar de kernflow die achtergrond gebruikt;
+- spacinglogica en mobiele `1ch`-binnenmarge;
 - zoek-/filtertaal;
 - card- en statuspatronen;
 - primaire-actielogica;
+- onderste meldingenbalk;
 - focus- en touchregels.
 
 Functionele verschillen tussen deze schermen mogen zichtbaar zijn, maar ze voelen als één applicatie en niet als losse modules.
@@ -242,16 +256,16 @@ Vaste regels:
 - de actuele voorraad staat bovenaan met een directe `−`- en `+`-bediening;
 - `−` verlaagt de voorraad met één via de bestaande afboek-/inventory-eventlogica;
 - `+` verhoogt de voorraad met één via de bestaande handmatige voorraadcorrectie;
-- daarom zijn aparte snelle acties **Voorraad aanpassen** en **Afboeken** op dit mobiele scherm overbodig en worden zij niet getoond;
-- de rij **Locatie** wordt alleen getoond wanneer **Waar Inhuis** actief is (`location_tracking_level != none`); zonder Waar Inhuis vervalt Locatie volledig uit dit detailscherm;
+- aparte snelle acties **Voorraad aanpassen** en **Afboeken** worden niet getoond;
+- de rij **Locatie** wordt alleen getoond wanneer **Waar Inhuis** actief is (`location_tracking_level != none`);
 - bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+` en `−` werken;
 - het detailscherm heeft geen vaste algemene `Opslaan`-knop; een specifieke instelling wordt direct/expliciet opgeslagen vanuit zijn eigen interactie;
-- de gebruikerszichtbare term voor de shoppingmodule blijft **Winkelen**; gebruik niet de term "boodschappen" als alternatieve modulenaam.
+- de gebruikerszichtbare term voor de shoppingmodule blijft **Winkelen**.
 
-De sectie **Snelle acties** bevat precies de functionele acties:
+De sectie **Snelle acties** bevat precies:
 1. **Voorkeurswinkel** — toont/bewerkt de bestaande huishoudinstelling `favorite_store`;
 2. **Aankoophistorie** — toont uitsluitend aankoopgebeurtenissen van het huidige huishoudartikel;
-3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve lijst in **Winkelen**, opent geen extra detailscherm en laat de gebruiker op het voorraadartikel staan met directe feedback.
+3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve lijst in **Winkelen**, opent geen extra detailscherm en geeft feedback via de onderste meldingenbalk.
 
 Niet opnemen als nieuwe mobiele functionaliteit:
 - `Naar boodschappen`;
@@ -283,14 +297,12 @@ Een marker alleen mag een verplichte styleguide-update niet omzeilen.
 ### Overige UI-wijziging
 
 Een overige frontend UI-/schermwijziging moet óf de styleguide bijwerken, óf expliciet verklaren waarom de bestaande regels ongewijzigd blijven:
-
 - `STYLEGUIDE_IMPACT: reviewed-no-change`
 - `STYLEGUIDE_REASON: <concrete toelichting>`
 
 ### Niet-UI-wijziging
 
 Voor een wijziging zonder UI-impact mag worden gebruikt:
-
 - `STYLEGUIDE_IMPACT: not-applicable`
 
 De CI-gate `UI styleguide governance validation` controleert fail-closed:
@@ -302,4 +314,4 @@ De CI-gate `UI styleguide governance validation` controleert fail-closed:
 
 ## Historische styleguidedocumenten
 
-`docs/Rezzerv-Styleguide_v05.08.md` en `Rezzerv-Styleguide_v05.14.md` blijven behouden als audittrail van eerdere PO-besluiten. Hun actuele regels zijn hierboven geconsolideerd. Nieuwe wijzigingen worden niet als nieuwe losse styleguideversies toegevoegd tenzij de PO daar expliciet om vraagt; de canonieke bron wordt voortaan direct bijgewerkt.
+`docs/Rezzerv-Styleguide_v05.08.md` en `Rezzerv-Styleguide_v05.14.md` blijven behouden als audittrail van eerdere PO-besluiten. Hun actuele regels zijn hierboven geconsolideerd. Nieuwe wijzigingen worden niet als nieuwe losse styleguideversies toegevoegd tenzij de PO daar expliciet om vraagt; de canonieke bron wordt direct bijgewerkt.
