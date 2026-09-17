@@ -1,0 +1,54 @@
+name: UI styleguide governance validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-styleguide-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-ui-styleguide:
+    name: Validate canonical Inhuis styleguide
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compile and self-test styleguide policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/validate_ui_styleguide.py
+          python scripts/ci/validate_ui_styleguide.py --self-test | tee ui-styleguide-selftest.log
+          grep -Fx 'UI_STYLEGUIDE_POLICY_SELFTEST_GREEN' ui-styleguide-selftest.log
+
+      - name: Validate styleguide document and PR impact
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            test -n "$BASE_SHA"
+            python scripts/ci/validate_ui_styleguide.py \
+              --event pull_request \
+              --base-sha "$BASE_SHA" \
+              | tee ui-styleguide-validation.log
+          else
+            python scripts/ci/validate_ui_styleguide.py \
+              --event push \
+              | tee ui-styleguide-validation.log
+          fi
+          grep -Fx 'UI_STYLEGUIDE_DOCUMENT_GREEN' ui-styleguide-validation.log
+          grep -Fx 'UI_STYLEGUIDE_CHANGE_POLICY_GREEN' ui-styleguide-validation.log
