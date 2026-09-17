@@ -69,15 +69,7 @@ a.rz-button-secondary[role="button"] {
 
 /* Passive AppFeedback messages use one fixed bottom bar. Interactive prompts
    that contain fields or explicit primary/secondary actions remain dialogs. */
-[data-testid^="app-feedback-"][data-testid$="-overlay"]
-  :where(*) {
-  box-sizing: border-box;
-}
-
-[data-testid^="app-feedback-"][data-testid$="-overlay"]
-:not(:has([data-testid$="-primary-button"]))
-:not(:has([data-testid$="-secondary-button"]))
-:not(:has(.rz-input)) {
+:where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
   position: fixed !important;
   inset: auto 0 0 0 !important;
   z-index: 10000 !important;
@@ -88,10 +80,7 @@ a.rz-button-secondary[role="button"] {
   background: transparent !important;
 }
 
-[data-testid^="app-feedback-"][data-testid$="-overlay"]
-:not(:has([data-testid$="-primary-button"]))
-:not(:has([data-testid$="-secondary-button"]))
-:not(:has(.rz-input)) > [role="dialog"] {
+:where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) > [role="dialog"] {
   position: relative !important;
   width: 100% !important;
   height: var(--size-app-bar) !important;
@@ -114,10 +103,7 @@ a.rz-button-secondary[role="button"] {
   font-weight: 400 !important;
 }
 
-[data-testid^="app-feedback-"][data-testid$="-overlay"]
-:not(:has([data-testid$="-primary-button"]))
-:not(:has([data-testid$="-secondary-button"]))
-:not(:has(.rz-input)) > [role="dialog"] > div:first-child {
+:where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) > [role="dialog"] > div:first-child {
   min-width: 0;
   flex: 1 1 auto;
   display: flex !important;
@@ -126,10 +112,7 @@ a.rz-button-secondary[role="button"] {
   overflow: hidden;
 }
 
-[data-testid^="app-feedback-"][data-testid$="-overlay"]
-:not(:has([data-testid$="-primary-button"]))
-:not(:has([data-testid$="-secondary-button"]))
-:not(:has(.rz-input)) > [role="dialog"] > div:first-child > div {
+:where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) > [role="dialog"] > div:first-child > div {
   min-width: 0;
   color: var(--color-ui-primary-text) !important;
   font-size: var(--font-size-ui-body) !important;
@@ -139,14 +122,8 @@ a.rz-button-secondary[role="button"] {
   text-overflow: ellipsis;
 }
 
-[data-testid^="app-feedback-"][data-testid$="-overlay"]
-:not(:has([data-testid$="-primary-button"]))
-:not(:has([data-testid$="-secondary-button"]))
-:not(:has(.rz-input)) [data-testid="app-feedback-technical-toggle"],
-[data-testid^="app-feedback-"][data-testid$="-overlay"]
-:not(:has([data-testid$="-primary-button"]))
-:not(:has([data-testid$="-secondary-button"]))
-:not(:has(.rz-input)) [data-testid$="-ok-button"] {
+:where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) [data-testid="app-feedback-technical-toggle"],
+:where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) [data-testid$="-ok-button"] {
   min-height: 40px;
   padding: 7px 12px;
   border: 1px solid rgba(255, 255, 255, 0.88);
@@ -156,10 +133,7 @@ a.rz-button-secondary[role="button"] {
   white-space: nowrap;
 }
 
-[data-testid^="app-feedback-"][data-testid$="-overlay"]
-:not(:has([data-testid$="-primary-button"]))
-:not(:has([data-testid$="-secondary-button"]))
-:not(:has(.rz-input)) [data-testid="app-feedback-technical-details"] {
+:where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) [data-testid="app-feedback-technical-details"] {
   position: absolute;
   right: var(--space-md);
   bottom: calc(100% + 8px);
@@ -216,17 +190,11 @@ a.rz-button-secondary[role="button"] {
     padding-right: var(--space-mobile-field-inline);
   }
 
-  [data-testid^="app-feedback-"][data-testid$="-overlay"]
-  :not(:has([data-testid$="-primary-button"]))
-  :not(:has([data-testid$="-secondary-button"]))
-  :not(:has(.rz-input)) {
+  :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
     height: var(--size-app-bar-mobile) !important;
   }
 
-  [data-testid^="app-feedback-"][data-testid$="-overlay"]
-  :not(:has([data-testid$="-primary-button"]))
-  :not(:has([data-testid$="-secondary-button"]))
-  :not(:has(.rz-input)) > [role="dialog"] {
+  :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) > [role="dialog"] {
     height: var(--size-app-bar-mobile) !important;
     min-height: var(--size-app-bar-mobile) !important;
     max-height: var(--size-app-bar-mobile) !important;
@@ -234,10 +202,7 @@ a.rz-button-secondary[role="button"] {
     gap: 8px !important;
   }
 
-  [data-testid^="app-feedback-"][data-testid$="-overlay"]
-  :not(:has([data-testid$="-primary-button"]))
-  :not(:has([data-testid$="-secondary-button"]))
-  :not(:has(.rz-input)) > [role="dialog"] > div:first-child > div:nth-child(n+3) {
+  :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) > [role="dialog"] > div:first-child > div:nth-child(n+3) {
     display: none;
   }
 }
