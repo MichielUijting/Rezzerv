@@ -9,13 +9,28 @@ const readFrontend = (relativePath) => fs.readFileSync(path.join(frontendRoot, r
 
 const tokensCss = readFrontend('src/ui/tokens.css')
 const themeCss = readFrontend('src/ui/theme.css')
+const feedbackBarCss = readFrontend('src/ui/feedback-bar.css')
 const providerSource = readFrontend('src/ui/AppFeedbackProvider.jsx')
+const appSource = readFrontend('src/App.jsx')
 const mobileArticleSource = readFrontend('src/features/articles/MobileArticlePage.jsx')
 const mobileArticleCss = readFrontend('src/features/articles/mobileArticleDetail.css')
 
 assert.match(tokensCss, /--size-app-bar:\s*58px/)
 assert.match(tokensCss, /--size-app-bar-mobile:\s*64px/)
 assert.match(tokensCss, /--space-mobile-field-inline:\s*1ch/)
+
+assert.match(appSource, /import "\.\/ui\/feedback-bar\.css";/)
+assert.match(appSource, /className="rz-app-feedback-bar-base"/)
+assert.match(appSource, /data-testid="app-feedback-bar-base"/)
+assert.match(appSource, /aria-hidden="true"/)
+assert.match(
+  feedbackBarCss,
+  /\.rz-app-feedback-bar-base\s*\{[\s\S]*position:\s*fixed;[\s\S]*bottom:\s*0;[\s\S]*height:\s*var\(--size-app-bar\);[\s\S]*background:\s*var\(--color-ui-primary\);[\s\S]*pointer-events:\s*none;/,
+)
+assert.match(
+  feedbackBarCss,
+  /@media \(max-width: 720px\)[\s\S]*\.rz-app-feedback-bar-base[\s\S]*height:\s*var\(--size-app-bar-mobile\);/,
+)
 
 assert.match(
   themeCss,

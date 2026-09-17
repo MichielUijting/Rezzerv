@@ -96,7 +96,7 @@ Voor mobiele kernschermen is de standaardvolgorde:
 2. zoeken/filteren/context;
 3. hoofdinhoud in cards/lijst/tabel;
 4. één dominante primaire actie waar nodig;
-5. tijdelijke feedback uitsluitend in de centrale onderste meldingenbalk.
+5. permanente onderste meldingenbalk; tijdelijke feedback verschijnt in die balk.
 
 Alle onderdelen volgen één horizontale uitlijning en herhaalbare spacing. Een scherm introduceert geen eigen navigatie- of actiepatroon wanneer een bestaand centraal patroon beschikbaar is.
 
@@ -143,8 +143,10 @@ De eerdere oranje achtergrond is geen actuele visuele referentie meer.
 Voor passieve applicatiemeldingen geldt één centraal patroon:
 - succes-, fout-, waarschuwing-, informatie- en voortgangsmeldingen worden niet midden in het scherm geplaatst;
 - zij verschijnen in een vaste onderste balk over de volle schermbreedte;
+- de balk is permanent zichtbaar, ook wanneer er geen melding is; zonder melding blijft de balk leeg en toont hij geen placeholdertekst;
 - de balk heeft dezelfde hoogte als de header: `58px` op grotere schermen en `64px` op mobiel;
 - achtergrond is `#008000` en tekst/iconen zijn wit;
+- bij een melding verschijnt de feedbackinhoud op dezelfde balklaag;
 - de melding mag een compacte OK- of detailactie bevatten zolang de balkhoogte gelijk blijft;
 - technische details mogen op verzoek boven de balk worden uitgeklapt, maar de meldingenbalk zelf verandert niet van hoogte;
 - tijdelijke mobiele artikelfeedback volgt hetzelfde patroon.
@@ -243,7 +245,7 @@ Voor de mobiele kernflow **Voorraad → Bijna op → Winkelen → Kassa → Uitp
 - zoek-/filtertaal;
 - card- en statuspatronen;
 - primaire-actielogica;
-- onderste meldingenbalk;
+- permanente onderste meldingenbalk;
 - focus- en touchregels.
 
 Functionele verschillen tussen deze schermen mogen zichtbaar zijn, maar ze voelen als één applicatie en niet als losse modules.
