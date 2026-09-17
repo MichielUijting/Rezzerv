@@ -32,15 +32,21 @@ const liveRows = [
     sublocatie: 'Plank',
   },
   {
-    id: 'inventory-other',
+    id: 'inventory-same-name-other-id',
     household_article_id: 'article-2',
+    artikel: 'Broccoli',
+    aantal: 9,
+  },
+  {
+    id: 'inventory-other',
+    household_article_id: 'article-3',
     artikel: 'Kaas',
     aantal: 3,
   },
 ]
 
 const rows = buildMobileArticleInventoryRows(liveRows, 'article-1', 'Broccoli')
-assert.equal(rows.length, 2)
+assert.equal(rows.length, 2, 'stable household article id must exclude same-name rows with another id')
 assert.equal(rows[0].quantity, 2)
 assert.equal(formatMobileLocation(rows[0]), 'Keuken / Keukenkast')
 assert.equal(chooseMobileInventoryRow(rows, { default_sublocation_id: 'sublocation-shelf' })?.id, 'inventory-b')
@@ -48,6 +54,12 @@ assert.equal(chooseMobileInventoryRow(rows, { default_location_id: 'space-kitche
 assert.equal(isMobileArticleAlmostOut(2, 2), true)
 assert.equal(isMobileArticleAlmostOut(3, 2), false)
 assert.equal(isMobileArticleAlmostOut(0, null), false)
+
+const legacyRows = buildMobileArticleInventoryRows([
+  { id: 'legacy-broccoli', artikel: 'Broccoli', aantal: 1 },
+  { id: 'legacy-cheese', artikel: 'Kaas', aantal: 1 },
+], 'article::Broccoli', 'Broccoli')
+assert.deepEqual(legacyRows.map((row) => row.id), ['legacy-broccoli'])
 
 const settingsPayload = buildHouseholdSettingsPayload({
   min_stock: 2,

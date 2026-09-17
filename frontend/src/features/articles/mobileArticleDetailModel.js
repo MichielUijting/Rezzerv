@@ -14,7 +14,7 @@ export function buildMobileArticleInventoryRows(liveRows = [], articleId = '', a
   return (Array.isArray(liveRows) ? liveRows : [])
     .filter((row) => {
       const rowArticleId = String(row?.household_article_id || '').trim()
-      if (stableArticleId && rowArticleId === stableArticleId) return true
+      if (stableArticleId) return rowArticleId === stableArticleId
       if (!articleNameKey) return false
       return normalizeText(row?.artikel || row?.household_article_name) === articleNameKey
     })
