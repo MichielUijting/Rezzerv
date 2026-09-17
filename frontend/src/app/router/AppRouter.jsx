@@ -1,7 +1,7 @@
 import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
-import ArticlePage from '../../features/articles/ArticlePage'
+import ArticlePageResponsive from '../../features/articles/ArticlePageResponsive.jsx'
 import ForgotPasswordPage from '../../features/auth/ForgotPasswordPage.jsx'
 import InvitationAcceptancePage from '../../features/auth/InvitationAcceptancePage.jsx'
 import LoginPage from '../../features/auth/LoginPage'
@@ -185,7 +185,7 @@ const router = createBrowserRouter([
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
   { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
-  { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
+  { path: '/voorraad/:articleId', element: <Protected><ArticlePageResponsive /></Protected> },
   { path: '/instellingen', element: <ProtectedSettingsRoute><SettingsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/mijn-account', element: <ProtectedSettingsRoute settingKey="account"><SettingsMyAccountPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/mogelijkheden', element: <ProtectedSettingsRoute settingKey="capabilities"><SettingsCapabilitiesPage /></ProtectedSettingsRoute> },
