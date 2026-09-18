@@ -71,6 +71,7 @@ def validate_config(cfg: dict) -> None:
     req(reuse.get("exact_candidate_sha") is True, "reuse must require exact candidate SHA")
     req(reuse.get("same_pr_and_base_for_pull_request") is True, "PR reuse must require same PR and base")
     req(reuse.get("same_branch_for_workflow_dispatch") is True, "dispatch reuse must require same branch")
+    req(reuse.get("attach_matching_in_progress") is True, "reuse must attach matching in-progress runs")
     events = reuse.get("allowed_events")
     req(isinstance(events, list) and set(events) == REUSE_EVENTS, "reuse allowed_events drift")
 
@@ -189,6 +190,60 @@ def run_has_required_coverage(row: dict, jobs: list[dict]) -> bool:
     return required.issubset(successful_step_names(jobs))
 
 
+def run_has_planned_coverage(row: dict, jobs: list[dict]) -> bool:
+    required = set(row.get("reuse_required_success_steps") or [])
+    if not required:
+        return True
+    states: dict[str, tuple[str, str | None]] = {}
+    for job in jobs:
+        for step in job.get("steps") or []:
+            name = step.get("name")
+            if name:
+                states[str(name)] = (str(step.get("status") or ""), step.get("conclusion"))
+    if not required.issubset(states):
+        return False
+    for name in required:
+        status, conclusion = states[name]
+        if conclusion in BAD or conclusion == "skipped":
+            return False
+        if status not in {"queued", "in_progress", "completed", "pending"}:
+            return False
+    return True
+
+
+def existing_reusable_run(
+    repo: str,
+    row: dict,
+    ref: str,
+    sha: str,
+    pr_number: str,
+    base_sha: str,
+    token: str,
+) -> tuple[str | None, dict | None]:
+    endpoint = workflow_endpoint(repo, row["workflow_file"]) + "/runs"
+    query = urllib.parse.urlencode({"head_sha": sha, "per_page": 100})
+    data = api_request("GET", endpoint + "?" + query, token) or {}
+    completed: list[dict] = []
+    inflight: list[dict] = []
+    for run in data.get("workflow_runs", []):
+        if not run_matches_reuse_identity(run, ref, sha, pr_number, base_sha):
+            continue
+        status = str(run.get("status") or "")
+        conclusion = run.get("conclusion")
+        jobs = run_jobs(repo, int(run.get("id")), token)
+        if status == "completed" and conclusion == "success" and run_has_required_coverage(row, jobs):
+            completed.append(run)
+        elif status in {"queued", "in_progress"} and run_has_planned_coverage(row, jobs):
+            inflight.append(run)
+    completed.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    inflight.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    if completed:
+        return "reused", completed[0]
+    if inflight:
+        return "attached", inflight[0]
+    return None, None
+
+
 def reusable_success_run(
     repo: str,
     row: dict,
@@ -198,21 +253,8 @@ def reusable_success_run(
     base_sha: str,
     token: str,
 ) -> dict | None:
-    endpoint = workflow_endpoint(repo, row["workflow_file"]) + "/runs"
-    query = urllib.parse.urlencode({"head_sha": sha, "per_page": 100})
-    data = api_request("GET", endpoint + "?" + query, token) or {}
-    candidates = []
-    for run in data.get("workflow_runs", []):
-        if run.get("status") != "completed" or run.get("conclusion") != "success":
-            continue
-        if not run_matches_reuse_identity(run, ref, sha, pr_number, base_sha):
-            continue
-        jobs = run_jobs(repo, int(run.get("id")), token)
-        if not run_has_required_coverage(row, jobs):
-            continue
-        candidates.append(run)
-    candidates.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
-    return candidates[0] if candidates else None
+    mode, run = existing_reusable_run(repo, row, ref, sha, pr_number, base_sha, token)
+    return run if mode == "reused" else None
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -241,10 +283,11 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         "status": "dispatching",
     }
     reused_count = 0
+    attached_count = 0
     dispatched_count = 0
     for row in cfg["workflows"]:
         workflow = row["workflow_file"]
-        reused = reusable_success_run(
+        reuse_mode, existing = existing_reusable_run(
             args.repo,
             row,
             args.ref,
@@ -253,21 +296,26 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
             args.base_sha or "",
             token,
         )
-        if reused:
-            reused_count += 1
+        if existing:
+            if reuse_mode == "reused":
+                reused_count += 1
+            elif reuse_mode == "attached":
+                attached_count += 1
+            else:
+                die(f"unexpected reuse mode: {reuse_mode}")
             evidence["workflows"].append({
                 "id": row["id"],
                 "workflow_file": workflow,
                 "requested_inputs": row.get("inputs") or {},
-                "status": "reused",
-                "run_id": reused.get("id"),
-                "event": reused.get("event"),
-                "head_sha": reused.get("head_sha"),
-                "head_branch": reused.get("head_branch"),
-                "conclusion": reused.get("conclusion"),
-                "html_url": reused.get("html_url"),
+                "status": reuse_mode,
+                "run_id": existing.get("id"),
+                "event": existing.get("event"),
+                "head_sha": existing.get("head_sha"),
+                "head_branch": existing.get("head_branch"),
+                "conclusion": existing.get("conclusion"),
+                "html_url": existing.get("html_url"),
             })
-            print(f"F7_FULL_REUSED={row['id']}:run={reused.get('id')}:{reused.get('event')}")
+            print(f"F7_FULL_{reuse_mode.upper()}={row['id']}:run={existing.get('id')}:{existing.get('event')}")
             continue
 
         payload = {"ref": args.ref}
@@ -285,13 +333,15 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         })
         print(f"F7_FULL_DISPATCHED={row['id']}:{Path(workflow).name}")
 
-    req(reused_count + dispatched_count == len(cfg["workflows"]), "reuse/dispatch accounting mismatch")
+    req(reused_count + attached_count + dispatched_count == len(cfg["workflows"]), "reuse/attach/dispatch accounting mismatch")
     evidence["status"] = "dispatched"
     evidence["reused_count"] = reused_count
+    evidence["attached_count"] = attached_count
     evidence["dispatched_count"] = dispatched_count
     Path(args.evidence).write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(f"F7_FULL_AUTHORITY_COUNT={len(cfg['workflows'])}")
     print(f"F7_FULL_REUSED_COUNT={reused_count}")
+    print(f"F7_FULL_ATTACHED_COUNT={attached_count}")
     print(f"F7_FULL_DISPATCHED_COUNT={dispatched_count}")
     print("F7_FULL_REUSE_DISPATCH_GREEN")
     return 0
@@ -384,6 +434,33 @@ def cmd_wait(args: argparse.Namespace) -> int:
             if wid in resolved:
                 continue
             item = evidence_by_id[wid]
+            if item.get("status") == "attached":
+                run_id = item.get("run_id")
+                req(isinstance(run_id, int), f"attached run id missing: {wid}")
+                run = api_request("GET", f"https://api.github.com/repos/{args.repo}/actions/runs/{run_id}", token) or {}
+                req(run_matches_reuse_identity(run, args.ref, args.sha, args.pr_number or "", args.base_sha or ""), f"attached run identity mismatch: {wid}")
+                status = str(run.get("status") or "")
+                conclusion = run.get("conclusion")
+                print(f"F7_FULL_ATTACHED_RUN {wid} run={run_id} status={status} conclusion={conclusion}")
+                if status != "completed":
+                    waiting.append(f"{wid}:{status or 'pending'}")
+                    continue
+                if conclusion != "success":
+                    die(f"{wid} attached run completed non-success: run={run_id} conclusion={conclusion}")
+                jobs = run_jobs(args.repo, run_id, token)
+                req(run_has_required_coverage(row, jobs), f"attached run coverage mismatch: {wid}")
+                resolved[wid] = {
+                    "id": wid,
+                    "workflow_file": row["workflow_file"],
+                    "run_id": run_id,
+                    "head_sha": run.get("head_sha"),
+                    "conclusion": conclusion,
+                    "html_url": run.get("html_url"),
+                    "source": "attached",
+                    "event": run.get("event"),
+                }
+                continue
+
             req(item.get("status") == "dispatched", f"unexpected evidence status for {wid}: {item.get('status')}")
             dispatched_at = str(item.get("dispatched_at") or evidence.get("dispatch_started_at") or "")
             req(bool(dispatched_at), f"dispatch timestamp missing: {wid}")
@@ -428,6 +505,7 @@ def cmd_wait(args: argparse.Namespace) -> int:
     evidence_path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(f"F7_FULL_AGGREGATED_COUNT={len(resolved)}")
     print(f"F7_FULL_AGGREGATED_REUSED_COUNT={sum(1 for item in resolved.values() if item['source'] == 'reused')}")
+    print(f"F7_FULL_AGGREGATED_ATTACHED_COUNT={sum(1 for item in resolved.values() if item['source'] == 'attached')}")
     print(f"F7_FULL_AGGREGATED_DISPATCHED_COUNT={sum(1 for item in resolved.values() if item['source'] == 'dispatched')}")
     print("F7_FULL_REGRESSION_GATE_GREEN")
     return 0
