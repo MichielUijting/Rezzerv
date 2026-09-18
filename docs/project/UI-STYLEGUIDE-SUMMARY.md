@@ -325,6 +325,31 @@ Voor de mobiele kernflow **Voorraad → Bijna op → Winkelen → Kassa → Uitp
 
 Functionele verschillen tussen deze schermen mogen zichtbaar zijn, maar ze voelen als één applicatie en niet als losse modules.
 
+## Mobiel Winkelen
+
+De mobiele Winkelen-weergave is een responsive presentatie van de bestaande actieve winkellijst en introduceert geen parallel shoppingdomein.
+
+Vaste regels:
+- desktop `/winkelen` behoudt de bestaande DataTable; reguliere huishoudgebruikers krijgen op `<=720px` de mobiele presentatie;
+- dezelfde bestaande shopping-list endpoints en permissies blijven de enige functionele authority;
+- bovenaan staat een compacte **Mijn lijst**-contextcard met totaal aantal regels en aantal **nog te kopen**;
+- toevoegen gebeurt vanuit één witte zoek-/filtercard via de bestaande gecombineerde cataloguszoeking in huishoudartikelen, producttypen en artikelgroepen;
+- catalogusresultaat, Producttype en Sorteren gebruiken de centrale Inhuis-`Select`;
+- standaard mag de lijst visueel worden gegroepeerd op de reeds aanwezige `article_group_name`; dit is presentatie en geen nieuwe domeinrelatie;
+- mobiele sortering blijft beperkt tot feiten die al op de actieve lijst bestaan: artikelgroep, naam, producttype en gekochtstatus;
+- iedere kaart toont minimaal gekochtstatus en artikelnaam, met producttype, artikelgroep, omvang en opmerking wanneer aanwezig;
+- **Omvang** en **Opmerking** blijven bewerkbaar via dezelfde bestaande update-route;
+- regels blijven selecteerbaar voor de bestaande acties **Exporteren** en **Verwijderen**;
+- **Winkelen afgerond** blijft de dominante sticky primaire actie boven de permanente meldingenbalk en gebruikt dezelfde bestaande complete-route;
+- passieve succesfeedback verschijnt via de centrale onderste meldingenbalk; verwijder- en afrondbevestigingen blijven interactieve AppFeedback-dialogen;
+- content reserveert onderaan de meldingenbalk plus safe-area, zodat de laatste kaart en sticky actie volledig bereikbaar blijven.
+
+Niet tonen zolang hiervoor geen echte appfunctionaliteit bestaat:
+- tabs of secties **Suggesties**, **Aanbiedingen** of **Vaak gekocht**;
+- winkelgroepering of winkelsortering op een shopping-list-regel;
+- productafbeeldingen zonder bestaande productbeeldbron;
+- plus/min-aantalbediening die de huidige Winkelen-functionaliteit niet aanbiedt.
+
 ## Mobiel Voorraad-artikeldetail
 
 Het mobiele detailscherm van een voorraadartikel is een vereenvoudigde presentatie van bestaande Voorraad-functionaliteit en introduceert geen parallel domeinmodel.
