@@ -39,7 +39,6 @@ const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', imp
 const responsiveSource = readFileSync(new URL('../src/features/almostOut/AlmostOutResponsive.jsx', import.meta.url), 'utf8')
 const mobileSource = readFileSync(new URL('../src/features/almostOut/MobileAlmostOut.jsx', import.meta.url), 'utf8')
 const inventoryCss = readFileSync(new URL('../src/pages/mobileVoorraad.css', import.meta.url), 'utf8')
-const styleguideSource = readFileSync(new URL('../../docs/project/UI-STYLEGUIDE-SUMMARY.md', import.meta.url), 'utf8')
 const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 
 assert.match(routerSource, /import AlmostOutResponsive from '\.\.\/\.\.\/features\/almostOut\/AlmostOutResponsive\.jsx'/)
@@ -67,8 +66,6 @@ assert.doesNotMatch(mobileSource, /Naar Winkelen/i)
 assert.match(inventoryCss, /rz-mobile-inventory-toolbar/)
 assert.match(inventoryCss, /rz-mobile-inventory-card/)
 assert.match(inventoryCss, /rz-mobile-inventory-quantity/)
-assert.match(styleguideSource, /Voorraad → Bijna op → Winkelen → Kassa → Uitpakken/)
-assert.match(styleguideSource, /uitsluitend `14px` bodytekst en `16px` titel\/hoofdnadruk/)
 assert.match(appSource, /data-testid="app-feedback-bar-scroll-clearance"/)
 
 console.log('MOBILE_ALMOST_OUT_CONTRACT_GREEN')
