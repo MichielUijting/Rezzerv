@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "pack_id": "F8-PO-01",
+  "candidate_ref": "main",
+  "candidate_sha": "ed149e993731d7c77efecce56dee8f91728621c6",
+  "executed_at": "2026-09-12T11:47:00+02:00",
+  "executed_by": "PO",
+  "overall_verdict": "rejected",
+  "journeys": [
+    {
+      "id": "PO-01",
+      "verdict": "rejected",
+      "notes": "PO observed that clicking 'Onboarding afronden' appears to do nothing. The screen still shows 'Gebruik huishouden: Nog niet gekozen' while the completion button is available, and no visible validation or navigation occurs. PO expectation: when a required Alleen/Samen choice is missing, show clear validation; after valid completion, automatically return to the landing page with the logical context-specific action buttons."
+    },
+    {
+      "id": "PO-02",
+      "verdict": "pending",
+      "notes": "Not executed because PO-01 produced a release-blocking finding."
+    },
+    {
+      "id": "PO-03",
+      "verdict": "pending",
+      "notes": "Not executed because PO-01 produced a release-blocking finding."
+    },
+    {
+      "id": "PO-04",
+      "verdict": "pending",
+      "notes": "Not executed because PO-01 produced a release-blocking finding."
+    }
+  ],
+  "blocking_findings": [
+    "PO-01: 'Onboarding afronden' gives no visible validation or feedback when the required Alleen/Samen household-use choice is missing; after valid completion the user must be returned automatically to the landing page with context-appropriate follow-up actions."
+  ],
+  "non_blocking_observations": []
+}
