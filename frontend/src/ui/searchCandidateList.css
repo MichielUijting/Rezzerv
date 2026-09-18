@@ -1,0 +1,47 @@
+.rz-search-candidate-list {
+  display: grid;
+  gap: 0;
+  margin-top: 4px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: #FFFFFF;
+  box-shadow: var(--elevation-1);
+}
+
+.rz-search-candidate-option {
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border-default);
+  background: #FFFFFF;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-ui-body);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rz-search-candidate-option:last-child {
+  border-bottom: 0;
+}
+
+.rz-search-candidate-option:hover,
+.rz-search-candidate-option:focus-visible,
+.rz-search-candidate-option--selected {
+  background: var(--color-brand-light);
+  color: var(--color-brand-primary);
+}
+
+.rz-search-candidate-option:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -2px;
+}
+
+.rz-search-candidate-status {
+  margin-top: 4px;
+  padding: 8px 0;
+  color: var(--color-brand-primary);
+  font-size: var(--font-size-ui-body);
+}

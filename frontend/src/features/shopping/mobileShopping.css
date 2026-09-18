@@ -55,31 +55,10 @@
   margin-bottom: 14px;
 }
 
-.rz-mobile-shopping-add-row,
-.rz-mobile-shopping-filter-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: end;
-}
-
-.rz-mobile-shopping-filter-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.rz-mobile-shopping-add-row .rz-button-primary {
+.rz-mobile-shopping-toolbar .rz-button-primary {
+  width: 100%;
   min-height: 44px;
   margin: 0;
-}
-
-.rz-mobile-shopping-divider {
-  height: 1px;
-  background: var(--color-border-default);
-}
-
-.rz-mobile-shopping-clear {
-  min-height: 44px;
-  justify-self: start;
 }
 
 .rz-mobile-shopping-groups {
@@ -217,7 +196,7 @@
 .rz-mobile-shopping-editor {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   padding: 12px var(--space-mobile-field-inline);
   border-top: 1px solid var(--color-border-default);
@@ -265,15 +244,8 @@
 }
 
 @media (max-width: 520px) {
-  .rz-mobile-shopping-add-row,
-  .rz-mobile-shopping-filter-grid,
   .rz-mobile-shopping-editor {
     grid-template-columns: 1fr;
-  }
-
-  .rz-mobile-shopping-add-row .rz-button-primary,
-  .rz-mobile-shopping-clear {
-    width: 100%;
   }
 
   .rz-mobile-shopping-card {

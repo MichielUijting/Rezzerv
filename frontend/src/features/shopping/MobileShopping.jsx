@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Header from '../../ui/Header.jsx'
 import Button from '../../ui/Button.jsx'
-import Select from '../../ui/Select.jsx'
+import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 import '../../pages/mobileVoorraad.css'
@@ -24,16 +24,8 @@ async function requestJson(url, options = {}) {
   return payload
 }
 
-function normalizeText(value) {
-  return String(value || '').trim().toLowerCase()
-}
-
 function csvValue(value) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`
-}
-
-function articleGroupLabel(item) {
-  return String(item?.article_group_name || '').trim() || 'Niet ingedeeld'
 }
 
 function productTypeLabel(item) {
@@ -46,9 +38,6 @@ export default function MobileShopping() {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
   const [selectedResultId, setSelectedResultId] = useState('')
-  const [listQuery, setListQuery] = useState('')
-  const [productTypeFilter, setProductTypeFilter] = useState('')
-  const [sortKey, setSortKey] = useState('articleGroup')
   const [selectedItemIds, setSelectedItemIds] = useState([])
   const [editingItemId, setEditingItemId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -88,7 +77,7 @@ export default function MobileShopping() {
       setSearching(true)
       setError('')
       try {
-        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}`)
+        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}&limit=5`)
         setCatalogResults(Array.isArray(payload?.items) ? payload.items : [])
       } catch (searchError) {
         setCatalogResults([])
@@ -106,70 +95,6 @@ export default function MobileShopping() {
     [catalogResults, selectedResultId],
   )
 
-  const resultOptions = useMemo(() => [
-    {
-      value: '',
-      label: searching
-        ? 'Zoeken…'
-        : catalogResults.length > 0
-          ? 'Selecteer resultaat'
-          : 'Geen resultaten',
-      disabled: true,
-    },
-    ...catalogResults.map((item) => ({
-      value: `${item.source_type}:${item.source_id}`,
-      label: `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`,
-    })),
-  ], [catalogResults, searching])
-
-  const productTypeOptions = useMemo(
-    () => [...new Set((list.items || []).map(productTypeLabel).filter(Boolean))]
-      .sort((a, b) => a.localeCompare(b, 'nl')),
-    [list.items],
-  )
-
-  const filteredItems = useMemo(() => {
-    const needle = normalizeText(listQuery)
-    const rows = (list.items || []).filter((item) => {
-      if (productTypeFilter && productTypeLabel(item) !== productTypeFilter) return false
-      if (!needle) return true
-      return [
-        item.article_name,
-        item.article_group_name,
-        item.product_type_name,
-        item.size,
-        item.note,
-      ].some((value) => normalizeText(value).includes(needle))
-    })
-
-    return rows.sort((a, b) => {
-      if (sortKey === 'productType') {
-        return productTypeLabel(a).localeCompare(productTypeLabel(b), 'nl')
-          || String(a.article_name || '').localeCompare(String(b.article_name || ''), 'nl')
-      }
-      if (sortKey === 'status') {
-        return Number(Boolean(a.checked)) - Number(Boolean(b.checked))
-          || String(a.article_name || '').localeCompare(String(b.article_name || ''), 'nl')
-      }
-      if (sortKey === 'articleGroup') {
-        return articleGroupLabel(a).localeCompare(articleGroupLabel(b), 'nl')
-          || String(a.article_name || '').localeCompare(String(b.article_name || ''), 'nl')
-      }
-      return String(a.article_name || '').localeCompare(String(b.article_name || ''), 'nl')
-    })
-  }, [list.items, listQuery, productTypeFilter, sortKey])
-
-  const groupedItems = useMemo(() => {
-    if (sortKey !== 'articleGroup') return [{ label: 'Winkellijst', items: filteredItems }]
-    const groups = new Map()
-    filteredItems.forEach((item) => {
-      const label = articleGroupLabel(item)
-      if (!groups.has(label)) groups.set(label, [])
-      groups.get(label).push(item)
-    })
-    return [...groups.entries()].map(([label, items]) => ({ label, items }))
-  }, [filteredItems, sortKey])
-
   const selectedItems = useMemo(
     () => (list.items || []).filter((item) => selectedItemIds.includes(item.id)),
     [list.items, selectedItemIds],
@@ -178,19 +103,12 @@ export default function MobileShopping() {
     () => (list.items || []).filter((item) => !item.checked).length,
     [list.items],
   )
-  const hasActiveFilters = Boolean(listQuery || productTypeFilter || sortKey !== 'articleGroup')
 
   function patchListItem(itemId, patch) {
     setList((current) => ({
       ...current,
       items: (current.items || []).map((item) => item.id === itemId ? { ...item, ...patch } : item),
     }))
-  }
-
-  function clearFilters() {
-    setListQuery('')
-    setProductTypeFilter('')
-    setSortKey('articleGroup')
   }
 
   function toggleSelectedItem(itemId, selected) {
@@ -367,21 +285,9 @@ export default function MobileShopping() {
 
   return (
     <div className="rz-screen rz-mobile-inventory-screen rz-mobile-shopping-screen" data-testid="mobile-shopping-page">
-      <Header title="Winkelen" />
+      <Header title="Boodschappenlijst" />
       <main className="rz-mobile-inventory-content rz-mobile-shopping-content">
-        <section className="rz-mobile-shopping-summary-card" aria-label="Mijn winkellijst">
-          <div>
-            <div className="rz-mobile-shopping-summary-title">Mijn lijst</div>
-            <div className="rz-mobile-shopping-summary-meta">
-              {loading ? 'Winkellijst laden…' : `${Number(list.item_count || 0)} artikelen • ${remainingCount} nog te kopen`}
-            </div>
-          </div>
-          <span className="rz-mobile-shopping-count" aria-label={`${remainingCount} nog te kopen`}>
-            {remainingCount}
-          </span>
-        </section>
-
-        <section className="rz-mobile-inventory-toolbar rz-mobile-shopping-toolbar" aria-label="Winkelen zoeken en filteren">
+        <section className="rz-mobile-inventory-toolbar rz-mobile-shopping-toolbar" aria-label="Artikel toevoegen">
           <div className="rz-mobile-shopping-toolbar-title">Artikel toevoegen</div>
           <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
             <span className="rz-mobile-inventory-label">Catalogus zoeken</span>
@@ -392,84 +298,42 @@ export default function MobileShopping() {
               onChange={(event) => setCatalogQuery(event.target.value)}
               placeholder="Zoek artikel, producttype of artikelgroep"
               aria-label="Artikel toevoegen"
+              aria-controls="mobile-shopping-candidate-list"
+              aria-expanded={catalogResults.length > 0}
               autoComplete="off"
             />
           </label>
+          <SearchCandidateList
+            items={catalogResults}
+            selectedKey={selectedResultId}
+            getKey={(item) => `${item.source_type}:${item.source_id}`}
+            getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
+            onSelect={setSelectedResultId}
+            loading={searching}
+            ariaLabel="Kandidaten voor artikel toevoegen"
+            dataTestId="mobile-shopping-candidate-list"
+          />
+          <Button
+            type="button"
+            variant="primary"
+            onClick={addSelectedResult}
+            disabled={saving || !selectedResult}
+            data-testid="mobile-shopping-add"
+          >
+            Toevoegen
+          </Button>
+        </section>
 
-          <div className="rz-mobile-shopping-add-row">
-            <div className="rz-mobile-inventory-field">
-              <span id="mobile-shopping-result-label" className="rz-mobile-inventory-label">Zoekresultaat</span>
-              <Select
-                ariaLabelledby="mobile-shopping-result-label"
-                value={selectedResultId}
-                onChange={setSelectedResultId}
-                options={resultOptions}
-                disabled={searching || catalogResults.length === 0}
-                dataTestId="mobile-shopping-result"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={addSelectedResult}
-              disabled={saving || !selectedResult}
-              data-testid="mobile-shopping-add"
-            >
-              Toevoegen
-            </Button>
-          </div>
-
-          <div className="rz-mobile-shopping-divider" />
-
-          <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
-            <span className="rz-mobile-inventory-label">Zoek in lijst</span>
-            <input
-              className="rz-input"
-              type="search"
-              value={listQuery}
-              onChange={(event) => setListQuery(event.target.value)}
-              placeholder="Zoek in je winkellijst"
-              aria-label="Zoek in winkellijst"
-              autoComplete="off"
-            />
-          </label>
-
-          <div className="rz-mobile-shopping-filter-grid">
-            <div className="rz-mobile-inventory-field">
-              <span id="mobile-shopping-producttype-label" className="rz-mobile-inventory-label">Producttype</span>
-              <Select
-                ariaLabelledby="mobile-shopping-producttype-label"
-                value={productTypeFilter}
-                onChange={setProductTypeFilter}
-                options={[
-                  { value: '', label: 'Alle producttypen' },
-                  ...productTypeOptions.map((option) => ({ value: option, label: option })),
-                ]}
-                dataTestId="mobile-shopping-producttype"
-              />
-            </div>
-            <div className="rz-mobile-inventory-field">
-              <span id="mobile-shopping-sort-label" className="rz-mobile-inventory-label">Sorteren</span>
-              <Select
-                ariaLabelledby="mobile-shopping-sort-label"
-                value={sortKey}
-                onChange={setSortKey}
-                options={[
-                  { value: 'articleGroup', label: 'Artikelgroep' },
-                  { value: 'name', label: 'Naam A–Z' },
-                  { value: 'productType', label: 'Producttype A–Z' },
-                  { value: 'status', label: 'Nog te kopen eerst' },
-                ]}
-                dataTestId="mobile-shopping-sort"
-              />
+        <section className="rz-mobile-shopping-summary-card" aria-label="Mijn winkellijst">
+          <div>
+            <div className="rz-mobile-shopping-summary-title">Mijn lijst</div>
+            <div className="rz-mobile-shopping-summary-meta">
+              {loading ? 'Boodschappenlijst laden…' : `${Number(list.item_count || 0)} artikelen • ${remainingCount} nog te kopen`}
             </div>
           </div>
-
-          {hasActiveFilters ? (
-            <Button type="button" variant="secondary" className="rz-mobile-shopping-clear" onClick={clearFilters}>
-              Filters wissen
-            </Button>
-          ) : null}
+          <span className="rz-mobile-shopping-count" aria-label={`${remainingCount} nog te kopen`}>
+            {remainingCount}
+          </span>
         </section>
 
         {error ? (
@@ -479,103 +343,111 @@ export default function MobileShopping() {
           </section>
         ) : null}
 
-        {!error && !loading && filteredItems.length === 0 ? (
+        {!error && !loading && (list.items || []).length === 0 ? (
           <section className="rz-mobile-inventory-state">
-            <strong>{(list.items || []).length === 0 ? 'Nog geen artikelen op de winkellijst.' : 'Geen artikelen gevonden.'}</strong>
-            {hasActiveFilters ? <span>Pas je zoekopdracht of filters aan.</span> : null}
+            <strong>Nog geen artikelen op de boodschappenlijst.</strong>
           </section>
         ) : null}
 
-        {!error && filteredItems.length > 0 ? (
-          <div className="rz-mobile-shopping-groups" aria-label="Winkellijst">
-            {groupedItems.map((group) => (
-              <section className="rz-mobile-shopping-group" key={group.label}>
-                <div className="rz-mobile-shopping-group-header">
-                  <div className="rz-mobile-shopping-group-title">{group.label}</div>
-                  <span>{group.items.length} {group.items.length === 1 ? 'artikel' : 'artikelen'}</span>
-                </div>
+        {!error && (list.items || []).length > 0 ? (
+          <section className="rz-mobile-shopping-group" aria-label="Boodschappenlijst">
+            <div className="rz-mobile-shopping-group-header">
+              <div className="rz-mobile-shopping-group-title">Boodschappenlijst</div>
+              <span>{(list.items || []).length} {(list.items || []).length === 1 ? 'artikel' : 'artikelen'}</span>
+            </div>
 
-                <div className="rz-mobile-shopping-list">
-                  {group.items.map((item) => {
-                    const editing = editingItemId === item.id
-                    return (
-                      <article
-                        key={item.id}
-                        className={`rz-mobile-shopping-card${item.checked ? ' rz-mobile-shopping-card--checked' : ''}`}
-                        data-testid={`mobile-shopping-item-${item.id}`}
+            <div className="rz-mobile-shopping-list">
+              {(list.items || []).map((item) => {
+                const editing = editingItemId === item.id
+                return (
+                  <article
+                    key={item.id}
+                    className={`rz-mobile-shopping-card${item.checked ? ' rz-mobile-shopping-card--checked' : ''}`}
+                    data-testid={`mobile-shopping-item-${item.id}`}
+                  >
+                    <label className="rz-mobile-shopping-buy-check">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(item.checked)}
+                        onChange={(event) => updateChecked(item, event.target.checked)}
+                        aria-label={`Gekocht ${item.article_name}`}
+                      />
+                      <span>{item.checked ? 'Gekocht' : 'Nog te kopen'}</span>
+                    </label>
+
+                    <div className="rz-mobile-shopping-card-main">
+                      <div className="rz-mobile-shopping-card-title">{item.article_name}</div>
+                      {productTypeLabel(item) ? (
+                        <div className="rz-mobile-shopping-card-product">{productTypeLabel(item)}</div>
+                      ) : null}
+                      <div className="rz-mobile-shopping-card-meta">
+                        <span>Aantal {Number(item.quantity ?? 1).toLocaleString('nl-NL')}</span>
+                        {String(item.article_group_name || '').trim() ? <span>{item.article_group_name}</span> : null}
+                        {item.size ? <span>{item.size}</span> : null}
+                        {item.note ? <span>{item.note}</span> : null}
+                      </div>
+                    </div>
+
+                    <div className="rz-mobile-shopping-card-actions">
+                      <button
+                        type="button"
+                        className="rz-mobile-shopping-edit"
+                        onClick={() => setEditingItemId(editing ? '' : item.id)}
+                        aria-expanded={editing}
+                        aria-controls={`mobile-shopping-editor-${item.id}`}
                       >
-                        <label className="rz-mobile-shopping-buy-check">
+                        {editing ? 'Sluiten' : 'Bewerken'}
+                      </button>
+                      <label className="rz-mobile-shopping-select">
+                        <input
+                          type="checkbox"
+                          checked={selectedItemIds.includes(item.id)}
+                          onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
+                          aria-label={`Selecteer ${item.article_name}`}
+                        />
+                        <span>Selecteer</span>
+                      </label>
+                    </div>
+
+                    {editing ? (
+                      <div className="rz-mobile-shopping-editor" id={`mobile-shopping-editor-${item.id}`}>
+                        <label className="rz-mobile-inventory-field">
+                          <span className="rz-mobile-inventory-label">Aantal</span>
                           <input
-                            type="checkbox"
-                            checked={Boolean(item.checked)}
-                            onChange={(event) => updateChecked(item, event.target.checked)}
-                            aria-label={`Gekocht ${item.article_name}`}
+                            className="rz-input"
+                            type="number"
+                            min="1"
+                            step="1"
+                            defaultValue={item.quantity ?? 1}
+                            aria-label={`Aantal ${item.article_name}`}
+                            onBlur={(event) => updateItem(item, { quantity: event.target.value })}
                           />
-                          <span>{item.checked ? 'Gekocht' : 'Nog te kopen'}</span>
                         </label>
-
-                        <div className="rz-mobile-shopping-card-main">
-                          <div className="rz-mobile-shopping-card-title">{item.article_name}</div>
-                          {productTypeLabel(item) ? (
-                            <div className="rz-mobile-shopping-card-product">{productTypeLabel(item)}</div>
-                          ) : null}
-                          <div className="rz-mobile-shopping-card-meta">
-                            <span>{articleGroupLabel(item)}</span>
-                            {item.size ? <span>{item.size}</span> : null}
-                            {item.note ? <span>{item.note}</span> : null}
-                          </div>
-                        </div>
-
-                        <div className="rz-mobile-shopping-card-actions">
-                          <button
-                            type="button"
-                            className="rz-mobile-shopping-edit"
-                            onClick={() => setEditingItemId(editing ? '' : item.id)}
-                            aria-expanded={editing}
-                            aria-controls={`mobile-shopping-editor-${item.id}`}
-                          >
-                            {editing ? 'Sluiten' : 'Bewerken'}
-                          </button>
-                          <label className="rz-mobile-shopping-select">
-                            <input
-                              type="checkbox"
-                              checked={selectedItemIds.includes(item.id)}
-                              onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
-                              aria-label={`Selecteer ${item.article_name}`}
-                            />
-                            <span>Selecteer</span>
-                          </label>
-                        </div>
-
-                        {editing ? (
-                          <div className="rz-mobile-shopping-editor" id={`mobile-shopping-editor-${item.id}`}>
-                            <label className="rz-mobile-inventory-field">
-                              <span className="rz-mobile-inventory-label">Omvang</span>
-                              <input
-                                className="rz-input"
-                                defaultValue={item.size || ''}
-                                aria-label={`Omvang ${item.article_name}`}
-                                onBlur={(event) => updateItem(item, { size: event.target.value })}
-                              />
-                            </label>
-                            <label className="rz-mobile-inventory-field">
-                              <span className="rz-mobile-inventory-label">Opmerking</span>
-                              <input
-                                className="rz-input"
-                                defaultValue={item.note || ''}
-                                aria-label={`Opmerking ${item.article_name}`}
-                                onBlur={(event) => updateItem(item, { note: event.target.value })}
-                              />
-                            </label>
-                          </div>
-                        ) : null}
-                      </article>
-                    )
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
+                        <label className="rz-mobile-inventory-field">
+                          <span className="rz-mobile-inventory-label">Omvang</span>
+                          <input
+                            className="rz-input"
+                            defaultValue={item.size || ''}
+                            aria-label={`Omvang ${item.article_name}`}
+                            onBlur={(event) => updateItem(item, { size: event.target.value })}
+                          />
+                        </label>
+                        <label className="rz-mobile-inventory-field">
+                          <span className="rz-mobile-inventory-label">Opmerking</span>
+                          <input
+                            className="rz-input"
+                            defaultValue={item.note || ''}
+                            aria-label={`Opmerking ${item.article_name}`}
+                            onBlur={(event) => updateItem(item, { note: event.target.value })}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                  </article>
+                )
+              })}
+            </div>
+          </section>
         ) : null}
 
         {selectedItems.length > 0 ? (

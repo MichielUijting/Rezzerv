@@ -3,6 +3,7 @@ import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import DataTable from '../../ui/DataTable.jsx'
+import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
@@ -11,12 +12,6 @@ const SOURCE_LABELS = {
   product_type: 'Producttype',
   article_group: 'Artikelgroep',
 }
-
-const SOURCE_GROUPS = [
-  ['household_article', 'Huishoudartikelen'],
-  ['product_type', 'Producttypen'],
-  ['article_group', 'Artikelgroepen'],
-]
 
 const CHECKBOX_STYLE = {
   accentColor: '#1A3E2B',
@@ -91,7 +86,7 @@ export default function ShoppingPage() {
       setSearching(true)
       setError('')
       try {
-        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}`)
+        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}&limit=5`)
         setCatalogResults(Array.isArray(payload?.items) ? payload.items : [])
       } catch (searchError) {
         setCatalogResults([])
@@ -107,17 +102,6 @@ export default function ShoppingPage() {
   const selectedResult = useMemo(
     () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
     [catalogResults, selectedResultId],
-  )
-
-  const groupedResults = useMemo(
-    () => SOURCE_GROUPS
-      .map(([sourceType, label]) => ({
-        sourceType,
-        label,
-        items: catalogResults.filter((item) => item.source_type === sourceType),
-      }))
-      .filter((group) => group.items.length > 0),
-    [catalogResults],
   )
 
   const productTypeOptions = useMemo(() => filterOptions(list.items, 'product_type_name'), [list.items])
@@ -285,8 +269,8 @@ export default function ShoppingPage() {
   function exportSelectedItems() {
     if (selectedItems.length === 0) return
     const rows = [
-      ['Artikel', 'Producttype', 'Omvang', 'Opmerking', 'Gekocht'],
-      ...selectedItems.map((item) => [item.article_name, item.product_type_name, item.size, item.note, item.checked ? 'Ja' : 'Nee']),
+      ['Artikel', 'Producttype', 'Aantal', 'Omvang', 'Opmerking', 'Gekocht'],
+      ...selectedItems.map((item) => [item.article_name, item.product_type_name, item.quantity ?? 1, item.size, item.note, item.checked ? 'Ja' : 'Nee']),
     ]
     const csv = `\uFEFF${rows.map((row) => row.map(csvValue).join(';')).join('\r\n')}`
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -395,6 +379,26 @@ export default function ShoppingPage() {
       renderCell: (item) => <span title={item.product_type_name}>{item.product_type_name}</span>,
     },
     {
+      key: 'quantity',
+      label: 'Aantal',
+      width: 90,
+      sortable: true,
+      headerStyle: { textAlign: 'right' },
+      getSortValue: (item) => Number(item.quantity ?? 1),
+      renderCell: (item) => (
+        <input
+          className="rz-input"
+          style={{ ...inlineInputStyle, textAlign: 'right' }}
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={item.quantity ?? 1}
+          aria-label={`Aantal ${item.article_name}`}
+          onBlur={(event) => updateItem(item, { quantity: event.target.value })}
+        />
+      ),
+    },
+    {
       key: 'size',
       label: 'Omvang',
       width: 120,
@@ -474,56 +478,42 @@ export default function ShoppingPage() {
   }
 
   return (
-    <AppShell title="Winkelen" showExit={false}>
+    <AppShell title="Boodschappenlijst" showExit={false}>
       <div style={{ display: 'grid', gap: 18, width: '100%' }}>
         <Card>
           <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="shopping-page">
-            <h2 style={{ margin: 0 }}>Winkelen — {Number(list.item_count || 0)} artikelen</h2>
+            <h2 style={{ margin: 0 }}>Boodschappenlijst — {Number(list.item_count || 0)} artikelen</h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(280px, 1fr) auto', gap: 12, alignItems: 'stretch' }}>
-              <label className="rz-input-field">
-                <span className="rz-label">Artikel toevoegen</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) auto', gap: 12, alignItems: 'start' }}>
+              <div className="rz-input-field">
+                <label className="rz-label" htmlFor="shopping-catalog-query">Artikel toevoegen</label>
                 <input
+                  id="shopping-catalog-query"
                   className="rz-input"
                   value={catalogQuery}
                   onChange={(event) => setCatalogQuery(event.target.value)}
                   placeholder="Zoek artikel, producttype of artikelgroep"
-                  aria-label="Artikel toevoegen"
+                  aria-controls="shopping-candidate-list"
+                  aria-expanded={catalogResults.length > 0}
+                  autoComplete="off"
                 />
-              </label>
-
-              <label className="rz-input-field">
-                <span className="rz-label">Zoekresultaat</span>
-                <select
-                  className="rz-input"
-                  value={selectedResultId}
-                  onChange={(event) => setSelectedResultId(event.target.value)}
-                  aria-label="Zoekresultaat"
-                  disabled={searching || catalogResults.length === 0}
-                >
-                  <option value="">
-                    {searching ? 'Zoeken‥' : catalogResults.length ? 'Selecteer resultaat' : 'Geen resultaten'}
-                  </option>
-                  {groupedResults.map((group) => (
-                    <optgroup key={group.sourceType} label={group.label}>
-                      {group.items.map((item) => (
-                        <option
-                          key={`${item.source_type}:${item.source_id}`}
-                          value={`${item.source_type}:${item.source_id}`}
-                        >
-                          {item.label} — {SOURCE_LABELS[item.source_type] || item.source_type}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
+                <SearchCandidateList
+                  items={catalogResults}
+                  selectedKey={selectedResultId}
+                  getKey={(item) => `${item.source_type}:${item.source_id}`}
+                  getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
+                  onSelect={setSelectedResultId}
+                  loading={searching}
+                  ariaLabel="Kandidaten voor artikel toevoegen"
+                  dataTestId="shopping-candidate-list"
+                />
+              </div>
 
               <Button
                 type="button"
                 onClick={addSelectedResult}
                 disabled={saving || !selectedResult}
-                style={{ alignSelf: 'end' }}
+                style={{ alignSelf: 'start', marginTop: 24 }}
               >
                 Toevoegen
               </Button>
