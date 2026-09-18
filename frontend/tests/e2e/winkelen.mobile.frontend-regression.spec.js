@@ -38,6 +38,24 @@ test.describe('Mobiel Winkelen', () => {
       })
     })
 
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          onboarding_status: 'completed',
+          onboarding_step: 'done',
+          primary_use_case: 'wat_inhuis',
+          initial_choice_required: false,
+          shared_household_minimum_required: false,
+          can_manage: true,
+          product_configuration: {
+            location_tracking_level: 'global',
+          },
+        }),
+      })
+    })
+
     let activeListId = 'shopping-mobile-active-1'
     let items = [
       {
