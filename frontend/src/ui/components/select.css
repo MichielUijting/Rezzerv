@@ -1,0 +1,111 @@
+.rz-select {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.rz-select--open {
+  z-index: 80;
+}
+
+.rz-select-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding-right: 36px !important;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body) !important;
+  font-weight: 400;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rz-select-trigger:disabled {
+  cursor: default;
+  opacity: 0.56;
+}
+
+.rz-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-ui-body) !important;
+}
+
+.rz-select-caret {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--color-brand-primary);
+  transform: translateY(-35%);
+  pointer-events: none;
+}
+
+.rz-select-listbox {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 90;
+  max-height: min(264px, 52vh);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid #aab6af;
+  border-radius: 12px;
+  background: #FFFFFF;
+  color: var(--color-text-primary);
+  box-shadow: 0 12px 28px rgba(26, 62, 43, 0.20);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body) !important;
+}
+
+.rz-select-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body) !important;
+  font-weight: 400;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rz-select-option:hover,
+.rz-select-option--active {
+  background: #EEF7F0;
+}
+
+.rz-select-option--selected {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+
+.rz-select-option:focus-visible,
+.rz-select-trigger:focus-visible {
+  outline: 3px solid rgba(26, 62, 43, 0.22);
+  outline-offset: 2px;
+}
+
+.rz-select-option:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

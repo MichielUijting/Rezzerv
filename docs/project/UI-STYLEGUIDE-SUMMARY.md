@@ -227,7 +227,8 @@ Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een explicie
 
 - zoek- en filtervelden hebben dezelfde visuele familie;
 - tekst is `14px`;
-- selectvelden gebruiken voor zowel de geselecteerde waarde als alle dropdownopties `14px`, gelijk aan de veldlabels;
+- gebruikerszichtbare dropdowns gebruiken de centrale Inhuis-`Select`-component; native browser/OS-`<select>`-popups zijn voor deze schermen niet toegestaan omdat hun geopende optielijst de Inhuis-typografie niet betrouwbaar volgt;
+- de centrale Inhuis-`Select` gebruikt voor veldwaarde én alle opties in de geopende lijst exact `14px`, gelijk aan de veldlabels;
 - interactieve velden hebben voldoende hoogte en een duidelijk focusbeeld;
 - op mobiel is een touchhoogte van minimaal ongeveer `44px` het uitgangspunt;
 - veldachtige mobiele rijen houden links en rechts minimaal de centrale `1ch`-marge aan;
@@ -299,7 +300,8 @@ Nieuwe schermen hergebruiken waar passend bestaande centrale componenten en patr
 - `AppFeedbackProvider` voor passieve applicatiemeldingen;
 - `Card`;
 - `Button`;
-- inputs/search/selects;
+- `Select` voor gebruikerszichtbare dropdowns waarvan de geopende lijst de Inhuis-typografie moet volgen;
+- inputs/search;
 - listcard-/badge-/statuspatronen;
 - `Table`/`DataTable`;
 - `ResizableHeaderCell`;

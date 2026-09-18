@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Header from '../../ui/Header'
 import Button from '../../ui/Button'
+import Select from '../../ui/Select.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
 import {
   buildMobileAlmostOutRows,
@@ -129,26 +130,36 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
 
           {locationTrackingEnabled ? (
             <div className="rz-mobile-inventory-filter-grid rz-mobile-inventory-filter-grid--single">
-              <label className="rz-mobile-inventory-field" data-testid="mobile-almost-out-location-filter">
-                <span className="rz-mobile-inventory-label">Locatie</span>
-                <select className="rz-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
-                  <option value="">Alle locaties</option>
-                  {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
-              </label>
+              <div className="rz-mobile-inventory-field" data-testid="mobile-almost-out-location-filter">
+                <span id="mobile-almost-out-location-label" className="rz-mobile-inventory-label">Locatie</span>
+                <Select
+                  ariaLabelledby="mobile-almost-out-location-label"
+                  value={locationFilter}
+                  onChange={setLocationFilter}
+                  options={[
+                    { value: '', label: 'Alle locaties' },
+                    ...locationOptions.map((option) => ({ value: option, label: option })),
+                  ]}
+                />
+              </div>
             </div>
           ) : null}
 
           <div className="rz-mobile-inventory-toolbar-row">
-            <label className="rz-mobile-inventory-sort">
-              <span className="rz-mobile-inventory-label">Sorteren</span>
-              <select className="rz-input" value={sortKey} onChange={(event) => setSortKey(event.target.value)}>
-                <option value="amountToBuy">Te kopen hoog–laag</option>
-                <option value="name">Naam A–Z</option>
-                <option value="currentQuantity">Huidig laag–hoog</option>
-                {locationTrackingEnabled ? <option value="location">Locatie A–Z</option> : null}
-              </select>
-            </label>
+            <div className="rz-mobile-inventory-sort">
+              <span id="mobile-almost-out-sort-label" className="rz-mobile-inventory-label">Sorteren</span>
+              <Select
+                ariaLabelledby="mobile-almost-out-sort-label"
+                value={sortKey}
+                onChange={setSortKey}
+                options={[
+                  { value: 'amountToBuy', label: 'Te kopen hoog–laag' },
+                  { value: 'name', label: 'Naam A–Z' },
+                  { value: 'currentQuantity', label: 'Huidig laag–hoog' },
+                  ...(locationTrackingEnabled ? [{ value: 'location', label: 'Locatie A–Z' }] : []),
+                ]}
+              />
+            </div>
             {hasActiveFilters ? (
               <Button type="button" variant="secondary" className="rz-mobile-inventory-clear" onClick={clearFilters}>
                 Filters wissen
