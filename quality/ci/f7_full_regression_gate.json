@@ -5,7 +5,7 @@
   "target_base": "main",
   "poll_seconds": 20,
   "timeout_seconds": 14400,
-  "candidate_contract": "Reuse only complete, successful authority evidence from the exact candidate SHA and matching PR/base or candidate branch; dispatch only missing authorities and aggregate all eleven authorities fail-closed.",
+  "candidate_contract": "Reuse complete successful authority evidence or attach to already-running full-scope authority evidence for the exact candidate SHA and matching PR/base or candidate branch; dispatch only missing authorities and aggregate all eleven authorities fail-closed.",
   "workflows": [
     {
       "id": "TP-CI-02",
@@ -184,6 +184,7 @@
     "allowed_events": [
       "pull_request",
       "workflow_dispatch"
-    ]
+    ],
+    "attach_matching_in_progress": true
   }
 }
