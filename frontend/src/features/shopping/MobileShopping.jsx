@@ -414,6 +414,7 @@ export default function MobileShopping() {
                         <label className="rz-mobile-inventory-field">
                           <span className="rz-mobile-inventory-label">Aantal</span>
                           <input
+                            key={`quantity-${item.id}-${item.quantity ?? 1}`}
                             className="rz-input"
                             type="number"
                             min="1"

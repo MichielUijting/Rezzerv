@@ -387,6 +387,7 @@ export default function ShoppingPage() {
       getSortValue: (item) => Number(item.quantity ?? 1),
       renderCell: (item) => (
         <input
+          key={`quantity-${item.id}-${item.quantity ?? 1}`}
           className="rz-input"
           style={{ ...inlineInputStyle, textAlign: 'right' }}
           type="number"
@@ -527,7 +528,7 @@ export default function ShoppingPage() {
               data={list.items || []}
               dataTestId="shopping-list-table"
               getRowKey={(item) => item.id}
-              emptyMessage={loading ? 'Winkellijst laden…' : 'Nog geen artikelen op de boodschappenlijst.'}
+              emptyMessage={loading ? 'Boodschappenlijst laden…' : 'Nog geen artikelen op de boodschappenlijst.'}
               filterState={dataTableFilters}
               onFilterChange={handleDataTableFilterChange}
               sortState={sort}
