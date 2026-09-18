@@ -302,6 +302,14 @@ Doelstructuur:
 - **Deep / Nightly:** zwaardere varianten, legacydata, recovery en combinaties.
 - **Release Acceptance:** PostgreSQL + migraties + alle P0 L2/L3/L4 + build/startup + PO-status.
 
+Actuele Fase-7 optimalisatie:
+
+- **Exact-candidate evidence reuse:** Full Regression controleert vóór dispatch of een authority voor dezelfde SHA al volledig groen is;
+- PR-evidence is alleen herbruikbaar bij hetzelfde PR-nummer én dezelfde base-SHA;
+- gedeelde runners tellen alleen als alle door Full Regression vereiste authority-stappen aantoonbaar `success` zijn;
+- alleen ontbrekende of niet-verifieerbare authorities worden opnieuw gedispatcht;
+- de uiteindelijke Full Regression-evidence blijft verplicht 11/11 authorities bevatten en onderscheidt `reused` van `dispatched`.
+
 Featuregerichte workflows worden pas geconsolideerd volgens `docs/TEST_WORKFLOW_CLASSIFICATION.md` nadat vervangend bewijs stabiel is. De bestaande workflow `test-orchestration-platform-authorization.yml` is een autorisatie-authority voor de platformroute en is **niet** de nog te bouwen overkoepelende CI-orchestrator.
 
 ---
