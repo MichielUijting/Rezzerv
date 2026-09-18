@@ -46,7 +46,18 @@ jobs:
           set -euo pipefail
           python -m py_compile \
             scripts/ci/shared_fullstack_plan.py \
+            scripts/ci/f7_full_regression_gate.py \
+            scripts/ci/test_f7_full_regression_reuse.py \
             scripts/ci/validate_f7_ci_orchestration_gate_map.py
+
+      - name: Validate exact-candidate Full Regression evidence reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/f7_full_regression_gate.py validate-config | tee f7-03-reuse-config.log
+          grep -Fx 'PASS f7_03_exact_sha_reuse_contract_closed' f7-03-reuse-config.log
+          python scripts/ci/test_f7_full_regression_reuse.py | tee f7-03-reuse-selftest.log
+          grep -Fx 'F7_03_EXACT_SHA_REUSE_SELFTEST_GREEN' f7-03-reuse-selftest.log
 
       - name: Validate F7-01 orchestration gate map
         shell: bash
@@ -81,6 +92,7 @@ jobs:
             echo "stale_fallback_references=2"
             echo "duplicate_pr_fallbacks=0"
             echo "gate_order=pr_fast_regression,full_regression,deep_nightly,release_acceptance"
+            echo "full_regression_reuse=exact_sha_same_pr_base_full_coverage"
           } > f7-01-ci-orchestration-evidence.txt
 
       - name: Upload F7-01 audit evidence
@@ -92,5 +104,7 @@ jobs:
             quality/ci/f7_ci_orchestration_gate_map.json
             f7-01-ci-orchestration-audit.log
             f7-01-ci-orchestration-evidence.txt
+            f7-03-reuse-config.log
+            f7-03-reuse-selftest.log
           if-no-files-found: error
           retention-days: 14
