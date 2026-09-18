@@ -4,7 +4,7 @@ import {
   expectNoConsoleErrors,
 } from './helpers/rezzervAssertions.js'
 
-test.describe('Mobiel Winkelen', () => {
+test.describe('Mobiele Boodschappenlijst', () => {
   test('gebruikt bestaande winkellijstfuncties in de mobiele kernflow', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     const consoleErrors = attachConsoleErrorCollector(page)
@@ -65,6 +65,7 @@ test.describe('Mobiel Winkelen', () => {
         article_name: 'Melk',
         article_group_name: 'Zuivel',
         product_type_name: 'Halfvolle melk',
+        quantity: 1,
         size: '1 liter',
         note: '',
         checked: false,
@@ -78,6 +79,7 @@ test.describe('Mobiel Winkelen', () => {
         article_name: 'Brood',
         article_group_name: 'Brood',
         product_type_name: 'Volkoren brood',
+        quantity: 1,
         size: '',
         note: 'Gesneden',
         checked: false,
@@ -95,9 +97,16 @@ test.describe('Mobiel Winkelen', () => {
         article_group_name: 'Fruit',
         product_type_name: 'Banaan',
       },
+      { source_type: 'household_article', source_id: 'household-article-broccoli', label: 'Broccoli', article_name: 'Broccoli', article_group_name: 'Groente', product_type_name: 'Broccoli' },
+      { source_type: 'household_article', source_id: 'household-article-broodjes', label: 'Broodjes', article_name: 'Broodjes', article_group_name: 'Brood', product_type_name: 'Broodjes' },
+      { source_type: 'product_type', source_id: 'product-type-banaan', label: 'Banaan', article_name: 'Banaan', article_group_name: 'Fruit', product_type_name: 'Banaan' },
+      { source_type: 'article_group', source_id: 'article-group-fruit', label: 'Fruit', article_name: 'Fruit', article_group_name: 'Fruit', product_type_name: '' },
+      { source_type: 'product_type', source_id: 'product-type-groente', label: 'Groente', article_name: 'Groente', article_group_name: 'Groente', product_type_name: 'Groente' },
     ]
 
     await page.route('**/api/shopping-list/catalog-search?*', async (route) => {
+      const url = new URL(route.request().url())
+      expect(url.searchParams.get('limit')).toBe('5')
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -129,6 +138,15 @@ test.describe('Mobiel Winkelen', () => {
     await page.route('**/api/shopping-list/items', async (route) => {
       if (route.request().method() !== 'POST') return route.fallback()
       const payload = JSON.parse(route.request().postData() || '{}')
+      const existing = items.find((item) =>
+        item.source_type === payload.source_type && item.source_id === payload.source_id
+      )
+      if (existing) {
+        existing.quantity = Number(existing.quantity ?? 1) + Number(payload.quantity ?? 1)
+        existing.checked = false
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(existing) })
+        return
+      }
       const item = {
         id: 'mobile-bananen',
         shopping_list_id: activeListId,
@@ -136,6 +154,7 @@ test.describe('Mobiel Winkelen', () => {
         article_name: payload.article_name,
         article_group_name: payload.article_group_name || '',
         product_type_name: payload.product_type_name || '',
+        quantity: Number(payload.quantity ?? 1),
         size: '',
         note: '',
         checked: false,
@@ -186,6 +205,11 @@ test.describe('Mobiel Winkelen', () => {
     await expect(page.getByTestId('shopping-page')).toHaveCount(0)
     await expect(page.getByText('Mijn lijst', { exact: true })).toBeVisible()
     await expect(page.getByText('2 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Boodschappenlijst' })).toBeVisible()
+    await expect(page.getByLabel('Zoek in winkellijst')).toHaveCount(0)
+    await expect(page.getByTestId('mobile-shopping-producttype')).toHaveCount(0)
+    await expect(page.getByTestId('mobile-shopping-sort')).toHaveCount(0)
+    await expect(page.getByText('Niet ingedeeld', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Suggesties', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Aanbiedingen', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Vaak gekocht', { exact: true })).toHaveCount(0)
@@ -203,17 +227,23 @@ test.describe('Mobiel Winkelen', () => {
     await expect(page.getByText('Halfvol', { exact: true })).toBeVisible()
 
     await page.getByLabel('Artikel toevoegen').fill('ban')
-    await expect(page.getByTestId('mobile-shopping-result')).toBeEnabled()
-    await page.getByTestId('mobile-shopping-result').click()
-    await page.getByRole('option', { name: 'Bananen — Huishoudartikel' }).click()
+    const candidateList = page.getByTestId('mobile-shopping-candidate-list')
+    await expect(candidateList).toBeVisible()
+    await expect(candidateList.getByRole('option')).toHaveCount(5)
+    await candidateList.getByRole('option', { name: 'Bananen — Huishoudartikel', exact: true }).click()
     await page.getByTestId('mobile-shopping-add').click()
     await expect(page.getByText('3 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
     await expect(page.getByText('Bananen', { exact: true })).toBeVisible()
 
-    await page.getByLabel('Zoek in winkellijst').fill('brood')
-    await expect(page.getByText('Brood', { exact: true }).first()).toBeVisible()
-    await expect(page.getByText('Melk', { exact: true })).toHaveCount(0)
-    await page.getByRole('button', { name: 'Filters wissen' }).click()
+    for (let repeat = 0; repeat < 2; repeat += 1) {
+      await page.getByLabel('Artikel toevoegen').fill('ban')
+      await page.getByTestId('mobile-shopping-candidate-list').getByRole('option', { name: 'Bananen — Huishoudartikel', exact: true }).click()
+      await page.getByTestId('mobile-shopping-add').click()
+    }
+    await expect(page.getByText('3 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
+    const bananaCard = page.getByTestId('mobile-shopping-item-mobile-bananen')
+    await expect(bananaCard).toContainText('Aantal 3')
+    await expect(page.getByTestId('mobile-shopping-item-mobile-bananen')).toHaveCount(1)
 
     await page.getByLabel('Selecteer Brood').check()
     await expect(page.getByText('1 geselecteerd', { exact: true })).toBeVisible()
@@ -225,7 +255,7 @@ test.describe('Mobiel Winkelen', () => {
     await page.getByTestId('mobile-shopping-complete').click()
     await expect(page.getByTestId('shopping-complete-confirmation')).toBeVisible()
     await page.getByTestId('shopping-complete-confirmation-primary-button').click()
-    await expect(page.getByText('Nog geen artikelen op de winkellijst.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Nog geen artikelen op de boodschappenlijst.', { exact: true })).toBeVisible()
 
     await expectNoConsoleErrors(consoleErrors)
   })
