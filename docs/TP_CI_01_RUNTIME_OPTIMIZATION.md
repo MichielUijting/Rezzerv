@@ -71,14 +71,16 @@ Hergebruik is fail-closed:
 - de run moet van dezelfde kandidaatbranch komen;
 - een `pull_request`-run telt alleen wanneer PR-nummer én base-SHA overeenkomen met de huidige Full Regression-context;
 - een eerdere `workflow_dispatch`-run telt alleen op dezelfde kandidaatbranch en exact dezelfde SHA;
-- de run moet `completed/success` zijn;
+- een voltooide herbruikbare run moet `completed/success` zijn;
+- een reeds `queued`/`in_progress` run mag alleen als `attached` meetellen wanneer de volledige Full Regression-scope op basis van de geplande workflowstappen aantoonbaar aanwezig is en geen vereiste stap is `skipped` of fout;
 - bij gedeelde/parameterized runners is alleen een groene workflowstatus onvoldoende: alle in het Full Regression-contract genoemde authority-stappen én de afsluitende shared-stack gate moeten daadwerkelijk `success` zijn;
 - ontbrekende, gedeeltelijke, skipped, onduidelijke of niet-verifieerbare dekking wordt **niet** hergebruikt; Full Regression dispatcht die authority opnieuw.
 
 De Full Regression-gate houdt daardoor altijd exact elf authorities in de aggregate-evidence, maar iedere authority krijgt een bron:
 
-- `reused` — eerder geldig bewijs op dezelfde kandidaat;
-- `dispatched` — door de huidige Full Regression-run gestart omdat hergebruik niet aantoonbaar geldig was.
+- `reused` — eerder afgerond en geldig bewijs op dezelfde kandidaat;
+- `attached` — een al lopende volledige authority op dezelfde kandidaat waarop Full Regression aansluit in plaats van een duplicaat te starten;
+- `dispatched` — door de huidige Full Regression-run gestart omdat geen volledig herbruikbaar of veilig aanhaakbaar bewijs bestond.
 
 De gate blijft pas groen bij 11/11 geldige authorities. Reuse verandert dus alleen de uitvoeringskosten en doorlooptijd, niet de vereiste dekking of de exact-candidate mergeproof.
 
