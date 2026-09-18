@@ -159,7 +159,7 @@ export default function MobileShopping() {
       })
       if (updated) patchListItem(item.id, updated)
     } catch (saveError) {
-      setError(saveError?.message || 'Winkellijstregel kon niet worden bijgewerkt.')
+      setError(saveError?.message || 'Boodschappenlijstregel kon niet worden bijgewerkt.')
       await loadList()
     } finally {
       setSaving(false)
@@ -274,7 +274,7 @@ export default function MobileShopping() {
           showFeedback({
             variant: 'success',
             title: 'Winkelen afgerond',
-            message: 'De winkellijst is leeggemaakt.',
+            message: 'De boodschappenlijst is leeggemaakt.',
           })
         } finally {
           setSaving(false)
@@ -324,7 +324,7 @@ export default function MobileShopping() {
           </Button>
         </section>
 
-        <section className="rz-mobile-shopping-summary-card" aria-label="Mijn winkellijst">
+        <section className="rz-mobile-shopping-summary-card" aria-label="Mijn boodschappenlijst">
           <div>
             <div className="rz-mobile-shopping-summary-title">Mijn lijst</div>
             <div className="rz-mobile-shopping-summary-meta">

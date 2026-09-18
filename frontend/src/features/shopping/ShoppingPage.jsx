@@ -185,7 +185,7 @@ export default function ShoppingPage() {
       })
       await loadList()
     } catch (saveError) {
-      setError(saveError?.message || 'Winkellijstregel kon niet worden bijgewerkt.')
+      setError(saveError?.message || 'Boodschappenlijstregel kon niet worden bijgewerkt.')
       await loadList()
     } finally {
       setSaving(false)
@@ -300,7 +300,7 @@ export default function ShoppingPage() {
         try {
           await requestJson('/api/shopping-list/complete', { method: 'POST' })
           setSelectedItemIds([])
-          setMessage('Winkelen is afgerond. De winkellijst is leeggemaakt.')
+          setMessage('Winkelen is afgerond. De boodschappenlijst is leeggemaakt.')
           await loadList()
         } catch (completeError) {
           throw new Error(completeError?.message || 'Winkelen kon niet worden afgerond.')

@@ -285,7 +285,7 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
     await expect(completeDialog).toBeVisible();
     await expect(completeDialog.getByText('Voorraad en bronlijsten blijven ongewijzigd.', { exact: true })).toBeVisible();
     await page.getByTestId('shopping-complete-confirmation-primary-button').click();
-    await expect(page.getByText('Winkelen is afgerond. De winkellijst is leeggemaakt.')).toBeVisible();
+    await expect(page.getByText('Winkelen is afgerond. De boodschappenlijst is leeggemaakt.')).toBeVisible();
     expect(nativeDialogs).toEqual([]);
     await expect(page.getByText('Nog geen artikelen op de boodschappenlijst.')).toBeVisible();
 
