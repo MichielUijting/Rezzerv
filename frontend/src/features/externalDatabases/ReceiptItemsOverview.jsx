@@ -3,6 +3,7 @@ import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import RecognitionConfirmationDetail from './RecognitionConfirmationDetail'
+import { limitSearchCandidates } from '../../ui/searchCandidatePolicy.js'
 
 const PAGE_SIZE = 10
 const MIN_VISIBLE_CANDIDATE_SCORE = 0.5
@@ -370,7 +371,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       linked_product_type_id: selectedItem.linkedProductTypeId,
     },
   } : null
-  const selectedCandidates = linkedSelectedCandidate ? [linkedSelectedCandidate] : offSearchResults.map((result) => {
+  const selectedCandidates = linkedSelectedCandidate ? [linkedSelectedCandidate] : limitSearchCandidates(offSearchResults).map((result) => {
     const catalogProduct = result?.existing_catalog_product || null
     const catalogLinked = Boolean(catalogProduct)
     const gtin = gtinText(result?.gtin || result?.ean || result?.code)
@@ -571,7 +572,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
           receipt_item_id: item.receiptItemId || item.id,
           ...(mode === 'handmatig' ? { query } : {}),
           mode: mode === 'handmatig' ? 'manual' : 'automatic',
-          limit: 10,
+          limit: 5,
         }),
       })
 
@@ -584,7 +585,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         Array.isArray(data?.results) ? data.results : [],
       )
 
-      setOffSearchResults(enrichedResults)
+      setOffSearchResults(limitSearchCandidates(enrichedResults))
       setOffPreview({ ...data, search_mode: mode })
 
       const linkedResult = enrichedResults.find(

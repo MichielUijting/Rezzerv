@@ -57,7 +57,7 @@ export default function MobileShopping() {
       setSelectedItemIds((current) => current.filter((id) => existingIds.has(id)))
       setEditingItemId((current) => existingIds.has(current) ? current : '')
     } catch (loadError) {
-      setError(loadError?.message || 'Winkellijst kon niet worden geladen.')
+      setError(loadError?.message || 'Boodschappenlijst kon niet worden geladen.')
     } finally {
       setLoading(false)
     }
@@ -140,7 +140,7 @@ export default function MobileShopping() {
       showFeedback({
         variant: 'success',
         title: 'Toegevoegd',
-        message: `${addedLabel} staat op de winkellijst.`,
+        message: `${addedLabel} staat op de boodschappenlijst.`,
       })
     } catch (saveError) {
       setError(saveError?.message || 'Het geselecteerde resultaat kon niet worden toegevoegd.')
@@ -206,7 +206,7 @@ export default function MobileShopping() {
       variant: 'warning',
       title: count === 1 ? 'Rij verwijderen' : 'Rijen verwijderen',
       message: count === 1 ? '1 geselecteerde rij verwijderen?' : `${count} geselecteerde rijen verwijderen?`,
-      detail: 'De geselecteerde regels verdwijnen uit de actuele winkellijst.',
+      detail: 'De geselecteerde regels verdwijnen uit de actuele boodschappenlijst.',
       testId: 'shopping-delete-confirmation',
       primaryActionLabel: 'Verwijderen',
       secondaryActionLabel: 'Annuleren',
@@ -259,7 +259,7 @@ export default function MobileShopping() {
     showFeedback({
       variant: 'warning',
       title: 'Winkelen afronden',
-      message: 'De actuele winkellijst wordt leeggemaakt.',
+      message: 'De actuele boodschappenlijst wordt leeggemaakt.',
       detail: 'Voorraad en bronlijsten blijven ongewijzigd.',
       testId: 'shopping-complete-confirmation',
       primaryActionLabel: 'Afronden',

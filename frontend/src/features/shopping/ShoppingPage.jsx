@@ -66,7 +66,7 @@ export default function ShoppingPage() {
       const existingIds = new Set((payload.items || []).map((item) => item.id))
       setSelectedItemIds((current) => current.filter((id) => existingIds.has(id)))
     } catch (loadError) {
-      setError(loadError?.message || 'Winkellijst kon niet worden geladen.')
+      setError(loadError?.message || 'Boodschappenlijst kon niet worden geladen.')
     } finally {
       setLoading(false)
     }
@@ -163,7 +163,7 @@ export default function ShoppingPage() {
           source_id: selectedResult.source_id,
         }),
       })
-      setMessage(`${selectedResult.label} toegevoegd aan de winkellijst.`)
+      setMessage(`${selectedResult.label} toegevoegd aan de boodschappenlijst.`)
       setCatalogQuery('')
       setCatalogResults([])
       setSelectedResultId('')
@@ -243,7 +243,7 @@ export default function ShoppingPage() {
       variant: 'warning',
       title: count === 1 ? 'Rij verwijderen' : 'Rijen verwijderen',
       message: count === 1 ? '1 geselecteerde rij verwijderen?' : `${count} geselecteerde rijen verwijderen?`,
-      detail: 'De geselecteerde regels verdwijnen uit de actuele winkellijst.',
+      detail: 'De geselecteerde regels verdwijnen uit de actuele boodschappenlijst.',
       testId: 'shopping-delete-confirmation',
       primaryActionLabel: 'Verwijderen',
       secondaryActionLabel: 'Annuleren',
@@ -288,7 +288,7 @@ export default function ShoppingPage() {
     showFeedback({
       variant: 'warning',
       title: 'Winkelen afronden',
-      message: 'De actuele winkellijst wordt leeggemaakt.',
+      message: 'De actuele boodschappenlijst wordt leeggemaakt.',
       detail: 'Voorraad en bronlijsten blijven ongewijzigd.',
       testId: 'shopping-complete-confirmation',
       primaryActionLabel: 'Afronden',
@@ -351,7 +351,7 @@ export default function ShoppingPage() {
       sortable: true,
       filterable: true,
       filterPlaceholder: 'Zoeken',
-      filterLabel: 'Zoeken in winkellijst',
+      filterLabel: 'Zoeken in boodschappenlijst',
       getFilterValue: (item) => item.article_name || '',
       getSortValue: (item) => item.article_name || '',
       renderCell: (item) => <span title={item.article_name}>{item.article_name}</span>,
@@ -527,7 +527,7 @@ export default function ShoppingPage() {
               data={list.items || []}
               dataTestId="shopping-list-table"
               getRowKey={(item) => item.id}
-              emptyMessage={loading ? 'Winkellijst laden…' : 'Nog geen artikelen op de winkellijst.'}
+              emptyMessage={loading ? 'Winkellijst laden…' : 'Nog geen artikelen op de boodschappenlijst.'}
               filterState={dataTableFilters}
               onFilterChange={handleDataTableFilterChange}
               sortState={sort}

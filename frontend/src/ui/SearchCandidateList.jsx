@@ -26,6 +26,7 @@ export default function SearchCandidateList({
 
   return (
     <div
+      id={dataTestId}
       className="rz-search-candidate-list"
       role="listbox"
       aria-label={ariaLabel}
