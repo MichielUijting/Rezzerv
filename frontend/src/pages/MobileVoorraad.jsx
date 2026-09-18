@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Header from '../ui/Header'
 import Button from '../ui/Button'
+import Select from '../ui/Select.jsx'
 import { fetchJsonWithAuth } from '../lib/authSession.js'
 import './mobileVoorraad.css'
 
@@ -197,32 +198,47 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
 
           <div className={`rz-mobile-inventory-filter-grid${locationTrackingEnabled ? '' : ' rz-mobile-inventory-filter-grid--single'}`}>
             {locationTrackingEnabled ? (
-              <label className="rz-mobile-inventory-field" data-testid="mobile-inventory-location-filter">
-                <span className="rz-mobile-inventory-label">Locatie</span>
-                <select className="rz-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
-                  <option value="">Alle locaties</option>
-                  {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
-              </label>
+              <div className="rz-mobile-inventory-field" data-testid="mobile-inventory-location-filter">
+                <span id="mobile-inventory-location-label" className="rz-mobile-inventory-label">Locatie</span>
+                <Select
+                  ariaLabelledby="mobile-inventory-location-label"
+                  value={locationFilter}
+                  onChange={setLocationFilter}
+                  options={[
+                    { value: '', label: 'Alle locaties' },
+                    ...locationOptions.map((option) => ({ value: option, label: option })),
+                  ]}
+                />
+              </div>
             ) : null}
-            <label className="rz-mobile-inventory-field">
-              <span className="rz-mobile-inventory-label">Artikelgroep</span>
-              <select className="rz-input" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
-                <option value="">Alle groepen</option>
-                {articleGroupOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-              </select>
-            </label>
+            <div className="rz-mobile-inventory-field">
+              <span id="mobile-inventory-group-label" className="rz-mobile-inventory-label">Artikelgroep</span>
+              <Select
+                ariaLabelledby="mobile-inventory-group-label"
+                value={groupFilter}
+                onChange={setGroupFilter}
+                options={[
+                  { value: '', label: 'Alle groepen' },
+                  ...articleGroupOptions.map((option) => ({ value: option, label: option })),
+                ]}
+              />
+            </div>
           </div>
 
           <div className="rz-mobile-inventory-toolbar-row">
-            <label className="rz-mobile-inventory-sort">
-              <span className="rz-mobile-inventory-label">Sorteren</span>
-              <select className="rz-input" value={sortKey} onChange={(event) => setSortKey(event.target.value)}>
-                <option value="name">Naam A–Z</option>
-                <option value="quantity">Aantal hoog–laag</option>
-                {locationTrackingEnabled ? <option value="location">Locatie A–Z</option> : null}
-              </select>
-            </label>
+            <div className="rz-mobile-inventory-sort">
+              <span id="mobile-inventory-sort-label" className="rz-mobile-inventory-label">Sorteren</span>
+              <Select
+                ariaLabelledby="mobile-inventory-sort-label"
+                value={sortKey}
+                onChange={setSortKey}
+                options={[
+                  { value: 'name', label: 'Naam A–Z' },
+                  { value: 'quantity', label: 'Aantal hoog–laag' },
+                  ...(locationTrackingEnabled ? [{ value: 'location', label: 'Locatie A–Z' }] : []),
+                ]}
+              />
+            </div>
             {hasActiveFilters ? (
               <Button type="button" variant="secondary" className="rz-mobile-inventory-clear" onClick={clearFilters}>Filters wissen</Button>
             ) : null}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
+import Select from '../../ui/Select.jsx'
 import {
   fetchJsonWithAuth,
   isHouseholdAdminFromContext,
@@ -372,17 +373,17 @@ export default function MobileArticlePage() {
             <div className="rz-mobile-article-detail-row rz-mobile-article-detail-row--location" data-testid="mobile-article-location-row">
               <span>Locatie</span>
               {inventoryRows.length > 1 ? (
-                <select
-                  className="rz-mobile-article-select"
+                <Select
                   value={selectedRow?.id || ''}
-                  onChange={(event) => setSelectedInventoryId(event.target.value)}
-                  data-testid="mobile-article-location-select"
-                  aria-label="Voorraadlocatie"
-                >
-                  {inventoryRows.map((row) => (
-                    <option key={row.id} value={row.id}>{formatMobileLocation(row)} — {formatQuantity(row.quantity)}</option>
-                  ))}
-                </select>
+                  onChange={setSelectedInventoryId}
+                  options={inventoryRows.map((row) => ({
+                    value: row.id,
+                    label: `${formatMobileLocation(row)} — ${formatQuantity(row.quantity)}`,
+                  }))}
+                  ariaLabel="Voorraadlocatie"
+                  triggerClassName="rz-mobile-article-select"
+                  dataTestId="mobile-article-location-select"
+                />
               ) : (
                 <strong>{formatMobileLocation(selectedRow)}</strong>
               )}
