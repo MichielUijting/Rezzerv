@@ -308,7 +308,8 @@ Actuele Fase-7 optimalisatie:
 - PR-evidence is alleen herbruikbaar bij hetzelfde PR-nummer én dezelfde base-SHA;
 - gedeelde runners tellen alleen als alle door Full Regression vereiste authority-stappen aantoonbaar `success` zijn;
 - alleen ontbrekende of niet-verifieerbare authorities worden opnieuw gedispatcht;
-- de uiteindelijke Full Regression-evidence blijft verplicht 11/11 authorities bevatten en onderscheidt `reused` van `dispatched`.
+- als een volledige authority op exact dezelfde kandidaat al `queued`/`in_progress` is, sluit Full Regression daarop aan (`attached`) in plaats van een duplicaat te starten;
+- de uiteindelijke Full Regression-evidence blijft verplicht 11/11 authorities bevatten en onderscheidt `reused`, `attached` en `dispatched`.
 
 Featuregerichte workflows worden pas geconsolideerd volgens `docs/TEST_WORKFLOW_CLASSIFICATION.md` nadat vervangend bewijs stabiel is. De bestaande workflow `test-orchestration-platform-authorization.yml` is een autorisatie-authority voor de platformroute en is **niet** de nog te bouwen overkoepelende CI-orchestrator.
 
