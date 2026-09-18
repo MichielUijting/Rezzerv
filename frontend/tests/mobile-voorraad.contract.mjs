@@ -95,7 +95,7 @@ assert.match(mobileSource, /data-testid="mobile-inventory-page"/)
 assert.match(mobileSource, /data-testid="mobile-inventory-add-incidental-purchase"/)
 assert.match(mobileSource, /data-testid="mobile-inventory-location-filter"/)
 assert.match(mobileSource, /locationTrackingEnabled \? 'Zoek artikel, groep of locatie' : 'Zoek artikel of groep'/)
-assert.match(mobileSource, /locationTrackingEnabled \? <option value="location">Locatie A–Z<\/option> : null/)
+assert.match(mobileSource, /\.\.\.\(locationTrackingEnabled \? \[\{ value: 'location', label: 'Locatie A–Z' \}\] : \[\]\)/)
 assert.match(mobileSource, /\/api\/dev\/inventory-preview/)
 assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
 
