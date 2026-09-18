@@ -81,6 +81,7 @@ def test_product_projection_contains_startpage_actions_in_default_order(authorit
 
     by_key = {item['key']: item for item in items}
     assert by_key[flags.FEATURE_GERECHTEN]['home_tile_key'] == 'recepten'
+    assert by_key[flags.ACTION_HOME_WINKELEN]['label'] == 'Boodschappenlijst'
     assert by_key[flags.FEATURE_GERECHTEN]['enabled'] is False
     assert all(
         item['enabled'] is True
