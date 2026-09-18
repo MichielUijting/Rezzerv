@@ -1,96 +1,189 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "gate_id": "F7-03",
   "title": "Full Regression exact-candidate gate",
   "target_base": "main",
   "poll_seconds": 20,
   "timeout_seconds": 14400,
-  "candidate_contract": "Dispatch every registered authority from one candidate branch ref and accept only workflow_dispatch runs whose head_sha exactly equals the requested candidate SHA.",
+  "candidate_contract": "Reuse only complete, successful authority evidence from the exact candidate SHA and matching PR/base or candidate branch; dispatch only missing authorities and aggregate all eleven authorities fail-closed.",
   "workflows": [
     {
       "id": "TP-CI-02",
       "workflow_file": ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml",
-      "inputs": {"authority": "both"},
-      "role": "p0_shared"
+      "inputs": {
+        "authority": "both"
+      },
+      "role": "p0_shared",
+      "reuse_required_success_steps": [
+        "Run P0 Kassa authority on shared images",
+        "Run F6 Kassa authority on the same built images",
+        "Enforce both selected authorities and shared-stack gate"
+      ]
     },
     {
       "id": "TP-CI-03",
       "workflow_file": ".github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml",
-      "inputs": {"authority": "both"},
-      "role": "p0_shared"
+      "inputs": {
+        "authority": "both"
+      },
+      "role": "p0_shared",
+      "reuse_required_success_steps": [
+        "Run P0 account session authority on shared images",
+        "Run P0 authorization isolation authority on same built images",
+        "Enforce selected authorities and shared-stack gate"
+      ]
     },
     {
       "id": "TP-CI-04",
       "workflow_file": ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml",
-      "inputs": {"authority": "both"},
-      "role": "p0_shared"
+      "inputs": {
+        "authority": "both"
+      },
+      "role": "p0_shared",
+      "reuse_required_success_steps": [
+        "Run P0 Inventory correction authority on shared images",
+        "Run P0 Almost-out recalculation authority on same built images",
+        "Run F6 Inventory controlled-5xx authority on same built images",
+        "Enforce selected Inventory authorities and shared-stack gate"
+      ]
     },
     {
       "id": "TP-CI-05",
       "workflow_file": ".github/workflows/tp-ci-05-receipt-shared-stack-postgresql-validation.yml",
-      "inputs": {"authority": "both"},
-      "role": "p0_shared"
+      "inputs": {
+        "authority": "both"
+      },
+      "role": "p0_shared",
+      "reuse_required_success_steps": [
+        "Run L4-03 Receipt inventory authority on shared images",
+        "Run L4-04 Receipt locations-off authority on shared images",
+        "Run L4-05 Receipt idempotency authority on shared images",
+        "Run P0 nonphysical Receipt authority on shared images",
+        "Run F6 Receipt controlled-5xx authority on shared images",
+        "Enforce selected Receipt authorities and shared-stack gate"
+      ]
     },
     {
       "id": "TP-CI-07",
       "workflow_file": ".github/workflows/tp-ci-07-core-p0-shared-stack-postgresql-validation.yml",
-      "inputs": {"authority": "both"},
-      "role": "p0_shared"
+      "inputs": {
+        "authority": "both"
+      },
+      "role": "p0_shared",
+      "reuse_required_success_steps": [
+        "Run L4-01 Onboarding authority on shared images",
+        "Run L4-06 Article Identity authority on shared images",
+        "Run L4-07 Platform Authority on shared images",
+        "Run P0 Unpacking authority on shared images",
+        "Enforce selected Core P0 authorities and shared-stack gate"
+      ]
     },
     {
       "id": "P0-HOUSEHOLD-MEMBERSHIP",
       "workflow_file": ".github/workflows/p0-household-membership-fullstack-postgresql-validation.yml",
       "inputs": {},
-      "role": "p0_standalone"
+      "role": "p0_standalone",
+      "reuse_required_success_steps": []
     },
     {
       "id": "P0-MIGRATION-FOUNDATION",
       "workflow_file": ".github/workflows/postgresql-migration-foundation-validation.yml",
       "inputs": {},
-      "role": "p0_schema"
+      "role": "p0_schema",
+      "reuse_required_success_steps": []
     },
     {
       "id": "P0-RUNTIME-STARTUP",
       "workflow_file": ".github/workflows/postgresql-runtime-startup-schema-authority.yml",
       "inputs": {},
-      "role": "p0_schema"
+      "role": "p0_schema",
+      "reuse_required_success_steps": []
     },
     {
       "id": "F5-SETTINGS-LOCATION-POLICY",
       "workflow_file": ".github/workflows/f5-postgresql-household-location-policy-regression.yml",
       "inputs": {},
-      "role": "p0_supporting_contract"
+      "role": "p0_supporting_contract",
+      "reuse_required_success_steps": []
     },
     {
       "id": "F5-CONDITIONAL-LOCATIONS-TAB",
       "workflow_file": ".github/workflows/f5-conditional-locations-tab-regression.yml",
       "inputs": {},
-      "role": "p0_supporting_contract"
+      "role": "p0_supporting_contract",
+      "reuse_required_success_steps": []
     },
     {
       "id": "FULL-FRONTEND-REGRESSION",
       "workflow_file": ".github/workflows/pr253-full-frontend-regression.yml",
       "inputs": {},
-      "role": "full_frontend"
+      "role": "full_frontend",
+      "reuse_required_success_steps": []
     }
   ],
   "p0_scenario_authorities": {
-    "P0-ACCOUNT-SESSION": ["TP-CI-03"],
-    "P0-ONBOARDING": ["TP-CI-07"],
-    "P0-HOUSEHOLD-MEMBERSHIP": ["P0-HOUSEHOLD-MEMBERSHIP"],
-    "P0-AUTHORIZATION-ISOLATION": ["TP-CI-03", "P0-HOUSEHOLD-MEMBERSHIP"],
-    "P0-SETTINGS-PROJECTION": ["F5-SETTINGS-LOCATION-POLICY", "F5-CONDITIONAL-LOCATIONS-TAB", "TP-CI-07"],
-    "P0-LOCATIONS-POLICY": ["F5-SETTINGS-LOCATION-POLICY", "F5-CONDITIONAL-LOCATIONS-TAB", "TP-CI-05"],
-    "P0-RECEIPT-INVENTORY-ALMOSTOUT": ["TP-CI-05"],
-    "P0-KASSA-REVIEW": ["TP-CI-02"],
-    "P0-UNPACKING": ["TP-CI-07", "TP-CI-05"],
-    "P0-INVENTORY": ["TP-CI-04", "TP-CI-05"],
-    "P0-ALMOST-OUT": ["TP-CI-04", "TP-CI-05"],
-    "P0-ARTICLE-IDENTITY": ["TP-CI-07"],
-    "P0-PLATFORM-AUTHORITY": ["TP-CI-07"],
-    "P0-MIGRATION-STARTUP": ["P0-MIGRATION-FOUNDATION", "P0-RUNTIME-STARTUP"]
+    "P0-ACCOUNT-SESSION": [
+      "TP-CI-03"
+    ],
+    "P0-ONBOARDING": [
+      "TP-CI-07"
+    ],
+    "P0-HOUSEHOLD-MEMBERSHIP": [
+      "P0-HOUSEHOLD-MEMBERSHIP"
+    ],
+    "P0-AUTHORIZATION-ISOLATION": [
+      "TP-CI-03",
+      "P0-HOUSEHOLD-MEMBERSHIP"
+    ],
+    "P0-SETTINGS-PROJECTION": [
+      "F5-SETTINGS-LOCATION-POLICY",
+      "F5-CONDITIONAL-LOCATIONS-TAB",
+      "TP-CI-07"
+    ],
+    "P0-LOCATIONS-POLICY": [
+      "F5-SETTINGS-LOCATION-POLICY",
+      "F5-CONDITIONAL-LOCATIONS-TAB",
+      "TP-CI-05"
+    ],
+    "P0-RECEIPT-INVENTORY-ALMOSTOUT": [
+      "TP-CI-05"
+    ],
+    "P0-KASSA-REVIEW": [
+      "TP-CI-02"
+    ],
+    "P0-UNPACKING": [
+      "TP-CI-07",
+      "TP-CI-05"
+    ],
+    "P0-INVENTORY": [
+      "TP-CI-04",
+      "TP-CI-05"
+    ],
+    "P0-ALMOST-OUT": [
+      "TP-CI-04",
+      "TP-CI-05"
+    ],
+    "P0-ARTICLE-IDENTITY": [
+      "TP-CI-07"
+    ],
+    "P0-PLATFORM-AUTHORITY": [
+      "TP-CI-07"
+    ],
+    "P0-MIGRATION-STARTUP": [
+      "P0-MIGRATION-FOUNDATION",
+      "P0-RUNTIME-STARTUP"
+    ]
   },
   "required_p0_scenario_count": 14,
   "required_workflow_count": 11,
-  "full_frontend_workflow_id": "FULL-FRONTEND-REGRESSION"
+  "full_frontend_workflow_id": "FULL-FRONTEND-REGRESSION",
+  "reuse_contract": {
+    "exact_candidate_sha": true,
+    "same_pr_and_base_for_pull_request": true,
+    "same_branch_for_workflow_dispatch": true,
+    "allowed_events": [
+      "pull_request",
+      "workflow_dispatch"
+    ]
+  }
 }
