@@ -9,6 +9,35 @@ test.describe('Mobiel Winkelen', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     const consoleErrors = attachConsoleErrorCollector(page)
 
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: { id: 'test-admin@rezzerv.local', email: 'test-admin@rezzerv.local' },
+          user_id: 'test-admin@rezzerv.local',
+          email: 'test-admin@rezzerv.local',
+          active_household_id: '0',
+          active_household_name: 'Systeemhuishouden',
+          context_type: 'regular',
+          role: 'owner',
+          display_role: 'owner',
+          permissions: {
+            'shopping_list.view': true,
+            'shopping_list.update': true,
+            'shopping_list.manage': true,
+          },
+          supported_permissions: [
+            'shopping_list.view',
+            'shopping_list.update',
+            'shopping_list.manage',
+          ],
+          is_frontteam: false,
+          is_platform_superuser: false,
+        }),
+      })
+    })
+
     let activeListId = 'shopping-mobile-active-1'
     let items = [
       {
