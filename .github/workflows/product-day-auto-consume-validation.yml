@@ -1,0 +1,35 @@
+name: Product-day auto-consume validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/main.py'
+      - 'backend/app/services/product_day_auto_consume_service.py'
+      - 'backend/tests/test_product_day_auto_consume_service.py'
+      - 'backend/tests/test_product_day_auto_consume_processing_order.py'
+      - 'backend/tests/test_product_day_auto_consume_integration_contract.py'
+      - '.github/workflows/product-day-auto-consume-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  product-day-auto-consume:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Compile product-day inventory code
+        run: python -m py_compile backend/app/main.py backend/app/services/product_day_auto_consume_service.py backend/tests/test_product_day_auto_consume_service.py backend/tests/test_product_day_auto_consume_processing_order.py backend/tests/test_product_day_auto_consume_integration_contract.py
+
+      - name: Install focused test dependencies
+        run: python -m pip install --disable-pip-version-check 'sqlalchemy>=2,<3' pytest
+
+      - name: Run product-day auto-consume regressions
+        env:
+          PYTHONPATH: backend
+        run: pytest -q backend/tests/test_product_day_auto_consume_service.py backend/tests/test_product_day_auto_consume_processing_order.py backend/tests/test_product_day_auto_consume_integration_contract.py
