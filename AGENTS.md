@@ -267,10 +267,12 @@ testartefacten in de werkmap achter.
   taakgebonden toestemming om de benodigde branch, commits/pushes en PR aan te
   maken of bij te werken. Daarvoor is niet voor iedere tussenhandeling een aparte
   bevestiging nodig, tenzij de PO de scope beperkt.
-- Alleen de PO is gemachtigd om een PR te mergen. ChatGPT/Codex mag een PR niet
-  zelf mergen, ook niet wanneer CI groen is of de PR Ready staat. ChatGPT/Codex
-  bereidt de merge voor en rapporteert de exacte kandidaat; de mergehandeling
-  blijft bij de PO.
+- ChatGPT/Codex mag een PR daadwerkelijk mergen namens de PO, maar uitsluitend
+  nadat de PO voor die specifieke PR expliciet en ondubbelzinnig toestemming tot
+  merge heeft gegeven. Het akkoord geldt alleen voor de op dat moment
+  gecontroleerde kandidaat-SHA. Als de head-SHA daarna wijzigt, vervalt het
+  eerdere akkoord en is opnieuw expliciete PO-toestemming nodig. Zonder expliciet
+  merge-akkoord mag ChatGPT/Codex niet op eigen initiatief mergen.
 - Tag, release, deployment of productie-omschakeling vereist altijd een
   afzonderlijke expliciete PO-GO.
 - `VERSION.txt` is de primaire releaseversie; afgeleide versiebestanden moeten
@@ -289,8 +291,9 @@ testartefacten in de werkmap achter.
 - Eén PR of release heeft één doel.
 - Geen merge of release bij rode of onduidelijke relevante regressie.
 - Technisch groen is niet hetzelfde als functionele PO-acceptatie.
-- Een formele merge vereist controle van de bedoelde head-SHA en blijft een
-  PO-handeling.
+- Een formele merge vereist controle van de bedoelde head-SHA en expliciete
+  PO-merge-GO voor die specifieke PR en kandidaat. Na die GO mag de mergehandeling
+  door de PO of door ChatGPT/Codex namens de PO worden uitgevoerd.
 - Een formele release volgt de Scope Gate, QA/QC Gate en Packaging Gate uit
   `Rezzerv-Release-Gate_v1.10.md`.
 

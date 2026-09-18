@@ -8,7 +8,7 @@ Deze regels vullen `AGENTS.md` en `docs/project/DEVELOPMENT-TEST-RELEASE.md` aan
 
 1. De broncode staat in GitHub in repository `MichielUijting/Rezzerv`.
 2. ChatGPT/Codex mag voor een door de PO opgedragen taak zelfstandig een aparte taakbranch gebruiken, bestanden wijzigen, commits maken/pushen en een pull request openen of bijwerken. Dit is taakgebonden toestemming en geen toestemming voor merge of release.
-3. Alleen de PO is gemachtigd om een PR te mergen. ChatGPT/Codex mag een PR niet zelf mergen, ook niet wanneer CI groen is of de PR Ready staat. ChatGPT/Codex bereidt de merge voor en rapporteert de exacte kandidaat; de mergehandeling blijft bij de PO. Tag, release, deployment of productie-omschakeling vereist daarnaast altijd een afzonderlijke, expliciete PO-GO.
+3. ChatGPT/Codex mag een PR daadwerkelijk mergen namens de PO, maar uitsluitend nadat de PO voor die specifieke PR expliciet en ondubbelzinnig toestemming tot merge heeft gegeven. Het merge-akkoord geldt alleen voor de op dat moment gecontroleerde kandidaat-SHA. Als de head-SHA daarna wijzigt, vervalt het eerdere akkoord en is opnieuw expliciete PO-toestemming nodig. Zonder expliciet merge-akkoord mag ChatGPT/Codex niet op eigen initiatief mergen. Tag, release, deployment of productie-omschakeling vereist daarnaast altijd een afzonderlijke, expliciete PO-GO.
 4. `main` is de stabiele releasebaseline. Applicatiecode, CI-logica en bindende projectregels worden niet rechtstreeks op `main` gewijzigd.
 5. Eén PR heeft één duidelijk doel. Ongevraagde refactors, cleanup of nevenfunctionaliteit horen niet in dezelfde PR.
 
@@ -25,7 +25,7 @@ Deze regels vullen `AGENTS.md` en `docs/project/DEVELOPMENT-TEST-RELEASE.md` aan
 11. `VERSION.txt` is de primaire applicatieversie; alle afgeleide versiebestanden moeten synchroon zijn.
 12. Bij runtime-/release-relevante wijzigingen verhoogt ChatGPT/Codex de patchversie als onderdeel van het gereedmaken van de definitieve kandidaat vóór Ready. Hiervoor is binnen de opgedragen taak geen aparte tweede bevestiging nodig.
 13. Een versiebump gebeurt niet voor uitsluitend documentatie-, analyse- of andere aantoonbaar niet-runtime/release-relevante wijzigingen wanneer de bestaande releasepolicy geen bump vereist.
-14. De normale volgorde is: Draft → implementatie → gerichte/fast checks → definitieve patchversie en versiesync → preflight groen → Ready → exact-candidate Full Regression indien vereist → PO-acceptatie → merge door de PO.
+14. De normale volgorde is: Draft → implementatie → gerichte/fast checks → definitieve patchversie en versiesync → preflight groen → Ready → exact-candidate Full Regression indien vereist → PO-acceptatie → expliciete PO-merge-GO → merge door de PO of door ChatGPT/Codex namens de PO.
 15. Zware regressieruns worden niet bewust op tussen-SHA's gestart. Goedkope preflightcontroles moeten ontbrekende versie- of kandidaatvoorwaarden zo vroeg mogelijk blokkeren.
 16. Tests, gates en contracten worden nooit versoepeld, omzeild of aangepast alleen om een kandidaat groen te laten worden. Eerst wordt de oorzaak vastgesteld en het geldende contract gecontroleerd.
 
@@ -44,7 +44,7 @@ Deze regels vullen `AGENTS.md` en `docs/project/DEVELOPMENT-TEST-RELEASE.md` aan
 
 ## 5. Rollen, communicatie en verantwoordelijkheid
 
-22. De gebruiker is PO en hoeft geen technische ontwikkel-, Git-, Docker-, database- of bestandsbeheerhandelingen uit te voeren wanneer ChatGPT/Codex die zelf veilig kan uitvoeren. ChatGPT/Codex vervult binnen de opdracht de technische rollen Architect, Engineer, QA/QC en Release Coordinator, met behoud van de formele PO-beslismomenten en de PO-only mergehandeling.
+22. De gebruiker is PO en hoeft geen technische ontwikkel-, Git-, Docker-, database- of bestandsbeheerhandelingen uit te voeren wanneer ChatGPT/Codex die zelf veilig kan uitvoeren. ChatGPT/Codex vervult binnen de opdracht de technische rollen Architect, Engineer, QA/QC en Release Coordinator, met behoud van de formele PO-beslismomenten. Een merge blijft afhankelijk van expliciete PO-toestemming voor de specifieke PR en de op dat moment gecontroleerde kandidaat-SHA.
 23. Technische rapportage aan de PO is compact en begrijpelijk. Noem minimaal: wat is gewijzigd, branch, PR, head-SHA, versie, uitgevoerde tests/gates, resterende risico's en de concrete volgende stap.
 24. Technisch groen is niet hetzelfde als functionele PO-acceptatie. Een visuele/functionele wijziging die PO-beoordeling vereist, wordt pas als geaccepteerd beschouwd na het expliciete oordeel van de PO.
 
@@ -77,7 +77,7 @@ Vóór oplevering controleert ChatGPT/Codex ten minste:
 - zijn de toepasselijke tests/gates op de juiste kandidaat uitgevoerd;
 - is een eerdere exact-candidate-proof nog geldig voor de huidige head-SHA;
 - zijn relevante open PR's/branches die nog niet in `main` zitten gemeld;
-- is duidelijk dat de mergehandeling bij de PO blijft en dat release/deployment een expliciete PO-GO vereist;
+- is duidelijk dat een merge uitsluitend na expliciete PO-GO voor de specifieke PR en kandidaat-SHA mag worden uitgevoerd, en dat release/deployment daarnaast een afzonderlijke expliciete PO-GO vereist;
 - zijn er geen secrets, lokale persoonsgebonden paden of andere gevoelige gegevens toegevoegd;
 - is CI-monitoring beëindigd zodra verdere voortgang alleen nog van externe wachttijd afhing, in plaats van binnen één ChatGPT-beurt te blijven pollen;
 - is na een eventuele time-out eerst de duurzame GitHub-status geverifieerd voordat werk is hervat.
