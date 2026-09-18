@@ -196,9 +196,10 @@ test.describe('Mobiel Winkelen', () => {
     await page.getByLabel('Gekocht Melk').check()
     await expect(page.getByText('2 artikelen • 1 nog te kopen', { exact: true })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Bewerken' }).first().click()
-    await page.getByLabel('Opmerking Melk').fill('Halfvol')
-    await page.getByLabel('Opmerking Melk').blur()
+    const melkCard = page.getByTestId('mobile-shopping-item-mobile-melk')
+    await melkCard.getByRole('button', { name: 'Bewerken' }).click()
+    await melkCard.getByLabel('Opmerking Melk').fill('Halfvol')
+    await melkCard.getByLabel('Opmerking Melk').blur()
     await expect(page.getByText('Halfvol', { exact: true })).toBeVisible()
 
     await page.getByLabel('Artikel toevoegen').fill('ban')
