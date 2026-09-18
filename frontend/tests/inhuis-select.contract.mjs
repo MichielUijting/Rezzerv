@@ -10,9 +10,16 @@ const articleSource = readFileSync(new URL('../src/features/articles/MobileArtic
 assert.match(selectSource, /role="listbox"/)
 assert.match(selectSource, /role="option"/)
 assert.match(selectSource, /aria-haspopup="listbox"/)
+assert.match(selectSource, /import \{ createPortal \} from 'react-dom'/)
+assert.match(selectSource, /createPortal\(/)
+assert.match(selectSource, /document\.body/)
+assert.match(selectSource, /getBoundingClientRect\(\)/)
+assert.match(selectSource, /window\.addEventListener\('scroll', updatePosition, true\)/)
 assert.match(selectSource, /onKeyDown=\{handleKeyDown\}/)
 assert.match(selectCss, /\.rz-select-trigger[\s\S]*font-size: var\(--font-size-ui-body\) !important;/)
 assert.match(selectCss, /\.rz-select-listbox[\s\S]*font-size: var\(--font-size-ui-body\) !important;/)
+assert.match(selectCss, /\.rz-select-listbox[\s\S]*position: fixed;/)
+assert.match(selectCss, /\.rz-select-listbox[\s\S]*z-index: 9000;/)
 assert.match(selectCss, /\.rz-select-option[\s\S]*font-size: var\(--font-size-ui-body\) !important;/)
 
 for (const source of [voorraadSource, almostOutSource, articleSource]) {

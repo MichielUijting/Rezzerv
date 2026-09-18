@@ -229,6 +229,7 @@ Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een explicie
 - tekst is `14px`;
 - gebruikerszichtbare dropdowns gebruiken de centrale Inhuis-`Select`-component; native browser/OS-`<select>`-popups zijn voor deze schermen niet toegestaan omdat hun geopende optielijst de Inhuis-typografie niet betrouwbaar volgt;
 - de centrale Inhuis-`Select` gebruikt voor veldwaarde én alle opties in de geopende lijst exact `14px`, gelijk aan de veldlabels;
+- de geopende Inhuis-`Select` wordt als overlay op de centrale applicatielaag gerenderd en ligt altijd vóór de onderliggende cards, lijsten en tabellen; stacking contexts van de inhoud mogen de dropdown niet afdekken;
 - interactieve velden hebben voldoende hoogte en een duidelijk focusbeeld;
 - op mobiel is een touchhoogte van minimaal ongeveer `44px` het uitgangspunt;
 - veldachtige mobiele rijen houden links en rechts minimaal de centrale `1ch`-marge aan;

@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import './components/select.css'
 
 function normalizeOptions(options = []) {
@@ -19,6 +20,42 @@ function findNextEnabled(options, startIndex, direction) {
   return -1
 }
 
+function getMenuPosition(trigger) {
+  if (!trigger || typeof window === 'undefined') return null
+
+  const rect = trigger.getBoundingClientRect()
+  const edge = 8
+  const gap = 4
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const availableBelow = Math.max(0, viewportHeight - rect.bottom - edge - gap)
+  const availableAbove = Math.max(0, rect.top - edge - gap)
+  const openAbove = availableBelow < 176 && availableAbove > availableBelow
+  const available = openAbove ? availableAbove : availableBelow
+  const width = Math.min(rect.width, Math.max(0, viewportWidth - (edge * 2)))
+  const left = Math.min(
+    Math.max(edge, rect.left),
+    Math.max(edge, viewportWidth - edge - width),
+  )
+  const maxHeight = Math.max(44, Math.min(264, available))
+
+  if (openAbove) {
+    return {
+      left: `${left}px`,
+      width: `${width}px`,
+      bottom: `${Math.max(edge, viewportHeight - rect.top + gap)}px`,
+      maxHeight: `${maxHeight}px`,
+    }
+  }
+
+  return {
+    left: `${left}px`,
+    width: `${width}px`,
+    top: `${Math.min(viewportHeight - edge - 44, rect.bottom + gap)}px`,
+    maxHeight: `${maxHeight}px`,
+  }
+}
+
 export default function Select({
   value = '',
   onChange,
@@ -31,6 +68,8 @@ export default function Select({
   dataTestId,
 }) {
   const rootRef = useRef(null)
+  const triggerRef = useRef(null)
+  const listboxRef = useRef(null)
   const generatedId = useId()
   const listboxId = `rz-select-${generatedId.replace(/:/g, '')}`
   const normalizedOptions = useMemo(() => normalizeOptions(options), [options])
@@ -38,11 +77,14 @@ export default function Select({
   const selectedOption = selectedIndex >= 0 ? normalizedOptions[selectedIndex] : normalizedOptions[0]
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(selectedIndex >= 0 ? selectedIndex : 0)
+  const [menuPosition, setMenuPosition] = useState(null)
 
   useEffect(() => {
     if (!isOpen) return undefined
     const handlePointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) setIsOpen(false)
+      const target = event.target
+      if (rootRef.current?.contains(target) || listboxRef.current?.contains(target)) return
+      setIsOpen(false)
     }
     document.addEventListener('pointerdown', handlePointerDown)
     return () => document.removeEventListener('pointerdown', handlePointerDown)
@@ -52,6 +94,23 @@ export default function Select({
     if (!isOpen) return
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : findNextEnabled(normalizedOptions, -1, 1))
   }, [isOpen, selectedIndex, normalizedOptions])
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setMenuPosition(null)
+      return undefined
+    }
+
+    const updatePosition = () => setMenuPosition(getMenuPosition(triggerRef.current))
+    updatePosition()
+
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [isOpen])
 
   function openMenu() {
     if (disabled) return
@@ -113,9 +172,47 @@ export default function Select({
   const rootClassName = ['rz-select', isOpen ? 'rz-select--open' : '', className].filter(Boolean).join(' ')
   const triggerClasses = ['rz-input', 'rz-select-trigger', triggerClassName].filter(Boolean).join(' ')
 
+  const listbox = isOpen && menuPosition && typeof document !== 'undefined'
+    ? createPortal(
+      <div
+        ref={listboxRef}
+        id={listboxId}
+        className="rz-select-listbox"
+        role="listbox"
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledby}
+        aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+        style={menuPosition}
+      >
+        {normalizedOptions.map((option, index) => (
+          <button
+            key={`${option.value}-${index}`}
+            id={`${listboxId}-option-${index}`}
+            type="button"
+            role="option"
+            aria-selected={index === selectedIndex}
+            disabled={option.disabled}
+            tabIndex={-1}
+            className={[
+              'rz-select-option',
+              index === activeIndex ? 'rz-select-option--active' : '',
+              index === selectedIndex ? 'rz-select-option--selected' : '',
+            ].filter(Boolean).join(' ')}
+            onMouseEnter={() => setActiveIndex(index)}
+            onClick={() => chooseOption(index)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>,
+      document.body,
+    )
+    : null
+
   return (
     <div ref={rootRef} className={rootClassName} onKeyDown={handleKeyDown}>
       <button
+        ref={triggerRef}
         type="button"
         className={triggerClasses}
         disabled={disabled}
@@ -130,38 +227,7 @@ export default function Select({
         <span className="rz-select-value">{selectedOption?.label || ''}</span>
         <span className="rz-select-caret" aria-hidden="true" />
       </button>
-
-      {isOpen ? (
-        <div
-          id={listboxId}
-          className="rz-select-listbox"
-          role="listbox"
-          aria-label={ariaLabel}
-          aria-labelledby={ariaLabelledby}
-          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
-        >
-          {normalizedOptions.map((option, index) => (
-            <button
-              key={`${option.value}-${index}`}
-              id={`${listboxId}-option-${index}`}
-              type="button"
-              role="option"
-              aria-selected={index === selectedIndex}
-              disabled={option.disabled}
-              tabIndex={-1}
-              className={[
-                'rz-select-option',
-                index === activeIndex ? 'rz-select-option--active' : '',
-                index === selectedIndex ? 'rz-select-option--selected' : '',
-              ].filter(Boolean).join(' ')}
-              onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => chooseOption(index)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {listbox}
     </div>
   )
 }
