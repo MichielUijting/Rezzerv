@@ -40,4 +40,5 @@ select,
 textarea,
 option {
   font-family: inherit;
+  font-size: var(--font-size-ui-body) !important;
 }
