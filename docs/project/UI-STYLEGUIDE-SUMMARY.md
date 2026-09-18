@@ -1,7 +1,7 @@
 # Inhuis UI-styleguide
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
-Laatst inhoudelijk vastgesteld door de PO: 17 september 2026.
+Laatst inhoudelijk vastgesteld door de PO: 18 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
@@ -37,6 +37,7 @@ Regels:
 - gebruikerszichtbare tekst gebruikt Arial;
 - per applicatiescherm zijn exact twee tekstgroottes toegestaan;
 - `14px` is de normale UI-maat voor labels, invoer, filters, knoppen, badges, metadata, tabeltekst en toelichtingen;
+- veldlabels, de geselecteerde waarde van een dropdown en de opties in de geopende dropdownlijst gebruiken dezelfde `14px` bodymaat; een dropdown introduceert geen grotere tekstmaat;
 - `16px` is voor schermtitels, sectietitels en expliciete hoofdnadruk;
 - extra hiërarchie komt uit gewicht, kleur en witruimte, niet uit een derde tekstgrootte;
 - knoptekst gebruikt normaal gewicht (`font-weight: 400`) en is niet vet;
@@ -226,6 +227,7 @@ Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een explicie
 
 - zoek- en filtervelden hebben dezelfde visuele familie;
 - tekst is `14px`;
+- selectvelden gebruiken voor zowel de geselecteerde waarde als alle dropdownopties `14px`, gelijk aan de veldlabels;
 - interactieve velden hebben voldoende hoogte en een duidelijk focusbeeld;
 - op mobiel is een touchhoogte van minimaal ongeveer `44px` het uitgangspunt;
 - veldachtige mobiele rijen houden links en rechts minimaal de centrale `1ch`-marge aan;
