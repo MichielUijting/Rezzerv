@@ -6,7 +6,7 @@ const inventoryKey = 'action.home.voorraad'
 const gerechtenKey = 'feature.gerechten'
 
 function metadata(key) {
-  if (key === shoppingKey) return ['winkelen', 'Winkelen']
+  if (key === shoppingKey) return ['winkelen', 'Boodschappenlijst']
   if (key === inventoryKey) return ['voorraad', 'Voorraad']
   return ['recepten', 'Gerechten']
 }
@@ -146,7 +146,7 @@ test('Superuser manages Startpagina actions with an inline confirmation on the s
 
   const confirmation = item.getByTestId('superuser-action-button-confirmation')
   await expect(confirmation).toBeVisible()
-  await expect(confirmation).toContainText('Winkelen')
+  await expect(confirmation).toContainText('Boodschappenlijst')
   await expect(item.getByRole('button', { name: 'Uitschakelen', exact: true })).toBeDisabled()
   await expect(otherItem.getByRole('button', { name: 'Uitschakelen', exact: true })).toBeEnabled()
 
@@ -172,7 +172,7 @@ test('Superuser drags an action before another action and persists the shifted o
   expect(state.orderUpdates[0]).toEqual([inventoryKey, shoppingKey, gerechtenKey])
   await expect(inventory).toHaveAttribute('data-sort-order', '0')
   await expect(shopping).toHaveAttribute('data-sort-order', '1')
-  await expect(page.getByTestId('superuser-action-order-status')).toContainText('Voorraad staat nu voor Winkelen')
+  await expect(page.getByTestId('superuser-action-order-status')).toContainText('Voorraad staat nu voor Boodschappenlijst')
 })
 
 test('Startpagina waits for the current server projection before rendering managed actions', async ({ page }) => {

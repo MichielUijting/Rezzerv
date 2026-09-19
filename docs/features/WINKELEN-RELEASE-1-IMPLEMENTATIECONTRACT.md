@@ -36,7 +36,7 @@ Release 1 levert één zelfstandige actieve winkellijst per huishouden. De lijst
 
 - toevoegen vanuit Bijna op;
 - toevoegen vanuit Gerechten;
-- automatisch samenvoegen van kandidaatartikelen;
+- samenvoegen van verschillende catalogusidentiteiten uitsluitend op basis van gelijke naam;
 - voorraadmutatie vanuit Winkelen;
 - kassabonkoppeling;
 - winkelgroepering;
@@ -228,3 +228,17 @@ Geen merge, release of deployment zonder:
 - functionele PO-controle;
 - QA/QC GO;
 - expliciete PO-GO.
+
+
+## Aanvullend PO-besluit 2026-09-18
+
+Dit besluit vervangt strijdige eerdere UI- en duplicaatregels in dit document.
+
+- De gebruikerszichtbare naam van de module/lijst is **Boodschappenlijst**. De interne route `/winkelen`, permissies en technische sleutels mogen `winkelen` blijven heten.
+- Zoekgestuurde kandidaatselectie toont kandidaten direct zodra de zoekactie resultaten heeft; een extra klik op een gesloten resultaatselectie is niet nodig.
+- Er worden maximaal **5 kandidaten** tegelijk getoond. Dit is de applicatiebrede regel voor zoekvelden waarbij de gebruiker één kandidaat uit zoekresultaten kiest; gewone filters en statische keuzelijsten vallen hier niet onder.
+- Mobiel en desktop gebruiken voor Boodschappenlijst dezelfde directe kandidaatpresentatie.
+- Wanneer dezelfde canonieke kandidaat (`source_type` + `source_id`) opnieuw aan dezelfde actieve boodschappenlijst wordt toegevoegd, ontstaat geen tweede regel. Het bestaande veld **Aantal** wordt verhoogd.
+- Voor een eerste canonieke kandidaat zonder expliciet aantal geldt **Aantal = 1**.
+- Bestaande duplicaten met dezelfde canonieke kandidaatidentiteit op een actieve lijst worden eenmalig geconsolideerd; aantallen worden daarbij opgeteld. Voltooide/historische lijsten worden niet herschreven.
+- Kandidaten met alleen dezelfde zichtbare naam maar een verschillende canonieke bronidentiteit worden niet stilzwijgend samengevoegd.

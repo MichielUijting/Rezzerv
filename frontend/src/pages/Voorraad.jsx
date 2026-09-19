@@ -9,6 +9,7 @@ import { nextSortState, sortItems, sortStringOptions } from "../ui/sorting";
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from "../ui/resizableTable.jsx";
 import useDismissOnComponentClick from "../lib/useDismissOnComponentClick.js";
 import { getAuthHeaders, readStoredAuthContext } from "../lib/authSession.js";
+import { limitSearchCandidates } from "../ui/searchCandidatePolicy.js";
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
@@ -388,6 +389,8 @@ function InlineAutocompleteSelect({
     return sortStringOptions(options.filter((option) => normalizeText(option).includes(needle)))
   }, [options, query])
 
+  const visibleOptions = useMemo(() => limitSearchCandidates(filteredOptions), [filteredOptions])
+
   useEffect(() => {
     setHighlightedIndex(0)
   }, [query])
@@ -435,7 +438,7 @@ function InlineAutocompleteSelect({
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
             e.preventDefault()
-            setHighlightedIndex((prev) => Math.min(prev + 1, Math.max(filteredOptions.length - 1, 0)))
+            setHighlightedIndex((prev) => Math.min(prev + 1, Math.max(visibleOptions.length - 1, 0)))
             return
           }
           if (e.key === 'ArrowUp') {
@@ -445,7 +448,7 @@ function InlineAutocompleteSelect({
           }
           if (e.key === 'Enter') {
             e.preventDefault()
-            const selected = filteredOptions[highlightedIndex]
+            const selected = visibleOptions[highlightedIndex]
             if (selected) commitSelection(selected)
             return
           }
@@ -456,7 +459,7 @@ function InlineAutocompleteSelect({
         }}
       />
       <div className="rz-inline-autocomplete-menu" role="listbox" aria-label={placeholder}>
-        {filteredOptions.length ? filteredOptions.map((option, index) => (
+        {visibleOptions.length ? visibleOptions.map((option, index) => (
           <button
             key={option}
             type="button"

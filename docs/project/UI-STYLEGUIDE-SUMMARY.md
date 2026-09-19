@@ -230,6 +230,9 @@ Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een explicie
 - gebruikerszichtbare dropdowns gebruiken de centrale Inhuis-`Select`-component; native browser/OS-`<select>`-popups zijn voor deze schermen niet toegestaan omdat hun geopende optielijst de Inhuis-typografie niet betrouwbaar volgt;
 - de centrale Inhuis-`Select` gebruikt voor veldwaarde én alle opties in de geopende lijst exact `14px`, gelijk aan de veldlabels;
 - de geopende Inhuis-`Select` wordt als overlay op de centrale applicatielaag gerenderd en ligt altijd vóór de onderliggende cards, lijsten en tabellen; stacking contexts van de inhoud mogen de dropdown niet afdekken;
+- bij **zoekgestuurde kandidaatselectie** worden gevonden kandidaten direct onder het zoekveld zichtbaar; de gebruiker hoeft niet eerst een gesloten resultaatveld of dropdown te openen;
+- zo'n zoekkandidatenlijst toont maximaal **5 kandidaten** tegelijk en gebruikt de centrale `SearchCandidateList`/`searchCandidatePolicy`; dit geldt applicatiebreed, waaronder Boodschappenlijst, Voorraad-autocomplete, handmatige externe productzoeking en Catalogus/GPC-zoeking;
+- gewone tabel-/kolomfilters, locatiekeuzes en andere statische keuzelijsten zijn geen zoekkandidatenlijst en vallen niet onder deze maximum-5-regel;
 - interactieve velden hebben voldoende hoogte en een duidelijk focusbeeld;
 - op mobiel is een touchhoogte van minimaal ongeveer `44px` het uitgangspunt;
 - veldachtige mobiele rijen houden links en rechts minimaal de centrale `1ch`-marge aan;
@@ -302,6 +305,7 @@ Nieuwe schermen hergebruiken waar passend bestaande centrale componenten en patr
 - `Card`;
 - `Button`;
 - `Select` voor gebruikerszichtbare dropdowns waarvan de geopende lijst de Inhuis-typografie moet volgen;
+- `SearchCandidateList` plus `searchCandidatePolicy` voor automatisch zichtbare zoekkandidaten (maximaal 5);
 - inputs/search;
 - listcard-/badge-/statuspatronen;
 - `Table`/`DataTable`;
@@ -312,7 +316,7 @@ Maak geen lokale variant van een bestaand component alleen om kleine visuele ver
 
 ## Kernflowconsistentie
 
-Voor de mobiele kernflow **Voorraad → Bijna op → Winkelen → Kassa → Uitpakken** gelden dezelfde:
+Voor de mobiele kernflow **Voorraad → Bijna op → Boodschappenlijst → Kassa → Uitpakken** gelden dezelfde:
 - typografie;
 - merk- en surfacekleuren;
 - lichtgroen gevlekte achtergrond waar de kernflow die achtergrond gebruikt;
@@ -324,6 +328,31 @@ Voor de mobiele kernflow **Voorraad → Bijna op → Winkelen → Kassa → Uitp
 - focus- en touchregels.
 
 Functionele verschillen tussen deze schermen mogen zichtbaar zijn, maar ze voelen als één applicatie en niet als losse modules.
+
+## Mobiele Boodschappenlijst
+
+De mobiele **Boodschappenlijst** is een responsive presentatie van de bestaande actieve shopping-list en introduceert geen parallel domeinmodel. Interne route-, permissie- en technische sleutels mogen `winkelen` blijven heten.
+
+Vaste regels:
+- desktop `/winkelen` behoudt de bestaande `DataTable`; reguliere huishoudgebruikers krijgen op `<=720px` de mobiele presentatie;
+- dezelfde bestaande shopping-list endpoints en permissies blijven de enige functionele authority;
+- bovenaan staat uitsluitend het blok **Artikel toevoegen**; na minimaal twee zoektekens verschijnen maximaal **5 kandidaten direct onder het zoekveld**, zonder extra klik op een gesloten resultaatselectie;
+- de compacte **Mijn lijst**-contextcard staat direct vóór de reeds geselecteerde artikelen en toont totaal aantal regels en aantal **nog te kopen**;
+- het afzonderlijke mobiele blok **Zoek in je winkellijst / Producttype / Sorteren / Filters wissen** wordt niet getoond;
+- de daadwerkelijke lijst heeft één functionele titel: **Boodschappenlijst**; een fallbackkop zoals **Niet ingedeeld** wordt niet als lijsttitel getoond;
+- iedere kaart toont minimaal gekochtstatus, artikelnaam en **Aantal**, met producttype, echte artikelgroep, omvang en opmerking wanneer aanwezig;
+- **Aantal**, **Omvang** en **Opmerking** blijven bewerkbaar via dezelfde bestaande update-route;
+- wanneer dezelfde canonieke kandidaat opnieuw wordt toegevoegd, blijft één regel zichtbaar en wordt **Aantal** verhoogd; gelijke namen met verschillende bronidentiteit worden niet stil samengevoegd;
+- regels blijven selecteerbaar voor de bestaande acties **Exporteren** en **Verwijderen**;
+- **Winkelen afgerond** blijft de dominante sticky primaire afrondactie boven de permanente meldingenbalk en gebruikt dezelfde bestaande complete-route;
+- passieve succesfeedback verschijnt via de centrale onderste meldingenbalk; verwijder- en afrondbevestigingen blijven interactieve AppFeedback-dialogen;
+- content reserveert onderaan de meldingenbalk plus safe-area, zodat de laatste kaart en sticky actie volledig bereikbaar blijven.
+
+Niet tonen zolang hiervoor geen echte appfunctionaliteit bestaat:
+- tabs of secties **Suggesties**, **Aanbiedingen** of **Vaak gekocht**;
+- winkelgroepering of winkelsortering op een shopping-list-regel;
+- productafbeeldingen zonder bestaande productbeeldbron;
+- plus/min-bediening voor Aantal wanneer die niet als bestaande domeinactie is geïmplementeerd.
 
 ## Mobiel Voorraad-artikeldetail
 
@@ -339,12 +368,12 @@ Vaste regels:
 - bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+` en `−` werken;
 - detail- en actierijen houden altijd de centrale `1ch`-binnenmarge aan, ook bij browserzoom of responsive emulatie;
 - het detailscherm heeft geen vaste algemene `Opslaan`-knop; een specifieke instelling wordt direct/expliciet opgeslagen vanuit zijn eigen interactie;
-- de gebruikerszichtbare term voor de shoppingmodule blijft **Winkelen**.
+- de gebruikerszichtbare term voor de shoppingmodule en de lijst is **Boodschappenlijst**; interne route en technische sleutel mogen `winkelen` blijven.
 
 De sectie **Snelle acties** bevat precies:
 1. **Voorkeurswinkel** — toont/bewerkt de bestaande huishoudinstelling `favorite_store`;
 2. **Aankoophistorie** — toont uitsluitend aankoopgebeurtenissen van het huidige huishoudartikel;
-3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve lijst in **Winkelen**, opent geen extra detailscherm en geeft feedback via de onderste meldingenbalk.
+3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve **Boodschappenlijst**, opent geen extra detailscherm en geeft feedback via de onderste meldingenbalk.
 
 Niet opnemen als nieuwe mobiele functionaliteit:
 - `Naar boodschappen`;

@@ -4,6 +4,16 @@ on:
   pull_request:
     paths:
       - 'frontend/src/features/shopping/**'
+      - 'frontend/tests/e2e/winkelen.mobile.frontend-regression.spec.js'
+      - 'frontend/tests/mobile-winkelen.contract.mjs'
+      - 'frontend/tests/search-candidate-policy.contract.mjs'
+      - 'frontend/src/ui/SearchCandidateList.jsx'
+      - 'frontend/src/ui/searchCandidatePolicy.js'
+      - 'frontend/src/ui/searchCandidateList.css'
+      - 'frontend/src/features/shopping/mobileShopping.css'
+      - 'frontend/src/features/shopping/MobileShopping.jsx'
+      - 'frontend/src/features/shopping/ShoppingResponsive.jsx'
+      - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/src/ui/DataTable.jsx'
       - 'frontend/src/ui/Table.jsx'
       - 'frontend/src/ui/resizableTable.jsx'
@@ -146,7 +156,7 @@ jobs:
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
             mcr.microsoft.com/playwright:v1.58.2-noble \
-            bash -lc "npm ci && ./node_modules/.bin/playwright test tests/e2e/winkelen.frontend-regression.spec.js tests/e2e/winkelen-column-controls.spec.js"
+            bash -lc "npm ci && node tests/mobile-winkelen.contract.mjs && node tests/search-candidate-policy.contract.mjs && ./node_modules/.bin/playwright test tests/e2e/winkelen.frontend-regression.spec.js tests/e2e/winkelen-column-controls.spec.js tests/e2e/winkelen.mobile.frontend-regression.spec.js"
 
       - name: Upload Playwright report
         if: always()

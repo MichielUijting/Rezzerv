@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
+import { limitSearchCandidates } from '../../ui/searchCandidatePolicy.js'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './catalog.css'
 
@@ -77,9 +78,8 @@ export default function CatalogGpcActionPage() {
   const articleResults = useMemo(() => {
     const query = articleQuery.trim().toLowerCase()
     if (!query) return []
-    return items.filter((item) => [item.name, item.brand, item.primary_gtin]
-      .some((value) => String(value || '').toLowerCase().includes(query)))
-      .slice(0, 25)
+    return limitSearchCandidates(items.filter((item) => [item.name, item.brand, item.primary_gtin]
+      .some((value) => String(value || '').toLowerCase().includes(query))))
   }, [items, articleQuery])
 
   async function chooseArticle(article) {
@@ -126,10 +126,10 @@ export default function CatalogGpcActionPage() {
       setSearchingBricks(true)
       setError('')
       try {
-        const response = await fetchJsonWithAuth(`/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=25`)
+        const response = await fetchJsonWithAuth(`/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=5`)
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(functionalError(data, 'De GPC-catalogus kon niet worden doorzocht.'))
-        if (!cancelled) setBrickResults(Array.isArray(data?.items) ? data.items : [])
+        if (!cancelled) setBrickResults(limitSearchCandidates(Array.isArray(data?.items) ? data.items : []))
       } catch (searchError) {
         if (!cancelled) setError(searchError?.message || 'De GPC-catalogus kon niet worden doorzocht.')
       } finally {

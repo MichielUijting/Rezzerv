@@ -149,9 +149,21 @@ def main() -> int:
         assert item["product_type_name"] == "Halfvolle melk", item
         assert item["source_type"] == "household_article", item
         assert item["source_id"] == "household-article-melk", item
-        assert item["quantity"] is None, item
+        assert item["quantity"] == 1.0, item
         assert item["volume"] is None, item
         assert item["checked"] is False, item
+
+        duplicate_second = add_shopping_list_item(conn, "0", candidate)
+        assert duplicate_second["id"] == item["id"], duplicate_second
+        assert duplicate_second["quantity"] == 2.0, duplicate_second
+
+        duplicate_third = add_shopping_list_item(conn, "0", candidate)
+        assert duplicate_third["id"] == item["id"], duplicate_third
+        assert duplicate_third["quantity"] == 3.0, duplicate_third
+
+        deduplicated_active = get_active_shopping_list(conn, "0")
+        assert deduplicated_active["item_count"] == 1, deduplicated_active
+        assert deduplicated_active["items"][0]["quantity"] == 3.0, deduplicated_active
 
         other_household = get_active_shopping_list(conn, "1")
         assert other_household["items"] == [], other_household
@@ -214,6 +226,7 @@ def main() -> int:
     print("catalog_search_three_scopes=PASS")
     print("initial_empty=PASS")
     print("catalog_candidate_and_inline_fields=PASS")
+    print("duplicate_candidate_quantity=PASS")
     print("crud_and_checked=PASS")
     print("household_isolation=PASS")
     print("complete_creates_empty_active_list=PASS")

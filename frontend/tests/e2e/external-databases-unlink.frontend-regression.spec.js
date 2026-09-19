@@ -113,7 +113,7 @@ test.describe('Externe databases ontkoppelen regressie', () => {
       {
         receipt_item_id: 'purchase-import-line:purchase-line-unlink-regression',
         mode: 'automatic',
-        limit: 10,
+        limit: 5,
       },
     ]);
     expect(unlinkCalled).toBe(false);

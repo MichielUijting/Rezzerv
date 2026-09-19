@@ -329,11 +329,69 @@ def add_shopping_list_item(conn: Connection, household_id: str, payload: dict[st
     article_name = " ".join(str(payload.get("article_name") or payload.get("label") or "").strip().split())
     if not article_name:
         raise ValueError("Artikelnaam is verplicht")
-    quantity = _database_number(_normalize_decimal(payload.get("quantity"), "Aantal"))
+
+    requested_quantity = _database_number(_normalize_decimal(payload.get("quantity"), "Aantal"))
     volume = _database_number(_normalize_decimal(payload.get("volume"), "Volume"))
     unit = _normalize_unit(payload.get("unit"))
-    item_id = str(uuid.uuid4())
+    source_type = str(payload.get("source_type") or "manual").strip().lower() or "manual"
+    source_id = str(payload.get("source_id") or "").strip()
+    canonical_candidate = bool(source_id and source_type != "manual")
     now = _utc_now_iso()
+
+    if canonical_candidate:
+        existing = conn.execute(text("""
+            SELECT *
+            FROM shopping_list_items
+            WHERE shopping_list_id = :shopping_list_id
+              AND household_id = :household_id
+              AND lower(trim(COALESCE(source_type, 'manual'))) = :source_type
+              AND trim(COALESCE(source_id, '')) = :source_id
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+        """), {
+            "shopping_list_id": active["id"],
+            "household_id": str(household_id),
+            "source_type": source_type,
+            "source_id": source_id,
+        }).mappings().first()
+
+        if existing:
+            current_quantity = _serialize_decimal(existing.get("quantity"))
+            next_quantity = (current_quantity if current_quantity is not None else 1.0) + (
+                requested_quantity if requested_quantity is not None else 1.0
+            )
+            conn.execute(text("""
+                UPDATE shopping_list_items
+                SET article_name = :article_name,
+                    article_group_name = :article_group_name,
+                    product_type_name = :product_type_name,
+                    quantity = :quantity,
+                    checked = 0,
+                    updated_at = :updated_at
+                WHERE id = :id
+                  AND shopping_list_id = :shopping_list_id
+                  AND household_id = :household_id
+            """), {
+                "article_name": article_name,
+                "article_group_name": str(payload.get("article_group_name") or existing.get("article_group_name") or "").strip(),
+                "product_type_name": str(payload.get("product_type_name") or existing.get("product_type_name") or "").strip(),
+                "quantity": next_quantity,
+                "updated_at": now,
+                "id": str(existing["id"]),
+                "shopping_list_id": active["id"],
+                "household_id": str(household_id),
+            })
+            row = conn.execute(
+                text("SELECT * FROM shopping_list_items WHERE id = :id AND household_id = :household_id"),
+                {"id": str(existing["id"]), "household_id": str(household_id)},
+            ).mappings().one()
+            return _serialize_item(row)
+
+    item_id = str(uuid.uuid4())
+    quantity = requested_quantity
+    if canonical_candidate and quantity is None:
+        quantity = 1.0
+
     values = {
         "id": item_id,
         "shopping_list_id": active["id"],
@@ -341,8 +399,8 @@ def add_shopping_list_item(conn: Connection, household_id: str, payload: dict[st
         "article_name": article_name,
         "article_group_name": str(payload.get("article_group_name") or "").strip(),
         "product_type_name": str(payload.get("product_type_name") or "").strip(),
-        "source_type": str(payload.get("source_type") or "manual").strip() or "manual",
-        "source_id": str(payload.get("source_id") or "").strip(),
+        "source_type": source_type,
+        "source_id": source_id,
         "quantity": quantity,
         "volume": volume,
         "unit": unit,
@@ -364,8 +422,6 @@ def add_shopping_list_item(conn: Connection, household_id: str, payload: dict[st
     """), values)
     row = conn.execute(text("SELECT * FROM shopping_list_items WHERE id = :id"), {"id": item_id}).mappings().one()
     return _serialize_item(row)
-
-
 def update_shopping_list_item(conn: Connection, household_id: str, item_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
     ensure_shopping_list_schema(conn)
     existing = conn.execute(text("SELECT * FROM shopping_list_items WHERE id = :id AND household_id = :household_id LIMIT 1"), {"id": str(item_id), "household_id": str(household_id)}).mappings().first()

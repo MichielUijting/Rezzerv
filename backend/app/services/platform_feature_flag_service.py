@@ -68,7 +68,7 @@ FEATURE_FLAG_DEFINITIONS = {
     },
     ACTION_HOME_MELDINGEN: _home_action("Meldingen", "meldingen"),
     ACTION_HOME_BIJNA_OP: _home_action("Bijna op", "bijna-op"),
-    ACTION_HOME_WINKELEN: _home_action("Winkelen", "winkelen"),
+    ACTION_HOME_WINKELEN: _home_action("Boodschappenlijst", "winkelen"),
     ACTION_HOME_PROGNOSES: _home_action("Prognoses", "prognoses"),
     ACTION_HOME_UITLENEN: _home_action("Uitlenen", "uitlenen"),
     ACTION_HOME_VOORRAAD: _home_action("Voorraad", "voorraad"),

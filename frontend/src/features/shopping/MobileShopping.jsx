@@ -1,0 +1,478 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Header from '../../ui/Header.jsx'
+import Button from '../../ui/Button.jsx'
+import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
+import { fetchJsonWithAuth } from '../../lib/authSession.js'
+import '../../pages/mobileVoorraad.css'
+import './mobileShopping.css'
+
+const SOURCE_LABELS = {
+  household_article: 'Huishoudartikel',
+  product_type: 'Producttype',
+  article_group: 'Artikelgroep',
+}
+
+async function requestJson(url, options = {}) {
+  const response = await fetchJsonWithAuth(url, options)
+  if (response.status === 204) return null
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const detail = typeof payload?.detail === 'string' ? payload.detail : 'Verzoek mislukt'
+    throw new Error(detail)
+  }
+  return payload
+}
+
+function csvValue(value) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`
+}
+
+function productTypeLabel(item) {
+  return String(item?.product_type_name || '').trim()
+}
+
+export default function MobileShopping() {
+  const { showFeedback } = useAppFeedback()
+  const [list, setList] = useState({ items: [], item_count: 0 })
+  const [catalogQuery, setCatalogQuery] = useState('')
+  const [catalogResults, setCatalogResults] = useState([])
+  const [selectedResultId, setSelectedResultId] = useState('')
+  const [selectedItemIds, setSelectedItemIds] = useState([])
+  const [editingItemId, setEditingItemId] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [searching, setSearching] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const checkedSaveChainsRef = useRef(new Map())
+  const checkedMutationVersionsRef = useRef(new Map())
+
+  async function loadList() {
+    setLoading(true)
+    setError('')
+    try {
+      const payload = await requestJson('/api/shopping-list')
+      setList(payload)
+      const existingIds = new Set((payload.items || []).map((item) => item.id))
+      setSelectedItemIds((current) => current.filter((id) => existingIds.has(id)))
+      setEditingItemId((current) => existingIds.has(current) ? current : '')
+    } catch (loadError) {
+      setError(loadError?.message || 'Boodschappenlijst kon niet worden geladen.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadList() }, [])
+
+  useEffect(() => {
+    const query = catalogQuery.trim()
+    setSelectedResultId('')
+    if (query.length < 2) {
+      setCatalogResults([])
+      return undefined
+    }
+
+    const timer = window.setTimeout(async () => {
+      setSearching(true)
+      setError('')
+      try {
+        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}&limit=5`)
+        setCatalogResults(Array.isArray(payload?.items) ? payload.items : [])
+      } catch (searchError) {
+        setCatalogResults([])
+        setError(searchError?.message || 'Artikelen konden niet worden doorzocht.')
+      } finally {
+        setSearching(false)
+      }
+    }, 250)
+
+    return () => window.clearTimeout(timer)
+  }, [catalogQuery])
+
+  const selectedResult = useMemo(
+    () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
+    [catalogResults, selectedResultId],
+  )
+
+  const selectedItems = useMemo(
+    () => (list.items || []).filter((item) => selectedItemIds.includes(item.id)),
+    [list.items, selectedItemIds],
+  )
+  const remainingCount = useMemo(
+    () => (list.items || []).filter((item) => !item.checked).length,
+    [list.items],
+  )
+
+  function patchListItem(itemId, patch) {
+    setList((current) => ({
+      ...current,
+      items: (current.items || []).map((item) => item.id === itemId ? { ...item, ...patch } : item),
+    }))
+  }
+
+  function toggleSelectedItem(itemId, selected) {
+    setSelectedItemIds((current) => selected
+      ? [...new Set([...current, itemId])]
+      : current.filter((id) => id !== itemId))
+  }
+
+  async function addSelectedResult() {
+    if (!selectedResult) return
+    setSaving(true)
+    setError('')
+    try {
+      await requestJson('/api/shopping-list/items', {
+        method: 'POST',
+        body: JSON.stringify({
+          article_name: selectedResult.article_name || selectedResult.label,
+          article_group_name: selectedResult.article_group_name || '',
+          product_type_name: selectedResult.product_type_name || '',
+          source_type: selectedResult.source_type,
+          source_id: selectedResult.source_id,
+        }),
+      })
+      const addedLabel = selectedResult.label
+      setCatalogQuery('')
+      setCatalogResults([])
+      setSelectedResultId('')
+      await loadList()
+      showFeedback({
+        variant: 'success',
+        title: 'Toegevoegd',
+        message: `${addedLabel} staat op de boodschappenlijst.`,
+      })
+    } catch (saveError) {
+      setError(saveError?.message || 'Het geselecteerde resultaat kon niet worden toegevoegd.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function updateItem(item, patch) {
+    setSaving(true)
+    setError('')
+    try {
+      const updated = await requestJson(`/api/shopping-list/items/${encodeURIComponent(item.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(patch),
+      })
+      if (updated) patchListItem(item.id, updated)
+    } catch (saveError) {
+      setError(saveError?.message || 'Boodschappenlijstregel kon niet worden bijgewerkt.')
+      await loadList()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function updateChecked(item, checked) {
+    const itemId = item.id
+    const previousChecked = Boolean(item.checked)
+    const nextVersion = (checkedMutationVersionsRef.current.get(itemId) || 0) + 1
+    checkedMutationVersionsRef.current.set(itemId, nextVersion)
+    patchListItem(itemId, { checked })
+
+    const previousChain = checkedSaveChainsRef.current.get(itemId) || Promise.resolve()
+    const nextChain = previousChain
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          await requestJson(`/api/shopping-list/items/${encodeURIComponent(itemId)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ checked }),
+          })
+        } catch (saveError) {
+          if (checkedMutationVersionsRef.current.get(itemId) === nextVersion) {
+            patchListItem(itemId, { checked: previousChecked })
+            setError(saveError?.message || 'De koopstatus kon niet worden opgeslagen.')
+          }
+          throw saveError
+        } finally {
+          if (checkedMutationVersionsRef.current.get(itemId) === nextVersion) {
+            checkedSaveChainsRef.current.delete(itemId)
+          }
+        }
+      })
+
+    checkedSaveChainsRef.current.set(itemId, nextChain)
+    void nextChain.catch(() => undefined)
+  }
+
+  function deleteSelectedItems() {
+    if (selectedItems.length === 0) return
+    const count = selectedItems.length
+    showFeedback({
+      variant: 'warning',
+      title: count === 1 ? 'Rij verwijderen' : 'Rijen verwijderen',
+      message: count === 1 ? '1 geselecteerde rij verwijderen?' : `${count} geselecteerde rijen verwijderen?`,
+      detail: 'De geselecteerde regels verdwijnen uit de actuele boodschappenlijst.',
+      testId: 'shopping-delete-confirmation',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        setSaving(true)
+        try {
+          await Promise.all(selectedItems.map((item) => requestJson(
+            `/api/shopping-list/items/${encodeURIComponent(item.id)}`,
+            { method: 'DELETE' },
+          )))
+          setSelectedItemIds([])
+          await loadList()
+          showFeedback({
+            variant: 'success',
+            title: 'Verwijderd',
+            message: count === 1 ? '1 rij verwijderd.' : `${count} rijen verwijderd.`,
+          })
+        } finally {
+          setSaving(false)
+        }
+      },
+    })
+  }
+
+  function exportSelectedItems() {
+    if (selectedItems.length === 0) return
+    const rows = [
+      ['Artikel', 'Producttype', 'Omvang', 'Opmerking', 'Gekocht'],
+      ...selectedItems.map((item) => [
+        item.article_name,
+        item.product_type_name,
+        item.size,
+        item.note,
+        item.checked ? 'Ja' : 'Nee',
+      ]),
+    ]
+    const csv = `\uFEFF${rows.map((row) => row.map(csvValue).join(';')).join('\r\n')}`
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'winkelen-geselecteerde-rijen.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  function completeShopping() {
+    showFeedback({
+      variant: 'warning',
+      title: 'Winkelen afronden',
+      message: 'De actuele boodschappenlijst wordt leeggemaakt.',
+      detail: 'Voorraad en bronlijsten blijven ongewijzigd.',
+      testId: 'shopping-complete-confirmation',
+      primaryActionLabel: 'Afronden',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        setSaving(true)
+        try {
+          await requestJson('/api/shopping-list/complete', { method: 'POST' })
+          setSelectedItemIds([])
+          setEditingItemId('')
+          await loadList()
+          showFeedback({
+            variant: 'success',
+            title: 'Winkelen afgerond',
+            message: 'De boodschappenlijst is leeggemaakt.',
+          })
+        } finally {
+          setSaving(false)
+        }
+      },
+    })
+  }
+
+  return (
+    <div className="rz-screen rz-mobile-inventory-screen rz-mobile-shopping-screen" data-testid="mobile-shopping-page">
+      <Header title="Boodschappenlijst" />
+      <main className="rz-mobile-inventory-content rz-mobile-shopping-content">
+        <section className="rz-mobile-inventory-toolbar rz-mobile-shopping-toolbar" aria-label="Artikel toevoegen">
+          <div className="rz-mobile-shopping-toolbar-title">Artikel toevoegen</div>
+          <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
+            <span className="rz-mobile-inventory-label">Catalogus zoeken</span>
+            <input
+              className="rz-input"
+              type="search"
+              value={catalogQuery}
+              onChange={(event) => setCatalogQuery(event.target.value)}
+              placeholder="Zoek artikel, producttype of artikelgroep"
+              aria-label="Artikel toevoegen"
+              aria-controls="mobile-shopping-candidate-list"
+              aria-expanded={catalogResults.length > 0}
+              autoComplete="off"
+            />
+          </label>
+          <SearchCandidateList
+            items={catalogResults}
+            selectedKey={selectedResultId}
+            getKey={(item) => `${item.source_type}:${item.source_id}`}
+            getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
+            onSelect={setSelectedResultId}
+            loading={searching}
+            ariaLabel="Kandidaten voor artikel toevoegen"
+            dataTestId="mobile-shopping-candidate-list"
+          />
+          <Button
+            type="button"
+            variant="primary"
+            onClick={addSelectedResult}
+            disabled={saving || !selectedResult}
+            data-testid="mobile-shopping-add"
+          >
+            Toevoegen
+          </Button>
+        </section>
+
+        <section className="rz-mobile-shopping-summary-card" aria-label="Mijn boodschappenlijst">
+          <div>
+            <div className="rz-mobile-shopping-summary-title">Mijn lijst</div>
+            <div className="rz-mobile-shopping-summary-meta">
+              {loading ? 'Boodschappenlijst laden…' : `${Number(list.item_count || 0)} artikelen • ${remainingCount} nog te kopen`}
+            </div>
+          </div>
+          <span className="rz-mobile-shopping-count" aria-label={`${remainingCount} nog te kopen`}>
+            {remainingCount}
+          </span>
+        </section>
+
+        {error ? (
+          <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert">
+            <div>{error}</div>
+            <Button type="button" variant="secondary" onClick={loadList}>Opnieuw proberen</Button>
+          </section>
+        ) : null}
+
+        {!error && !loading && (list.items || []).length === 0 ? (
+          <section className="rz-mobile-inventory-state">
+            <strong>Nog geen artikelen op de boodschappenlijst.</strong>
+          </section>
+        ) : null}
+
+        {!error && (list.items || []).length > 0 ? (
+          <section className="rz-mobile-shopping-group" aria-label="Boodschappenlijst">
+            <div className="rz-mobile-shopping-group-header">
+              <div className="rz-mobile-shopping-group-title">Boodschappenlijst</div>
+              <span>{(list.items || []).length} {(list.items || []).length === 1 ? 'artikel' : 'artikelen'}</span>
+            </div>
+
+            <div className="rz-mobile-shopping-list">
+              {(list.items || []).map((item) => {
+                const editing = editingItemId === item.id
+                return (
+                  <article
+                    key={item.id}
+                    className={`rz-mobile-shopping-card${item.checked ? ' rz-mobile-shopping-card--checked' : ''}`}
+                    data-testid={`mobile-shopping-item-${item.id}`}
+                  >
+                    <label className="rz-mobile-shopping-buy-check">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(item.checked)}
+                        onChange={(event) => updateChecked(item, event.target.checked)}
+                        aria-label={`Gekocht ${item.article_name}`}
+                      />
+                      <span>{item.checked ? 'Gekocht' : 'Nog te kopen'}</span>
+                    </label>
+
+                    <div className="rz-mobile-shopping-card-main">
+                      <div className="rz-mobile-shopping-card-title">{item.article_name}</div>
+                      {productTypeLabel(item) ? (
+                        <div className="rz-mobile-shopping-card-product">{productTypeLabel(item)}</div>
+                      ) : null}
+                      <div className="rz-mobile-shopping-card-meta">
+                        <span>Aantal {Number(item.quantity ?? 1).toLocaleString('nl-NL')}</span>
+                        {String(item.article_group_name || '').trim() ? <span>{item.article_group_name}</span> : null}
+                        {item.size ? <span>{item.size}</span> : null}
+                        {item.note ? <span>{item.note}</span> : null}
+                      </div>
+                    </div>
+
+                    <div className="rz-mobile-shopping-card-actions">
+                      <button
+                        type="button"
+                        className="rz-mobile-shopping-edit"
+                        onClick={() => setEditingItemId(editing ? '' : item.id)}
+                        aria-expanded={editing}
+                        aria-controls={`mobile-shopping-editor-${item.id}`}
+                      >
+                        {editing ? 'Sluiten' : 'Bewerken'}
+                      </button>
+                      <label className="rz-mobile-shopping-select">
+                        <input
+                          type="checkbox"
+                          checked={selectedItemIds.includes(item.id)}
+                          onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
+                          aria-label={`Selecteer ${item.article_name}`}
+                        />
+                        <span>Selecteer</span>
+                      </label>
+                    </div>
+
+                    {editing ? (
+                      <div className="rz-mobile-shopping-editor" id={`mobile-shopping-editor-${item.id}`}>
+                        <label className="rz-mobile-inventory-field">
+                          <span className="rz-mobile-inventory-label">Aantal</span>
+                          <input
+                            key={`quantity-${item.id}-${item.quantity ?? 1}`}
+                            className="rz-input"
+                            type="number"
+                            min="1"
+                            step="1"
+                            defaultValue={item.quantity ?? 1}
+                            aria-label={`Aantal ${item.article_name}`}
+                            onBlur={(event) => updateItem(item, { quantity: event.target.value })}
+                          />
+                        </label>
+                        <label className="rz-mobile-inventory-field">
+                          <span className="rz-mobile-inventory-label">Omvang</span>
+                          <input
+                            className="rz-input"
+                            defaultValue={item.size || ''}
+                            aria-label={`Omvang ${item.article_name}`}
+                            onBlur={(event) => updateItem(item, { size: event.target.value })}
+                          />
+                        </label>
+                        <label className="rz-mobile-inventory-field">
+                          <span className="rz-mobile-inventory-label">Opmerking</span>
+                          <input
+                            className="rz-input"
+                            defaultValue={item.note || ''}
+                            aria-label={`Opmerking ${item.article_name}`}
+                            onBlur={(event) => updateItem(item, { note: event.target.value })}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {selectedItems.length > 0 ? (
+          <section className="rz-mobile-shopping-selection-actions" aria-label="Geselecteerde regels">
+            <span>{selectedItems.length} geselecteerd</span>
+            <div>
+              <Button type="button" variant="secondary" onClick={exportSelectedItems}>Exporteren</Button>
+              <Button type="button" variant="secondary" onClick={deleteSelectedItems} disabled={saving}>Verwijderen</Button>
+            </div>
+          </section>
+        ) : null}
+
+        <div className="rz-mobile-shopping-complete">
+          <Button
+            type="button"
+            variant="primary"
+            onClick={completeShopping}
+            disabled={saving || Number(list.item_count || 0) === 0}
+            data-testid="mobile-shopping-complete"
+          >
+            Winkelen afgerond
+          </Button>
+        </div>
+      </main>
+    </div>
+  )
+}
