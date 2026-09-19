@@ -117,6 +117,7 @@ jobs:
           grep -F 'POSTGRESQL_CATALOG_IDENTITY_BOOLEAN_ORDER_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_INTEGER_MEMBERSHIP_PROJECTION_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_COMPLETE_GPC_LINK_VALIDATION_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_GPC_METADATA_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_CANDIDATE_TIMESTAMP_ORDER_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_RECEIPT_TABLE_NUMERIC_QUANTITY_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN' /tmp/catalog-off-dml.log
