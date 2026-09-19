@@ -226,7 +226,7 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await melkCard.getByLabel('Opmerking Melk').blur()
     await expect(page.getByText('Halfvol', { exact: true })).toBeVisible()
 
-    await page.getByLabel('Artikel toevoegen', { exact: true }).fill('ban')
+    await page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true }).fill('ban')
     const candidateList = page.getByTestId('mobile-shopping-candidate-list')
     await expect(candidateList).toBeVisible()
     await expect(candidateList.getByRole('option')).toHaveCount(5)
@@ -236,7 +236,7 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await expect(page.getByText('Bananen', { exact: true })).toBeVisible()
 
     for (let repeat = 0; repeat < 2; repeat += 1) {
-      await page.getByLabel('Artikel toevoegen', { exact: true }).fill('ban')
+      await page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true }).fill('ban')
       await page.getByTestId('mobile-shopping-candidate-list').getByRole('option', { name: 'Bananen — Huishoudartikel', exact: true }).click()
       await page.getByTestId('mobile-shopping-add').click()
     }

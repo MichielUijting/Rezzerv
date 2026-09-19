@@ -159,13 +159,13 @@ test.describe('Externe databases OFF candidate flow', () => {
     expect(offRequestBodies[0]).toEqual({
       receipt_item_id: 'purchase-import-line:purchase-line-off-preview-regression',
       mode: 'automatic',
-      limit: 10,
+      limit: 5,
     });
     expect(offRequestBodies[1]).toEqual({
       receipt_item_id: 'purchase-import-line:purchase-line-off-preview-regression',
       query: 'melk halfvol zelf zoeken',
       mode: 'manual',
-      limit: 10,
+      limit: 5,
     });
 
     await expect(page.getByTestId('external-producttype-link-panel')).toBeVisible();

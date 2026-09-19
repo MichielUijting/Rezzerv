@@ -129,6 +129,10 @@ ALLOWED_COMPATIBILITY_FILES: dict[str, str] = {
     "backend/tests/postgresql_legacy_production_adoption_selftest.py": (
         "Reconstructs historical production SQLite drift before canonical PostgreSQL adoption."
     ),
+    "backend/tests/shopping_list_release1_selftest.py": (
+        "Exercises the existing isolated SQLite shopping-list service compatibility harness; "
+        "the workflow runtime and browser regression remain PostgreSQL-backed."
+    ),
     "backend/tests/receipt_lifecycle_schema_authority_selftest.py": (
         "Proves the historical SQLite receipt schema can be migrated without runtime DDL."
     ),
