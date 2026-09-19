@@ -38,6 +38,8 @@ OFF_FIELDS = [
     "stores_tags",
     "image_front_small_url",
     "image_front_url",
+    "image_small_url",
+    "image_url",
 ]
 
 
@@ -50,6 +52,15 @@ def _text(value: Any) -> str:
         return " ".join(_text(item) for item in value if _text(item))
     return str(value or "").strip()
 
+
+
+def _off_image_url(product: dict[str, Any]) -> str:
+    return _text(
+        product.get("image_front_small_url")
+        or product.get("image_front_url")
+        or product.get("image_small_url")
+        or product.get("image_url")
+    )
 
 
 def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
@@ -149,6 +160,7 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
             "explicit_gpc_brick_code": _text(
                 product.get("gpcCategoryCode")
             ),
+            "image_url": _off_image_url(product),
             "source": "open_food_facts",
         },
         "mutated": False,
@@ -488,9 +500,7 @@ def _score_product(
 
     country_tokens = _tokens(product.get("countries")) | _tokens(product.get("countries_tags"))
     market = 1.0 if {"netherlands", "nederland"} & country_tokens else 0.0
-    completeness = 1.0 if _text(
-        product.get("image_front_small_url") or product.get("image_front_url")
-    ) else 0.0
+    completeness = 1.0 if _off_image_url(product) else 0.0
 
     score = round(
         min(
@@ -543,7 +553,7 @@ def _normalize_result(
         "brand": _text(product.get("brands")),
         "quantity": _text(product.get("quantity")),
         "category": _text(product.get("categories")),
-        "image_url": _text(product.get("image_front_small_url") or product.get("image_front_url")),
+        "image_url": _off_image_url(product),
         "source_url": f"https://world.openfoodfacts.org/product/{urllib.parse.quote(gtin)}",
         "score": score,
         "score_breakdown": breakdown,

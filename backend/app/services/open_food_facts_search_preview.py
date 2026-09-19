@@ -31,6 +31,8 @@ OFF_SEARCH_FIELDS_LIST = [
     "stores_tags",
     "image_front_small_url",
     "image_front_url",
+    "image_small_url",
+    "image_url",
 ]
 OFF_SEARCH_FIELDS = ",".join(OFF_SEARCH_FIELDS_LIST)
 FLAVORED_PRODUCT_TOKENS = {
@@ -127,6 +129,15 @@ def build_off_search_terms(
     ])[:12]
 
 
+def _off_image_url(product: dict[str, Any]) -> str:
+    return _text(
+        product.get("image_front_small_url")
+        or product.get("image_front_url")
+        or product.get("image_small_url")
+        or product.get("image_url")
+    )
+
+
 def _off_product_url(code: str) -> str:
     normalized_code = _text(code)
     if not normalized_code:
@@ -192,7 +203,7 @@ def _score_off_product(product: dict[str, Any], search_terms: list[str], payload
     store_tokens = _tokens(product.get("stores")) | _tokens(" ".join(product.get("stores_tags") or []))
     nl_score = 1.0 if ({"netherlands", "nederland", "nl"} & country_tokens) else 0.0
     retailer_score = _score_overlap(_tokens(payload.get("retailer_code")), store_tokens) if payload.get("retailer_code") else 0.0
-    image_score = 1.0 if _text(product.get("image_front_small_url") or product.get("image_front_url")) else 0.0
+    image_score = 1.0 if _off_image_url(product) else 0.0
     flavored_mismatch_penalty = _flavored_mismatch_penalty(payload, product)
 
     score = (
@@ -224,7 +235,7 @@ def _normalize_off_product(product: dict[str, Any], search_terms: list[str], pay
     if not product_name:
         return None
     score, breakdown = _score_off_product(product, search_terms, payload)
-    image_url = _text(product.get("image_front_small_url") or product.get("image_front_url"))
+    image_url = _off_image_url(product)
     return {
         "source_name": "open_food_facts",
         "source_product_code": code,

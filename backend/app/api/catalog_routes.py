@@ -42,6 +42,7 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         "name": "gp.name",
         "brand": "gp.brand",
         "primary_gtin": "gp.primary_gtin",
+        "image_url": "gp.image_url",
         "source": "gp.source",
         "status": "gp.status",
         "created_at": "gp.created_at",
