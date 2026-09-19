@@ -29,7 +29,14 @@ def run_manual_search_contract() -> None:
                     "code": "8718452504435",
                     "product_name": "Tomaten Gezeefd Passata",
                     "brands": "Jumbo",
-                    "image_front_small_url": "https://images.openfoodfacts.test/passata.jpg",
+                    "selected_images": {
+                        "front": {
+                            "display": {
+                                "nl": "https://images.openfoodfacts.test/passata-selected.jpg"
+                            }
+                        }
+                    },
+                    "image_front_small_url": "https://images.openfoodfacts.test/passata-legacy.jpg",
                 },
                 {"code": "8718452474356", "product_name": "Basmati rijst", "brands": "Jumbo"},
             ],
@@ -55,8 +62,8 @@ def run_manual_search_contract() -> None:
         )
         assert_equal(
             result["results"][0]["image_url"],
-            "https://images.openfoodfacts.test/passata.jpg",
-            "OFF zoekresultaat behoudt productfoto",
+            "https://images.openfoodfacts.test/passata-selected.jpg",
+            "OFF zoekresultaat gebruikt selected_images-frontfoto",
         )
     finally:
         service.resolve_receipt_item = original_resolve_receipt_item
@@ -121,7 +128,14 @@ def run_exact_gtin_image_contract() -> None:
                     "code": "8718452504435",
                     "product_name": "Tomaten Gezeefd Passata",
                     "brands": "Jumbo",
-                    "image_front_url": "https://images.openfoodfacts.test/passata-full.jpg",
+                    "selected_images": {
+                        "front": {
+                            "display": {
+                                "en": "https://images.openfoodfacts.test/passata-selected-full.jpg"
+                            }
+                        }
+                    },
+                    "image_front_url": "https://images.openfoodfacts.test/passata-legacy-full.jpg",
                 },
             }).encode("utf-8")
 
@@ -131,8 +145,8 @@ def run_exact_gtin_image_contract() -> None:
         assert_equal(result["status"], "found", "exacte GTIN status")
         assert_equal(
             result["product"]["image_url"],
-            "https://images.openfoodfacts.test/passata-full.jpg",
-            "exacte GTIN lookup behoudt productfoto",
+            "https://images.openfoodfacts.test/passata-selected-full.jpg",
+            "exacte GTIN lookup gebruikt selected_images-frontfoto",
         )
     finally:
         service.urllib.request.urlopen = original_urlopen

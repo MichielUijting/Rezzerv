@@ -36,6 +36,7 @@ OFF_FIELDS = [
     "countries_tags",
     "stores",
     "stores_tags",
+    "selected_images",
     "image_front_small_url",
     "image_front_url",
     "image_small_url",
@@ -54,9 +55,35 @@ def _text(value: Any) -> str:
 
 
 
+def _selected_front_image_url(product: dict[str, Any]) -> str:
+    selected_images = product.get("selected_images")
+    if not isinstance(selected_images, dict):
+        return ""
+    front = selected_images.get("front")
+    if not isinstance(front, dict):
+        return ""
+    for size_key in ("display", "small", "thumb"):
+        urls = front.get(size_key)
+        if isinstance(urls, dict):
+            for language_code in ("nl", "en"):
+                value = _text(urls.get(language_code))
+                if value:
+                    return value
+            for value in urls.values():
+                normalized = _text(value)
+                if normalized:
+                    return normalized
+        else:
+            value = _text(urls)
+            if value:
+                return value
+    return ""
+
+
 def _off_image_url(product: dict[str, Any]) -> str:
     return _text(
-        product.get("image_front_small_url")
+        _selected_front_image_url(product)
+        or product.get("image_front_small_url")
         or product.get("image_front_url")
         or product.get("image_small_url")
         or product.get("image_url")
