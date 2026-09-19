@@ -478,6 +478,12 @@ def main() -> None:
         print("POSTGRESQL_OFF_LINK_EXTERNAL_ARTICLE_CONFIRMATION_GREEN")
         print("POSTGRESQL_OFF_LINK_NO_INVENTORY_MUTATION_GREEN")
         print("POSTGRESQL_OFF_LINK_REPEAT_IDEMPOTENT_GREEN")
+
+        from postgresql_off_link_receipt_table_end_to_end_selftest import (
+            main as run_receipt_table_end_to_end,
+        )
+
+        run_receipt_table_end_to_end()
         print("POSTGRESQL_OFF_LINK_END_TO_END_SELFTEST_GREEN")
     finally:
         with engine.begin() as conn:
