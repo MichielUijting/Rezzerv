@@ -11,6 +11,8 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.db import engine
 from app.services.off_product_link_service import link_off_product_with_product_type
+from app.services.external_receipt_item_projection import install_receipt_table_line_projection
+from app.api import system_routes
 
 
 TEST_HOUSEHOLD_ID = "__postgresql_off_link_household__"
@@ -478,6 +480,46 @@ def main() -> None:
         print("POSTGRESQL_OFF_LINK_EXTERNAL_ARTICLE_CONFIRMATION_GREEN")
         print("POSTGRESQL_OFF_LINK_NO_INVENTORY_MUTATION_GREEN")
         print("POSTGRESQL_OFF_LINK_REPEAT_IDEMPOTENT_GREEN")
+
+        install_receipt_table_line_projection()
+        receipt_items_payload = system_routes.external_databases_receipt_items(limit=500)
+        receipt_items = [
+            item
+            for item in list(receipt_items_payload.get("items") or [])
+            if isinstance(item, dict)
+        ]
+        linked_receipt_item = next(
+            (
+                item
+                for item in receipt_items
+                if str(item.get("global_product_id") or item.get("central_global_product_id") or "").strip()
+                == global_product_id
+            ),
+            None,
+        )
+        if linked_receipt_item is None:
+            raise AssertionError(
+                {
+                    "reason": "linked Chocopops product missing from receipt-items projection",
+                    "global_product_id": global_product_id,
+                    "items": receipt_items,
+                }
+            )
+        projected_product_type = str(
+            linked_receipt_item.get("product_type_id")
+            or linked_receipt_item.get("inventory_group_key")
+            or ""
+        ).strip()
+        if projected_product_type != TEST_PRODUCT_TYPE:
+            raise AssertionError(
+                {
+                    "reason": "receipt-items projection lost GPC product type",
+                    "expected": TEST_PRODUCT_TYPE,
+                    "actual": projected_product_type,
+                    "item": linked_receipt_item,
+                }
+            )
+        print("POSTGRESQL_OFF_LINK_RECEIPT_ITEMS_API_LOAD_GREEN")
 
         from postgresql_off_link_receipt_table_end_to_end_selftest import (
             main as run_receipt_table_end_to_end,
