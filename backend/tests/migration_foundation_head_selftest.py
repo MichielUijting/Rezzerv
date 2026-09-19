@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import re
+
 import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect, text
 
 import migration_foundation_selftest as foundation_test
 
 
-HEAD_REVISION = "20260918_01"
+HEAD_REVISION = "20260919_01"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 89
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
@@ -67,6 +69,19 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
         header = block.splitlines()[0].strip()
         if any(f"(table={table_name})" in header for table_name in _SQLITE_HEAD_EXTENSION_TABLES):
             continue
+        if "(table=global_products)" in header or "(table=external_product_candidates)" in header:
+            block = re.sub(
+                r",\s*image_url\s+TEXT(?=\s*\))",
+                "",
+                block,
+                flags=re.IGNORECASE,
+            )
+            block = re.sub(
+                r"image_url\s+TEXT\s*,",
+                "",
+                block,
+                flags=re.IGNORECASE,
+            )
         retained.append(block)
     return "\n\n".join(retained).rstrip() + "\n"
 
@@ -323,6 +338,28 @@ def _assert_password_reset_authority(connection) -> None:
         print("SQLITE_PASSWORD_RESET_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_catalog_image_authority(connection) -> None:
+    inspector = inspect(connection)
+    for table_name in ("global_products", "external_product_candidates"):
+        columns = {
+            str(item.get("name") or ""): item
+            for item in inspector.get_columns(table_name)
+        }
+        if "image_url" not in columns:
+            raise AssertionError(f"{table_name}.image_url ontbreekt op Alembic head")
+        if not isinstance(columns["image_url"]["type"], sa.Text):
+            raise AssertionError(
+                f"{table_name}.image_url must be TEXT, got {columns['image_url']['type']}"
+            )
+        if not bool(columns["image_url"].get("nullable")):
+            raise AssertionError(f"{table_name}.image_url must remain nullable")
+
+    if connection.dialect.name == "postgresql":
+        print("POSTGRESQL_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN")
+    else:
+        print("SQLITE_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN")
+
+
 def _assert_home_action_order_authority(connection) -> None:
     inspector = inspect(connection)
     if HOME_ACTION_ORDER_TABLE not in set(inspector.get_table_names()):
@@ -402,10 +439,11 @@ def main() -> None:
             _assert_inventory_quantity_precision_authority(connection)
             _assert_password_reset_authority(connection)
             _assert_home_action_order_authority(connection)
+            _assert_catalog_image_authority(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260918_01_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_20260919_01_GREEN")
 
 
 if __name__ == "__main__":
