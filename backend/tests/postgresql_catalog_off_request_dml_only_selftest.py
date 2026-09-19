@@ -30,6 +30,7 @@ NAME_ALPHA = "postgresql catalog off proof alpha"
 NAME_BRAVO = "PostgreSQL Catalog OFF Proof Bravo"
 NAME_FILTER = "postgresql catalog off proof"
 ALEMBIC_HEAD = "20260919_01"
+TEST_GROUP_KEY = "__postgresql_catalog_off_membership_group__"
 
 
 def _assert_runtime_create_denied() -> None:
@@ -43,6 +44,17 @@ def _assert_runtime_create_denied() -> None:
 
 
 def _cleanup(conn) -> None:
+    conn.execute(
+        text(
+            "DELETE FROM product_group_memberships "
+            "WHERE inventory_group_key = :inventory_group_key"
+        ),
+        {"inventory_group_key": TEST_GROUP_KEY},
+    )
+    conn.execute(
+        text("DELETE FROM product_inventory_groups WHERE inventory_group_key = :inventory_group_key"),
+        {"inventory_group_key": TEST_GROUP_KEY},
+    )
     conn.execute(
         text(
             "DELETE FROM product_group_memberships "
@@ -225,24 +237,41 @@ def _assert_integer_membership_projection() -> None:
             conn,
             _off_payload(GTIN_ALPHA, NAME_ALPHA),
         )
-        group_key = conn.execute(
+        conn.execute(
             text(
                 """
-                SELECT inventory_group_key
-                FROM product_inventory_groups
-                WHERE COALESCE(active, 1) = 1
-                ORDER BY inventory_group_key
-                LIMIT 1
+                INSERT INTO product_inventory_groups (
+                    inventory_group_key,
+                    display_name,
+                    default_base_unit,
+                    aggregation_mode,
+                    active,
+                    created_at,
+                    updated_at,
+                    source
+                ) VALUES (
+                    :inventory_group_key,
+                    :display_name,
+                    'stuk',
+                    'count',
+                    1,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP,
+                    :source
+                )
                 """
-            )
-        ).scalar_one_or_none()
-        if not group_key:
-            raise AssertionError("Geen actief producttype beschikbaar voor membership-proef")
+            ),
+            {
+                "inventory_group_key": TEST_GROUP_KEY,
+                "display_name": "PostgreSQL Catalog OFF membership proof",
+                "source": "postgresql_catalog_off_request_dml_only_selftest",
+            },
+        )
 
         linked = link_global_product_to_inventory_group_with_connection(
             conn,
             global_product_id=global_product_id,
-            inventory_group_key=str(group_key),
+            inventory_group_key=TEST_GROUP_KEY,
             confidence=0.93,
             source="postgresql_catalog_off_request_dml_only_selftest",
             confirmed_by_user=True,
@@ -270,7 +299,7 @@ def _assert_integer_membership_projection() -> None:
         )
         if len(enriched) != 1:
             raise AssertionError(enriched)
-        if enriched[0].get("linked_product_type_id") != str(group_key):
+        if enriched[0].get("linked_product_type_id") != TEST_GROUP_KEY:
             raise AssertionError(enriched)
 
         _cleanup(conn)
