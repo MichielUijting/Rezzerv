@@ -64,7 +64,7 @@ def get_or_create_global_product(
         for column in inspect(conn).get_columns("global_products")
     }
     image_update_sql = (
-        ", image_url = COALESCE(NULLIF(trim(image_url), ''), :image_url)"
+        "                    image_url = COALESCE(NULLIF(trim(image_url), ''), :image_url),\n"
         if "image_url" in product_columns
         else ""
     )
@@ -100,9 +100,8 @@ def get_or_create_global_product(
                     category = COALESCE(category, :category),
                     size_value = COALESCE(size_value, :size_value),
                     size_unit = COALESCE(size_unit, :size_unit),
-                    product_fingerprint = COALESCE(NULLIF(product_fingerprint, ''), :product_fingerprint)
-                    {image_update_sql},
-                    updated_at = CURRENT_TIMESTAMP
+                    product_fingerprint = COALESCE(NULLIF(product_fingerprint, ''), :product_fingerprint),
+{image_update_sql}                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """),
             {

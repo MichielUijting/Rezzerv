@@ -35,6 +35,7 @@ def test_search_preview_uses_search_a_licious_and_stays_read_only():
                 "categories": "Zuivel",
                 "countries": "Nederland",
                 "stores": "Jumbo",
+                "image_front_small_url": "https://images.openfoodfacts.test/halfvolle-melk.jpg",
             }
         ], [{"search_term": search_term, "provider": "search_a_licious", "http_status": 200, "url": "memory://search", "raw_count": 1}], []
 
@@ -67,6 +68,7 @@ def test_search_preview_uses_search_a_licious_and_stays_read_only():
     assert result["timeout_seconds"] == 8.0
     assert result["result_count"] == 1
     assert result["results"][0]["source_name"] == "open_food_facts"
+    assert result["results"][0]["image_url"] == "https://images.openfoodfacts.test/halfvolle-melk.jpg"
     assert result["requires_user_selection"] is True
     assert result["creates_global_product"] is False
     assert result["creates_household_article"] is False
