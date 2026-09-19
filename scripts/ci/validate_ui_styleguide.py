@@ -33,6 +33,8 @@ UI_REVIEW_PATTERNS = tuple(
 
 REQUIRED_TOKENS = (
     "--color-brand-primary",
+    "--color-ui-primary",
+    "--color-ui-primary-text",
     "--color-brand-light",
     "--color-text-primary",
     "--color-text-inverse",
