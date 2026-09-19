@@ -174,58 +174,18 @@ def _cleanup_fallback_reference(conn) -> None:
 def _assert_complete_reference_fallback(engine) -> None:
     with engine.begin() as conn:
         _cleanup_fallback_reference(conn)
-        conn.execute(text("""
-            INSERT INTO gpc_product_groups (
-                gpc_brick_code,
-                gpc_brick_name,
-                gpc_brick_name_en,
-                gpc_class_code,
-                gpc_class_name,
-                gpc_class_name_en,
-                gpc_family_code,
-                gpc_family_name,
-                gpc_family_name_en,
-                gpc_segment_code,
-                gpc_segment_name,
-                gpc_segment_name_en,
-                language_code,
-                source_version,
-                source,
-                active,
-                created_at,
-                updated_at
-            ) VALUES (
-                :brick_code,
-                'Cereal Products - Ready to Eat (Shelf Stable)',
-                'Cereal Products - Ready to Eat (Shelf Stable)',
-                :class_code,
-                'Processed Cereal Products',
-                'Processed Cereal Products',
-                :family_code,
-                'Cereal/Grain/Pulse Products',
-                'Cereal/Grain/Pulse Products',
-                :segment_code,
-                'Food/Beverage',
-                'Food/Beverage',
-                'en',
-                '2026-05-20',
-                'gs1_gpc_2026_05_en',
-                TRUE,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            )
-        """), {
-            "brick_code": FALLBACK_BRICK_CODE,
-            "class_code": FALLBACK_CLASS_CODE,
-            "family_code": FALLBACK_FAMILY_CODE,
-            "segment_code": FALLBACK_SEGMENT_CODE,
-        })
-        before = conn.execute(
+        canonical_before = conn.execute(
             text("SELECT 1 FROM gpc_bricks WHERE brick_code=:code"),
             {"code": FALLBACK_BRICK_CODE},
         ).first()
-        if before:
-            raise AssertionError("Fallback Brick stond onverwacht al in gpc_bricks")
+        product_group_before = conn.execute(
+            text("SELECT 1 FROM gpc_product_groups WHERE gpc_brick_code=:code"),
+            {"code": FALLBACK_BRICK_CODE},
+        ).first()
+        if canonical_before or product_group_before:
+            raise AssertionError(
+                "Fallback Brick stond onverwacht al in een databaseprojectie"
+            )
 
         results = search_official_gpc_bricks(
             conn,
@@ -234,7 +194,7 @@ def _assert_complete_reference_fallback(engine) -> None:
         )
         if not results or results[0].get("brick_code") != FALLBACK_BRICK_CODE:
             raise AssertionError(results)
-        if results[0].get("reference_source") != "gpc_product_groups":
+        if results[0].get("reference_source") != "bundled_gpc_2026_05_en":
             raise AssertionError(results[0])
 
         materialized = ensure_official_gpc_brick(conn, FALLBACK_BRICK_CODE)
