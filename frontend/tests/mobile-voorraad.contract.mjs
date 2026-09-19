@@ -105,6 +105,6 @@ assert.match(mobileCss, /backdrop-filter:\s*blur\(/)
 assert.match(mobileCss, /data-location-tracking='disabled'[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/)
 assert.match(mobileCss, /rz-mobile-inventory-card-meta span:first-child[\s\S]*border-radius:\s*999px/)
 assert.match(mobileCss, /rz-mobile-inventory-actions[\s\S]*position:\s*sticky/)
-assert.match(mobileCss, /rz-mobile-inventory-summary[\s\S]*background:\s*var\(--color-brand-primary\)/)
+assert.match(mobileCss, /rz-mobile-inventory-summary[\s\S]*background:\s*var\(--color-ui-primary\)[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')

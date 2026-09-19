@@ -1,8 +1,8 @@
 /* REZZERV BUTTON COMPONENT v1.1 (token-driven) */
 button.rz-button-primary,
 a.rz-button-primary[role="button"]{
-  background: var(--color-brand-primary);
-  color: var(--color-text-inverse);
+  background: var(--color-ui-primary);
+  color: var(--color-ui-primary-text);
   border: none;
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);
@@ -18,8 +18,8 @@ a.rz-button-primary[role="button"]:hover{
 }
 button.rz-button-secondary,
 a.rz-button-secondary[role="button"]{
-  background: var(--color-brand-primary);
-  color: var(--color-text-inverse);
+  background: var(--color-ui-primary);
+  color: var(--color-ui-primary-text);
   border: none;
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);

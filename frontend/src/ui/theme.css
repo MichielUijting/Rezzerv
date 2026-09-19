@@ -1,6 +1,6 @@
 /* Inhuis primary UI surface theme.
    Keep dark brand ink for text/icons on light surfaces; use the canonical
-   dark green for primary surfaces and white foregrounds on that green. */
+   blue-green for primary surfaces and dark foregrounds on that color. */
 
 :root {
   /* Bridge the legacy login/action token to the canonical Inhuis UI token. */
@@ -41,7 +41,7 @@ a.rz-button-secondary[role="button"] {
 
 .rz-column-resize-handle:hover,
 .rz-table--resizable-columns thead tr:first-child th:hover::after {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(26, 26, 26, 0.24);
 }
 
 .rz-mobile-inventory-screen .rz-mobile-inventory-summary,
@@ -126,9 +126,9 @@ a.rz-button-secondary[role="button"] {
 :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) [data-testid$="-ok-button"] {
   min-height: 40px;
   padding: 7px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(26, 26, 26, 0.62);
   background: transparent !important;
-  color: #FFFFFF !important;
+  color: var(--color-ui-primary-text) !important;
   box-shadow: none !important;
   white-space: nowrap;
 }
@@ -165,7 +165,7 @@ a.rz-button-secondary[role="button"] {
   border: 0 !important;
   border-radius: 0 !important;
   background: var(--color-ui-primary) !important;
-  color: #FFFFFF !important;
+  color: var(--color-ui-primary-text) !important;
   box-shadow: 0 -5px 18px rgba(8, 41, 29, 0.18);
   display: flex;
   align-items: center;
@@ -175,7 +175,7 @@ a.rz-button-secondary[role="button"] {
 @media (max-width: 720px) {
   .rz-header {
     background: var(--color-ui-primary);
-    border-bottom-color: rgba(255, 255, 255, 0.20);
+    border-bottom-color: rgba(26, 26, 26, 0.18);
   }
 
   /* About one character of standard breathing room at both sides of mobile

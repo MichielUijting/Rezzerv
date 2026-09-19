@@ -4,7 +4,7 @@
   --rz-frame: #e6e7ea;
   --rz-text: #111827;
   --rz-muted: #6b7280;
-  --rz-accent: #8dd8a6; /* light green */
+  --rz-accent: var(--color-ui-primary); /* canonical Inhuis primary */
   --rz-accent-dark: #2e7d4d;
   --rz-danger: #b42318;
   --rz-radius: 18px;
@@ -124,7 +124,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 
 .btn-primary{
   background: var(--rz-accent);
-  color: #0b3b22;
+  color: var(--color-ui-primary-text);
 }
 
 .btn-primary:hover{ filter:brightness(0.98); }

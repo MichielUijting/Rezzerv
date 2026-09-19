@@ -232,8 +232,8 @@
   padding: 12px;
   border: 0;
   border-radius: 12px;
-  background: var(--color-brand-primary);
-  color: var(--color-text-inverse);
+  background: var(--color-ui-primary);
+  color: var(--color-ui-primary-text);
 }
 
 .rz-mobile-article-action-value {
