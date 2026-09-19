@@ -163,9 +163,12 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
 
 def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_provenance():
     backend = OFF_LINK_SERVICE.read_text(encoding="utf-8")
+    reference = GPC_REFERENCE_SERVICE.read_text(encoding="utf-8")
     frontend = EXTERNAL_DATABASES.read_text(encoding="utf-8")
 
-    assert "SELECT" in backend and "FROM gpc_bricks b" in backend
+    assert "ensure_official_gpc_brick" in backend
+    assert "FROM gpc_bricks b" in reference
+    assert "FROM gpc_product_groups gpg" in reference
     assert "Onbekende GS1 GPC Brickcode" in backend
     assert "global_product_gpc_bricks" in backend
     assert "assignment_source" in backend

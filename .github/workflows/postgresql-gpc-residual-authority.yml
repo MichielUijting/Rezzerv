@@ -84,12 +84,12 @@ jobs:
           grep -F 'POSTGRESQL_GPC_RESIDUAL_ALEMBIC_AUTHORITY_GREEN' /tmp/gpc-residual-static.log
           grep -F 'POSTGRESQL_GPC_RESIDUAL_STATIC_AUTHORITY_SELFTEST_GREEN' /tmp/gpc-residual-static.log
 
-      - name: Migrate through residual GPC authority revision
+      - name: Migrate through current canonical Alembic head
         working-directory: backend
         run: |
           python -m app.schema_migration_preflight | tee /tmp/gpc-residual-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/gpc-residual-migration.log
-          grep -F "'revision': '20260829_11'" /tmp/gpc-residual-migration.log
+          grep -F "'revision': '20260919_01'" /tmp/gpc-residual-migration.log
 
       - name: Prove residual GPC paths work with DML-only runtime role
         working-directory: backend
