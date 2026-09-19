@@ -19,6 +19,11 @@ TEST_RAW_RECEIPT_ID = "__postgresql_off_receipt_table_raw__"
 TEST_RECEIPT_ID = "__postgresql_off_receipt_table__"
 TEST_LINE_ID = "__postgresql_off_receipt_table_line__"
 TEST_CANDIDATE_ID = "__postgresql_off_receipt_table_candidate__"
+TEST_PROVIDER_ID = "__postgresql_off_receipt_table_provider__"
+TEST_PROVIDER_CODE = "postgresql-off-receipt-table-e2e"
+TEST_CONNECTION_ID = "__postgresql_off_receipt_table_connection__"
+TEST_BATCH_ID = "__postgresql_off_receipt_table_batch__"
+TEST_IMPORT_LINE_ID = "__postgresql_off_receipt_table_import_line__"
 TEST_RECEIPT_ITEM_ID = f"receipt-table-line:{TEST_LINE_ID}"
 TEST_CONTEXT_KEY = TEST_RECEIPT_ITEM_ID
 TEST_GTIN = "0898965996120"
@@ -61,14 +66,32 @@ def _cleanup(conn) -> None:
             DELETE FROM external_product_candidates
             WHERE id = :id
                OR receipt_line_id = :line_id
+               OR purchase_import_line_id = :import_line_id
                OR context_key = :context_key
             """
         ),
         {
             "id": TEST_CANDIDATE_ID,
             "line_id": TEST_LINE_ID,
+            "import_line_id": TEST_IMPORT_LINE_ID,
             "context_key": TEST_CONTEXT_KEY,
         },
+    )
+    conn.execute(
+        text("DELETE FROM purchase_import_lines WHERE id = :id"),
+        {"id": TEST_IMPORT_LINE_ID},
+    )
+    conn.execute(
+        text("DELETE FROM purchase_import_batches WHERE id = :id"),
+        {"id": TEST_BATCH_ID},
+    )
+    conn.execute(
+        text("DELETE FROM household_store_connections WHERE id = :id"),
+        {"id": TEST_CONNECTION_ID},
+    )
+    conn.execute(
+        text("DELETE FROM store_providers WHERE id = :id OR code = :code"),
+        {"id": TEST_PROVIDER_ID, "code": TEST_PROVIDER_CODE},
     )
     conn.execute(
         text("DELETE FROM receipt_table_lines WHERE id = :id"),
@@ -133,6 +156,38 @@ def _seed_receipt_table_candidate(conn) -> None:
             """
         ),
         {"id": TEST_HOUSEHOLD_ID},
+    )
+
+    conn.execute(
+        text(
+            """
+            INSERT INTO store_providers (
+                id, code, name, status, import_mode, created_at, updated_at
+            ) VALUES (
+                :id, :code, 'PostgreSQL OFF receipt-table provider',
+                'active', 'mock', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {"id": TEST_PROVIDER_ID, "code": TEST_PROVIDER_CODE},
+    )
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_store_connections (
+                id, household_id, store_provider_id,
+                connection_status, linked_at, created_at, updated_at
+            ) VALUES (
+                :id, :household_id, :store_provider_id,
+                'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "id": TEST_CONNECTION_ID,
+            "household_id": TEST_HOUSEHOLD_ID,
+            "store_provider_id": TEST_PROVIDER_ID,
+        },
     )
 
     sha256_hash = hashlib.sha256(
@@ -219,8 +274,55 @@ def _seed_receipt_table_candidate(conn) -> None:
     conn.execute(
         text(
             """
+            INSERT INTO purchase_import_batches (
+                id, household_id, store_provider_id, connection_id,
+                source_type, source_reference,
+                import_status, raw_payload, created_at
+            ) VALUES (
+                :id, :household_id, :store_provider_id, :connection_id,
+                'receipt', :source_reference,
+                'in_review', '{}', CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "id": TEST_BATCH_ID,
+            "household_id": TEST_HOUSEHOLD_ID,
+            "store_provider_id": TEST_PROVIDER_ID,
+            "connection_id": TEST_CONNECTION_ID,
+            "source_reference": f"receipt:{TEST_RECEIPT_ID}",
+        },
+    )
+    conn.execute(
+        text(
+            """
+            INSERT INTO purchase_import_lines (
+                id, batch_id, external_line_ref, external_article_code,
+                article_name_raw, brand_raw, quantity_raw, unit_raw,
+                currency_code, match_status, review_decision,
+                processing_status, created_at, updated_at
+            ) VALUES (
+                :id, :batch_id, :external_line_ref, :external_article_code,
+                :receipt_text, 'PostgreSQL proof', 1, 'stuk',
+                'EUR', 'unmatched', 'pending',
+                'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "id": TEST_IMPORT_LINE_ID,
+            "batch_id": TEST_BATCH_ID,
+            "external_line_ref": f"receipt-line:{TEST_LINE_ID}",
+            "external_article_code": TEST_EXTERNAL_ARTICLE_CODE,
+            "receipt_text": TEST_RECEIPT_TEXT,
+        },
+    )
+    conn.execute(
+        text(
+            """
             INSERT INTO external_product_candidates (
                 id,
+                purchase_import_line_id,
                 receipt_line_id,
                 context_key,
                 retailer_code,
@@ -243,6 +345,7 @@ def _seed_receipt_table_candidate(conn) -> None:
                 updated_at
             ) VALUES (
                 :id,
+                :purchase_import_line_id,
                 :receipt_line_id,
                 :context_key,
                 :retailer_code,
@@ -268,6 +371,7 @@ def _seed_receipt_table_candidate(conn) -> None:
         ),
         {
             "id": TEST_CANDIDATE_ID,
+            "purchase_import_line_id": TEST_IMPORT_LINE_ID,
             "receipt_line_id": TEST_LINE_ID,
             "context_key": TEST_CONTEXT_KEY,
             "retailer_code": TEST_RETAILER,
