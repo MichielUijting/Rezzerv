@@ -201,7 +201,7 @@ function offStatusLabel(preview) {
 function defaultOffQuery(item) { return text(item?.receiptLineText || item?.bestSelectableCandidateName || item?.bestCandidateName, '') }
 function candidateGpcBrickCode(candidate) {
   const raw = candidate?.raw || {}
-  const value = raw.gpc_brick_code || raw.gpcBrickCode || raw.gpc_code || raw.gpcCode || ''
+  const value = raw.gpc_brick_code || raw.explicit_gpc_brick_code || raw.gpcCategoryCode || raw.gpcBrickCode || raw.gpc_code || raw.gpcCode || ''
   const normalized = String(value ?? '').trim()
   return /^\d{8}$/.test(normalized) ? normalized : ''
 }
@@ -213,7 +213,7 @@ function suggestProductTypeId(candidate, options) {
   const exact = options.find((option) =>
     String(option?.inventory_group_key || '') === expectedKey
     && String(option?.gpc_brick_code || '') === brickCode
-    && String(option?.source || '') === 'gs1_gpc_nl'
+    && String(option?.source || '').startsWith('gs1_gpc_')
   )
   return exact ? expectedKey : ''
 }
@@ -262,7 +262,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     if (normalizedGtin === '-') return null
 
     const response = await fetchJsonWithAuth(
-      `/api/catalog?query=${encodeURIComponent(normalizedGtin)}&limit=20`,
+      `/api/catalog?primary_gtin=${encodeURIComponent(normalizedGtin)}&limit=20`,
       { method: 'GET' },
     )
 
@@ -597,6 +597,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             category: raw.category || raw.categories || '',
             quantity: raw.quantity || raw.quantity_label || raw.net_content || selectedItem.quantity,
             source_url: raw.source_url || raw.url || '',
+            image_url: raw.image_url || raw.image_front_small_url || raw.image_front_url || '',
             variant: raw.variant || '',
           },
           product_type_assignment: productTypeAssignment,
