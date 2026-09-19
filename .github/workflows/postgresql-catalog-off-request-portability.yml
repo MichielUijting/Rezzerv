@@ -6,6 +6,7 @@ on:
       - 'backend/app/api/catalog_routes.py'
       - 'backend/app/services/off_product_link_service.py'
       - 'backend/app/services/off_search_service.py'
+      - 'backend/app/services/gpc_local_catalog_service.py'
       - 'backend/app/services/external_article_ui_projection.py'
       - 'backend/app/services/external_receipt_item_projection.py'
       - 'backend/app/services/external_article_product_link_service.py'
@@ -120,6 +121,7 @@ jobs:
           grep -F 'POSTGRESQL_OFF_RECEIPT_TABLE_NUMERIC_QUANTITY_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_GPC_CODE_PROPAGATION_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_OFF_EXPLICIT_GPC_OFFICIAL_REFERENCE_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_NUMERIC_SORT_DML_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_QUERY_GREEN' /tmp/catalog-off-dml.log
