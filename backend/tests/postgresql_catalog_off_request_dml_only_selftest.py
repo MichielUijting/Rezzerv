@@ -14,6 +14,10 @@ if str(BACKEND_ROOT) not in sys.path:
 from app.api import catalog_routes
 from app.db import engine
 from app.services.external_database_off_index_matchers import match_retailer_receipt_line
+from app.services.external_article_product_link_service import (
+    _complete_global_product_link_data,
+    save_external_article_product_link,
+)
 from app.services.external_product_candidate_store import (
     _m2c2l_enrich_linked_receipt_items,
     ensure_external_product_candidates_schema,
@@ -31,6 +35,9 @@ NAME_BRAVO = "PostgreSQL Catalog OFF Proof Bravo"
 NAME_FILTER = "postgresql catalog off proof"
 ALEMBIC_HEAD = "20260919_01"
 TEST_GROUP_KEY = "__postgresql_catalog_off_membership_group__"
+OFFICIAL_GPC_GROUP_KEY = "gpc:99999999"
+OFFICIAL_GPC_BRICK_CODE = "99999999"
+EXTERNAL_LINK_CONFIRMED_BY = "postgresql_catalog_off_request_dml_only_selftest"
 
 
 def _assert_runtime_create_denied() -> None:
@@ -46,14 +53,30 @@ def _assert_runtime_create_denied() -> None:
 def _cleanup(conn) -> None:
     conn.execute(
         text(
-            "DELETE FROM product_group_memberships "
-            "WHERE inventory_group_key = :inventory_group_key"
+            "DELETE FROM external_article_product_links "
+            "WHERE confirmed_by = :confirmed_by"
         ),
-        {"inventory_group_key": TEST_GROUP_KEY},
+        {"confirmed_by": EXTERNAL_LINK_CONFIRMED_BY},
     )
     conn.execute(
-        text("DELETE FROM product_inventory_groups WHERE inventory_group_key = :inventory_group_key"),
-        {"inventory_group_key": TEST_GROUP_KEY},
+        text(
+            "DELETE FROM product_group_memberships "
+            "WHERE inventory_group_key IN (:test_group_key, :official_gpc_group_key)"
+        ),
+        {
+            "test_group_key": TEST_GROUP_KEY,
+            "official_gpc_group_key": OFFICIAL_GPC_GROUP_KEY,
+        },
+    )
+    conn.execute(
+        text(
+            "DELETE FROM product_inventory_groups "
+            "WHERE inventory_group_key IN (:test_group_key, :official_gpc_group_key)"
+        ),
+        {
+            "test_group_key": TEST_GROUP_KEY,
+            "official_gpc_group_key": OFFICIAL_GPC_GROUP_KEY,
+        },
     )
     conn.execute(
         text(
@@ -307,6 +330,83 @@ def _assert_integer_membership_projection() -> None:
     print("POSTGRESQL_CATALOG_OFF_INTEGER_MEMBERSHIP_PROJECTION_GREEN")
 
 
+def _assert_complete_official_gpc_link_validation() -> None:
+    with engine.begin() as conn:
+        _cleanup(conn)
+        global_product_id, _, _, _ = _upsert_global_product(
+            conn,
+            _off_payload(GTIN_ALPHA, NAME_ALPHA),
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO product_inventory_groups (
+                    inventory_group_key,
+                    display_name,
+                    default_base_unit,
+                    aggregation_mode,
+                    active,
+                    gpc_brick_code,
+                    created_at,
+                    updated_at,
+                    source
+                ) VALUES (
+                    :inventory_group_key,
+                    :display_name,
+                    'stuk',
+                    'count',
+                    1,
+                    :gpc_brick_code,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP,
+                    :source
+                )
+                """
+            ),
+            {
+                "inventory_group_key": OFFICIAL_GPC_GROUP_KEY,
+                "display_name": "PostgreSQL OFF complete-link proof",
+                "gpc_brick_code": OFFICIAL_GPC_BRICK_CODE,
+                "source": "gs1_gpc_postgresql_test",
+            },
+        )
+
+        linked = link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=global_product_id,
+            inventory_group_key=OFFICIAL_GPC_GROUP_KEY,
+            comparison_group_key=OFFICIAL_GPC_GROUP_KEY,
+            confidence=1.0,
+            source="manual_gs1_gpc",
+            confirmed_by_user=True,
+        )
+        if not bool(linked.get("ok")):
+            raise AssertionError(linked)
+
+        completeness = _complete_global_product_link_data(conn, global_product_id)
+        if not completeness.get("complete"):
+            raise AssertionError(completeness)
+        if not completeness.get("has_active_official_gpc"):
+            raise AssertionError(completeness)
+
+        saved = save_external_article_product_link(
+            conn,
+            retailer_code="aldi",
+            receipt_text="CHOC OPOPS / CHOCO SHELLS",
+            external_article_code="",
+            global_product_id=global_product_id,
+            confirmed_by=EXTERNAL_LINK_CONFIRMED_BY,
+        )
+        if saved.get("status") != "confirmed":
+            raise AssertionError(saved)
+        if saved.get("global_product_id") != global_product_id:
+            raise AssertionError(saved)
+
+        _cleanup(conn)
+
+    print("POSTGRESQL_OFF_COMPLETE_GPC_LINK_VALIDATION_GREEN")
+
+
 def _assert_off_index_matcher() -> None:
     result = match_retailer_receipt_line(
         "lidl",
@@ -327,6 +427,7 @@ def main() -> None:
         _assert_schema_contract()
         _assert_off_identity_and_catalog_queries()
         _assert_integer_membership_projection()
+        _assert_complete_official_gpc_link_validation()
         _assert_off_index_matcher()
     finally:
         with engine.begin() as conn:
