@@ -18,6 +18,9 @@ on:
       - 'backend/tests/test_platform_feature_flags_route_authorization.py'
       - 'backend/tests/test_platform_authorizations_route_authorization.py'
       - 'backend/tests/test_external_database_route_authorization.py'
+      - 'backend/app/api/product_inventory_group_routes.py'
+      - 'backend/app/services/product_route_household_guard.py'
+      - 'backend/tests/test_off_link_route_authorization_contract.py'
       - 'backend/tests/test_external_relation_batch_decision_platform_authorization.py'
       - 'docs/security/SUPERUSER-V2-PERMISSION-CUTOVER.md'
       - '.github/workflows/superuser-v2-permission-cutover.yml'
@@ -102,7 +105,8 @@ jobs:
             tests/test_platform_feature_flags_route_authorization.py \
             tests/test_platform_authorizations_route_authorization.py \
             tests/test_external_database_route_authorization.py \
-            tests/test_external_relation_batch_decision_platform_authorization.py
+            tests/test_external_relation_batch_decision_platform_authorization.py \
+            tests/test_off_link_route_authorization_contract.py
 
       - name: Run dedicated Superuser v2 cutover contract
         env:

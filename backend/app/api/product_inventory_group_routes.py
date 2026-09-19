@@ -103,6 +103,9 @@ def external_product_gpc_classify(payload: dict[str, Any] = Body(default_factory
 
 @router.post('/api/external-products/off/link')
 def external_off_product_type_link(payload: dict[str, Any] = Body(default_factory=dict)):
+    require_platform_permission_from_session(
+        'platform.external_products.link_existing'
+    )
     assignment = payload.get('product_type_assignment')
     if not isinstance(assignment, dict):
         raise HTTPException(status_code=400, detail='Producttypebeslissing is verplicht')
