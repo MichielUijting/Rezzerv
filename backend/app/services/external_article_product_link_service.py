@@ -72,11 +72,11 @@ def _complete_global_product_link_data(conn, global_product_id: str) -> dict[str
                     JOIN product_inventory_groups pig
                       ON pig.inventory_group_key = pgm.inventory_group_key
                     WHERE pgm.global_product_id = gp.id
-                      AND COALESCE(pgm.active, TRUE) IS TRUE
+                      AND COALESCE(pgm.active, 1) = 1
                       AND pgm.inventory_group_key LIKE 'gpc:%'
                       AND pig.gpc_brick_code = substr(pgm.inventory_group_key, 5)
                       AND pig.source LIKE 'gs1_gpc_%'
-                      AND COALESCE(pig.active, TRUE) IS TRUE
+                      AND COALESCE(pig.active, 1) = 1
                 ) AS has_active_official_gpc
             FROM global_products gp
             WHERE gp.id = :global_product_id

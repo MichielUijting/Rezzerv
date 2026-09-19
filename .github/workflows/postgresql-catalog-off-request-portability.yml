@@ -5,6 +5,7 @@ on:
     paths:
       - 'backend/app/api/catalog_routes.py'
       - 'backend/app/services/off_product_link_service.py'
+      - 'backend/app/services/external_article_product_link_service.py'
       - 'backend/app/services/global_product_service.py'
       - 'backend/app/services/open_food_facts_candidate_store.py'
       - 'backend/app/services/open_food_facts_search_preview.py'
@@ -107,6 +108,7 @@ jobs:
           grep -F 'POSTGRESQL_OFF_IDENTITY_INSERT_UPDATE_BOOLEAN_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_IDENTITY_BOOLEAN_ORDER_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_INTEGER_MEMBERSHIP_PROJECTION_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_OFF_COMPLETE_GPC_LINK_VALIDATION_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_NUMERIC_SORT_DML_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_QUERY_GREEN' /tmp/catalog-off-dml.log
