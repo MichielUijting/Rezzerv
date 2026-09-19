@@ -38,7 +38,7 @@ def _central_product_details(conn, global_product_id: str) -> dict[str, Any]:
             FROM global_products gp
             LEFT JOIN product_group_memberships pgm
               ON pgm.global_product_id = gp.id
-             AND COALESCE(pgm.active, TRUE) IS TRUE
+             AND COALESCE(pgm.active, 1) = 1
             LEFT JOIN gpc_product_groups gpc
               ON CAST(gpc.gpc_brick_code AS TEXT) =
                  CASE
