@@ -15,6 +15,7 @@ from app.api import catalog_routes
 from app.db import engine
 from app.services.external_database_off_index_matchers import match_retailer_receipt_line
 from app.services.external_article_confirmation_service import _candidate_identity
+from app.services.external_article_ui_projection import _central_product_details
 from app.services.external_article_product_link_service import (
     _complete_global_product_link_data,
     save_external_article_product_link,
@@ -25,6 +26,7 @@ from app.services.external_product_candidate_store import (
 )
 from app.services.external_product_index_store import ensure_external_product_index_seeded
 from app.services.off_product_link_service import _upsert_global_product
+from app.services.off_search_service import _normalize_result, _resolve_receipt_table_line
 from app.services.product_inventory_group_store import (
     link_global_product_to_inventory_group_with_connection,
 )
@@ -421,6 +423,55 @@ def _assert_candidate_identity_timestamp_order() -> None:
     print("POSTGRESQL_OFF_CANDIDATE_TIMESTAMP_ORDER_GREEN")
 
 
+def _assert_receipt_table_off_search_postgresql_types() -> None:
+    with engine.begin() as conn:
+        resolved = _resolve_receipt_table_line(
+            conn,
+            "__postgresql_off_receipt_table_quantity_probe__",
+        )
+    if resolved is not None:
+        raise AssertionError(resolved)
+
+    print("POSTGRESQL_OFF_RECEIPT_TABLE_NUMERIC_QUANTITY_GREEN")
+
+
+def _assert_external_article_ui_membership_projection() -> None:
+    with engine.begin() as conn:
+        details = _central_product_details(
+            conn,
+            "__postgresql_external_article_ui_probe__",
+        )
+    if details:
+        raise AssertionError(details)
+
+    print("POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN")
+
+
+def _assert_off_gpc_normalization() -> None:
+    normalized = _normalize_result(
+        query="bananen",
+        retailer_code="albert heijn",
+        quantity_label="1 stuk",
+        product={
+            "code": "8718265184886",
+            "product_name": "Bananen",
+            "brands": "AH",
+            "quantity": "1 stuk",
+            "categories": "Fruit",
+            "gpcCategoryCode": "10005897",
+            "countries": "Nederland",
+        },
+    )
+    if not normalized:
+        raise AssertionError(normalized)
+    if normalized.get("gpc_brick_code") != "10005897":
+        raise AssertionError(normalized)
+    if normalized.get("explicit_gpc_brick_code") != "10005897":
+        raise AssertionError(normalized)
+
+    print("POSTGRESQL_OFF_GPC_CODE_PROPAGATION_GREEN")
+
+
 def _assert_off_index_matcher() -> None:
     result = match_retailer_receipt_line(
         "lidl",
@@ -443,6 +494,9 @@ def main() -> None:
         _assert_integer_membership_projection()
         _assert_complete_official_gpc_link_validation()
         _assert_candidate_identity_timestamp_order()
+        _assert_receipt_table_off_search_postgresql_types()
+        _assert_external_article_ui_membership_projection()
+        _assert_off_gpc_normalization()
         _assert_off_index_matcher()
     finally:
         with engine.begin() as conn:
