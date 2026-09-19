@@ -173,6 +173,126 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
     return global_product_id, gtin, size_value, size_unit
 
 
+def _normalize_gpc_source(assignment: dict[str, Any]) -> str:
+    explicit = _clean_text(assignment.get("gpc_source")).lower()
+    if explicit:
+        if explicit not in {"external", "manual"}:
+            raise ValueError("gpc_source moet 'external' of 'manual' zijn")
+        return explicit
+
+    legacy_source = _clean_text(assignment.get("mapping_source")).lower()
+    if "manual" in legacy_source:
+        return "manual"
+    return "external"
+
+
+def _official_gpc_brick(conn, brick_code: str) -> dict[str, Any]:
+    if not _table_exists(conn, "gpc_bricks"):
+        raise ValueError("De officiële GS1 GPC-catalogus is niet beschikbaar")
+    row = conn.execute(
+        text(
+            """
+            SELECT
+                b.brick_code,
+                COALESCE(
+                    (
+                        SELECT translated_text
+                        FROM gpc_translations tr
+                        WHERE tr.entity_type = 'brick'
+                          AND tr.entity_code = b.brick_code
+                          AND tr.language_code = 'nl'
+                        LIMIT 1
+                    ),
+                    b.description
+                ) AS display_name
+            FROM gpc_bricks b
+            WHERE b.brick_code = :brick_code
+            LIMIT 1
+            """
+        ),
+        {"brick_code": brick_code},
+    ).mappings().first()
+    if not row:
+        raise ValueError("Onbekende GS1 GPC Brickcode")
+    return dict(row)
+
+
+def _ensure_official_gpc_product_type(conn, brick_code: str) -> str:
+    brick = _official_gpc_brick(conn, brick_code)
+    product_type_id = f"gpc:{brick_code}"
+    existing = conn.execute(
+        text(
+            """
+            SELECT inventory_group_key, gpc_brick_code, source, active
+            FROM product_inventory_groups
+            WHERE inventory_group_key = :inventory_group_key
+            LIMIT 1
+            """
+        ),
+        {"inventory_group_key": product_type_id},
+    ).mappings().first()
+
+    if existing:
+        existing_brick = _clean_text(existing.get("gpc_brick_code"))
+        if existing_brick and existing_brick != brick_code:
+            raise ValueError("Bestaand Producttype verwijst naar een andere GS1 GPC Brickcode")
+        conn.execute(
+            text(
+                """
+                UPDATE product_inventory_groups
+                SET gpc_brick_code = :gpc_brick_code,
+                    display_name = COALESCE(NULLIF(display_name, ''), :display_name),
+                    source = CASE
+                        WHEN source LIKE 'gs1_gpc_%' THEN source
+                        ELSE 'gs1_gpc_official'
+                    END,
+                    active = 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE inventory_group_key = :inventory_group_key
+                """
+            ),
+            {
+                "inventory_group_key": product_type_id,
+                "gpc_brick_code": brick_code,
+                "display_name": _clean_text(brick.get("display_name")) or brick_code,
+            },
+        )
+    else:
+        conn.execute(
+            text(
+                """
+                INSERT INTO product_inventory_groups (
+                    inventory_group_key,
+                    display_name,
+                    default_base_unit,
+                    aggregation_mode,
+                    active,
+                    gpc_brick_code,
+                    source,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :inventory_group_key,
+                    :display_name,
+                    'stuk',
+                    'count',
+                    1,
+                    :gpc_brick_code,
+                    'gs1_gpc_official',
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "inventory_group_key": product_type_id,
+                "display_name": _clean_text(brick.get("display_name")) or brick_code,
+                "gpc_brick_code": brick_code,
+            },
+        )
+    return product_type_id
+
+
 def _resolve_product_type(conn, assignment: dict[str, Any]) -> str:
     if not isinstance(assignment, dict):
         raise ValueError("GS1 GPC-classificatie is verplicht")
@@ -184,29 +304,67 @@ def _resolve_product_type(conn, assignment: dict[str, Any]) -> str:
     if not match:
         raise ValueError("Producttype moet een officiële GS1 GPC Brickcode zijn")
 
-    brick_code = match.group(1)
-    product_type = conn.execute(
+    return _ensure_official_gpc_product_type(conn, match.group(1))
+
+
+def _persist_global_product_gpc_assignment(
+    conn,
+    *,
+    global_product_id: str,
+    brick_code: str,
+    gpc_source: str,
+    confidence: float,
+) -> None:
+    if not _table_exists(conn, "global_product_gpc_bricks"):
+        raise ValueError("Canonical GPC-classificatieopslag ontbreekt")
+    required_columns = {
+        "global_product_id",
+        "brick_code",
+        "assignment_source",
+        "confidence",
+        "migrated_from",
+        "updated_at",
+    }
+    missing = required_columns - _table_columns(conn, "global_product_gpc_bricks")
+    if missing:
+        raise ValueError(
+            "Canonical GPC-classificatieopslag wijkt af; ontbrekende kolommen: "
+            + ", ".join(sorted(missing))
+        )
+    _official_gpc_brick(conn, brick_code)
+    conn.execute(
         text(
             """
-            SELECT inventory_group_key, display_name, gpc_brick_code, source
-            FROM product_inventory_groups
-            WHERE inventory_group_key = :inventory_group_key
-              AND gpc_brick_code = :gpc_brick_code
-              AND source LIKE 'gs1_gpc_%'
-              AND COALESCE(active, 1) = 1
-            LIMIT 1
+            INSERT INTO global_product_gpc_bricks (
+                global_product_id,
+                brick_code,
+                assignment_source,
+                confidence,
+                migrated_from,
+                updated_at
+            ) VALUES (
+                :global_product_id,
+                :brick_code,
+                :assignment_source,
+                :confidence,
+                'external_databases_off_link',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT(global_product_id) DO UPDATE SET
+                brick_code = excluded.brick_code,
+                assignment_source = excluded.assignment_source,
+                confidence = excluded.confidence,
+                migrated_from = excluded.migrated_from,
+                updated_at = CURRENT_TIMESTAMP
             """
         ),
         {
-            "inventory_group_key": product_type_id,
-            "gpc_brick_code": brick_code,
+            "global_product_id": global_product_id,
+            "brick_code": brick_code,
+            "assignment_source": gpc_source,
+            "confidence": confidence,
         },
-    ).mappings().first()
-    if not product_type:
-        raise ValueError(
-            "GS1 GPC Brickcode is niet aanwezig in de officiële Nederlandse GPC-publicatie"
-        )
-    return product_type_id
+    )
 
 
 
@@ -363,19 +521,28 @@ def link_off_product_with_product_type(
     with engine.begin() as conn:
         global_product_id, gtin, size_value, size_unit = _upsert_global_product(conn, off_product)
         product_type_id = _resolve_product_type(conn, product_type_assignment)
+        brick_code = product_type_id.split(":", 1)[1]
+        gpc_source = _normalize_gpc_source(product_type_assignment)
+        confidence = float(product_type_assignment.get("confidence_score") or 1.0)
         membership = link_global_product_to_inventory_group_with_connection(
             conn,
             global_product_id=global_product_id,
             inventory_group_key=product_type_id,
             comparison_group_key=product_type_id,
-            confidence=float(product_type_assignment.get("confidence_score") or 1.0),
-            source=_clean_text(
-                product_type_assignment.get("mapping_source") or "user_confirmed_off_result"
-            ),
+            confidence=confidence,
+            source=("manual_gs1_gpc" if gpc_source == "manual" else "external_gs1_gpc"),
             confirmed_by_user=True,
         )
         if not membership.get("ok"):
             raise ValueError(str(membership.get("error") or "Producttype kon niet worden gekoppeld"))
+
+        _persist_global_product_gpc_assignment(
+            conn,
+            global_product_id=global_product_id,
+            brick_code=brick_code,
+            gpc_source=gpc_source,
+            confidence=confidence,
+        )
 
         receipt_link = _link_receipt_item(conn, receipt_item_id, global_product_id)
         confirmed_external_link = confirm_external_article_for_receipt_item(
@@ -407,6 +574,8 @@ def link_off_product_with_product_type(
         },
         "product_type": {
             "inventory_group_key": product_type_id,
+            "gpc_brick_code": brick_code,
+            "gpc_source": gpc_source,
             "confirmed_by_user": True,
         },
         "membership_id": membership.get("membership_id"),
