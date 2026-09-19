@@ -194,6 +194,9 @@ def test_gpc_search_and_assignment_share_complete_official_reference_source():
     assert "ensure_official_gpc_brick" in routes
     assert "ensure_official_gpc_brick" in off_link
     assert "FROM gpc_product_groups gpg" in reference
+    assert "gpc_bricks_2026_05_en.json" in reference
+    assert "_bundled_brick_row" in reference
+    assert '"bundled_gpc_2026_05_en"' in reference
     assert "INSERT INTO gpc_segments" in reference
     assert "INSERT INTO gpc_families" in reference
     assert "INSERT INTO gpc_classes" in reference

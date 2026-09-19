@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from functools import lru_cache
+import json
+from pathlib import Path
 import re
 from typing import Any
 
@@ -8,6 +11,8 @@ from sqlalchemy.engine import Connection
 
 
 _GPC_CODE = re.compile(r"^\d{8}$")
+_BUNDLED_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_bricks_2026_05_en.json"
+_BUNDLED_REFERENCE_SOURCE = "bundled_gpc_2026_05_en"
 
 
 def _tables(conn: Connection) -> set[str]:
@@ -103,6 +108,47 @@ def _valid_hierarchy(row: dict[str, Any]) -> bool:
     )
 
 
+def _bundled_row(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "brick_code": str(raw.get("gpc_brick_code") or "").strip(),
+        "brick_description": str(raw.get("gpc_brick_name_en") or "").strip(),
+        "brick_description_en": str(raw.get("gpc_brick_name_en") or "").strip(),
+        "class_code": str(raw.get("gpc_class_code") or "").strip(),
+        "class_description": str(raw.get("gpc_class_name_en") or "").strip(),
+        "family_code": str(raw.get("gpc_family_code") or "").strip(),
+        "family_description": str(raw.get("gpc_family_name_en") or "").strip(),
+        "segment_code": str(raw.get("gpc_segment_code") or "").strip(),
+        "segment_description": str(raw.get("gpc_segment_name_en") or "").strip(),
+        "reference_source": _BUNDLED_REFERENCE_SOURCE,
+    }
+
+
+@lru_cache(maxsize=1)
+def _bundled_rows() -> tuple[dict[str, Any], ...]:
+    try:
+        payload = json.loads(_BUNDLED_DATA_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ()
+    rows: list[dict[str, Any]] = []
+    for raw in payload.get("bricks") or []:
+        if not isinstance(raw, dict):
+            continue
+        row = _bundled_row(raw)
+        if _valid_hierarchy(row) and row.get("brick_description"):
+            rows.append(row)
+    return tuple(rows)
+
+
+@lru_cache(maxsize=1)
+def _bundled_by_code() -> dict[str, dict[str, Any]]:
+    return {str(row["brick_code"]): row for row in _bundled_rows()}
+
+
+def _bundled_brick_row(brick_code: str) -> dict[str, Any] | None:
+    row = _bundled_by_code().get(str(brick_code or "").strip())
+    return dict(row) if row else None
+
+
 def ensure_official_gpc_brick(conn: Connection, brick_code: str) -> dict[str, Any] | None:
     code = str(brick_code or "").strip()
     if not _GPC_CODE.fullmatch(code):
@@ -113,6 +159,8 @@ def ensure_official_gpc_brick(conn: Connection, brick_code: str) -> dict[str, An
         return existing
 
     fallback = _product_group_row(conn, code)
+    if not fallback or not _valid_hierarchy(fallback):
+        fallback = _bundled_brick_row(code)
     if not fallback or not _valid_hierarchy(fallback):
         return None
 
@@ -212,6 +260,7 @@ def search_official_gpc_bricks(
             if row:
                 rows.append(row)
 
+    known = {str(row.get("brick_code") or "") for row in rows}
     if "gpc_product_groups" in tables:
         active_sql = _active_clause(conn, "gpg")
         fallback_rows = conn.execute(text(f"""
@@ -222,7 +271,6 @@ def search_official_gpc_bricks(
             ORDER BY gpg.gpc_brick_code
             LIMIT :limit
         """), params).mappings().all()
-        known = {str(row.get("brick_code") or "") for row in rows}
         for item in fallback_rows:
             code = str(item.get("gpc_brick_code") or "")
             if code in known:
@@ -231,6 +279,27 @@ def search_official_gpc_bricks(
             if row:
                 rows.append(row)
                 known.add(code)
+
+    for bundled in _bundled_rows():
+        code = str(bundled.get("brick_code") or "")
+        if code in known:
+            continue
+        if normalized:
+            haystack = " ".join(
+                str(bundled.get(key) or "").lower()
+                for key in (
+                    "brick_code",
+                    "brick_description",
+                    "brick_description_en",
+                    "class_description",
+                    "family_description",
+                    "segment_description",
+                )
+            )
+            if normalized not in haystack:
+                continue
+        rows.append(dict(bundled))
+        known.add(code)
 
     rows.sort(key=lambda row: (
         0 if normalized and str(row.get("brick_code") or "").lower() == normalized else 1,
