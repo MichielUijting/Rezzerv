@@ -10,7 +10,6 @@ from sqlalchemy import text
 
 PLATFORM_ADMIN_MUTATIONS = {
     ("POST", "/api/external-databases/catalog/promote-candidate-with-product-type"),
-    ("POST", "/api/external-products/off/link"),
     ("POST", "/api/product-groups"),
     ("PUT", "/api/product-groups/{inventory_group_key:path}"),
     ("DELETE", "/api/product-groups/{inventory_group_key:path}"),
