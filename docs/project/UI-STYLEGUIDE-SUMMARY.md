@@ -252,6 +252,14 @@ Een standaard listcard bevat:
 
 De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft `14px`.
 
+## Productafbeeldingen
+
+- productafbeeldingen uit externe productbronnen worden als ondersteunende productidentificatie getoond en vervangen nooit de artikelnaam of GTIN;
+- Cataloguslijsten gebruiken waar beschikbaar een compacte thumbnail naast de artikelnaam, zonder een extra brede fotokolom af te dwingen;
+- Catalogusdetail mag dezelfde afbeelding groter tonen met behoud van beeldverhouding en `object-fit: contain`;
+- ontbrekende of niet-laadbare afbeeldingen krijgen een rustige **Geen foto**-fallback zonder broken-image-icoon;
+- een externe afbeelding-URL wordt niet automatisch gebruikt om een reeds aanwezige Catalogusafbeelding te overschrijven.
+
 ## Badges, chips en aantallen
 
 - badges/chips gebruiken `14px`; zij ogen compacter door padding, achtergrond en gewicht, niet door kleinere tekst;

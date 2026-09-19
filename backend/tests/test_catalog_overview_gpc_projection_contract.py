@@ -16,6 +16,7 @@ def test_confirmed_gpc_assignment_is_projected_by_catalog_backend_query():
     assert "tr.entity_type = 'brick'" in source
     assert "AS product_type" in source
     assert "AS gpc_brick_code" in source
+    assert '"image_url": "gp.image_url"' in source
 
 
 def test_catalog_overview_uses_backend_pagination_without_n_plus_one_requests():
@@ -66,3 +67,17 @@ def test_catalog_status_is_removed_from_backend_frontend_export_and_detail():
     assert "Kwaliteitsstatus" not in detail
     assert "rz-catalog-status" not in css
     assert "rz-catalog-col-status" not in css
+
+
+def test_catalog_projects_and_renders_product_images_with_fallback():
+    page = CATALOG_PAGE.read_text(encoding="utf-8")
+    detail = CATALOG_DETAIL.read_text(encoding="utf-8")
+    css = CATALOG_CSS.read_text(encoding="utf-8")
+
+    assert "CatalogProductImage" in page
+    assert "imageUrl={item.image_url}" in page
+    assert "CatalogProductImage" in detail
+    assert "imageUrl={product.image_url}" in detail
+    assert ".rz-catalog-product-image--compact" in css
+    assert ".rz-catalog-product-summary" in css
+    assert "object-fit: contain" in css

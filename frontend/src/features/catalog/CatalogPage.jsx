@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
+import CatalogProductImage from './CatalogProductImage'
 import {
   canCurrentUserPerform,
   fetchJsonWithAuth,
@@ -227,7 +228,12 @@ export default function CatalogPage() {
                   {isLoading ? <tr><td colSpan="7">Catalogus laden...</td></tr> : items.length ? items.map((item) => (
                     <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
                       <td className="rz-check"><input type="checkbox" checked={Boolean(selectedRows[item.id])} onChange={() => toggleSelected(item)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
-                      <td>{text(item.name)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
+                      <td>
+                        <div className="rz-catalog-name-with-image">
+                          <CatalogProductImage imageUrl={item.image_url} productName={item.name} compact />
+                          <span>{text(item.name)}</span>
+                        </div>
+                      </td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
                       <td>{sourceLabel(item.source)}</td><td className="rz-num">{Number(item.household_article_count || 0)}</td>
                     </tr>
                   )) : <tr><td colSpan="7">Geen universele artikelen gevonden.</td></tr>}
