@@ -237,23 +237,26 @@ def main() -> None:
         events_before = int(conn.execute(text("SELECT COUNT(*) FROM inventory_events")).scalar() or 0)
         _seed_realistic_receipt_candidate(conn)
 
+    off_product = {
+        "gtin": TEST_GTIN,
+        "product_name": "Chocopops PostgreSQL end-to-end",
+        "brand": "PostgreSQL proof",
+        "category": "Breakfast cereals",
+        "quantity": "375 g",
+        "image_url": "https://images.openfoodfacts.test/0898965996120.jpg",
+    }
+    product_type_assignment = {
+        "product_type_id": TEST_PRODUCT_TYPE,
+        "gpc_source": "manual",
+        "confidence_score": 1.0,
+    }
+
     global_product_id = ""
     try:
         result = link_off_product_with_product_type(
             receipt_item_id=TEST_RECEIPT_ITEM_ID,
-            off_product={
-                "gtin": TEST_GTIN,
-                "product_name": "Chocopops PostgreSQL end-to-end",
-                "brand": "PostgreSQL proof",
-                "category": "Breakfast cereals",
-                "quantity": "375 g",
-                "image_url": "https://images.openfoodfacts.test/0898965996120.jpg",
-            },
-            product_type_assignment={
-                "product_type_id": TEST_PRODUCT_TYPE,
-                "gpc_source": "manual",
-                "confidence_score": 1.0,
-            },
+            off_product=off_product,
+            product_type_assignment=product_type_assignment,
         )
         if not result.get("ok") or not result.get("linked"):
             raise AssertionError(result)
@@ -357,10 +360,124 @@ def main() -> None:
                     }
                 )
 
+        repeat_result = link_off_product_with_product_type(
+            receipt_item_id=TEST_RECEIPT_ITEM_ID,
+            off_product=off_product,
+            product_type_assignment=product_type_assignment,
+        )
+        repeat_global_product_id = str(
+            (repeat_result.get("global_product") or {}).get("id") or ""
+        )
+        if repeat_global_product_id != global_product_id:
+            raise AssertionError(
+                {
+                    "first_global_product_id": global_product_id,
+                    "repeat_global_product_id": repeat_global_product_id,
+                    "repeat_result": repeat_result,
+                }
+            )
+
+        with engine.begin() as conn:
+            confirmed_links = int(
+                conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*)
+                        FROM external_article_product_links
+                        WHERE retailer_code = :retailer_code
+                          AND receipt_text_normalized = :receipt_text_normalized
+                          AND status = 'confirmed'
+                        """
+                    ),
+                    {
+                        "retailer_code": TEST_RETAILER,
+                        "receipt_text_normalized": "choc opops choco shells",
+                    },
+                ).scalar()
+                or 0
+            )
+            inactive_links = int(
+                conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*)
+                        FROM external_article_product_links
+                        WHERE retailer_code = :retailer_code
+                          AND receipt_text_normalized = :receipt_text_normalized
+                          AND status = 'inactive'
+                        """
+                    ),
+                    {
+                        "retailer_code": TEST_RETAILER,
+                        "receipt_text_normalized": "choc opops choco shells",
+                    },
+                ).scalar()
+                or 0
+            )
+            membership_count = int(
+                conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*)
+                        FROM product_group_memberships
+                        WHERE global_product_id = :global_product_id
+                          AND inventory_group_key = :inventory_group_key
+                        """
+                    ),
+                    {
+                        "global_product_id": global_product_id,
+                        "inventory_group_key": TEST_PRODUCT_TYPE,
+                    },
+                ).scalar()
+                or 0
+            )
+            gpc_assignment_count = int(
+                conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*)
+                        FROM global_product_gpc_bricks
+                        WHERE global_product_id = :global_product_id
+                          AND brick_code = :brick_code
+                        """
+                    ),
+                    {
+                        "global_product_id": global_product_id,
+                        "brick_code": TEST_GPC_BRICK,
+                    },
+                ).scalar()
+                or 0
+            )
+            inventory_after_repeat = int(
+                conn.execute(text("SELECT COUNT(*) FROM inventory")).scalar() or 0
+            )
+            events_after_repeat = int(
+                conn.execute(text("SELECT COUNT(*) FROM inventory_events")).scalar() or 0
+            )
+
+        if confirmed_links != 1:
+            raise AssertionError({"confirmed_links": confirmed_links})
+        if inactive_links < 1:
+            raise AssertionError({"inactive_links": inactive_links})
+        if membership_count != 1:
+            raise AssertionError({"membership_count": membership_count})
+        if gpc_assignment_count != 1:
+            raise AssertionError({"gpc_assignment_count": gpc_assignment_count})
+        if inventory_after_repeat != inventory_before or events_after_repeat != events_before:
+            raise AssertionError(
+                {
+                    "inventory_before": inventory_before,
+                    "inventory_after_repeat": inventory_after_repeat,
+                    "events_before": events_before,
+                    "events_after_repeat": events_after_repeat,
+                }
+            )
+
         print("POSTGRESQL_OFF_LINK_REAL_CANDIDATE_GREEN")
         print("POSTGRESQL_OFF_LINK_GPC_ASSIGNMENT_GREEN")
         print("POSTGRESQL_OFF_LINK_EXTERNAL_ARTICLE_CONFIRMATION_GREEN")
         print("POSTGRESQL_OFF_LINK_NO_INVENTORY_MUTATION_GREEN")
+        print("POSTGRESQL_OFF_LINK_REPEAT_IDEMPOTENT_GREEN")
         print("POSTGRESQL_OFF_LINK_END_TO_END_SELFTEST_GREEN")
     finally:
         with engine.begin() as conn:
