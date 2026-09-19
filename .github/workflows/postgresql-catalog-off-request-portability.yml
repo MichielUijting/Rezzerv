@@ -91,6 +91,9 @@ jobs:
           grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_CATALOG_IDENTITY_BOOLEAN_READ_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_ORDER_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_OFF_RECEIPT_NUMERIC_CAST_STATIC_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_OFF_GPC_PROPAGATION_STATIC_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_ACTIVE_STATIC_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_OFF_IDENTITY_BOOLEAN_BIND_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_CATALOG_OFF_REQUEST_PORTABILITY_STATIC_SELFTEST_GREEN' /tmp/catalog-off-static.log
 
