@@ -7,6 +7,7 @@ on:
       - 'backend/app/api/catalog_routes.py'
       - 'backend/app/services/article_detail_write_guard.py'
       - 'backend/app/services/off_product_link_service.py'
+      - 'backend/app/services/gpc_reference_catalog_service.py'
       - 'backend/tests/test_gpc_article_assignment_contract.py'
       - 'frontend/src/features/catalog/CatalogGpcFrame.jsx'
       - 'frontend/src/features/catalog/CatalogGpcClassificationPage.jsx'
@@ -36,7 +37,8 @@ jobs:
           python -m py_compile \
             backend/app/api/catalog_gpc_routes.py \
             backend/app/api/catalog_routes.py \
-            backend/app/services/article_detail_write_guard.py
+            backend/app/services/article_detail_write_guard.py \
+            backend/app/services/gpc_reference_catalog_service.py
       - name: Run runtime router and catalog contract tests
         run: python -m pytest -q backend/tests/test_gpc_article_assignment_contract.py
       - uses: actions/setup-node@v4

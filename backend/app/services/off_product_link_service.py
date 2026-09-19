@@ -9,6 +9,7 @@ from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.global_product_service import get_or_create_global_product
+from app.services.gpc_reference_catalog_service import ensure_official_gpc_brick
 from app.services.external_article_confirmation_service import (
     confirm_external_article_for_receipt_item,
 )
@@ -187,34 +188,17 @@ def _normalize_gpc_source(assignment: dict[str, Any]) -> str:
 
 
 def _official_gpc_brick(conn, brick_code: str) -> dict[str, Any]:
-    if not _table_exists(conn, "gpc_bricks"):
-        raise ValueError("De officiële GS1 GPC-catalogus is niet beschikbaar")
-    row = conn.execute(
-        text(
-            """
-            SELECT
-                b.brick_code,
-                COALESCE(
-                    (
-                        SELECT translated_text
-                        FROM gpc_translations tr
-                        WHERE tr.entity_type = 'brick'
-                          AND tr.entity_code = b.brick_code
-                          AND tr.language_code = 'nl'
-                        LIMIT 1
-                    ),
-                    b.description
-                ) AS display_name
-            FROM gpc_bricks b
-            WHERE b.brick_code = :brick_code
-            LIMIT 1
-            """
-        ),
-        {"brick_code": brick_code},
-    ).mappings().first()
+    row = ensure_official_gpc_brick(conn, brick_code)
     if not row:
         raise ValueError("Onbekende GS1 GPC Brickcode")
-    return dict(row)
+    return {
+        **row,
+        "display_name": _clean_text(
+            row.get("brick_description")
+            or row.get("brick_description_en")
+            or row.get("brick_code")
+        ),
+    }
 
 
 def _ensure_official_gpc_product_type(conn, brick_code: str) -> str:

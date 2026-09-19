@@ -17,6 +17,7 @@ DETAIL = ROOT / "frontend/src/features/catalog/CatalogDetailPageV2.jsx"
 FRONTEND_ROUTER = ROOT / "frontend/src/app/router/AppRouter.jsx"
 CSS = ROOT / "frontend/src/features/catalog/catalog.css"
 OFF_LINK_SERVICE = ROOT / "backend/app/services/off_product_link_service.py"
+GPC_REFERENCE_SERVICE = ROOT / "backend/app/services/gpc_reference_catalog_service.py"
 EXTERNAL_DATABASES = ROOT / "frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx"
 
 
@@ -55,7 +56,7 @@ def test_assignment_targets_existing_global_product_and_known_brick():
     source = GPC_ROUTES.read_text(encoding="utf-8")
     assert "FROM global_products" in source
     assert "global_product_id" in source
-    assert "SELECT 1 FROM gpc_bricks WHERE brick_code" in source
+    assert "ensure_official_gpc_brick" in source
     assert "global_product_gpc_bricks" in source
     assert "household_article_gpc_bricks" not in source
 
@@ -162,9 +163,12 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
 
 def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_provenance():
     backend = OFF_LINK_SERVICE.read_text(encoding="utf-8")
+    reference = GPC_REFERENCE_SERVICE.read_text(encoding="utf-8")
     frontend = EXTERNAL_DATABASES.read_text(encoding="utf-8")
 
-    assert "SELECT" in backend and "FROM gpc_bricks b" in backend
+    assert "ensure_official_gpc_brick" in backend
+    assert "FROM gpc_bricks b" in reference
+    assert "FROM gpc_product_groups gpg" in reference
     assert "Onbekende GS1 GPC Brickcode" in backend
     assert "global_product_gpc_bricks" in backend
     assert "assignment_source" in backend
@@ -179,3 +183,19 @@ def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_proven
     assert "external-gpc-search-results" in frontend
     assert "gpc_source: productTypeSelectionSource" in frontend
     assert "Handmatig geselecteerd uit de officiële GS1 GPC-catalogus." in frontend
+
+
+def test_gpc_search_and_assignment_share_complete_official_reference_source():
+    routes = GPC_ROUTES.read_text(encoding="utf-8")
+    reference = GPC_REFERENCE_SERVICE.read_text(encoding="utf-8")
+    off_link = OFF_LINK_SERVICE.read_text(encoding="utf-8")
+
+    assert "search_official_gpc_bricks" in routes
+    assert "ensure_official_gpc_brick" in routes
+    assert "ensure_official_gpc_brick" in off_link
+    assert "FROM gpc_product_groups gpg" in reference
+    assert "INSERT INTO gpc_segments" in reference
+    assert "INSERT INTO gpc_families" in reference
+    assert "INSERT INTO gpc_classes" in reference
+    assert "INSERT INTO gpc_bricks" in reference
+    assert "ON CONFLICT(brick_code) DO NOTHING" in reference

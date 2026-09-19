@@ -8,6 +8,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import inspect, text
 
 from app.db import engine
+from app.services.gpc_reference_catalog_service import (
+    ensure_official_gpc_brick,
+    search_official_gpc_bricks,
+)
 
 
 router = APIRouter(tags=["catalog-gpc"])
@@ -295,24 +299,12 @@ def search_catalog_gpc_bricks(
 ):
     _require_gpc_tables()
     normalized = " ".join(str(query or "").strip().split()).lower()
-    where = ""
-    params: dict[str, Any] = {"limit": int(limit)}
-    if normalized:
-        params["query"] = f"%{normalized}%"
-        where = """
-            WHERE lower(b.brick_code) LIKE :query
-               OR lower(b.description) LIKE :query
-               OR lower(COALESCE((
-                    SELECT translated_text
-                    FROM gpc_translations tr
-                    WHERE tr.entity_type='brick'
-                      AND tr.entity_code=b.brick_code
-                      AND tr.language_code='nl'
-               ), '')) LIKE :query
-        """
-    sql = _brick_select_sql(where) + " ORDER BY brick_description, b.brick_code LIMIT :limit"
     with engine.begin() as conn:
-        rows = [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
+        rows = search_official_gpc_bricks(
+            conn,
+            query=normalized,
+            limit=int(limit),
+        )
     return {"items": rows, "total": len(rows), "query": normalized}
 
 
@@ -347,10 +339,7 @@ def set_catalog_product_gpc_brick(
     with engine.begin() as conn:
         if not _global_product_exists(conn, global_product_id):
             raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
-        if not conn.execute(
-            text("SELECT 1 FROM gpc_bricks WHERE brick_code = :brick_code LIMIT 1"),
-            {"brick_code": brick_code},
-        ).first():
+        if not ensure_official_gpc_brick(conn, brick_code):
             raise HTTPException(status_code=400, detail="Onbekende GPC Brickcode")
         conn.execute(text("DELETE FROM global_product_gpc_migration_suppressions WHERE global_product_id = :id"), {"id": global_product_id})
         conn.execute(text("""
