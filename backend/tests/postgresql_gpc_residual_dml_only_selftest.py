@@ -15,6 +15,10 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.api import catalog_gpc_routes
 from app.services import gpc_article_assignment_service, gpc_import_service
+from app.services.gpc_reference_catalog_service import (
+    ensure_official_gpc_brick,
+    search_official_gpc_bricks,
+)
 from app.services.global_product_service import get_or_create_global_product
 from app.services.gpc_translation_service import (
     ensure_gpc_translation_schema,
@@ -26,6 +30,10 @@ FAMILY_CODE = "99010000"
 CLASS_CODE = "99010100"
 BRICK_CODE = "99010101"
 TRANSLATION_SOURCE_NAME = "pr2l-gpc-translation.csv"
+FALLBACK_SEGMENT_CODE = "50000000"
+FALLBACK_FAMILY_CODE = "50220000"
+FALLBACK_CLASS_CODE = "50221200"
+FALLBACK_BRICK_CODE = "10000284"
 
 
 def _engine_url():
@@ -136,6 +144,113 @@ def _cleanup(conn, product_id: str | None = None) -> None:
     conn.execute(text("DELETE FROM gpc_segments WHERE segment_code = :code"), {"code": SEGMENT_CODE})
 
 
+def _cleanup_fallback_reference(conn) -> None:
+    conn.execute(
+        text("DELETE FROM gpc_bricks WHERE brick_code = :code"),
+        {"code": FALLBACK_BRICK_CODE},
+    )
+    conn.execute(
+        text("DELETE FROM gpc_classes WHERE class_code = :code"),
+        {"code": FALLBACK_CLASS_CODE},
+    )
+    conn.execute(
+        text("DELETE FROM gpc_families WHERE family_code = :code"),
+        {"code": FALLBACK_FAMILY_CODE},
+    )
+    conn.execute(
+        text("DELETE FROM gpc_segments WHERE segment_code = :code"),
+        {"code": FALLBACK_SEGMENT_CODE},
+    )
+    conn.execute(
+        text("DELETE FROM product_inventory_groups WHERE inventory_group_key = :key"),
+        {"key": f"gpc:{FALLBACK_BRICK_CODE}"},
+    )
+    conn.execute(
+        text("DELETE FROM gpc_product_groups WHERE gpc_brick_code = :code"),
+        {"code": FALLBACK_BRICK_CODE},
+    )
+
+
+def _assert_complete_reference_fallback(engine) -> None:
+    with engine.begin() as conn:
+        _cleanup_fallback_reference(conn)
+        conn.execute(text("""
+            INSERT INTO gpc_product_groups (
+                gpc_brick_code,
+                gpc_brick_name,
+                gpc_brick_name_en,
+                gpc_class_code,
+                gpc_class_name,
+                gpc_class_name_en,
+                gpc_family_code,
+                gpc_family_name,
+                gpc_family_name_en,
+                gpc_segment_code,
+                gpc_segment_name,
+                gpc_segment_name_en,
+                language_code,
+                source_version,
+                source,
+                active,
+                created_at,
+                updated_at
+            ) VALUES (
+                :brick_code,
+                'Cereal Products - Ready to Eat (Shelf Stable)',
+                'Cereal Products - Ready to Eat (Shelf Stable)',
+                :class_code,
+                'Processed Cereal Products',
+                'Processed Cereal Products',
+                :family_code,
+                'Cereal/Grain/Pulse Products',
+                'Cereal/Grain/Pulse Products',
+                :segment_code,
+                'Food/Beverage',
+                'Food/Beverage',
+                'en',
+                '2026-05-20',
+                'gs1_gpc_2026_05_en',
+                TRUE,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+        """), {
+            "brick_code": FALLBACK_BRICK_CODE,
+            "class_code": FALLBACK_CLASS_CODE,
+            "family_code": FALLBACK_FAMILY_CODE,
+            "segment_code": FALLBACK_SEGMENT_CODE,
+        })
+        before = conn.execute(
+            text("SELECT 1 FROM gpc_bricks WHERE brick_code=:code"),
+            {"code": FALLBACK_BRICK_CODE},
+        ).first()
+        if before:
+            raise AssertionError("Fallback Brick stond onverwacht al in gpc_bricks")
+
+        results = search_official_gpc_bricks(
+            conn,
+            query=FALLBACK_BRICK_CODE,
+            limit=5,
+        )
+        if not results or results[0].get("brick_code") != FALLBACK_BRICK_CODE:
+            raise AssertionError(results)
+        if results[0].get("reference_source") != "gpc_product_groups":
+            raise AssertionError(results[0])
+
+        materialized = ensure_official_gpc_brick(conn, FALLBACK_BRICK_CODE)
+        if not materialized or materialized.get("brick_code") != FALLBACK_BRICK_CODE:
+            raise AssertionError(materialized)
+        stored = conn.execute(
+            text("SELECT description FROM gpc_bricks WHERE brick_code=:code"),
+            {"code": FALLBACK_BRICK_CODE},
+        ).scalar_one_or_none()
+        if stored != "Cereal Products - Ready to Eat (Shelf Stable)":
+            raise AssertionError(stored)
+        _cleanup_fallback_reference(conn)
+
+    print("POSTGRESQL_GPC_COMPLETE_REFERENCE_FALLBACK_GREEN")
+
+
 def _assert_assignment_dml(engine) -> str:
     with engine.begin() as conn:
         _cleanup(conn)
@@ -228,6 +343,7 @@ def main() -> None:
     try:
         _assert_runtime_create_denied(engine)
         _assert_schema_validation_only(engine)
+        _assert_complete_reference_fallback(engine)
         product_id = _assert_assignment_dml(engine)
         _assert_translation_dml(engine)
         _assert_import_projection_dml(engine)

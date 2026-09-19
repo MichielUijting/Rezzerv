@@ -7,6 +7,7 @@ on:
       - 'backend/app/api/catalog_gpc_routes.py'
       - 'backend/app/services/gpc_article_assignment_service.py'
       - 'backend/app/services/gpc_import_service.py'
+      - 'backend/app/services/gpc_reference_catalog_service.py'
       - 'backend/app/services/gpc_translation_service.py'
       - 'backend/tests/postgresql_gpc_residual_sql_authority_selftest.py'
       - 'backend/tests/postgresql_gpc_residual_dml_only_selftest.py'
@@ -96,6 +97,7 @@ jobs:
           env -u MIGRATION_DATABASE_URL python tests/postgresql_gpc_residual_dml_only_selftest.py | tee /tmp/gpc-residual-dml-only.log
           grep -F 'POSTGRESQL_GPC_RESIDUAL_RUNTIME_CREATE_DENIED_GREEN' /tmp/gpc-residual-dml-only.log
           grep -F 'POSTGRESQL_GPC_RESIDUAL_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
+          grep -F 'POSTGRESQL_GPC_COMPLETE_REFERENCE_FALLBACK_GREEN' /tmp/gpc-residual-dml-only.log
           grep -F 'POSTGRESQL_GPC_ASSIGNMENT_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
           grep -F 'POSTGRESQL_GPC_TRANSLATION_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
           grep -F 'POSTGRESQL_GPC_IMPORT_BOOLEAN_DML_ONLY_GREEN' /tmp/gpc-residual-dml-only.log
