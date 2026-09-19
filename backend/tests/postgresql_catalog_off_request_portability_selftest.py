@@ -10,6 +10,7 @@ OFF_LINK_PATH = BACKEND_ROOT / "app" / "services" / "off_product_link_service.py
 OFF_SEARCH_PATH = BACKEND_ROOT / "app" / "services" / "off_search_service.py"
 ARTICLE_UI_PATH = BACKEND_ROOT / "app" / "services" / "external_article_ui_projection.py"
 
+# Houd deze scope gelijk aan de volledige OFF/GPC-gebruikersroute in de CI-workflow.
 FORBIDDEN_SQL_PATTERNS = {
     "runtime CREATE TABLE": re.compile(r"\bCREATE\s+TABLE\b", re.IGNORECASE),
     "runtime CREATE INDEX": re.compile(r"\bCREATE\s+(?:UNIQUE\s+)?INDEX\b", re.IGNORECASE),
