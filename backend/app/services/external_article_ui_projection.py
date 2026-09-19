@@ -31,14 +31,17 @@ def _central_product_details(conn, global_product_id: str) -> dict[str, Any]:
                 COALESCE(gp.brand, '') AS global_product_brand,
                 COALESCE(gp.primary_gtin, '') AS primary_gtin,
                 COALESCE(pgm.inventory_group_key, '') AS product_type_id,
-                COALESCE(gpc.gpc_brick_code, '') AS gpc_brick_code,
-                COALESCE(gpc.gpc_brick_name, '') AS gpc_brick_name,
-                COALESCE(gpc.gpc_brick_name_en, '') AS gpc_brick_name_en,
+                COALESCE(gpc.gpc_brick_code, pig.gpc_brick_code, '') AS gpc_brick_code,
+                COALESCE(gpc.gpc_brick_name, pig.display_name, '') AS gpc_brick_name,
+                COALESCE(gpc.gpc_brick_name_en, pig.display_name, '') AS gpc_brick_name_en,
                 COALESCE(gpc.source_version, '') AS gpc_source_version
             FROM global_products gp
             LEFT JOIN product_group_memberships pgm
               ON pgm.global_product_id = gp.id
              AND COALESCE(pgm.active, 1) = 1
+            LEFT JOIN product_inventory_groups pig
+              ON pig.inventory_group_key = pgm.inventory_group_key
+             AND COALESCE(pig.active, 1) = 1
             LEFT JOIN gpc_product_groups gpc
               ON CAST(gpc.gpc_brick_code AS TEXT) =
                  CASE
