@@ -16,6 +16,8 @@ CATALOG_PAGE = ROOT / "frontend/src/features/catalog/CatalogPage.jsx"
 DETAIL = ROOT / "frontend/src/features/catalog/CatalogDetailPageV2.jsx"
 FRONTEND_ROUTER = ROOT / "frontend/src/app/router/AppRouter.jsx"
 CSS = ROOT / "frontend/src/features/catalog/catalog.css"
+OFF_LINK_SERVICE = ROOT / "backend/app/services/off_product_link_service.py"
+EXTERNAL_DATABASES = ROOT / "frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx"
 
 
 def test_catalog_router_contains_real_gpc_runtime_routes():
@@ -156,3 +158,24 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
     assert ".rz-catalog-gpc-section" in css
     assert ".rz-catalog-gpc-result" in css
     assert ".rz-catalog-gpc-suggestion" in css
+
+
+def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_provenance():
+    backend = OFF_LINK_SERVICE.read_text(encoding="utf-8")
+    frontend = EXTERNAL_DATABASES.read_text(encoding="utf-8")
+
+    assert "SELECT" in backend and "FROM gpc_bricks b" in backend
+    assert "Onbekende GS1 GPC Brickcode" in backend
+    assert "global_product_gpc_bricks" in backend
+    assert "assignment_source" in backend
+    assert "gpc_source" in backend
+    assert '{"external", "manual"}' in backend
+    assert "manual_gs1_gpc" in backend
+    assert "external_gs1_gpc" in backend
+
+    assert "/api/catalog/gpc/bricks?query=" in frontend
+    assert "SearchCandidateList" in frontend
+    assert "Zoek op Brickcode of producttype" in frontend
+    assert "external-gpc-search-results" in frontend
+    assert "gpc_source: productTypeSelectionSource" in frontend
+    assert "Handmatig geselecteerd uit de officiële GS1 GPC-catalogus." in frontend

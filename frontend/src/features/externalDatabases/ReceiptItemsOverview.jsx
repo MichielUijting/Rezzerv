@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
+import SearchCandidateList from '../../ui/SearchCandidateList'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import RecognitionConfirmationDetail from './RecognitionConfirmationDetail'
 import { limitSearchCandidates } from '../../ui/searchCandidatePolicy.js'
@@ -238,6 +239,11 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const [isLinkingProductType, setIsLinkingProductType] = useState(false)
   const [isClassifyingProductType, setIsClassifyingProductType] = useState(false)
   const [productTypeClassificationStatus, setProductTypeClassificationStatus] = useState('')
+  const [productTypeSelectionSource, setProductTypeSelectionSource] = useState('')
+  const [gpcSearchText, setGpcSearchText] = useState('')
+  const [gpcSearchResults, setGpcSearchResults] = useState([])
+  const [gpcSearchError, setGpcSearchError] = useState('')
+  const [isGpcSearching, setIsGpcSearching] = useState(false)
   const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', catalogLinked: 'all', quantity: '', price: '', bestCandidateName: '', productType: '', bestCandidateCode: '', bestCandidateScore: '', candidateCount: '' })
   const [sortKey, setSortKey] = useState('receiptLineText')
   const [sortDesc, setSortDesc] = useState(false)
@@ -408,7 +414,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   })
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
   const hasValidProductTypeDecision = /^gpc:\d{8}$/.test(String(selectedProductTypeId || ''))
-  const selectedCandidateCanBeLinked = Boolean(selectedItem && selectedCandidate && hasValidProductTypeDecision && !isLinkingProductType && !isClassifyingProductType)
+  const hasValidProductTypeSource = productTypeSelectionSource === 'external' || productTypeSelectionSource === 'manual'
+  const selectedCandidateCanBeLinked = Boolean(selectedItem && selectedCandidate && hasValidProductTypeDecision && hasValidProductTypeSource && !isLinkingProductType && !isClassifyingProductType)
   const selectedCandidateCanBeUnlinked = false
   const selectedItemHasKnownGtin = Boolean(selectedItem?.hasKnownGtin || hasKnownGtin(selectedItem?.gtin))
 
@@ -418,13 +425,35 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   function toggleSelectedItem(itemId) { setSelectedItemIds((current) => current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId]) }
   function toggleVisibleItems() { setSelectedItemIds((current) => allVisibleSelected ? current.filter((id) => !visibleIds.includes(id)) : Array.from(new Set([...current, ...visibleIds]))) }
   function goToPage(targetPage) { setPage(Math.max(1, Math.min(pageCount, targetPage))) }
-  function selectReceiptItem(item) { const linkedCandidateId = item.catalogLinked ? `linked:${item.globalProductId || item.gtin}` : ''; setSelectedItem(item); setSelectedCandidateId(linkedCandidateId); setOffPreview(null); setOffSearchResults([]); setOffError(''); setOffSearchText(defaultOffQuery(item)); setOffSearchMode('automatisch'); setProductTypeMode('existing'); setSelectedProductTypeId(item.catalogLinked ? item.linkedProductTypeId : ''); setNewProductTypeName(''); if (!item.hasKnownGtin) consultOpenFoodFactsForItem(item, defaultOffQuery(item), 'automatisch') }
+  function selectReceiptItem(item) {
+    const linkedCandidateId = item.catalogLinked ? `linked:${item.globalProductId || item.gtin}` : ''
+    setSelectedItem(item)
+    setSelectedCandidateId(linkedCandidateId)
+    setOffPreview(null)
+    setOffSearchResults([])
+    setOffError('')
+    setOffSearchText(defaultOffQuery(item))
+    setOffSearchMode('automatisch')
+    setProductTypeMode('existing')
+    setSelectedProductTypeId(item.catalogLinked ? item.linkedProductTypeId : '')
+    setProductTypeSelectionSource('')
+    setProductTypeClassificationStatus('')
+    setGpcSearchText('')
+    setGpcSearchResults([])
+    setGpcSearchError('')
+    setNewProductTypeName('')
+    if (!item.hasKnownGtin) consultOpenFoodFactsForItem(item, defaultOffQuery(item), 'automatisch')
+  }
 
   useEffect(() => {
     let cancelled = false
     async function classifySelectedCandidate() {
+      setGpcSearchText('')
+      setGpcSearchResults([])
+      setGpcSearchError('')
       if (!selectedCandidate) {
         setSelectedProductTypeId(selectedItem?.catalogLinked ? selectedItem.linkedProductTypeId : '')
+        setProductTypeSelectionSource('')
         setProductTypeClassificationStatus('')
         return
       }
@@ -434,17 +463,20 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       setNewProductTypeName(selectedCandidate.candidateName === '-' ? '' : selectedCandidate.candidateName)
       if (explicitSuggestion) {
         setSelectedProductTypeId(explicitSuggestion)
-        setProductTypeClassificationStatus('Producttype bepaald via expliciete GPC Brickcode.')
+        setProductTypeSelectionSource(selectedCandidate.isLinkedToCatalog ? '' : 'external')
+        setProductTypeClassificationStatus('Producttype bepaald via expliciete GPC Brickcode van de externe bron.')
         return
       }
       if (selectedCandidate.isLinkedToCatalog) {
         setSelectedProductTypeId('')
+        setProductTypeSelectionSource('')
         setProductTypeClassificationStatus('GPC-classificatie ontbreekt.')
         return
       }
       setIsClassifyingProductType(true)
       setSelectedProductTypeId('')
-      setProductTypeClassificationStatus('Producttype wordt bepaald...')
+      setProductTypeSelectionSource('')
+      setProductTypeClassificationStatus('Producttype wordt automatisch bepaald...')
       try {
         const raw = selectedCandidate.raw || {}
         const response = await fetchJsonWithAuth('/api/external-products/gpc/classify', {
@@ -468,15 +500,18 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
           }
           setProductTypeOptions((current) => current.some((item) => item.inventory_group_key === option.inventory_group_key) ? current : [...current, option])
           setSelectedProductTypeId(option.inventory_group_key)
-          setProductTypeClassificationStatus(`Automatisch bepaald met zekerheid ${Number(data.confidence || 0).toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}.`)
+          setProductTypeSelectionSource('external')
+          setProductTypeClassificationStatus(`Automatisch bepaald via de externe bron met zekerheid ${Number(data.confidence || 0).toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}.`)
         } else {
           setSelectedProductTypeId('')
-          setProductTypeClassificationStatus('GPC-classificatie niet eenduidig; koppelen is geblokkeerd.')
+          setProductTypeSelectionSource('')
+          setProductTypeClassificationStatus('GPC-classificatie ontbreekt of is niet eenduidig. Zoek handmatig op Brickcode of producttype.')
         }
       } catch (err) {
         if (!cancelled) {
           setSelectedProductTypeId('')
-          setProductTypeClassificationStatus(err?.message || 'GPC-classificatie is mislukt')
+          setProductTypeSelectionSource('')
+          setProductTypeClassificationStatus(err?.message || 'GPC-classificatie is mislukt; zoek handmatig op Brickcode of producttype.')
         }
       } finally {
         if (!cancelled) setIsClassifyingProductType(false)
@@ -484,7 +519,53 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     }
     classifySelectedCandidate()
     return () => { cancelled = true }
-  }, [selectedCandidateId, productTypeOptions.length, selectedItem?.id, selectedItem?.linkedProductTypeId, selectedItem?.catalogLinked])
+  }, [selectedCandidateId, selectedItem?.id, selectedItem?.linkedProductTypeId, selectedItem?.catalogLinked])
+
+  async function searchManualGpcBricks() {
+    const query = String(gpcSearchText || '').trim()
+    if (!query) {
+      setGpcSearchError('Vul een Brickcode of producttype in.')
+      setGpcSearchResults([])
+      return
+    }
+    setIsGpcSearching(true)
+    setGpcSearchError('')
+    try {
+      const response = await fetchJsonWithAuth(
+        `/api/catalog/gpc/bricks?query=${encodeURIComponent(query)}&limit=5`,
+        { method: 'GET' },
+      )
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.detail || 'GS1 GPC-catalogus kon niet worden doorzocht')
+      const results = limitSearchCandidates(Array.isArray(data?.items) ? data.items : [])
+      setGpcSearchResults(results)
+      if (!results.length) setGpcSearchError('Geen geldige GS1 GPC Brick gevonden.')
+    } catch (err) {
+      setGpcSearchResults([])
+      setGpcSearchError(err?.message || 'GS1 GPC-catalogus kon niet worden doorzocht')
+    } finally {
+      setIsGpcSearching(false)
+    }
+  }
+
+  function selectManualGpcBrick(key, brick) {
+    const brickCode = String(brick?.brick_code || '').trim()
+    if (!/^\d{8}$/.test(brickCode) || key !== `gpc:${brickCode}`) {
+      setGpcSearchError('Ongeldige GS1 GPC Brickcode.')
+      return
+    }
+    const option = {
+      inventory_group_key: key,
+      display_name: brick?.brick_description || brick?.brick_description_en || key,
+      gpc_brick_code: brickCode,
+      source: 'gs1_gpc_official',
+    }
+    setProductTypeOptions((current) => current.some((item) => item.inventory_group_key === key) ? current : [...current, option])
+    setSelectedProductTypeId(key)
+    setProductTypeSelectionSource('manual')
+    setProductTypeClassificationStatus('Handmatig geselecteerd uit de officiële GS1 GPC-catalogus.')
+    setGpcSearchError('')
+  }
 
   function exportSelectedItems() {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
@@ -497,7 +578,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     if (!selectedItem || !selectedCandidate || !selectedCandidateCanBeLinked) return
     const productTypeAssignment = {
       product_type_id: selectedProductTypeId,
-      mapping_source: 'external_gs1_gpc',
+      gpc_source: productTypeSelectionSource,
+      mapping_source: productTypeSelectionSource === 'manual' ? 'manual_gs1_gpc' : 'external_gs1_gpc',
       confidence_score: 1,
     }
     setIsLinkingProductType(true)
@@ -529,6 +611,10 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       onMessage?.(`Artikel is gekoppeld aan Producttype ${productTypeLabel}.`)
       setSelectedCandidateId('')
       setSelectedProductTypeId('')
+      setProductTypeSelectionSource('')
+      setGpcSearchText('')
+      setGpcSearchResults([])
+      setGpcSearchError('')
       setNewProductTypeName('')
       await Promise.all([loadItems(), loadProductTypeOptions()])
     } catch (err) {
@@ -736,5 +822,5 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
           <span className="rz-search-complete-label">Zoekactie wordt uitgevoerd</span>
         </div>
       </div>
-    ) : null}<div className="rz-external-databases-section-header"><h3>Bonartikelen voor externe herkenning</h3></div><div className="rz-external-databases-actions"><Button type="button" variant="secondary" disabled={!selectedItemIds.length} onClick={exportSelectedItems}>Exporteren</Button><span className="rz-external-databases-muted">Geselecteerd: {selectedItemIds.length}</span></div><div className="rz-table-scroll rz-table-scroll--wide"><Table wrapperClassName="rz-data-table-wrapper" dataTestId="external-receipt-items-table" tableClassName="rz-data-table rz-data-table--sticky-header rz-data-table--sticky-filters rz-external-receipt-table" tableStyle={RECEIPT_TABLE_STYLE} resizableColumns><colgroup>{RECEIPT_COL_WIDTHS.map((width, index) => <col key={`receipt-col-${index}`} style={{ width }} />)}</colgroup><thead><tr className="rz-table-header"><th className="rz-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleItems} /></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('receiptLineText')}>Bonartikel <span>{sortMark('receiptLineText')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('retailerCode')}>Winkelketen <span>{sortMark('retailerCode')}</span></button></th><th className="rz-check"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalogLinked')}>Catalogus <span>{sortMark('catalogLinked')}</span></button></th><th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateScore')}>Score <span>{sortMark('bestCandidateScore')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateName')}>(Kand.) artikel <span>{sortMark('bestCandidateName')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('productType')}>Producttype <span>{sortMark('productType')}</span></button></th><th>(Kand.) GTIN/EAN</th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('quantity')}>Omvang / gewicht <span>{sortMark('quantity')}</span></button></th><th className="rz-num">Prijs</th><th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe <span>{sortMark('candidateCount')}</span></button></th></tr><tr className="rz-table-filters rz-external-databases-filter-row"><th></th><th><input className="rz-table-filter" value={filters.receiptLineText} onChange={(event) => updateFilter('receiptLineText', event.target.value)} placeholder="Zoek" aria-label="Filter op Bonartikel" /></th><th><input className="rz-table-filter" value={filters.retailerCode} onChange={(event) => updateFilter('retailerCode', event.target.value)} placeholder="Filter" /></th><th><select className="rz-table-filter" value={filters.catalogLinked} onChange={(event) => updateFilter('catalogLinked', event.target.value)} aria-label="Catalogus filter"><option value="all">Alle</option><option value="linked">Gekoppeld</option><option value="unlinked">Niet gekoppeld</option></select></th><th><input className="rz-table-filter" value={filters.bestCandidateScore} onChange={(event) => updateFilter('bestCandidateScore', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.bestCandidateName} onChange={(event) => updateFilter('bestCandidateName', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.productType} onChange={(event) => updateFilter('productType', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.bestCandidateCode} onChange={(event) => updateFilter('bestCandidateCode', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.quantity} onChange={(event) => updateFilter('quantity', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.price} onChange={(event) => updateFilter('price', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.candidateCount} onChange={(event) => updateFilter('candidateCount', event.target.value)} placeholder="Filter" /></th></tr></thead><tbody>{visibleItems.length ? visibleItems.map((item) => <tr key={item.id} className={selectedItem?.id === item.id ? 'rz-row-active' : ''} onDoubleClick={() => selectReceiptItem(item)}><td className="rz-check"><input type="checkbox" checked={selectedItemIds.includes(item.id)} onChange={() => toggleSelectedItem(item.id)} /></td><td>{item.receiptLineText}</td><td>{item.retailerCode}</td><td className="rz-check"><input type="checkbox" checked={item.catalogLinked} readOnly /></td><td className="rz-num">{scoreText(item.bestCandidateScore)}</td><td>{item.bestCandidateName || '-'}</td><td>{item.productType || '-'}</td><td>{item.bestCandidateCode || '-'}</td><td>{item.quantity}</td><td className="rz-num">{numberText(item.price)}</td><td className="rz-num">{item.candidateCount}</td></tr>) : <tr><td colSpan="11">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}{Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="11"></td></tr>)}</tbody></Table></div><div className="rz-external-databases-pagination" aria-label="Paginering bonartikelen"><Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(1)}>Eerste</Button><Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>Vorige</Button><span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span><Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)}>Volgende</Button><Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(pageCount)}>Laatste</Button></div>{selectedItem ? <div className="rz-external-receipt-detail"><h3>Koppelen kandidaten in artikel-catalogus</h3><p>Universele kandidaten voor: {selectedItem.receiptLineText}</p><dl><dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd><dt>Bonartikelnummer</dt><dd>{selectedItem.receiptArticleNumber}</dd><dt>Artikelnummer</dt><dd>{selectedItem.articleNumber}</dd><dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd><dt>Status</dt><dd>{selectedItem.status}</dd></dl><RecognitionConfirmationDetail item={selectedItem} onConfirmed={loadItems} onError={onError} onMessage={onMessage} />{!selectedItemHasKnownGtin ? <div className="rz-external-databases-actions" data-testid="external-off-manual-search"><label className="rz-input-field"><div className="rz-label">OFF zoektekst</div><input className="rz-input" aria-label="OFF zoektekst" value={offSearchText} onChange={(event) => setOffSearchText(event.target.value)} /></label><Button type="button" variant="secondary" disabled={isOffLoading || !offSearchText.trim()} onClick={runManualOffSearch}>Zelf zoeken</Button><span className="rz-external-databases-muted">Pas de zoektekst aan als OFF geen goede kandidaat vindt.</span></div> : null}<Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" tableStyle={CANDIDATE_TABLE_STYLE} resizableColumns><colgroup>{CANDIDATE_COL_WIDTHS.map((width, index) => <col key={`candidate-col-${index}`} style={{ width }} />)}</colgroup><thead><tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>GTIN / EAN</th><th className="rz-num">Score</th><th>Status</th></tr></thead><tbody>{selectedCandidates.length ? selectedCandidates.map((candidate) => <tr key={candidate.id} className={selectedCandidateId === candidate.id ? 'rz-row-selected' : ''}><td className="rz-check"><input type="radio" name="external-candidate" checked={selectedCandidateId === candidate.id} disabled={!candidate.isLinkableToCatalog && !candidate.isLinkedToCatalog} onChange={() => setSelectedCandidateId(candidate.id)} /></td><td>{candidate.candidateName}</td><td>{candidate.brand}</td><td>{candidate.source}</td><td>{candidate.externalCode}</td><td className="rz-num">{scoreText(candidate.score)}</td><td>{candidate.status}</td></tr>) : <tr><td colSpan="7">Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.</td></tr>}</tbody></Table><div data-testid="external-producttype-link-panel"><h4>Producttype</h4><p className="rz-external-databases-muted">Producttype wordt uitsluitend bepaald door de officiële Nederlandse GS1 GPC Brickcode van de externe productbron.</p><label className="rz-input-field"><div className="rz-label">GS1 GPC Producttype</div><select className="rz-input" aria-label="Producttype" value={selectedProductTypeId} disabled><option value="">{isClassifyingProductType ? 'Producttype wordt bepaald...' : 'GPC-classificatie ontbreekt'}</option>{productTypeOptions.map((option) => <option key={option.inventory_group_key} value={option.inventory_group_key}>{option.display_name} — GPC {option.gpc_brick_code}</option>)}</select></label><p className="rz-external-databases-muted" data-testid="external-producttype-classification-status">{productTypeClassificationStatus}</p></div><div className="rz-external-databases-actions"><Button type="button" disabled={!selectedCandidateCanBeLinked} onClick={processSelectedCandidate}>{isLinkingProductType ? 'Koppelen...' : 'Koppel artikel en Producttype'}</Button><Button type="button" variant="secondary" disabled={!selectedCandidateCanBeUnlinked} onClick={unlinkSelectedCandidate}>Ontkoppel artikel</Button><span className="rz-external-databases-muted">{selectedItemHasKnownGtin ? 'GTIN/EAN is al bekend; OFF-kandidaten worden niet automatisch toegevoegd.' : (isOffLoading ? 'OFF wordt geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; gebruik Zelf zoeken om de zoektekst handmatig aan te passen.')}</span></div>{offError ? <div className="rz-inline-feedback">{offError}</div> : null}{offPreview ? <div className="rz-external-databases-preview-meta" data-testid="external-off-preview-meta"><span>OFF-status: {offStatusLabel(offPreview)}</span><span>Provider: {text(offPreview.provider)}</span><span>Zoektype: {offSearchMode}</span><span>Zoektekst: {offPreview.query || offSearchText || '-'}</span><span>Productmutatie: nee</span></div> : null}</div> : null}</div>
+    ) : null}<div className="rz-external-databases-section-header"><h3>Bonartikelen voor externe herkenning</h3></div><div className="rz-external-databases-actions"><Button type="button" variant="secondary" disabled={!selectedItemIds.length} onClick={exportSelectedItems}>Exporteren</Button><span className="rz-external-databases-muted">Geselecteerd: {selectedItemIds.length}</span></div><div className="rz-table-scroll rz-table-scroll--wide"><Table wrapperClassName="rz-data-table-wrapper" dataTestId="external-receipt-items-table" tableClassName="rz-data-table rz-data-table--sticky-header rz-data-table--sticky-filters rz-external-receipt-table" tableStyle={RECEIPT_TABLE_STYLE} resizableColumns><colgroup>{RECEIPT_COL_WIDTHS.map((width, index) => <col key={`receipt-col-${index}`} style={{ width }} />)}</colgroup><thead><tr className="rz-table-header"><th className="rz-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleItems} /></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('receiptLineText')}>Bonartikel <span>{sortMark('receiptLineText')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('retailerCode')}>Winkelketen <span>{sortMark('retailerCode')}</span></button></th><th className="rz-check"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalogLinked')}>Catalogus <span>{sortMark('catalogLinked')}</span></button></th><th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateScore')}>Score <span>{sortMark('bestCandidateScore')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateName')}>(Kand.) artikel <span>{sortMark('bestCandidateName')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('productType')}>Producttype <span>{sortMark('productType')}</span></button></th><th>(Kand.) GTIN/EAN</th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('quantity')}>Omvang / gewicht <span>{sortMark('quantity')}</span></button></th><th className="rz-num">Prijs</th><th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe <span>{sortMark('candidateCount')}</span></button></th></tr><tr className="rz-table-filters rz-external-databases-filter-row"><th></th><th><input className="rz-table-filter" value={filters.receiptLineText} onChange={(event) => updateFilter('receiptLineText', event.target.value)} placeholder="Zoek" aria-label="Filter op Bonartikel" /></th><th><input className="rz-table-filter" value={filters.retailerCode} onChange={(event) => updateFilter('retailerCode', event.target.value)} placeholder="Filter" /></th><th><select className="rz-table-filter" value={filters.catalogLinked} onChange={(event) => updateFilter('catalogLinked', event.target.value)} aria-label="Catalogus filter"><option value="all">Alle</option><option value="linked">Gekoppeld</option><option value="unlinked">Niet gekoppeld</option></select></th><th><input className="rz-table-filter" value={filters.bestCandidateScore} onChange={(event) => updateFilter('bestCandidateScore', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.bestCandidateName} onChange={(event) => updateFilter('bestCandidateName', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.productType} onChange={(event) => updateFilter('productType', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.bestCandidateCode} onChange={(event) => updateFilter('bestCandidateCode', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.quantity} onChange={(event) => updateFilter('quantity', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.price} onChange={(event) => updateFilter('price', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.candidateCount} onChange={(event) => updateFilter('candidateCount', event.target.value)} placeholder="Filter" /></th></tr></thead><tbody>{visibleItems.length ? visibleItems.map((item) => <tr key={item.id} className={selectedItem?.id === item.id ? 'rz-row-active' : ''} onDoubleClick={() => selectReceiptItem(item)}><td className="rz-check"><input type="checkbox" checked={selectedItemIds.includes(item.id)} onChange={() => toggleSelectedItem(item.id)} /></td><td>{item.receiptLineText}</td><td>{item.retailerCode}</td><td className="rz-check"><input type="checkbox" checked={item.catalogLinked} readOnly /></td><td className="rz-num">{scoreText(item.bestCandidateScore)}</td><td>{item.bestCandidateName || '-'}</td><td>{item.productType || '-'}</td><td>{item.bestCandidateCode || '-'}</td><td>{item.quantity}</td><td className="rz-num">{numberText(item.price)}</td><td className="rz-num">{item.candidateCount}</td></tr>) : <tr><td colSpan="11">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}{Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="11"></td></tr>)}</tbody></Table></div><div className="rz-external-databases-pagination" aria-label="Paginering bonartikelen"><Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(1)}>Eerste</Button><Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>Vorige</Button><span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span><Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)}>Volgende</Button><Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(pageCount)}>Laatste</Button></div>{selectedItem ? <div className="rz-external-receipt-detail"><h3>Koppelen kandidaten in artikel-catalogus</h3><p>Universele kandidaten voor: {selectedItem.receiptLineText}</p><dl><dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd><dt>Bonartikelnummer</dt><dd>{selectedItem.receiptArticleNumber}</dd><dt>Artikelnummer</dt><dd>{selectedItem.articleNumber}</dd><dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd><dt>Status</dt><dd>{selectedItem.status}</dd></dl><RecognitionConfirmationDetail item={selectedItem} onConfirmed={loadItems} onError={onError} onMessage={onMessage} />{!selectedItemHasKnownGtin ? <div className="rz-external-databases-actions" data-testid="external-off-manual-search"><label className="rz-input-field"><div className="rz-label">OFF zoektekst</div><input className="rz-input" aria-label="OFF zoektekst" value={offSearchText} onChange={(event) => setOffSearchText(event.target.value)} /></label><Button type="button" variant="secondary" disabled={isOffLoading || !offSearchText.trim()} onClick={runManualOffSearch}>Zelf zoeken</Button><span className="rz-external-databases-muted">Pas de zoektekst aan als OFF geen goede kandidaat vindt.</span></div> : null}<Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" tableStyle={CANDIDATE_TABLE_STYLE} resizableColumns><colgroup>{CANDIDATE_COL_WIDTHS.map((width, index) => <col key={`candidate-col-${index}`} style={{ width }} />)}</colgroup><thead><tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>GTIN / EAN</th><th className="rz-num">Score</th><th>Status</th></tr></thead><tbody>{selectedCandidates.length ? selectedCandidates.map((candidate) => <tr key={candidate.id} className={selectedCandidateId === candidate.id ? 'rz-row-selected' : ''}><td className="rz-check"><input type="radio" name="external-candidate" checked={selectedCandidateId === candidate.id} disabled={!candidate.isLinkableToCatalog && !candidate.isLinkedToCatalog} onChange={() => setSelectedCandidateId(candidate.id)} /></td><td>{candidate.candidateName}</td><td>{candidate.brand}</td><td>{candidate.source}</td><td>{candidate.externalCode}</td><td className="rz-num">{scoreText(candidate.score)}</td><td>{candidate.status}</td></tr>) : <tr><td colSpan="7">Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.</td></tr>}</tbody></Table><div data-testid="external-producttype-link-panel"><h4>Producttype</h4><p className="rz-external-databases-muted">Inhuis probeert eerst automatisch de officiële GS1 GPC Brickcode van de externe productbron te gebruiken. Ontbreekt die of is de classificatie niet eenduidig, dan kun je handmatig een geldige Brick uit de officiële GPC-catalogus selecteren.</p><label className="rz-input-field"><div className="rz-label">GS1 GPC Producttype</div><select className="rz-input" aria-label="Producttype" value={selectedProductTypeId} disabled><option value="">{isClassifyingProductType ? 'Producttype wordt bepaald...' : 'GPC-classificatie ontbreekt'}</option>{productTypeOptions.map((option) => <option key={option.inventory_group_key} value={option.inventory_group_key}>{option.display_name} — GPC {option.gpc_brick_code}</option>)}</select></label><p className="rz-external-databases-muted" data-testid="external-producttype-classification-status">{productTypeClassificationStatus}</p>{selectedCandidate && !isClassifyingProductType && productTypeSelectionSource !== 'external' ? <div className="rz-external-databases-form" data-testid="external-manual-gpc-search"><label className="rz-input-field"><div className="rz-label">Handmatig GS1 GPC zoeken</div><input className="rz-input" aria-label="Zoek op Brickcode of producttype" value={gpcSearchText} onChange={(event) => setGpcSearchText(event.target.value)} placeholder="Zoek op Brickcode of producttype…" /></label><div className="rz-external-databases-actions"><Button type="button" variant="secondary" disabled={isGpcSearching || !gpcSearchText.trim()} onClick={searchManualGpcBricks}>Zoek GPC</Button><span className="rz-external-databases-muted">Alleen Bricks uit de officiële GS1 GPC-catalogus kunnen worden gekozen.</span></div><SearchCandidateList items={gpcSearchResults} selectedKey={selectedProductTypeId} getKey={(item) => `gpc:${item.brick_code}`} getLabel={(item) => `${item.brick_code} — ${item.brick_description || item.brick_description_en || 'Onbekend producttype'}`} onSelect={selectManualGpcBrick} loading={isGpcSearching} emptyMessage={gpcSearchError} ariaLabel="GS1 GPC zoekresultaten" dataTestId="external-gpc-search-results" /></div> : null}</div><div className="rz-external-databases-actions"><Button type="button" disabled={!selectedCandidateCanBeLinked} onClick={processSelectedCandidate}>{isLinkingProductType ? 'Koppelen...' : 'Koppel artikel en Producttype'}</Button><Button type="button" variant="secondary" disabled={!selectedCandidateCanBeUnlinked} onClick={unlinkSelectedCandidate}>Ontkoppel artikel</Button><span className="rz-external-databases-muted">{selectedItemHasKnownGtin ? 'GTIN/EAN is al bekend; OFF-kandidaten worden niet automatisch toegevoegd.' : (isOffLoading ? 'OFF wordt geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; gebruik Zelf zoeken om de zoektekst handmatig aan te passen.')}</span></div>{offError ? <div className="rz-inline-feedback">{offError}</div> : null}{offPreview ? <div className="rz-external-databases-preview-meta" data-testid="external-off-preview-meta"><span>OFF-status: {offStatusLabel(offPreview)}</span><span>Provider: {text(offPreview.provider)}</span><span>Zoektype: {offSearchMode}</span><span>Zoektekst: {offPreview.query || offSearchText || '-'}</span><span>Productmutatie: nee</span></div> : null}</div> : null}</div>
 }
