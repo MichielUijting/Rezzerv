@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import inspect, text
 
 from app.db import engine
+from app.services.gpc_reference_catalog_service import search_official_gpc_bricks
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_bricks_2026_05_en.json"
 SOURCE = "gs1_gpc_2026_05_en"
@@ -241,15 +242,33 @@ def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_
     explicit = re.sub(r"\D+", "", explicit_gpc_brick_code or "")
     with engine.begin() as conn:
         if re.fullmatch(r"\d{8}", explicit):
-            row = conn.execute(text("""
-                SELECT gpc_brick_code,gpc_brick_name,gpc_brick_name_en,source_version,source
-                FROM gpc_product_groups
-                WHERE gpc_brick_code=:code AND COALESCE(active, TRUE) IS TRUE
-                LIMIT 1
-            """), {"code": explicit}).mappings().first()
+            official_rows = search_official_gpc_bricks(
+                conn,
+                query=explicit,
+                limit=5,
+            )
+            row = next(
+                (
+                    item
+                    for item in official_rows
+                    if str(item.get("brick_code") or "").strip() == explicit
+                ),
+                None,
+            )
             if row:
-                return {"ok": True, "status": "classified", "classification_source": "explicit_gpc_code",
-                        "confidence": 1.0, "product_type_id": f"gpc:{explicit}", **dict(row)}
+                return {
+                    "ok": True,
+                    "status": "classified",
+                    "classification_source": "explicit_gpc_code",
+                    "confidence": 1.0,
+                    "product_type_id": f"gpc:{explicit}",
+                    "gpc_brick_code": explicit,
+                    "gpc_brick_name": str(row.get("brick_description") or "").strip(),
+                    "gpc_brick_name_en": str(row.get("brick_description_en") or "").strip(),
+                    "source_version": VERSION,
+                    "source": "gs1_gpc_official",
+                    "reference_source": row.get("reference_source"),
+                }
 
         query = _normalize(f"{product_name} {category}")
         rows = conn.execute(text("""

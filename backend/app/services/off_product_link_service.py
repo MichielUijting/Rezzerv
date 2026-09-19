@@ -53,7 +53,7 @@ def _parse_quantity_label(value: Any) -> tuple[float | None, str | None]:
     except InvalidOperation:
         return None, None
     unit = match.group("unit").lower()
-    aliases = {"st": "stuk", "stuks": "stuk", "stuks": "stuk"}
+    aliases = {"st": "stuk", "stuk": "stuk", "stuks": "stuk"}
     return float(amount), aliases.get(unit, unit)
 
 

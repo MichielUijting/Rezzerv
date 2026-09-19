@@ -184,9 +184,8 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
             "brand": _text(product.get("brands")),
             "category": _text(product.get("categories")),
             "categories": _text(product.get("categories")),
-            "explicit_gpc_brick_code": _text(
-                product.get("gpcCategoryCode")
-            ),
+            "gpc_brick_code": _text(product.get("gpcCategoryCode")),
+            "explicit_gpc_brick_code": _text(product.get("gpcCategoryCode")),
             "image_url": _off_image_url(product),
             "source": "open_food_facts",
         },
@@ -277,7 +276,7 @@ def _resolve_receipt_line(conn, source_id: str) -> dict[str, Any] | None:
             SELECT
                 rl.id AS source_id,
                 COALESCE(NULLIF(rl.parsed_name, ''), rl.raw_text) AS receipt_line_text,
-                COALESCE(rl.parsed_quantity, '') AS quantity,
+                COALESCE(CAST(rl.parsed_quantity AS TEXT), '') AS quantity,
                 COALESCE(rl.parsed_unit, '') AS unit,
                 COALESCE(r.store_name, '') AS retailer_code
             FROM receipt_lines rl
@@ -311,7 +310,7 @@ def _resolve_receipt_table_line(conn, source_id: str) -> dict[str, Any] | None:
             SELECT
                 rtl.id AS source_id,
                 COALESCE(NULLIF(rtl.raw_label, ''), rtl.normalized_label) AS receipt_line_text,
-                COALESCE(rtl.quantity, '') AS quantity,
+                COALESCE(CAST(rtl.quantity AS TEXT), '') AS quantity,
                 COALESCE(rtl.unit, '') AS unit,
                 COALESCE(rt.store_name, '') AS retailer_code
             FROM receipt_table_lines rtl
@@ -574,12 +573,18 @@ def _normalize_result(
     if breakdown["name"] <= 0:
         return None
 
+    gpc_brick_code = _text(product.get("gpcCategoryCode"))
+    if not re.fullmatch(r"\d{8}", gpc_brick_code):
+        gpc_brick_code = ""
+
     return {
         "gtin": gtin,
         "product_name": product_name,
         "brand": _text(product.get("brands")),
         "quantity": _text(product.get("quantity")),
         "category": _text(product.get("categories")),
+        "gpc_brick_code": gpc_brick_code,
+        "explicit_gpc_brick_code": gpc_brick_code,
         "image_url": _off_image_url(product),
         "source_url": f"https://world.openfoodfacts.org/product/{urllib.parse.quote(gtin)}",
         "score": score,

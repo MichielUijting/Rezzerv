@@ -15,6 +15,7 @@ from app.api import catalog_routes
 from app.db import engine
 from app.services.external_database_off_index_matchers import match_retailer_receipt_line
 from app.services.external_article_confirmation_service import _candidate_identity
+from app.services.external_article_ui_projection import _central_product_details
 from app.services.external_article_product_link_service import (
     _complete_global_product_link_data,
     save_external_article_product_link,
@@ -24,7 +25,9 @@ from app.services.external_product_candidate_store import (
     ensure_external_product_candidates_schema,
 )
 from app.services.external_product_index_store import ensure_external_product_index_seeded
+from app.services.gpc_local_catalog_service import classify_gpc_product
 from app.services.off_product_link_service import _upsert_global_product
+from app.services.off_search_service import _normalize_result, _resolve_receipt_table_line
 from app.services.product_inventory_group_store import (
     link_global_product_to_inventory_group_with_connection,
 )
@@ -384,6 +387,14 @@ def _assert_complete_official_gpc_link_validation() -> None:
         if not bool(linked.get("ok")):
             raise AssertionError(linked)
 
+        projected = _central_product_details(conn, global_product_id)
+        if projected.get("product_type_id") != OFFICIAL_GPC_GROUP_KEY:
+            raise AssertionError(projected)
+        if projected.get("gpc_brick_code") != OFFICIAL_GPC_BRICK_CODE:
+            raise AssertionError(projected)
+        if not str(projected.get("gpc_brick_name") or "").strip():
+            raise AssertionError(projected)
+
         completeness = _complete_global_product_link_data(conn, global_product_id)
         if not completeness.get("complete"):
             raise AssertionError(completeness)
@@ -406,6 +417,7 @@ def _assert_complete_official_gpc_link_validation() -> None:
         _cleanup(conn)
 
     print("POSTGRESQL_OFF_COMPLETE_GPC_LINK_VALIDATION_GREEN")
+    print("POSTGRESQL_EXTERNAL_ARTICLE_UI_GPC_METADATA_GREEN")
 
 
 def _assert_candidate_identity_timestamp_order() -> None:
@@ -419,6 +431,75 @@ def _assert_candidate_identity_timestamp_order() -> None:
         raise AssertionError(candidate)
 
     print("POSTGRESQL_OFF_CANDIDATE_TIMESTAMP_ORDER_GREEN")
+
+
+def _assert_receipt_table_off_search_postgresql_types() -> None:
+    with engine.begin() as conn:
+        resolved = _resolve_receipt_table_line(
+            conn,
+            "__postgresql_off_receipt_table_quantity_probe__",
+        )
+    if resolved is not None:
+        raise AssertionError(resolved)
+
+    print("POSTGRESQL_OFF_RECEIPT_TABLE_NUMERIC_QUANTITY_GREEN")
+
+
+def _assert_external_article_ui_membership_projection() -> None:
+    with engine.begin() as conn:
+        details = _central_product_details(
+            conn,
+            "__postgresql_external_article_ui_probe__",
+        )
+    if details:
+        raise AssertionError(details)
+
+    print("POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN")
+
+
+def _assert_off_gpc_normalization() -> None:
+    normalized = _normalize_result(
+        query="bananen",
+        retailer_code="albert heijn",
+        quantity_label="1 stuk",
+        product={
+            "code": "8718265184886",
+            "product_name": "Bananen",
+            "brands": "AH",
+            "quantity": "1 stuk",
+            "categories": "Fruit",
+            "gpcCategoryCode": "10005897",
+            "countries": "Nederland",
+        },
+    )
+    if not normalized:
+        raise AssertionError(normalized)
+    if normalized.get("gpc_brick_code") != "10005897":
+        raise AssertionError(normalized)
+    if normalized.get("explicit_gpc_brick_code") != "10005897":
+        raise AssertionError(normalized)
+
+    print("POSTGRESQL_OFF_GPC_CODE_PROPAGATION_GREEN")
+
+
+def _assert_explicit_off_gpc_uses_official_reference_catalog() -> None:
+    classified = classify_gpc_product(
+        product_name="Bananen",
+        category="Fruit",
+        explicit_gpc_brick_code="10005897",
+    )
+    if classified.get("status") != "classified":
+        raise AssertionError(classified)
+    if classified.get("classification_source") != "explicit_gpc_code":
+        raise AssertionError(classified)
+    if classified.get("product_type_id") != "gpc:10005897":
+        raise AssertionError(classified)
+    if classified.get("gpc_brick_code") != "10005897":
+        raise AssertionError(classified)
+    if not str(classified.get("source") or "").startswith("gs1_gpc_"):
+        raise AssertionError(classified)
+
+    print("POSTGRESQL_OFF_EXPLICIT_GPC_OFFICIAL_REFERENCE_GREEN")
 
 
 def _assert_off_index_matcher() -> None:
@@ -443,6 +524,10 @@ def main() -> None:
         _assert_integer_membership_projection()
         _assert_complete_official_gpc_link_validation()
         _assert_candidate_identity_timestamp_order()
+        _assert_receipt_table_off_search_postgresql_types()
+        _assert_external_article_ui_membership_projection()
+        _assert_off_gpc_normalization()
+        _assert_explicit_off_gpc_uses_official_reference_catalog()
         _assert_off_index_matcher()
     finally:
         with engine.begin() as conn:

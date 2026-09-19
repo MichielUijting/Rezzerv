@@ -203,18 +203,36 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('Bananen worden automatisch geclassificeerd als officiële GPC Brick', async ({ page }) => {
+  test('Bananen gebruiken de expliciete officiële GPC Brick uit OFF zonder classificatie-omweg', async ({ page }) => {
+    let classifyCalled = false;
+    let exactCatalogLookupCalled = false;
+
     await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(receiptItemsPayload()) });
     });
     await page.route('**/api/external-products/off/search', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...automaticSearchResponse(), results: [{ gtin: '8718265184886', product_name: 'Bananen', brand: 'De Groot', score: 0.99 }] }) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...automaticSearchResponse(),
+          results: [{
+            gtin: '8718265184886',
+            product_name: 'Bananen',
+            brand: 'De Groot',
+            score: 0.99,
+            gpc_brick_code: '10005897',
+          }],
+        }),
+      });
     });
-    await page.route('**/api/catalog?query=8718265184886&limit=20', async (route) => {
+    await page.route('**/api/catalog?primary_gtin=8718265184886&limit=20', async (route) => {
+      exactCatalogLookupCalled = true;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) });
     });
     await page.route('**/api/external-products/gpc/classify', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'classified', classification_source: 'gpc_taxonomy_name_match', confidence: 1, product_type_id: 'gpc:10005897', gpc_brick_code: '10005897', gpc_brick_name: 'Bananen', gpc_brick_name_en: 'Bananas', source: 'gs1_gpc_2026_05_en', source_version: '2026-05-20' }) });
+      classifyCalled = true;
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'Classificatie-omweg mag niet nodig zijn' }) });
     });
     await page.route('**/api/inventory/groups', async (route) => {
       await route.fulfill({
@@ -231,15 +249,19 @@ test.describe('Externe databases OFF candidate flow', () => {
         }),
       });
     });
+
     await page.goto('/externe-databases');
     const receiptRow = page.getByTestId('external-receipt-items-table').locator('tbody tr', { hasText: 'halfvolle melk' });
     await receiptRow.dblclick();
     const candidateRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: '8718265184886' });
     await candidateRow.getByRole('radio').check();
+
     await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('gpc:10005897');
     await expect(page.getByLabel('Producttype', { exact: true }).locator('option:checked')).toContainText('Bananen — GPC 10005897');
-    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Automatisch bepaald via de externe bron met zekerheid 1,000.');
+    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Producttype bepaald via expliciete GPC Brickcode van de externe bron.');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
+    expect(exactCatalogLookupCalled).toBe(true);
+    expect(classifyCalled).toBe(false);
   });
 
   test('Langdurige OFF-zoekactie toont na Ã©Ã©n seconde de blokkerende R en verwijdert die direct na een fout', async ({ page }) => {

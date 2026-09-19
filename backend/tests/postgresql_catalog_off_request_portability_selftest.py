@@ -7,7 +7,10 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = BACKEND_ROOT / "app" / "api" / "catalog_routes.py"
 OFF_LINK_PATH = BACKEND_ROOT / "app" / "services" / "off_product_link_service.py"
+OFF_SEARCH_PATH = BACKEND_ROOT / "app" / "services" / "off_search_service.py"
+ARTICLE_UI_PATH = BACKEND_ROOT / "app" / "services" / "external_article_ui_projection.py"
 
+# Houd deze scope gelijk aan de volledige OFF/GPC-gebruikersroute in de CI-workflow.
 FORBIDDEN_SQL_PATTERNS = {
     "runtime CREATE TABLE": re.compile(r"\bCREATE\s+TABLE\b", re.IGNORECASE),
     "runtime CREATE INDEX": re.compile(r"\bCREATE\s+(?:UNIQUE\s+)?INDEX\b", re.IGNORECASE),
@@ -52,7 +55,7 @@ def _text_sql_literals(source: str) -> list[str]:
 
 def _assert_no_runtime_ddl() -> None:
     failures: list[str] = []
-    for path in (CATALOG_PATH, OFF_LINK_PATH):
+    for path in (CATALOG_PATH, OFF_LINK_PATH, OFF_SEARCH_PATH, ARTICLE_UI_PATH):
         source = path.read_text(encoding="utf-8-sig")
         for index, sql in enumerate(_text_sql_literals(source), start=1):
             for label, pattern in FORBIDDEN_SQL_PATTERNS.items():
@@ -92,6 +95,44 @@ def _assert_catalog_sql_portable() -> None:
     print("POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_ORDER_GREEN")
 
 
+def _assert_off_search_sql_portable() -> None:
+    source = OFF_SEARCH_PATH.read_text(encoding="utf-8-sig")
+    forbidden = (
+        "COALESCE(rtl.quantity, '')",
+        "COALESCE(rl.parsed_quantity, '')",
+    )
+    present = [token for token in forbidden if token in source]
+    if present:
+        raise AssertionError(
+            f"OFF receipt resolution still mixes numeric values with empty text: {present}"
+        )
+
+    required = (
+        "COALESCE(CAST(rtl.quantity AS TEXT), '')",
+        "COALESCE(CAST(rl.parsed_quantity AS TEXT), '')",
+        '"gpc_brick_code": gpc_brick_code',
+        '"explicit_gpc_brick_code": gpc_brick_code',
+    )
+    missing = [token for token in required if token not in source]
+    if missing:
+        raise AssertionError(f"OFF search portability/GPC contract incomplete: {missing}")
+
+    print("POSTGRESQL_OFF_RECEIPT_NUMERIC_CAST_STATIC_GREEN")
+    print("POSTGRESQL_OFF_GPC_PROPAGATION_STATIC_GREEN")
+
+
+def _assert_external_article_ui_sql_portable() -> None:
+    source = ARTICLE_UI_PATH.read_text(encoding="utf-8-sig")
+    if "COALESCE(pgm.active, TRUE)" in source:
+        raise AssertionError(
+            "External article UI projection still treats integer membership active as BOOLEAN"
+        )
+    if "COALESCE(pgm.active, 1) = 1" not in source:
+        raise AssertionError("External article UI membership predicate contract missing")
+
+    print("POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_ACTIVE_STATIC_GREEN")
+
+
 def _assert_off_identity_boolean_bind() -> None:
     source = OFF_LINK_PATH.read_text(encoding="utf-8-sig")
     forbidden = (
@@ -115,11 +156,13 @@ def _assert_off_identity_boolean_bind() -> None:
 
 
 def main() -> None:
-    for path in (CATALOG_PATH, OFF_LINK_PATH):
+    for path in (CATALOG_PATH, OFF_LINK_PATH, OFF_SEARCH_PATH, ARTICLE_UI_PATH):
         if not path.is_file():
             raise AssertionError(f"Catalog/OFF scope file ontbreekt: {path}")
     _assert_no_runtime_ddl()
     _assert_catalog_sql_portable()
+    _assert_off_search_sql_portable()
+    _assert_external_article_ui_sql_portable()
     _assert_off_identity_boolean_bind()
     print("POSTGRESQL_CATALOG_OFF_REQUEST_PORTABILITY_STATIC_SELFTEST_GREEN")
 
