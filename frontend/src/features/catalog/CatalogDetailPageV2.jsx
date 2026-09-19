@@ -5,6 +5,7 @@ import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import CatalogGpcFrame from './CatalogGpcFrame'
+import CatalogProductImage from './CatalogProductImage'
 import './catalog.css'
 
 function text(value, fallback = '-') {
@@ -98,13 +99,18 @@ export default function CatalogDetailPageV2() {
           {!isLoading && !error ? (
             <div className="rz-catalog-detail-grid">
               <section className="rz-catalog-detail-section">
-                <h2>{text(product.name, 'Universeel artikel')}</h2>
-                <dl className="rz-catalog-definition-list">
-                  <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
-                  <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
-                  <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
-                  <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
-                </dl>
+                <div className="rz-catalog-product-summary">
+                  <CatalogProductImage imageUrl={product.image_url} productName={product.name} />
+                  <div className="rz-catalog-product-summary-content">
+                    <h2>{text(product.name, 'Universeel artikel')}</h2>
+                    <dl className="rz-catalog-definition-list">
+                      <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
+                      <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
+                      <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
+                      <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
+                    </dl>
+                  </div>
+                </div>
               </section>
 
               <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />

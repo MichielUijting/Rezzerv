@@ -23,7 +23,7 @@ GTIN_BRAVO = "8712345678902"
 NAME_ALPHA = "postgresql catalog off proof alpha"
 NAME_BRAVO = "PostgreSQL Catalog OFF Proof Bravo"
 NAME_FILTER = "postgresql catalog off proof"
-ALEMBIC_HEAD = "20260830_02"
+ALEMBIC_HEAD = "20260919_01"
 
 
 def _assert_runtime_create_denied() -> None:
@@ -71,6 +71,12 @@ def _assert_schema_contract() -> None:
         str(column["name"]): column
         for column in inspector.get_columns("external_product_candidates")
     }
+    product_columns = {
+        str(column["name"]): column
+        for column in inspector.get_columns("global_products")
+    }
+    if "image_url" not in candidate_columns or "image_url" not in product_columns:
+        raise AssertionError("Catalog/OFF image_url schema contract ontbreekt")
     for column_name in (
         "is_probable",
         "is_user_confirmed",
@@ -86,7 +92,8 @@ def _assert_schema_contract() -> None:
     if before_tables != after_tables:
         raise AssertionError("Catalog/OFF validation unexpectedly mutated runtime schema")
 
-    print("POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_20260830_02_GREEN")
+    print("POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_20260919_01_GREEN")
+    print("POSTGRESQL_CATALOG_OFF_IMAGE_SCHEMA_GREEN")
     print("POSTGRESQL_CATALOG_OFF_BOOLEAN_TYPES_GREEN")
     print("POSTGRESQL_CATALOG_OFF_VALIDATION_ONLY_SCHEMA_GREEN")
 
@@ -98,6 +105,7 @@ def _off_payload(gtin: str, name: str) -> dict[str, object]:
         "brand": "PostgreSQL proof",
         "category": "proof",
         "quantity": "500 g",
+        "image_url": f"https://images.openfoodfacts.test/{gtin}.jpg",
     }
 
 
@@ -155,6 +163,11 @@ def _assert_off_identity_and_catalog_queries() -> None:
     ]
     if [item.get("id") for item in proof_items] != [alpha_id, bravo_id]:
         raise AssertionError(proof_items)
+    image_by_id = {item.get("id"): item.get("image_url") for item in proof_items}
+    if image_by_id.get(alpha_id) != f"https://images.openfoodfacts.test/{GTIN_ALPHA}.jpg":
+        raise AssertionError(image_by_id)
+    if image_by_id.get(bravo_id) != f"https://images.openfoodfacts.test/{GTIN_BRAVO}.jpg":
+        raise AssertionError(image_by_id)
 
     # Numeric sort must not be wrapped in LOWER().
     numeric_catalog = catalog_routes.list_catalog(
@@ -182,6 +195,7 @@ def _assert_off_identity_and_catalog_queries() -> None:
 
     print("POSTGRESQL_OFF_IDENTITY_INSERT_UPDATE_BOOLEAN_GREEN")
     print("POSTGRESQL_CATALOG_IDENTITY_BOOLEAN_ORDER_GREEN")
+    print("POSTGRESQL_CATALOG_OFF_IMAGE_PERSISTENCE_GREEN")
     print("POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN")
     print("POSTGRESQL_CATALOG_NUMERIC_SORT_DML_GREEN")
     print("POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_QUERY_GREEN")

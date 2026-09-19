@@ -37,6 +37,7 @@ _REQUIRED_CANDIDATE_COLUMNS = {
     "quantity_label",
     "variant",
     "source_url",
+    "image_url",
     "score",
     "score_breakdown_json",
     "raw_payload",
@@ -263,6 +264,7 @@ def save_matchpreview_candidates(
                 "quantity_label": str(candidate.get("quantity_label") or "").strip() or None,
                 "variant": str(candidate.get("variant") or "").strip() or None,
                 "source_url": str(candidate.get("source_url") or "").strip() or None,
+                "image_url": str(candidate.get("image_url") or "").strip() or None,
                 "score": float(candidate.get("score") or 0),
                 "score_breakdown_json": _serialize_score_breakdown(candidate),
                 "candidate_status": str(candidate.get("candidate_status") or "possible_candidate").strip(),
@@ -293,6 +295,7 @@ def save_matchpreview_candidates(
                             retailer_article_number = :retailer_article_number,
                             quantity_label = :quantity_label,
                             source_url = :source_url,
+                            image_url = :image_url,
                             score = :score,
                             score_breakdown_json = :score_breakdown_json,
                             candidate_status = :candidate_status,
@@ -313,7 +316,7 @@ def save_matchpreview_candidates(
                             retailer_code, receipt_line_text, candidate_name, candidate_brand,
                             candidate_source_name, candidate_source_product_code, source_name,
                             source_product_code, retailer_article_number, quantity_label,
-                            variant, source_url, score, score_breakdown_json,
+                            variant, source_url, image_url, score, score_breakdown_json,
                             candidate_status, is_probable, is_user_confirmed,
                             is_external_database_override, created_by, created_at, updated_at
                         ) VALUES (
@@ -321,7 +324,7 @@ def save_matchpreview_candidates(
                             :retailer_code, :receipt_line_text, :candidate_name, :candidate_brand,
                             :candidate_source_name, :candidate_source_product_code, :source_name,
                             :source_product_code, :retailer_article_number, :quantity_label,
-                            :variant, :source_url, :score, :score_breakdown_json,
+                            :variant, :source_url, :image_url, :score, :score_breakdown_json,
                             :candidate_status, :is_probable, :is_user_confirmed,
                             :is_external_database_override, :created_by, :created_at, :updated_at
                         )
@@ -798,6 +801,7 @@ def _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(
             category=str(candidate.get("candidate_category") or "").strip() or None,
             size_value=None,
             size_unit=None,
+            image_url=str(candidate.get("image_url") or "").strip() or None,
             source=str(
                 candidate.get("candidate_source_name")
                 or candidate.get("source_name")
@@ -805,6 +809,28 @@ def _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(
             ).strip(),
             status="active",
         )
+
+    candidate_image_url = str(candidate.get("image_url") or "").strip()
+    if global_product_id and candidate_image_url:
+        product_columns = _m2c2h5_table_columns(conn, "global_products")
+        if "image_url" in product_columns:
+            conn.execute(
+                text(
+                    """
+                    UPDATE global_products
+                    SET image_url = CASE
+                        WHEN trim(COALESCE(image_url, '')) = '' THEN :image_url
+                        ELSE image_url
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :global_product_id
+                    """
+                ),
+                {
+                    "image_url": candidate_image_url,
+                    "global_product_id": global_product_id,
+                },
+            )
 
     primary_identity = _m2c2i_fix7b_identity_value(candidate)
     if primary_identity:

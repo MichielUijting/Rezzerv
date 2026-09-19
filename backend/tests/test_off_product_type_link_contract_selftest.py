@@ -124,6 +124,7 @@ def main() -> int:
         "brand": "Contractmerk",
         "quantity": "1 l",
         "category": "Halfvolle melk",
+        "image_url": "https://images.openfoodfacts.test/contract-halfvolle-melk.jpg",
     }
 
     result = link_off_product_with_product_type(
@@ -135,6 +136,7 @@ def main() -> int:
     assert result.get("creates_external_candidate") is False, result
     assert result.get("mutates_inventory") is False, result
     global_product_id = str((result.get("global_product") or {}).get("id") or "")
+    assert (result.get("global_product") or {}).get("image_url") == "https://images.openfoodfacts.test/contract-halfvolle-melk.jpg"
 
     rollback_gtin = f"97{numeric_suffix}"
     try:
@@ -170,6 +172,10 @@ def main() -> int:
             """), {"id": line_id}).mappings().first()
             assert str((line or {}).get("matched_global_product_id") or "") == global_product_id, line
             assert str((line or {}).get("match_status") or "") == "matched", line
+            stored_image_url = conn.execute(text("""
+                SELECT image_url FROM global_products WHERE id = :id
+            """), {"id": global_product_id}).scalar()
+            assert stored_image_url == "https://images.openfoodfacts.test/contract-halfvolle-melk.jpg", stored_image_url
             membership_count = conn.execute(text("""
                 SELECT COUNT(*) FROM product_group_memberships
                 WHERE global_product_id = :global_product_id
@@ -182,6 +188,7 @@ def main() -> int:
             """), {"gtin": rollback_gtin}).scalar() or 0
             assert int(rollback_product_count) == 0, rollback_product_count
         print("PASS off_result_product_type_atomic_contract")
+        print("PASS off_result_catalog_image_persistence")
         print("PASS off_result_does_not_persist_candidate_or_inventory")
         print("PASS off_result_rollback_contract")
         print("OFF_PRODUCT_TYPE_LINK_CONTRACT_GREEN")

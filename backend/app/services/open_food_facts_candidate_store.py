@@ -56,6 +56,7 @@ def _off_candidate_from_result(result: dict[str, Any]) -> dict[str, Any]:
         "quantity_label": _text(result.get("quantity_label") or result.get("quantity")),
         "variant": _text(result.get("variant") or result.get("quantity") or "OFF"),
         "source_url": _text(result.get("source_url")),
+        "image_url": _text(result.get("image_url")),
         "score": float(result.get("score") or 0),
         "score_breakdown": result.get("score_breakdown") or {},
         "candidate_status": "candidate",
@@ -191,6 +192,7 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
                 "quantity_label": _text(candidate.get("quantity_label")) or None,
                 "variant": _text(candidate.get("variant")) or None,
                 "source_url": _text(candidate.get("source_url")) or None,
+                "image_url": _text(candidate.get("image_url")) or None,
                 "score": float(candidate.get("score") or 0),
                 "score_breakdown_json": _serialize_score_breakdown(candidate),
                 "candidate_status": _text(candidate.get("candidate_status")) or "candidate",
@@ -219,6 +221,7 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
                             quantity_label = :quantity_label,
                             variant = :variant,
                             source_url = :source_url,
+                            image_url = :image_url,
                             score = :score,
                             score_breakdown_json = :score_breakdown_json,
                             candidate_status = :candidate_status,
@@ -239,7 +242,7 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
                             retailer_code, receipt_line_text, candidate_name, candidate_brand,
                             candidate_source_name, candidate_source_product_code, source_name,
                             source_product_code, retailer_article_number, quantity_label,
-                            variant, source_url, score, score_breakdown_json,
+                            variant, source_url, image_url, score, score_breakdown_json,
                             candidate_status, is_probable, is_user_confirmed,
                             is_external_database_override, created_by, created_at, updated_at
                         ) VALUES (
@@ -247,7 +250,7 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
                             :retailer_code, :receipt_line_text, :candidate_name, :candidate_brand,
                             :candidate_source_name, :candidate_source_product_code, :source_name,
                             :source_product_code, :retailer_article_number, :quantity_label,
-                            :variant, :source_url, :score, :score_breakdown_json,
+                            :variant, :source_url, :image_url, :score, :score_breakdown_json,
                             :candidate_status, :is_probable, :is_user_confirmed,
                             :is_external_database_override, :created_by, :created_at, :updated_at
                         )

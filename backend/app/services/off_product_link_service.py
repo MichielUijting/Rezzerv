@@ -97,6 +97,11 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
         or off_product.get("net_content")
     )
     size_value, size_unit = _parse_quantity_label(quantity_label)
+    image_url = _clean_text(
+        off_product.get("image_url")
+        or off_product.get("image_front_small_url")
+        or off_product.get("image_front_url")
+    ) or None
 
     global_product_id = get_or_create_global_product(
         conn,
@@ -107,6 +112,7 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
         category=category,
         size_value=size_value,
         size_unit=size_unit,
+        image_url=image_url,
         source="open_food_facts",
         status="active",
         normalize_gtin=lambda value: _normalize_gtin(value),
@@ -393,6 +399,11 @@ def link_off_product_with_product_type(
             "name": _clean_text(off_product.get("product_name") or off_product.get("candidate_name") or off_product.get("name")),
             "size_value": size_value,
             "size_unit": size_unit,
+            "image_url": _clean_text(
+                off_product.get("image_url")
+                or off_product.get("image_front_small_url")
+                or off_product.get("image_front_url")
+            ) or None,
         },
         "product_type": {
             "inventory_group_key": product_type_id,

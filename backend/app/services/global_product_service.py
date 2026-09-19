@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 
@@ -48,6 +48,7 @@ def get_or_create_global_product(
     category: str | None = None,
     size_value: Any = None,
     size_unit: str | None = None,
+    image_url: str | None = None,
     source: str = "user",
     status: str = "active",
     normalize_gtin: Callable[[str], str | None] | None = None,
@@ -57,6 +58,16 @@ def get_or_create_global_product(
     normalized_name = " ".join(str(name or "").strip().split())
     if not normalized_name:
         raise ValueError("Productnaam is verplicht")
+    normalized_image_url = str(image_url or "").strip() or None
+    product_columns = {
+        str(column.get("name") or "")
+        for column in inspect(conn).get_columns("global_products")
+    }
+    image_update_sql = (
+        "                    image_url = COALESCE(NULLIF(trim(image_url), ''), :image_url),\n"
+        if "image_url" in product_columns
+        else ""
+    )
 
     fingerprint = build_global_product_fingerprint(normalized_name, brand, variant, size_value, size_unit)
 
@@ -81,7 +92,7 @@ def get_or_create_global_product(
     if existing:
         product_id = str(existing["id"])
         conn.execute(
-            text("""
+            text(f"""
                 UPDATE global_products
                 SET name = CASE WHEN COALESCE(trim(name), '') = '' THEN :name ELSE name END,
                     brand = COALESCE(brand, :brand),
@@ -90,7 +101,7 @@ def get_or_create_global_product(
                     size_value = COALESCE(size_value, :size_value),
                     size_unit = COALESCE(size_unit, :size_unit),
                     product_fingerprint = COALESCE(NULLIF(product_fingerprint, ''), :product_fingerprint),
-                    updated_at = CURRENT_TIMESTAMP
+{image_update_sql}                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """),
             {
@@ -102,21 +113,24 @@ def get_or_create_global_product(
                 "size_value": size_value,
                 "size_unit": size_unit,
                 "product_fingerprint": fingerprint or None,
+                "image_url": normalized_image_url,
             },
         )
         return product_id
 
     product_id = str(uuid.uuid4())
+    image_column_sql = ", image_url" if "image_url" in product_columns else ""
+    image_value_sql = ", :image_url" if "image_url" in product_columns else ""
     try:
         conn.execute(
-            text("""
+            text(f"""
                 INSERT INTO global_products (
                     id, primary_gtin, name, brand, variant, category,
-                    size_value, size_unit, product_fingerprint,
+                    size_value, size_unit, product_fingerprint{image_column_sql},
                     source, status, created_at, updated_at
                 ) VALUES (
                     :id, :primary_gtin, :name, :brand, :variant, :category,
-                    :size_value, :size_unit, :product_fingerprint,
+                    :size_value, :size_unit, :product_fingerprint{image_value_sql},
                     :source, :status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
             """),
@@ -130,6 +144,7 @@ def get_or_create_global_product(
                 "size_value": size_value,
                 "size_unit": size_unit,
                 "product_fingerprint": fingerprint or None,
+                "image_url": normalized_image_url,
                 "source": source,
                 "status": status,
             },

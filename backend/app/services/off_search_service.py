@@ -36,8 +36,11 @@ OFF_FIELDS = [
     "countries_tags",
     "stores",
     "stores_tags",
+    "selected_images",
     "image_front_small_url",
     "image_front_url",
+    "image_small_url",
+    "image_url",
 ]
 
 
@@ -50,6 +53,41 @@ def _text(value: Any) -> str:
         return " ".join(_text(item) for item in value if _text(item))
     return str(value or "").strip()
 
+
+
+def _selected_front_image_url(product: dict[str, Any]) -> str:
+    selected_images = product.get("selected_images")
+    if not isinstance(selected_images, dict):
+        return ""
+    front = selected_images.get("front")
+    if not isinstance(front, dict):
+        return ""
+    for size_key in ("display", "small", "thumb"):
+        urls = front.get(size_key)
+        if isinstance(urls, dict):
+            for language_code in ("nl", "en"):
+                value = _text(urls.get(language_code))
+                if value:
+                    return value
+            for value in urls.values():
+                normalized = _text(value)
+                if normalized:
+                    return normalized
+        else:
+            value = _text(urls)
+            if value:
+                return value
+    return ""
+
+
+def _off_image_url(product: dict[str, Any]) -> str:
+    return _text(
+        _selected_front_image_url(product)
+        or product.get("image_front_small_url")
+        or product.get("image_front_url")
+        or product.get("image_small_url")
+        or product.get("image_url")
+    )
 
 
 def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
@@ -149,6 +187,7 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
             "explicit_gpc_brick_code": _text(
                 product.get("gpcCategoryCode")
             ),
+            "image_url": _off_image_url(product),
             "source": "open_food_facts",
         },
         "mutated": False,
@@ -488,9 +527,7 @@ def _score_product(
 
     country_tokens = _tokens(product.get("countries")) | _tokens(product.get("countries_tags"))
     market = 1.0 if {"netherlands", "nederland"} & country_tokens else 0.0
-    completeness = 1.0 if _text(
-        product.get("image_front_small_url") or product.get("image_front_url")
-    ) else 0.0
+    completeness = 1.0 if _off_image_url(product) else 0.0
 
     score = round(
         min(
@@ -543,7 +580,7 @@ def _normalize_result(
         "brand": _text(product.get("brands")),
         "quantity": _text(product.get("quantity")),
         "category": _text(product.get("categories")),
-        "image_url": _text(product.get("image_front_small_url") or product.get("image_front_url")),
+        "image_url": _off_image_url(product),
         "source_url": f"https://world.openfoodfacts.org/product/{urllib.parse.quote(gtin)}",
         "score": score,
         "score_breakdown": breakdown,

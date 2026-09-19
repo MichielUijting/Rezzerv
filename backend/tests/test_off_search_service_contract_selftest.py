@@ -25,7 +25,19 @@ def run_manual_search_contract() -> None:
         }
         service._query_off = lambda query, page_size: (
             [
-                {"code": "8718452504435", "product_name": "Tomaten Gezeefd Passata", "brands": "Jumbo"},
+                {
+                    "code": "8718452504435",
+                    "product_name": "Tomaten Gezeefd Passata",
+                    "brands": "Jumbo",
+                    "selected_images": {
+                        "front": {
+                            "display": {
+                                "nl": "https://images.openfoodfacts.test/passata-selected.jpg"
+                            }
+                        }
+                    },
+                    "image_front_small_url": "https://images.openfoodfacts.test/passata-legacy.jpg",
+                },
                 {"code": "8718452474356", "product_name": "Basmati rijst", "brands": "Jumbo"},
             ],
             "test_provider",
@@ -47,6 +59,11 @@ def run_manual_search_contract() -> None:
             [row["product_name"] for row in result["results"]],
             ["Tomaten Gezeefd Passata"],
             "handmatige zoekresultaten",
+        )
+        assert_equal(
+            result["results"][0]["image_url"],
+            "https://images.openfoodfacts.test/passata-selected.jpg",
+            "OFF zoekresultaat gebruikt selected_images-frontfoto",
         )
     finally:
         service.resolve_receipt_item = original_resolve_receipt_item
@@ -90,10 +107,55 @@ def run_automatic_search_contract() -> None:
         service._query_off = original_query_off
 
 
+
+
+def run_exact_gtin_image_contract() -> None:
+    original_urlopen = service.urllib.request.urlopen
+
+    class FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return service.json.dumps({
+                "status": 1,
+                "product": {
+                    "code": "8718452504435",
+                    "product_name": "Tomaten Gezeefd Passata",
+                    "brands": "Jumbo",
+                    "selected_images": {
+                        "front": {
+                            "display": {
+                                "en": "https://images.openfoodfacts.test/passata-selected-full.jpg"
+                            }
+                        }
+                    },
+                    "image_front_url": "https://images.openfoodfacts.test/passata-legacy-full.jpg",
+                },
+            }).encode("utf-8")
+
+    try:
+        service.urllib.request.urlopen = lambda *args, **kwargs: FakeResponse()
+        result = service.lookup_off_product_by_gtin("8718452504435")
+        assert_equal(result["status"], "found", "exacte GTIN status")
+        assert_equal(
+            result["product"]["image_url"],
+            "https://images.openfoodfacts.test/passata-selected-full.jpg",
+            "exacte GTIN lookup gebruikt selected_images-frontfoto",
+        )
+    finally:
+        service.urllib.request.urlopen = original_urlopen
+
 def main() -> int:
     checks = [
         ("manual_search_contract", run_manual_search_contract),
         ("automatic_search_contract", run_automatic_search_contract),
+        ("exact_gtin_image_contract", run_exact_gtin_image_contract),
     ]
     failures = []
 
