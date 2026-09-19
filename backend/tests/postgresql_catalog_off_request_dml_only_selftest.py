@@ -25,6 +25,7 @@ from app.services.external_product_candidate_store import (
     ensure_external_product_candidates_schema,
 )
 from app.services.external_product_index_store import ensure_external_product_index_seeded
+from app.services.gpc_local_catalog_service import classify_gpc_product
 from app.services.off_product_link_service import _upsert_global_product
 from app.services.off_search_service import _normalize_result, _resolve_receipt_table_line
 from app.services.product_inventory_group_store import (
@@ -472,6 +473,26 @@ def _assert_off_gpc_normalization() -> None:
     print("POSTGRESQL_OFF_GPC_CODE_PROPAGATION_GREEN")
 
 
+def _assert_explicit_off_gpc_uses_official_reference_catalog() -> None:
+    classified = classify_gpc_product(
+        product_name="Bananen",
+        category="Fruit",
+        explicit_gpc_brick_code="10005897",
+    )
+    if classified.get("status") != "classified":
+        raise AssertionError(classified)
+    if classified.get("classification_source") != "explicit_gpc_code":
+        raise AssertionError(classified)
+    if classified.get("product_type_id") != "gpc:10005897":
+        raise AssertionError(classified)
+    if classified.get("gpc_brick_code") != "10005897":
+        raise AssertionError(classified)
+    if not str(classified.get("source") or "").startswith("gs1_gpc_"):
+        raise AssertionError(classified)
+
+    print("POSTGRESQL_OFF_EXPLICIT_GPC_OFFICIAL_REFERENCE_GREEN")
+
+
 def _assert_off_index_matcher() -> None:
     result = match_retailer_receipt_line(
         "lidl",
@@ -497,6 +518,7 @@ def main() -> None:
         _assert_receipt_table_off_search_postgresql_types()
         _assert_external_article_ui_membership_projection()
         _assert_off_gpc_normalization()
+        _assert_explicit_off_gpc_uses_official_reference_catalog()
         _assert_off_index_matcher()
     finally:
         with engine.begin() as conn:
