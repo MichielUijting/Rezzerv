@@ -37,7 +37,8 @@ def _candidate_identity(conn, receipt_item_id: str, source_id: str) -> dict[str,
             ORDER BY
                 is_user_confirmed DESC,
                 CASE WHEN global_product_id IS NOT NULL THEN 1 ELSE 0 END DESC,
-                COALESCE(updated_at, created_at, '') DESC,
+                CASE WHEN updated_at IS NULL AND created_at IS NULL THEN 1 ELSE 0 END ASC,
+                COALESCE(updated_at, created_at) DESC,
                 id DESC
             LIMIT 1
             """

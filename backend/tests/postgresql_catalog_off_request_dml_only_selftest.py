@@ -14,6 +14,7 @@ if str(BACKEND_ROOT) not in sys.path:
 from app.api import catalog_routes
 from app.db import engine
 from app.services.external_database_off_index_matchers import match_retailer_receipt_line
+from app.services.external_article_confirmation_service import _candidate_identity
 from app.services.external_article_product_link_service import (
     _complete_global_product_link_data,
     save_external_article_product_link,
@@ -407,6 +408,19 @@ def _assert_complete_official_gpc_link_validation() -> None:
     print("POSTGRESQL_OFF_COMPLETE_GPC_LINK_VALIDATION_GREEN")
 
 
+def _assert_candidate_identity_timestamp_order() -> None:
+    with engine.begin() as conn:
+        candidate = _candidate_identity(
+            conn,
+            "purchase-import-line:__postgresql_candidate_timestamp_probe__",
+            "__postgresql_candidate_timestamp_probe__",
+        )
+    if candidate is not None:
+        raise AssertionError(candidate)
+
+    print("POSTGRESQL_OFF_CANDIDATE_TIMESTAMP_ORDER_GREEN")
+
+
 def _assert_off_index_matcher() -> None:
     result = match_retailer_receipt_line(
         "lidl",
@@ -428,6 +442,7 @@ def main() -> None:
         _assert_off_identity_and_catalog_queries()
         _assert_integer_membership_projection()
         _assert_complete_official_gpc_link_validation()
+        _assert_candidate_identity_timestamp_order()
         _assert_off_index_matcher()
     finally:
         with engine.begin() as conn:
