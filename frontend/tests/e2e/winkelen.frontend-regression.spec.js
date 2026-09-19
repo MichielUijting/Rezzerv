@@ -12,7 +12,7 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
 
     await page.goto('/winkelen');
     await expect(page).toHaveURL(/\/winkelen$/);
-    await page.getByLabel('Artikel toevoegen').fill('Regressie-artikel');
+    await page.getByLabel('Artikel toevoegen', { exact: true }).fill('Regressie-artikel');
 
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByTestId('shopping-candidate-list')).toBeVisible();
@@ -211,7 +211,7 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
     const articleWidthAfter = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
     expect(articleWidthAfter).toBeGreaterThan(articleWidthBefore + 40);
 
-    await page.getByLabel('Artikel toevoegen').fill('melk');
+    await page.getByLabel('Artikel toevoegen', { exact: true }).fill('melk');
     const candidateList = page.getByTestId('shopping-candidate-list');
     await expect(candidateList).toBeVisible();
     await expect(candidateList.getByRole('option')).toHaveCount(5);
@@ -220,7 +220,7 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
     await expect(page.getByRole('heading', { name: 'Boodschappenlijst — 1 artikelen' })).toBeVisible();
 
     for (let repeat = 0; repeat < 2; repeat += 1) {
-      await page.getByLabel('Artikel toevoegen').fill('melk');
+      await page.getByLabel('Artikel toevoegen', { exact: true }).fill('melk');
       await page.getByTestId('shopping-candidate-list').getByRole('option', { name: 'Melk — Huishoudartikel', exact: true }).click();
       await page.getByRole('button', { name: 'Toevoegen' }).click();
     }
@@ -276,7 +276,7 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
     await expect(page.getByRole('heading', { name: 'Boodschappenlijst — 0 artikelen' })).toBeVisible();
     await expect(page.getByLabel('Selecteer Melk')).toHaveCount(0);
 
-    await page.getByLabel('Artikel toevoegen').fill('pasta');
+    await page.getByLabel('Artikel toevoegen', { exact: true }).fill('pasta');
     await page.getByTestId('shopping-candidate-list').getByRole('option', { name: 'Pasta — Producttype', exact: true }).click();
     await page.getByRole('button', { name: 'Toevoegen' }).click();
 

@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, inspect, text
 import migration_foundation_selftest as foundation_test
 
 
-HEAD_REVISION = "20260915_01"
+HEAD_REVISION = "20260918_01"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 89
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
@@ -405,7 +405,7 @@ def main() -> None:
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260915_01_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_20260918_01_GREEN")
 
 
 if __name__ == "__main__":

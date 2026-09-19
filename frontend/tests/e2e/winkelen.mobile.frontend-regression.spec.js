@@ -205,7 +205,7 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await expect(page.getByTestId('shopping-page')).toHaveCount(0)
     await expect(page.getByText('Mijn lijst', { exact: true })).toBeVisible()
     await expect(page.getByText('2 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
-    await expect(page.getByRole('region', { name: 'Boodschappenlijst' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Boodschappenlijst', exact: true })).toBeVisible()
     await expect(page.getByLabel('Zoek in winkellijst')).toHaveCount(0)
     await expect(page.getByTestId('mobile-shopping-producttype')).toHaveCount(0)
     await expect(page.getByTestId('mobile-shopping-sort')).toHaveCount(0)
@@ -226,7 +226,7 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await melkCard.getByLabel('Opmerking Melk').blur()
     await expect(page.getByText('Halfvol', { exact: true })).toBeVisible()
 
-    await page.getByLabel('Artikel toevoegen').fill('ban')
+    await page.getByLabel('Artikel toevoegen', { exact: true }).fill('ban')
     const candidateList = page.getByTestId('mobile-shopping-candidate-list')
     await expect(candidateList).toBeVisible()
     await expect(candidateList.getByRole('option')).toHaveCount(5)
@@ -236,7 +236,7 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await expect(page.getByText('Bananen', { exact: true })).toBeVisible()
 
     for (let repeat = 0; repeat < 2; repeat += 1) {
-      await page.getByLabel('Artikel toevoegen').fill('ban')
+      await page.getByLabel('Artikel toevoegen', { exact: true }).fill('ban')
       await page.getByTestId('mobile-shopping-candidate-list').getByRole('option', { name: 'Bananen — Huishoudartikel', exact: true }).click()
       await page.getByTestId('mobile-shopping-add').click()
     }
