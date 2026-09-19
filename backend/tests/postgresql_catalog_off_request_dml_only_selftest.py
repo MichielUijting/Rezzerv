@@ -14,9 +14,15 @@ if str(BACKEND_ROOT) not in sys.path:
 from app.api import catalog_routes
 from app.db import engine
 from app.services.external_database_off_index_matchers import match_retailer_receipt_line
-from app.services.external_product_candidate_store import ensure_external_product_candidates_schema
+from app.services.external_product_candidate_store import (
+    _m2c2l_enrich_linked_receipt_items,
+    ensure_external_product_candidates_schema,
+)
 from app.services.external_product_index_store import ensure_external_product_index_seeded
 from app.services.off_product_link_service import _upsert_global_product
+from app.services.product_inventory_group_store import (
+    link_global_product_to_inventory_group_with_connection,
+)
 
 GTIN_ALPHA = "8712345678901"
 GTIN_BRAVO = "8712345678902"
@@ -37,6 +43,16 @@ def _assert_runtime_create_denied() -> None:
 
 
 def _cleanup(conn) -> None:
+    conn.execute(
+        text(
+            "DELETE FROM product_group_memberships "
+            "WHERE global_product_id IN ("
+            "SELECT id FROM global_products "
+            "WHERE primary_gtin IN (:gtin_alpha, :gtin_bravo)"
+            ")"
+        ),
+        {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO},
+    )
     conn.execute(
         text(
             "DELETE FROM product_identities "
@@ -201,6 +217,67 @@ def _assert_off_identity_and_catalog_queries() -> None:
     print("POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_QUERY_GREEN")
 
 
+
+def _assert_integer_membership_projection() -> None:
+    with engine.begin() as conn:
+        _cleanup(conn)
+        global_product_id, _, _, _ = _upsert_global_product(
+            conn,
+            _off_payload(GTIN_ALPHA, NAME_ALPHA),
+        )
+        group_key = conn.execute(
+            text(
+                """
+                SELECT inventory_group_key
+                FROM product_inventory_groups
+                WHERE COALESCE(active, 1) = 1
+                ORDER BY inventory_group_key
+                LIMIT 1
+                """
+            )
+        ).scalar_one_or_none()
+        if not group_key:
+            raise AssertionError("Geen actief producttype beschikbaar voor membership-proef")
+
+        linked = link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=global_product_id,
+            inventory_group_key=str(group_key),
+            confidence=0.93,
+            source="postgresql_catalog_off_request_dml_only_selftest",
+            confirmed_by_user=True,
+        )
+        if not bool(linked.get("ok")):
+            raise AssertionError(linked)
+
+        membership = conn.execute(
+            text(
+                """
+                SELECT active, confirmed_by_user
+                FROM product_group_memberships
+                WHERE global_product_id = :global_product_id
+                LIMIT 1
+                """
+            ),
+            {"global_product_id": global_product_id},
+        ).mappings().one()
+        if int(membership["active"]) != 1 or int(membership["confirmed_by_user"]) != 1:
+            raise AssertionError(membership)
+
+        enriched = _m2c2l_enrich_linked_receipt_items(
+            conn,
+            [{"global_product_id": global_product_id}],
+        )
+        if len(enriched) != 1:
+            raise AssertionError(enriched)
+        if enriched[0].get("linked_product_type_id") != str(group_key):
+            raise AssertionError(enriched)
+
+        _cleanup(conn)
+
+    print("POSTGRESQL_CATALOG_OFF_INTEGER_MEMBERSHIP_PROJECTION_GREEN")
+
+
 def _assert_off_index_matcher() -> None:
     result = match_retailer_receipt_line(
         "lidl",
@@ -220,6 +297,7 @@ def main() -> None:
         _assert_runtime_create_denied()
         _assert_schema_contract()
         _assert_off_identity_and_catalog_queries()
+        _assert_integer_membership_projection()
         _assert_off_index_matcher()
     finally:
         with engine.begin() as conn:
