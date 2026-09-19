@@ -632,10 +632,10 @@ def _m2c2l_enrich_linked_receipt_items(
             f"pgm.updated_at AS membership_updated_at "
             f"FROM global_products gp "
             f"LEFT JOIN product_group_memberships pgm ON pgm.global_product_id = gp.id "
-            f"AND COALESCE(pgm.active, TRUE) IS TRUE "
+            f"AND COALESCE(pgm.active, 1) = 1 "
             f"LEFT JOIN product_inventory_groups pig ON pig.inventory_group_key = pgm.inventory_group_key "
             f"WHERE gp.id IN ({', '.join(bind_names)}) "
-            f"ORDER BY gp.id, COALESCE(pgm.confirmed_by_user, FALSE) DESC, "
+            f"ORDER BY gp.id, COALESCE(pgm.confirmed_by_user, 0) DESC, "
             f"CASE WHEN pgm.updated_at IS NULL THEN 1 ELSE 0 END ASC, "
             f"pgm.updated_at DESC"
         ),

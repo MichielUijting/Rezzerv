@@ -106,6 +106,7 @@ jobs:
           grep -F 'POSTGRESQL_CATALOG_OFF_VALIDATION_ONLY_SCHEMA_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_IDENTITY_INSERT_UPDATE_BOOLEAN_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_IDENTITY_BOOLEAN_ORDER_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_INTEGER_MEMBERSHIP_PROJECTION_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_NUMERIC_SORT_DML_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_RECEIPT_TIMESTAMP_QUERY_GREEN' /tmp/catalog-off-dml.log
