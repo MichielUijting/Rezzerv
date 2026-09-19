@@ -387,6 +387,14 @@ def _assert_complete_official_gpc_link_validation() -> None:
         if not bool(linked.get("ok")):
             raise AssertionError(linked)
 
+        projected = _central_product_details(conn, global_product_id)
+        if projected.get("product_type_id") != OFFICIAL_GPC_GROUP_KEY:
+            raise AssertionError(projected)
+        if projected.get("gpc_brick_code") != OFFICIAL_GPC_BRICK_CODE:
+            raise AssertionError(projected)
+        if not str(projected.get("gpc_brick_name") or "").strip():
+            raise AssertionError(projected)
+
         completeness = _complete_global_product_link_data(conn, global_product_id)
         if not completeness.get("complete"):
             raise AssertionError(completeness)
@@ -409,6 +417,7 @@ def _assert_complete_official_gpc_link_validation() -> None:
         _cleanup(conn)
 
     print("POSTGRESQL_OFF_COMPLETE_GPC_LINK_VALIDATION_GREEN")
+    print("POSTGRESQL_EXTERNAL_ARTICLE_UI_GPC_METADATA_GREEN")
 
 
 def _assert_candidate_identity_timestamp_order() -> None:
