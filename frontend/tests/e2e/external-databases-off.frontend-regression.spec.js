@@ -185,9 +185,9 @@ test.describe('Externe databases OFF candidate flow', () => {
 
     await expect(page.getByTestId('external-producttype-link-panel')).toBeVisible();
     await candidateTable.locator('tbody tr', { hasText: '8710000000099' }).getByRole('radio').check();
-    await expect(page.getByLabel('Producttype')).toBeDisabled();
-    await expect(page.getByLabel('Producttype')).toHaveValue('');
-    await expect(page.getByLabel('Producttype').locator('option:checked')).toHaveText('GPC-classificatie ontbreekt');
+    await expect(page.getByLabel('Producttype', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('Producttype', { exact: true }).locator('option:checked')).toHaveText('GPC-classificatie ontbreekt');
     await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Zoek handmatig op Brickcode of producttype.');
     await expect(page.getByTestId('external-manual-gpc-search')).toBeVisible();
     await page.getByLabel('Zoek op Brickcode of producttype').fill('10000284');
@@ -196,7 +196,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(gpcResults).toContainText('10000284');
     await expect(gpcResults).toContainText('Cereals Products – Ready to Eat (Shelf Stable)');
     await gpcResults.getByRole('option').click();
-    await expect(page.getByLabel('Producttype')).toHaveValue('gpc:10000284');
+    await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('gpc:10000284');
     await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Handmatig geselecteerd uit de officiële GS1 GPC-catalogus.');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeDisabled();
@@ -236,8 +236,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     await receiptRow.dblclick();
     const candidateRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: '8718265184886' });
     await candidateRow.getByRole('radio').check();
-    await expect(page.getByLabel('Producttype')).toHaveValue('gpc:10005897');
-    await expect(page.getByLabel('Producttype').locator('option:checked')).toContainText('Bananen — GPC 10005897');
+    await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('gpc:10005897');
+    await expect(page.getByLabel('Producttype', { exact: true }).locator('option:checked')).toContainText('Bananen — GPC 10005897');
     await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Automatisch bepaald via de externe bron met zekerheid 1,000.');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
   });
