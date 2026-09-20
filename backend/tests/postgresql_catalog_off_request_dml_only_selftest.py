@@ -860,7 +860,7 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
         receipt_item_id=f"purchase-import-line:{GLOBAL_SCOPE_LINE_ID}",
         generic_product_name=GENERIC_SCOPE_NAME,
         product_type_assignment={
-            "product_type_id": "gpc:10005897",
+            "product_type_id": "gpc:10000262",
             "gpc_source": "manual",
             "mapping_source": "manual_gs1_gpc",
             "confidence_score": 1.0,
@@ -940,7 +940,7 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
         raise AssertionError(generic_row)
     if str(generic_row.get("linked_gtin") or ""):
         raise AssertionError(generic_row)
-    if str(generic_row.get("linked_product_type_id") or "") != "gpc:10005897":
+    if str(generic_row.get("linked_product_type_id") or "") != "gpc:10000262":
         raise AssertionError(generic_row)
 
     with engine.begin() as conn:
@@ -951,6 +951,7 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
     print("POSTGRESQL_EXTERNAL_RECEIPT_PRIVATE_LABEL_STALE_LINK_SUPPRESSED_GREEN")
     print("POSTGRESQL_GENERIC_CATALOG_LINK_NO_GTIN_GREEN")
     print("POSTGRESQL_GENERIC_CATALOG_LINK_PRESERVES_HOUSEHOLD_GREEN")
+    print("POSTGRESQL_GENERIC_BOUILLON_GPC_10000262_GREEN")
 
 
 def _assert_household_only_link_not_projected_as_global() -> None:
