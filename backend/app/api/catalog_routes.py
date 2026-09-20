@@ -55,6 +55,17 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         for alias, expression in selectable.items()
     ]
     joins: list[str] = []
+    source_expression = "COALESCE(gp.source, '')" if "source" in gp_columns else "''"
+    primary_gtin_expression = (
+        "COALESCE(gp.primary_gtin, '')"
+        if "primary_gtin" in gp_columns
+        else "''"
+    )
+    catalog_kind_expression = (
+        f"CASE WHEN TRIM({primary_gtin_expression}) = '' "
+        "THEN 'generic' ELSE 'exact' END"
+    )
+    select_parts.append(f"{catalog_kind_expression} AS catalog_kind")
 
     legacy_product_type = "NULL"
     legacy_product_type_id = "NULL"
@@ -113,6 +124,44 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
     ])
 
     household_table = _household_table()
+    external_links_available = "external_article_product_links" in tables
+    alias_source_condition = (
+        "LOWER(COALESCE(gp.source, '')) IN "
+        "('user', 'receipt_user_confirmed', 'receipt', 'manual')"
+        if "source" in gp_columns
+        else "FALSE"
+    )
+    alias_gtin_condition = (
+        "COALESCE(TRIM(gp.primary_gtin), '') = ''"
+        if "primary_gtin" in gp_columns
+        else "TRUE"
+    )
+    alias_visibility_expression = "TRUE"
+
+    if external_links_available:
+        joins.append("""
+            LEFT JOIN (
+                SELECT
+                    receipt_text_normalized,
+                    MIN(global_product_id) AS target_global_product_id
+                FROM external_article_product_links
+                WHERE status = 'confirmed'
+                  AND COALESCE(receipt_text_normalized, '') <> ''
+                GROUP BY receipt_text_normalized
+                HAVING COUNT(DISTINCT global_product_id) = 1
+            ) catalog_alias_target
+              ON catalog_alias_target.receipt_text_normalized =
+                 LOWER(TRIM(COALESCE(gp.name, '')))
+             AND catalog_alias_target.target_global_product_id <> gp.id
+        """)
+        alias_visibility_expression = (
+            "NOT ("
+            f"{alias_source_condition} "
+            f"AND {alias_gtin_condition} "
+            "AND catalog_alias_target.target_global_product_id IS NOT NULL"
+            ")"
+        )
+
     if household_table:
         joins.append(f"""
             LEFT JOIN (
@@ -123,8 +172,54 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
             ) household_counts ON household_counts.global_product_id = gp.id
         """)
         household_count_expression = "COALESCE(household_counts.household_article_count, 0)"
+
+        if external_links_available:
+            legacy_source_condition = (
+                "LOWER(COALESCE(legacy_gp.source, '')) IN "
+                "('user', 'receipt_user_confirmed', 'receipt', 'manual')"
+                if "source" in gp_columns
+                else "FALSE"
+            )
+            legacy_gtin_condition = (
+                "COALESCE(TRIM(legacy_gp.primary_gtin), '') = ''"
+                if "primary_gtin" in gp_columns
+                else "TRUE"
+            )
+            joins.append(f"""
+                LEFT JOIN (
+                    SELECT
+                        unique_links.target_global_product_id AS global_product_id,
+                        COUNT(*) AS redirected_household_article_count
+                    FROM {household_table} redirected_ha
+                    JOIN global_products legacy_gp
+                      ON legacy_gp.id = redirected_ha.global_product_id
+                    JOIN (
+                        SELECT
+                            receipt_text_normalized,
+                            MIN(global_product_id) AS target_global_product_id
+                        FROM external_article_product_links
+                        WHERE status = 'confirmed'
+                          AND COALESCE(receipt_text_normalized, '') <> ''
+                        GROUP BY receipt_text_normalized
+                        HAVING COUNT(DISTINCT global_product_id) = 1
+                    ) unique_links
+                      ON unique_links.receipt_text_normalized =
+                         LOWER(TRIM(COALESCE(legacy_gp.name, '')))
+                     AND unique_links.target_global_product_id <> legacy_gp.id
+                    WHERE redirected_ha.global_product_id IS NOT NULL
+                      AND {legacy_source_condition}
+                      AND {legacy_gtin_condition}
+                    GROUP BY unique_links.target_global_product_id
+                ) redirected_household_counts
+                  ON redirected_household_counts.global_product_id = gp.id
+            """)
+            household_count_expression = (
+                "COALESCE(household_counts.household_article_count, 0) + "
+                "COALESCE(redirected_household_counts.redirected_household_article_count, 0)"
+            )
     else:
         household_count_expression = "0"
+
     select_parts.append(f"{household_count_expression} AS household_article_count")
 
     if "product_identities" in tables and "global_product_id" in _columns("product_identities"):
@@ -143,10 +238,12 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
     expressions = {
         "name": "COALESCE(gp.name, '')",
         "brand": "COALESCE(gp.brand, '')",
-        "primary_gtin": "COALESCE(gp.primary_gtin, '')",
+        "primary_gtin": primary_gtin_expression,
+        "catalog_kind": catalog_kind_expression,
         "product_type": f"COALESCE({product_type_expression}, '')",
-        "source": "COALESCE(gp.source, '')",
+        "source": source_expression,
         "household_article_count": household_count_expression,
+        "catalog_visible": alias_visibility_expression,
     }
     return select_parts, joins, expressions
 
@@ -156,16 +253,18 @@ def _catalog_where(
     name: str,
     brand: str,
     primary_gtin: str,
+    catalog_kind: str,
     product_type: str,
     source: str,
     household_article_count: str,
 ) -> tuple[str, dict[str, Any]]:
-    conditions: list[str] = []
+    conditions: list[str] = [f"({expressions['catalog_visible']})"]
     params: dict[str, Any] = {}
     filters = {
         "name": name,
         "brand": brand,
         "primary_gtin": primary_gtin,
+        "catalog_kind": catalog_kind,
         "product_type": product_type,
         "source": source,
     }
@@ -207,6 +306,7 @@ def list_catalog(
     name: str = Query(default="", max_length=200),
     brand: str = Query(default="", max_length=200),
     primary_gtin: str = Query(default="", max_length=200),
+    catalog_kind: str = Query(default="", max_length=50),
     product_type: str = Query(default="", max_length=200),
     source: str = Query(default="", max_length=200),
     household_article_count: str = Query(default="", max_length=50),
@@ -224,6 +324,7 @@ def list_catalog(
         name,
         brand,
         primary_gtin,
+        catalog_kind,
         product_type,
         source,
         household_article_count,
