@@ -194,6 +194,16 @@ def _cleanup(conn) -> None:
         text("DELETE FROM global_products WHERE primary_gtin IN (:gtin_alpha, :gtin_bravo, :gtin_charlie)"),
         {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO, "gtin_charlie": GTIN_CHARLIE},
     )
+    conn.execute(
+        text(
+            """
+            DELETE FROM global_products
+            WHERE source = 'external_databases_generic'
+              AND name = :generic_name
+            """
+        ),
+        {"generic_name": GENERIC_SCOPE_NAME},
+    )
 
 
 def _assert_schema_contract() -> None:
@@ -935,16 +945,6 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
 
     with engine.begin() as conn:
         _cleanup(conn)
-        conn.execute(
-            text(
-                """
-                DELETE FROM global_products
-                WHERE source = 'external_databases_generic'
-                  AND name = :generic_name
-                """
-            ),
-            {"generic_name": GENERIC_SCOPE_NAME},
-        )
 
     print("POSTGRESQL_OFF_GLOBAL_LINK_IGNORES_HOUSEHOLD_PRODUCT_GREEN")
     print("POSTGRESQL_EXTERNAL_RECEIPT_MAIN_TABLE_CENTRAL_LINK_GREEN")
