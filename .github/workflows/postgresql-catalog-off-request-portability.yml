@@ -136,6 +136,7 @@ jobs:
           grep -F 'POSTGRESQL_EXTERNAL_RECEIPT_PRIVATE_LABEL_STALE_LINK_SUPPRESSED_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_GENERIC_CATALOG_LINK_NO_GTIN_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_GENERIC_CATALOG_LINK_PRESERVES_HOUSEHOLD_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_GENERIC_BOUILLON_GPC_10000262_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_GPC_CODE_PROPAGATION_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_EXPLICIT_GPC_OFFICIAL_REFERENCE_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN' /tmp/catalog-off-dml.log
