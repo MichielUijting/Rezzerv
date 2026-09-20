@@ -10,6 +10,7 @@ OFF_LINK_PATH = BACKEND_ROOT / "app" / "services" / "off_product_link_service.py
 OFF_SEARCH_PATH = BACKEND_ROOT / "app" / "services" / "off_search_service.py"
 ARTICLE_UI_PATH = BACKEND_ROOT / "app" / "services" / "external_article_ui_projection.py"
 CANDIDATE_STORE_PATH = BACKEND_ROOT / "app" / "services" / "external_product_candidate_store.py"
+IDENTITY_POLICY_PATH = BACKEND_ROOT / "app" / "services" / "external_product_identity_policy.py"
 
 # Houd deze scope gelijk aan de volledige OFF/GPC-gebruikersroute in de CI-workflow.
 FORBIDDEN_SQL_PATTERNS = {
@@ -200,6 +201,37 @@ def _assert_global_external_link_authority() -> None:
     print("POSTGRESQL_EXTERNAL_RECEIPT_GLOBAL_AUTHORITY_STATIC_GREEN")
 
 
+def _assert_private_label_identity_guard_wired() -> None:
+    policy_source = IDENTITY_POLICY_PATH.read_text(encoding="utf-8-sig")
+    off_source = OFF_LINK_PATH.read_text(encoding="utf-8-sig")
+    search_source = OFF_SEARCH_PATH.read_text(encoding="utf-8-sig")
+    ui_source = ARTICLE_UI_PATH.read_text(encoding="utf-8-sig")
+
+    required_policy = (
+        "def external_product_identity_compatibility",
+        "def assert_external_product_identity_compatible",
+        "private_label_brand_conflict",
+    )
+    missing_policy = [token for token in required_policy if token not in policy_source]
+    if missing_policy:
+        raise AssertionError(
+            f"Private-label identity policy incompleet: {missing_policy}"
+        )
+
+    if "assert_external_product_identity_compatible(" not in off_source:
+        raise AssertionError("OFF write-route mist private-label identity guard")
+    if "external_product_identity_compatibility(" not in search_source:
+        raise AssertionError("OFF zoekroute mist private-label kandidaatfilter")
+    if 'add("private_label_phrase", source_receipt_text, 1.2)' not in search_source:
+        raise AssertionError("OFF zoekroute mist expliciete huismerk-queryvariant")
+    if "external_product_identity_compatibility(" not in ui_source:
+        raise AssertionError("Externe-databasesprojectie mist stale-link identity guard")
+    if '"central_link_identity_rejected"' not in ui_source:
+        raise AssertionError("Externe-databasesprojectie rapporteert identity rejection niet")
+
+    print("POSTGRESQL_OFF_PRIVATE_LABEL_IDENTITY_STATIC_GREEN")
+
+
 def main() -> None:
     for path in (
         CATALOG_PATH,
@@ -207,6 +239,7 @@ def main() -> None:
         OFF_SEARCH_PATH,
         ARTICLE_UI_PATH,
         CANDIDATE_STORE_PATH,
+        IDENTITY_POLICY_PATH,
     ):
         if not path.is_file():
             raise AssertionError(f"Catalog/OFF scope file ontbreekt: {path}")
@@ -216,6 +249,7 @@ def main() -> None:
     _assert_external_article_ui_sql_portable()
     _assert_off_identity_boolean_bind()
     _assert_global_external_link_authority()
+    _assert_private_label_identity_guard_wired()
     print("POSTGRESQL_CATALOG_OFF_REQUEST_PORTABILITY_STATIC_SELFTEST_GREEN")
 
 

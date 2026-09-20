@@ -11,6 +11,10 @@ from typing import Any
 from sqlalchemy import inspect, text
 
 from app.db import engine
+from app.services.external_product_identity_policy import (
+    external_product_identity_compatibility,
+    leading_private_label_marker,
+)
 
 
 SEARCH_A_LICIOUS_URL = os.getenv(
@@ -601,12 +605,17 @@ AUTO_QUERY_STOPWORDS = {
 
 
 def _automatic_query_variants(item: dict[str, Any]) -> list[dict[str, Any]]:
+    source_receipt_text = _text(item.get("receipt_line_text", ""))
     receipt_text = _strip_retailer_prefix(
-        item.get("receipt_line_text", ""),
+        source_receipt_text,
         item.get("retailer_code", ""),
     )
     raw_tokens = [token for token in _normalize(receipt_text).split() if len(token) >= 3]
     core_tokens = [token for token in raw_tokens if token not in AUTO_QUERY_STOPWORDS]
+    private_label_marker = leading_private_label_marker(
+        retailer_code=item.get("retailer_code", ""),
+        receipt_text=source_receipt_text,
+    )
 
     variants: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -618,6 +627,8 @@ def _automatic_query_variants(item: dict[str, Any]) -> list[dict[str, Any]]:
         seen.add(normalized)
         variants.append({"kind": kind, "query": normalized, "weight": weight})
 
+    if private_label_marker:
+        add("private_label_phrase", source_receipt_text, 1.2)
     if len(core_tokens) >= 2:
         add("core_phrase", " ".join(core_tokens), 1.0)
     if len(raw_tokens) >= 2:
@@ -752,6 +763,7 @@ def _automatic_search(item: dict[str, Any], limit: int) -> tuple[str, str, list[
         if provider and provider not in providers:
             providers.append(provider)
 
+        identity_rejected_count = 0
         accepted_count = 0
         for product in products:
             result = _normalize_result(
@@ -761,6 +773,16 @@ def _automatic_search(item: dict[str, Any], limit: int) -> tuple[str, str, list[
                 product=product,
             )
             if result is None:
+                continue
+
+            identity_check = external_product_identity_compatibility(
+                retailer_code=item.get("retailer_code", ""),
+                receipt_text=item.get("receipt_line_text", ""),
+                candidate_brand=result.get("brand"),
+                candidate_name=result.get("product_name"),
+            )
+            if not identity_check.get("ok"):
+                identity_rejected_count += 1
                 continue
 
             accepted_count += 1
@@ -780,7 +802,7 @@ def _automatic_search(item: dict[str, Any], limit: int) -> tuple[str, str, list[
             )
 
             entry["query_hits"] += 1
-            if variant["kind"] in {"core_phrase", "clean_phrase"}:
+            if variant["kind"] in {"private_label_phrase", "core_phrase", "clean_phrase"}:
                 entry["phrase_hits"] += 1
 
             current_name_score = float(
@@ -811,6 +833,7 @@ def _automatic_search(item: dict[str, Any], limit: int) -> tuple[str, str, list[
                 "provider": provider,
                 "raw_count": len(products),
                 "accepted_count": accepted_count,
+                "identity_rejected_count": identity_rejected_count,
             }
         )
 
@@ -886,6 +909,14 @@ def search_off_candidates(payload: dict[str, Any]) -> dict[str, Any]:
                 product=product,
             )
             if result is None:
+                continue
+            identity_check = external_product_identity_compatibility(
+                retailer_code=item.get("retailer_code", ""),
+                receipt_text=item.get("receipt_line_text", ""),
+                candidate_brand=result.get("brand"),
+                candidate_name=result.get("product_name"),
+            )
+            if not identity_check.get("ok"):
                 continue
             existing = best_by_gtin.get(result["gtin"])
             if existing is None or result["score"] > existing["score"]:

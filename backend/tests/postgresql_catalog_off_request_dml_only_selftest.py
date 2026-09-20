@@ -29,6 +29,9 @@ from app.services.external_product_candidate_store import (
     list_external_receipt_items,
 )
 from app.services.external_product_index_store import ensure_external_product_index_seeded
+from app.services.external_product_identity_policy import (
+    external_product_identity_compatibility,
+)
 from app.services.gpc_local_catalog_service import classify_gpc_product
 from app.services.off_product_link_service import (
     _upsert_global_product,
@@ -523,6 +526,37 @@ def _assert_external_article_ui_membership_projection() -> None:
     print("POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN")
 
 
+def _assert_private_label_identity_policy() -> None:
+    mismatch = external_product_identity_compatibility(
+        retailer_code="Albert Heijn",
+        receipt_text="AH BOUILLON",
+        candidate_brand="Marigold",
+        candidate_name="Bouillon",
+    )
+    if mismatch.get("ok") or mismatch.get("reason") != "private_label_brand_conflict":
+        raise AssertionError(mismatch)
+
+    matching_private_label = external_product_identity_compatibility(
+        retailer_code="Albert Heijn",
+        receipt_text="AH BOUILLON",
+        candidate_brand="Albert Heijn",
+        candidate_name="Bouillon rund",
+    )
+    if not matching_private_label.get("ok"):
+        raise AssertionError(matching_private_label)
+
+    ordinary_third_party = external_product_identity_compatibility(
+        retailer_code="Albert Heijn",
+        receipt_text="COCA COLA ZERO",
+        candidate_brand="Coca-Cola",
+        candidate_name="Coca-Cola Zero",
+    )
+    if not ordinary_third_party.get("ok"):
+        raise AssertionError(ordinary_third_party)
+
+    print("POSTGRESQL_OFF_PRIVATE_LABEL_IDENTITY_POLICY_GREEN")
+
+
 def _assert_global_off_link_ignores_household_specific_product_link() -> None:
     with engine.begin() as conn:
         _cleanup(conn)
@@ -653,9 +687,13 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
             },
         )
 
+    valid_private_label_product = {
+        **_off_payload(GTIN_CHARLIE, NAME_CHARLIE),
+        "brand": "Albert Heijn",
+    }
     result = link_off_product_with_product_type(
         receipt_item_id=f"purchase-import-line:{GLOBAL_SCOPE_LINE_ID}",
-        off_product=_off_payload(GTIN_CHARLIE, NAME_CHARLIE),
+        off_product=valid_private_label_product,
         product_type_assignment={
             "product_type_id": "gpc:10005897",
             "gpc_source": "manual",
@@ -666,6 +704,29 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
     linked_product_id = str((result.get("global_product") or {}).get("id") or "")
     if not linked_product_id:
         raise AssertionError(result)
+
+    incompatible_product = {
+        **_off_payload(GTIN_CHARLIE, "Bouillon"),
+        "brand": "Marigold",
+    }
+    try:
+        link_off_product_with_product_type(
+            receipt_item_id=f"purchase-import-line:{GLOBAL_SCOPE_LINE_ID}",
+            off_product=incompatible_product,
+            product_type_assignment={
+                "product_type_id": "gpc:10005897",
+                "gpc_source": "manual",
+                "mapping_source": "manual_gs1_gpc",
+                "confidence_score": 1.0,
+            },
+        )
+    except ValueError as exc:
+        if "huismerk" not in str(exc).lower() or "marigold" not in str(exc).lower():
+            raise AssertionError(str(exc)) from exc
+    else:
+        raise AssertionError("AH BOUILLON accepted incompatible Marigold product")
+
+    print("POSTGRESQL_OFF_PRIVATE_LABEL_WRITE_REJECT_GREEN")
 
     with engine.begin() as conn:
         household_article = conn.execute(
@@ -734,10 +795,41 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
         raise AssertionError(row)
 
     with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE global_products
+                SET name = 'Bouillon', brand = 'Marigold', updated_at = CURRENT_TIMESTAMP
+                WHERE id = :global_product_id
+                """
+            ),
+            {"global_product_id": linked_product_id},
+        )
+
+    stale_projected = list_external_receipt_items(limit=500)
+    stale_matching = [
+        item
+        for item in stale_projected.get("items") or []
+        if str(item.get("receipt_line_text") or "").strip() == GLOBAL_SCOPE_RECEIPT_TEXT
+    ]
+    if len(stale_matching) != 1:
+        raise AssertionError(stale_matching)
+    stale_row = stale_matching[0]
+    if stale_row.get("central_link_active"):
+        raise AssertionError(stale_row)
+    if not stale_row.get("central_link_identity_rejected"):
+        raise AssertionError(stale_row)
+    if stale_row.get("central_link_identity_rejection_reason") != "private_label_brand_conflict":
+        raise AssertionError(stale_row)
+    if stale_row.get("global_product_id") not in (None, ""):
+        raise AssertionError(stale_row)
+
+    with engine.begin() as conn:
         _cleanup(conn)
 
     print("POSTGRESQL_OFF_GLOBAL_LINK_IGNORES_HOUSEHOLD_PRODUCT_GREEN")
     print("POSTGRESQL_EXTERNAL_RECEIPT_MAIN_TABLE_CENTRAL_LINK_GREEN")
+    print("POSTGRESQL_EXTERNAL_RECEIPT_PRIVATE_LABEL_STALE_LINK_SUPPRESSED_GREEN")
 
 
 def _assert_household_only_link_not_projected_as_global() -> None:
@@ -847,6 +939,7 @@ def main() -> None:
         _assert_candidate_identity_timestamp_order()
         _assert_receipt_table_off_search_postgresql_types()
         _assert_external_article_ui_membership_projection()
+        _assert_private_label_identity_policy()
         _assert_global_off_link_ignores_household_specific_product_link()
         _assert_household_only_link_not_projected_as_global()
         _assert_off_gpc_normalization()

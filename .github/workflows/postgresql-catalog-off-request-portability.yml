@@ -6,6 +6,7 @@ on:
       - 'backend/app/api/catalog_routes.py'
       - 'backend/app/services/off_product_link_service.py'
       - 'backend/app/services/off_search_service.py'
+      - 'backend/app/services/external_product_identity_policy.py'
       - 'backend/app/services/gpc_local_catalog_service.py'
       - 'backend/app/services/external_article_ui_projection.py'
       - 'backend/app/services/external_receipt_item_projection.py'
@@ -98,6 +99,7 @@ jobs:
           grep -F 'POSTGRESQL_OFF_IDENTITY_BOOLEAN_BIND_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_OFF_GLOBAL_LINK_HOUSEHOLD_WRITE_ABSENT_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_EXTERNAL_RECEIPT_GLOBAL_AUTHORITY_STATIC_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_OFF_PRIVATE_LABEL_IDENTITY_STATIC_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_CATALOG_OFF_REQUEST_PORTABILITY_STATIC_SELFTEST_GREEN' /tmp/catalog-off-static.log
 
       - name: Migrate through current canonical Alembic head
@@ -126,6 +128,9 @@ jobs:
           grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_HOUSEHOLD_ONLY_LINK_IGNORED_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_GLOBAL_LINK_IGNORES_HOUSEHOLD_PRODUCT_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_EXTERNAL_RECEIPT_MAIN_TABLE_CENTRAL_LINK_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_OFF_PRIVATE_LABEL_IDENTITY_POLICY_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_OFF_PRIVATE_LABEL_WRITE_REJECT_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_EXTERNAL_RECEIPT_PRIVATE_LABEL_STALE_LINK_SUPPRESSED_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_GPC_CODE_PROPAGATION_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_EXPLICIT_GPC_OFFICIAL_REFERENCE_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN' /tmp/catalog-off-dml.log

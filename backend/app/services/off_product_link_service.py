@@ -12,6 +12,10 @@ from app.services.global_product_service import get_or_create_global_product
 from app.services.gpc_reference_catalog_service import ensure_official_gpc_brick
 from app.services.external_article_confirmation_service import (
     confirm_external_article_for_receipt_item,
+    resolve_external_article_identity,
+)
+from app.services.external_product_identity_policy import (
+    assert_external_product_identity_compatible,
 )
 from app.services.product_inventory_group_store import (
     create_or_get_product_type_with_connection,
@@ -448,6 +452,21 @@ def link_off_product_with_product_type(
 
     ensure_product_inventory_group_schema()
     with engine.begin() as conn:
+        receipt_identity = resolve_external_article_identity(conn, receipt_item_id)
+        assert_external_product_identity_compatible(
+            retailer_code=receipt_identity.get("retailer_code"),
+            receipt_text=receipt_identity.get("receipt_text"),
+            candidate_brand=(
+                off_product.get("brand")
+                or off_product.get("candidate_brand")
+            ),
+            candidate_name=(
+                off_product.get("product_name")
+                or off_product.get("candidate_name")
+                or off_product.get("name")
+            ),
+        )
+
         global_product_id, gtin, size_value, size_unit = _upsert_global_product(conn, off_product)
         product_type_id = _resolve_product_type(conn, product_type_assignment)
         brick_code = product_type_id.split(":", 1)[1]
