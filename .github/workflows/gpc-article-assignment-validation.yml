@@ -8,13 +8,17 @@ on:
       - 'backend/app/services/article_detail_write_guard.py'
       - 'backend/app/services/off_product_link_service.py'
       - 'backend/app/services/gpc_reference_catalog_service.py'
+      - 'backend/app/services/gpc_candidate_service.py'
       - 'backend/tests/test_gpc_article_assignment_contract.py'
+      - 'backend/tests/test_gpc_candidate_service.py'
       - 'frontend/src/features/catalog/CatalogGpcFrame.jsx'
+      - 'frontend/src/features/catalog/CatalogGpcActionPage.jsx'
       - 'frontend/src/features/catalog/CatalogGpcClassificationPage.jsx'
       - 'frontend/src/features/catalog/CatalogDetailPageV2.jsx'
       - 'frontend/src/features/catalog/catalog.css'
       - 'frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx'
       - 'frontend/tests/e2e/external-databases-off.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/catalog-gpc-search.frontend-regression.spec.js'
       - 'frontend/src/app/router/AppRouter.jsx'
       - '.github/workflows/gpc-article-assignment-validation.yml'
   workflow_dispatch:
@@ -38,9 +42,11 @@ jobs:
             backend/app/api/catalog_gpc_routes.py \
             backend/app/api/catalog_routes.py \
             backend/app/services/article_detail_write_guard.py \
-            backend/app/services/gpc_reference_catalog_service.py
-      - name: Run runtime router and catalog contract tests
-        run: python -m pytest -q backend/tests/test_gpc_article_assignment_contract.py
+            backend/app/services/gpc_reference_catalog_service.py \
+            backend/app/services/gpc_candidate_service.py \
+            backend/tests/test_gpc_candidate_service.py
+      - name: Run runtime router and catalog candidate tests
+        run: python -m pytest -q backend/tests/test_gpc_article_assignment_contract.py backend/tests/test_gpc_candidate_service.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
