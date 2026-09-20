@@ -11,7 +11,8 @@ from typing import Any
 from sqlalchemy import inspect, text
 
 from app.db import engine
-from app.services.gpc_reference_catalog_service import search_official_gpc_bricks
+from app.services.gpc_candidate_service import build_product_signals, rank_gpc_candidates
+from app.services.gpc_reference_catalog_service import list_official_gpc_bricks, search_official_gpc_bricks
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_bricks_2026_05_en.json"
 SOURCE = "gs1_gpc_2026_05_en"
@@ -237,7 +238,38 @@ def _score(query: str, title: str) -> float:
     return round(0.45 * jaccard + 0.35 * coverage + 0.20 * sequence, 6)
 
 
-def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_brick_code: str = "") -> dict[str, Any]:
+def rank_external_gpc_candidates(*, product_name: str, category: str = "", search_text: str = "", reference_rows: list[dict[str, Any]], limit: int = 5) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    signal_bundle = build_product_signals({
+        "product_name": product_name,
+        "category": category,
+        "external_product_name": product_name,
+        "external_category": category,
+        "external_categories": category,
+        "external_search_text": search_text,
+    })
+    ranked = rank_gpc_candidates(reference_rows, signal_bundle, limit=max(1, min(int(limit), 5)))
+    suggestions: list[dict[str, Any]] = []
+    for candidate in ranked:
+        code = str(candidate.get("brick_code") or "").strip()
+        if not re.fullmatch(r"\d{8}", code):
+            continue
+        suggestion = dict(candidate)
+        suggestion.update({
+            "product_type_id": f"gpc:{code}",
+            "gpc_brick_code": code,
+            "gpc_brick_name": str(candidate.get("brick_description") or "").strip(),
+            "gpc_brick_name_en": str(candidate.get("brick_description_en") or "").strip(),
+            "source": "gs1_gpc_official",
+        })
+        suggestions.append(suggestion)
+    return suggestions[:5], {
+        "intent_key": str(signal_bundle.get("intent_key") or ""),
+        "reference_count": len(reference_rows),
+        "signal_count": len(signal_bundle.get("signals") or []),
+    }
+
+
+def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_brick_code: str = "", search_text: str = "") -> dict[str, Any]:
     ensure_local_gpc_schema()
     explicit = re.sub(r"\D+", "", explicit_gpc_brick_code or "")
     with engine.begin() as conn:
@@ -270,6 +302,20 @@ def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_
                     "reference_source": row.get("reference_source"),
                 }
 
+        reference_rows = list_official_gpc_bricks(conn)
+        suggestions, candidate_generation = rank_external_gpc_candidates(
+            product_name=product_name,
+            category=category,
+            search_text=search_text,
+            reference_rows=reference_rows,
+            limit=5,
+        )
+        suggestion_payload = {
+            "suggestion": suggestions[0] if suggestions else None,
+            "suggestions": suggestions,
+            "candidate_generation": candidate_generation,
+        }
+
         query = _normalize(f"{product_name} {category}")
         rows = conn.execute(text("""
             SELECT gpc_brick_code,gpc_brick_name,gpc_brick_name_en,source_version,source
@@ -285,14 +331,14 @@ def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_
             ranked.append((score, row))
     ranked.sort(key=lambda item: (-item[0], str(item[1].get("gpc_brick_code") or "")))
     if not ranked:
-        return {"ok": True, "status": "not_classified", "reason": "no_match", "query": query}
+        return {"ok": True, "status": "not_classified", "reason": "no_match", "query": query, **suggestion_payload}
     best_score, best = ranked[0]
     second_score = ranked[1][0] if len(ranked) > 1 else 0.0
     margin = best_score - second_score
     if best_score < 0.90 or (best_score < 0.97 and margin < 0.08):
         return {"ok": True, "status": "not_classified", "reason": "insufficient_confidence",
-                "query": query, "best_score": best_score, "margin": margin}
+                "query": query, "best_score": best_score, "margin": margin, **suggestion_payload}
     result = dict(best)
     return {"ok": True, "status": "classified", "classification_source": "gpc_taxonomy_name_match",
             "confidence": best_score, "margin": margin,
-            "product_type_id": f"gpc:{best['gpc_brick_code']}", **result}
+            "product_type_id": f"gpc:{best['gpc_brick_code']}", **result, **suggestion_payload}
