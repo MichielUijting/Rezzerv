@@ -450,6 +450,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let genericLinked = false;
     let genericLinkBody = null;
+    let releaseLateAutomaticGpc;
+    const lateAutomaticGpcGate = new Promise((resolve) => { releaseLateAutomaticGpc = resolve; });
 
     const receiptPayload = () => ({
       items: [{
@@ -535,6 +537,27 @@ test.describe('Externe databases OFF candidate flow', () => {
       });
     });
 
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      await lateAutomaticGpcGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          status: 'not_classified',
+          reason: 'insufficient_confidence',
+          suggestions: [{
+            brick_code: '10000262',
+            brick_description: 'Soups - Prepared (Shelf Stable)',
+            confidence: 0.71,
+            confidence_label: 'redelijk',
+            match_strength_percent: 71,
+            suggestion_reason: 'Overeenkomst met productgegevens: Bouillon',
+          }],
+        }),
+      });
+    });
+
     await page.route('**/api/catalog?primary_gtin=*&limit=20', async (route) => {
       await route.fulfill({
         status: 200,
@@ -607,6 +630,9 @@ test.describe('Externe databases OFF candidate flow', () => {
     const gpcResults = page.getByTestId('external-gpc-search-results');
     await expect(gpcResults).toContainText('10000262');
     await expect(gpcResults).toContainText('Soups - Prepared (Shelf Stable)');
+
+    releaseLateAutomaticGpc();
+    await expect(gpcResults).toContainText('10000262');
     await gpcResults.getByRole('option').click();
 
     await expect(page.getByRole('button', { name: 'Koppel als generiek artikel', exact: true })).toBeEnabled();
