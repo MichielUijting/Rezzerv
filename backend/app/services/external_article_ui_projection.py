@@ -12,6 +12,9 @@ from sqlalchemy import text
 from app.services.external_article_product_link_service import (
     get_confirmed_external_article_product_link,
 )
+from app.services.external_product_identity_policy import (
+    external_product_identity_compatibility,
+)
 
 
 def _text(value: Any) -> str:
@@ -79,7 +82,11 @@ def _catalog_product_by_gtin(conn, *values: Any) -> dict[str, Any] | None:
     row = conn.execute(
         text(
             """
-            SELECT id AS global_product_id, name AS global_product_name, primary_gtin
+            SELECT
+                id AS global_product_id,
+                name AS global_product_name,
+                COALESCE(brand, '') AS global_product_brand,
+                primary_gtin
             FROM global_products
             WHERE primary_gtin = :gtin
             LIMIT 1
@@ -109,6 +116,25 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
         else None
     )
 
+    central_product_details: dict[str, Any] = {}
+    identity_rejection: dict[str, Any] = {}
+    if central_link:
+        candidate_product_id = _text(central_link.get("global_product_id"))
+        central_product_details = _central_product_details(conn, candidate_product_id)
+        identity_check = external_product_identity_compatibility(
+            retailer_code=retailer_code,
+            receipt_text=receipt_text,
+            candidate_brand=central_product_details.get("global_product_brand"),
+            candidate_name=(
+                central_product_details.get("global_product_name")
+                or central_link.get("global_product_name")
+            ),
+        )
+        if not identity_check.get("ok"):
+            identity_rejection = identity_check
+            central_link = None
+            central_product_details = {}
+
     if not central_link:
         candidate_gtin_values = []
         for candidate in next_row.get("candidates") or []:
@@ -136,13 +162,26 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
             *candidate_gtin_values,
         )
         if catalog_product:
-            central_link = {
-                "global_product_id": catalog_product.get("global_product_id"),
-                "global_product_name": catalog_product.get("global_product_name"),
-                "primary_gtin": catalog_product.get("primary_gtin"),
-                "source": "catalog_gtin",
-                "link_status": "active",
-            }
+            identity_check = external_product_identity_compatibility(
+                retailer_code=retailer_code,
+                receipt_text=receipt_text,
+                candidate_brand=catalog_product.get("global_product_brand"),
+                candidate_name=catalog_product.get("global_product_name"),
+            )
+            if identity_check.get("ok"):
+                central_link = {
+                    "global_product_id": catalog_product.get("global_product_id"),
+                    "global_product_name": catalog_product.get("global_product_name"),
+                    "primary_gtin": catalog_product.get("primary_gtin"),
+                    "source": "catalog_gtin",
+                    "link_status": "active",
+                }
+                central_product_details = _central_product_details(
+                    conn,
+                    _text(catalog_product.get("global_product_id")),
+                )
+            else:
+                identity_rejection = identity_check
 
     active = bool(central_link)
     central_product_id = _text((central_link or {}).get("global_product_id"))
@@ -154,6 +193,10 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     next_row["central_global_product_name"] = central_product_name
     next_row["is_linked_to_catalog"] = active
     next_row["is_existing_link_for_receipt_item"] = active
+    next_row["central_link_identity_rejected"] = bool(identity_rejection)
+    next_row["central_link_identity_rejection_reason"] = _text(
+        identity_rejection.get("reason")
+    )
 
     if not active:
         # Household- en receipt-specifieke legacyverwijzingen zijn géén
@@ -177,7 +220,11 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     gpc_source_version = ""
 
     if active:
-        details = _central_product_details(conn, central_product_id)
+        details = (
+            central_product_details
+            if central_product_details
+            else _central_product_details(conn, central_product_id)
+        )
         central_product_name = _text(details.get("global_product_name")) or central_product_name
         central_product_brand = _text(details.get("global_product_brand"))
         central_gtin = _text(details.get("primary_gtin"))
