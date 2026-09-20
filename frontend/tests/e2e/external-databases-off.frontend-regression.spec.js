@@ -300,7 +300,63 @@ test.describe('Externe databases OFF candidate flow', () => {
     expect(classifyCalled).toBe(false);
   });
 
-  test('Langdurige OFF-zoekactie toont na Ã©Ã©n seconde de blokkerende R en verwijdert die direct na een fout', async ({ page }) => {
+  test('Langdurig laden van bonartikeltabel toont pas na één seconde het Inhuis-logo', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    let releaseItems;
+    let markItemsStarted;
+
+    const itemsGate = new Promise((resolve) => {
+      releaseItems = resolve;
+    });
+    const itemsStarted = new Promise((resolve) => {
+      markItemsStarted = resolve;
+    });
+
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      markItemsStarted();
+      await itemsGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(receiptItemsPayload()),
+      });
+    });
+
+    await page.route('**/api/inventory/groups', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ group_options: [] }),
+      });
+    });
+
+    await page.goto('/externe-databases');
+    await itemsStarted;
+
+    const overlay = page.getByRole('status', { name: 'Gegevens worden geladen' });
+    await expect(overlay).toHaveCount(0);
+
+    await page.waitForTimeout(850);
+    await expect(overlay).toHaveCount(0);
+
+    await page.waitForTimeout(300);
+    await expect(overlay).toBeVisible();
+    await expect(overlay).toHaveAttribute('aria-busy', 'true');
+
+    const logo = page.getByTestId('table-loading-logo');
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute('src', '/inhuis-app-icon.png');
+    await expect(logo).toHaveCSS('width', '250px');
+    await expect(overlay.getByText('R', { exact: true })).toHaveCount(0);
+
+    releaseItems();
+
+    await expect(page.getByTestId('external-receipt-items-table')).toBeVisible();
+    await expect(overlay).toHaveCount(0);
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+  test('Langdurige OFF-zoekactie toont na één seconde het Inhuis-logo en verwijdert dit direct na een fout', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let releaseSearch;
     const searchGate = new Promise((resolve) => {
@@ -336,14 +392,17 @@ test.describe('Externe databases OFF candidate flow', () => {
 
     await receiptRow.dblclick();
 
-    const overlay = page.getByRole('status', { name: 'Zoekactie wordt uitgevoerd' });
+    const overlay = page.getByRole('status', { name: 'Gegevens worden geladen' });
     await expect(overlay).toHaveCount(0);
 
     await page.waitForTimeout(1100);
     await expect(overlay).toBeVisible();
     await expect(overlay).toHaveAttribute('aria-busy', 'true');
-    await expect(overlay.getByText('R', { exact: true })).toBeVisible();
-    await expect(overlay.getByText('Zoekactie wordt uitgevoerd', { exact: true })).toBeVisible();
+    const logo = page.getByTestId('table-loading-logo');
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute('src', '/inhuis-app-icon.png');
+    await expect(logo).toHaveCSS('width', '250px');
+    await expect(overlay.getByText('R', { exact: true })).toHaveCount(0);
 
     releaseSearch();
 
