@@ -35,6 +35,11 @@ def test_build_product_signals_reuses_existing_taxonomy(monkeypatch):
     )
     monkeypatch.setattr(
         service,
+        "load_gpc_candidate_terms",
+        lambda key: (),
+    )
+    monkeypatch.setattr(
+        service,
         "load_taxonomy_rules",
         lambda: (
             {
@@ -152,3 +157,84 @@ def test_rank_gpc_candidates_matches_meaningful_dutch_compound_tokens():
     assert ranked
     assert ranked[0]["brick_code"] == "10001001"
     assert all(row["brick_code"] != "10001002" for row in ranked)
+
+
+
+def test_boerenmetworst_semantic_bridge_ranks_official_pork_and_mixed_species_bricks(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "classify_product_intent_from_taxonomy",
+        lambda value: "vleeswaren.worst",
+    )
+    monkeypatch.setattr(
+        service,
+        "get_taxonomy_metadata_for_intent",
+        lambda key: {
+            "intent_key": key,
+            "canonical_name": "Worst",
+            "category": "Vleeswaren",
+            "product_type": "Worst",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "load_gpc_candidate_terms",
+        lambda key: (
+            "Pork Sausages - Prepared/Processed",
+            "Mixed Species Sausages - Prepared/Processed",
+            "Meat/Poultry/Other Animals Sausages - Prepared/Processed",
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "load_taxonomy_rules",
+        lambda: (
+            {
+                "intent_key": "vleeswaren.worst",
+                "normalized_term": "boerenmetworst",
+                "priority": 999,
+                "source": "seed",
+            },
+        ),
+    )
+
+    bundle = service.build_product_signals({
+        "product_name": "'t Slagershuys boerenmetworst",
+        "category": "",
+        "external_product_name": "Boerenmetworst",
+        "external_category": "",
+        "external_categories": "",
+        "external_search_text": "slagershuys boerenmetworst",
+    })
+
+    semantic_signals = [
+        signal
+        for signal in bundle["signals"]
+        if signal["source"] == "taxonomy_gpc_candidate_term"
+    ]
+    assert semantic_signals
+    assert all(signal["weight"] == 0.55 for signal in semantic_signals)
+
+    sausage_class = "MEAT/POULTRY/OTHER ANIMALS SAUSAGES - PREPARED/PROCESSED"
+    rows = [
+        _row("10005833", "BEEF SAUSAGES - PREPARED/PROCESSED", sausage_class, "MEAT/POULTRY/OTHER ANIMALS"),
+        _row("10005834", "CHICKEN SAUSAGES - PREPARED/PROCESSED", sausage_class, "MEAT/POULTRY/OTHER ANIMALS"),
+        _row("10005835", "LAMB/MUTTON SAUSAGES - PREPARED/PROCESSED", sausage_class, "MEAT/POULTRY/OTHER ANIMALS"),
+        _row("10005836", "MIXED SPECIES SAUSAGES - PREPARED/PROCESSED", sausage_class, "MEAT/POULTRY/OTHER ANIMALS"),
+        _row("10005837", "TURKEY SAUSAGES - PREPARED/PROCESSED", sausage_class, "MEAT/POULTRY/OTHER ANIMALS"),
+        _row("10005838", "VEAL SAUSAGES - PREPARED/PROCESSED", sausage_class, "MEAT/POULTRY/OTHER ANIMALS"),
+        _row("10005840", "PORK SAUSAGES - PREPARED/PROCESSED", sausage_class, "MEAT/POULTRY/OTHER ANIMALS"),
+        _row("10000007", "CHEESE", "CHEESE", "DAIRY"),
+    ]
+
+    ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
+
+    assert len(ranked) == 5
+    assert {row["brick_code"] for row in ranked[:2]} == {"10005836", "10005840"}
+    assert ranked[0]["match_strength_percent"] >= 60
+    assert ranked[1]["match_strength_percent"] >= 60
+    assert all(
+        row["suggestion_reason"].startswith("Semantische GPC-overeenkomst via producttype:")
+        for row in ranked[:2]
+    )
+    assert all(row["brick_code"] != "10000007" for row in ranked)
