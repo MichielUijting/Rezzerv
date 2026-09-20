@@ -574,6 +574,35 @@ def link_generic_product_with_product_type(
             status="active",
         )
 
+        generic_product = conn.execute(
+            text(
+                """
+                SELECT id, primary_gtin, brand, variant
+                FROM global_products
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": global_product_id},
+        ).mappings().one()
+        if _clean_text(generic_product.get("primary_gtin")):
+            raise ValueError("Generiek Catalogusartikel mag geen GTIN/EAN dragen")
+        if _clean_text(generic_product.get("brand")):
+            raise ValueError("Generiek Catalogusartikel mag geen merk dragen")
+        if _clean_text(generic_product.get("variant")):
+            raise ValueError("Generiek Catalogusartikel mag geen productvariant dragen")
+        conn.execute(
+            text(
+                """
+                UPDATE global_products
+                SET source = 'external_databases_generic',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"id": global_product_id},
+        )
+
         membership = link_global_product_to_inventory_group_with_connection(
             conn,
             global_product_id=global_product_id,
