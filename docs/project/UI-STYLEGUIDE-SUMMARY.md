@@ -1,7 +1,7 @@
 # Inhuis UI-styleguide
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
-Laatst inhoudelijk vastgesteld door de PO: 19 september 2026.
+Laatst inhoudelijk vastgesteld door de PO: 20 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
@@ -51,7 +51,7 @@ Regels:
 Centrale tokens:
 - `--color-brand-primary`: `#1A3E2B` — donkere brand-ink voor tekst, iconen en focus op lichte surfaces;
 - `--color-ui-primary`: `#28A99E` — primaire blauw-groene UI-kleur voor dominante gekleurde surfaces;
-- `--color-ui-primary-text`: `#1A1A1A` — donkere tekst en iconen op primaire blauw-groene surfaces;
+- `--color-ui-primary-text`: `#FFFFFF` — witte tekst en iconen op primaire blauw-groene surfaces;
 - `--color-brand-light`: `#D9F5E0`;
 - `--color-text-primary`: `#1A1A1A`;
 - `--color-text-inverse`: `#FFFFFF`;
@@ -60,12 +60,13 @@ Centrale tokens:
 
 Gebruik:
 - `#28A99E` is de primaire Inhuis-UI-kleur voor header, primaire gekleurde acties, tabelheaders en de meldingenbalk;
-- tekst en iconen op `#28A99E` gebruiken `#1A1A1A`; dit geeft circa 6,0:1 contrast en blijft daarmee goed leesbaar;
+- tekst en iconen op `#28A99E` gebruiken centraal `#FFFFFF`; dit geldt applicatiebreed voor primaire gekleurde surfaces en vervangt de eerdere donkere tekstkleur;
 - `#1A3E2B` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
 - normale tekst gebruikt de primaire donkere tekstkleur;
 - lichte groentinten zijn ondersteunend en concurreren niet met de primaire actie;
 - de legacy-token `--rz-accent` wordt centraal gekoppeld aan `--color-ui-primary`;
 - voeg geen nieuwe dominante merkkleur toe zonder expliciete PO-beslissing en styleguide-update;
+- witte tekst op primaire gekleurde surfaces geldt voor **alle schermen** en omvat minimaal headers, permanente footer-/meldingenbalken, primaire en secundaire gekleurde knoppen en de gekleurde titelrij van tabellen;
 - fout-, waarschuwing- en succeskleuren mogen semantisch afwijken, maar worden niet als alternatieve merkkleur ingezet.
 
 ## Spacing, radius en elevation
@@ -135,7 +136,7 @@ Voor een native mobiele shell geldt hetzelfde route-/stackmodel, maar zonder zic
 
 - standaard headerhoogte: `58px` op grotere schermen en `64px` op mobiel;
 - achtergrond: `--color-ui-primary` (`#28A99E`);
-- schermtitel en subtitel gebruiken donker (`--color-ui-primary-text`, `#1A1A1A`);
+- schermtitel en subtitel gebruiken wit (`--color-ui-primary-text`, `#FFFFFF`);
 - op mobiel staat de schermtitel links en het witte Inhuis-logo rechts;
 - secundaire headercontext zoals subtitel/userbox wordt op het compacte mobiele patroon niet tussen titel en logo gepropt;
 - gebruikerszichtbaar merk is **Inhuis**;
@@ -194,7 +195,7 @@ Vaste kenmerken:
 Voor beide referenties geldt:
 - `64px` blauw-groene header op mobiel;
 - `#28A99E` voor header, primaire actie en permanente meldingenbalk;
-- donkere tekst/iconen (`#1A1A1A`) op primaire blauw-groene surfaces;
+- witte tekst/iconen (`#FFFFFF`) op primaire blauw-groene surfaces;
 - lichtgroen gevlekte pagina-achtergrond;
 - witte of vrijwel witte contentcards;
 - uitsluitend `14px` bodytekst en `16px` titel/hoofdnadruk in de uiteindelijke rendering;
@@ -213,7 +214,7 @@ Voor passieve applicatiemeldingen geldt één centraal patroon:
 - zij verschijnen in een vaste onderste balk over de volle schermbreedte;
 - de balk is permanent zichtbaar, ook wanneer er geen melding is; zonder melding blijft de balk leeg en toont hij geen placeholdertekst;
 - de balk heeft dezelfde hoogte als de header: `58px` op grotere schermen en `64px` op mobiel;
-- achtergrond is `#28A99E` en tekst/iconen zijn donker (`#1A1A1A`);
+- achtergrond is `#28A99E` en tekst/iconen zijn wit (`#FFFFFF`);
 - bij een melding verschijnt de feedbackinhoud op dezelfde balklaag;
 - de melding mag een compacte OK- of detailactie bevatten zolang de balkhoogte gelijk blijft;
 - technische details mogen op verzoek boven de balk worden uitgeklapt, maar de meldingenbalk zelf verandert niet van hoogte;
@@ -271,7 +272,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 
 ## Knoppen en acties
 
-- primaire knop: `#28A99E` met donkere tekst/iconen (`#1A1A1A`);
+- primaire knop: `#28A99E` met witte tekst/iconen (`#FFFFFF`);
 - knoptekst is `14px` en niet vet (`font-weight: 400`);
 - per scherm is bij voorkeur één dominante primaire actie;
 - secundaire acties krijgen minder visueel gewicht;
@@ -282,6 +283,8 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 
 ## Tabellen
 
+De standaard desktop-/matrixweergave toont waar een tabel pagineert **10 zichtbare bodyregels** per pagina. Wanneer minder dan 10 records beschikbaar zijn, mag de tabelhoogte met lege niet-interactieve fillerregels op 10 regels worden gestabiliseerd zodat de lay-out niet springt.
+
 - zoek- en filterregel staat direct boven de kolomtitels;
 - eerste zoekveld heet `Zoek`;
 - filters tonen `Filter` zonder extra label erboven wanneer het bestaande tabelpatroon dat gebruikt;
@@ -291,7 +294,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - titel, filter en cellen van één kolom gebruiken exact dezelfde uitlijning;
 - Nederlandse decimaalnotatie wordt gebruikt waar van toepassing;
 - sortering is beschikbaar waar het tabelcontract dit voorschrijft;
-- tabelheaders gebruiken `#28A99E` met donkere tekst en donkere sorteer-/resize-indicatoren;
+- tabelheaders gebruiken `#28A99E` met witte tekst; sorteerindicatoren op de header zijn eveneens wit en resize-indicatoren blijven visueel herkenbaar;
 - actieve kolom/focus op lichte surfaces gebruikt de donkere brand-ink;
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
 - hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen.
@@ -303,7 +306,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - klikbare iconen hebben een bruikbaar touch-/klikgebied;
 - interactieve elementen hebben een zichtbare focusstatus;
 - kleur is nooit het enige signaal voor betekenis;
-- tekst en iconen op `#28A99E` gebruiken `#1A1A1A` voor voldoende contrast;
+- tekst en iconen op `#28A99E` gebruiken `#FFFFFF`, conform de applicatiebrede primaire-foregroundregel;
 - leesbaarheid en contrast gaan voor decoratieve transparantie.
 
 ## Centrale componenten

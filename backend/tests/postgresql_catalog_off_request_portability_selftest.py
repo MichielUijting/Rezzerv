@@ -84,7 +84,7 @@ def _assert_catalog_sql_portable() -> None:
         raise AssertionError(f"Catalog SQL still contains non-portable constructs: {present}")
 
     required = (
-        'sort_by in {"name", "brand", "primary_gtin", "product_type", "source"}',
+        'sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "source"}',
         "LOWER({order_expression})",
         "COALESCE(is_primary, FALSE)",
         "ORDER BY pib.created_at DESC, pil.id DESC",

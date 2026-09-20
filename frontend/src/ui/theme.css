@@ -1,6 +1,6 @@
 /* Inhuis primary UI surface theme.
    Keep dark brand ink for text/icons on light surfaces; use the canonical
-   blue-green for primary surfaces and dark foregrounds on that color. */
+   blue-green for primary surfaces and white foregrounds on that color. */
 
 :root {
   /* Bridge the legacy login/action token to the canonical Inhuis UI token. */
