@@ -35,6 +35,7 @@ from app.services.external_product_identity_policy import (
 from app.services.gpc_local_catalog_service import classify_gpc_product
 from app.services.off_product_link_service import (
     _upsert_global_product,
+    link_generic_product_with_product_type,
     link_off_product_with_product_type,
 )
 from app.services.off_search_service import _normalize_result, _resolve_receipt_table_line
@@ -64,6 +65,7 @@ GLOBAL_SCOPE_CANDIDATE_ID = "__postgresql_global_scope_candidate__"
 GLOBAL_SCOPE_RECEIPT_TEXT = "AH BOUILLON GLOBAL SCOPE PROOF"
 GLOBAL_SCOPE_RETAILER = "albert-heijn"
 GLOBAL_SCOPE_LEGACY_PRODUCT_ID = "__legacy_household_only_product__"
+GENERIC_SCOPE_NAME = "PostgreSQL Generic Bouillon Proof"
 
 
 def _assert_runtime_create_denied() -> None:
@@ -123,6 +125,26 @@ def _cleanup(conn) -> None:
             ")"
         ),
         {"gtin_charlie": GTIN_CHARLIE},
+    )
+    conn.execute(
+        text(
+            "DELETE FROM global_product_gpc_bricks "
+            "WHERE global_product_id IN ("
+            "SELECT id FROM global_products "
+            "WHERE source = 'external_databases_generic' AND name = :generic_name"
+            ")"
+        ),
+        {"generic_name": GENERIC_SCOPE_NAME},
+    )
+    conn.execute(
+        text(
+            "DELETE FROM product_group_memberships "
+            "WHERE global_product_id IN ("
+            "SELECT id FROM global_products "
+            "WHERE source = 'external_databases_generic' AND name = :generic_name"
+            ")"
+        ),
+        {"generic_name": GENERIC_SCOPE_NAME},
     )
     conn.execute(
         text(
@@ -824,12 +846,111 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
     if stale_row.get("global_product_id") not in (None, ""):
         raise AssertionError(stale_row)
 
+    generic_result = link_generic_product_with_product_type(
+        receipt_item_id=f"purchase-import-line:{GLOBAL_SCOPE_LINE_ID}",
+        generic_product_name=GENERIC_SCOPE_NAME,
+        product_type_assignment={
+            "product_type_id": "gpc:10005897",
+            "gpc_source": "manual",
+            "mapping_source": "manual_gs1_gpc",
+            "confidence_score": 1.0,
+        },
+    )
+    generic_product_id = str(
+        (generic_result.get("global_product") or {}).get("id") or ""
+    )
+    if not generic_product_id:
+        raise AssertionError(generic_result)
+    if str((generic_result.get("global_product") or {}).get("gtin") or ""):
+        raise AssertionError(generic_result)
+
+    with engine.begin() as conn:
+        generic_product = conn.execute(
+            text(
+                """
+                SELECT id, name, brand, primary_gtin, source
+                FROM global_products
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": generic_product_id},
+        ).mappings().one()
+        if generic_product.get("name") != GENERIC_SCOPE_NAME:
+            raise AssertionError(generic_product)
+        if str(generic_product.get("brand") or ""):
+            raise AssertionError(generic_product)
+        if str(generic_product.get("primary_gtin") or ""):
+            raise AssertionError(generic_product)
+        if generic_product.get("source") != "external_databases_generic":
+            raise AssertionError(generic_product)
+
+        household_article = conn.execute(
+            text(
+                """
+                SELECT global_product_id
+                FROM household_articles
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID},
+        ).mappings().one()
+        if household_article.get("global_product_id") != GLOBAL_SCOPE_LEGACY_PRODUCT_ID:
+            raise AssertionError(household_article)
+
+        purchase_line = conn.execute(
+            text(
+                """
+                SELECT matched_global_product_id
+                FROM purchase_import_lines
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": GLOBAL_SCOPE_LINE_ID},
+        ).mappings().one()
+        if purchase_line.get("matched_global_product_id") not in (None, ""):
+            raise AssertionError(purchase_line)
+
+    generic_projected = list_external_receipt_items(limit=500)
+    generic_matching = [
+        item
+        for item in generic_projected.get("items") or []
+        if str(item.get("receipt_line_text") or "").strip() == GLOBAL_SCOPE_RECEIPT_TEXT
+    ]
+    if len(generic_matching) != 1:
+        raise AssertionError(generic_matching)
+    generic_row = generic_matching[0]
+    if generic_row.get("central_link_active") is not True:
+        raise AssertionError(generic_row)
+    if str(generic_row.get("global_product_id") or "") != generic_product_id:
+        raise AssertionError(generic_row)
+    if str(generic_row.get("linked_candidate_name") or "") != GENERIC_SCOPE_NAME:
+        raise AssertionError(generic_row)
+    if str(generic_row.get("linked_gtin") or ""):
+        raise AssertionError(generic_row)
+    if str(generic_row.get("linked_product_type_id") or "") != "gpc:10005897":
+        raise AssertionError(generic_row)
+
     with engine.begin() as conn:
         _cleanup(conn)
+        conn.execute(
+            text(
+                """
+                DELETE FROM global_products
+                WHERE source = 'external_databases_generic'
+                  AND name = :generic_name
+                """
+            ),
+            {"generic_name": GENERIC_SCOPE_NAME},
+        )
 
     print("POSTGRESQL_OFF_GLOBAL_LINK_IGNORES_HOUSEHOLD_PRODUCT_GREEN")
     print("POSTGRESQL_EXTERNAL_RECEIPT_MAIN_TABLE_CENTRAL_LINK_GREEN")
     print("POSTGRESQL_EXTERNAL_RECEIPT_PRIVATE_LABEL_STALE_LINK_SUPPRESSED_GREEN")
+    print("POSTGRESQL_GENERIC_CATALOG_LINK_NO_GTIN_GREEN")
+    print("POSTGRESQL_GENERIC_CATALOG_LINK_PRESERVES_HOUSEHOLD_GREEN")
 
 
 def _assert_household_only_link_not_projected_as_global() -> None:
