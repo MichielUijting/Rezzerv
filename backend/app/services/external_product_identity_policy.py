@@ -26,7 +26,7 @@ def _clean(value: Any) -> str:
 def _normalize(value: Any) -> str:
     normalized = _clean(value).lower().replace("-", " ").replace(".", " ")
     normalized = re.sub(
-        r"[^a-z0-9áéíóúàèìòùäëïöüâêîôûçñ\\s]+",
+        r"[^a-z0-9áéíóúàèìòùäëïöüâêîôûçñ\s]+",
         " ",
         normalized,
         flags=re.IGNORECASE,
