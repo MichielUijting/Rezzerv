@@ -302,7 +302,8 @@ De standaard desktop-/matrixweergave toont waar een tabel pagineert **10 zichtba
 - tabelheaders gebruiken `#28A99E` met witte tekst; sorteerindicatoren op de header zijn eveneens wit en resize-indicatoren blijven visueel herkenbaar;
 - actieve kolom/focus op lichte surfaces gebruikt de donkere brand-ink;
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
-- hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen.
+- hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen;
+- wanneer een tabel intern verticaal scrolt, blijven de kolomtitelrij en de zoek-/filterrij samen als één sticky kopblok zichtbaar; de titelrij staat op `top: 0` en de zoek-/filterrij blijft direct onder de titelrij op de gemeten of centrale headerhoogte, zonder schermspecifieke sticky-hack.
 
 ### Tabel-loadingoverlay
 
