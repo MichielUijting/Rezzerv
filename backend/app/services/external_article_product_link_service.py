@@ -58,6 +58,7 @@ def _complete_global_product_link_data(conn, global_product_id: str) -> dict[str
             SELECT
                 gp.id,
                 gp.name,
+                COALESCE(gp.source, '') AS product_source,
                 COALESCE(gp.primary_gtin, '') AS primary_gtin,
                 EXISTS (
                     SELECT 1
@@ -89,26 +90,37 @@ def _complete_global_product_link_data(conn, global_product_id: str) -> dict[str
     if not row:
         return {"complete": False, "reason": "Het universele artikel bestaat niet"}
 
+    product_source = str(row.get("product_source") or "").strip().lower()
     primary_gtin = str(row.get("primary_gtin") or "").strip()
     has_valid_primary_gtin = bool(re.fullmatch(r"[0-9]{8,14}", primary_gtin))
     has_matching_gtin_identity = bool(row.get("has_matching_gtin_identity"))
     has_active_official_gpc = bool(row.get("has_active_official_gpc"))
+    is_generic_catalog_product = product_source == "external_databases_generic"
 
     reasons = []
-    if not has_valid_primary_gtin:
-        reasons.append("geldige GTIN/EAN ontbreekt")
-    if not has_matching_gtin_identity:
-        reasons.append("bijpassende GTIN-identiteit ontbreekt")
-    if not has_active_official_gpc:
-        reasons.append("officieel GS1 GPC-Producttype ontbreekt")
+    if is_generic_catalog_product:
+        if primary_gtin:
+            reasons.append("generiek Catalogusartikel mag geen GTIN/EAN dragen")
+        if not has_active_official_gpc:
+            reasons.append("officieel GS1 GPC-Producttype ontbreekt")
+    else:
+        if not has_valid_primary_gtin:
+            reasons.append("geldige GTIN/EAN ontbreekt")
+        if not has_matching_gtin_identity:
+            reasons.append("bijpassende GTIN-identiteit ontbreekt")
+        if not has_active_official_gpc:
+            reasons.append("officieel GS1 GPC-Producttype ontbreekt")
 
     return {
         "complete": not reasons,
         "reason": "; ".join(reasons),
+        "link_mode": "generic" if is_generic_catalog_product else "exact",
+        "product_source": product_source,
         "primary_gtin": primary_gtin,
         "has_valid_primary_gtin": has_valid_primary_gtin,
         "has_matching_gtin_identity": has_matching_gtin_identity,
         "has_active_official_gpc": has_active_official_gpc,
+        "is_generic_catalog_product": is_generic_catalog_product,
     }
 
 
