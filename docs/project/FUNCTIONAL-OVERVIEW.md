@@ -10,7 +10,16 @@ Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zi
 
 ## Productcatalogus en externe databases
 
-Rezzerv scheidt centrale productkennis van huishoudartikelen en voorraad. Externe bronnen kunnen productgegevens verrijken. **Catalogus en Externe databases zijn platformbreed en gelden voor alle huishoudens.** Centrale catalogusmutaties zijn platformbeheeracties. Een huishoudspecifieke koppeling op een `household_article` is geen globale Cataloguskoppeling en mag een platformbrede externe-databasekoppeling niet blokkeren of als globale status worden geprojecteerd. Wanneer een bonartikel zelf een expliciete huismerkidentiteit bevat (bijvoorbeeld `AH` bij Albert Heijn), mogen externe kandidaten met een conflicterend merk niet als geldige kandidaat worden aangeboden, bevestigd of als actieve Cataloguskoppeling worden geprojecteerd.
+Rezzerv scheidt centrale productkennis van huishoudartikelen en voorraad. Externe bronnen kunnen productgegevens verrijken. **Catalogus en Externe databases zijn platformbreed en gelden voor alle huishoudens.** Centrale catalogusmutaties zijn platformbeheeracties. Een huishoudspecifieke koppeling op een `household_article` is geen globale Cataloguskoppeling en mag een platformbrede externe-databasekoppeling niet blokkeren of als globale status worden geprojecteerd.
+
+Voor bonartikelen bestaan twee geldige centrale koppelvormen:
+
+- **Exact product:** wanneer een specifieke productidentiteit betrouwbaar bekend is, wordt gekoppeld aan een Catalogusproduct met geldige GTIN/EAN, bijpassende GTIN-identiteit en officiële GS1 GPC Brick. Een expliciete huismerkidentiteit in de bontekst (bijvoorbeeld `AH` bij Albert Heijn) blijft daarbij fail-closed: een extern exact product met conflicterend merk mag niet worden bevestigd.
+- **Generiek artikel:** wanneer de kassabon het soort artikel wel betrouwbaar bepaalt maar merk, variant of GTIN niet, mag de gebruiker bewust informatieverlies accepteren en koppelen aan een generiek centraal Catalogusartikel. Dit artikel heeft een generieke naam en een officiële GS1 GPC Brick als classificatie-authority, maar **geen verplichte GTIN/EAN, merk of variant**. Voorbeeld: `AH BOUILLON` kan centraal worden gekoppeld aan `Bouillon` met de gekozen officiële Brick, zonder te doen alsof bekend is of het kip-, rund- of een andere exacte bouillonvariant was.
+
+Automatisch zoeken blijft conservatief bij productidentiteitsconflicten. **Zelf zoeken** mag breder resultaten tonen, inclusief een zichtbaar merkconflict; zo'n conflicterend resultaat mag niet als exact product worden gekoppeld. De generieke koppeling is een aparte expliciete keuze en is niet afhankelijk van een specifieke externe productkandidaat.
+
+Voor voorraad, Bijna op en boodschappen mag het generieke artikel leidend zijn wanneer het huishouden vooral wil weten of het artikeltype aanwezig of nodig is. Een tijdelijke of huishoudspecifieke voorkeur zoals `kip` bij `Bouillon` is geen afgeleide centrale productidentiteit; zo'n wens wordt door de gebruiker op huishoud-/boodschappenniveau vastgelegd, bijvoorbeeld in de bestaande opmerking van de boodschappenregel.
 
 ## Prognoses en Bijna op
 
