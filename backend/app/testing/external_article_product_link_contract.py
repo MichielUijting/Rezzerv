@@ -51,6 +51,7 @@ def _create_test_database():
                     id TEXT PRIMARY KEY,
                     primary_gtin TEXT,
                     name TEXT NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'user',
                     status TEXT NOT NULL DEFAULT 'active'
                 )
                 """
@@ -178,42 +179,56 @@ def _create_test_database():
                     id,
                     primary_gtin,
                     name,
+                    source,
                     status
                 ) VALUES
                     (
                         'product-a',
                         '8710000000001',
                         'Volledig artikel A',
+                        'user',
                         'active'
                     ),
                     (
                         'product-b',
                         '8710000000002',
                         'Volledig artikel B',
+                        'user',
                         'active'
                     ),
                     (
                         'product-no-gtin',
                         NULL,
                         'Artikel zonder GTIN',
+                        'user',
+                        'active'
+                    ),
+                    (
+                        'product-generic',
+                        NULL,
+                        'Generiek artikel',
+                        'external_databases_generic',
                         'active'
                     ),
                     (
                         'product-no-identity',
                         '8710000000003',
                         'Artikel zonder GTIN-identiteit',
+                        'user',
                         'active'
                     ),
                     (
                         'product-no-gpc',
                         '8710000000004',
                         'Artikel zonder GPC',
+                        'user',
                         'active'
                     ),
                     (
                         'product-inactive',
                         '8710000000005',
                         'Inactief Product',
+                        'user',
                         'inactive'
                     )
                 """
@@ -293,6 +308,12 @@ def _create_test_database():
                     (
                         'membership-b',
                         'product-b',
+                        'gpc:10000001',
+                        1
+                    ),
+                    (
+                        'membership-generic',
+                        'product-generic',
                         'gpc:10000001',
                         1
                     ),
@@ -437,6 +458,18 @@ def run_contract() -> None:
             "geldige GTIN/EAN ontbreekt",
         )
 
+        generic = confirm_global_external_article_product_link(
+            conn,
+            retailer_code="aldi",
+            receipt_text="Generiek artikel",
+            global_product_id="product-generic",
+            confirmed_by="contract-test-generic",
+        )
+        _assert(
+            generic["global_product_id"] == "product-generic",
+            "Generiek artikel zonder GTIN is niet geldig bevestigd",
+        )
+
         _expect_value_error(
             lambda: confirm_global_external_article_product_link(
                 conn,
@@ -528,6 +561,21 @@ def run_contract() -> None:
             "Volledige koppeling is ten onrechte gedeactiveerd",
         )
 
+        generic_status = conn.execute(
+            text(
+                """
+                SELECT status
+                FROM external_article_product_links
+                WHERE retailer_code = 'aldi'
+                  AND receipt_text_normalized = 'generiek artikel'
+                """
+            )
+        ).scalar_one()
+        _assert(
+            generic_status == "confirmed",
+            "Geldige generieke koppeling is ten onrechte gedeactiveerd",
+        )
+
         deactivated = deactivate_global_external_article_product_link(
             conn,
             retailer_code="ALDI",
@@ -558,7 +606,8 @@ def run_contract() -> None:
         )
 
     print("PASS: volledige artikelen kunnen worden gekoppeld")
-    print("PASS: GTIN/EAN is verplicht")
+    print("PASS: GTIN/EAN is verplicht voor exacte producten")
+    print("PASS: expliciete generieke producten zonder GTIN zijn geldig met officiële GPC")
     print("PASS: passende GTIN-identiteit is verplicht")
     print("PASS: officieel GS1 GPC-Producttype is verplicht")
     print("PASS: inactieve universele artikelen worden geweigerd")

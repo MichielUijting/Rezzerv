@@ -11,7 +11,10 @@ from app.api.shopping_list_routes import router as shopping_list_router
 from app.services.gpc_import_service import import_gs1_gpc_nl, require_admin_key
 from app.services.gpc_local_catalog_service import classify_gpc_product, import_bundled_gpc_catalog
 from app.services.external_product_candidate_store import promote_external_product_candidate_with_product_type
-from app.services.off_product_link_service import link_off_product_with_product_type
+from app.services.off_product_link_service import (
+    link_generic_product_with_product_type,
+    link_off_product_with_product_type,
+)
 from app.services.product_group_crud_store import create_product_group, delete_product_group, list_product_groups, update_product_group
 from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
@@ -111,6 +114,25 @@ def external_off_product_type_link(payload: dict[str, Any] = Body(default_factor
         raise HTTPException(status_code=400, detail='Producttypebeslissing is verplicht')
     try:
         result = link_off_product_with_product_type(receipt_item_id=str(payload.get('receipt_item_id') or '').strip(), off_product=payload.get('off_product') or {}, product_type_assignment=assignment)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
+
+
+@router.post('/api/external-products/generic/link')
+def external_generic_product_type_link(payload: dict[str, Any] = Body(default_factory=dict)):
+    require_platform_permission_from_session(
+        'platform.external_products.link_existing'
+    )
+    assignment = payload.get('product_type_assignment')
+    if not isinstance(assignment, dict):
+        raise HTTPException(status_code=400, detail='Producttypebeslissing is verplicht')
+    try:
+        result = link_generic_product_with_product_type(
+            receipt_item_id=str(payload.get('receipt_item_id') or '').strip(),
+            generic_product_name=str(payload.get('generic_product_name') or '').strip(),
+            product_type_assignment=assignment,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return result

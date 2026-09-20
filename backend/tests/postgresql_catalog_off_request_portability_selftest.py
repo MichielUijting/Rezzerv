@@ -9,6 +9,7 @@ CATALOG_PATH = BACKEND_ROOT / "app" / "api" / "catalog_routes.py"
 OFF_LINK_PATH = BACKEND_ROOT / "app" / "services" / "off_product_link_service.py"
 OFF_SEARCH_PATH = BACKEND_ROOT / "app" / "services" / "off_search_service.py"
 ARTICLE_UI_PATH = BACKEND_ROOT / "app" / "services" / "external_article_ui_projection.py"
+ARTICLE_LINK_PATH = BACKEND_ROOT / "app" / "services" / "external_article_product_link_service.py"
 CANDIDATE_STORE_PATH = BACKEND_ROOT / "app" / "services" / "external_product_candidate_store.py"
 IDENTITY_POLICY_PATH = BACKEND_ROOT / "app" / "services" / "external_product_identity_policy.py"
 
@@ -57,7 +58,7 @@ def _text_sql_literals(source: str) -> list[str]:
 
 def _assert_no_runtime_ddl() -> None:
     failures: list[str] = []
-    for path in (CATALOG_PATH, OFF_LINK_PATH, OFF_SEARCH_PATH, ARTICLE_UI_PATH, CANDIDATE_STORE_PATH):
+    for path in (CATALOG_PATH, OFF_LINK_PATH, OFF_SEARCH_PATH, ARTICLE_UI_PATH, ARTICLE_LINK_PATH, CANDIDATE_STORE_PATH):
         source = path.read_text(encoding="utf-8-sig")
         for index, sql in enumerate(_text_sql_literals(source), start=1):
             for label, pattern in FORBIDDEN_SQL_PATTERNS.items():
@@ -232,12 +233,68 @@ def _assert_private_label_identity_guard_wired() -> None:
     print("POSTGRESQL_OFF_PRIVATE_LABEL_IDENTITY_STATIC_GREEN")
 
 
+def _assert_generic_catalog_link_contract() -> None:
+    off_source = OFF_LINK_PATH.read_text(encoding="utf-8-sig")
+    search_source = OFF_SEARCH_PATH.read_text(encoding="utf-8-sig")
+    ui_source = ARTICLE_UI_PATH.read_text(encoding="utf-8-sig")
+    link_source = ARTICLE_LINK_PATH.read_text(encoding="utf-8-sig")
+
+    required_off = (
+        "def link_generic_product_with_product_type",
+        "gtin=None",
+        'source="external_databases_generic"',
+        'confirmed_by="external_databases_generic_link"',
+    )
+    missing_off = [token for token in required_off if token not in off_source]
+    if missing_off:
+        raise AssertionError(f"Generieke Cataloguskoppeling incompleet: {missing_off}")
+
+    required_link = (
+        'is_generic_catalog_product = product_source == "external_databases_generic"',
+        '"link_mode": "generic" if is_generic_catalog_product else "exact"',
+        '"is_generic_catalog_product": is_generic_catalog_product',
+    )
+    missing_link = [token for token in required_link if token not in link_source]
+    if missing_link:
+        raise AssertionError(
+            f"Centraal exact/generiek completeness-contract incompleet: {missing_link}"
+        )
+
+    required_ui = (
+        'confirmed_by")) == "external_databases_generic_link"',
+        '"central_link_mode"',
+        '"is_generic_catalog_link"',
+    )
+    missing_ui = [token for token in required_ui if token not in ui_source]
+    if missing_ui:
+        raise AssertionError(f"Generieke projectie incompleet: {missing_ui}")
+
+    manual_start = search_source.find('    if mode == "manual":')
+    manual_end = search_source.find(
+        "    else:\n        query, provider, results, query_diagnostics = _automatic_search",
+        manual_start,
+    )
+    if manual_start < 0 or manual_end < 0:
+        raise AssertionError("Handmatige OFF-zoekroute kon niet worden afgebakend")
+    manual_source = search_source[manual_start:manual_end]
+    if 'result["identity_compatible"] = bool(identity_check.get("ok"))' not in manual_source:
+        raise AssertionError("Handmatige OFF-resultaten missen identiteitswaarschuwing")
+    if 'if not identity_check.get("ok"):\n                continue' in manual_source:
+        raise AssertionError(
+            "Handmatige OFF-zoekroute filtert conflicterende merken nog volledig weg"
+        )
+
+    print("POSTGRESQL_GENERIC_CATALOG_LINK_STATIC_GREEN")
+    print("POSTGRESQL_OFF_MANUAL_SEARCH_BROAD_STATIC_GREEN")
+
+
 def main() -> None:
     for path in (
         CATALOG_PATH,
         OFF_LINK_PATH,
         OFF_SEARCH_PATH,
         ARTICLE_UI_PATH,
+        ARTICLE_LINK_PATH,
         CANDIDATE_STORE_PATH,
         IDENTITY_POLICY_PATH,
     ):
@@ -250,6 +307,7 @@ def main() -> None:
     _assert_off_identity_boolean_bind()
     _assert_global_external_link_authority()
     _assert_private_label_identity_guard_wired()
+    _assert_generic_catalog_link_contract()
     print("POSTGRESQL_CATALOG_OFF_REQUEST_PORTABILITY_STATIC_SELFTEST_GREEN")
 
 
