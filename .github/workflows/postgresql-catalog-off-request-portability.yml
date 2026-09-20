@@ -124,6 +124,8 @@ jobs:
           grep -F 'POSTGRESQL_OFF_RECEIPT_TABLE_NUMERIC_QUANTITY_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_HOUSEHOLD_ONLY_LINK_IGNORED_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_OFF_GLOBAL_LINK_IGNORES_HOUSEHOLD_PRODUCT_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_EXTERNAL_RECEIPT_MAIN_TABLE_CENTRAL_LINK_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_GPC_CODE_PROPAGATION_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_EXPLICIT_GPC_OFFICIAL_REFERENCE_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN' /tmp/catalog-off-dml.log
