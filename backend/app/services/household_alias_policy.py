@@ -59,9 +59,9 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
             WITH source_identities AS (
                 SELECT
                     pil.matched_household_article_id AS household_article_id,
-                    COALESCE(epc.retailer_code, rt.store_chain, rt.store_name, '') AS retailer_code,
-                    COALESCE(epc.receipt_line_text, pil.article_name_raw, '') AS receipt_line_text,
-                    COALESCE(epc.external_article_code, pil.external_article_code, '') AS external_article_code,
+                    COALESCE(NULLIF(rt.store_chain, ''), NULLIF(rt.store_name, ''), NULLIF(epc.retailer_code, ''), '') AS retailer_code,
+                    COALESCE(NULLIF(pil.article_name_raw, ''), NULLIF(epc.receipt_line_text, ''), '') AS receipt_line_text,
+                    COALESCE(NULLIF(pil.external_article_code, ''), NULLIF(epc.external_article_code, ''), '') AS external_article_code,
                     COALESCE(epc.updated_at, epc.created_at, pil.updated_at, pil.created_at) AS source_at
                 FROM purchase_import_lines pil
                 JOIN purchase_import_batches pib ON pib.id = pil.batch_id
@@ -78,12 +78,14 @@ def _central_catalog_images_for_household_articles(conn, text, article_rows: lis
 
                 SELECT
                     rtl.matched_article_id AS household_article_id,
-                    COALESCE(rt.store_chain, rt.store_name, '') AS retailer_code,
-                    COALESCE(rtl.corrected_raw_label, rtl.raw_label, rtl.normalized_label, '') AS receipt_line_text,
-                    COALESCE(rtl.external_article_code, '') AS external_article_code,
-                    COALESCE(rt.updated_at, rt.created_at) AS source_at
+                    COALESCE(NULLIF(rt.store_chain, ''), NULLIF(rt.store_name, ''), NULLIF(epc.retailer_code, ''), '') AS retailer_code,
+                    COALESCE(NULLIF(rtl.corrected_raw_label, ''), NULLIF(rtl.raw_label, ''), NULLIF(rtl.normalized_label, ''), NULLIF(epc.receipt_line_text, ''), '') AS receipt_line_text,
+                    COALESCE(NULLIF(rtl.external_article_code, ''), NULLIF(epc.external_article_code, ''), '') AS external_article_code,
+                    COALESCE(epc.updated_at, epc.created_at, rt.updated_at, rt.created_at) AS source_at
                 FROM receipt_table_lines rtl
                 JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+                LEFT JOIN external_product_candidates epc
+                  ON epc.receipt_line_id = rtl.id
                 JOIN household_articles source_ha
                   ON source_ha.id = rtl.matched_article_id
                  AND source_ha.household_id = rt.household_id
