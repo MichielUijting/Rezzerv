@@ -306,7 +306,7 @@ De standaard desktop-/matrixweergave toont waar een tabel pagineert **10 zichtba
 - klikbare iconen hebben een bruikbaar touch-/klikgebied;
 - interactieve elementen hebben een zichtbare focusstatus;
 - kleur is nooit het enige signaal voor betekenis;
-- tekst en iconen op `#28A99E` gebruiken `#1A1A1A` voor voldoende contrast;
+- tekst en iconen op `#28A99E` gebruiken `#FFFFFF`, conform de applicatiebrede primaire-foregroundregel;
 - leesbaarheid en contrast gaan voor decoratieve transparantie.
 
 ## Centrale componenten
