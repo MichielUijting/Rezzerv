@@ -39,11 +39,11 @@
 
 .rz-catalog-col-select { width: 44px; }
 .rz-catalog-col-name { width: 220px; }
+.rz-catalog-col-kind { width: 125px; }
 .rz-catalog-col-brand { width: 130px; }
 .rz-catalog-col-gtin { width: 145px; }
-.rz-catalog-col-product-type { width: 200px; }
-.rz-catalog-col-source { width: 145px; }
-.rz-catalog-col-household-count { width: 135px; }
+.rz-catalog-col-product-type { width: 230px; }
+.rz-catalog-col-household-count { width: 150px; }
 
 .rz-catalog-name-with-image {
   display: flex;
@@ -304,3 +304,12 @@
     width: 100%;
   }
 }
+
+.rz-catalog-filler-row {
+  pointer-events: none;
+}
+
+.rz-catalog-table tbody tr.rz-catalog-filler-row:hover {
+  background: inherit;
+}
+
