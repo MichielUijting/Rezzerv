@@ -203,6 +203,42 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
+  test('Generiek boerenmetworst toont automatisch GPC-kandidaten zonder handmatig zoeken', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    const classifyBodies = [];
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ receipt_item_id: 'purchase-import-line:boerenmetworst-generic', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'boerenmetworst-generic', context_key: 'ctx-boerenmetworst-generic', purchase_import_line_id: 'boerenmetworst-generic', receipt_line_text: "'t Slagershuys boerenmetworst", retailer_code: 'Picnic', retailer_article_number: '', gtin: '', quantity_label: '1', price: 3.49, candidate_status: 'no_candidate', is_receipt_item_placeholder: true, is_linked_to_catalog: false, is_linkable_to_catalog: false, candidates: [] }] }) });
+    });
+    await page.route('**/api/external-products/off/search', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'found', provider: 'search_a_licious', query: 'slagershuys boerenmetworst', mode: 'automatic', mutated: false, results: [{ gtin: '5413848467457', product_name: 'Boerenmetworst', brand: '', category: 'Vleeswaren, worst', categories: 'Vleeswaren, worst', score: 0.883, automatic_rank_score: 0.883, confidence: 'high' }] }) });
+    });
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      classifyBodies.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'not_classified', reason: 'insufficient_confidence', suggestions: [{ brick_code: '10001001', brick_description: 'Worst en worstproducten', class_description: 'Vleeswaren', family_description: 'Vleesproducten', segment_description: 'Voedingsmiddelen', confidence: 0.86, confidence_label: 'hoog', match_strength_percent: 86, suggestion_reason: 'Overeenkomst met productgegevens: boerenmetworst, vleeswaren' }, { brick_code: '10001002', brick_description: 'Gedroogde vleesproducten', class_description: 'Vleeswaren', family_description: 'Vleesproducten', segment_description: 'Voedingsmiddelen', confidence: 0.68, confidence_label: 'redelijk', match_strength_percent: 68, suggestion_reason: 'Overeenkomst met productgegevens: vleeswaren' }] }) });
+    });
+    await page.goto('/externe-databases');
+    const receiptRow = page.getByTestId('external-receipt-items-table').locator('tbody tr', { hasText: "'t Slagershuys boerenmetworst" });
+    await expect(receiptRow).toBeVisible();
+    await receiptRow.dblclick();
+    await expect(page.getByLabel('Generieke artikelnaam')).toHaveValue("'t Slagershuys boerenmetworst");
+    const autoCandidates = page.getByTestId('external-auto-gpc-candidates');
+    await expect(autoCandidates).toBeVisible();
+    await expect(autoCandidates).toContainText('Waarschijnlijke GS1 GPC Bricks');
+    await expect(autoCandidates).toContainText('10001001');
+    await expect(autoCandidates).toContainText('86%');
+    await expect(autoCandidates).toContainText('boerenmetworst');
+    await expect(page.getByTestId('external-manual-gpc-search')).toBeVisible();
+    await expect(page.getByLabel('Zoek op Brickcode of producttype')).toHaveValue('');
+    await page.getByTestId('external-auto-gpc-candidate-list').getByRole('option').first().click();
+    await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('gpc:10001001');
+    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('GPC-kandidaat bevestigd');
+    await expect(page.getByRole('button', { name: 'Koppel als generiek artikel', exact: true })).toBeEnabled();
+    await expect.poll(() => classifyBodies.length).toBeGreaterThan(0);
+    expect(classifyBodies.some((body) => String(body?.product_name || '').includes('boerenmetworst'))).toBe(true);
+    expect(classifyBodies.some((body) => String(body?.search_text || '').includes('boerenmetworst'))).toBe(true);
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
   test('Bananen gebruiken de expliciete officiële GPC Brick uit OFF zonder classificatie-omweg', async ({ page }) => {
     let classifyCalled = false;
     let exactCatalogLookupCalled = false;
@@ -414,6 +450,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let genericLinked = false;
     let genericLinkBody = null;
+    let releaseLateAutomaticGpc;
+    const lateAutomaticGpcGate = new Promise((resolve) => { releaseLateAutomaticGpc = resolve; });
 
     const receiptPayload = () => ({
       items: [{
@@ -499,6 +537,27 @@ test.describe('Externe databases OFF candidate flow', () => {
       });
     });
 
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      await lateAutomaticGpcGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          status: 'not_classified',
+          reason: 'insufficient_confidence',
+          suggestions: [{
+            brick_code: '10000262',
+            brick_description: 'Soups - Prepared (Shelf Stable)',
+            confidence: 0.71,
+            confidence_label: 'redelijk',
+            match_strength_percent: 71,
+            suggestion_reason: 'Overeenkomst met productgegevens: Bouillon',
+          }],
+        }),
+      });
+    });
+
     await page.route('**/api/catalog?primary_gtin=*&limit=20', async (route) => {
       await route.fulfill({
         status: 200,
@@ -571,6 +630,9 @@ test.describe('Externe databases OFF candidate flow', () => {
     const gpcResults = page.getByTestId('external-gpc-search-results');
     await expect(gpcResults).toContainText('10000262');
     await expect(gpcResults).toContainText('Soups - Prepared (Shelf Stable)');
+
+    releaseLateAutomaticGpc();
+    await expect(gpcResults).toContainText('10000262');
     await gpcResults.getByRole('option').click();
 
     await expect(page.getByRole('button', { name: 'Koppel als generiek artikel', exact: true })).toBeEnabled();

@@ -134,3 +134,21 @@ def test_rank_gpc_candidates_never_returns_more_than_five():
 
     assert len(ranked) == 5
     assert len({row["brick_code"] for row in ranked}) == 5
+
+
+def test_rank_gpc_candidates_matches_meaningful_dutch_compound_tokens():
+    signals = {"intent_key": "", "signals": [{
+        "text": "boerenmetworst",
+        "normalized": "boerenmetworst",
+        "tokens": ["boerenmetworst"],
+        "source": "product_name",
+        "weight": 1.45,
+    }]}
+    rows = [
+        _row("10001001", "Worst en worstproducten", "Vleeswaren", "Vleesproducten"),
+        _row("10001002", "Roomkaas", "Kaas", "Zuivel"),
+    ]
+    ranked = service.rank_gpc_candidates(rows, signals, limit=5)
+    assert ranked
+    assert ranked[0]["brick_code"] == "10001001"
+    assert all(row["brick_code"] != "10001002" for row in ranked)

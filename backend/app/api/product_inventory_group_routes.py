@@ -101,7 +101,12 @@ def external_candidate_product_type_link(payload: dict[str, Any] = Body(default_
 
 @router.post('/api/external-products/gpc/classify')
 def external_product_gpc_classify(payload: dict[str, Any] = Body(default_factory=dict)):
-    return classify_gpc_product(product_name=_payload_text(payload, 'product_name', 'candidate_name', 'name'), category=_payload_text(payload, 'category', 'categories'), explicit_gpc_brick_code=_payload_text(payload, 'gpc_brick_code', 'gpcCategoryCode'))
+    return classify_gpc_product(
+        product_name=_payload_text(payload, 'product_name', 'candidate_name', 'name'),
+        category=_payload_text(payload, 'category', 'categories'),
+        explicit_gpc_brick_code=_payload_text(payload, 'gpc_brick_code', 'gpcCategoryCode'),
+        search_text=_payload_text(payload, 'search_text', 'receipt_line_text'),
+    )
 
 
 @router.post('/api/external-products/off/link')

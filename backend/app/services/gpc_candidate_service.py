@@ -185,9 +185,23 @@ def _signal_match(signal: dict[str, Any], haystacks: dict[str, str]) -> tuple[fl
             location_score += 5.0
 
         haystack_tokens = set(_meaningful_tokens(haystack))
-        overlap = len(set(signal_tokens) & haystack_tokens)
+        signal_token_set = set(signal_tokens)
+        overlap = len(signal_token_set & haystack_tokens)
         if signal_tokens and overlap:
-            location_score += 3.0 * (overlap / len(set(signal_tokens)))
+            location_score += 3.0 * (overlap / len(signal_token_set))
+        elif signal_tokens and haystack_tokens:
+            partial_overlap = 0
+            for signal_token in signal_token_set:
+                if len(signal_token) < 5:
+                    continue
+                if any(
+                    len(haystack_token) >= 5
+                    and (signal_token in haystack_token or haystack_token in signal_token)
+                    for haystack_token in haystack_tokens
+                ):
+                    partial_overlap += 1
+            if partial_overlap:
+                location_score += 1.8 * (partial_overlap / len(signal_token_set))
 
         if len(signal_text) >= 5 and len(haystack) >= 5:
             fuzzy = SequenceMatcher(None, signal_text, haystack).ratio()
