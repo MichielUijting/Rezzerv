@@ -159,6 +159,69 @@ def bundled_official_gpc_bricks() -> list[dict[str, Any]]:
     return [dict(row) for row in _bundled_rows()]
 
 
+def list_official_gpc_bricks(conn: Connection) -> list[dict[str, Any]]:
+    """Return the complete read-only official GPC reference for candidate ranking."""
+    tables = _tables(conn)
+    rows: list[dict[str, Any]] = []
+    known: set[str] = set()
+    required = {"gpc_bricks", "gpc_classes", "gpc_families", "gpc_segments"}
+    if required.issubset(tables):
+        has_translations = "gpc_translations" in tables
+        brick_label = ("COALESCE((SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='brick' AND tr.entity_code=b.brick_code AND tr.language_code='nl' LIMIT 1), b.description)" if has_translations else "b.description")
+        class_label = ("COALESCE((SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='class' AND tr.entity_code=c.class_code AND tr.language_code='nl' LIMIT 1), c.description)" if has_translations else "c.description")
+        family_label = ("COALESCE((SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='family' AND tr.entity_code=f.family_code AND tr.language_code='nl' LIMIT 1), f.description)" if has_translations else "f.description")
+        segment_label = ("COALESCE((SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='segment' AND tr.entity_code=s.segment_code AND tr.language_code='nl' LIMIT 1), s.description)" if has_translations else "s.description")
+        canonical = conn.execute(text(f"""
+            SELECT b.brick_code, {brick_label} AS brick_description,
+                   b.description AS brick_description_en,
+                   c.class_code, {class_label} AS class_description,
+                   f.family_code, {family_label} AS family_description,
+                   s.segment_code, {segment_label} AS segment_description,
+                   'gpc_bricks' AS reference_source
+            FROM gpc_bricks b
+            JOIN gpc_classes c ON c.class_code = b.class_code
+            JOIN gpc_families f ON f.family_code = c.family_code
+            JOIN gpc_segments s ON s.segment_code = f.segment_code
+            ORDER BY b.brick_code
+        """)).mappings().all()
+        for item in canonical:
+            row = dict(item)
+            code = str(row.get("brick_code") or "")
+            if code and _valid_hierarchy(row):
+                rows.append(row)
+                known.add(code)
+    if "gpc_product_groups" in tables:
+        active_sql = _active_clause(conn, "gpg")
+        fallback = conn.execute(text(f"""
+            SELECT gpg.gpc_brick_code AS brick_code,
+                   COALESCE(NULLIF(gpg.gpc_brick_name, ''), NULLIF(gpg.gpc_brick_name_en, ''), gpg.gpc_brick_code) AS brick_description,
+                   COALESCE(NULLIF(gpg.gpc_brick_name_en, ''), NULLIF(gpg.gpc_brick_name, ''), gpg.gpc_brick_code) AS brick_description_en,
+                   gpg.gpc_class_code AS class_code,
+                   COALESCE(NULLIF(gpg.gpc_class_name, ''), NULLIF(gpg.gpc_class_name_en, ''), gpg.gpc_class_code) AS class_description,
+                   gpg.gpc_family_code AS family_code,
+                   COALESCE(NULLIF(gpg.gpc_family_name, ''), NULLIF(gpg.gpc_family_name_en, ''), gpg.gpc_family_code) AS family_description,
+                   gpg.gpc_segment_code AS segment_code,
+                   COALESCE(NULLIF(gpg.gpc_segment_name, ''), NULLIF(gpg.gpc_segment_name_en, ''), gpg.gpc_segment_code) AS segment_description,
+                   'gpc_product_groups' AS reference_source
+            FROM gpc_product_groups gpg
+            WHERE {active_sql}
+            ORDER BY gpg.gpc_brick_code
+        """)).mappings().all()
+        for item in fallback:
+            row = dict(item)
+            code = str(row.get("brick_code") or "")
+            if code and code not in known and _valid_hierarchy(row):
+                rows.append(row)
+                known.add(code)
+    for bundled in _bundled_rows():
+        code = str(bundled.get("brick_code") or "")
+        if code and code not in known:
+            rows.append(dict(bundled))
+            known.add(code)
+    rows.sort(key=lambda row: str(row.get("brick_code") or ""))
+    return rows
+
+
 def ensure_official_gpc_brick(conn: Connection, brick_code: str) -> dict[str, Any] | None:
     code = str(brick_code or "").strip()
     if not _GPC_CODE.fullmatch(code):
