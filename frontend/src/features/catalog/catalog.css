@@ -206,6 +206,25 @@
   margin: 3px 0 0;
 }
 
+.rz-catalog-gpc-candidates {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.rz-catalog-gpc-candidates-header {
+  display: grid;
+  gap: 4px;
+}
+
+.rz-catalog-gpc-candidates-header span {
+  color: #5f6f63;
+}
+
+.rz-catalog-gpc-candidates > .rz-catalog-gpc-suggestion {
+  margin-top: 0;
+}
+
 .rz-catalog-gpc-suggestion {
   display: flex;
   align-items: center;
@@ -281,6 +300,7 @@
 .rz-catalog-gpc-editor-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 4px;
 }
 

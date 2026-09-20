@@ -18,6 +18,7 @@ FRONTEND_ROUTER = ROOT / "frontend/src/app/router/AppRouter.jsx"
 CSS = ROOT / "frontend/src/features/catalog/catalog.css"
 OFF_LINK_SERVICE = ROOT / "backend/app/services/off_product_link_service.py"
 GPC_REFERENCE_SERVICE = ROOT / "backend/app/services/gpc_reference_catalog_service.py"
+GPC_CANDIDATE_SERVICE = ROOT / "backend/app/services/gpc_candidate_service.py"
 EXTERNAL_DATABASES = ROOT / "frontend/src/features/externalDatabases/ReceiptItemsOverview.jsx"
 
 
@@ -183,6 +184,35 @@ def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_proven
     assert "external-gpc-search-results" in frontend
     assert "gpc_source: productTypeSelectionSource" in frontend
     assert "Handmatig geselecteerd uit de officiële GS1 GPC-catalogus." in frontend
+
+
+def test_unclassified_catalog_product_returns_ranked_top_five_candidates():
+    routes = GPC_ROUTES.read_text(encoding="utf-8")
+    candidate_service = GPC_CANDIDATE_SERVICE.read_text(encoding="utf-8")
+    action = ACTION_PAGE.read_text(encoding="utf-8")
+    frame = FRAME.read_text(encoding="utf-8")
+
+    assert "rank_gpc_candidates" in routes
+    assert "build_product_signals" in routes
+    assert "bundled_official_gpc_bricks" in routes
+    assert "_external_product_metadata" in routes
+    assert '"suggestions": suggestions' in routes
+    assert "limit=5" in routes
+    assert "normalized_search_text" in routes
+
+    assert "classify_product_intent_from_taxonomy" in candidate_service
+    assert "load_taxonomy_rules" in candidate_service
+    assert "match_strength_percent" in candidate_service
+    assert 'max(1, min(int(limit), 5))' in candidate_service
+
+    for source in (action, frame):
+        assert "Waarschijnlijke GPC Bricks" in source
+        assert "Matchsterkte:" in source
+        assert "data?.suggestions" in source
+        assert ".slice(0, 5)" in source
+        assert "Voorstel bevestigen" in source
+        assert "Voorstel negeren" in source
+        assert "Andere Brick zoeken" in source
 
 
 def test_gpc_search_and_assignment_share_complete_official_reference_source():

@@ -44,7 +44,7 @@ export default function CatalogGpcActionPage() {
   const [articleQuery, setArticleQuery] = useState('')
   const [selectedArticle, setSelectedArticle] = useState(null)
   const [assignment, setAssignment] = useState(null)
-  const [suggestion, setSuggestion] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
   const [brickEditorOpen, setBrickEditorOpen] = useState(false)
   const [brickQuery, setBrickQuery] = useState('')
   const [brickResults, setBrickResults] = useState([])
@@ -85,7 +85,7 @@ export default function CatalogGpcActionPage() {
   async function chooseArticle(article) {
     setSelectedArticle(article)
     setAssignment(null)
-    setSuggestion(null)
+    setSuggestions([])
     setBrickEditorOpen(false)
     setBrickQuery('')
     setBrickResults([])
@@ -97,14 +97,19 @@ export default function CatalogGpcActionPage() {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden opgehaald.'))
       setAssignment(data?.assignment || null)
-      const candidate = data?.suggestion || null
-      setSuggestion(isSuggestionRejected(article.id, candidate) ? null : candidate)
+      const rawSuggestions = Array.isArray(data?.suggestions)
+        ? data.suggestions
+        : data?.suggestion ? [data.suggestion] : []
+      const visibleSuggestions = rawSuggestions
+        .filter((candidate) => !isSuggestionRejected(article.id, candidate))
+        .slice(0, 5)
+      setSuggestions(visibleSuggestions)
       if (data?.assignment) {
         setFeedback('De bestaande bevestigde GPC-classificatie is gevonden.')
-      } else if (candidate && !isSuggestionRejected(article.id, candidate)) {
-        setFeedback('Inhuis heeft een voorstel gevonden. Je kunt dit bevestigen, negeren of een andere Brick zoeken.')
+      } else if (visibleSuggestions.length) {
+        setFeedback(`Inhuis heeft ${visibleSuggestions.length} waarschijnlijke GPC-kandidaat${visibleSuggestions.length === 1 ? '' : 'en'} gevonden. Bevestig de beste match of kies een alternatief.`)
       } else {
-        setFeedback('Voor dit artikel is nog geen bevestigde GPC Brick opgeslagen. Zoek en selecteer een Brick.')
+        setFeedback('Inhuis kon nog geen bruikbare GPC-kandidaat afleiden. Zoek en selecteer hieronder een Brick.')
         setBrickEditorOpen(true)
       }
     } catch (chooseError) {
@@ -156,7 +161,7 @@ export default function CatalogGpcActionPage() {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden opgeslagen.'))
       setAssignment(data?.assignment || brick)
-      setSuggestion(null)
+      setSuggestions([])
       setBrickEditorOpen(false)
       setBrickQuery('')
       setBrickResults([])
@@ -177,19 +182,24 @@ export default function CatalogGpcActionPage() {
     window.setTimeout(() => document.getElementById('catalog-gpc-action-brick-search')?.focus(), 0)
   }
 
-  function rejectSuggestion() {
-    if (!selectedArticle || !suggestion) return
-    rememberSuggestionRejection(selectedArticle.id, suggestion)
-    setSuggestion(null)
+  function rejectSuggestion(candidate) {
+    if (!selectedArticle || !candidate) return
+    rememberSuggestionRejection(selectedArticle.id, candidate)
+    const remaining = suggestions.filter((item) => item?.brick_code !== candidate?.brick_code)
+    setSuggestions(remaining)
+    if (remaining.length) {
+      setFeedback('Deze kandidaat is genegeerd. Kies een van de overige voorstellen of zoek handmatig.')
+      return
+    }
     setBrickEditorOpen(true)
-    setFeedback('Het voorstel is genegeerd. Het artikel blijft nog niet geclassificeerd; zoek hieronder een betere Brick.')
+    setFeedback('Alle automatische voorstellen zijn genegeerd. Zoek hieronder een betere Brick.')
     window.setTimeout(() => document.getElementById('catalog-gpc-action-brick-search')?.focus(), 0)
   }
 
   function resetArticle() {
     setSelectedArticle(null)
     setAssignment(null)
-    setSuggestion(null)
+    setSuggestions([])
     setBrickEditorOpen(false)
     setArticleQuery('')
     setBrickQuery('')
@@ -269,17 +279,31 @@ export default function CatalogGpcActionPage() {
                   </div>
                 ) : null}
 
-                {!checking && !assignment && suggestion ? (
-                  <div className="rz-catalog-gpc-suggestion" data-testid="catalog-gpc-action-suggestion">
-                    <div>
-                      <span className="rz-catalog-gpc-label">Voorgestelde classificatie</span>
-                      <strong>{suggestion.brick_code} — {text(suggestion.brick_description || suggestion.brick_description_en)}</strong>
-                      <small>{text(suggestion.suggestion_reason)}</small>
+                {!checking && !assignment && suggestions.length ? (
+                  <div className="rz-catalog-gpc-candidates" data-testid="catalog-gpc-action-suggestions">
+                    <div className="rz-catalog-gpc-candidates-header">
+                      <strong>Waarschijnlijke GPC Bricks</strong>
+                      <span>Automatisch gerangschikt op productnaam, categorie, externe metadata en de bestaande Inhuis-producttaxonomie.</span>
                     </div>
+                    {suggestions.map((candidate, index) => (
+                      <div className="rz-catalog-gpc-suggestion" data-testid="catalog-gpc-action-suggestion" key={candidate.brick_code}>
+                        <div>
+                          <span className="rz-catalog-gpc-label">{index === 0 ? 'Voorgestelde classificatie' : `Alternatief ${index + 1}`}</span>
+                          <strong>{candidate.brick_code} — {text(candidate.brick_description || candidate.brick_description_en)}</strong>
+                          <small>
+                            Matchsterkte: {Number(candidate.match_strength_percent || Math.round(Number(candidate.confidence || 0) * 100))}% ({text(candidate.confidence_label, 'indicatief')})
+                            {' · '}{text(candidate.suggestion_reason)}
+                          </small>
+                          <span className="rz-catalog-gpc-result-path">{text(candidate.segment_description)} › {text(candidate.family_description)} › {text(candidate.class_description)}</span>
+                        </div>
+                        <div className="rz-catalog-gpc-editor-actions">
+                          <Button type="button" onClick={() => saveBrick(candidate)} disabled={saving}>Voorstel bevestigen</Button>
+                          <Button type="button" variant="secondary" onClick={() => rejectSuggestion(candidate)} disabled={saving}>Voorstel negeren</Button>
+                        </div>
+                      </div>
+                    ))}
                     <div className="rz-catalog-gpc-editor-actions">
-                      <Button type="button" onClick={() => saveBrick(suggestion)} disabled={saving}>Voorstel bevestigen</Button>
                       <Button type="button" variant="secondary" onClick={searchAlternative} disabled={saving}>Andere Brick zoeken</Button>
-                      <Button type="button" variant="secondary" onClick={rejectSuggestion} disabled={saving}>Voorstel negeren</Button>
                     </div>
                   </div>
                 ) : null}

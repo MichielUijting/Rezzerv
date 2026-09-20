@@ -149,6 +149,16 @@ def _bundled_brick_row(brick_code: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def bundled_official_gpc_bricks() -> list[dict[str, Any]]:
+    """Return the complete bundled official GPC fallback catalog.
+
+    Callers receive copies so candidate ranking can add transient scoring fields
+    without mutating the cached reference rows.
+    """
+
+    return [dict(row) for row in _bundled_rows()]
+
+
 def ensure_official_gpc_brick(conn: Connection, brick_code: str) -> dict[str, Any] | None:
     code = str(brick_code or "").strip()
     if not _GPC_CODE.fullmatch(code):
