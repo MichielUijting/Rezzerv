@@ -1,5 +1,5 @@
 {
-  "version": "m2c2i24s-c-product-taxonomy-coverage-v2",
+  "version": "m2c2i24s-c-product-taxonomy-coverage-v3",
   "taxonomy": [
     {"intent_key": "zuivel.vla", "canonical_name": "Bananenvla", "category": "Zuivel", "product_type": "Vla", "synonyms": ["bananenvla", "vla banaan", "vla"]},
     {"intent_key": "zuivel.kwark", "canonical_name": "Kwark", "category": "Zuivel", "product_type": "Kwark", "synonyms": ["romige kwark", "kwark kaneel", "kwark wit", "kwark"]},
@@ -51,6 +51,7 @@
     {"intent_key": "vleeswaren.kipfilet", "canonical_name": "Kipfilet", "category": "Vleeswaren", "product_type": "Kipfilet", "synonyms": ["kipfilet plakken", "kipfilet"]},
     {"intent_key": "vleeswaren.rookworst", "canonical_name": "Rookworst", "category": "Vleeswaren", "product_type": "Rookworst", "synonyms": ["rookworst", "rookv"]},
     {"intent_key": "vleeswaren.chorizo", "canonical_name": "Chorizo", "category": "Vleeswaren", "product_type": "Chorizo", "synonyms": ["chorizo ring", "chorizo"]},
+    {"intent_key": "vleeswaren.worst", "canonical_name": "Worst", "category": "Vleeswaren", "product_type": "Worst", "synonyms": ["boerenmetworst", "boeren metworst", "metworst", "droge metworst", "droge worst", "snijworst", "worst"], "gpc_candidate_terms": ["Pork Sausages - Prepared/Processed", "Mixed Species Sausages - Prepared/Processed", "Meat/Poultry/Other Animals Sausages - Prepared/Processed"]},
     {"intent_key": "vlees.gehakt", "canonical_name": "Gehakt", "category": "Vlees", "product_type": "Gehakt", "synonyms": ["mager gehakt", "gehakt"]},
     {"intent_key": "vlees.kipdijfilet", "canonical_name": "Kipdijfilet", "category": "Vlees", "product_type": "Kipdijfilet", "synonyms": ["kipdijfilet blokjes", "kipdij blokjes", "kipblokje dijfil", "kipdij reepje", "kipdijfilet", "kipdij"]},
     {"intent_key": "vlees.spek", "canonical_name": "Spek", "category": "Vlees", "product_type": "Spek", "synonyms": ["zeeuws spek", "spekreepjes", "spek"]},

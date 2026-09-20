@@ -285,6 +285,7 @@ def ensure_product_taxonomy_seeded() -> dict[str, Any]:
 
     load_taxonomy_rules.cache_clear()
     load_taxonomy_metadata.cache_clear()
+    load_gpc_candidate_terms.cache_clear()
     load_product_variant_terms.cache_clear()
     return {
         "ok": True,
@@ -429,6 +430,37 @@ def get_taxonomy_metadata_for_intent(intent_key: str | None) -> dict[str, str]:
         key,
         {"intent_key": key, "canonical_name": key, "category": "", "product_type": ""},
     )
+
+
+@lru_cache(maxsize=128)
+def load_gpc_candidate_terms(intent_key: str | None = None) -> tuple[str, ...]:
+    """Return semantic GPC search terms without adding classifier synonyms.
+
+    These terms bridge a Dutch product intent to the wording used by the
+    bundled official GPC reference. They are candidate hints only: they do not
+    make the taxonomy classifier claim a meat species or a final Brick.
+    """
+
+    requested_intent = str(intent_key or "").strip()
+    if not requested_intent:
+        return ()
+
+    for item in _seed_payload().get("taxonomy") or []:
+        if str(item.get("intent_key") or "").strip() != requested_intent:
+            continue
+
+        terms: list[str] = []
+        seen: set[str] = set()
+        for value in item.get("gpc_candidate_terms") or []:
+            term = " ".join(str(value or "").strip().split())
+            normalized = normalize_taxonomy_text(term)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            terms.append(term)
+        return tuple(terms)
+
+    return ()
 
 
 def _variant_rules_from_seed(intent_key: str | None = None) -> list[dict[str, Any]]:

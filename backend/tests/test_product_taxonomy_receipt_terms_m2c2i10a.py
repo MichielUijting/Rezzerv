@@ -60,3 +60,11 @@ def test_receipt_product_analyzer_has_no_hardcoded_taxonomy_maps():
     assert "PRODUCT_TYPE_BY_INTENT_PREFIX" not in source
     assert "CATEGORY_BY_INTENT_PREFIX" not in source
     assert "VARIANT_TERMS" not in source
+
+
+
+def test_picnic_boerenmetworst_is_recognized_as_generic_sausage():
+    assert classify_product_intent(
+        "'t Slagershuys boerenmetworst",
+        retailer_code="picnic",
+    ) == "vleeswaren.worst"

@@ -6,6 +6,7 @@ from typing import Any, Iterable
 from app.services.product_taxonomy_store import (
     classify_product_intent_from_taxonomy,
     get_taxonomy_metadata_for_intent,
+    load_gpc_candidate_terms,
     load_taxonomy_rules,
     normalize_taxonomy_text,
 )
@@ -29,6 +30,7 @@ _FIELD_WEIGHTS = {
     "taxonomy_product_type": 1.50,
     "taxonomy_category": 1.05,
     "taxonomy_synonym": 1.15,
+    "taxonomy_gpc_candidate_term": 0.55,
 }
 
 _HIERARCHY_WEIGHTS = {
@@ -134,6 +136,15 @@ def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
                 taxonomy_metadata.get(field),
                 source=source,
                 weight=_FIELD_WEIGHTS[source],
+            )
+
+        for candidate_term in load_gpc_candidate_terms(intent_key):
+            _add_signal(
+                signals,
+                seen,
+                candidate_term,
+                source="taxonomy_gpc_candidate_term",
+                weight=_FIELD_WEIGHTS["taxonomy_gpc_candidate_term"],
             )
 
         synonym_count = 0
@@ -248,7 +259,7 @@ def rank_gpc_candidates(
 
         haystacks = _candidate_haystacks(candidate)
         total = 0.0
-        evidence: list[tuple[float, str, str]] = []
+        evidence: list[tuple[float, str, str, str]] = []
         matched_signal_keys: set[tuple[str, str]] = set()
 
         for signal in signals:
@@ -259,7 +270,12 @@ def rank_gpc_candidates(
             key = (str(signal.get("normalized") or ""), field)
             if key not in matched_signal_keys:
                 matched_signal_keys.add(key)
-                evidence.append((score, str(signal.get("text") or ""), field))
+                evidence.append((
+                    score,
+                    str(signal.get("text") or ""),
+                    field,
+                    str(signal.get("source") or ""),
+                ))
 
         if total < 0.85:
             continue
@@ -285,17 +301,26 @@ def rank_gpc_candidates(
 
         matched_terms: list[str] = []
         matched_levels: list[str] = []
-        for _, term, field in evidence:
+        semantic_terms: list[str] = []
+        for _, term, field, source in evidence:
             normalized_term = " ".join(str(term or "").split())
             if normalized_term and normalized_term not in matched_terms:
                 matched_terms.append(normalized_term)
+            if (
+                source == "taxonomy_gpc_candidate_term"
+                and normalized_term
+                and normalized_term not in semantic_terms
+            ):
+                semantic_terms.append(normalized_term)
             level = field.replace("_description_en", "").replace("_description", "")
             if level and level not in matched_levels:
                 matched_levels.append(level)
 
         reason_terms = ", ".join(matched_terms[:3])
         reason_levels = ", ".join(matched_levels[:2])
-        if reason_terms:
+        if semantic_terms:
+            reason = "Semantische GPC-overeenkomst via producttype: " + ", ".join(semantic_terms[:2])
+        elif reason_terms:
             reason = f"Overeenkomst met productgegevens: {reason_terms}"
             if reason_levels:
                 reason += f" ({reason_levels})"
