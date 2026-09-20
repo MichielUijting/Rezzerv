@@ -10,7 +10,7 @@ Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zi
 
 ## Productcatalogus en externe databases
 
-Rezzerv scheidt centrale productkennis van huishoudartikelen en voorraad. Externe bronnen kunnen productgegevens verrijken. **Catalogus en Externe databases zijn platformbreed en gelden voor alle huishoudens.** Centrale catalogusmutaties zijn platformbeheeracties. Een huishoudspecifieke koppeling op een `household_article` is geen globale Cataloguskoppeling en mag een platformbrede externe-databasekoppeling niet blokkeren of als globale status worden geprojecteerd.
+Rezzerv scheidt centrale productkennis van huishoudartikelen en voorraad. Externe bronnen kunnen productgegevens verrijken. **Catalogus en Externe databases zijn platformbreed en gelden voor alle huishoudens.** Centrale catalogusmutaties zijn platformbeheeracties. Een huishoudspecifieke koppeling op een `household_article` is geen globale Cataloguskoppeling en mag een platformbrede externe-databasekoppeling niet blokkeren of als globale status worden geprojecteerd. Wanneer een bonartikel zelf een expliciete huismerkidentiteit bevat (bijvoorbeeld `AH` bij Albert Heijn), mogen externe kandidaten met een conflicterend merk niet als geldige kandidaat worden aangeboden, bevestigd of als actieve Cataloguskoppeling worden geprojecteerd.
 
 ## Prognoses en Bijna op
 
