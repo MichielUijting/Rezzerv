@@ -96,6 +96,8 @@ jobs:
           grep -F 'POSTGRESQL_OFF_GPC_PROPAGATION_STATIC_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_ACTIVE_STATIC_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_OFF_IDENTITY_BOOLEAN_BIND_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_OFF_GLOBAL_LINK_HOUSEHOLD_WRITE_ABSENT_GREEN' /tmp/catalog-off-static.log
+          grep -F 'POSTGRESQL_EXTERNAL_RECEIPT_GLOBAL_AUTHORITY_STATIC_GREEN' /tmp/catalog-off-static.log
           grep -F 'POSTGRESQL_CATALOG_OFF_REQUEST_PORTABILITY_STATIC_SELFTEST_GREEN' /tmp/catalog-off-static.log
 
       - name: Migrate through current canonical Alembic head
@@ -121,6 +123,7 @@ jobs:
           grep -F 'POSTGRESQL_OFF_CANDIDATE_TIMESTAMP_ORDER_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_RECEIPT_TABLE_NUMERIC_QUANTITY_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_HOUSEHOLD_ONLY_LINK_IGNORED_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_GPC_CODE_PROPAGATION_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_EXPLICIT_GPC_OFFICIAL_REFERENCE_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_CASE_INSENSITIVE_SORT_DML_GREEN' /tmp/catalog-off-dml.log
