@@ -155,6 +155,19 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     next_row["is_linked_to_catalog"] = active
     next_row["is_existing_link_for_receipt_item"] = active
 
+    if not active:
+        # Household- en receipt-specifieke legacyverwijzingen zijn géén
+        # platformbrede Cataloguskoppeling. Laat zulke velden niet als globale
+        # linkinformatie doorlekken naar Externe databases.
+        next_row["global_product_id"] = None
+        next_row["matched_global_product_id"] = None
+        next_row["canonical_catalog_product_id"] = None
+        next_row["linked_candidate_name"] = ""
+        next_row["linked_gtin"] = ""
+        next_row["linked_product_type_id"] = ""
+        next_row["linked_product_type"] = ""
+        next_row["linked_score"] = None
+
     central_product_brand = ""
     central_gtin = ""
     product_type_id = ""
