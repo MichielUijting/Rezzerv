@@ -916,8 +916,9 @@ def search_off_candidates(payload: dict[str, Any]) -> dict[str, Any]:
                 candidate_brand=result.get("brand"),
                 candidate_name=result.get("product_name"),
             )
-            if not identity_check.get("ok"):
-                continue
+            result["identity_compatible"] = bool(identity_check.get("ok"))
+            result["identity_conflict_reason"] = str(identity_check.get("reason") or "")
+            result["identity_conflict_message"] = str(identity_check.get("message") or "")
             existing = best_by_gtin.get(result["gtin"])
             if existing is None or result["score"] > existing["score"]:
                 best_by_gtin[result["gtin"]] = result
