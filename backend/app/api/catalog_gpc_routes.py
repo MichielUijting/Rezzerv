@@ -8,7 +8,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import inspect, text
 
 from app.db import engine
+from app.services.gpc_candidate_service import (
+    build_product_signals,
+    rank_gpc_candidates,
+)
 from app.services.gpc_reference_catalog_service import (
+    bundled_official_gpc_bricks,
     ensure_official_gpc_brick,
     search_official_gpc_bricks,
 )
@@ -222,22 +227,95 @@ def _migrate_confirmed_legacy_assignment(conn, global_product_id: str) -> dict[s
     return candidate
 
 
-def _metadata_suggestion(conn, global_product_id: str) -> dict[str, Any] | None:
-    legacy = _legacy_candidate(conn, global_product_id)
-    if legacy:
-        row = conn.execute(
-            text(_brick_select_sql("WHERE b.brick_code = :brick_code")),
-            {"brick_code": legacy["brick_code"]},
-        ).mappings().first()
-        if row:
-            result = dict(row)
-            result.update({
-                "suggestion_source": "bestaande_productgroep",
-                "suggestion_reason": "Bestaande GPC-productgroep bij dit catalogusartikel",
-                "confidence": float(legacy.get("confidence") or 0.0),
-            })
-            return result
+def _external_product_metadata(conn, product: dict[str, Any]) -> dict[str, Any]:
+    gtin = str(product.get("primary_gtin") or "").strip()
+    if not gtin or "external_product_index" not in _tables():
+        return {}
 
+    available = _columns("external_product_index")
+    identity_columns = [column for column in ("gtin", "ean", "code") if column in available]
+    metadata_columns = [
+        column
+        for column in (
+            "product_name",
+            "brand",
+            "category",
+            "categories",
+            "normalized_search_text",
+            "retailer_code",
+        )
+        if column in available
+    ]
+    if not identity_columns or not metadata_columns:
+        return {}
+
+    where_clause = " OR ".join(f"{column} = :gtin" for column in identity_columns)
+    order_clause = "updated_at DESC" if "updated_at" in available else "id"
+    row = conn.execute(
+        text(
+            f"SELECT {', '.join(metadata_columns)} "
+            f"FROM external_product_index "
+            f"WHERE {where_clause} "
+            f"ORDER BY {order_clause} LIMIT 1"
+        ),
+        {"gtin": gtin},
+    ).mappings().first()
+    return dict(row) if row else {}
+
+
+def _candidate_catalog_rows(conn) -> list[dict[str, Any]]:
+    rows = [
+        dict(row)
+        for row in conn.execute(
+            text(_brick_select_sql() + " ORDER BY b.brick_code")
+        ).mappings().all()
+    ]
+    known = {str(row.get("brick_code") or "") for row in rows}
+
+    # De gebundelde GS1-referentie is de volledige officiële fallback.
+    # Daardoor wordt kandidaatgeneratie niet beperkt door een partiële DB-import.
+    for bundled in bundled_official_gpc_bricks():
+        code = str(bundled.get("brick_code") or "")
+        if not code or code in known:
+            continue
+        rows.append(dict(bundled))
+        known.add(code)
+    return rows
+
+
+def _legacy_suggestion_row(
+    conn,
+    global_product_id: str,
+    candidates_by_code: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    legacy = _legacy_candidate(conn, global_product_id)
+    if not legacy:
+        return None
+    code = str(legacy.get("brick_code") or "").strip()
+    row = candidates_by_code.get(code)
+    if not row:
+        return None
+
+    confidence = max(0.0, min(1.0, float(legacy.get("confidence") or 0.0)))
+    result = dict(row)
+    result.update({
+        "suggestion_source": "bestaande_productgroep",
+        "suggestion_reason": "Bestaande GPC-productgroep bij dit catalogusartikel",
+        "confidence": confidence,
+        "confidence_label": "hoog" if confidence >= 0.78 else "redelijk" if confidence >= 0.58 else "laag",
+        "match_strength_percent": int(round(confidence * 100)),
+        "matched_terms": [],
+        "intent_key": "",
+    })
+    return result
+
+
+def _metadata_suggestions(
+    conn,
+    global_product_id: str,
+    *,
+    limit: int = 5,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     product = conn.execute(text("""
         SELECT id, name, brand, category, primary_gtin
         FROM global_products
@@ -245,51 +323,49 @@ def _metadata_suggestion(conn, global_product_id: str) -> dict[str, Any] | None:
         LIMIT 1
     """), {"id": global_product_id}).mappings().first()
     if not product:
-        return None
+        return [], {"intent_key": "", "reference_count": 0}
 
-    metadata_parts = [product.get("name"), product.get("brand"), product.get("category")]
-    if "external_product_index" in _tables() and product.get("primary_gtin"):
-        external = conn.execute(text("""
-            SELECT product_name, brand, category, categories, product_type, search_terms
-            FROM external_product_index
-            WHERE gtin = :gtin OR ean = :gtin OR code = :gtin
-            ORDER BY updated_at DESC
-            LIMIT 1
-        """), {"gtin": product.get("primary_gtin")}).mappings().first()
-        if external:
-            metadata_parts.extend(external.values())
-
-    stopwords = {"kids", "pizza", "biologisch", "organic", "the", "and", "voor", "met", "van"}
-    tokens = []
-    for token in re.findall(r"[a-z0-9]+", " ".join(str(value or "") for value in metadata_parts).lower()):
-        if len(token) >= 4 and token not in stopwords and token not in tokens:
-            tokens.append(token)
-    if not tokens:
-        return None
-
-    candidates = conn.execute(text(_brick_select_sql() + " ORDER BY b.brick_code")).mappings().all()
-    best = None
-    best_score = 0
-    matched_tokens: list[str] = []
-    for candidate in candidates:
-        haystack = " ".join(str(candidate.get(key) or "").lower() for key in (
-            "brick_description", "brick_description_en", "class_description",
-            "family_description", "segment_description",
-        ))
-        matches = [token for token in tokens if token in haystack]
-        score = len(matches)
-        if score > best_score:
-            best = dict(candidate)
-            best_score = score
-            matched_tokens = matches
-    if not best or best_score < 1:
-        return None
-    best.update({
-        "suggestion_source": "productmetadata",
-        "suggestion_reason": "Overeenkomst met productgegevens: " + ", ".join(matched_tokens[:5]),
-        "confidence": min(0.85, 0.45 + (0.1 * best_score)),
+    product_dict = dict(product)
+    external = _external_product_metadata(conn, product_dict)
+    signal_bundle = build_product_signals({
+        "product_name": product_dict.get("name"),
+        "category": product_dict.get("category"),
+        "external_product_name": external.get("product_name"),
+        "external_category": external.get("category"),
+        "external_categories": external.get("categories"),
+        "external_search_text": external.get("normalized_search_text"),
     })
-    return best
+
+    candidate_rows = _candidate_catalog_rows(conn)
+    ranked = rank_gpc_candidates(
+        candidate_rows,
+        signal_bundle,
+        limit=max(1, min(int(limit), 5)),
+    )
+
+    by_code = {
+        str(row.get("brick_code") or ""): row
+        for row in candidate_rows
+        if str(row.get("brick_code") or "")
+    }
+    legacy = _legacy_suggestion_row(conn, global_product_id, by_code)
+    if legacy:
+        legacy_code = str(legacy.get("brick_code") or "")
+        ranked = [
+            legacy,
+            *[
+                candidate
+                for candidate in ranked
+                if str(candidate.get("brick_code") or "") != legacy_code
+            ],
+        ][: max(1, min(int(limit), 5))]
+
+    return ranked, {
+        "intent_key": str(signal_bundle.get("intent_key") or ""),
+        "reference_count": len(candidate_rows),
+        "signal_count": len(signal_bundle.get("signals") or []),
+        "external_metadata_found": bool(external),
+    }
 
 
 @router.get("/gpc/bricks")
@@ -317,10 +393,24 @@ def get_catalog_product_gpc_brick(global_product_id: str):
             raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
         migration = _migrate_confirmed_legacy_assignment(conn, global_product_id)
         row = _assignment_row(conn, global_product_id)
-        suggestion = None if row else _metadata_suggestion(conn, global_product_id)
+        suggestions: list[dict[str, Any]] = []
+        candidate_generation = {
+            "intent_key": "",
+            "reference_count": 0,
+            "signal_count": 0,
+            "external_metadata_found": False,
+        }
+        if not row:
+            suggestions, candidate_generation = _metadata_suggestions(
+                conn,
+                global_product_id,
+                limit=5,
+            )
     return {
         "assignment": dict(row) if row else None,
-        "suggestion": suggestion,
+        "suggestion": suggestions[0] if suggestions else None,
+        "suggestions": suggestions,
+        "candidate_generation": candidate_generation,
         "migration": {
             "performed": bool(migration),
             "source": "bevestigde bestaande productgroep" if migration else None,
