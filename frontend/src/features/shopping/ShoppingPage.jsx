@@ -4,6 +4,7 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import DataTable from '../../ui/DataTable.jsx'
 import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
+import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
@@ -354,7 +355,12 @@ export default function ShoppingPage() {
       filterLabel: 'Zoeken in boodschappenlijst',
       getFilterValue: (item) => item.article_name || '',
       getSortValue: (item) => item.article_name || '',
-      renderCell: (item) => <span title={item.article_name}>{item.article_name}</span>,
+      renderCell: (item) => (
+        <div className="rz-product-row-identity" title={item.article_name}>
+          <CatalogArticleThumbnail imageUrl={item.image_url} productName={item.article_name} />
+          <span>{item.article_name}</span>
+        </div>
+      ),
     },
     {
       key: 'productType',

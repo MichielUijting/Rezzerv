@@ -51,6 +51,7 @@ export function buildMobileAlmostOutRows(items = []) {
       primaryName,
       householdName,
       productName,
+      imageUrl: String(item?.image_url || '').trim(),
       currentQuantity: normalizeNumber(item?.current_quantity ?? item?.huidige_voorraad),
       minStock: normalizeNumber(item?.min_stock ?? item?.minimumvoorraad),
       idealStock: normalizeNumber(item?.ideal_stock ?? item?.streefvoorraad),

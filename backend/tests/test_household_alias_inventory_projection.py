@@ -37,6 +37,7 @@ class ProjectionConnection:
             'naam': '7 Granen Ontbijt',
             'custom_name': 'Keesje',
             'product_name': '7 Granen Ontbijt',
+            'image_url': 'https://images.example.test/ontbijt.jpg',
         }])
 
 
@@ -110,6 +111,7 @@ def test_inventory_preview_projects_household_alias_instead_of_inventory_name():
     assert projected['rows'][0]['artikel'] == '7 Granen Ontbijt'
     assert projected['rows'][0]['household_article_name'] == 'Keesje'
     assert projected['rows'][0]['product_name'] == '7 Granen Ontbijt'
+    assert projected['rows'][0]['image_url'] == 'https://images.example.test/ontbijt.jpg'
 
 
 def test_inventory_inline_household_name_does_not_rename_inventory_identity():

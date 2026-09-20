@@ -4248,6 +4248,7 @@ def evaluate_household_article_almost_out(conn, household_id: str, article_row: 
         'display_name': normalize_optional_text_field(article_row.get('custom_name')) or article_name,
         'household_article_name': normalize_optional_text_field(article_row.get('custom_name')) or article_name,
         'product_name': normalize_optional_text_field(article_row.get('product_name')) or article_name,
+        'image_url': normalize_optional_text_field(article_row.get('image_url')),
         'global_product_id': global_product_id or None,
         'product_anchor': 'global_product' if global_product_id else 'household_article',
         'current_quantity': current_quantity,
@@ -4319,7 +4320,8 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
             """
             SELECT ha.id, ha.household_id, ha.naam, ha.custom_name, ha.min_stock, ha.ideal_stock, ha.favorite_store, ha.status,
                    ha.global_product_id,
-                   COALESCE(gp.name, '') AS product_name
+                   COALESCE(gp.name, '') AS product_name,
+                   COALESCE(gp.image_url, '') AS image_url
             FROM household_articles ha
             LEFT JOIN global_products gp ON gp.id = ha.global_product_id
             WHERE ha.household_id = :household_id

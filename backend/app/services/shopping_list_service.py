@@ -136,7 +136,7 @@ def _serialize_decimal(value: Any) -> float | None:
 
 
 def _serialize_item(row: Any) -> dict[str, Any]:
-    return {
+    payload = {
         "id": str(row.get("id") or ""),
         "shopping_list_id": str(row.get("shopping_list_id") or ""),
         "household_id": str(row.get("household_id") or ""),
@@ -154,6 +154,36 @@ def _serialize_item(row: Any) -> dict[str, Any]:
         "created_at": str(row.get("created_at") or ""),
         "updated_at": str(row.get("updated_at") or ""),
     }
+    row_keys = set(row.keys()) if hasattr(row, "keys") else set()
+    if "image_url" in row_keys:
+        payload["image_url"] = str(row.get("image_url") or "").strip()
+    return payload
+
+
+def _shopping_list_image_projection(conn: Connection) -> tuple[str, str]:
+    inspector = inspect(conn)
+    tables = set(inspector.get_table_names())
+    if not {"household_articles", "global_products"}.issubset(tables):
+        return "'' AS image_url", ""
+
+    household_columns = _table_columns(conn, "household_articles")
+    product_columns = _table_columns(conn, "global_products")
+    if not {"id", "household_id", "global_product_id"}.issubset(household_columns):
+        return "'' AS image_url", ""
+    if not {"id", "image_url"}.issubset(product_columns):
+        return "'' AS image_url", ""
+
+    return (
+        "COALESCE(gp.image_url, '') AS image_url",
+        """
+        LEFT JOIN household_articles ha
+          ON lower(trim(COALESCE(sli.source_type, 'manual'))) = 'household_article'
+         AND ha.id = sli.source_id
+         AND ha.household_id = sli.household_id
+        LEFT JOIN global_products gp
+          ON gp.id = ha.global_product_id
+        """,
+    )
 
 
 def _first_column(columns: set[str], candidates: tuple[str, ...]) -> str | None:
@@ -313,13 +343,16 @@ def get_or_create_active_list(conn: Connection, household_id: str) -> dict[str, 
 
 def get_active_shopping_list(conn: Connection, household_id: str) -> dict[str, Any]:
     active = get_or_create_active_list(conn, household_id)
-    rows = conn.execute(text("""
-        SELECT id, shopping_list_id, household_id, article_name, article_group_name,
-               product_type_name, source_type, source_id, quantity, volume, unit,
-               size, note, checked, created_at, updated_at
-        FROM shopping_list_items
-        WHERE shopping_list_id = :shopping_list_id AND household_id = :household_id
-        ORDER BY checked ASC, lower(article_name) ASC, created_at ASC
+    image_expression, image_joins = _shopping_list_image_projection(conn)
+    rows = conn.execute(text(f"""
+        SELECT sli.id, sli.shopping_list_id, sli.household_id, sli.article_name, sli.article_group_name,
+               sli.product_type_name, sli.source_type, sli.source_id, sli.quantity, sli.volume, sli.unit,
+               sli.size, sli.note, sli.checked, sli.created_at, sli.updated_at,
+               {image_expression}
+        FROM shopping_list_items sli
+        {image_joins}
+        WHERE sli.shopping_list_id = :shopping_list_id AND sli.household_id = :household_id
+        ORDER BY sli.checked ASC, lower(sli.article_name) ASC, sli.created_at ASC
     """), {"shopping_list_id": active["id"], "household_id": str(household_id)}).mappings().all()
     return {**active, "items": [_serialize_item(row) for row in rows], "item_count": len(rows)}
 

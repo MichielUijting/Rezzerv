@@ -80,19 +80,31 @@ def main() -> int:
             VALUES ('inventory-sentinel', '0', 'Voorraad blijft gelijk', 7)
         """))
         conn.execute(text("""
+            CREATE TABLE global_products (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                image_url TEXT
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO global_products(id, name, image_url)
+            VALUES ('global-product-melk', 'Melk halfvol', 'https://images.example.test/melk.jpg')
+        """))
+        conn.execute(text("""
             CREATE TABLE household_articles (
                 id TEXT PRIMARY KEY,
                 household_id TEXT NOT NULL,
                 article_name TEXT NOT NULL,
                 article_group_name TEXT,
-                product_type_name TEXT
+                product_type_name TEXT,
+                global_product_id TEXT
             )
         """))
         conn.execute(text("""
             INSERT INTO household_articles(
-                id, household_id, article_name, article_group_name, product_type_name
+                id, household_id, article_name, article_group_name, product_type_name, global_product_id
             ) VALUES (
-                'household-article-melk', '0', 'Melk', 'Zuivel', 'Halfvolle melk'
+                'household-article-melk', '0', 'Melk', 'Zuivel', 'Halfvolle melk', 'global-product-melk'
             )
         """))
         conn.execute(text("""
@@ -164,6 +176,7 @@ def main() -> int:
         deduplicated_active = get_active_shopping_list(conn, "0")
         assert deduplicated_active["item_count"] == 1, deduplicated_active
         assert deduplicated_active["items"][0]["quantity"] == 3.0, deduplicated_active
+        assert deduplicated_active["items"][0]["image_url"] == "https://images.example.test/melk.jpg", deduplicated_active
 
         other_household = get_active_shopping_list(conn, "1")
         assert other_household["items"] == [], other_household

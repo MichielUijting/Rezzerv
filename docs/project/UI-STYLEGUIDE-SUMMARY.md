@@ -261,7 +261,11 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - productafbeeldingen uit externe productbronnen worden als ondersteunende productidentificatie getoond en vervangen nooit de artikelnaam of GTIN;
 - Cataloguslijsten gebruiken waar beschikbaar een compacte thumbnail naast de artikelnaam, zonder een extra brede fotokolom af te dwingen;
 - Catalogusdetail mag dezelfde afbeelding groter tonen met behoud van beeldverhouding en `object-fit: contain`;
-- ontbrekende of niet-laadbare afbeeldingen krijgen een rustige **Geen foto**-fallback zonder broken-image-icoon;
+- **Voorraad**, **Bijna op** en **Boodschappenlijst/Winkelen** tonen dezelfde, in Catalogus opgeslagen productafbeelding als compacte thumbnail direct naast de artikelnaam wanneer het artikel canoniek aan dat Catalogusproduct is gekoppeld;
+- operationele schermen voeren geen eigen externe afbeeldingszoekactie uit: zij gebruiken uitsluitend de persistente `image_url` van het gekoppelde Catalogusproduct;
+- de standaard operationele thumbnail is circa **52 × 52px**, gebruikt `object-fit: contain` en mag op mobiel als vaste eerste contentkolom vóór de artikeltekst staan;
+- ontbrekende of niet-laadbare afbeeldingen krijgen een rustige neutrale beeld-placeholder zonder broken-image-icoon; de artikelnaam blijft altijd zichtbaar;
+- bij Boodschappenlijst/Winkelen wordt alleen een Catalogusfoto geprojecteerd als de regel canoniek naar een huishoudartikel en daarmee naar een Catalogusproduct verwijst; producttype- of artikelgroepregels krijgen niet kunstmatig een willekeurige productfoto;
 - een externe afbeelding-URL wordt niet automatisch gebruikt om een reeds aanwezige Catalogusafbeelding te overschrijven.
 
 ## Badges, chips en aantallen
@@ -374,7 +378,7 @@ Vaste regels:
 Niet tonen zolang hiervoor geen echte appfunctionaliteit bestaat:
 - tabs of secties **Suggesties**, **Aanbiedingen** of **Vaak gekocht**;
 - winkelgroepering of winkelsortering op een shopping-list-regel;
-- productafbeeldingen zonder bestaande productbeeldbron;
+- productafbeeldingen zonder bestaande productbeeldbron of zonder canonieke koppeling naar een Catalogusproduct;
 - plus/min-bediening voor Aantal wanneer die niet als bestaande domeinactie is geïmplementeerd.
 
 ## Mobiel Voorraad-artikeldetail

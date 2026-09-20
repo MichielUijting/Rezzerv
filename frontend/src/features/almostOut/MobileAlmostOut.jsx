@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Header from '../../ui/Header'
 import Button from '../../ui/Button'
 import Select from '../../ui/Select.jsx'
+import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
 import {
   buildMobileAlmostOutRows,
@@ -200,6 +201,11 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
 
               const content = (
                 <>
+                  <CatalogArticleThumbnail
+                    imageUrl={row.imageUrl}
+                    productName={row.productName || title}
+                    className="rz-mobile-inventory-product-thumbnail"
+                  />
                   <div className="rz-mobile-inventory-card-main">
                     <div className="rz-mobile-inventory-card-title">{title}</div>
                     {contextParts.length > 0 ? (

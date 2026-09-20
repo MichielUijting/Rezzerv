@@ -50,7 +50,8 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
                     ha.id,
                     ha.naam,
                     ha.custom_name,
-                    COALESCE(gp.name, '') AS product_name
+                    COALESCE(gp.name, '') AS product_name,
+                    COALESCE(gp.image_url, '') AS image_url
                 FROM household_articles ha
                 LEFT JOIN global_products gp ON gp.id = ha.global_product_id
                 WHERE ha.id IN ({placeholders})
@@ -70,8 +71,10 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
         canonical_name = str(article.get('naam') or '').strip()
         custom_name = str(article.get('custom_name') or '').strip()
         product_name = str(article.get('product_name') or '').strip()
+        image_url = str(article.get('image_url') or '').strip()
         row['household_article_name'] = custom_name or canonical_name or str(row.get('artikel') or '')
         row['product_name'] = product_name or canonical_name or str(row.get('artikel') or '')
+        row['image_url'] = image_url
         projected.append(row)
     return {**payload, 'rows': projected}
 

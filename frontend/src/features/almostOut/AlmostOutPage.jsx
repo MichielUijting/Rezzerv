@@ -5,6 +5,7 @@ import Table from '../../ui/Table'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
+import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import '../stores/locationlessStoreImport.css'
 
 function normalizeNumber(value) {
@@ -151,6 +152,7 @@ export default function AlmostOutPage() {
     return (items || []).map((item) => ({
       id: String(item?.household_article_id || item?.article_id || item?.article_name || Math.random()),
       ...buildArticleNames(item),
+      imageUrl: String(item?.image_url || '').trim(),
       currentQuantity: normalizeNumber(item?.current_quantity ?? item?.huidige_voorraad),
       minStock: normalizeNumber(item?.min_stock ?? item?.minimumvoorraad),
       idealStock: normalizeNumber(item?.ideal_stock ?? item?.streefvoorraad),
@@ -234,7 +236,12 @@ export default function AlmostOutPage() {
                   <tr><td colSpan={8}>Er zijn op dit moment geen artikelen die aangevuld moeten worden.</td></tr>
                 ) : filteredRows.map((row) => (
                   <tr key={row.id}>
-                    <td title={row.householdName || '—'}>{row.householdName || '—'}</td>
+                    <td title={row.householdName || '—'}>
+                      <div className="rz-product-row-identity">
+                        <CatalogArticleThumbnail imageUrl={row.imageUrl} productName={row.productName || row.primaryName} />
+                        <span>{row.householdName || '—'}</span>
+                      </div>
+                    </td>
                     <td title={row.productName || row.primaryName}>{row.productName || row.primaryName}</td>
                     <td className="rz-num">{formatQuantity(row.currentQuantity)}</td>
                     <td className="rz-num">{formatQuantity(row.minStock)}</td>
