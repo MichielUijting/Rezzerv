@@ -304,6 +304,7 @@ De standaard desktop-/matrixweergave toont waar een tabel pagineert **10 zichtba
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
 - hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen;
 - wanneer een tabel intern verticaal scrolt, blijven de kolomtitelrij en de zoek-/filterrij samen als één sticky kopblok zichtbaar; de titelrij staat op `top: 0` en de zoek-/filterrij blijft direct onder de titelrij op de gemeten of centrale headerhoogte, zonder schermspecifieke sticky-hack.
+- dit sticky kopblok is het generieke tabelpatroon voor alle schermen die titel- én zoek/filterrij tonen; schermen activeren het patroon via de centrale tabelklassen in plaats van lokale positionerings-CSS.
 
 ### Tabel-loadingoverlay
 
