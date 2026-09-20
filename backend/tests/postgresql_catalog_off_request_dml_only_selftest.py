@@ -65,7 +65,6 @@ GLOBAL_SCOPE_HOUSEHOLD_ID = "__postgresql_global_scope_household__"
 GLOBAL_SCOPE_CANDIDATE_ID = "__postgresql_global_scope_candidate__"
 GLOBAL_SCOPE_RECEIPT_TEXT = "AH BOUILLON GLOBAL SCOPE PROOF"
 GLOBAL_SCOPE_RETAILER = "albert-heijn"
-GLOBAL_SCOPE_LEGACY_PRODUCT_ID = "__legacy_household_only_product__"
 GENERIC_SCOPE_NAME = "PostgreSQL Generic Bouillon Proof"
 
 
