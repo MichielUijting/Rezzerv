@@ -15,7 +15,10 @@ from app.api import catalog_routes
 from app.db import engine
 from app.services.external_database_off_index_matchers import match_retailer_receipt_line
 from app.services.external_article_confirmation_service import _candidate_identity
-from app.services.external_article_ui_projection import _central_product_details
+from app.services.external_article_ui_projection import (
+    _central_product_details,
+    project_central_link_truth,
+)
 from app.services.external_article_product_link_service import (
     _complete_global_product_link_data,
     save_external_article_product_link,
@@ -457,6 +460,44 @@ def _assert_external_article_ui_membership_projection() -> None:
     print("POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN")
 
 
+def _assert_household_only_link_not_projected_as_global() -> None:
+    with engine.begin() as conn:
+        projected = project_central_link_truth(
+            conn,
+            {
+                "retailer_code": "__global_scope_probe__",
+                "receipt_line_text": "__household_only_link_probe__",
+                "global_product_id": "__household_only_product__",
+                "matched_global_product_id": "__household_only_product__",
+                "canonical_catalog_product_id": "__household_only_product__",
+                "linked_candidate_name": "Household-only product",
+                "linked_product_type_id": "gpc:10000284",
+                "linked_product_type": "Household-only type",
+                "linked_score": 1.0,
+                "status": "linked_to_catalog",
+                "candidate_status": "linked_to_catalog",
+                "candidates": [],
+            },
+        )
+
+    if projected.get("central_link_active"):
+        raise AssertionError(projected)
+    for field in (
+        "global_product_id",
+        "matched_global_product_id",
+        "canonical_catalog_product_id",
+        "linked_candidate_name",
+        "linked_gtin",
+        "linked_product_type_id",
+        "linked_product_type",
+        "linked_score",
+    ):
+        if projected.get(field) not in (None, ""):
+            raise AssertionError((field, projected))
+
+    print("POSTGRESQL_EXTERNAL_ARTICLE_UI_HOUSEHOLD_ONLY_LINK_IGNORED_GREEN")
+
+
 def _assert_off_gpc_normalization() -> None:
     normalized = _normalize_result(
         query="bananen",
@@ -526,6 +567,7 @@ def main() -> None:
         _assert_candidate_identity_timestamp_order()
         _assert_receipt_table_off_search_postgresql_types()
         _assert_external_article_ui_membership_projection()
+        _assert_household_only_link_not_projected_as_global()
         _assert_off_gpc_normalization()
         _assert_explicit_off_gpc_uses_official_reference_catalog()
         _assert_off_index_matcher()
