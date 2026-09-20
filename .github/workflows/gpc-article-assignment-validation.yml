@@ -9,6 +9,9 @@ on:
       - 'backend/app/services/off_product_link_service.py'
       - 'backend/app/services/gpc_reference_catalog_service.py'
       - 'backend/app/services/gpc_candidate_service.py'
+      - 'backend/app/services/gpc_local_catalog_service.py'
+      - 'backend/app/api/product_inventory_group_routes.py'
+      - 'backend/tests/test_external_gpc_candidate_integration.py'
       - 'backend/tests/test_gpc_article_assignment_contract.py'
       - 'backend/tests/test_gpc_candidate_service.py'
       - 'frontend/src/features/catalog/CatalogGpcFrame.jsx'
@@ -44,9 +47,12 @@ jobs:
             backend/app/services/article_detail_write_guard.py \
             backend/app/services/gpc_reference_catalog_service.py \
             backend/app/services/gpc_candidate_service.py \
-            backend/tests/test_gpc_candidate_service.py
+            backend/app/services/gpc_local_catalog_service.py \
+            backend/app/api/product_inventory_group_routes.py \
+            backend/tests/test_gpc_candidate_service.py \
+            backend/tests/test_external_gpc_candidate_integration.py
       - name: Run runtime router and catalog candidate tests
-        run: python -m pytest -q backend/tests/test_gpc_article_assignment_contract.py backend/tests/test_gpc_candidate_service.py
+        run: python -m pytest -q backend/tests/test_gpc_article_assignment_contract.py backend/tests/test_gpc_candidate_service.py backend/tests/test_external_gpc_candidate_integration.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
