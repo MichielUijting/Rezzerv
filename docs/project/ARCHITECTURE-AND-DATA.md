@@ -47,7 +47,16 @@ Een centraal product mag nooit automatisch huishoudgegevens delen. Huishoudartik
 
 ## Identiteiten
 
-Productidentiteiten omvatten onder meer GTIN/EAN/barcode, winkelartikelnummers, externe database-ID's en interne product-ID's. Normalisatie voorkomt duplicaten en ondersteunt koppeling. Een expliciete huismerkmarker in de bontekst is onderdeel van de identiteitsbewaking: bij een herkenbare marker van de winkelketen (zoals `AH` bij Albert Heijn) moet het externe product een passende merkidentiteit aantonen. Een conflict wordt zowel in kandidaatselectie als write-route en read-projectie fail-closed behandeld, zodat ook historisch fout opgeslagen centrale koppelingen niet als actief worden gepresenteerd.
+Productidentiteiten omvatten onder meer GTIN/EAN/barcode, winkelartikelnummers, externe database-ID's en interne product-ID's. Normalisatie voorkomt duplicaten en ondersteunt koppeling.
+
+Een centrale winkel-/bonartikelkoppeling kent twee expliciete identiteitsmodi:
+
+1. **exact** — het centrale product heeft een geldige primaire GTIN/EAN, een bijpassende GTIN-identiteit en een actieve officiële GS1 GPC-classificatie;
+2. **generic** — het centrale product is expliciet gemarkeerd met bron `external_databases_generic`, heeft geen GTIN, merk of variant nodig en heeft wél een actieve officiële GS1 GPC-classificatie. De bevestigde bonartikelkoppeling wordt daarbij gemarkeerd met `confirmed_by=external_databases_generic_link`.
+
+De generieke modus is geen fallback op een incompleet exact product. Alleen een bewuste generieke gebruikersactie mag een GTIN-loos product als geldige centrale bonartikelkoppeling bevestigen. Andere incomplete Catalogusproducten blijven fail-closed.
+
+Een expliciete huismerkmarker in de bontekst is onderdeel van de **exacte** identiteitsbewaking: bij een herkenbare marker van de winkelketen (zoals `AH` bij Albert Heijn) moet een exact extern product een passende merkidentiteit aantonen. Een conflict wordt voor exacte koppelingen in automatische kandidaatselectie, write-route en read-projectie fail-closed behandeld. Handmatig zoeken mag conflicterende producten wel als niet-koppelbare zoekresultaten tonen. Een expliciet generieke koppeling valt niet onder deze exacte merkregel, omdat zij bewust geen merkidentiteit claimt.
 
 ## Migraties
 
