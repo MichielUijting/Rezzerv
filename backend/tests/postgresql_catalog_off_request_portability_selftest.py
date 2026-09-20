@@ -201,7 +201,13 @@ def _assert_global_external_link_authority() -> None:
 
 
 def main() -> None:
-    for path in (CATALOG_PATH, OFF_LINK_PATH, OFF_SEARCH_PATH, ARTICLE_UI_PATH):
+    for path in (
+        CATALOG_PATH,
+        OFF_LINK_PATH,
+        OFF_SEARCH_PATH,
+        ARTICLE_UI_PATH,
+        CANDIDATE_STORE_PATH,
+    ):
         if not path.is_file():
             raise AssertionError(f"Catalog/OFF scope file ontbreekt: {path}")
     _assert_no_runtime_ddl()
