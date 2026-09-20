@@ -47,7 +47,7 @@ Een centraal product mag nooit automatisch huishoudgegevens delen. Huishoudartik
 
 ## Identiteiten
 
-Productidentiteiten omvatten onder meer GTIN/EAN/barcode, winkelartikelnummers, externe database-ID's en interne product-ID's. Normalisatie voorkomt duplicaten en ondersteunt koppeling.
+Productidentiteiten omvatten onder meer GTIN/EAN/barcode, winkelartikelnummers, externe database-ID's en interne product-ID's. Normalisatie voorkomt duplicaten en ondersteunt koppeling. Een expliciete huismerkmarker in de bontekst is onderdeel van de identiteitsbewaking: bij een herkenbare marker van de winkelketen (zoals `AH` bij Albert Heijn) moet het externe product een passende merkidentiteit aantonen. Een conflict wordt zowel in kandidaatselectie als write-route en read-projectie fail-closed behandeld, zodat ook historisch fout opgeslagen centrale koppelingen niet als actief worden gepresenteerd.
 
 ## Migraties
 
