@@ -167,10 +167,25 @@ def list_official_gpc_bricks(conn: Connection) -> list[dict[str, Any]]:
     required = {"gpc_bricks", "gpc_classes", "gpc_families", "gpc_segments"}
     if required.issubset(tables):
         has_translations = "gpc_translations" in tables
-        brick_label = ("COALESCE((SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='brick' AND tr.entity_code=b.brick_code AND tr.language_code='nl' LIMIT 1), b.description)" if has_translations else "b.description")
-        class_label = ("COALESCE((SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='class' AND tr.entity_code=c.class_code AND tr.language_code='nl' LIMIT 1), c.description)" if has_translations else "c.description")
-        family_label = ("COALESCE((SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='family' AND tr.entity_code=f.family_code AND tr.language_code='nl' LIMIT 1), f.description)" if has_translations else "f.description")
-        segment_label = ("COALESCE((SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='segment' AND tr.entity_code=s.segment_code AND tr.language_code='nl' LIMIT 1), s.description)" if has_translations else "s.description")
+        has_product_groups = "gpc_product_groups" in tables
+        brick_sources = []
+        class_sources = []
+        family_sources = []
+        segment_sources = []
+        if has_translations:
+            brick_sources.append("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='brick' AND tr.entity_code=b.brick_code AND tr.language_code='nl' LIMIT 1)")
+            class_sources.append("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='class' AND tr.entity_code=c.class_code AND tr.language_code='nl' LIMIT 1)")
+            family_sources.append("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='family' AND tr.entity_code=f.family_code AND tr.language_code='nl' LIMIT 1)")
+            segment_sources.append("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='segment' AND tr.entity_code=s.segment_code AND tr.language_code='nl' LIMIT 1)")
+        if has_product_groups:
+            brick_sources.append("(SELECT NULLIF(gpg.gpc_brick_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_brick_code=b.brick_code AND gpg.language_code='nl' LIMIT 1)")
+            class_sources.append("(SELECT NULLIF(gpg.gpc_class_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_class_code=c.class_code AND gpg.language_code='nl' LIMIT 1)")
+            family_sources.append("(SELECT NULLIF(gpg.gpc_family_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_family_code=f.family_code AND gpg.language_code='nl' LIMIT 1)")
+            segment_sources.append("(SELECT NULLIF(gpg.gpc_segment_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_segment_code=s.segment_code AND gpg.language_code='nl' LIMIT 1)")
+        brick_label = f"COALESCE({', '.join([*brick_sources, 'b.description'])})"
+        class_label = f"COALESCE({', '.join([*class_sources, 'c.description'])})"
+        family_label = f"COALESCE({', '.join([*family_sources, 'f.description'])})"
+        segment_label = f"COALESCE({', '.join([*segment_sources, 's.description'])})"
         canonical = conn.execute(text(f"""
             SELECT b.brick_code, {brick_label} AS brick_description,
                    b.description AS brick_description_en,
