@@ -266,12 +266,15 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
         next_row["canonical_catalog_product_id"] = central_product_id
         next_row["gtin"] = central_gtin
         next_row["primary_gtin"] = central_gtin
+        next_row["linked_gtin"] = central_gtin
         next_row["product_type_id"] = product_type_id
         next_row["inventory_group_key"] = product_type_id
+        next_row["linked_product_type_id"] = product_type_id
         next_row["gpc_brick_code"] = gpc_brick_code
         next_row["gpc_brick_name"] = gpc_brick_name
         next_row["gpc_brick_name_en"] = gpc_brick_name_en
         next_row["product_type_label"] = gpc_brick_name
+        next_row["linked_product_type"] = gpc_brick_name
         next_row["gpc_source_version"] = gpc_source_version
         next_row["status"] = "linked_to_catalog"
         next_row["candidate_status"] = "linked_to_catalog"
