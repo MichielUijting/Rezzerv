@@ -20,6 +20,12 @@ function text(value, fallback = '-') {
   return normalized || fallback
 }
 
+function catalogKindLabel(value) {
+  return String(value ?? '').trim().toLowerCase() === 'exact'
+    ? 'Exact product'
+    : 'Generiek'
+}
+
 function sourceLabel(value) {
   const normalized = String(value ?? '').trim().toLowerCase()
   const labels = {
@@ -49,7 +55,7 @@ export default function CatalogPage() {
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
   const [filters, setFilters] = useState({
-    name: '', brand: '', primaryGtin: '', productType: '', source: '',
+    name: '', catalogKind: '', brand: '', primaryGtin: '', productType: '',
     householdArticleCount: '',
   })
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
@@ -72,15 +78,26 @@ export default function CatalogPage() {
         })
         const mappings = {
           name: 'name',
+          catalogKind: 'catalog_kind',
           brand: 'brand',
           primaryGtin: 'primary_gtin',
           productType: 'product_type',
-          source: 'source',
           householdArticleCount: 'household_article_count',
         }
         Object.entries(mappings).forEach(([stateKey, parameter]) => {
           const value = String(filters[stateKey] || '').trim()
-          if (value) params.set(parameter, value)
+          if (!value) return
+          if (stateKey === 'catalogKind') {
+            const normalized = value.toLowerCase()
+            const apiValue = normalized.startsWith('gener')
+              ? 'generic'
+              : normalized.startsWith('exact')
+                ? 'exact'
+                : normalized
+            params.set(parameter, apiValue)
+            return
+          }
+          params.set(parameter, value)
         })
         const response = await fetchJsonWithAuth(`/api/catalog?${params.toString()}`, { method: 'GET' })
         const data = await response.json().catch(() => ({}))
@@ -106,6 +123,8 @@ export default function CatalogPage() {
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => Boolean(selectedRows[id]))
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
+  const occupiedBodyRows = isLoading || items.length === 0 ? 1 : items.length
+  const fillerRowCount = Math.max(0, PAGE_SIZE - occupiedBodyRows)
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
@@ -161,8 +180,16 @@ export default function CatalogPage() {
       return
     }
     const rows = [
-      ['Universeel artikel', 'Merk', 'Primaire GTIN', 'Producttype', 'Bron', 'Huishoudartikelen'],
-      ...selectedItems.map((item) => [item.name, item.brand, item.primary_gtin, item.product_type, item.source, item.household_article_count]),
+      ['Universeel artikel', 'Soort', 'Merk', 'Primaire GTIN', 'Producttype', 'Bron', 'Huishoudartikelen'],
+      ...selectedItems.map((item) => [
+        item.name,
+        catalogKindLabel(item.catalog_kind),
+        item.brand,
+        item.primary_gtin,
+        item.product_type,
+        sourceLabel(item.source),
+        item.household_article_count,
+      ]),
     ]
     const csv = rows.map((row) => row.map(csvValue).join(';')).join('\r\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -183,7 +210,7 @@ export default function CatalogPage() {
             <div className="rz-catalog-header">
               <div>
                 <h2>Catalogus</h2>
-                <p>Overzicht van universele artikelen, centrale productidentiteiten en GS1 GPC-classificaties.</p>
+                <p>Overzicht van generieke artikelen en exacte producten met hun centrale GS1 GPC-classificatie.</p>
               </div>
             </div>
 
@@ -201,27 +228,27 @@ export default function CatalogPage() {
             <div className="rz-table-scroll rz-table-scroll--wide">
               <Table dataTestId="catalog-table" tableClassName="rz-catalog-table" resizableColumns>
                 <colgroup>
-                  <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col className="rz-catalog-col-brand" />
-                  <col className="rz-catalog-col-gtin" /><col className="rz-catalog-col-product-type" /><col className="rz-catalog-col-source" />
+                  <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col className="rz-catalog-col-kind" />
+                  <col className="rz-catalog-col-brand" /><col className="rz-catalog-col-gtin" /><col className="rz-catalog-col-product-type" />
                   <col className="rz-catalog-col-household-count" />
                 </colgroup>
                 <thead>
                   <tr className="rz-table-header">
                     <th className="rz-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} aria-label="Selecteer alle zichtbare catalogusartikelen" /></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('name')}>Universeel artikel <span>{sortMark('name')}</span></button></th>
+                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalog_kind')}>Soort <span>{sortMark('catalog_kind')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('brand')}>Merk <span>{sortMark('brand')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('primary_gtin')}>Primaire GTIN <span>{sortMark('primary_gtin')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('product_type')}>Producttype <span>{sortMark('product_type')}</span></button></th>
-                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('source')}>Bron <span>{sortMark('source')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('household_article_count')}>Huishoudartikelen <span>{sortMark('household_article_count')}</span></button></th>
                   </tr>
                   <tr className="rz-external-databases-filter-row">
                     <th />
                     <th><input className="rz-table-filter" placeholder="Zoek" value={filters.name} onChange={(event) => updateFilter('name', event.target.value)} /></th>
+                    <th><input className="rz-table-filter" placeholder="Filter" value={filters.catalogKind} onChange={(event) => updateFilter('catalogKind', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.brand} onChange={(event) => updateFilter('brand', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.primaryGtin} onChange={(event) => updateFilter('primaryGtin', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.productType} onChange={(event) => updateFilter('productType', event.target.value)} /></th>
-                    <th><input className="rz-table-filter" placeholder="Filter" value={filters.source} onChange={(event) => updateFilter('source', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
                   </tr>
                 </thead>
@@ -234,10 +261,15 @@ export default function CatalogPage() {
                           <CatalogProductImage imageUrl={item.image_url} productName={item.name} compact />
                           <span>{text(item.name)}</span>
                         </div>
-                      </td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
-                      <td>{sourceLabel(item.source)}</td><td className="rz-num">{Number(item.household_article_count || 0)}</td>
+                      </td><td>{catalogKindLabel(item.catalog_kind)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
+                      <td className="rz-num">{Number(item.household_article_count || 0)}</td>
                     </tr>
                   )) : <tr><td colSpan="7">Geen universele artikelen gevonden.</td></tr>}
+                  {!isLoading ? Array.from({ length: fillerRowCount }, (_, index) => (
+                    <tr key={`catalog-filler-${index}`} className="rz-catalog-filler-row" aria-hidden="true" data-testid="catalog-filler-row">
+                      <td colSpan="7">&nbsp;</td>
+                    </tr>
+                  )) : null}
                 </tbody>
               </Table>
             </div>
