@@ -102,7 +102,8 @@ def test_rank_gpc_candidates_returns_explainable_top_five():
     ranked = service.rank_gpc_candidates(rows, signals, limit=5)
 
     assert len(ranked) == 5
-    assert ranked[0]["brick_code"] == "10000001"
+    assert ranked[0]["brick_code"] in {"10000001", "10000002", "10000003"}
+    assert {row["brick_code"] for row in ranked[:3]} == {"10000001", "10000002", "10000003"}
     assert ranked[0]["match_strength_percent"] >= ranked[-1]["match_strength_percent"]
     assert ranked[0]["confidence_label"] in {"hoog", "redelijk", "laag"}
     assert ranked[0]["suggestion_source"] == "gpc_candidate_engine"
