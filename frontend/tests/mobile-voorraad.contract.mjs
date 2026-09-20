@@ -98,6 +98,9 @@ assert.match(mobileSource, /locationTrackingEnabled \? 'Zoek artikel, groep of l
 assert.match(mobileSource, /\.\.\.\(locationTrackingEnabled \? \[\{ value: 'location', label: 'Locatie A–Z' \}\] : \[\]\)/)
 assert.match(mobileSource, /\/api\/dev\/inventory-preview/)
 assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
+assert.match(mobileSource, /CatalogArticleThumbnail/)
+assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
+assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
 
 assert.equal(existsSync(orangeWallpaper), true)
 assert.match(mobileCss, /\/inhuis-orange-wallpaper\.svg/)
