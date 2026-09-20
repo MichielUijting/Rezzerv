@@ -531,3 +531,105 @@ def link_off_product_with_product_type(
         "creates_inventory_event": False,
         "mutates_inventory": False,
     }
+
+def link_generic_product_with_product_type(
+    *,
+    receipt_item_id: str,
+    generic_product_name: str,
+    product_type_assignment: dict[str, Any],
+    force_failure_after_link: bool = False,
+) -> dict[str, Any]:
+    """Koppel een bonartikel aan een generiek centraal Catalogusartikel.
+
+    Deze route is bedoeld voor bonteksten die het artikeltype betrouwbaar
+    identificeren, maar geen exacte merk-/variant-/GTIN-identiteit bewijzen.
+    Het centrale product heeft daarom bewust geen GTIN, merk, variant, maat of
+    productafbeelding. De officiële GS1 GPC Brick is de classificatie-authority.
+
+    Net als de exacte OFF-route muteert deze platformbrede koppeling geen
+    household_articles, bonregels, purchase-importregels of voorraad.
+    """
+    generic_name = _clean_text(generic_product_name)
+    if not generic_name:
+        raise ValueError("Generieke artikelnaam is verplicht")
+
+    ensure_product_inventory_group_schema()
+    with engine.begin() as conn:
+        product_type_id = _resolve_product_type(conn, product_type_assignment)
+        brick_code = product_type_id.split(":", 1)[1]
+        gpc_source = _normalize_gpc_source(product_type_assignment)
+        confidence = float(product_type_assignment.get("confidence_score") or 1.0)
+
+        global_product_id = get_or_create_global_product(
+            conn,
+            gtin=None,
+            name=generic_name,
+            brand=None,
+            variant=None,
+            category=None,
+            size_value=None,
+            size_unit=None,
+            image_url=None,
+            source="external_databases_generic",
+            status="active",
+        )
+
+        membership = link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=global_product_id,
+            inventory_group_key=product_type_id,
+            comparison_group_key=product_type_id,
+            confidence=confidence,
+            source="external_databases_generic",
+            confirmed_by_user=True,
+        )
+        if not membership.get("ok"):
+            raise ValueError(
+                membership.get("error")
+                or "Generiek Catalogusartikel kon niet aan Producttype worden gekoppeld"
+            )
+
+        _persist_global_product_gpc_assignment(
+            conn,
+            global_product_id=global_product_id,
+            brick_code=brick_code,
+            gpc_source=gpc_source,
+            confidence=confidence,
+        )
+
+        receipt_link = _receipt_item_reference(conn, receipt_item_id)
+        confirmed_external_link = confirm_external_article_for_receipt_item(
+            conn,
+            receipt_item_id=receipt_item_id,
+            global_product_id=global_product_id,
+            confirmed_by="external_databases_generic_link",
+        )
+        receipt_link["external_article_product_link"] = confirmed_external_link
+
+        if force_failure_after_link:
+            raise RuntimeError("Geforceerde rollbackcontrole na generieke koppeling")
+
+    return {
+        "ok": True,
+        "linked": True,
+        "generic": True,
+        "receipt_item_id": _clean_text(receipt_item_id),
+        "receipt_item": receipt_link,
+        "global_product": {
+            "id": global_product_id,
+            "gtin": "",
+            "name": generic_name,
+            "brand": "",
+            "generic": True,
+        },
+        "product_type": {
+            "id": product_type_id,
+            "gpc_brick_code": brick_code,
+            "source": gpc_source,
+            "confidence": confidence,
+        },
+        "membership": membership,
+        "mutates_household_data": False,
+        "mutates_inventory": False,
+    }
+
