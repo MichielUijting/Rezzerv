@@ -118,22 +118,27 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
 
     central_product_details: dict[str, Any] = {}
     identity_rejection: dict[str, Any] = {}
+    generic_central_link = bool(
+        central_link
+        and _text(central_link.get("confirmed_by")) == "external_databases_generic_link"
+    )
     if central_link:
         candidate_product_id = _text(central_link.get("global_product_id"))
         central_product_details = _central_product_details(conn, candidate_product_id)
-        identity_check = external_product_identity_compatibility(
-            retailer_code=retailer_code,
-            receipt_text=receipt_text,
-            candidate_brand=central_product_details.get("global_product_brand"),
-            candidate_name=(
-                central_product_details.get("global_product_name")
-                or central_link.get("global_product_name")
-            ),
-        )
-        if not identity_check.get("ok"):
-            identity_rejection = identity_check
-            central_link = None
-            central_product_details = {}
+        if not generic_central_link:
+            identity_check = external_product_identity_compatibility(
+                retailer_code=retailer_code,
+                receipt_text=receipt_text,
+                candidate_brand=central_product_details.get("global_product_brand"),
+                candidate_name=(
+                    central_product_details.get("global_product_name")
+                    or central_link.get("global_product_name")
+                ),
+            )
+            if not identity_check.get("ok"):
+                identity_rejection = identity_check
+                central_link = None
+                central_product_details = {}
 
     if not central_link:
         candidate_gtin_values = []
@@ -194,6 +199,8 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     next_row["central_global_product_name"] = central_product_name
     next_row["is_linked_to_catalog"] = active
     next_row["is_existing_link_for_receipt_item"] = active
+    next_row["central_link_mode"] = "generic" if generic_central_link and active else ("exact" if active else "")
+    next_row["is_generic_catalog_link"] = bool(generic_central_link and active)
     next_row["central_link_identity_rejected"] = bool(identity_rejection)
     next_row["central_link_identity_rejection_reason"] = _text(
         identity_rejection.get("reason")
