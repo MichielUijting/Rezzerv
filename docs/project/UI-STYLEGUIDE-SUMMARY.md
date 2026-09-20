@@ -300,6 +300,15 @@ De standaard desktop-/matrixweergave toont waar een tabel pagineert **10 zichtba
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
 - hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen.
 
+### Tabel-loadingoverlay
+
+- bij het laden of verversen van tabelgegevens wordt de blokkerende loading-overlay pas zichtbaar nadat de laadstatus **1.000 ms onafgebroken** actief is; kortere laadacties tonen geen overlay-flits;
+- gebruik hiervoor de centrale `DelayedTableLoadingOverlay`; feature-specifieke letter-, spinner- of cirkelvarianten zijn niet toegestaan;
+- de overlay toont uitsluitend het bestaande **Inhuis-beeldmerk zonder woordmerk** (`/inhuis-app-icon.png`), dus geen losse letter `R`, geen cirkelkader en geen zichtbare tekst onder het logo;
+- op een regulier desktopvenster is het beeldmerk **250px breed**, exact vijfmaal de 50px-basishoogte van het Inhuis-logo in de desktopheader; op smallere vensters mag het responsief begrensd worden tot maximaal `70vw`;
+- zodra laden gereed is of faalt verdwijnt de overlay direct;
+- de overlay gebruikt `role="status"`, `aria-busy="true"` en een niet-zichtbaar toegankelijk laadlabel; animatie wordt uitgeschakeld bij `prefers-reduced-motion`.
+
 ## Iconen en toegankelijkheid
 
 - iconen zijn functioneel, eenvoudig en consistent;

@@ -17,6 +17,9 @@ const typographyCss = readFrontend('src/ui/typography.css')
 const mainSource = readFrontend('src/main.jsx')
 const indexHtml = readFrontend('index.html')
 const manifest = JSON.parse(readFrontend('public/manifest.webmanifest'))
+const tableLoadingOverlay = readFrontend('src/ui/DelayedTableLoadingOverlay.jsx')
+const tableLoadingCss = readFrontend('src/ui/tableLoadingOverlay.css')
+const externalReceiptOverview = readFrontend('src/features/externalDatabases/ReceiptItemsOverview.jsx')
 
 assert.match(brandLogo, /\/inhuis-logo-header\.png/)
 assert.match(brandLogo, /\/inhuis-logo-white\.png/)
@@ -47,6 +50,13 @@ assert.equal(manifest.short_name, 'Inhuis')
 assert.equal(manifest.description, 'Inhuis kassabon-inname en voorraadbeheer')
 assert.equal(manifest.icons?.[0]?.src, '/inhuis-app-icon.png')
 assert.ok(fs.existsSync(path.join(frontendRoot, 'public/inhuis-app-icon.png')))
+assert.match(tableLoadingOverlay, /const DEFAULT_DELAY_MS = 1000/)
+assert.match(tableLoadingOverlay, /src="\/inhuis-app-icon\.png"/)
+assert.match(tableLoadingOverlay, /data-testid="table-loading-logo"/)
+assert.match(tableLoadingCss, /width:\s*min\(250px,\s*70vw\)/)
+assert.doesNotMatch(tableLoadingCss, /border-radius:\s*50%/)
+assert.match(externalReceiptOverview, /DelayedTableLoadingOverlay active=\{isItemsLoading \|\| isOffLoading\}/)
+assert.doesNotMatch(externalReceiptOverview, /showSearchComplete|rz-search-complete-letter|rz-search-progress-indicator/)
 
 // User-visible branding guardrails. Technical REZZERV_* keys, events, storage keys,
 // provider/class names and test credentials may intentionally remain Rezzerv internally.
