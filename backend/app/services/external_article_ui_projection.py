@@ -169,6 +169,7 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
                 candidate_name=catalog_product.get("global_product_name"),
             )
             if identity_check.get("ok"):
+                identity_rejection = {}
                 central_link = {
                     "global_product_id": catalog_product.get("global_product_id"),
                     "global_product_name": catalog_product.get("global_product_name"),
