@@ -104,6 +104,10 @@ ALLOWED_COMPATIBILITY_FILES: dict[str, str] = {
     ".github/workflows/postgresql-migration-foundation-validation.yml": (
         "Validates both sides of the SQLite-to-PostgreSQL migration foundation."
     ),
+    "backend/app/testing/external_article_product_link_contract.py": (
+        "Exercises the explicit SQLite side of the external-article link migration/foundation "
+        "compatibility contract; normal application and regression authority remain PostgreSQL."
+    ),
     "backend/app/testing/receipt_inventory_locationless_production_contract.py": (
         "Exercises the explicit SQLite-only locationless receipt compatibility harness; "
         "production receipt authority remains PostgreSQL."
