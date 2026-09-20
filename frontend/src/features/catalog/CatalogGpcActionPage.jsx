@@ -199,7 +199,7 @@ export default function CatalogGpcActionPage() {
   function resetArticle() {
     setSelectedArticle(null)
     setAssignment(null)
-    setSuggestion(null)
+    setSuggestions([])
     setBrickEditorOpen(false)
     setArticleQuery('')
     setBrickQuery('')
