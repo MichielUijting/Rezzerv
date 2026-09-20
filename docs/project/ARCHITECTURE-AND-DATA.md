@@ -43,6 +43,8 @@ De kernscheiding is:
 
 Een centraal product mag nooit automatisch huishoudgegevens delen. Huishoudartikelen, locaties, voorraad en gebruik blijven per huishouden gescheiden.
 
+**Catalogus en Externe databases zijn platformbrede domeinen.** De definitieve koppeling tussen een winkel-/bonartikel en een centraal product wordt centraal opgeslagen en geprojecteerd. `household_articles.global_product_id` blijft een huishoudspecifieke relatie en mag niet als fallback of blokkade voor een platformbrede Cataloguskoppeling worden gebruikt. Een platformbrede externe-databaseactie mag daarom niet stilzwijgend household articles, bonregels of purchase-importregels van één huishouden wijzigen.
+
 ## Identiteiten
 
 Productidentiteiten omvatten onder meer GTIN/EAN/barcode, winkelartikelnummers, externe database-ID's en interne product-ID's. Normalisatie voorkomt duplicaten en ondersteunt koppeling.
