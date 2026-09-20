@@ -3,6 +3,12 @@ from __future__ import annotations
 from types import ModuleType
 from typing import Any, Callable
 
+from app.services.external_article_product_link_service import (
+    normalize_external_link_article_code,
+    normalize_external_link_receipt_text,
+    normalize_external_link_retailer_code,
+)
+
 
 _POLICY_MARKER = '_rezzerv_household_alias_policy_installed'
 _INVENTORY_PREVIEW_MARKER = '_rezzerv_household_alias_inventory_preview_installed'
@@ -21,6 +27,188 @@ def _route_for(main_module: ModuleType, path: str, method: str):
             continue
         return route
     return None
+
+
+def _central_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Resolve Catalogus images without mutating household-specific article links.
+
+    Exact Catalogus links created in Externe databases are platform-wide and deliberately
+    do not write household_articles.global_product_id. For Voorraad we therefore use
+    the receipt/import lineage that already points at the canonical household article,
+    then resolve the confirmed central external-article link for that same shop identity.
+
+    If one household article has receipt lineage to multiple different central products,
+    the projection fails closed and shows no derived image instead of guessing a photo.
+    """
+    unresolved = {
+        str(row.get('id') or '').strip()
+        for row in article_rows
+        if str(row.get('id') or '').strip() and not str(row.get('image_url') or '').strip()
+    }
+    if not unresolved:
+        return {}
+
+    placeholders = ', '.join(f':fallback_article_id_{index}' for index in range(len(unresolved)))
+    params = {
+        f'fallback_article_id_{index}': article_id
+        for index, article_id in enumerate(sorted(unresolved))
+    }
+    source_rows = conn.execute(
+        text(
+            f'''
+            WITH source_identities AS (
+                SELECT
+                    pil.matched_household_article_id AS household_article_id,
+                    COALESCE(epc.retailer_code, rt.store_chain, rt.store_name, '') AS retailer_code,
+                    COALESCE(epc.receipt_line_text, pil.article_name_raw, '') AS receipt_line_text,
+                    COALESCE(epc.external_article_code, pil.external_article_code, '') AS external_article_code,
+                    COALESCE(epc.updated_at, epc.created_at, pil.updated_at, pil.created_at) AS source_at
+                FROM purchase_import_lines pil
+                JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+                JOIN household_articles source_ha
+                  ON source_ha.id = pil.matched_household_article_id
+                 AND source_ha.household_id = pib.household_id
+                LEFT JOIN external_product_candidates epc
+                  ON epc.purchase_import_line_id = pil.id
+                LEFT JOIN receipt_tables rt
+                  ON pib.source_reference = ('receipt:' || CAST(rt.id AS TEXT))
+                WHERE pil.matched_household_article_id IN ({placeholders})
+
+                UNION ALL
+
+                SELECT
+                    rtl.matched_article_id AS household_article_id,
+                    COALESCE(rt.store_chain, rt.store_name, '') AS retailer_code,
+                    COALESCE(rtl.corrected_raw_label, rtl.raw_label, rtl.normalized_label, '') AS receipt_line_text,
+                    COALESCE(rtl.external_article_code, '') AS external_article_code,
+                    COALESCE(rt.updated_at, rt.created_at) AS source_at
+                FROM receipt_table_lines rtl
+                JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+                JOIN household_articles source_ha
+                  ON source_ha.id = rtl.matched_article_id
+                 AND source_ha.household_id = rt.household_id
+                WHERE rtl.matched_article_id IN ({placeholders})
+            ), ranked AS (
+                SELECT
+                    household_article_id,
+                    retailer_code,
+                    receipt_line_text,
+                    external_article_code,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY household_article_id
+                        ORDER BY source_at DESC
+                    ) AS source_rank
+                FROM source_identities
+            )
+            SELECT
+                household_article_id,
+                retailer_code,
+                receipt_line_text,
+                external_article_code,
+                source_rank
+            FROM ranked
+            WHERE source_rank <= 8
+            ORDER BY household_article_id, source_rank
+            '''
+        ),
+        params,
+    ).mappings().all()
+
+    sources_by_article: dict[str, list[dict[str, str]]] = {}
+    unique_identities: list[tuple[str, str, str]] = []
+    seen_identities: set[tuple[str, str, str]] = set()
+    for source in source_rows:
+        article_id = str(source.get('household_article_id') or '').strip()
+        retailer = normalize_external_link_retailer_code(source.get('retailer_code'))
+        article_code = normalize_external_link_article_code(source.get('external_article_code'))
+        receipt_text = normalize_external_link_receipt_text(source.get('receipt_line_text'))
+        if not article_id or not retailer or (not article_code and not receipt_text):
+            continue
+        identity = (retailer, article_code, receipt_text)
+        sources_by_article.setdefault(article_id, []).append({
+            'retailer': retailer,
+            'article_code': article_code,
+            'receipt_text': receipt_text,
+        })
+        if identity not in seen_identities:
+            seen_identities.add(identity)
+            unique_identities.append(identity)
+
+    if not unique_identities:
+        return {}
+
+    links_by_code: dict[tuple[str, str], dict[str, Any]] = {}
+    links_by_text: dict[tuple[str, str], dict[str, Any]] = {}
+    batch_size = 100
+    for batch_start in range(0, len(unique_identities), batch_size):
+        batch = unique_identities[batch_start:batch_start + batch_size]
+        clauses = []
+        link_params: dict[str, Any] = {}
+        for index, (retailer, article_code, receipt_text) in enumerate(batch):
+            suffix = f'{batch_start}_{index}'
+            link_params[f'retailer_{suffix}'] = retailer
+            alternatives = []
+            if article_code:
+                link_params[f'article_code_{suffix}'] = article_code
+                alternatives.append(f'link.external_article_code = :article_code_{suffix}')
+            if receipt_text:
+                link_params[f'receipt_text_{suffix}'] = receipt_text
+                alternatives.append(f'link.receipt_text_normalized = :receipt_text_{suffix}')
+            if alternatives:
+                clauses.append(
+                    f"(link.retailer_code = :retailer_{suffix} AND ({' OR '.join(alternatives)}))"
+                )
+        if not clauses:
+            continue
+        link_rows = conn.execute(
+            text(
+                f'''
+                SELECT
+                    link.retailer_code,
+                    link.external_article_code,
+                    link.receipt_text_normalized,
+                    link.global_product_id,
+                    COALESCE(gp.image_url, '') AS image_url,
+                    link.confirmed_at,
+                    link.id
+                FROM external_article_product_links link
+                JOIN global_products gp ON gp.id = link.global_product_id
+                WHERE link.status = 'confirmed'
+                  AND lower(COALESCE(gp.status, 'active')) = 'active'
+                  AND ({' OR '.join(clauses)})
+                ORDER BY link.confirmed_at DESC, link.id DESC
+                '''
+            ),
+            link_params,
+        ).mappings().all()
+        for link in link_rows:
+            retailer = str(link.get('retailer_code') or '').strip()
+            article_code = str(link.get('external_article_code') or '').strip()
+            receipt_text = str(link.get('receipt_text_normalized') or '').strip()
+            if article_code:
+                links_by_code.setdefault((retailer, article_code), dict(link))
+            if receipt_text:
+                links_by_text.setdefault((retailer, receipt_text), dict(link))
+
+    images_by_article: dict[str, str] = {}
+    for article_id, sources in sources_by_article.items():
+        products: dict[str, str] = {}
+        for source in sources:
+            link = None
+            if source['article_code']:
+                link = links_by_code.get((source['retailer'], source['article_code']))
+            if link is None and source['receipt_text']:
+                link = links_by_text.get((source['retailer'], source['receipt_text']))
+            if not link:
+                continue
+            product_id = str(link.get('global_product_id') or '').strip()
+            if product_id:
+                products[product_id] = str(link.get('image_url') or '').strip()
+        if len(products) == 1:
+            image_url = next(iter(products.values()))
+            if image_url:
+                images_by_article[article_id] = image_url
+    return images_by_article
 
 
 def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
@@ -48,8 +236,10 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
                 f'''
                 SELECT
                     ha.id,
+                    ha.household_id,
                     ha.naam,
                     ha.custom_name,
+                    ha.global_product_id,
                     COALESCE(gp.name, '') AS product_name,
                     COALESCE(gp.image_url, '') AS image_url
                 FROM household_articles ha
@@ -59,6 +249,7 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
             ),
             params,
         ).mappings().all()
+        derived_images = _central_catalog_images_for_household_articles(conn, text, article_rows)
 
     articles_by_id = {str(row.get('id') or ''): row for row in article_rows}
     projected = []
@@ -71,7 +262,7 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
         canonical_name = str(article.get('naam') or '').strip()
         custom_name = str(article.get('custom_name') or '').strip()
         product_name = str(article.get('product_name') or '').strip()
-        image_url = str(article.get('image_url') or '').strip()
+        image_url = str(article.get('image_url') or '').strip() or derived_images.get(article_id, '')
         row['household_article_name'] = custom_name or canonical_name or str(row.get('artikel') or '')
         row['product_name'] = product_name or canonical_name or str(row.get('artikel') or '')
         row['image_url'] = image_url
