@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Header from '../../ui/Header.jsx'
 import Button from '../../ui/Button.jsx'
 import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
+import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 import '../../pages/mobileVoorraad.css'
@@ -374,6 +375,12 @@ export default function MobileShopping() {
                       />
                       <span>{item.checked ? 'Gekocht' : 'Nog te kopen'}</span>
                     </label>
+
+                    <CatalogArticleThumbnail
+                      imageUrl={item.image_url}
+                      productName={item.article_name}
+                      className="rz-mobile-shopping-product-thumbnail"
+                    />
 
                     <div className="rz-mobile-shopping-card-main">
                       <div className="rz-mobile-shopping-card-title">{item.article_name}</div>

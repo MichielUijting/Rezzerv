@@ -110,7 +110,7 @@
 
 .rz-mobile-inventory-toolbar-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
 }
@@ -188,6 +188,10 @@
 
 .rz-mobile-inventory-card--disabled {
   opacity: 0.72;
+}
+
+.rz-mobile-inventory-product-thumbnail {
+  align-self: center;
 }
 
 .rz-mobile-inventory-card-main {

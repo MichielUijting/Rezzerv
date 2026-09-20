@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import Header from '../ui/Header'
 import Button from '../ui/Button'
 import Select from '../ui/Select.jsx'
+import CatalogArticleThumbnail from '../ui/CatalogArticleThumbnail.jsx'
 import { fetchJsonWithAuth } from '../lib/authSession.js'
 import './mobileVoorraad.css'
 
@@ -54,6 +55,7 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
         articleName: String(item?.artikel || householdName || productName).trim(),
         householdName: householdName || productName || 'Onbekend artikel',
         productName,
+        imageUrl: String(item?.image_url || '').trim(),
         articleGroup,
         quantity,
         locations: new Set(location ? [location] : []),
@@ -67,6 +69,7 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
     if (location) existing.locations.add(location)
     if (sublocation) existing.sublocations.add(`${location}__${sublocation}`)
     if (!existing.detailId && inventoryId) existing.detailId = inventoryId
+    if (!existing.imageUrl && item?.image_url) existing.imageUrl = String(item.image_url).trim()
   })
 
   return [...grouped.values()]
@@ -271,6 +274,11 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                 : ''
               const content = (
                 <>
+                  <CatalogArticleThumbnail
+                    imageUrl={row.imageUrl}
+                    productName={row.productName || row.householdName}
+                    className="rz-mobile-inventory-product-thumbnail"
+                  />
                   <div className="rz-mobile-inventory-card-main">
                     <div className="rz-mobile-inventory-card-title">{row.householdName}</div>
                     {row.productName && row.productName !== row.householdName ? (

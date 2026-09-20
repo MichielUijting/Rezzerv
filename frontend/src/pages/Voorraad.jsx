@@ -10,6 +10,7 @@ import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from "
 import useDismissOnComponentClick from "../lib/useDismissOnComponentClick.js";
 import { getAuthHeaders, readStoredAuthContext } from "../lib/authSession.js";
 import { limitSearchCandidates } from "../ui/searchCandidatePolicy.js";
+import CatalogArticleThumbnail from "../ui/CatalogArticleThumbnail.jsx";
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
@@ -506,6 +507,7 @@ function mergeInventoryRows(liveRows = []) {
         productnaam: row?.product_name || artikel,
         householdArticleName: row?.household_article_name || '',
         productName: row?.product_name || artikel,
+        imageUrl: String(row?.image_url || '').trim(),
         householdArticleId: row?.household_article_id || '',
         articleGroupName: row?.article_group_name || '',
         aantal,
@@ -526,6 +528,7 @@ function mergeInventoryRows(liveRows = []) {
     if (sublocatie || locatie) existing._sublocationValues.add(`${locatie}__${sublocatie}`)
     if (!existing.inventoryId && row.id) existing.inventoryId = row.id
     if (!existing.detailId) existing.detailId = buildArticleDetailId(existing.artikel, row.id || existing.inventoryId || existing.id, row.household_article_id) || existing.id
+    if (!existing.imageUrl && row?.image_url) existing.imageUrl = String(row.image_url).trim()
   })
 
   const merged = [...grouped.values()].map((row) => {
@@ -543,6 +546,7 @@ function mergeInventoryRows(liveRows = []) {
       productnaam: row.productnaam || row.artikel,
       householdArticleName: row.householdArticleName || '',
       productName: row.productName || row.artikel,
+      imageUrl: row.imageUrl || '',
       householdArticleId: row.householdArticleId || '',
       artikelgroep: row.articleGroupName || 'Niet ingedeeld',
       articleGroupName: row.articleGroupName || 'Niet ingedeeld',
@@ -1331,7 +1335,10 @@ export default function Voorraad() {
       const label = row?.isAggregated ? `${row.huishoudnaam || row.artikel || ''} (samengevoegd)` : (row.huishoudnaam || row.artikel || '')
       return (
         <div className="rz-inline-cell rz-inline-label rz-stock-article-cell" title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined}>
-          <div className="rz-article-name-primary">{label || '—'}</div>
+          <div className="rz-product-row-identity">
+            <CatalogArticleThumbnail imageUrl={row?.imageUrl} productName={row?.productnaam || row?.productName || label} />
+            <div className="rz-article-name-primary">{label || '—'}</div>
+          </div>
         </div>
       );
     }
