@@ -33,6 +33,7 @@ from app.services.external_product_identity_policy import (
     external_product_identity_compatibility,
 )
 from app.services.gpc_local_catalog_service import classify_gpc_product
+from app.services.global_product_service import get_or_create_global_product
 from app.services.off_product_link_service import (
     _upsert_global_product,
     link_generic_product_with_product_type,
@@ -116,6 +117,17 @@ def _cleanup(conn) -> None:
     conn.execute(
         text("DELETE FROM household_articles WHERE id = :id"),
         {"id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID},
+    )
+    conn.execute(
+        text(
+            """
+            DELETE FROM global_products
+            WHERE source = 'user'
+              AND name = :legacy_name
+              AND COALESCE(TRIM(primary_gtin), '') = ''
+            """
+        ),
+        {"legacy_name": GLOBAL_SCOPE_RECEIPT_TEXT},
     )
     conn.execute(
         text(
@@ -305,6 +317,7 @@ def _assert_off_identity_and_catalog_queries() -> None:
         name=NAME_FILTER,
         brand="",
         primary_gtin="",
+        catalog_kind="",
         product_type="",
         source="",
         household_article_count="",
@@ -649,6 +662,16 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
                 "raw_payload": '{"batch_metadata":{"store_name":"Albert Heijn"}}',
             },
         )
+        legacy_product_id = get_or_create_global_product(
+            conn,
+            gtin=None,
+            name=GLOBAL_SCOPE_RECEIPT_TEXT,
+            source="user",
+            status="active",
+        )
+        if not legacy_product_id:
+            raise AssertionError("Legacy user product was not created")
+
         conn.execute(
             text(
                 """
@@ -665,7 +688,7 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
                 "id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID,
                 "household_id": GLOBAL_SCOPE_HOUSEHOLD_ID,
                 "naam": GLOBAL_SCOPE_RECEIPT_TEXT,
-                "global_product_id": GLOBAL_SCOPE_LEGACY_PRODUCT_ID,
+                "global_product_id": legacy_product_id,
             },
         )
         conn.execute(
@@ -772,7 +795,7 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
             ),
             {"id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID},
         ).mappings().one()
-        if household_article.get("global_product_id") != GLOBAL_SCOPE_LEGACY_PRODUCT_ID:
+        if household_article.get("global_product_id") != legacy_product_id:
             raise AssertionError(household_article)
 
         purchase_line = conn.execute(
@@ -906,7 +929,7 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
             ),
             {"id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID},
         ).mappings().one()
-        if household_article.get("global_product_id") != GLOBAL_SCOPE_LEGACY_PRODUCT_ID:
+        if household_article.get("global_product_id") != legacy_product_id:
             raise AssertionError(household_article)
 
         purchase_line = conn.execute(
@@ -943,6 +966,37 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
     if str(generic_row.get("linked_product_type_id") or "") != "gpc:10000262":
         raise AssertionError(generic_row)
 
+    catalog_projection = catalog_routes.list_catalog(
+        name="",
+        brand="",
+        primary_gtin="",
+        catalog_kind="",
+        product_type="",
+        source="",
+        household_article_count="",
+        sort_by="name",
+        sort_direction="asc",
+        limit=2000,
+        offset=0,
+    )
+    catalog_by_id = {
+        str(item.get("id") or ""): item
+        for item in catalog_projection.get("items") or []
+    }
+    if legacy_product_id in catalog_by_id:
+        raise AssertionError(
+            f"Superseded household user alias is still visible: {catalog_by_id[legacy_product_id]}"
+        )
+    generic_catalog_row = catalog_by_id.get(generic_product_id)
+    if not generic_catalog_row:
+        raise AssertionError(
+            f"Generic central Catalog product missing: {generic_product_id}"
+        )
+    if generic_catalog_row.get("catalog_kind") != "generic":
+        raise AssertionError(generic_catalog_row)
+    if int(generic_catalog_row.get("household_article_count") or 0) != 1:
+        raise AssertionError(generic_catalog_row)
+
     with engine.begin() as conn:
         _cleanup(conn)
 
@@ -952,6 +1006,8 @@ def _assert_global_off_link_ignores_household_specific_product_link() -> None:
     print("POSTGRESQL_GENERIC_CATALOG_LINK_NO_GTIN_GREEN")
     print("POSTGRESQL_GENERIC_CATALOG_LINK_PRESERVES_HOUSEHOLD_GREEN")
     print("POSTGRESQL_GENERIC_BOUILLON_GPC_10000262_GREEN")
+    print("POSTGRESQL_CATALOG_SUPERSEDED_USER_ALIAS_HIDDEN_GREEN")
+    print("POSTGRESQL_CATALOG_REDIRECTED_HOUSEHOLD_COUNT_GREEN")
 
 
 def _assert_household_only_link_not_projected_as_global() -> None:
