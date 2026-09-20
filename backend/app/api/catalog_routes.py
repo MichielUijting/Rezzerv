@@ -331,7 +331,7 @@ def list_catalog(
     )
     order_expression = expressions.get(sort_by, expressions["name"])
     direction = "DESC" if sort_direction.lower() == "desc" else "ASC"
-    if sort_by in {"name", "brand", "primary_gtin", "product_type", "source"}:
+    if sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "source"}:
         order_sql = (
             f"LOWER({order_expression}) {direction}, "
             f"{order_expression} {direction}"
