@@ -29,6 +29,7 @@ function sourceLabel(value) {
     manual: 'Handmatig',
     openfoodfacts: 'Open Food Facts',
     open_food_facts: 'Open Food Facts',
+    external_databases_generic: 'Generiek via Externe databases',
     gs1: 'GS1',
     ai: 'AI',
     public_reference: 'Openbare referentie',
