@@ -1405,7 +1405,7 @@ export default function Voorraad() {
       <div className="rz-content">
         <div className="rz-content-inner">
           <div className="rz-card">
-            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" dataTestId="inventory-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inventoryColumnWidths), minWidth: buildTableWidth(inventoryColumnWidths) }}>
+            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="inventory-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inventoryColumnWidths), minWidth: buildTableWidth(inventoryColumnWidths) }}>
                 <colgroup>
                   <col style={{ width: `${inventoryColumnWidths.select}px` }} />
                   <col style={{ width: `${inventoryColumnWidths.huishoudnaam}px` }} />
