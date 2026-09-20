@@ -342,6 +342,7 @@ def _assert_off_identity_and_catalog_queries() -> None:
         name=NAME_FILTER,
         brand="",
         primary_gtin="",
+        catalog_kind="",
         product_type="",
         source="",
         household_article_count="",
