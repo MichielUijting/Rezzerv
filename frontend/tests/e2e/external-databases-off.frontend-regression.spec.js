@@ -410,6 +410,192 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
+  test('AH BOUILLON kan breed zoeken en zonder GTIN generiek op GPC Brick worden gekoppeld', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    let genericLinked = false;
+    let genericLinkBody = null;
+
+    const receiptPayload = () => ({
+      items: [{
+        receipt_item_id: 'purchase-import-line:ah-bouillon-generic',
+        receipt_item_type: 'purchase_import_line',
+        receipt_item_source_id: 'ah-bouillon-generic',
+        context_key: 'ctx-ah-bouillon-generic',
+        purchase_import_line_id: 'ah-bouillon-generic',
+        receipt_line_text: 'AH BOUILLON',
+        retailer_code: 'Albert Heijn',
+        retailer_article_number: '',
+        gtin: '',
+        quantity_label: '1',
+        price: 1.49,
+        candidate_status: genericLinked ? 'linked_to_catalog' : 'no_candidate',
+        status: genericLinked ? 'linked_to_catalog' : 'no_candidate',
+        global_product_id: genericLinked ? 'generic-bouillon-product' : null,
+        canonical_catalog_product_id: genericLinked ? 'generic-bouillon-product' : null,
+        is_receipt_item_placeholder: true,
+        is_linked_to_catalog: genericLinked,
+        central_link_active: genericLinked,
+        is_existing_link_for_receipt_item: genericLinked,
+        is_generic_catalog_link: genericLinked,
+        central_link_mode: genericLinked ? 'generic' : '',
+        is_linkable_to_catalog: false,
+        linked_candidate_name: genericLinked ? 'Bouillon' : '',
+        linked_product_type_id: genericLinked ? 'gpc:10000262' : '',
+        linked_product_type: genericLinked ? 'Soups - Prepared (Shelf Stable)' : '',
+        linked_gtin: '',
+        linked_score: null,
+        candidates: [],
+      }],
+    });
+
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(receiptPayload()),
+      });
+    });
+
+    await page.route('**/api/inventory/groups', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ group_options: [] }),
+      });
+    });
+
+    await page.route('**/api/external-products/off/search', async (route) => {
+      const body = route.request().postDataJSON();
+      const manual = body?.mode === 'manual';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          status: manual ? 'found' : 'no_results',
+          provider: 'search_a_licious',
+          query: manual ? body.query : 'ah bouillon',
+          mode: manual ? 'manual' : 'automatic',
+          mutated: false,
+          results: manual ? [
+            {
+              gtin: '0500003088840',
+              product_name: 'Bouillon',
+              brand: 'Marigold',
+              score: 0.86,
+              identity_compatible: false,
+              identity_conflict_reason: 'private_label_brand_conflict',
+              identity_conflict_message: 'Merk wijkt af van AH',
+            },
+            {
+              gtin: '8718906470101',
+              product_name: 'Bouillon bospaddenstoel',
+              brand: 'Albert Heijn',
+              score: 0.82,
+              identity_compatible: true,
+            },
+          ] : [],
+        }),
+      });
+    });
+
+    await page.route('**/api/catalog?primary_gtin=*&limit=20', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [], total: 0 }),
+      });
+    });
+
+    await page.route('**/api/catalog/gpc/bricks?query=*&limit=5', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{
+            brick_code: '10000262',
+            brick_description: 'Soups - Prepared (Shelf Stable)',
+            brick_description_en: 'Soups - Prepared (Shelf Stable)',
+          }],
+          total: 1,
+        }),
+      });
+    });
+
+    await page.route('**/api/external-products/generic/link', async (route) => {
+      genericLinkBody = route.request().postDataJSON();
+      genericLinked = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          linked: true,
+          generic: true,
+          global_product: {
+            id: 'generic-bouillon-product',
+            gtin: '',
+            name: 'Bouillon',
+            brand: '',
+            generic: true,
+          },
+          product_type: {
+            id: 'gpc:10000262',
+            gpc_brick_code: '10000262',
+          },
+        }),
+      });
+    });
+
+    await page.goto('/externe-databases');
+    const receiptTable = page.getByTestId('external-receipt-items-table');
+    const receiptRow = receiptTable.locator('tbody tr', { hasText: 'AH BOUILLON' });
+    await expect(receiptRow).toBeVisible();
+    await receiptRow.dblclick();
+
+    await expect(page.getByLabel('Generieke artikelnaam')).toHaveValue('Bouillon');
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
+
+    await page.getByLabel('OFF zoektekst').fill('BOUILLON');
+    await page.getByRole('button', { name: 'Zelf zoeken' }).click();
+
+    const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
+    const marigold = candidateTable.locator('tbody tr', { hasText: 'Marigold' });
+    await expect(marigold).toBeVisible();
+    await expect(marigold).toContainText('Merk wijkt af');
+    await expect(marigold.getByRole('radio')).toBeDisabled();
+    await expect(candidateTable.locator('tbody tr', { hasText: 'Albert Heijn' })).toBeVisible();
+
+    await page.getByLabel('Zoek op Brickcode of producttype').fill('10000262');
+    await page.getByRole('button', { name: 'Zoek GPC' }).click();
+    const gpcResults = page.getByTestId('external-gpc-search-results');
+    await expect(gpcResults).toContainText('10000262');
+    await expect(gpcResults).toContainText('Soups - Prepared (Shelf Stable)');
+    await gpcResults.getByRole('option').click();
+
+    await expect(page.getByRole('button', { name: 'Koppel als generiek artikel', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Koppel als generiek artikel', exact: true }).click();
+
+    expect(genericLinkBody).toEqual({
+      receipt_item_id: 'purchase-import-line:ah-bouillon-generic',
+      generic_product_name: 'Bouillon',
+      product_type_assignment: {
+        product_type_id: 'gpc:10000262',
+        gpc_source: 'manual',
+        mapping_source: 'manual_gs1_gpc',
+        confidence_score: 1,
+      },
+    });
+
+    const linkedRow = receiptTable.locator('tbody tr', { hasText: 'AH BOUILLON' });
+    await expect(linkedRow.locator('td').nth(3).getByRole('checkbox')).toBeChecked();
+    await expect(linkedRow.locator('td').nth(5)).toHaveText('Bouillon');
+    await expect(linkedRow.locator('td').nth(6)).toHaveText('Soups - Prepared (Shelf Stable)');
+    await expect(linkedRow.locator('td').nth(7)).toHaveText('-');
+
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
   // OFF_ZOEKOVERLAY_REGRESSIETEST_INGEVOERD
 
 });
