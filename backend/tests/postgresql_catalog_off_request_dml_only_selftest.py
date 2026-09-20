@@ -15,7 +15,10 @@ from app.api import catalog_routes
 from app.db import engine
 from app.services.external_database_off_index_matchers import match_retailer_receipt_line
 from app.services.external_article_confirmation_service import _candidate_identity
-from app.services.external_article_ui_projection import _central_product_details
+from app.services.external_article_ui_projection import (
+    _central_product_details,
+    project_central_link_truth,
+)
 from app.services.external_article_product_link_service import (
     _complete_global_product_link_data,
     save_external_article_product_link,
@@ -23,10 +26,14 @@ from app.services.external_article_product_link_service import (
 from app.services.external_product_candidate_store import (
     _m2c2l_enrich_linked_receipt_items,
     ensure_external_product_candidates_schema,
+    list_external_receipt_items,
 )
 from app.services.external_product_index_store import ensure_external_product_index_seeded
 from app.services.gpc_local_catalog_service import classify_gpc_product
-from app.services.off_product_link_service import _upsert_global_product
+from app.services.off_product_link_service import (
+    _upsert_global_product,
+    link_off_product_with_product_type,
+)
 from app.services.off_search_service import _normalize_result, _resolve_receipt_table_line
 from app.services.product_inventory_group_store import (
     link_global_product_to_inventory_group_with_connection,
@@ -34,14 +41,26 @@ from app.services.product_inventory_group_store import (
 
 GTIN_ALPHA = "8712345678901"
 GTIN_BRAVO = "8712345678902"
+GTIN_CHARLIE = "8712345678903"
 NAME_ALPHA = "postgresql catalog off proof alpha"
 NAME_BRAVO = "PostgreSQL Catalog OFF Proof Bravo"
+NAME_CHARLIE = "PostgreSQL Global OFF Scope Proof"
 NAME_FILTER = "postgresql catalog off proof"
 ALEMBIC_HEAD = "20260919_01"
 TEST_GROUP_KEY = "__postgresql_catalog_off_membership_group__"
 OFFICIAL_GPC_GROUP_KEY = "gpc:99999999"
 OFFICIAL_GPC_BRICK_CODE = "99999999"
 EXTERNAL_LINK_CONFIRMED_BY = "postgresql_catalog_off_request_dml_only_selftest"
+GLOBAL_SCOPE_PROVIDER_ID = "__postgresql_global_scope_provider__"
+GLOBAL_SCOPE_CONNECTION_ID = "__postgresql_global_scope_connection__"
+GLOBAL_SCOPE_BATCH_ID = "__postgresql_global_scope_batch__"
+GLOBAL_SCOPE_LINE_ID = "__postgresql_global_scope_line__"
+GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID = "__postgresql_global_scope_household_article__"
+GLOBAL_SCOPE_HOUSEHOLD_ID = "__postgresql_global_scope_household__"
+GLOBAL_SCOPE_CANDIDATE_ID = "__postgresql_global_scope_candidate__"
+GLOBAL_SCOPE_RECEIPT_TEXT = "AH BOUILLON GLOBAL SCOPE PROOF"
+GLOBAL_SCOPE_RETAILER = "albert-heijn"
+GLOBAL_SCOPE_LEGACY_PRODUCT_ID = "__legacy_household_only_product__"
 
 
 def _assert_runtime_create_denied() -> None:
@@ -55,6 +74,53 @@ def _assert_runtime_create_denied() -> None:
 
 
 def _cleanup(conn) -> None:
+    conn.execute(
+        text(
+            "DELETE FROM external_product_candidates "
+            "WHERE id = :candidate_id"
+        ),
+        {"candidate_id": GLOBAL_SCOPE_CANDIDATE_ID},
+    )
+    conn.execute(
+        text(
+            "DELETE FROM external_article_product_links "
+            "WHERE retailer_code = :retailer_code "
+            "AND receipt_text_normalized = :receipt_text_normalized"
+        ),
+        {
+            "retailer_code": GLOBAL_SCOPE_RETAILER,
+            "receipt_text_normalized": GLOBAL_SCOPE_RECEIPT_TEXT.lower(),
+        },
+    )
+    conn.execute(
+        text("DELETE FROM purchase_import_lines WHERE id = :id"),
+        {"id": GLOBAL_SCOPE_LINE_ID},
+    )
+    conn.execute(
+        text("DELETE FROM purchase_import_batches WHERE id = :id"),
+        {"id": GLOBAL_SCOPE_BATCH_ID},
+    )
+    conn.execute(
+        text("DELETE FROM household_store_connections WHERE id = :id"),
+        {"id": GLOBAL_SCOPE_CONNECTION_ID},
+    )
+    conn.execute(
+        text("DELETE FROM store_providers WHERE id = :id"),
+        {"id": GLOBAL_SCOPE_PROVIDER_ID},
+    )
+    conn.execute(
+        text("DELETE FROM household_articles WHERE id = :id"),
+        {"id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID},
+    )
+    conn.execute(
+        text(
+            "DELETE FROM global_product_gpc_bricks "
+            "WHERE global_product_id IN ("
+            "SELECT id FROM global_products WHERE primary_gtin = :gtin_charlie"
+            ")"
+        ),
+        {"gtin_charlie": GTIN_CHARLIE},
+    )
     conn.execute(
         text(
             "DELETE FROM external_article_product_links "
@@ -87,21 +153,21 @@ def _cleanup(conn) -> None:
             "DELETE FROM product_group_memberships "
             "WHERE global_product_id IN ("
             "SELECT id FROM global_products "
-            "WHERE primary_gtin IN (:gtin_alpha, :gtin_bravo)"
+            "WHERE primary_gtin IN (:gtin_alpha, :gtin_bravo, :gtin_charlie)"
             ")"
         ),
-        {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO},
+        {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO, "gtin_charlie": GTIN_CHARLIE},
     )
     conn.execute(
         text(
             "DELETE FROM product_identities "
-            "WHERE identity_type = 'gtin' AND identity_value IN (:gtin_alpha, :gtin_bravo)"
+            "WHERE identity_type = 'gtin' AND identity_value IN (:gtin_alpha, :gtin_bravo, :gtin_charlie)"
         ),
-        {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO},
+        {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO, "gtin_charlie": GTIN_CHARLIE},
     )
     conn.execute(
-        text("DELETE FROM global_products WHERE primary_gtin IN (:gtin_alpha, :gtin_bravo)"),
-        {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO},
+        text("DELETE FROM global_products WHERE primary_gtin IN (:gtin_alpha, :gtin_bravo, :gtin_charlie)"),
+        {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO, "gtin_charlie": GTIN_CHARLIE},
     )
 
 
@@ -457,6 +523,261 @@ def _assert_external_article_ui_membership_projection() -> None:
     print("POSTGRESQL_EXTERNAL_ARTICLE_UI_INTEGER_MEMBERSHIP_GREEN")
 
 
+def _assert_global_off_link_ignores_household_specific_product_link() -> None:
+    with engine.begin() as conn:
+        _cleanup(conn)
+        conn.execute(
+            text(
+                """
+                INSERT INTO store_providers (
+                    id, code, name, status, import_mode, created_at, updated_at
+                ) VALUES (
+                    :id, :code, :name, 'active', 'receipt',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": GLOBAL_SCOPE_PROVIDER_ID,
+                "code": GLOBAL_SCOPE_PROVIDER_ID,
+                "name": "PostgreSQL global scope provider",
+            },
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO household_store_connections (
+                    id, household_id, store_provider_id, connection_status,
+                    created_at, updated_at
+                ) VALUES (
+                    :id, :household_id, :store_provider_id, 'active',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": GLOBAL_SCOPE_CONNECTION_ID,
+                "household_id": GLOBAL_SCOPE_HOUSEHOLD_ID,
+                "store_provider_id": GLOBAL_SCOPE_PROVIDER_ID,
+            },
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO purchase_import_batches (
+                    id, household_id, store_provider_id, connection_id,
+                    source_type, source_reference, import_status, raw_payload,
+                    created_at
+                ) VALUES (
+                    :id, :household_id, :store_provider_id, :connection_id,
+                    'receipt', 'postgresql-global-scope-proof', 'imported',
+                    :raw_payload, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": GLOBAL_SCOPE_BATCH_ID,
+                "household_id": GLOBAL_SCOPE_HOUSEHOLD_ID,
+                "store_provider_id": GLOBAL_SCOPE_PROVIDER_ID,
+                "connection_id": GLOBAL_SCOPE_CONNECTION_ID,
+                "raw_payload": '{"batch_metadata":{"store_name":"Albert Heijn"}}',
+            },
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO household_articles (
+                    id, household_id, naam, consumable, global_product_id,
+                    status, default_inventory_handling, created_at, updated_at
+                ) VALUES (
+                    :id, :household_id, :naam, 0, :global_product_id,
+                    'active', 'STOCK', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID,
+                "household_id": GLOBAL_SCOPE_HOUSEHOLD_ID,
+                "naam": GLOBAL_SCOPE_RECEIPT_TEXT,
+                "global_product_id": GLOBAL_SCOPE_LEGACY_PRODUCT_ID,
+            },
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO purchase_import_lines (
+                    id, batch_id, article_name_raw, brand_raw, quantity_raw,
+                    unit_raw, line_price_raw, currency_code, match_status,
+                    matched_household_article_id, ui_sort_order, created_at,
+                    updated_at
+                ) VALUES (
+                    :id, :batch_id, :article_name_raw, 'Albert Heijn', 1,
+                    'stuk', 1.65, 'EUR', 'matched',
+                    :matched_household_article_id, 1, CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": GLOBAL_SCOPE_LINE_ID,
+                "batch_id": GLOBAL_SCOPE_BATCH_ID,
+                "article_name_raw": GLOBAL_SCOPE_RECEIPT_TEXT,
+                "matched_household_article_id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID,
+            },
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO external_product_candidates (
+                    id, purchase_import_line_id, source_name, candidate_name,
+                    candidate_source_name, candidate_source_product_code,
+                    retailer_code, receipt_line_text, score, status,
+                    candidate_status, created_by, is_probable,
+                    is_user_confirmed, is_external_database_override,
+                    created_at, updated_at
+                ) VALUES (
+                    :id, :purchase_import_line_id, 'postgresql_test',
+                    :candidate_name, 'postgresql_test', 'global-scope-proof',
+                    :retailer_code, :receipt_line_text, 0.9, 'candidate',
+                    'candidate', 'postgresql_global_scope_test', FALSE,
+                    FALSE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": GLOBAL_SCOPE_CANDIDATE_ID,
+                "purchase_import_line_id": GLOBAL_SCOPE_LINE_ID,
+                "candidate_name": NAME_CHARLIE,
+                "retailer_code": GLOBAL_SCOPE_RETAILER,
+                "receipt_line_text": GLOBAL_SCOPE_RECEIPT_TEXT,
+            },
+        )
+
+    result = link_off_product_with_product_type(
+        receipt_item_id=f"purchase-import-line:{GLOBAL_SCOPE_LINE_ID}",
+        off_product=_off_payload(GTIN_CHARLIE, NAME_CHARLIE),
+        product_type_assignment={
+            "product_type_id": "gpc:10005897",
+            "gpc_source": "manual",
+            "mapping_source": "manual_gs1_gpc",
+            "confidence_score": 1.0,
+        },
+    )
+    linked_product_id = str((result.get("global_product") or {}).get("id") or "")
+    if not linked_product_id:
+        raise AssertionError(result)
+
+    with engine.begin() as conn:
+        household_article = conn.execute(
+            text(
+                """
+                SELECT global_product_id
+                FROM household_articles
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": GLOBAL_SCOPE_HOUSEHOLD_ARTICLE_ID},
+        ).mappings().one()
+        if household_article.get("global_product_id") != GLOBAL_SCOPE_LEGACY_PRODUCT_ID:
+            raise AssertionError(household_article)
+
+        purchase_line = conn.execute(
+            text(
+                """
+                SELECT matched_global_product_id, match_status
+                FROM purchase_import_lines
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": GLOBAL_SCOPE_LINE_ID},
+        ).mappings().one()
+        if purchase_line.get("matched_global_product_id") not in (None, ""):
+            raise AssertionError(purchase_line)
+
+        central_link = conn.execute(
+            text(
+                """
+                SELECT global_product_id, status
+                FROM external_article_product_links
+                WHERE retailer_code = :retailer_code
+                  AND receipt_text_normalized = :receipt_text_normalized
+                ORDER BY confirmed_at DESC, id DESC
+                LIMIT 1
+                """
+            ),
+            {
+                "retailer_code": GLOBAL_SCOPE_RETAILER,
+                "receipt_text_normalized": GLOBAL_SCOPE_RECEIPT_TEXT.lower(),
+            },
+        ).mappings().one()
+        if central_link.get("global_product_id") != linked_product_id:
+            raise AssertionError(central_link)
+        if central_link.get("status") != "confirmed":
+            raise AssertionError(central_link)
+
+    projected = list_external_receipt_items(limit=500)
+    matching = [
+        item
+        for item in projected.get("items") or []
+        if str(item.get("receipt_line_text") or "").strip() == GLOBAL_SCOPE_RECEIPT_TEXT
+    ]
+    if len(matching) != 1:
+        raise AssertionError(matching)
+    row = matching[0]
+    if row.get("central_link_active") is not True:
+        raise AssertionError(row)
+    if str(row.get("global_product_id") or "") != linked_product_id:
+        raise AssertionError(row)
+    if str(row.get("linked_candidate_name") or "") != NAME_CHARLIE:
+        raise AssertionError(row)
+
+    with engine.begin() as conn:
+        _cleanup(conn)
+
+    print("POSTGRESQL_OFF_GLOBAL_LINK_IGNORES_HOUSEHOLD_PRODUCT_GREEN")
+    print("POSTGRESQL_EXTERNAL_RECEIPT_MAIN_TABLE_CENTRAL_LINK_GREEN")
+
+
+def _assert_household_only_link_not_projected_as_global() -> None:
+    with engine.begin() as conn:
+        projected = project_central_link_truth(
+            conn,
+            {
+                "retailer_code": "__global_scope_probe__",
+                "receipt_line_text": "__household_only_link_probe__",
+                "global_product_id": "__household_only_product__",
+                "matched_global_product_id": "__household_only_product__",
+                "canonical_catalog_product_id": "__household_only_product__",
+                "linked_candidate_name": "Household-only product",
+                "linked_product_type_id": "gpc:10000284",
+                "linked_product_type": "Household-only type",
+                "linked_score": 1.0,
+                "status": "linked_to_catalog",
+                "candidate_status": "linked_to_catalog",
+                "candidates": [],
+            },
+        )
+
+    if projected.get("central_link_active"):
+        raise AssertionError(projected)
+    for field in (
+        "global_product_id",
+        "matched_global_product_id",
+        "canonical_catalog_product_id",
+        "linked_candidate_name",
+        "linked_gtin",
+        "linked_product_type_id",
+        "linked_product_type",
+        "linked_score",
+    ):
+        if projected.get(field) not in (None, ""):
+            raise AssertionError((field, projected))
+
+    print("POSTGRESQL_EXTERNAL_ARTICLE_UI_HOUSEHOLD_ONLY_LINK_IGNORED_GREEN")
+
+
 def _assert_off_gpc_normalization() -> None:
     normalized = _normalize_result(
         query="bananen",
@@ -526,6 +847,8 @@ def main() -> None:
         _assert_candidate_identity_timestamp_order()
         _assert_receipt_table_off_search_postgresql_types()
         _assert_external_article_ui_membership_projection()
+        _assert_global_off_link_ignores_household_specific_product_link()
+        _assert_household_only_link_not_projected_as_global()
         _assert_off_gpc_normalization()
         _assert_explicit_off_gpc_uses_official_reference_catalog()
         _assert_off_index_matcher()

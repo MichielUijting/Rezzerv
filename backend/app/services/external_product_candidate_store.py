@@ -455,7 +455,7 @@ def _m2c2h5_purchase_import_placeholder(row: dict[str, Any]) -> dict[str, Any]:
         article_name or purchase_import_line_id,
         purchase_import_line_id=purchase_import_line_id or None,
     )
-    global_product_id = str(row.get("global_product_id") or "").strip()
+    source_global_product_id = str(row.get("global_product_id") or "").strip()
     receipt_item_id = (
         f"purchase-import-line:{purchase_import_line_id}"
         if purchase_import_line_id
@@ -493,8 +493,9 @@ def _m2c2h5_purchase_import_placeholder(row: dict[str, Any]) -> dict[str, Any]:
         "score": 0,
         "score_breakdown_json": "{}",
         "candidate_status": "no_candidate",
-        "global_product_id": global_product_id or None,
-        "status": "linked_to_catalog" if global_product_id else "no_candidate",
+        "source_global_product_id": source_global_product_id or None,
+        "global_product_id": None,
+        "status": "no_candidate",
         "is_probable": False,
         "is_user_confirmed": False,
         "is_external_database_override": False,
@@ -536,27 +537,10 @@ def _m2c2h5_list_purchase_import_placeholders(
         "pil", columns, ["matched_global_product_id", "matched_global_article_id"]
     )
 
+    # De platformbrede Externe-databaseslisting mag geen household_article-link
+    # als globale Cataloguswaarheid projecteren. Alleen centrale productlinks
+    # worden later door external_article_ui_projection als gekoppeld gemarkeerd.
     household_article_join_sql = ""
-    household_article_column = next(
-        (
-            candidate
-            for candidate in (
-                "matched_household_article_id",
-                "household_article_id",
-                "selected_household_article_id",
-            )
-            if candidate in columns
-        ),
-        None,
-    )
-    if household_article_column and _m2c2h5_table_exists(conn, "household_articles"):
-        household_columns = _m2c2h5_table_columns(conn, "household_articles")
-        if {"id", "global_product_id"}.issubset(household_columns):
-            household_article_join_sql = (
-                "LEFT JOIN household_articles ha "
-                f"ON ha.id = pil.{household_article_column}"
-            )
-            global_product_expr = f"COALESCE({global_product_expr}, ha.global_product_id)"
 
     created_expr = _m2c2h5_col("pil", columns, ["created_at"], "NULL")
     updated_expr = _m2c2h5_col("pil", columns, ["updated_at"], "NULL")
@@ -580,7 +564,6 @@ def _m2c2h5_list_purchase_import_placeholders(
             {batch_join_sql}
             {household_article_join_sql}
             ORDER BY
-                CASE WHEN COALESCE({global_product_expr}, '') <> '' THEN 0 ELSE 1 END ASC,
                 CASE WHEN COALESCE({updated_expr}, {created_expr}) IS NULL THEN 1 ELSE 0 END ASC,
                 COALESCE({updated_expr}, {created_expr}) DESC,
                 CASE WHEN {created_expr} IS NULL THEN 1 ELSE 0 END ASC,

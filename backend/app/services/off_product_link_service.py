@@ -352,33 +352,13 @@ def _persist_global_product_gpc_assignment(
 
 
 
-def _link_household_article(conn, household_article_id: Any, global_product_id: str) -> str | None:
-    article_id = _clean_text(household_article_id)
-    if not article_id or article_id.startswith("live::"):
-        return None
-    article = conn.execute(
-        text("SELECT id, global_product_id FROM household_articles WHERE id = :id LIMIT 1"),
-        {"id": article_id},
-    ).mappings().first()
-    if not article:
-        return None
-    current = _clean_text(article.get("global_product_id"))
-    if current and current != global_product_id:
-        raise ValueError("Het voorraadartikel is al aan een ander universeel artikel gekoppeld")
-    conn.execute(
-        text(
-            """
-            UPDATE household_articles
-            SET global_product_id = :global_product_id, updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-            """
-        ),
-        {"id": article_id, "global_product_id": global_product_id},
-    )
-    return article_id
+def _receipt_item_reference(conn, receipt_item_id: str) -> dict[str, Any]:
+    """Lees de bronreferentie zonder huishoud- of bondata te muteren.
 
-
-def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> dict[str, Any]:
+    Externe databases en Catalogus zijn platformbreed. Een globale
+    artikelkoppeling mag daarom geen household_article, purchase-importregel of
+    bonregel aanpassen als neveneffect van de centrale koppeling.
+    """
     normalized = _clean_text(receipt_item_id)
     if ":" not in normalized:
         raise ValueError("receipt_item_id heeft geen geldige canonieke prefix")
@@ -392,50 +372,28 @@ def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> di
             text(
                 """
                 SELECT id, matched_household_article_id
-                FROM purchase_import_lines WHERE id = :id LIMIT 1
+                FROM purchase_import_lines
+                WHERE id = :id
+                LIMIT 1
                 """
             ),
             {"id": source_id},
         ).mappings().first()
         if not row:
             raise ValueError("Purchase-importregel niet gevonden")
-        conn.execute(
-            text(
-                """
-                UPDATE purchase_import_lines
-                SET matched_global_product_id = :global_product_id,
-                    match_status = 'matched', updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-                """
-            ),
-            {"id": source_id, "global_product_id": global_product_id},
-        )
-        article_id = _link_household_article(conn, row.get("matched_household_article_id"), global_product_id)
-        return {"receipt_item_type": "purchase_import_line", "source_id": source_id, "household_article_id": article_id}
+        return {
+            "receipt_item_type": "purchase_import_line",
+            "source_id": source_id,
+            "household_article_id": _clean_text(row.get("matched_household_article_id")) or None,
+        }
 
     if prefix == "receipt-table-line":
         row = conn.execute(
             text(
                 """
-                SELECT
-                    rtl.id,
-                    rtl.matched_article_id,
-                    rtl.external_article_code,
-                    COALESCE(
-                        rtl.corrected_raw_label,
-                        rtl.raw_label,
-                        rtl.normalized_label,
-                        ''
-                    ) AS receipt_text,
-                    COALESCE(
-                        rt.store_chain,
-                        rt.store_name,
-                        ''
-                    ) AS retailer_code
-                FROM receipt_table_lines rtl
-                JOIN receipt_tables rt
-                  ON rt.id = rtl.receipt_table_id
-                WHERE rtl.id = :id
+                SELECT id, matched_article_id
+                FROM receipt_table_lines
+                WHERE id = :id
                 LIMIT 1
                 """
             ),
@@ -443,46 +401,31 @@ def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> di
         ).mappings().first()
         if not row:
             raise ValueError("Bonregel niet gevonden")
-        conn.execute(
-            text(
-                """
-                UPDATE receipt_table_lines
-                SET matched_global_product_id = :global_product_id,
-                    article_match_status = CASE
-                        WHEN COALESCE(matched_article_id, '') <> '' THEN 'matched'
-                        ELSE 'product_matched'
-                    END,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-                """
-            ),
-            {"id": source_id, "global_product_id": global_product_id},
-        )
-        article_id = _link_household_article(
-            conn,
-            row.get("matched_article_id"),
-            global_product_id,
-        )
-
         return {
             "receipt_item_type": "receipt_table_line",
             "source_id": source_id,
-            "household_article_id": article_id,
+            "household_article_id": _clean_text(row.get("matched_article_id")) or None,
         }
 
     if prefix == "receipt-line" and _table_exists(conn, "receipt_lines"):
-        columns = _table_columns(conn, "receipt_lines")
-        if "matched_global_product_id" not in columns:
-            raise ValueError("receipt_lines ondersteunt nog geen universeel-artikelkoppeling")
-        row = conn.execute(text("SELECT * FROM receipt_lines WHERE id = :id LIMIT 1"), {"id": source_id}).mappings().first()
+        row = conn.execute(
+            text(
+                """
+                SELECT id, matched_article_id
+                FROM receipt_lines
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": source_id},
+        ).mappings().first()
         if not row:
             raise ValueError("Receiptregel niet gevonden")
-        conn.execute(
-            text("UPDATE receipt_lines SET matched_global_product_id = :global_product_id WHERE id = :id"),
-            {"id": source_id, "global_product_id": global_product_id},
-        )
-        article_id = _link_household_article(conn, row.get("matched_article_id"), global_product_id)
-        return {"receipt_item_type": "receipt_line", "source_id": source_id, "household_article_id": article_id}
+        return {
+            "receipt_item_type": "receipt_line",
+            "source_id": source_id,
+            "household_article_id": _clean_text(row.get("matched_article_id")) or None,
+        }
 
     raise ValueError(f"Niet-ondersteund receipt_item_id-type: {prefix}")
 
@@ -494,9 +437,11 @@ def link_off_product_with_product_type(
     product_type_assignment: dict[str, Any],
     force_failure_after_link: bool = False,
 ) -> dict[str, Any]:
-    """Sla OFF-product, bronkoppeling en Producttype in één transactie op.
+    """Sla de platformbrede OFF-, Catalogus- en Producttypekoppeling atomair op.
 
-    De functie schrijft niet naar external_product_candidates en muteert geen voorraad.
+    Externe databases en Catalogus gelden voor alle huishoudens. De koppeling
+    schrijft daarom niet naar household_articles, receipt/importregels,
+    external_product_candidates of voorraad.
     """
     if not isinstance(off_product, dict):
         raise ValueError("off_product is verplicht")
@@ -528,7 +473,7 @@ def link_off_product_with_product_type(
             confidence=confidence,
         )
 
-        receipt_link = _link_receipt_item(conn, receipt_item_id, global_product_id)
+        receipt_link = _receipt_item_reference(conn, receipt_item_id)
         confirmed_external_link = confirm_external_article_for_receipt_item(
             conn,
             receipt_item_id=receipt_item_id,

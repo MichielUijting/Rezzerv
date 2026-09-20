@@ -9,6 +9,7 @@ CATALOG_PATH = BACKEND_ROOT / "app" / "api" / "catalog_routes.py"
 OFF_LINK_PATH = BACKEND_ROOT / "app" / "services" / "off_product_link_service.py"
 OFF_SEARCH_PATH = BACKEND_ROOT / "app" / "services" / "off_search_service.py"
 ARTICLE_UI_PATH = BACKEND_ROOT / "app" / "services" / "external_article_ui_projection.py"
+CANDIDATE_STORE_PATH = BACKEND_ROOT / "app" / "services" / "external_product_candidate_store.py"
 
 # Houd deze scope gelijk aan de volledige OFF/GPC-gebruikersroute in de CI-workflow.
 FORBIDDEN_SQL_PATTERNS = {
@@ -55,7 +56,7 @@ def _text_sql_literals(source: str) -> list[str]:
 
 def _assert_no_runtime_ddl() -> None:
     failures: list[str] = []
-    for path in (CATALOG_PATH, OFF_LINK_PATH, OFF_SEARCH_PATH, ARTICLE_UI_PATH):
+    for path in (CATALOG_PATH, OFF_LINK_PATH, OFF_SEARCH_PATH, ARTICLE_UI_PATH, CANDIDATE_STORE_PATH):
         source = path.read_text(encoding="utf-8-sig")
         for index, sql in enumerate(_text_sql_literals(source), start=1):
             for label, pattern in FORBIDDEN_SQL_PATTERNS.items():
@@ -155,8 +156,58 @@ def _assert_off_identity_boolean_bind() -> None:
     print("POSTGRESQL_OFF_IDENTITY_BOOLEAN_BIND_GREEN")
 
 
+def _assert_global_external_link_authority() -> None:
+    off_source = OFF_LINK_PATH.read_text(encoding="utf-8-sig")
+    forbidden_household_writes = (
+        "UPDATE household_articles",
+        "UPDATE purchase_import_lines",
+        "UPDATE receipt_table_lines",
+        "UPDATE receipt_lines",
+    )
+    present = [token for token in forbidden_household_writes if token in off_source]
+    if present:
+        raise AssertionError(
+            f"Platformbrede OFF-koppeling muteert nog huishoud-/bondata: {present}"
+        )
+    required_off = (
+        "def _receipt_item_reference",
+        "receipt_link = _receipt_item_reference(conn, receipt_item_id)",
+        "confirm_external_article_for_receipt_item",
+    )
+    missing_off = [token for token in required_off if token not in off_source]
+    if missing_off:
+        raise AssertionError(f"Globale OFF-linkauthority ontbreekt: {missing_off}")
+
+    candidate_source = CANDIDATE_STORE_PATH.read_text(encoding="utf-8-sig")
+    if 'f"COALESCE({global_product_expr}, ha.global_product_id)"' in candidate_source:
+        raise AssertionError(
+            "Externe-databaseslisting gebruikt household_articles.global_product_id nog als globale fallback"
+        )
+    required_candidate = (
+        '"source_global_product_id": source_global_product_id or None',
+        '"global_product_id": None',
+        '"status": "no_candidate"',
+    )
+    missing_candidate = [
+        token for token in required_candidate if token not in candidate_source
+    ]
+    if missing_candidate:
+        raise AssertionError(
+            f"Globale receipt-projectiecontract ontbreekt: {missing_candidate}"
+        )
+
+    print("POSTGRESQL_OFF_GLOBAL_LINK_HOUSEHOLD_WRITE_ABSENT_GREEN")
+    print("POSTGRESQL_EXTERNAL_RECEIPT_GLOBAL_AUTHORITY_STATIC_GREEN")
+
+
 def main() -> None:
-    for path in (CATALOG_PATH, OFF_LINK_PATH, OFF_SEARCH_PATH, ARTICLE_UI_PATH):
+    for path in (
+        CATALOG_PATH,
+        OFF_LINK_PATH,
+        OFF_SEARCH_PATH,
+        ARTICLE_UI_PATH,
+        CANDIDATE_STORE_PATH,
+    ):
         if not path.is_file():
             raise AssertionError(f"Catalog/OFF scope file ontbreekt: {path}")
     _assert_no_runtime_ddl()
@@ -164,6 +215,7 @@ def main() -> None:
     _assert_off_search_sql_portable()
     _assert_external_article_ui_sql_portable()
     _assert_off_identity_boolean_bind()
+    _assert_global_external_link_authority()
     print("POSTGRESQL_CATALOG_OFF_REQUEST_PORTABILITY_STATIC_SELFTEST_GREEN")
 
 
