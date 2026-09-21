@@ -20,5 +20,5 @@
       "candidate_sha"
     ]
   },
-  "required_authority_behavior": "The permanent trigger only selects the candidate. The existing F7-03 Full Regression gate remains responsible for dispatching and aggregating all eleven registered authorities on that exact candidate SHA."
+  "required_authority_behavior": "The permanent trigger only selects the candidate. F7-03 reuses or dispatches twenty-one exact-candidate workflows: TP-CI-02 remains the serial two-authority Kassa cluster, fourteen authorities formerly serialized inside TP-CI-03/04/05/07 run as standalone workflows in parallel, and the six existing standalone/schema/supporting/frontend authorities remain required."
 }
