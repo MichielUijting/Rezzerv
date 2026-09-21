@@ -5,8 +5,14 @@ on:
     paths:
       - "backend/alembic/**"
       - "backend/app/services/gpc_catalog_service.py"
+      - "backend/app/services/gpc_candidate_service.py"
+      - "backend/app/services/product_taxonomy_store.py"
+      - "backend/app/data/product_taxonomy_seed.json"
       - "backend/app/cli/import_gpc_catalog.py"
       - "backend/tests/test_gpc_catalog_service.py"
+      - "backend/tests/test_gpc_candidate_service.py"
+      - "backend/tests/test_gpc_candidate_coverage_policy.py"
+      - "backend/tests/test_product_taxonomy_receipt_terms_m2c2i10a.py"
       - ".github/workflows/gpc-catalog-validation.yml"
   workflow_dispatch:
 
@@ -92,9 +98,19 @@ jobs:
           python -m py_compile app/services/gpc_catalog_service.py
           python -m py_compile app/cli/import_gpc_catalog.py
           python -m py_compile tests/test_gpc_catalog_service.py
+          python -m py_compile app/services/gpc_candidate_service.py
+          python -m py_compile app/services/product_taxonomy_store.py
+          python -m py_compile tests/test_gpc_candidate_service.py
+          python -m py_compile tests/test_gpc_candidate_coverage_policy.py
+          python -m py_compile tests/test_product_taxonomy_receipt_terms_m2c2i10a.py
 
       - name: Run focused GPC tests on PostgreSQL
-        run: python -m pytest -q tests/test_gpc_catalog_service.py
+        run: >-
+          python -m pytest -q
+          tests/test_gpc_catalog_service.py
+          tests/test_gpc_candidate_service.py
+          tests/test_gpc_candidate_coverage_policy.py
+          tests/test_product_taxonomy_receipt_terms_m2c2i10a.py
 
       - name: Reset isolated PostgreSQL database before CLI proof
         run: python -c "from app.testing.postgresql_onboarding_selftest_fixture import reset_postgresql_test_database; reset_postgresql_test_database()"
