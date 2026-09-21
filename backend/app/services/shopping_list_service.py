@@ -306,6 +306,11 @@ def _search_global_products(
     brand_expression = "COALESCE(gp.brand, '')" if "brand" in columns else "''"
     image_expression = "COALESCE(gp.image_url, '')" if "image_url" in columns else "''"
     product_type_expression = _global_product_type_expression(conn)
+    status_condition = (
+        "AND lower(trim(COALESCE(gp.status, 'active'))) <> 'deleted'"
+        if "status" in columns
+        else ""
+    )
     query_conditions = ["lower(trim(COALESCE(gp.name, ''))) LIKE :query"]
     if "brand" in columns:
         query_conditions.append("lower(trim(COALESCE(gp.brand, ''))) LIKE :query")
@@ -320,6 +325,7 @@ def _search_global_products(
                {product_type_expression} AS product_type_name
         FROM global_products gp
         WHERE trim(COALESCE(gp.primary_gtin, '')) <> ''
+          {status_condition}
           AND ({" OR ".join(query_conditions)})
         ORDER BY
           CASE

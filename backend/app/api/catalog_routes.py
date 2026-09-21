@@ -3,14 +3,48 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, field_validator
 from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.db import engine
+from app.services.session_request_context import resolve_current_server_session
 
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 router.include_router(catalog_gpc_router)
+
+
+class CatalogBulkDeleteRequest(BaseModel):
+    global_product_ids: list[str]
+
+    @field_validator("global_product_ids")
+    @classmethod
+    def validate_global_product_ids(cls, value: list[str]) -> list[str]:
+        if not isinstance(value, list):
+            raise ValueError("global_product_ids moet een lijst zijn")
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw_id in value:
+            product_id = str(raw_id or "").strip()
+            if not product_id or product_id in seen:
+                continue
+            seen.add(product_id)
+            normalized.append(product_id)
+        if not normalized:
+            raise ValueError("Selecteer minimaal één catalogusartikel")
+        if len(normalized) > 200:
+            raise ValueError("Maximaal 200 catalogusartikelen per bulkactie")
+        return normalized
+
+
+def _require_catalog_delete_superuser() -> None:
+    context = resolve_current_server_session()
+    if not bool(context.is_platform_superuser):
+        raise HTTPException(
+            status_code=403,
+            detail="Alleen de superuser mag catalogusartikelen verwijderen",
+        )
 
 
 def _tables() -> set[str]:
@@ -137,6 +171,10 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         else "TRUE"
     )
     alias_visibility_expression = "TRUE"
+    if "status" in gp_columns:
+        alias_visibility_expression = (
+            "LOWER(TRIM(COALESCE(gp.status, 'active'))) <> 'deleted'"
+        )
 
     if external_links_available:
         joins.append("""
@@ -155,7 +193,7 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
              AND catalog_alias_target.target_global_product_id <> gp.id
         """)
         alias_visibility_expression = (
-            "NOT ("
+            f"({alias_visibility_expression}) AND NOT ("
             f"{alias_source_condition} "
             f"AND {alias_gtin_condition} "
             "AND catalog_alias_target.target_global_product_id IS NOT NULL"
@@ -286,11 +324,17 @@ def _catalog_row(global_product_id: str) -> dict[str, Any] | None:
     if "global_products" not in _tables():
         return None
     select_parts, joins, _ = _catalog_projection()
+    status_condition = (
+        "AND LOWER(TRIM(COALESCE(gp.status, 'active'))) <> 'deleted'"
+        if "status" in _columns("global_products")
+        else ""
+    )
     sql = f"""
         SELECT {", ".join(select_parts)}
         FROM global_products gp
         {" ".join(joins)}
         WHERE gp.id = :global_product_id
+          {status_condition}
         LIMIT 1
     """
     with engine.begin() as conn:
@@ -355,6 +399,59 @@ def list_catalog(
             for row in conn.execute(text(page_sql), page_params).mappings().all()
         ]
     return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+
+@router.post("/bulk-delete")
+def bulk_delete_catalog_products(payload: CatalogBulkDeleteRequest):
+    _require_catalog_delete_superuser()
+    if "global_products" not in _tables():
+        raise HTTPException(status_code=404, detail="Catalogus is niet beschikbaar")
+    product_columns = _columns("global_products")
+    if "status" not in product_columns:
+        raise HTTPException(
+            status_code=503,
+            detail="Catalogus ondersteunt verwijderen nog niet",
+        )
+
+    deleted_ids: list[str] = []
+    already_deleted_ids: list[str] = []
+    not_found_ids: list[str] = []
+    updated_at_sql = ", updated_at = CURRENT_TIMESTAMP" if "updated_at" in product_columns else ""
+
+    with engine.begin() as conn:
+        for product_id in payload.global_product_ids:
+            row = conn.execute(
+                text("""
+                    SELECT id, status
+                    FROM global_products
+                    WHERE id = :global_product_id
+                    LIMIT 1
+                """),
+                {"global_product_id": product_id},
+            ).mappings().first()
+            if not row:
+                not_found_ids.append(product_id)
+                continue
+            if str(row.get("status") or "").strip().lower() == "deleted":
+                already_deleted_ids.append(product_id)
+                continue
+            conn.execute(
+                text(f"""
+                    UPDATE global_products
+                    SET status = 'deleted'{updated_at_sql}
+                    WHERE id = :global_product_id
+                """),
+                {"global_product_id": product_id},
+            )
+            deleted_ids.append(product_id)
+
+    return {
+        "deleted_count": len(deleted_ids),
+        "deleted_ids": deleted_ids,
+        "already_deleted_ids": already_deleted_ids,
+        "not_found_ids": not_found_ids,
+    }
 
 
 def _identity_rows(global_product_id: str) -> list[dict[str, Any]]:
