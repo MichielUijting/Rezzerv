@@ -8,7 +8,7 @@ from typing import Sequence
 
 from app.maintenance import postgresql_data_migration as migration
 
-HEAD_REVISION = "20260919_01"
+HEAD_REVISION = "20260921_01"
 EXPECTED_APPLICATION_TABLES = 89
 
 

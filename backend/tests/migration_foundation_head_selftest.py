@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect, text
 import migration_foundation_selftest as foundation_test
 
 
-HEAD_REVISION = "20260919_01"
+HEAD_REVISION = "20260921_01"
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 89
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
@@ -82,6 +82,24 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
                 block,
                 flags=re.IGNORECASE,
             )
+        if "(table=household_articles)" in header:
+            for column_name in (
+                "representative_image_url",
+                "representative_image_global_product_id",
+                "representative_image_gpc_brick_code",
+            ):
+                block = re.sub(
+                    rf",\s*{column_name}\s+TEXT(?=\s*\))",
+                    "",
+                    block,
+                    flags=re.IGNORECASE,
+                )
+                block = re.sub(
+                    rf"{column_name}\s+TEXT\s*,",
+                    "",
+                    block,
+                    flags=re.IGNORECASE,
+                )
         retained.append(block)
     return "\n\n".join(retained).rstrip() + "\n"
 
@@ -360,6 +378,37 @@ def _assert_catalog_image_authority(connection) -> None:
         print("SQLITE_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_household_representative_image_authority(connection) -> None:
+    inspector = inspect(connection)
+    columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns("household_articles")
+    }
+    expected = {
+        "representative_image_url",
+        "representative_image_global_product_id",
+        "representative_image_gpc_brick_code",
+    }
+    missing = expected - set(columns)
+    if missing:
+        raise AssertionError(
+            f"household_articles mist representatieve fotokolommen: {sorted(missing)}"
+        )
+    for column_name in expected:
+        if not isinstance(columns[column_name]["type"], sa.Text):
+            raise AssertionError(
+                f"household_articles.{column_name} must be TEXT, got {columns[column_name]['type']}"
+            )
+        if not bool(columns[column_name].get("nullable")):
+            raise AssertionError(
+                f"household_articles.{column_name} must remain nullable"
+            )
+    if connection.dialect.name == "postgresql":
+        print("POSTGRESQL_HOUSEHOLD_REPRESENTATIVE_IMAGE_SCHEMA_GREEN")
+    else:
+        print("SQLITE_HOUSEHOLD_REPRESENTATIVE_IMAGE_SCHEMA_GREEN")
+
+
 def _assert_home_action_order_authority(connection) -> None:
     inspector = inspect(connection)
     if HOME_ACTION_ORDER_TABLE not in set(inspector.get_table_names()):
@@ -440,10 +489,11 @@ def main() -> None:
             _assert_password_reset_authority(connection)
             _assert_home_action_order_authority(connection)
             _assert_catalog_image_authority(connection)
+            _assert_household_representative_image_authority(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260919_01_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN")
 
 
 if __name__ == "__main__":

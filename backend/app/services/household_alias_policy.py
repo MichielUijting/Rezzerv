@@ -8,6 +8,9 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_receipt_text,
     normalize_external_link_retailer_code,
 )
+from app.services.household_representative_image_service import (
+    materialize_household_representative_images,
+)
 
 
 _POLICY_MARKER = '_rezzerv_household_alias_policy_installed'
@@ -335,6 +338,10 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
     placeholders = ', '.join(f':article_id_{index}' for index in range(len(article_ids)))
     params = {f'article_id_{index}': article_id for index, article_id in enumerate(article_ids)}
     with engine.begin() as conn:
+        materialized_representative_images = materialize_household_representative_images(
+            conn,
+            article_ids,
+        )
         article_rows = conn.execute(
             text(
                 f'''
@@ -345,6 +352,9 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
                     ha.custom_name,
                     ha.global_product_id,
                     ha.barcode,
+                    ha.representative_image_url,
+                    ha.representative_image_global_product_id,
+                    ha.representative_image_gpc_brick_code,
                     COALESCE(gp.name, '') AS product_name,
                     COALESCE(gp.image_url, '') AS image_url
                 FROM household_articles ha
@@ -379,7 +389,9 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
         custom_name = str(article.get('custom_name') or '').strip()
         product_name = str(article.get('product_name') or '').strip()
         image_url = (
-            str(article.get('image_url') or '').strip()
+            str(article.get('representative_image_url') or '').strip()
+            or materialized_representative_images.get(article_id, '')
+            or str(article.get('image_url') or '').strip()
             or canonical_images.get(article_id, '')
             or derived_images.get(article_id, '')
         )
