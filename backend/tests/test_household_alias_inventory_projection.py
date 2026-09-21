@@ -55,6 +55,8 @@ class CentralCatalogProjectionConnection:
 
     def execute(self, statement, params=None):
         sql = str(statement)
+        if 'SELECT DISTINCT assignment.brick_code' in sql:
+            return Result(rows=[])
         if 'FROM household_articles ha' in sql and 'LEFT JOIN global_products gp' in sql:
             return Result(rows=[{
                 'id': ARTICLE_ID,
@@ -120,6 +122,8 @@ class CentralCatalogProjectionEngine:
 class CanonicalIdentityProjectionConnection:
     def execute(self, statement, params=None):
         sql = str(statement)
+        if 'SELECT DISTINCT assignment.brick_code' in sql:
+            return Result(rows=[])
         if 'FROM household_articles ha' in sql and 'LEFT JOIN global_products gp' in sql:
             return Result(rows=[{
                 'id': ARTICLE_ID,
@@ -149,6 +153,8 @@ class CanonicalIdentityProjectionEngine:
 class CanonicalBarcodeProjectionConnection:
     def execute(self, statement, params=None):
         sql = str(statement)
+        if 'SELECT DISTINCT assignment.brick_code' in sql:
+            return Result(rows=[])
         if 'FROM household_articles ha' in sql and 'LEFT JOIN global_products gp' in sql:
             return Result(rows=[{
                 'id': ARTICLE_ID,
@@ -175,6 +181,42 @@ class CanonicalBarcodeProjectionEngine:
     @contextmanager
     def begin(self):
         yield CanonicalBarcodeProjectionConnection()
+
+
+class RepresentativeBrickProjectionConnection:
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if 'FROM household_articles ha' in sql and 'LEFT JOIN global_products gp' in sql:
+            return Result(rows=[{
+                'id': ARTICLE_ID,
+                'household_id': 'household-a',
+                'naam': 'Broccoli',
+                'custom_name': '',
+                'global_product_id': 'generic-broccoli',
+                'barcode': '',
+                'product_name': 'Broccoli',
+                'image_url': '',
+            }])
+        if 'FROM global_product_gpc_bricks' in sql and 'WHERE global_product_id' in sql:
+            return Result(row={'brick_code': '10000001'})
+        if 'FROM household_article_representative_products representative' in sql:
+            return Result(row={
+                'household_article_id': ARTICLE_ID,
+                'global_product_id': 'exact-broccoli',
+                'brick_code': '10000001',
+                'selection_source': 'same_gpc_brick_catalog',
+                'image_url': 'https://images.example.test/broccoli.jpg',
+                'primary_gtin': '8711578582950',
+                'product_status': 'active',
+                'current_brick_code': '10000001',
+            })
+        raise AssertionError(f'Onverwachte representative-projectie-SQL: {sql}')
+
+
+class RepresentativeBrickProjectionEngine:
+    @contextmanager
+    def begin(self):
+        yield RepresentativeBrickProjectionConnection()
 
 
 class AliasUpdatePayload:
@@ -287,6 +329,26 @@ def test_inventory_preview_projects_household_alias_instead_of_inventory_name():
     assert projected['rows'][0]['household_article_name'] == 'Keesje'
     assert projected['rows'][0]['product_name'] == '7 Granen Ontbijt'
     assert projected['rows'][0]['image_url'] == 'https://images.example.test/ontbijt.jpg'
+
+
+def test_inventory_preview_uses_household_representative_same_brick_image():
+    main_module = SimpleNamespace(
+        engine=RepresentativeBrickProjectionEngine(),
+        text=lambda value: value,
+    )
+    payload = {
+        'rows': [{
+            'id': INVENTORY_ID,
+            'household_article_id': ARTICLE_ID,
+            'artikel': 'Broccoli',
+            'aantal': 1,
+        }]
+    }
+
+    projected = _inventory_alias_projection(main_module, payload)
+
+    assert projected['rows'][0]['image_url'] == 'https://images.example.test/broccoli.jpg'
+    assert projected['rows'][0]['household_article_name'] == 'Broccoli'
 
 
 def test_inventory_preview_uses_confirmed_central_catalog_image_without_household_product_mutation():
@@ -402,6 +464,7 @@ def test_inventory_inline_household_name_does_not_rename_inventory_identity():
 
 def run_contract() -> None:
     test_inventory_preview_projects_household_alias_instead_of_inventory_name()
+    test_inventory_preview_uses_household_representative_same_brick_image()
     test_inventory_preview_uses_confirmed_central_catalog_image_without_household_product_mutation()
     test_inventory_preview_uses_canonical_product_identity_image()
     test_inventory_preview_uses_household_barcode_for_catalog_image()
