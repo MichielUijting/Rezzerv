@@ -132,7 +132,353 @@ jobs:
             --evidence f7-full-regression-evidence.json \
             | tee f7-full-dispatch.log
           grep -Fx 'F7_FULL_AUTHORITY_COUNT=21' f7-full-dispatch.log
-          grep -E '^F7_FULL_REUSED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -E '^F7_FULL_REUSED_COUNT=[0-9]+
+          grep -E '^F7_FULL_ATTACHED_COUNT=[0-9]+
+          grep -E '^F7_FULL_DISPATCHED_COUNT=[0-9]+
+          grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
+
+      - name: Aggregate reused, attached and dispatched authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -u scripts/ci/f7_full_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --base-sha "$BASE_SHA" \
+            --pr-number "$PR_NUMBER" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-wait.log
+          grep -Fx 'F7_FULL_AGGREGATED_COUNT=21' f7-full-wait.log
+          grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
+
+      - name: Validate orchestration gate map after Full Regression proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Full Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-full-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_full_regression_trigger_policy.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-version-preflight.log
+            f7-ui-styleguide-preflight.log
+            f7-full-config.log
+            f7-full-reuse-selftest.log
+            f7-trigger-policy.log
+            f7-full-dispatch.log
+            f7-full-wait.log
+            f7-full-regression-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 14
+ f7-full-dispatch.log
+          grep -E '^F7_FULL_ATTACHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -E '^F7_FULL_DISPATCHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
+
+      - name: Aggregate reused, attached and dispatched authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -u scripts/ci/f7_full_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --base-sha "$BASE_SHA" \
+            --pr-number "$PR_NUMBER" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-wait.log
+          grep -Fx 'F7_FULL_AGGREGATED_COUNT=21' f7-full-wait.log
+          grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
+
+      - name: Validate orchestration gate map after Full Regression proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Full Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-full-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_full_regression_trigger_policy.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-version-preflight.log
+            f7-ui-styleguide-preflight.log
+            f7-full-config.log
+            f7-full-reuse-selftest.log
+            f7-trigger-policy.log
+            f7-full-dispatch.log
+            f7-full-wait.log
+            f7-full-regression-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 14
+ f7-full-dispatch.log
+          grep -E '^F7_FULL_DISPATCHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
+
+      - name: Aggregate reused, attached and dispatched authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -u scripts/ci/f7_full_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --base-sha "$BASE_SHA" \
+            --pr-number "$PR_NUMBER" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-wait.log
+          grep -Fx 'F7_FULL_AGGREGATED_COUNT=21' f7-full-wait.log
+          grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
+
+      - name: Validate orchestration gate map after Full Regression proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Full Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-full-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_full_regression_trigger_policy.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-version-preflight.log
+            f7-ui-styleguide-preflight.log
+            f7-full-config.log
+            f7-full-reuse-selftest.log
+            f7-trigger-policy.log
+            f7-full-dispatch.log
+            f7-full-wait.log
+            f7-full-regression-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 14
+ f7-full-dispatch.log
+          grep -E '^F7_FULL_ATTACHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -E '^F7_FULL_DISPATCHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
+
+      - name: Aggregate reused, attached and dispatched authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -u scripts/ci/f7_full_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --base-sha "$BASE_SHA" \
+            --pr-number "$PR_NUMBER" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-wait.log
+          grep -Fx 'F7_FULL_AGGREGATED_COUNT=21' f7-full-wait.log
+          grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
+
+      - name: Validate orchestration gate map after Full Regression proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Full Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-full-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_full_regression_trigger_policy.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-version-preflight.log
+            f7-ui-styleguide-preflight.log
+            f7-full-config.log
+            f7-full-reuse-selftest.log
+            f7-trigger-policy.log
+            f7-full-dispatch.log
+            f7-full-wait.log
+            f7-full-regression-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 14
+ f7-full-dispatch.log
+          grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
+
+      - name: Aggregate reused, attached and dispatched authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -u scripts/ci/f7_full_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --base-sha "$BASE_SHA" \
+            --pr-number "$PR_NUMBER" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-wait.log
+          grep -Fx 'F7_FULL_AGGREGATED_COUNT=21' f7-full-wait.log
+          grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
+
+      - name: Validate orchestration gate map after Full Regression proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Full Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-full-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_full_regression_trigger_policy.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-version-preflight.log
+            f7-ui-styleguide-preflight.log
+            f7-full-config.log
+            f7-full-reuse-selftest.log
+            f7-trigger-policy.log
+            f7-full-dispatch.log
+            f7-full-wait.log
+            f7-full-regression-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 14
+ f7-full-dispatch.log
+          grep -E '^F7_FULL_ATTACHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -E '^F7_FULL_DISPATCHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
+
+      - name: Aggregate reused, attached and dispatched authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -u scripts/ci/f7_full_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --base-sha "$BASE_SHA" \
+            --pr-number "$PR_NUMBER" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-wait.log
+          grep -Fx 'F7_FULL_AGGREGATED_COUNT=21' f7-full-wait.log
+          grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
+
+      - name: Validate orchestration gate map after Full Regression proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Full Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-full-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_full_regression_trigger_policy.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-version-preflight.log
+            f7-ui-styleguide-preflight.log
+            f7-full-config.log
+            f7-full-reuse-selftest.log
+            f7-trigger-policy.log
+            f7-full-dispatch.log
+            f7-full-wait.log
+            f7-full-regression-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 14
+ f7-full-dispatch.log
+          grep -E '^F7_FULL_DISPATCHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
+          grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
+
+      - name: Aggregate reused, attached and dispatched authorities for exact candidate SHA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -u scripts/ci/f7_full_regression_gate.py wait \
+            --config "$GATE_CONFIG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$CANDIDATE_REF" \
+            --sha "$CANDIDATE_SHA" \
+            --base-sha "$BASE_SHA" \
+            --pr-number "$PR_NUMBER" \
+            --evidence f7-full-regression-evidence.json \
+            | tee f7-full-wait.log
+          grep -Fx 'F7_FULL_AGGREGATED_COUNT=21' f7-full-wait.log
+          grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
+
+      - name: Validate orchestration gate map after Full Regression proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/validate_f7_ci_orchestration_gate_map.py | tee f7-gate-map.log
+          grep -Fx 'F7_CI_ORCHESTRATION_GATE_MAP_GREEN' f7-gate-map.log
+
+      - name: Upload Full Regression aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f7-full-regression-${{ github.run_id }}
+          path: |
+            quality/ci/f7_full_regression_gate.json
+            quality/ci/f7_full_regression_trigger_policy.json
+            quality/ci/f7_ci_orchestration_gate_map.json
+            f7-version-preflight.log
+            f7-ui-styleguide-preflight.log
+            f7-full-config.log
+            f7-full-reuse-selftest.log
+            f7-trigger-policy.log
+            f7-full-dispatch.log
+            f7-full-wait.log
+            f7-full-regression-evidence.json
+            f7-gate-map.log
+          if-no-files-found: warn
+          retention-days: 14
+ f7-full-dispatch.log
           grep -E '^F7_FULL_ATTACHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
           grep -E '^F7_FULL_DISPATCHED_COUNT=([0-9]|1[01])$' f7-full-dispatch.log
           grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
