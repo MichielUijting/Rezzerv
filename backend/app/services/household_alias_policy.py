@@ -8,6 +8,9 @@ from app.services.external_article_product_link_service import (
     normalize_external_link_receipt_text,
     normalize_external_link_retailer_code,
 )
+from app.services.household_article_representative_image_service import (
+    representative_image_urls_for_household_articles,
+)
 
 
 _POLICY_MARKER = '_rezzerv_household_alias_policy_installed'
@@ -354,18 +357,55 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
             ),
             params,
         ).mappings().all()
-        canonical_images = _canonical_catalog_images_for_household_articles(conn, text, article_rows)
+        unresolved_for_representative = [
+            dict(article)
+            for article in article_rows
+            if not str(article.get('image_url') or '').strip()
+        ]
+        representative_images = representative_image_urls_for_household_articles(
+            conn,
+            unresolved_for_representative,
+        )
+        canonical_projection_rows = [
+            {
+                **dict(article),
+                'image_url': (
+                    str(article.get('image_url') or '').strip()
+                    or representative_images.get(
+                        str(article.get('id') or '').strip(),
+                        '',
+                    )
+                ),
+            }
+            for article in article_rows
+        ]
+        canonical_images = _canonical_catalog_images_for_household_articles(
+            conn,
+            text,
+            canonical_projection_rows,
+        )
         central_projection_rows = [
             {
                 **dict(article),
                 'image_url': (
                     str(article.get('image_url') or '').strip()
-                    or canonical_images.get(str(article.get('id') or '').strip(), '')
+                    or representative_images.get(
+                        str(article.get('id') or '').strip(),
+                        '',
+                    )
+                    or canonical_images.get(
+                        str(article.get('id') or '').strip(),
+                        '',
+                    )
                 ),
             }
             for article in article_rows
         ]
-        derived_images = _central_catalog_images_for_household_articles(conn, text, central_projection_rows)
+        derived_images = _central_catalog_images_for_household_articles(
+            conn,
+            text,
+            central_projection_rows,
+        )
 
     articles_by_id = {str(row.get('id') or ''): row for row in article_rows}
     projected = []
@@ -380,6 +420,7 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
         product_name = str(article.get('product_name') or '').strip()
         image_url = (
             str(article.get('image_url') or '').strip()
+            or representative_images.get(article_id, '')
             or canonical_images.get(article_id, '')
             or derived_images.get(article_id, '')
         )
