@@ -8,10 +8,11 @@ from sqlalchemy import create_engine, inspect, text
 import migration_foundation_selftest as foundation_test
 
 
-HEAD_REVISION = "20260919_01"
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 89
+HEAD_REVISION = "20260921_01"
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 90
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
+HOUSEHOLD_REPRESENTATIVE_PHOTO_TABLE = "household_article_representative_products"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
 QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
@@ -21,6 +22,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     "raw_receipts",
     PASSWORD_RESET_TABLE,
     HOME_ACTION_ORDER_TABLE,
+    HOUSEHOLD_REPRESENTATIVE_PHOTO_TABLE,
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
@@ -360,6 +362,105 @@ def _assert_catalog_image_authority(connection) -> None:
         print("SQLITE_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN")
 
 
+def _assert_household_representative_photo_authority(connection) -> None:
+    inspector = inspect(connection)
+    table_name = HOUSEHOLD_REPRESENTATIVE_PHOTO_TABLE
+    if table_name not in set(inspector.get_table_names()):
+        raise AssertionError(
+            "Alembic head is missing household_article_representative_products"
+        )
+
+    columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns(table_name)
+    }
+    expected_columns = {
+        "household_article_id",
+        "global_product_id",
+        "brick_code",
+        "selection_source",
+        "created_at",
+        "updated_at",
+    }
+    if set(columns) != expected_columns:
+        raise AssertionError(
+            f"{table_name} column drift: expected={sorted(expected_columns)} "
+            f"actual={sorted(columns)}"
+        )
+    for column_name in expected_columns:
+        if bool(columns[column_name].get("nullable")):
+            raise AssertionError(f"{table_name}.{column_name} must be NOT NULL")
+
+    primary_key = tuple(
+        inspector.get_pk_constraint(table_name).get("constrained_columns") or ()
+    )
+    if primary_key != ("household_article_id",):
+        raise AssertionError(
+            f"{table_name} primary key drift: {primary_key!r}"
+        )
+
+    foreign_keys = inspector.get_foreign_keys(table_name)
+    household_fk = [
+        fk for fk in foreign_keys
+        if tuple(fk.get("constrained_columns") or ())
+        == ("household_article_id",)
+    ]
+    product_fk = [
+        fk for fk in foreign_keys
+        if tuple(fk.get("constrained_columns") or ())
+        == ("global_product_id",)
+    ]
+    if len(household_fk) != 1:
+        raise AssertionError(f"{table_name} household FK drift: {household_fk!r}")
+    if len(product_fk) != 1:
+        raise AssertionError(f"{table_name} product FK drift: {product_fk!r}")
+    if (
+        str(household_fk[0].get("referred_table") or "") != "household_articles"
+        or tuple(household_fk[0].get("referred_columns") or ()) != ("id",)
+    ):
+        raise AssertionError(
+            f"{table_name}.household_article_id must reference household_articles.id"
+        )
+    if (
+        str(product_fk[0].get("referred_table") or "") != "global_products"
+        or tuple(product_fk[0].get("referred_columns") or ()) != ("id",)
+    ):
+        raise AssertionError(
+            f"{table_name}.global_product_id must reference global_products.id"
+        )
+
+    indexes = {
+        str(item.get("name") or ""): tuple(item.get("column_names") or ())
+        for item in inspector.get_indexes(table_name)
+    }
+    expected_indexes = {
+        "idx_household_article_representative_product_global_product": (
+            "global_product_id",
+        ),
+        "idx_household_article_representative_product_brick": ("brick_code",),
+    }
+    for index_name, expected in expected_indexes.items():
+        if indexes.get(index_name) != expected:
+            raise AssertionError(
+                f"{table_name} index drift {index_name}: "
+                f"expected={expected} actual={indexes.get(index_name)}"
+            )
+
+    if connection.dialect.name == "postgresql":
+        for column_name in ("created_at", "updated_at"):
+            column_type = columns[column_name]["type"]
+            if not isinstance(column_type, sa.DateTime) or not bool(
+                getattr(column_type, "timezone", False)
+            ):
+                raise AssertionError(
+                    f"Expected TIMESTAMPTZ for {table_name}.{column_name}, "
+                    f"got {column_type}"
+                )
+        print("POSTGRESQL_HOUSEHOLD_REPRESENTATIVE_PHOTO_SCHEMA_GREEN")
+    else:
+        print("SQLITE_HOUSEHOLD_REPRESENTATIVE_PHOTO_SCHEMA_GREEN")
+
+
 def _assert_home_action_order_authority(connection) -> None:
     inspector = inspect(connection)
     if HOME_ACTION_ORDER_TABLE not in set(inspector.get_table_names()):
@@ -440,10 +541,11 @@ def main() -> None:
             _assert_password_reset_authority(connection)
             _assert_home_action_order_authority(connection)
             _assert_catalog_image_authority(connection)
+            _assert_household_representative_photo_authority(connection)
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260919_01_GREEN")
+    print("MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN")
 
 
 if __name__ == "__main__":
