@@ -334,6 +334,56 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
+
+  test('IP-owner met systeemtoegang krijgt geen superuser Catalogus-verwijderactie', async ({ page }) => {
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: 'platform-ip-owner',
+          email: 'ip-owner@example.test',
+          active_household_id: '0',
+          context_type: 'system',
+          role: 'owner',
+          display_role: 'admin',
+          is_platform_superuser: false,
+          is_ip_owner: true,
+          permissions: {
+            'platform.system_household.access': true,
+            'platform.catalog.manage': true,
+          },
+        }),
+      });
+    });
+    await page.route('**/api/catalog?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{
+            id: 'catalog-ip-owner-visible',
+            name: 'IP-owner zichtbaar artikel',
+            catalog_kind: 'exact',
+            brand: '',
+            primary_gtin: '8744444444444',
+            product_type: '',
+            household_article_count: 0,
+            image_url: '',
+          }],
+          total: 1,
+          limit: 10,
+          offset: 0,
+        }),
+      });
+    });
+
+    await page.goto('/catalogus');
+    await expect(page.getByTestId('catalog-row-catalog-ip-owner-visible')).toBeVisible();
+    await expect(page.getByTestId('catalog-bulk-delete')).toHaveCount(0);
+  });
+
+
   test('normale gebruiker krijgt geen Catalogus-verwijderactie', async ({ page }) => {
     await page.route('**/api/session', async (route) => {
       await route.fulfill({

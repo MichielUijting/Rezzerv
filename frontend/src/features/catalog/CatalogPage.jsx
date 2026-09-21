@@ -10,7 +10,6 @@ import CatalogProductImage from './CatalogProductImage'
 import {
   canCurrentUserPerform,
   fetchJsonWithAuth,
-  isPlatformSuperuserFromContext,
   readStoredAuthContext,
 } from '../../lib/authSession'
 import '../externalDatabases/externalDatabases.css'
@@ -55,7 +54,7 @@ export default function CatalogPage() {
   const { showFeedback } = useAppFeedback()
   const authContext = readStoredAuthContext()
   const canUpdateGpc = canCurrentUserPerform('gpc.update', authContext)
-  const isPlatformSuperuser = isPlatformSuperuserFromContext(authContext)
+  const isPlatformSuperuser = Boolean(authContext?.is_platform_superuser)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
