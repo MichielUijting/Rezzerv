@@ -188,4 +188,130 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expect(page.getByPlaceholder('Zoeken op Brickcode of Nederlandse/Engelse Brickomschrijving')).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
   });
+
+  test('Catalogustabel houdt titel en zoekfilters sticky en begrenst de pagina op tien inhoudelijke rijen', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    let requestedLimit = null;
+
+    await page.route('**/api/catalog?*', async (route) => {
+      const url = new URL(route.request().url());
+      requestedLimit = url.searchParams.get('limit');
+      const items = Array.from({ length: 10 }, (_, index) => ({
+        id: `catalog-row-${index + 1}`,
+        name: `Catalogusartikel ${index + 1}`,
+        catalog_kind: index % 2 ? 'generic' : 'exact',
+        brand: index % 2 ? '' : 'Merk',
+        primary_gtin: `87100000000${String(index).padStart(2, '0')}`,
+        product_type: 'Test Producttype',
+        household_article_count: index,
+        image_url: '',
+      }));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items, total: 10, limit: 10, offset: 0 }),
+      });
+    });
+
+    await page.goto('/catalogus');
+    const table = page.getByTestId('catalog-table');
+    await expect(table).toBeVisible();
+    await expect(table.locator('tbody tr')).toHaveCount(10);
+    expect(requestedLimit).toBe('10');
+
+    const wrapper = table.locator('..');
+    await wrapper.evaluate((node) => {
+      node.style.maxHeight = '180px';
+      node.scrollTop = 160;
+    });
+    await page.waitForTimeout(50);
+
+    const wrapperBox = await wrapper.boundingBox();
+    const headerBox = await table.locator('thead tr.rz-table-header th').first().boundingBox();
+    const filterBox = await table.locator('thead tr.rz-table-filters th').first().boundingBox();
+
+    expect(wrapperBox).not.toBeNull();
+    expect(headerBox).not.toBeNull();
+    expect(filterBox).not.toBeNull();
+    expect(Math.abs(headerBox.y - wrapperBox.y)).toBeLessThanOrEqual(3);
+    expect(Math.abs(filterBox.y - (headerBox.y + headerBox.height))).toBeLessThanOrEqual(3);
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+  test('langdurig zoeken naar GPC Bricks toont pas na één seconde het grote Inhuis-logo', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    let releaseBrickSearch;
+    let markBrickSearchStarted;
+    const brickSearchGate = new Promise((resolve) => { releaseBrickSearch = resolve; });
+    const brickSearchStarted = new Promise((resolve) => { markBrickSearchStarted = resolve; });
+
+    await page.route('**/api/catalog?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{
+            id: 'global-product-overlay-test',
+            name: 'Langzame Brick zoektest',
+            brand: 'Inhuis',
+            primary_gtin: '8710000000999',
+          }],
+          total: 1,
+          limit: 2000,
+          offset: 0,
+        }),
+      });
+    });
+
+    await page.route('**/api/catalog/global-product-overlay-test/gpc-brick', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ assignment: null, suggestions: [] }),
+      });
+    });
+
+    await page.route('**/api/catalog/gpc/bricks?*', async (route) => {
+      markBrickSearchStarted();
+      await brickSearchGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{
+            brick_code: '10000167',
+            brick_description: 'Kaas — Smeerbaar',
+            segment_description: 'Voedingsmiddelen',
+            family_description: 'Zuivel',
+            class_description: 'Kaas',
+          }],
+        }),
+      });
+    });
+
+    await page.goto('/catalogus/gpc-classificeren');
+    await page.getByPlaceholder('Zoeken op artikelnaam, merk, barcode, GTIN of EAN').fill('Langzame');
+    await page.getByRole('button', { name: /Langzame Brick zoektest/ }).click();
+
+    const brickSearch = page.getByPlaceholder('Zoeken op Brickcode of Nederlandse/Engelse Brickomschrijving');
+    await expect(brickSearch).toBeVisible();
+    await brickSearch.fill('kaas');
+    await brickSearchStarted;
+
+    const overlay = page.getByRole('status', { name: 'Gegevens worden geladen' });
+    await expect(overlay).toHaveCount(0);
+    await page.waitForTimeout(850);
+    await expect(overlay).toHaveCount(0);
+    await page.waitForTimeout(300);
+    await expect(overlay).toBeVisible();
+    await expect(page.getByTestId('table-loading-logo')).toHaveAttribute('src', '/inhuis-app-icon.png');
+    await expect(page.getByTestId('table-loading-logo')).toHaveCSS('width', '250px');
+
+    releaseBrickSearch();
+
+    await expect(page.getByRole('button', { name: /10000167 — Kaas — Smeerbaar/ })).toBeVisible();
+    await expect(overlay).toHaveCount(0);
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
 });
