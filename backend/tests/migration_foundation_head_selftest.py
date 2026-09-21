@@ -410,10 +410,17 @@ def _assert_household_representative_photo_authority(connection) -> None:
         if tuple(fk.get("constrained_columns") or ())
         == ("global_product_id",)
     ]
+    brick_fk = [
+        fk for fk in foreign_keys
+        if tuple(fk.get("constrained_columns") or ())
+        == ("brick_code",)
+    ]
     if len(household_fk) != 1:
         raise AssertionError(f"{table_name} household FK drift: {household_fk!r}")
     if len(product_fk) != 1:
         raise AssertionError(f"{table_name} product FK drift: {product_fk!r}")
+    if len(brick_fk) != 1:
+        raise AssertionError(f"{table_name} Brick FK drift: {brick_fk!r}")
     if (
         str(household_fk[0].get("referred_table") or "") != "household_articles"
         or tuple(household_fk[0].get("referred_columns") or ()) != ("id",)
@@ -427,6 +434,14 @@ def _assert_household_representative_photo_authority(connection) -> None:
     ):
         raise AssertionError(
             f"{table_name}.global_product_id must reference global_products.id"
+        )
+
+    if (
+        str(brick_fk[0].get("referred_table") or "") != "gpc_bricks"
+        or tuple(brick_fk[0].get("referred_columns") or ()) != ("brick_code",)
+    ):
+        raise AssertionError(
+            f"{table_name}.brick_code must reference gpc_bricks.brick_code"
         )
 
     indexes = {
