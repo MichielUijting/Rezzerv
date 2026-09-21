@@ -45,6 +45,7 @@ def upgrade() -> None:
         "household_articles",
         "global_products",
         "global_product_gpc_bricks",
+        "gpc_bricks",
     }
     missing = required - set(inspector.get_table_names())
     if missing:
@@ -86,6 +87,10 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(
                 ["global_product_id"],
                 ["global_products.id"],
+            ),
+            sa.ForeignKeyConstraint(
+                ["brick_code"],
+                ["gpc_bricks.brick_code"],
             ),
         )
 
