@@ -82,6 +82,24 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
                 block,
                 flags=re.IGNORECASE,
             )
+        if "(table=household_articles)" in header:
+            for column_name in (
+                "representative_image_url",
+                "representative_image_global_product_id",
+                "representative_image_gpc_brick_code",
+            ):
+                block = re.sub(
+                    rf",\s*{column_name}\s+TEXT(?=\s*\))",
+                    "",
+                    block,
+                    flags=re.IGNORECASE,
+                )
+                block = re.sub(
+                    rf"{column_name}\s+TEXT\s*,",
+                    "",
+                    block,
+                    flags=re.IGNORECASE,
+                )
         retained.append(block)
     return "\n\n".join(retained).rstrip() + "\n"
 
