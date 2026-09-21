@@ -5,10 +5,12 @@ import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import CatalogProductImage from './CatalogProductImage'
 import {
   canCurrentUserPerform,
   fetchJsonWithAuth,
+  isPlatformSuperuserFromContext,
   readStoredAuthContext,
 } from '../../lib/authSession'
 import '../externalDatabases/externalDatabases.css'
@@ -50,8 +52,10 @@ function csvValue(value) {
 
 export default function CatalogPage() {
   const navigate = useNavigate()
+  const { showFeedback } = useAppFeedback()
   const authContext = readStoredAuthContext()
   const canUpdateGpc = canCurrentUserPerform('gpc.update', authContext)
+  const isPlatformSuperuser = isPlatformSuperuserFromContext(authContext)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
@@ -62,6 +66,8 @@ export default function CatalogPage() {
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
   const [page, setPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
@@ -117,7 +123,7 @@ export default function CatalogPage() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [filters, page, sort])
+  }, [filters, page, sort, reloadToken])
 
   const selectedIds = useMemo(() => Object.keys(selectedRows), [selectedRows])
   const visibleIds = items.map((item) => item.id)
@@ -174,6 +180,50 @@ export default function CatalogPage() {
     setMessage('Selectie gewist.')
   }
 
+  function deleteSelected() {
+    if (!isPlatformSuperuser || selectedIds.length === 0) return
+    const count = selectedIds.length
+    showFeedback({
+      variant: 'warning',
+      title: count === 1 ? 'Catalogusartikel verwijderen' : 'Catalogusartikelen verwijderen',
+      message: count === 1
+        ? '1 geselecteerd catalogusartikel verwijderen?'
+        : `${count} geselecteerde catalogusartikelen verwijderen?`,
+      detail: 'De selectie verdwijnt uit de actieve Catalogus. Historische koppelingen blijven behouden.',
+      testId: 'catalog-bulk-delete-confirmation',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        setIsDeleting(true)
+        setError('')
+        setMessage('')
+        try {
+          const response = await fetchJsonWithAuth('/api/catalog/bulk-delete', {
+            method: 'POST',
+            body: JSON.stringify({ global_product_ids: selectedIds }),
+          })
+          const payload = await response.json().catch(() => ({}))
+          if (!response.ok) throw new Error(payload?.detail || 'Catalogusartikelen konden niet worden verwijderd')
+          const deletedCount = Number(payload?.deleted_count || 0)
+          setSelectedRows({})
+          setReloadToken((current) => current + 1)
+          setMessage(deletedCount === 1 ? '1 catalogusartikel verwijderd.' : `${deletedCount} catalogusartikelen verwijderd.`)
+          showFeedback({
+            variant: 'success',
+            title: 'Verwijderd',
+            message: deletedCount === 1 ? '1 catalogusartikel is verwijderd.' : `${deletedCount} catalogusartikelen zijn verwijderd.`,
+          })
+        } catch (deleteError) {
+          const deleteMessage = deleteError?.message || 'Catalogusartikelen konden niet worden verwijderd.'
+          setError(deleteMessage)
+          throw new Error(deleteMessage)
+        } finally {
+          setIsDeleting(false)
+        }
+      },
+    })
+  }
+
   function exportSelected() {
     const selectedItems = Object.values(selectedRows)
     if (!selectedItems.length) {
@@ -222,6 +272,16 @@ export default function CatalogPage() {
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
               {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
+              {isPlatformSuperuser ? (
+                <Button
+                  type="button"
+                  disabled={isDeleting || !selectedIds.length}
+                  onClick={deleteSelected}
+                  data-testid="catalog-bulk-delete"
+                >
+                  {isDeleting ? 'Verwijderen...' : 'Verwijderen'}
+                </Button>
+              ) : null}
               <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={exportSelected}>Exporteren</Button>
               <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={clearSelection}>Selectie wissen</Button>
               <span className="rz-external-databases-muted">Geselecteerd: {selectedIds.length}</span>
