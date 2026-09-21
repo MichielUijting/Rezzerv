@@ -19,6 +19,19 @@ _GENERIC_TOKENS = {
     "van", "met", "zonder", "een", "het", "de", "en",
 }
 
+_SEMANTIC_GPC_DESCRIPTOR_TOKENS = {
+    "prepared",
+    "processed",
+}
+
+
+def _semantic_anchor_tokens(signal_tokens: list[str]) -> set[str]:
+    return {
+        token
+        for token in signal_tokens
+        if token not in _SEMANTIC_GPC_DESCRIPTOR_TOKENS
+    }
+
 _FIELD_WEIGHTS = {
     "product_name": 1.45,
     "category": 1.30,
@@ -197,6 +210,12 @@ def _signal_match(signal: dict[str, Any], haystacks: dict[str, str]) -> tuple[fl
 
         haystack_tokens = set(_meaningful_tokens(haystack))
         signal_token_set = set(signal_tokens)
+
+        if str(signal.get("source") or "") == "taxonomy_gpc_candidate_term":
+            semantic_anchors = _semantic_anchor_tokens(signal_tokens)
+            if semantic_anchors and not (semantic_anchors & haystack_tokens):
+                continue
+
         overlap = len(signal_token_set & haystack_tokens)
         if signal_tokens and overlap:
             location_score += 3.0 * (overlap / len(signal_token_set))

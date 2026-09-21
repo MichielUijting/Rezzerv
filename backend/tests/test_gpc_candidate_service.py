@@ -238,3 +238,105 @@ def test_boerenmetworst_semantic_bridge_ranks_official_pork_and_mixed_species_br
         for row in ranked[:2]
     )
     assert all(row["brick_code"] != "10000007" for row in ranked)
+
+
+def test_soepgr_basis_semantic_bridge_ranks_official_prepared_vegetable_bricks(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "classify_product_intent_from_taxonomy",
+        lambda value: "soep.groentebasis",
+    )
+    monkeypatch.setattr(
+        service,
+        "get_taxonomy_metadata_for_intent",
+        lambda key: {
+            "intent_key": key,
+            "canonical_name": "Soepgroente",
+            "category": "Soep",
+            "product_type": "Soepgroente",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "load_gpc_candidate_terms",
+        lambda key: (
+            "Vegetables - Prepared/Processed (Perishable)",
+            "Vegetables - Prepared/Processed (Frozen)",
+            "Vegetables - Prepared/Processed (Shelf Stable)",
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "load_taxonomy_rules",
+        lambda: (
+            {
+                "intent_key": "soep.groentebasis",
+                "normalized_term": "soepgr basis",
+                "priority": 1200,
+                "source": "seed",
+            },
+        ),
+    )
+
+    bundle = service.build_product_signals({
+        "product_name": "SOEPGR BASIS",
+        "category": "",
+        "external_product_name": "Soepgroenten",
+        "external_category": "",
+        "external_categories": "",
+        "external_search_text": "SOEPGR BASIS soepgroenten",
+    })
+
+    semantic_signals = [
+        signal
+        for signal in bundle["signals"]
+        if signal["source"] == "taxonomy_gpc_candidate_term"
+    ]
+    assert len(semantic_signals) == 3
+
+    vegetable_class = "VEGETABLES - PREPARED/PROCESSED"
+    rows = [
+        _row(
+            "10000270",
+            "VEGETABLES - PREPARED/PROCESSED (FROZEN)",
+            vegetable_class,
+            "VEGETABLES",
+        ),
+        _row(
+            "10000271",
+            "VEGETABLES - PREPARED/PROCESSED (PERISHABLE)",
+            vegetable_class,
+            "VEGETABLES",
+        ),
+        _row(
+            "10000272",
+            "VEGETABLES - PREPARED/PROCESSED (SHELF STABLE)",
+            vegetable_class,
+            "VEGETABLES",
+        ),
+        _row(
+            "10005840",
+            "PORK SAUSAGES - PREPARED/PROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS SAUSAGES - PREPARED/PROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS",
+        ),
+    ]
+
+    ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
+
+    assert [row["brick_code"] for row in ranked[:3]] == [
+        "10000270",
+        "10000271",
+        "10000272",
+    ] or set(row["brick_code"] for row in ranked[:3]) == {
+        "10000270",
+        "10000271",
+        "10000272",
+    }
+    assert all(
+        row["suggestion_reason"].startswith(
+            "Semantische GPC-overeenkomst via producttype:"
+        )
+        for row in ranked[:3]
+    )
+    assert all(row["brick_code"] != "10005840" for row in ranked)

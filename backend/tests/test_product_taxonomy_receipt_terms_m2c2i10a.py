@@ -68,3 +68,10 @@ def test_picnic_boerenmetworst_is_recognized_as_generic_sausage():
         "'t Slagershuys boerenmetworst",
         retailer_code="picnic",
     ) == "vleeswaren.worst"
+
+
+def test_ah_soepgr_basis_is_recognized_as_soup_vegetable_base():
+    assert classify_product_intent(
+        "SOEPGR BASIS",
+        retailer_code="ah",
+    ) == "soep.groentebasis"
