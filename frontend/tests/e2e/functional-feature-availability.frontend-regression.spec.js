@@ -53,6 +53,7 @@ for (const actor of ['member', 'superuser']) {
     await expect(page.getByTestId('home-tile-recepten')).toContainText('Gerechten')
     state.enabled = false
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+    await expect(page.getByTestId('legacy-home-navigation')).toBeVisible()
     await expect(page.getByTestId('home-tile-recepten')).toHaveCount(0)
     expect(await page.locator('[data-testid^="home-tile-"]').evaluateAll((nodes) => nodes.map((n) => n.dataset.testid))).toEqual(otherTiles)
     state.enabled = true
@@ -60,6 +61,7 @@ for (const actor of ['member', 'superuser']) {
     await expect(page.getByTestId('home-tile-recepten')).toBeVisible()
     state.failed = true
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+    await expect(page.getByTestId('legacy-home-navigation')).toBeVisible()
     await expect(page.getByTestId('home-tile-recepten')).toHaveCount(0)
   })
 }
