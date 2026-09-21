@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
+import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
 import { limitSearchCandidates } from '../../ui/searchCandidatePolicy.js'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './catalog.css'
@@ -210,6 +211,7 @@ export default function CatalogGpcActionPage() {
 
   return (
     <AppShell title="GPC classificeren" showExit={false}>
+      <DelayedTableLoadingOverlay active={loading || checking || searchingBricks || saving} />
       <div className="rz-catalog-page" data-testid="catalog-gpc-action-page">
         <ScreenCard fullWidth>
           <div className="rz-catalog-card">
