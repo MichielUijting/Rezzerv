@@ -184,6 +184,21 @@ table.rz-table{
   outline: 2px solid var(--color-brand-primary);
 }
 
+/* Generic two-row sticky table contract: keep column titles and filters visible inside the table scroller. */
+.rz-data-table--sticky-header thead tr.rz-table-header th{
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--color-brand-primary);
+}
+
+.rz-data-table--sticky-filters thead tr.rz-table-filters th{
+  position: sticky;
+  top: var(--rz-sticky-header-offset, var(--rz-table-header-row-height));
+  z-index: 3;
+  background: var(--color-brand-light);
+}
+
 /* DataTable resize anchor + usable hit zone. Sticky headers remain sticky via the more specific sticky-header rule. */
 .rz-resizable-header-cell{
   position: relative;

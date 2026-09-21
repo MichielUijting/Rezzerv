@@ -47,6 +47,72 @@ class ProjectionEngine:
         yield ProjectionConnection()
 
 
+class CentralCatalogProjectionConnection:
+    def __init__(self, *, ambiguous=False):
+        self.ambiguous = ambiguous
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if 'FROM household_articles ha' in sql and 'LEFT JOIN global_products gp' in sql:
+            return Result(rows=[{
+                'id': ARTICLE_ID,
+                'household_id': 'household-a',
+                'naam': 'Bio dadeltjes',
+                'custom_name': '',
+                'global_product_id': None,
+                'product_name': '',
+                'image_url': '',
+            }])
+        if 'WITH source_identities AS' in sql:
+            rows = [{
+                'household_article_id': ARTICLE_ID,
+                'retailer_code': 'Albert Heijn',
+                'receipt_line_text': 'BIO DADELTJES',
+                'external_article_code': '',
+                'source_rank': 1,
+            }]
+            if self.ambiguous:
+                rows.append({
+                    'household_article_id': ARTICLE_ID,
+                    'retailer_code': 'Jumbo',
+                    'receipt_line_text': 'BIO DADELTJES',
+                    'external_article_code': '',
+                    'source_rank': 2,
+                })
+            return Result(rows=rows)
+        if 'FROM external_article_product_links link' in sql:
+            rows = [{
+                'retailer_code': 'albert-heijn',
+                'external_article_code': '',
+                'receipt_text_normalized': 'bio dadeltjes',
+                'global_product_id': 'global-product-a',
+                'image_url': 'https://images.example.test/bio-dadeltjes.jpg',
+                'confirmed_at': '2026-09-20T12:00:00Z',
+                'id': 'link-a',
+            }]
+            if self.ambiguous:
+                rows.append({
+                    'retailer_code': 'jumbo',
+                    'external_article_code': '',
+                    'receipt_text_normalized': 'bio dadeltjes',
+                    'global_product_id': 'global-product-b',
+                    'image_url': 'https://images.example.test/other-dadeltjes.jpg',
+                    'confirmed_at': '2026-09-19T12:00:00Z',
+                    'id': 'link-b',
+                })
+            return Result(rows=rows)
+        raise AssertionError(f'Onverwachte Catalogus-projectie-SQL: {sql}')
+
+
+class CentralCatalogProjectionEngine:
+    def __init__(self, *, ambiguous=False):
+        self.ambiguous = ambiguous
+
+    @contextmanager
+    def begin(self):
+        yield CentralCatalogProjectionConnection(ambiguous=self.ambiguous)
+
+
 class AliasUpdatePayload:
     def __init__(self, naam, aantal=1, space_name='Keuken', sublocation_name='Kast'):
         self.naam = naam
@@ -114,6 +180,45 @@ def test_inventory_preview_projects_household_alias_instead_of_inventory_name():
     assert projected['rows'][0]['image_url'] == 'https://images.example.test/ontbijt.jpg'
 
 
+def test_inventory_preview_uses_confirmed_central_catalog_image_without_household_product_mutation():
+    main_module = SimpleNamespace(
+        engine=CentralCatalogProjectionEngine(),
+        text=lambda value: value,
+    )
+    payload = {
+        'rows': [{
+            'id': INVENTORY_ID,
+            'household_article_id': ARTICLE_ID,
+            'artikel': 'Bio dadeltjes',
+            'aantal': 1,
+        }]
+    }
+
+    projected = _inventory_alias_projection(main_module, payload)
+
+    assert projected['rows'][0]['image_url'] == 'https://images.example.test/bio-dadeltjes.jpg'
+    assert projected['rows'][0]['household_article_name'] == 'Bio dadeltjes'
+
+
+def test_inventory_preview_does_not_guess_image_when_one_household_article_maps_to_multiple_products():
+    main_module = SimpleNamespace(
+        engine=CentralCatalogProjectionEngine(ambiguous=True),
+        text=lambda value: value,
+    )
+    payload = {
+        'rows': [{
+            'id': INVENTORY_ID,
+            'household_article_id': ARTICLE_ID,
+            'artikel': 'Bio dadeltjes',
+            'aantal': 1,
+        }]
+    }
+
+    projected = _inventory_alias_projection(main_module, payload)
+
+    assert projected['rows'][0]['image_url'] == ''
+
+
 def test_inventory_inline_household_name_does_not_rename_inventory_identity():
     state = {'inventory_name': '7 Granen Ontbijt', 'custom_name': 'Keesje'}
     calls = []
@@ -150,6 +255,8 @@ def test_inventory_inline_household_name_does_not_rename_inventory_identity():
 
 def run_contract() -> None:
     test_inventory_preview_projects_household_alias_instead_of_inventory_name()
+    test_inventory_preview_uses_confirmed_central_catalog_image_without_household_product_mutation()
+    test_inventory_preview_does_not_guess_image_when_one_household_article_maps_to_multiple_products()
     test_inventory_inline_household_name_does_not_rename_inventory_identity()
     print('HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN')
 
