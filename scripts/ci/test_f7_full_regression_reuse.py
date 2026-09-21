@@ -15,8 +15,8 @@ SHA = "a" * 40
 BASE = "b" * 40
 REF = "codex/example"
 ROW = {
-    "id": "TP-CI-05",
-    "workflow_file": ".github/workflows/tp-ci-05-receipt-shared-stack-postgresql-validation.yml",
+    "id": "TP-CI-02",
+    "workflow_file": ".github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml",
     "reuse_required_success_steps": ["Run A", "Run B", "Enforce"],
 }
 
