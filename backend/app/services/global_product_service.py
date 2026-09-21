@@ -101,6 +101,10 @@ def get_or_create_global_product(
                     size_value = COALESCE(size_value, :size_value),
                     size_unit = COALESCE(size_unit, :size_unit),
                     product_fingerprint = COALESCE(NULLIF(product_fingerprint, ''), :product_fingerprint),
+                    status = CASE
+                        WHEN lower(trim(COALESCE(status, ''))) = 'deleted' THEN :reactivation_status
+                        ELSE status
+                    END,
 {image_update_sql}                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """),
@@ -114,6 +118,7 @@ def get_or_create_global_product(
                 "size_unit": size_unit,
                 "product_fingerprint": fingerprint or None,
                 "image_url": normalized_image_url,
+                "reactivation_status": str(status or "active").strip() or "active",
             },
         )
         return product_id

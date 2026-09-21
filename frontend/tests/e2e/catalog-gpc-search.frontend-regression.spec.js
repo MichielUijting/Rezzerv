@@ -238,6 +238,211 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
+
+  test('alleen superuser kan geselecteerde Catalogusartikelen verwijderen', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    let catalogItems = [
+      {
+        id: 'catalog-delete-me',
+        name: 'Verwijder mij',
+        catalog_kind: 'exact',
+        brand: 'Testmerk',
+        primary_gtin: '8711111111111',
+        product_type: 'Testtype',
+        household_article_count: 0,
+        image_url: '',
+      },
+      {
+        id: 'catalog-keep-me',
+        name: 'Bewaar mij',
+        catalog_kind: 'exact',
+        brand: 'Testmerk',
+        primary_gtin: '8722222222222',
+        product_type: 'Testtype',
+        household_article_count: 0,
+        image_url: '',
+      },
+    ];
+    let deletePayload = null;
+
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: 'platform-superuser',
+          email: 'supergebruiker@rezzerv.local',
+          active_household_id: '0',
+          context_type: 'system',
+          role: 'owner',
+          display_role: 'admin',
+          is_platform_superuser: true,
+          permissions: {
+            'platform.system_household.access': true,
+            'gpc.update': true,
+          },
+        }),
+      });
+    });
+
+    await page.route('**/api/catalog?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: catalogItems,
+          total: catalogItems.length,
+          limit: 10,
+          offset: 0,
+        }),
+      });
+    });
+
+    await page.route('**/api/catalog/bulk-delete', async (route) => {
+      deletePayload = JSON.parse(route.request().postData() || '{}');
+      const ids = Array.isArray(deletePayload.global_product_ids) ? deletePayload.global_product_ids : [];
+      catalogItems = catalogItems.filter((item) => !ids.includes(item.id));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          deleted_count: ids.length,
+          deleted_ids: ids,
+          already_deleted_ids: [],
+          not_found_ids: [],
+        }),
+      });
+    });
+
+    await page.goto('/catalogus');
+    await expect(page.getByTestId('catalog-bulk-delete')).toBeVisible();
+    await expect(page.getByTestId('catalog-bulk-delete')).toBeDisabled();
+
+    await page.getByLabel('Selecteer Verwijder mij').check();
+    await expect(page.getByTestId('catalog-bulk-delete')).toBeEnabled();
+    await page.getByTestId('catalog-bulk-delete').click();
+
+    const confirmation = page.getByTestId('catalog-bulk-delete-confirmation');
+    await expect(confirmation).toBeVisible();
+    await expect(confirmation.getByText('1 geselecteerd catalogusartikel verwijderen?', { exact: true })).toBeVisible();
+    await page.getByTestId('catalog-bulk-delete-confirmation-primary-button').click();
+
+    await expect.poll(() => deletePayload).toEqual({ global_product_ids: ['catalog-delete-me'] });
+    await expect(page.getByTestId('catalog-row-catalog-delete-me')).toHaveCount(0);
+    await expect(page.getByTestId('catalog-row-catalog-keep-me')).toBeVisible();
+    await expect(page.getByText('1 catalogusartikel verwijderd.', { exact: true })).toBeVisible();
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+
+  test('IP-owner met systeemtoegang krijgt geen superuser Catalogus-verwijderactie', async ({ page }) => {
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: 'platform-ip-owner',
+          email: 'ip-owner@example.test',
+          active_household_id: '0',
+          context_type: 'system',
+          role: 'owner',
+          display_role: 'admin',
+          is_platform_superuser: false,
+          is_ip_owner: true,
+          permissions: {
+            'platform.system_household.access': true,
+            'platform.catalog.manage': true,
+          },
+        }),
+      });
+    });
+    await page.route('**/api/catalog?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{
+            id: 'catalog-ip-owner-visible',
+            name: 'IP-owner zichtbaar artikel',
+            catalog_kind: 'exact',
+            brand: '',
+            primary_gtin: '8744444444444',
+            product_type: '',
+            household_article_count: 0,
+            image_url: '',
+          }],
+          total: 1,
+          limit: 10,
+          offset: 0,
+        }),
+      });
+    });
+
+    await page.goto('/catalogus');
+    await expect(page.getByTestId('catalog-row-catalog-ip-owner-visible')).toBeVisible();
+    await expect(page.getByTestId('catalog-bulk-delete')).toHaveCount(0);
+  });
+
+
+  test('normale gebruiker krijgt geen Catalogus-verwijderactie', async ({ page }) => {
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: 'regular-user',
+          email: 'gebruiker@example.test',
+          active_household_id: 'household-1',
+          context_type: 'regular',
+          role: 'member',
+          display_role: 'lid',
+          is_platform_superuser: false,
+          permissions: {},
+        }),
+      });
+    });
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          onboarding_status: 'completed',
+          onboarding_step: 'completed',
+          can_manage: true,
+          initial_choice_required: false,
+          shared_household_minimum_required: false,
+          primary_use_case: 'wat_inhuis',
+        }),
+      });
+    });
+    await page.route('**/api/catalog?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{
+            id: 'catalog-visible',
+            name: 'Zichtbaar artikel',
+            catalog_kind: 'exact',
+            brand: '',
+            primary_gtin: '8733333333333',
+            product_type: '',
+            household_article_count: 0,
+            image_url: '',
+          }],
+          total: 1,
+          limit: 10,
+          offset: 0,
+        }),
+      });
+    });
+
+    await page.goto('/catalogus');
+    await expect(page.getByTestId('catalog-row-catalog-visible')).toBeVisible();
+    await expect(page.getByTestId('catalog-bulk-delete')).toHaveCount(0);
+  });
+
+
   test('langdurig zoeken naar GPC Bricks toont pas na één seconde het grote Inhuis-logo', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let releaseBrickSearch;
