@@ -14,6 +14,15 @@ DEEP = ROOT / "quality/ci/f7_deep_nightly_gate.json"
 DEEP_WORKFLOW = ROOT / ".github/workflows/f7-deep-nightly-gate.yml"
 EXPECTED_GATE_ORDER = ["pr_fast_regression", "full_regression", "deep_nightly", "release_acceptance"]
 EXPECTED_FULL_PR_ACTIONS = ["opened", "reopened", "ready_for_review", "synchronize"]
+EXPECTED_FULL_WORKFLOW_COUNT = 21
+EXPECTED_F7_SERIAL_SHARED = {"TP-CI-02"}
+EXPECTED_F7_REPLACED_SHARED = {"TP-CI-03", "TP-CI-04", "TP-CI-05", "TP-CI-07"}
+EXPECTED_F7_PARALLEL_STANDALONE = {
+    "P0-ACCOUNT-SESSION", "P0-AUTHORIZATION-ISOLATION", "P0-INVENTORY", "P0-ALMOST-OUT",
+    "F6-INVENTORY", "P0-RECEIPT-INVENTORY", "P0-RECEIPT-LOCATIONS-OFF",
+    "P0-RECEIPT-IDEMPOTENCY", "P0-RECEIPT-NONPHYSICAL", "F6-RECEIPT", "P0-ONBOARDING",
+    "P0-ARTICLE-IDENTITY", "P0-PLATFORM-AUTHORITY", "P0-UNPACKING",
+}
 EXPECTED_DEEP_BUCKETS = {"failure_recovery": 6, "legacy_portability": 6}
 EXPECTED_P0 = {
     "P0-ACCOUNT-SESSION", "P0-ONBOARDING", "P0-HOUSEHOLD-MEMBERSHIP",
@@ -89,7 +98,7 @@ def main() -> int:
     full_gate = gates["full_regression"]
     require(full_gate.get("status") == "covered", "Full Regression must be covered")
     require(full_gate.get("required_p0_scenarios") == 14, "Full Regression P0 count drift")
-    require(full_gate.get("required_workflows") == 11, "Full Regression workflow count drift")
+    require(full_gate.get("required_workflows") == EXPECTED_FULL_WORKFLOW_COUNT, "Full Regression workflow count drift")
     full_residuals = {row.get("id"): row for row in full_gate.get("residuals", [])}
     require(set(full_residuals) == {"F7-FULL-01", "F7-FULL-02"}, "Full residual set drift")
     require(all(row.get("status") == "closed" for row in full_residuals.values()), "Full residuals must be closed")
@@ -99,11 +108,19 @@ def main() -> int:
     full = load(FULL)
     require(full.get("gate_id") == "F7-03", "Full contract gate id drift")
     require(full.get("required_p0_scenario_count") == 14, "Full contract P0 count drift")
-    require(full.get("required_workflow_count") == 11, "Full contract workflow count drift")
+    require(full.get("required_workflow_count") == EXPECTED_FULL_WORKFLOW_COUNT, "Full contract workflow count drift")
     require(set((full.get("p0_scenario_authorities") or {}).keys()) == EXPECTED_P0, "Full contract P0 coverage drift")
     full_workflows = full.get("workflows") or []
-    require(len(full_workflows) == 11, "Full workflow inventory drift")
+    require(len(full_workflows) == EXPECTED_FULL_WORKFLOW_COUNT, "Full workflow inventory drift")
     validate_dispatchable(full_workflows, "Full")
+    full_profile = full.get("execution_profile") or {}
+    require(full_profile.get("mode") == "f7_parallel_standalone", "Full execution profile mode drift")
+    require(set(full_profile.get("serial_shared_workflows") or []) == EXPECTED_F7_SERIAL_SHARED, "Full serial shared profile drift")
+    require(set(full_profile.get("replaced_shared_workflows") or []) == EXPECTED_F7_REPLACED_SHARED, "Full replaced shared profile drift")
+    require(set(full_profile.get("parallel_standalone_authorities") or []) == EXPECTED_F7_PARALLEL_STANDALONE, "Full parallel standalone profile drift")
+    full_ids = {row.get("id") for row in full_workflows}
+    require(EXPECTED_F7_REPLACED_SHARED.isdisjoint(full_ids), "Replaced shared clusters still registered in Full Regression")
+    require(EXPECTED_F7_PARALLEL_STANDALONE.issubset(full_ids), "Parallel standalone Full Regression authority missing")
 
     trigger = load(FULL_TRIGGER)
     require(trigger.get("policy_id") == "F7-FULL-02", "Full trigger policy id drift")
@@ -112,6 +129,12 @@ def main() -> int:
     require("    paths:" not in full_text, "Full Regression must not be path-filtered")
     require("cancel-in-progress: true" in full_text, "Full candidate replacement policy missing")
     require("workflow_dispatch:" in full_text, "Full manual fallback missing")
+    for marker in ("REUSED", "ATTACHED", "DISPATCHED"):
+        require(
+            f"grep -E '^F7_FULL_{marker}_COUNT=([0-9]|1[0-9]|2[01])$' f7-full-dispatch.log" in full_text,
+            f"Full dispatch {marker.lower()} counter guard must accept counts through twenty-one",
+        )
+    require("([0-9]|1[01])$" not in full_text, "legacy eleven-authority dispatch counter guard still present")
 
     deep_gate = gates["deep_nightly"]
     require(deep_gate.get("status") == "covered", "Deep/Nightly must be covered after first aggregate proof")
@@ -186,7 +209,7 @@ def main() -> int:
     print("PASS f7_02_fallback_governance_closed")
     print("PASS f7_03_full_regression_contract_registered")
     print("PASS f7_03_exact_14_p0_scenarios_mapped")
-    print("PASS f7_03_eleven_workflows_registered")
+    print(f"PASS f7_03_full_regression_workflow_inventory_registered count={EXPECTED_FULL_WORKFLOW_COUNT}")
     print("PASS f7_03_full_regression_exact_candidate_closed")
     print("PASS f7_04_full_regression_trigger_policy_permanent")
     print("PASS f7_04_non_draft_candidate_guarded")

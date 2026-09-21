@@ -14,7 +14,13 @@
       "status": "covered",
       "aggregate_workflow": ".github/workflows/f7-pr-fast-regression-gate.yml",
       "contract": "quality/ci/f7_pr_fast_regression_gate.json",
-      "shared_clusters": ["TP-CI-02", "TP-CI-03", "TP-CI-04", "TP-CI-05", "TP-CI-07"],
+      "shared_clusters": [
+        "TP-CI-02",
+        "TP-CI-03",
+        "TP-CI-04",
+        "TP-CI-05",
+        "TP-CI-07"
+      ],
       "shared_authority_count": 16,
       "fallback_governance": {
         "manual_only_workflows": 14,
@@ -51,8 +57,8 @@
       "contract": "quality/ci/f7_full_regression_gate.json",
       "trigger_policy": "quality/ci/f7_full_regression_trigger_policy.json",
       "required_p0_scenarios": 14,
-      "required_workflows": 11,
-      "candidate_contract": "All registered authorities are workflow_dispatch'ed from one candidate branch ref and accepted only when their run head_sha equals the exact candidate SHA.",
+      "required_workflows": 21,
+      "candidate_contract": "All twenty-one registered workflows are evaluated on one exact candidate SHA. TP-CI-02 remains the serial shared Kassa cluster; the fourteen authorities formerly serialized inside TP-CI-03/04/05/07 are dispatched as standalone workflow runs in parallel; six existing standalone/schema/supporting/frontend authorities remain unchanged.",
       "residuals": [
         {
           "id": "F7-FULL-01",
@@ -77,7 +83,22 @@
           },
           "description": "Full Regression now runs automatically for every non-draft merge candidate to main on opened, reopened, ready-for-review and synchronize, while retaining workflow_dispatch fallback."
         }
-      ]
+      ],
+      "execution_profile": {
+        "mode": "f7_parallel_standalone",
+        "serial_shared_workflows": [
+          "TP-CI-02"
+        ],
+        "serial_shared_authorities": 2,
+        "replaced_shared_workflows": [
+          "TP-CI-03",
+          "TP-CI-04",
+          "TP-CI-05",
+          "TP-CI-07"
+        ],
+        "parallelized_shared_authorities": 14,
+        "required_workflows": 21
+      }
     },
     "deep_nightly": {
       "status": "covered",
