@@ -107,6 +107,7 @@ from app.services.unpacking_household_object_guard import (
     acquire_purchase_import_processing_lock,
     install_unpacking_household_object_guard,
 )
+from app.services.household_alias_policy import install_household_alias_policy
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -18610,3 +18611,8 @@ configure_article_group_routes(
 
 from app.api.router import api_router
 app.include_router(api_router)
+
+# Activate the household-aware Voorraad projection only after all routes and
+# enrichment helpers exist. This makes Catalogus image_url and household aliases
+# part of the actual /api/dev/inventory-preview runtime response.
+install_household_alias_policy(sys.modules[__name__])
