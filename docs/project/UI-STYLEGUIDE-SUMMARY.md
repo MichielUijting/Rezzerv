@@ -289,6 +289,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 ## Tabellen
 
 De standaard desktop-/matrixweergave toont waar een tabel pagineert **10 zichtbare bodyregels** per pagina. Wanneer minder dan 10 records beschikbaar zijn, mag de tabelhoogte met lege niet-interactieve fillerregels op 10 regels worden gestabiliseerd zodat de lay-out niet springt.
+Voor **Catalogus** geldt dit expliciet: per pagina worden maximaal **10 inhoudelijke catalogusregels** getoond; de tabelcontainer wordt op die 10 inhoudelijke regels gedimensioneerd, zodat productthumbnails geen onbedoelde kortere viewport met extra verticale scroll veroorzaken.
 
 - zoek- en filterregel staat direct boven de kolomtitels;
 - eerste zoekveld heet `Zoek`;
@@ -313,6 +314,7 @@ De standaard desktop-/matrixweergave toont waar een tabel pagineert **10 zichtba
 - de overlay toont uitsluitend het bestaande **Inhuis-beeldmerk zonder woordmerk** (`/inhuis-app-icon.png`), dus geen losse letter `R`, geen cirkelkader en geen zichtbare tekst onder het logo;
 - op een regulier desktopvenster is het beeldmerk **250px breed**, exact vijfmaal de 50px-basishoogte van het Inhuis-logo in de desktopheader; op smallere vensters mag het responsief begrensd worden tot maximaal `70vw`;
 - zodra laden gereed is of faalt verdwijnt de overlay direct;
+- dezelfde vertraagde overlay wordt ook gebruikt voor langdurige interactieve Catalogus-acties, waaronder het ophalen/controleren van een GPC-classificatie en het zoeken naar GPC Bricks; ook daar verschijnt het beeldmerk pas na 1.000 ms onafgebroken wachten;
 - de overlay gebruikt `role="status"`, `aria-busy="true"` en een niet-zichtbaar toegankelijk laadlabel; animatie wordt uitgeschakeld bij `prefers-reduced-motion`.
 
 ## Iconen en toegankelijkheid
