@@ -31,10 +31,25 @@
   color: #5f7a68;
 }
 
+.rz-catalog-table-wrapper {
+  --rz-table-body-row-height: 52px;
+  border: 1px solid var(--color-table-border, #6bbf7a);
+  max-height: calc(
+    var(--rz-table-header-row-height)
+    + var(--rz-table-filter-row-height)
+    + (var(--rz-table-body-row-height) * 10)
+    + 2px
+  );
+}
+
 .rz-catalog-table {
   table-layout: fixed;
   width: 100%;
   min-width: 990px;
+}
+
+.rz-external-databases .rz-catalog-table tbody td {
+  height: var(--rz-table-body-row-height);
 }
 
 .rz-catalog-col-select { width: 44px; }

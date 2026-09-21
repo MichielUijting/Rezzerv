@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
+import DelayedTableLoadingOverlay from '../../ui/DelayedTableLoadingOverlay'
 import CatalogProductImage from './CatalogProductImage'
 import {
   canCurrentUserPerform,
@@ -204,6 +205,7 @@ export default function CatalogPage() {
 
   return (
     <AppShell title="Catalogus" showExit={false}>
+      <DelayedTableLoadingOverlay active={isLoading} />
       <div className="rz-catalog-page rz-external-databases" data-testid="catalog-page">
         <ScreenCard fullWidth>
           <div className="rz-catalog-card">
@@ -225,8 +227,12 @@ export default function CatalogPage() {
               <span className="rz-external-databases-muted">Geselecteerd: {selectedIds.length}</span>
             </div>
 
-            <div className="rz-table-scroll rz-table-scroll--wide">
-              <Table dataTestId="catalog-table" tableClassName="rz-catalog-table" resizableColumns>
+            <Table
+              dataTestId="catalog-table"
+              wrapperClassName="rz-catalog-table-wrapper"
+              tableClassName="rz-catalog-table rz-data-table--sticky-header rz-data-table--sticky-filters"
+              resizableColumns
+            >
                 <colgroup>
                   <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col className="rz-catalog-col-kind" />
                   <col className="rz-catalog-col-brand" /><col className="rz-catalog-col-gtin" /><col className="rz-catalog-col-product-type" />
@@ -242,7 +248,7 @@ export default function CatalogPage() {
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('product_type')}>Producttype <span>{sortMark('product_type')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('household_article_count')}>Huishoudartikelen <span>{sortMark('household_article_count')}</span></button></th>
                   </tr>
-                  <tr className="rz-external-databases-filter-row">
+                  <tr className="rz-table-filters rz-external-databases-filter-row">
                     <th />
                     <th><input className="rz-table-filter" placeholder="Zoek" value={filters.name} onChange={(event) => updateFilter('name', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.catalogKind} onChange={(event) => updateFilter('catalogKind', event.target.value)} /></th>
@@ -271,8 +277,7 @@ export default function CatalogPage() {
                     </tr>
                   )) : null}
                 </tbody>
-              </Table>
-            </div>
+            </Table>
 
             <div className="rz-external-databases-pagination" aria-label="Paginering Catalogus">
               <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(1)}>Eerste</Button>

@@ -55,7 +55,7 @@ assert.match(tableLoadingOverlay, /src="\/inhuis-app-icon\.png"/)
 assert.match(tableLoadingOverlay, /data-testid="table-loading-logo"/)
 assert.match(tableLoadingCss, /width:\s*min\(250px,\s*70vw\)/)
 assert.doesNotMatch(tableLoadingCss, /border-radius:\s*50%/)
-assert.match(externalReceiptOverview, /DelayedTableLoadingOverlay active=\{isItemsLoading \|\| isOffLoading\}/)
+assert.match(externalReceiptOverview, /DelayedTableLoadingOverlay active=\{isItemsLoading \|\| isOffLoading \|\| isGpcSearching \|\| isClassifyingProductType\}/)
 assert.doesNotMatch(externalReceiptOverview, /showSearchComplete|rz-search-complete-letter|rz-search-progress-indicator/)
 
 // User-visible branding guardrails. Technical REZZERV_* keys, events, storage keys,
