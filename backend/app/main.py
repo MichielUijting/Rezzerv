@@ -108,6 +108,9 @@ from app.services.unpacking_household_object_guard import (
     install_unpacking_household_object_guard,
 )
 from app.services.household_alias_policy import install_household_alias_policy
+from app.services.household_representative_image_service import (
+    backfill_household_representative_images,
+)
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -13154,6 +13157,12 @@ run_runtime_initialization(
     ensure_default_receipt_sources=ensure_default_receipt_sources,
     dedupe_receipts_for_household=dedupe_receipts_for_household,
     receipt_storage_root=RECEIPT_STORAGE_ROOT,
+)
+
+representative_image_backfill_count = backfill_household_representative_images(engine)
+logger.info(
+    "Representatieve Voorraadfoto's terugwerkend gevuld: %s",
+    representative_image_backfill_count,
 )
 
 
