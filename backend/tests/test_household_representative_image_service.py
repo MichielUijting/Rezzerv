@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import create_engine, text
+from contextlib import contextmanager
 
-from app.services.household_representative_image_service import (
-    materialize_household_representative_images,
-)
+import app.services.household_representative_image_service as representative
 
 
 ARTICLE_ID = "article-broccoli"
@@ -12,170 +10,142 @@ GROUP_ID = "group-broccoli"
 BRICK_CODE = "10000164"
 
 
-def _engine():
-    engine = create_engine("sqlite+pysqlite:///:memory:")
-    with engine.begin() as conn:
-        conn.exec_driver_sql("""
-            CREATE TABLE household_articles (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                global_product_id TEXT,
-                article_group_id TEXT,
-                representative_image_url TEXT,
-                representative_image_global_product_id TEXT,
-                representative_image_gpc_brick_code TEXT
-            )
-        """)
-        conn.exec_driver_sql("""
-            CREATE TABLE article_groups (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                name TEXT NOT NULL
-            )
-        """)
-        conn.exec_driver_sql("""
-            CREATE TABLE gpc_bricks (
-                brick_code TEXT PRIMARY KEY,
-                description TEXT
-            )
-        """)
-        conn.exec_driver_sql("""
-            CREATE TABLE gpc_translations (
-                entity_type TEXT,
-                entity_code TEXT,
-                language_code TEXT,
-                translated_text TEXT
-            )
-        """)
-        conn.exec_driver_sql("""
-            CREATE TABLE global_products (
-                id TEXT PRIMARY KEY,
-                primary_gtin TEXT,
-                image_url TEXT,
-                status TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            )
-        """)
-        conn.exec_driver_sql("""
-            CREATE TABLE global_product_gpc_bricks (
-                global_product_id TEXT,
-                brick_code TEXT
-            )
-        """)
-        conn.exec_driver_sql("""
-            CREATE TABLE purchase_import_lines (
-                id TEXT PRIMARY KEY,
-                matched_household_article_id TEXT,
-                matched_global_product_id TEXT,
-                created_at TEXT,
-                updated_at TEXT
-            )
-        """)
-        conn.execute(
-            text("INSERT INTO article_groups(id, household_id, name) VALUES (:id, 'household-a', 'Broccoli')"),
-            {"id": GROUP_ID},
-        )
-        conn.execute(
-            text("INSERT INTO gpc_bricks(brick_code, description) VALUES (:code, 'Broccoli')"),
-            {"code": BRICK_CODE},
-        )
-        conn.execute(
-            text("""
-                INSERT INTO household_articles(
-                    id, household_id, article_group_id
-                ) VALUES (:id, 'household-a', :group_id)
-            """),
-            {"id": ARTICLE_ID, "group_id": GROUP_ID},
-        )
-        conn.execute(
-            text("""
-                INSERT INTO global_products(
-                    id, primary_gtin, image_url, status, created_at, updated_at
-                ) VALUES (
-                    'exact-broccoli-picnic',
-                    '8711578582950',
-                    'https://images.example.test/broccoli.jpg',
-                    'active',
-                    '2026-09-20T10:00:00',
-                    '2026-09-20T10:00:00'
-                )
-            """)
-        )
-        conn.execute(
-            text("""
-                INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
-                VALUES ('exact-broccoli-picnic', :brick_code)
-            """),
-            {"brick_code": BRICK_CODE},
-        )
-    return engine
+class Result:
+    def __init__(self, *, row=None, rows=None):
+        self._row = row
+        self._rows = rows or []
+
+    def mappings(self):
+        return self
+
+    def first(self):
+        return self._row
+
+    def all(self):
+        return self._rows
 
 
-def test_materializes_stable_household_image_from_exact_product_in_same_brick():
-    engine = _engine()
-
-    with engine.begin() as conn:
-        resolved = materialize_household_representative_images(conn, [ARTICLE_ID])
-        assert resolved == {
-            ARTICLE_ID: "https://images.example.test/broccoli.jpg"
+class RepresentativeConnection:
+    def __init__(self):
+        self.state = {
+            "representative_image_url": "",
+            "representative_image_global_product_id": "",
+            "representative_image_gpc_brick_code": "",
+            "catalog_products": [
+                {
+                    "global_product_id": "exact-broccoli-picnic",
+                    "image_url": "https://images.example.test/broccoli.jpg",
+                    "gpc_brick_code": BRICK_CODE,
+                    "updated_at": "2026-09-20T10:00:00",
+                }
+            ],
         }
 
-        row = conn.execute(
-            text("""
-                SELECT representative_image_url,
-                       representative_image_global_product_id,
-                       representative_image_gpc_brick_code
-                FROM household_articles
-                WHERE id = :id
-            """),
-            {"id": ARTICLE_ID},
-        ).mappings().one()
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        params = dict(params or {})
 
-        assert row["representative_image_url"] == "https://images.example.test/broccoli.jpg"
-        assert row["representative_image_global_product_id"] == "exact-broccoli-picnic"
-        assert row["representative_image_gpc_brick_code"] == BRICK_CODE
+        if "FROM household_articles ha" in sql and "representative_image_url" in sql:
+            if self.state["representative_image_url"]:
+                return Result(rows=[])
+            return Result(rows=[{
+                "id": ARTICLE_ID,
+                "household_id": "household-a",
+                "global_product_id": None,
+                "article_group_id": GROUP_ID,
+                "representative_image_url": "",
+                "representative_image_global_product_id": "",
+                "representative_image_gpc_brick_code": "",
+            }])
+
+        if "FROM article_groups ag" in sql and "JOIN gpc_bricks gb" in sql:
+            return Result(rows=[{"brick_code": BRICK_CODE}])
+
+        if "FROM global_product_gpc_bricks gpb" in sql and "JOIN global_products gp" in sql:
+            candidates = [
+                item for item in self.state["catalog_products"]
+                if item["gpc_brick_code"] == params.get("brick_code")
+            ]
+            candidates.sort(key=lambda item: item["updated_at"], reverse=True)
+            return Result(row=candidates[0] if candidates else None)
+
+        if "UPDATE household_articles" in sql and "representative_image_url" in sql:
+            self.state["representative_image_url"] = str(params.get("image_url") or "")
+            self.state["representative_image_global_product_id"] = str(params.get("global_product_id") or "")
+            self.state["representative_image_gpc_brick_code"] = str(params.get("gpc_brick_code") or "")
+            return Result()
+
+        if "FROM global_products gp" in sql and "WHERE gp.id = :global_product_id" in sql:
+            return Result(row=None)
+
+        raise AssertionError(f"Onverwachte representative-image SQL: {sql}")
 
 
-def test_representative_image_remains_stable_when_another_store_product_is_added():
-    engine = _engine()
+def _patch_schema(monkeypatch):
+    monkeypatch.setattr(
+        representative,
+        "_tables",
+        lambda conn: {
+            "household_articles",
+            "article_groups",
+            "gpc_bricks",
+            "global_products",
+            "global_product_gpc_bricks",
+        },
+    )
 
-    with engine.begin() as conn:
-        materialize_household_representative_images(conn, [ARTICLE_ID])
-        conn.execute(
-            text("""
-                INSERT INTO global_products(
-                    id, primary_gtin, image_url, status, created_at, updated_at
-                ) VALUES (
-                    'exact-broccoli-ah',
-                    '8719999999999',
-                    'https://images.example.test/broccoli-ah.jpg',
-                    'active',
-                    '2026-09-21T10:00:00',
-                    '2026-09-21T10:00:00'
-                )
-            """)
-        )
-        conn.execute(
-            text("""
-                INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
-                VALUES ('exact-broccoli-ah', :brick_code)
-            """),
-            {"brick_code": BRICK_CODE},
-        )
+    def columns(_conn, table_name):
+        mapping = {
+            "household_articles": {
+                "id",
+                "household_id",
+                "global_product_id",
+                "article_group_id",
+                "representative_image_url",
+                "representative_image_global_product_id",
+                "representative_image_gpc_brick_code",
+            },
+            "purchase_import_lines": set(),
+        }
+        return mapping.get(table_name, set())
 
-        second = materialize_household_representative_images(conn, [ARTICLE_ID])
-        assert second == {}
+    monkeypatch.setattr(representative, "_columns", columns)
 
-        row = conn.execute(
-            text("""
-                SELECT representative_image_url,
-                       representative_image_global_product_id
-                FROM household_articles
-                WHERE id = :id
-            """),
-            {"id": ARTICLE_ID},
-        ).mappings().one()
 
-        assert row["representative_image_url"] == "https://images.example.test/broccoli.jpg"
-        assert row["representative_image_global_product_id"] == "exact-broccoli-picnic"
+def test_materializes_stable_household_image_from_exact_product_in_same_brick(monkeypatch):
+    _patch_schema(monkeypatch)
+    conn = RepresentativeConnection()
+
+    resolved = representative.materialize_household_representative_images(
+        conn,
+        [ARTICLE_ID],
+    )
+
+    assert resolved == {
+        ARTICLE_ID: "https://images.example.test/broccoli.jpg"
+    }
+    assert conn.state["representative_image_url"] == "https://images.example.test/broccoli.jpg"
+    assert conn.state["representative_image_global_product_id"] == "exact-broccoli-picnic"
+    assert conn.state["representative_image_gpc_brick_code"] == BRICK_CODE
+
+
+def test_representative_image_remains_stable_when_another_store_product_is_added(monkeypatch):
+    _patch_schema(monkeypatch)
+    conn = RepresentativeConnection()
+
+    representative.materialize_household_representative_images(conn, [ARTICLE_ID])
+    conn.state["catalog_products"].append({
+        "global_product_id": "exact-broccoli-ah",
+        "image_url": "https://images.example.test/broccoli-ah.jpg",
+        "gpc_brick_code": BRICK_CODE,
+        "updated_at": "2026-09-21T10:00:00",
+    })
+
+    second = representative.materialize_household_representative_images(
+        conn,
+        [ARTICLE_ID],
+    )
+
+    assert second == {}
+    assert conn.state["representative_image_url"] == "https://images.example.test/broccoli.jpg"
+    assert conn.state["representative_image_global_product_id"] == "exact-broccoli-picnic"
