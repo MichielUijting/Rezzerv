@@ -20,6 +20,8 @@ async function mockApi(page, actor, state) {
       is_platform_superuser: system, is_frontteam: false,
     })
     if (path === '/api/onboarding') return json({ onboarding_status: 'completed', primary_use_case: null })
+    if (path === '/api/superuser/bootstrap') return json({ access: 'granted' })
+    if (path === '/api/superuser/audit/open') return json({ status: 'ok' })
     if (path === '/api/features') {
       state.reads++
       return state.failed ? json({}, 503) : json({ features: { [key]: state.enabled } })
@@ -66,11 +68,16 @@ for (const actor of ['member', 'superuser']) {
   })
 }
 
-test('Superuser opens functional management and enables Gerechten after confirmation', async ({ page }) => {
+test('Superuser opens functional management from Systeem and enables Gerechten after confirmation', async ({ page }) => {
   const state = { enabled: false, reads: 0, managementReads: 0, updates: [] }
   await mockApi(page, 'superuser', state)
   await page.goto('/home')
-  await page.getByRole('button', { name: 'Functionaliteiten', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Functionaliteiten', exact: true })).toHaveCount(0)
+
+  await page.goto('/superuser')
+  await expect(page.getByTestId('superuser-dashboard')).toBeVisible()
+  await page.getByRole('tab', { name: 'Systeem', exact: true }).click()
+  await page.getByTestId('superuser-open-functionalities').click()
   await expect(page).toHaveURL(/\/platform\/functionaliteiten$/)
   const feature = page.getByTestId(`platform-feature-flag-${key}`)
   await expect(feature).toContainText(key)
