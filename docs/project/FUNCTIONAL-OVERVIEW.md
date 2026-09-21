@@ -21,6 +21,8 @@ Automatisch zoeken blijft conservatief bij productidentiteitsconflicten. **Zelf 
 
 Voor voorraad, Bijna op en boodschappen mag het generieke artikel leidend zijn wanneer het huishouden vooral wil weten of het artikeltype aanwezig of nodig is. Een tijdelijke of huishoudspecifieke voorkeur zoals `kip` bij `Bouillon` is geen afgeleide centrale productidentiteit; zo'n wens wordt door de gebruiker op huishoud-/boodschappenniveau vastgelegd, bijvoorbeeld in de bestaande opmerking van de boodschappenregel.
 
+Voor de productfoto van zo'n generiek huishoudartikel mag Inhuis één representatief **exact** Catalogusproduct gebruiken. Dit exacte product hoeft niet hetzelfde winkelartikelnummer of dezelfde GTIN te hebben als iedere aankoop, maar moet wel dezelfde officiële GS1 GPC Brick hebben. De keuze wordt per huishoudartikel bewaard en is dus geen algemene afbeelding op Brick-niveau. Zo kan bijvoorbeeld het huishoudartikel `Broccoli` één herkenbare broccoli-productfoto tonen terwijl aankopen bij verschillende winkels verschillende exacte artikelnummers hebben. Naamgelijkheid alleen is nooit voldoende voor deze koppeling.
+
 ## Prognoses en Bijna op
 
 Prognoses gebruiken huishoudgegevens en historische voorraadbewegingen. Instellingen en uitkomsten blijven aan het juiste huishouden en de juiste rol gebonden.
