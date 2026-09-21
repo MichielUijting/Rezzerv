@@ -9,6 +9,9 @@ from typing import Any, Callable
 from sqlalchemy import text
 
 from app.services.receipt_source_helper_service import configure_receipt_source_helper_service
+from app.services.household_article_representative_image_service import (
+    backfill_household_article_representative_products,
+)
 
 
 def _normalize_receipt_source_household_id(value: Any) -> str:
@@ -62,6 +65,13 @@ def run_runtime_initialization(
     logger.info(
         "Incomplete kassabonartikelkoppelingen gedeactiveerd: %s",
         cleanup_count,
+    )
+
+    with engine.begin() as connection:
+        representative_photo_backfill = backfill_household_article_representative_products(connection)
+    logger.info(
+        "Representatieve huishoudartikelfoto's bijgewerkt: %s",
+        representative_photo_backfill,
     )
 
     bootstrap_auth_registry()
