@@ -72,8 +72,11 @@ jobs:
           grep -F 'SQLITE_PASSWORD_RESET_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_HOME_ACTION_ORDER_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
+          grep -F 'SQLITE_HOUSEHOLD_REPRESENTATIVE_PHOTO_SCHEMA_GREEN' /tmp/migration-sqlite.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260919_01_GREEN' /tmp/migration-sqlite.log
+          python backend/tests/household_article_representative_image_selftest.py | tee /tmp/household-representative-image.log
+          grep -F 'HOUSEHOLD_ARTICLE_REPRESENTATIVE_IMAGE_GREEN' /tmp/household-representative-image.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN' /tmp/migration-sqlite.log
           python backend/tests/password_reset_security_selftest.py | tee /tmp/password-reset-security.log
           grep -F 'PASSWORD_RESET_SECURITY_GREEN' /tmp/password-reset-security.log
           python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/zero-residual.log
@@ -89,9 +92,9 @@ jobs:
           python backend/tests/receipt_lifecycle_schema_authority_selftest.py
           python -m app.testing.external_article_product_link_contract
           python -m alembic -c backend/alembic.ini current | tee /tmp/sqlite-current.log
-          grep -F '20260919_01' /tmp/sqlite-current.log
+          grep -F '20260921_01' /tmp/sqlite-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/sqlite-heads.log
-          grep -F '20260919_01' /tmp/sqlite-heads.log
+          grep -F '20260921_01' /tmp/sqlite-heads.log
 
   sqlite-existing-adoption:
     name: Existing SQLite baseline is validated and adopted
@@ -149,6 +152,7 @@ jobs:
           grep -F -- '-- table: household_invitations (table=household_invitations)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: platform_feature_flags (table=platform_feature_flags)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: platform_home_action_order (table=platform_home_action_order)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
+          grep -F -- '-- table: household_article_representative_products (table=household_article_representative_products)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: purchase_import_line_inventory_handling_overrides (table=purchase_import_line_inventory_handling_overrides)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: receipt_webhook_deliveries (table=receipt_webhook_deliveries)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
           grep -F -- '-- table: account_password_reset_tokens (table=account_password_reset_tokens)' "$RUNNER_TEMP/rezzerv-schema/current-schema.sql"
@@ -158,9 +162,10 @@ jobs:
           grep -F 'SQLITE_PASSWORD_RESET_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_HOME_ACTION_ORDER_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260919_01_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'SQLITE_HOUSEHOLD_REPRESENTATIVE_PHOTO_SCHEMA_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260919_01' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '20260921_01' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -221,8 +226,9 @@ jobs:
           grep -F 'POSTGRESQL_PASSWORD_RESET_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_HOME_ACTION_ORDER_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
+          grep -F 'POSTGRESQL_HOUSEHOLD_REPRESENTATIVE_PHOTO_SCHEMA_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260919_01_GREEN' /tmp/migration-postgresql.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN' /tmp/migration-postgresql.log
           python backend/tests/password_reset_security_selftest.py | tee /tmp/password-reset-security.log
           grep -F 'PASSWORD_RESET_SECURITY_GREEN' /tmp/password-reset-security.log
           python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/zero-residual.log
@@ -278,6 +284,6 @@ jobs:
           print('POSTGRESQL_HOME_ACTION_ORDER_MIGRATION_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current | tee /tmp/postgresql-current.log
-          grep -F '20260919_01' /tmp/postgresql-current.log
+          grep -F '20260921_01' /tmp/postgresql-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/postgresql-heads.log
-          grep -F '20260919_01' /tmp/postgresql-heads.log
+          grep -F '20260921_01' /tmp/postgresql-heads.log
