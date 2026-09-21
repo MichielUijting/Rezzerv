@@ -25,8 +25,8 @@ from app.services.shopping_list_service import (
 )
 
 router = APIRouter()
-CATALOG_SCOPES = ("household_articles", "product_types", "article_groups")
-SOURCE_PRIORITY = {"household_article": 0, "product_type": 1, "article_group": 2}
+CATALOG_SCOPES = ("household_articles", "global_products", "product_types", "article_groups")
+SOURCE_PRIORITY = {"household_article": 0, "global_product": 1, "product_type": 2, "article_group": 3}
 
 
 def _membership_id(conn, *, household_id: str, user_id: str, email: str) -> str:
@@ -198,11 +198,11 @@ def shopping_list_catalog_search(
                 "query": normalized_query,
                 "items": [],
                 "total": 0,
-                "counts": {"household_article": 0, "product_type": 0, "article_group": 0},
+                "counts": {"household_article": 0, "global_product": 0, "product_type": 0, "article_group": 0},
             }
 
         combined: list[dict[str, Any]] = []
-        counts = {"household_article": 0, "product_type": 0, "article_group": 0}
+        counts = {"household_article": 0, "global_product": 0, "product_type": 0, "article_group": 0}
         for catalog_scope in CATALOG_SCOPES:
             payload = _search_one_scope(catalog_scope, household_id, normalized_query, limit)
             scope_items = list(payload.get("items") or [])

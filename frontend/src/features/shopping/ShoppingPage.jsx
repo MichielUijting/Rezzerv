@@ -10,6 +10,7 @@ import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
 const SOURCE_LABELS = {
   household_article: 'Huishoudartikel',
+  global_product: 'Exact Catalogusproduct',
   product_type: 'Producttype',
   article_group: 'Artikelgroep',
 }

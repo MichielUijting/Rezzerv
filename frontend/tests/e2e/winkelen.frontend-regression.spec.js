@@ -27,6 +27,17 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
 
     const candidates = [
       {
+        source_type: 'global_product',
+        source_id: 'global-product-bananen',
+        label: 'Bananen',
+        article_name: 'Bananen',
+        article_group_name: '',
+        product_type_name: 'Bananas',
+        brand: 'Albert Heijn',
+        primary_gtin: '8718265184886',
+        image_url: 'https://images.example.test/bananen.jpg',
+      },
+      {
         source_type: 'household_article',
         source_id: 'household-article-melk',
         label: 'Melk',
@@ -60,7 +71,7 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
           query: url.searchParams.get('query'),
           items: candidates,
           total: candidates.length,
-          counts: { household_article: 1, product_type: 1, article_group: 0 },
+          counts: { household_article: 1, global_product: 1, product_type: 1, article_group: 0 },
         }),
       });
     });
@@ -211,8 +222,13 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
     const articleWidthAfter = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
     expect(articleWidthAfter).toBeGreaterThan(articleWidthBefore + 40);
 
-    await page.getByLabel('Artikel toevoegen', { exact: true }).fill('melk');
+    await page.getByLabel('Artikel toevoegen', { exact: true }).fill('bananen');
     const candidateList = page.getByTestId('shopping-candidate-list');
+    await expect(candidateList.getByRole('option', { name: 'Bananen — Exact Catalogusproduct', exact: true })).toBeVisible();
+    await candidateList.getByRole('option', { name: 'Bananen — Exact Catalogusproduct', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Toevoegen' })).toBeEnabled();
+
+    await page.getByLabel('Artikel toevoegen', { exact: true }).fill('melk');
     await expect(candidateList).toBeVisible();
     await expect(candidateList.getByRole('option')).toHaveCount(5);
     await candidateList.getByRole('option', { name: 'Melk — Huishoudartikel', exact: true }).click();
