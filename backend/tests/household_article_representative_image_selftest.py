@@ -99,7 +99,18 @@ def _seed(conn) -> None:
                 id, household_id, global_product_id, barcode
             ) VALUES
                 ('article-broccoli', 'household-1', 'generic-broccoli', NULL),
+                ('article-history', 'household-1', NULL, NULL),
                 ('article-other', 'household-1', 'generic-other', NULL)
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            INSERT INTO purchase_import_lines (
+                matched_household_article_id,
+                matched_global_product_id
+            ) VALUES ('article-history', 'ah-broccoli')
             """
         )
     )
@@ -120,12 +131,25 @@ def test_backfill_selects_exact_photo_inside_same_gpc_brick() -> None:
             )
         ).mappings().one()
 
-        assert report["scanned"] == 2
-        assert report["selected"] == 1
+        assert report["scanned"] == 3
+        assert report["selected"] == 2
         assert report["unresolved"] == 1
         assert selected["global_product_id"] == "picnic-broccoli"
         assert selected["brick_code"] == "10000001"
         assert selected["selection_source"] == "same_gpc_brick_catalog"
+
+        history_selected = conn.execute(
+            text(
+                """
+                SELECT global_product_id, brick_code, selection_source
+                FROM household_article_representative_products
+                WHERE household_article_id = 'article-history'
+                """
+            )
+        ).mappings().one()
+        assert history_selected["global_product_id"] == "ah-broccoli"
+        assert history_selected["brick_code"] == "10000001"
+        assert history_selected["selection_source"] == "purchase_history"
 
         images = representative_image_urls_for_household_articles(
             conn,
