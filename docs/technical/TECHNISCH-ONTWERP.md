@@ -187,6 +187,8 @@ Ontwerpregel:
 - Domeinservices mogen database schrijven.
 - Diagnosecode mag read-only zijn tenzij expliciet repair/admin.
 
+De service `app/services/household_article_representative_image_service.py` beheert de huishoudartikelgebonden representatieve Catalogusproductrelatie voor operationele productfoto's. De service bewaart geen afbeeldingskopie maar één `global_product_id` plus de geldende officiële GPC Brick per `household_article_id`. Selectie mag alleen binnen dezelfde Brick plaatsvinden; artikelnaam is geen identiteit. De Alembic-migratie bezit het schema, terwijl runtime-initialisatie uitsluitend idempotente DML-backfill uitvoert.
+
 ### TD-06 — Email, Gmail en inbound routes
 
 Verantwoordelijkheid:
