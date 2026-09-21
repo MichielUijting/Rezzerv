@@ -83,12 +83,35 @@ def main() -> int:
             CREATE TABLE global_products (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
+                brand TEXT,
+                primary_gtin TEXT,
                 image_url TEXT
             )
         """))
         conn.execute(text("""
-            INSERT INTO global_products(id, name, image_url)
-            VALUES ('global-product-melk', 'Melk halfvol', 'https://images.example.test/melk.jpg')
+            INSERT INTO global_products(id, name, brand, primary_gtin, image_url) VALUES
+              ('global-product-melk', 'Melk halfvol', 'Testmerk', '8712345678901', 'https://images.example.test/melk.jpg'),
+              ('global-product-bananen', 'Bananen', 'Albert Heijn', '8718265184886', 'https://images.example.test/bananen.jpg')
+        """))
+        conn.execute(text("""
+            CREATE TABLE gpc_bricks (
+                brick_code TEXT PRIMARY KEY,
+                description TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE global_product_gpc_bricks (
+                global_product_id TEXT NOT NULL,
+                brick_code TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO gpc_bricks(brick_code, description)
+            VALUES ('10000025', 'Bananas')
+        """))
+        conn.execute(text("""
+            INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
+            VALUES ('global-product-bananen', '10000025')
         """))
         conn.execute(text("""
             CREATE TABLE household_articles (
@@ -136,6 +159,18 @@ def main() -> int:
         assert household_results["items"][0]["article_group_name"] == "Zuivel", household_results
         assert household_results["items"][0]["product_type_name"] == "Halfvolle melk", household_results
 
+        global_product_results = search_shopping_catalog(
+            conn, "0", scope="global_products", query="bananen", limit=20
+        )
+        assert global_product_results["total"] == 1, global_product_results
+        global_candidate = global_product_results["items"][0]
+        assert global_candidate["source_type"] == "global_product", global_product_results
+        assert global_candidate["source_id"] == "global-product-bananen", global_product_results
+        assert global_candidate["brand"] == "Albert Heijn", global_product_results
+        assert global_candidate["primary_gtin"] == "8718265184886", global_product_results
+        assert global_candidate["product_type_name"] == "Bananas", global_product_results
+        assert global_candidate["image_url"] == "https://images.example.test/bananen.jpg", global_product_results
+
         product_type_results = search_shopping_catalog(
             conn, "0", scope="product_types", query="bro", limit=20
         )
@@ -180,6 +215,16 @@ def main() -> int:
 
         other_household = get_active_shopping_list(conn, "1")
         assert other_household["items"] == [], other_household
+
+        global_item = add_shopping_list_item(conn, "2", global_candidate)
+        assert global_item["source_type"] == "global_product", global_item
+        assert global_item["source_id"] == "global-product-bananen", global_item
+        global_duplicate = add_shopping_list_item(conn, "2", global_candidate)
+        assert global_duplicate["id"] == global_item["id"], global_duplicate
+        assert global_duplicate["quantity"] == 2.0, global_duplicate
+        global_list = get_active_shopping_list(conn, "2")
+        assert global_list["item_count"] == 1, global_list
+        assert global_list["items"][0]["image_url"] == "https://images.example.test/bananen.jpg", global_list
 
         updated = update_shopping_list_item(conn, "0", item["id"], {
             "quantity": 2,
@@ -236,7 +281,8 @@ def main() -> int:
         assert int(inventory_amount) == 7, inventory_amount
 
     print("SHOPPING_LIST_RELEASE_1_SELFTEST=PASS")
-    print("catalog_search_three_scopes=PASS")
+    print("catalog_search_four_scopes=PASS")
+    print("global_product_direct_image_and_deduplication=PASS")
     print("initial_empty=PASS")
     print("catalog_candidate_and_inline_fields=PASS")
     print("duplicate_candidate_quantity=PASS")

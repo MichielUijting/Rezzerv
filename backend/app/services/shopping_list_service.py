@@ -9,7 +9,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 ALLOWED_UNITS = {"", "stuk", "stuks", "gram", "kilogram", "milliliter", "liter", "verpakking"}
-ALLOWED_SEARCH_SCOPES = {"household_articles", "product_types", "article_groups"}
+ALLOWED_SEARCH_SCOPES = {"household_articles", "global_products", "product_types", "article_groups"}
 
 SHOPPING_LIST_REQUIRED_COLUMNS = {
     "id",
@@ -163,25 +163,41 @@ def _serialize_item(row: Any) -> dict[str, Any]:
 def _shopping_list_image_projection(conn: Connection) -> tuple[str, str]:
     inspector = inspect(conn)
     tables = set(inspector.get_table_names())
-    if not {"household_articles", "global_products"}.issubset(tables):
+    if "global_products" not in tables:
         return "'' AS image_url", ""
 
-    household_columns = _table_columns(conn, "household_articles")
     product_columns = _table_columns(conn, "global_products")
-    if not {"id", "household_id", "global_product_id"}.issubset(household_columns):
-        return "'' AS image_url", ""
     if not {"id", "image_url"}.issubset(product_columns):
         return "'' AS image_url", ""
 
-    return (
-        "COALESCE(gp.image_url, '') AS image_url",
-        """
+    household_join = ""
+    household_product_condition = ""
+    if "household_articles" in tables:
+        household_columns = _table_columns(conn, "household_articles")
+        if {"id", "household_id", "global_product_id"}.issubset(household_columns):
+            household_join = """
         LEFT JOIN household_articles ha
           ON lower(trim(COALESCE(sli.source_type, 'manual'))) = 'household_article'
          AND ha.id = sli.source_id
          AND ha.household_id = sli.household_id
+            """
+            household_product_condition = """
+             OR (
+                lower(trim(COALESCE(sli.source_type, 'manual'))) = 'household_article'
+                AND gp.id = ha.global_product_id
+             )
+            """
+
+    return (
+        "COALESCE(gp.image_url, '') AS image_url",
+        f"""
+        {household_join}
         LEFT JOIN global_products gp
-          ON gp.id = ha.global_product_id
+          ON (
+              lower(trim(COALESCE(sli.source_type, 'manual'))) = 'global_product'
+              AND gp.id = sli.source_id
+          )
+          {household_product_condition}
         """,
     )
 
@@ -233,6 +249,111 @@ def _search_simple_table(
     ]
 
 
+def _global_product_type_expression(conn: Connection) -> str:
+    tables = set(inspect(conn).get_table_names())
+    expressions: list[str] = []
+
+    if {"global_product_gpc_bricks", "gpc_bricks"}.issubset(tables):
+        translation_expression = "NULL"
+        if "gpc_translations" in tables:
+            translation_columns = _table_columns(conn, "gpc_translations")
+            if {"entity_type", "entity_code", "language_code", "translated_text"}.issubset(translation_columns):
+                translation_expression = """
+                    (SELECT tr.translated_text
+                     FROM gpc_translations tr
+                     WHERE tr.entity_type = 'brick'
+                       AND tr.entity_code = gpgb.brick_code
+                       AND tr.language_code = 'nl'
+                     LIMIT 1)
+                """
+        expressions.append(f"""
+            (SELECT COALESCE({translation_expression}, gb.description, '')
+             FROM global_product_gpc_bricks gpgb
+             JOIN gpc_bricks gb ON gb.brick_code = gpgb.brick_code
+             WHERE gpgb.global_product_id = gp.id
+             ORDER BY gpgb.brick_code
+             LIMIT 1)
+        """)
+
+    if {"product_group_memberships", "product_inventory_groups"}.issubset(tables):
+        expressions.append("""
+            (SELECT pig.display_name
+             FROM product_group_memberships pgm
+             JOIN product_inventory_groups pig
+               ON pig.inventory_group_key = pgm.inventory_group_key
+             WHERE pgm.global_product_id = gp.id
+               AND COALESCE(pgm.active, 1) = 1
+               AND COALESCE(pig.active, 1) = 1
+             ORDER BY pig.display_name
+             LIMIT 1)
+        """)
+
+    if not expressions:
+        return "''"
+    return "COALESCE(" + ", ".join(expressions + ["''"]) + ")"
+
+
+def _search_global_products(
+    conn: Connection,
+    *,
+    query: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    columns = _table_columns(conn, "global_products")
+    if not {"id", "name", "primary_gtin"}.issubset(columns):
+        return []
+
+    brand_expression = "COALESCE(gp.brand, '')" if "brand" in columns else "''"
+    image_expression = "COALESCE(gp.image_url, '')" if "image_url" in columns else "''"
+    product_type_expression = _global_product_type_expression(conn)
+    query_conditions = ["lower(trim(COALESCE(gp.name, ''))) LIKE :query"]
+    if "brand" in columns:
+        query_conditions.append("lower(trim(COALESCE(gp.brand, ''))) LIKE :query")
+    query_conditions.append("lower(trim(COALESCE(gp.primary_gtin, ''))) LIKE :query")
+
+    rows = conn.execute(text(f"""
+        SELECT gp.id AS source_id,
+               gp.name AS label,
+               {brand_expression} AS brand,
+               COALESCE(gp.primary_gtin, '') AS primary_gtin,
+               {image_expression} AS image_url,
+               {product_type_expression} AS product_type_name
+        FROM global_products gp
+        WHERE trim(COALESCE(gp.primary_gtin, '')) <> ''
+          AND ({" OR ".join(query_conditions)})
+        ORDER BY
+          CASE
+            WHEN lower(trim(COALESCE(gp.name, ''))) = :exact_query THEN 0
+            WHEN lower(trim(COALESCE(gp.name, ''))) LIKE :prefix_query THEN 1
+            ELSE 2
+          END,
+          lower(trim(COALESCE(gp.name, ''))),
+          gp.id
+        LIMIT :limit
+    """), {
+        "query": f"%{query.lower()}%",
+        "exact_query": query.lower(),
+        "prefix_query": f"{query.lower()}%",
+        "limit": limit,
+    }).mappings().all()
+
+    return [
+        {
+            "source_type": "global_product",
+            "source_id": str(row.get("source_id") or ""),
+            "label": str(row.get("label") or "").strip(),
+            "article_name": str(row.get("label") or "").strip(),
+            "article_group_name": "",
+            "product_type_name": str(row.get("product_type_name") or "").strip(),
+            "brand": str(row.get("brand") or "").strip(),
+            "primary_gtin": str(row.get("primary_gtin") or "").strip(),
+            "image_url": str(row.get("image_url") or "").strip(),
+        }
+        for row in rows
+        if str(row.get("label") or "").strip()
+    ]
+
+
 def search_shopping_catalog(
     conn: Connection,
     household_id: str,
@@ -257,6 +378,12 @@ def search_shopping_catalog(
             household_id=str(household_id),
             source_type="article_group",
             label_candidates=("name", "display_name", "article_group_name"),
+            limit=safe_limit,
+        )
+    elif normalized_scope == "global_products":
+        items = _search_global_products(
+            conn,
+            query=normalized_query,
             limit=safe_limit,
         )
     elif normalized_scope == "product_types":
