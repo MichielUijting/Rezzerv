@@ -45,6 +45,16 @@ Een centraal product mag nooit automatisch huishoudgegevens delen. Huishoudartik
 
 **Catalogus en Externe databases zijn platformbrede domeinen.** De definitieve koppeling tussen een winkel-/bonartikel en een centraal product wordt centraal opgeslagen en geprojecteerd. `household_articles.global_product_id` blijft een huishoudspecifieke relatie en mag niet als fallback of blokkade voor een platformbrede Cataloguskoppeling worden gebruikt. Een platformbrede externe-databaseactie mag daarom niet stilzwijgend household articles, bonregels of purchase-importregels van één huishouden wijzigen.
 
+### Representatieve productfoto per huishoudartikel
+
+Een huishoudartikel kan een generiek artikel zijn terwijl verschillende winkels daarvoor verschillende exacte producten, GTIN's en winkelartikelnummers voeren. Voor de operationele productfoto wordt daarom **geen foto rechtstreeks aan een GPC Brick gekoppeld**. In plaats daarvan bewaart `household_article_representative_products` per `household_articles.id` maximaal één representatief **exact Catalogusproduct**.
+
+De officiële GS1 GPC Brick is hierbij de compatibiliteitsgrens: het representatieve exacte product moet dezelfde Brick hebben als het huishoudartikel of de canonieke productidentiteit daarvan. De relatie bewaart het `global_product_id` en de Brick, niet een kopie van de afbeelding-URL. De actuele `global_products.image_url` blijft dus de afbeeldingsbron. Verschillende winkelartikelnummers blokkeren de representatieve foto niet zolang de productsoort via dezelfde officiële Brick wordt bevestigd.
+
+De selectie gebruikt geen artikelnaam als identiteit. Bestaande directe productkoppelingen, canonieke productidentiteiten en aankoopgeschiedenis krijgen voorrang; wanneer die geen foto leveren mag een exact Catalogusproduct met foto uit dezelfde Brick als representatief beeld worden gekozen. Een eenmaal geldige keuze blijft stabiel. Bij een Brick-wijziging of ongeldig/inactief product wordt de keuze opnieuw beoordeeld.
+
+Na een Alembic-schema-upgrade voert de normale runtime-initialisatie een idempotente DML-backfill uit voor reeds bestaande huishoudartikelen. Dit verandert geen platformbrede Cataloguskoppelingen en houdt `household_articles.id` als functionele huishoudartikelidentiteit intact.
+
 ## Identiteiten
 
 Productidentiteiten omvatten onder meer GTIN/EAN/barcode, winkelartikelnummers, externe database-ID's en interne product-ID's. Normalisatie voorkomt duplicaten en ondersteunt koppeling.
