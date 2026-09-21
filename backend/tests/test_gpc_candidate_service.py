@@ -340,3 +340,122 @@ def test_soepgr_basis_semantic_bridge_ranks_official_prepared_vegetable_bricks(m
         for row in ranked[:3]
     )
     assert all(row["brick_code"] != "10005840" for row in ranked)
+
+def test_ground_meat_semantic_variants_prefer_official_species_bricks(monkeypatch):
+    monkeypatch.setattr(service, "classify_product_intent_from_taxonomy", lambda value: "vlees.gehakt")
+    monkeypatch.setattr(
+        service,
+        "get_taxonomy_metadata_for_intent",
+        lambda key: {
+            "intent_key": key,
+            "canonical_name": "Gehakt",
+            "category": "Vlees",
+            "product_type": "Gehakt",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "load_gpc_candidate_terms",
+        lambda key: (
+            "Mixed Species Meat/Poultry/Other Animal - Alternative Meat - Prepared/Processed",
+            "Beef - Prepared/Processed",
+            "Pork - Prepared/Processed",
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "load_product_variant_terms",
+        lambda key: (
+            {
+                "normalized_variant_term": "gemengd gehakt",
+                "gpc_candidate_terms": (
+                    "Mixed Species Meat/Poultry/Other Animal - Alternative Meat - Prepared/Processed",
+                ),
+            },
+            {"normalized_variant_term": "rundergehakt", "gpc_candidate_terms": ("Beef - Prepared/Processed",)},
+            {"normalized_variant_term": "varkensgehakt", "gpc_candidate_terms": ("Pork - Prepared/Processed",)},
+        ),
+    )
+    monkeypatch.setattr(service, "load_taxonomy_rules", lambda: ())
+
+    meat_class = "Meat/Poultry/Other Animals - Prepared/Processed"
+    rows = [
+        _row("10005767", "Beef - Prepared/Processed", meat_class, "Meat/Poultry/Other Animals"),
+        _row(
+            "10005778",
+            "Mixed Species Meat/Poultry/Other Animal - Alternative Meat - Prepared/Processed",
+            meat_class,
+            "Meat/Poultry/Other Animals",
+        ),
+        _row("10005781", "Pork - Prepared/Processed", meat_class, "Meat/Poultry/Other Animals"),
+        _row(
+            "10005836",
+            "Mixed Species Sausages - Prepared/Processed",
+            "Meat/Poultry/Other Animals Sausages - Prepared/Processed",
+            "Meat/Poultry/Other Animals",
+        ),
+    ]
+
+    cases = (
+        ("'t Slagershuys gemengd gehakt", "10005778"),
+        ("Rundergehakt", "10005767"),
+        ("Varkensgehakt", "10005781"),
+    )
+    for product_name, expected_brick in cases:
+        bundle = service.build_product_signals({
+            "product_name": product_name,
+            "category": "",
+            "external_product_name": product_name,
+            "external_category": "",
+            "external_categories": "",
+            "external_search_text": product_name,
+        })
+        ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
+        assert ranked, product_name
+        assert ranked[0]["brick_code"] == expected_brick, (product_name, ranked)
+        assert ranked[0]["suggestion_reason"].startswith(
+            "Semantische GPC-overeenkomst via producttype:"
+        )
+        assert all(row["brick_code"] != "10005836" for row in ranked[:3])
+
+
+def test_ground_meat_generic_semantic_bridge_keeps_official_species_candidates(monkeypatch):
+    monkeypatch.setattr(service, "classify_product_intent_from_taxonomy", lambda value: "vlees.gehakt")
+    monkeypatch.setattr(
+        service,
+        "get_taxonomy_metadata_for_intent",
+        lambda key: {
+            "intent_key": key,
+            "canonical_name": "Gehakt",
+            "category": "Vlees",
+            "product_type": "Gehakt",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "load_gpc_candidate_terms",
+        lambda key: (
+            "Mixed Species Meat/Poultry/Other Animal - Alternative Meat - Prepared/Processed",
+            "Beef - Prepared/Processed",
+            "Pork - Prepared/Processed",
+        ),
+    )
+    monkeypatch.setattr(service, "load_product_variant_terms", lambda key: ())
+    monkeypatch.setattr(service, "load_taxonomy_rules", lambda: ())
+
+    rows = [
+        _row("10005767", "Beef - Prepared/Processed", "Meat/Poultry/Other Animals - Prepared/Processed"),
+        _row(
+            "10005778",
+            "Mixed Species Meat/Poultry/Other Animal - Alternative Meat - Prepared/Processed",
+            "Meat/Poultry/Other Animals - Prepared/Processed",
+        ),
+        _row("10005781", "Pork - Prepared/Processed", "Meat/Poultry/Other Animals - Prepared/Processed"),
+    ]
+    bundle = service.build_product_signals({
+        "product_name": "Gehakt",
+        "external_search_text": "gehakt",
+    })
+    ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
+    assert {row["brick_code"] for row in ranked[:3]} == {"10005767", "10005778", "10005781"}
+
