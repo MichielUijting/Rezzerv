@@ -155,9 +155,6 @@ export default function HomePage() {
       <Header title="Startpagina" />
       <div className="rz-content"><div className="rz-content-inner">
         <Card className="rz-card-home">
-          {canCurrentUserPerform('platform.functional_features.manage', context) && (
-            <Button type="button" onClick={() => navigate('/platform/functionaliteiten')}>Functionaliteiten</Button>
-          )}
           {navigation.mode === 'legacy' ? (
             <div className="rz-tile-grid" role="navigation" aria-label="Acties" data-testid="legacy-home-navigation">
               {navigation.primaryTiles.map(renderTile)}

@@ -6,7 +6,7 @@ import Tabs from '../../ui/Tabs.jsx'
 import DataTable from '../../ui/DataTable.jsx'
 import Button from '../../ui/Button.jsx'
 import Checkbox from '../../ui/Checkbox.jsx'
-import { fetchJsonWithAuth } from '../../lib/authSession.js'
+import { canCurrentUserPerform, fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
 import SuperuserOverviewSection from './SuperuserOverviewSection.jsx'
 import SuperuserUsageSection from './SuperuserUsageSection.jsx'
 import SuperuserUsersSection from './SuperuserUsersSection.jsx'
@@ -68,10 +68,40 @@ function displayValue(key, value) {
   return dutchValue(value)
 }
 
+function SuperuserSystemSection() {
+  const navigate = useNavigate()
+  const context = readStoredAuthContext()
+  const canManageFunctionalities = canCurrentUserPerform('platform.functional_features.manage', context)
+
+  return (
+    <section aria-label="Systeem" data-testid="superuser-system-section">
+      <h2 style={{ marginTop: 0, fontSize: 20 }}>Systeem</h2>
+      <p>Platformbrede beheerfuncties die niet thuishoren op de gewone Startpagina.</p>
+      {canManageFunctionalities ? (
+        <div data-testid="superuser-system-functionalities">
+          <p><strong>Functionaliteiten</strong></p>
+          <p>Beheer welke functionaliteiten platformbreed beschikbaar zijn voor gebruikers.</p>
+          <Button
+            type="button"
+            onClick={() => navigate('/platform/functionaliteiten')}
+            data-testid="superuser-open-functionalities"
+          >
+            Functionaliteiten
+          </Button>
+        </div>
+      ) : (
+        <p data-testid="superuser-system-empty">Voor deze account zijn geen systeemfuncties beschikbaar.</p>
+      )}
+      <p>Het Beheercentrum zelf blijft alleen-lezen; wijzigingen gebeuren op het afzonderlijke beheerscherm.</p>
+    </section>
+  )
+}
+
 function EmptySection({ title, onOpenHousehold }) {
   if (title === 'Overzicht') return <SuperuserOverviewSection />
   if (title === 'Gebruikers') return <SuperuserUsersSection onOpenHousehold={onOpenHousehold} />
   if (title === 'Gebruik') return <SuperuserUsageSection onOpenHousehold={onOpenHousehold} />
+  if (title === 'Systeem') return <SuperuserSystemSection />
   return <section aria-label={title}><h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2><p style={{ marginBottom: 0 }}>Dit onderdeel volgt in een volgende Superuser-release.</p></section>
 }
 

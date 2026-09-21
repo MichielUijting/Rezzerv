@@ -215,6 +215,26 @@ test.describe('Superuser frontend-regressie', () => {
     await expect(page.getByText(/Meldingen van en met huishouden 0/i)).toBeVisible()
   })
 
+  test('Functionaliteiten staat onder Systeem en niet meer op de gewone Startpagina', async ({ page }) => {
+    await page.goto('/home')
+    await expect(page.getByRole('button', { name: 'Functionaliteiten', exact: true })).toHaveCount(0)
+
+    await page.goto('/superuser')
+    await expect(page.getByTestId('superuser-dashboard')).toBeVisible()
+    await page.getByRole('tab', { name: 'Systeem', exact: true }).click()
+
+    const systemSection = page.getByTestId('superuser-system-section')
+    await expect(systemSection).toBeVisible()
+    await expect(systemSection.getByText('Platformbrede beheerfuncties die niet thuishoren op de gewone Startpagina.')).toBeVisible()
+    const functionalitiesButton = page.getByTestId('superuser-open-functionalities')
+    await expect(functionalitiesButton).toBeVisible()
+
+    await functionalitiesButton.click()
+    await expect(page).toHaveURL(/\/platform\/functionaliteiten$/)
+    await expect(page.getByTestId('platform-feature-flags-page')).toBeVisible()
+    await expect(page.getByText('Globale beschikbaarheid van functionaliteiten', { exact: true })).toBeVisible()
+  })
+
   test('Meldingen-tab springt direct naar de bestaande platformfunctionaliteit', async ({ page }) => {
     await page.getByRole('tab', { name: 'Meldingen', exact: true }).click()
     await expect(page).toHaveURL(/\/superuser\/meldingen$/)
