@@ -701,6 +701,7 @@ async function saveInventoryRow(row) {
 }
 
 const initialData = [];
+const INVENTORY_VISIBLE_ROW_COUNT = 10;
 
 const editableColumns = [
   { key: "huishoudnaam", label: "Voorraadartikel", type: "text", width: "28%" },
@@ -763,12 +764,12 @@ export default function Voorraad() {
   });
   const [tableSort, setTableSort] = useState({ key: "huishoudnaam", direction: "asc" });
   const inventoryTableColumns = useMemo(() => ([
-    { key: "select", width: 44 },
-    { key: "huishoudnaam", width: 260 },
-    { key: "artikelgroep", width: 180 },
-    { key: "aantal", width: 120 },
-    { key: "locatie", width: 160 },
-    { key: "sublocatie", width: 160 },
+    { key: "select", width: 55 },
+    { key: "huishoudnaam", width: 325 },
+    { key: "artikelgroep", width: 225 },
+    { key: "aantal", width: 150 },
+    { key: "locatie", width: 200 },
+    { key: "sublocatie", width: 200 },
   ]), []);
   const inventoryColumnDefaults = useMemo(() => Object.fromEntries(inventoryTableColumns.map(({ key, width }) => [key, width])), [inventoryTableColumns]);
   const { widths: inventoryColumnWidths, startResize: startInventoryResize } = useResizableColumnWidths(inventoryColumnDefaults);
@@ -908,6 +909,11 @@ export default function Voorraad() {
       sublocatie: (row) => row.sublocatie || '',
     });
   }, [rows, localZeroRows, filters, tableSort]);
+
+  const inventoryFillerRowCount = Math.max(
+    0,
+    INVENTORY_VISIBLE_ROW_COUNT - (filteredRows.length || 1),
+  );
 
   const setRowValue = (rowId, key, value) => {
     setRows((prev) => {
@@ -1403,8 +1409,8 @@ export default function Voorraad() {
     <div className="rz-screen" data-testid="inventory-page">
       <Header title="Voorraad" />
       <div className="rz-content">
-        <div className="rz-content-inner">
-          <div className="rz-card">
+        <div className="rz-content-inner rz-inventory-content-inner">
+          <div className="rz-card rz-inventory-card">
             <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="inventory-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inventoryColumnWidths), minWidth: buildTableWidth(inventoryColumnWidths) }}>
                 <colgroup>
                   <col style={{ width: `${inventoryColumnWidths.select}px` }} />
@@ -1521,9 +1527,20 @@ export default function Voorraad() {
 
                   {filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={7}>Nog geen live voorraad beschikbaar.</td>
+                      <td colSpan={6}>Nog geen live voorraad beschikbaar.</td>
                     </tr>
                   )}
+
+                  {Array.from({ length: inventoryFillerRowCount }, (_, index) => (
+                    <tr
+                      key={`inventory-filler-${index}`}
+                      className="rz-inventory-filler-row"
+                      aria-hidden="true"
+                      data-testid="inventory-filler-row"
+                    >
+                      <td colSpan={6}>&nbsp;</td>
+                    </tr>
+                  ))}
                 </tbody>
               </Table>
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
