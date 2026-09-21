@@ -401,6 +401,20 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
         }),
       });
     });
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          onboarding_status: 'completed',
+          onboarding_step: 'completed',
+          can_manage: true,
+          initial_choice_required: false,
+          shared_household_minimum_required: false,
+          primary_use_case: 'wat_inhuis',
+        }),
+      });
+    });
     await page.route('**/api/catalog?*', async (route) => {
       await route.fulfill({
         status: 200,
