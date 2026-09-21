@@ -47,13 +47,21 @@ def _product_image_and_brick(conn, global_product_id: Any) -> dict[str, str]:
             SELECT
                 gp.id AS global_product_id,
                 COALESCE(gp.image_url, '') AS image_url,
-                COALESCE(gpb.brick_code, '') AS gpc_brick_code
+                COALESCE(gpb.brick_code, pig.gpc_brick_code, '') AS gpc_brick_code
             FROM global_products gp
             LEFT JOIN global_product_gpc_bricks gpb
               ON gpb.global_product_id = gp.id
+            LEFT JOIN product_group_memberships pgm
+              ON pgm.global_product_id = gp.id
+             AND COALESCE(pgm.active, 1) = 1
+            LEFT JOIN product_inventory_groups pig
+              ON pig.inventory_group_key = pgm.inventory_group_key
+             AND COALESCE(pig.active, 1) = 1
             WHERE gp.id = :global_product_id
               AND lower(COALESCE(gp.status, 'active')) = 'active'
-            ORDER BY gpb.brick_code
+            ORDER BY
+                CASE WHEN COALESCE(gpb.brick_code, '') <> '' THEN 0 ELSE 1 END,
+                COALESCE(gpb.brick_code, pig.gpc_brick_code, '')
             LIMIT 1
             """
         ),
