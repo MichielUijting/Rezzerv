@@ -29,6 +29,108 @@ def _route_for(main_module: ModuleType, path: str, method: str):
     return None
 
 
+
+def _normalize_catalog_gtin(value: Any) -> str:
+    return ''.join(character for character in str(value or '') if character.isdigit())
+
+
+def _canonical_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Resolve images from canonical household/product identities without guessing by name.
+
+    Some existing households predate household_articles.global_product_id. They can still
+    have a canonical product_identities link or a stored GTIN/barcode. Those identities
+    are safe to use for read-only image projection because they identify the exact
+    Catalogus product. Ambiguous identity history fails closed.
+    """
+    unresolved_rows = [
+        dict(row)
+        for row in article_rows
+        if str(row.get('id') or '').strip() and not str(row.get('image_url') or '').strip()
+    ]
+    if not unresolved_rows:
+        return {}
+
+    article_ids = [str(row.get('id') or '').strip() for row in unresolved_rows]
+    placeholders = ', '.join(f':canonical_article_id_{index}' for index in range(len(article_ids)))
+    params = {
+        f'canonical_article_id_{index}': article_id
+        for index, article_id in enumerate(article_ids)
+    }
+
+    products_by_article: dict[str, dict[str, str]] = {
+        article_id: {}
+        for article_id in article_ids
+    }
+
+    identity_rows = conn.execute(
+        text(
+            f'''
+            SELECT
+                pi.household_article_id,
+                pi.global_product_id,
+                COALESCE(gp.image_url, '') AS image_url
+            FROM product_identities pi
+            JOIN global_products gp ON gp.id = pi.global_product_id
+            WHERE pi.household_article_id IN ({placeholders})
+              AND pi.global_product_id IS NOT NULL
+              AND lower(COALESCE(gp.status, 'active')) = 'active'
+            ORDER BY pi.is_primary DESC, pi.created_at DESC, pi.id DESC
+            '''
+        ),
+        params,
+    ).mappings().all()
+
+    for identity in identity_rows:
+        article_id = str(identity.get('household_article_id') or '').strip()
+        product_id = str(identity.get('global_product_id') or '').strip()
+        if article_id in products_by_article and product_id:
+            products_by_article[article_id][product_id] = str(identity.get('image_url') or '').strip()
+
+    articles_by_gtin: dict[str, list[str]] = {}
+    for article in unresolved_rows:
+        article_id = str(article.get('id') or '').strip()
+        gtin = _normalize_catalog_gtin(article.get('barcode'))
+        if article_id and gtin:
+            articles_by_gtin.setdefault(gtin, []).append(article_id)
+
+    if articles_by_gtin:
+        gtin_placeholders = ', '.join(f':catalog_gtin_{index}' for index in range(len(articles_by_gtin)))
+        gtin_params = {
+            f'catalog_gtin_{index}': gtin
+            for index, gtin in enumerate(sorted(articles_by_gtin))
+        }
+        gtin_rows = conn.execute(
+            text(
+                f'''
+                SELECT
+                    id AS global_product_id,
+                    primary_gtin,
+                    COALESCE(image_url, '') AS image_url
+                FROM global_products
+                WHERE primary_gtin IN ({gtin_placeholders})
+                  AND lower(COALESCE(status, 'active')) = 'active'
+                ORDER BY id
+                '''
+            ),
+            gtin_params,
+        ).mappings().all()
+        for product in gtin_rows:
+            gtin = _normalize_catalog_gtin(product.get('primary_gtin'))
+            product_id = str(product.get('global_product_id') or '').strip()
+            if not gtin or not product_id:
+                continue
+            for article_id in articles_by_gtin.get(gtin, []):
+                products_by_article[article_id][product_id] = str(product.get('image_url') or '').strip()
+
+    images_by_article: dict[str, str] = {}
+    for article_id, products in products_by_article.items():
+        if len(products) != 1:
+            continue
+        image_url = next(iter(products.values()))
+        if image_url:
+            images_by_article[article_id] = image_url
+    return images_by_article
+
 def _central_catalog_images_for_household_articles(conn, text, article_rows: list[dict[str, Any]]) -> dict[str, str]:
     """Resolve Catalogus images without mutating household-specific article links.
 
@@ -242,6 +344,7 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
                     ha.naam,
                     ha.custom_name,
                     ha.global_product_id,
+                    ha.barcode,
                     COALESCE(gp.name, '') AS product_name,
                     COALESCE(gp.image_url, '') AS image_url
                 FROM household_articles ha
@@ -251,7 +354,18 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
             ),
             params,
         ).mappings().all()
-        derived_images = _central_catalog_images_for_household_articles(conn, text, article_rows)
+        canonical_images = _canonical_catalog_images_for_household_articles(conn, text, article_rows)
+        central_projection_rows = [
+            {
+                **dict(article),
+                'image_url': (
+                    str(article.get('image_url') or '').strip()
+                    or canonical_images.get(str(article.get('id') or '').strip(), '')
+                ),
+            }
+            for article in article_rows
+        ]
+        derived_images = _central_catalog_images_for_household_articles(conn, text, central_projection_rows)
 
     articles_by_id = {str(row.get('id') or ''): row for row in article_rows}
     projected = []
@@ -264,7 +378,11 @@ def _inventory_alias_projection(main_module: ModuleType, payload: Any) -> Any:
         canonical_name = str(article.get('naam') or '').strip()
         custom_name = str(article.get('custom_name') or '').strip()
         product_name = str(article.get('product_name') or '').strip()
-        image_url = str(article.get('image_url') or '').strip() or derived_images.get(article_id, '')
+        image_url = (
+            str(article.get('image_url') or '').strip()
+            or canonical_images.get(article_id, '')
+            or derived_images.get(article_id, '')
+        )
         row['household_article_name'] = custom_name or canonical_name or str(row.get('artikel') or '')
         row['product_name'] = product_name or canonical_name or str(row.get('artikel') or '')
         row['image_url'] = image_url

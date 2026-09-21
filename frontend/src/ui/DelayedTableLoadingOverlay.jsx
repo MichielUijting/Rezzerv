@@ -34,7 +34,7 @@ export default function DelayedTableLoadingOverlay({
     >
       <img
         className="rz-table-loading-logo"
-        src="/inhuis-app-icon.png"
+        src="/inhuis-loading-mark.svg"
         alt=""
         aria-hidden="true"
         data-testid="table-loading-logo"

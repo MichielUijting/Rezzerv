@@ -304,8 +304,8 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expect(overlay).toHaveCount(0);
     await page.waitForTimeout(300);
     await expect(overlay).toBeVisible();
-    await expect(page.getByTestId('table-loading-logo')).toHaveAttribute('src', '/inhuis-app-icon.png');
-    await expect(page.getByTestId('table-loading-logo')).toHaveCSS('width', '250px');
+    await expect(page.getByTestId('table-loading-logo')).toHaveAttribute('src', '/inhuis-loading-mark.svg');
+    await expect(page.getByTestId('table-loading-logo')).toHaveCSS('width', '420px');
 
     releaseBrickSearch();
 

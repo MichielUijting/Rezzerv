@@ -263,6 +263,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - Catalogusdetail mag dezelfde afbeelding groter tonen met behoud van beeldverhouding en `object-fit: contain`;
 - **Voorraad**, **Bijna op** en **Boodschappenlijst/Winkelen** tonen dezelfde, in Catalogus opgeslagen productafbeelding als compacte thumbnail direct naast de artikelnaam wanneer het artikel canoniek aan dat Catalogusproduct is gekoppeld;
 - operationele schermen voeren geen eigen externe afbeeldingszoekactie uit: zij gebruiken uitsluitend de persistente `image_url` van het gekoppelde Catalogusproduct;
+- voor oudere huishoudartikelen zonder ingevulde `global_product_id` mag dezelfde Catalogusfoto read-only worden herleid via een bestaande canonieke `product_identities`-koppeling of een exacte opgeslagen GTIN/barcode; naamgelijkheid alleen is nooit voldoende om een productfoto te kiezen;
 - de standaard operationele thumbnail is circa **52 × 52px**, gebruikt `object-fit: contain` en mag op mobiel als vaste eerste contentkolom vóór de artikeltekst staan;
 - ontbrekende of niet-laadbare afbeeldingen krijgen een rustige neutrale beeld-placeholder zonder broken-image-icoon; de artikelnaam blijft altijd zichtbaar;
 - bij Boodschappenlijst/Winkelen wordt alleen een Catalogusfoto geprojecteerd als de regel canoniek naar een huishoudartikel en daarmee naar een Catalogusproduct verwijst; producttype- of artikelgroepregels krijgen niet kunstmatig een willekeurige productfoto;
@@ -290,6 +291,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 
 De standaard desktop-/matrixweergave toont waar een tabel pagineert **10 zichtbare bodyregels** per pagina. Wanneer minder dan 10 records beschikbaar zijn, mag de tabelhoogte met lege niet-interactieve fillerregels op 10 regels worden gestabiliseerd zodat de lay-out niet springt.
 Voor **Catalogus** geldt dit expliciet: per pagina worden maximaal **10 inhoudelijke catalogusregels** getoond; de tabelcontainer wordt op die 10 inhoudelijke regels gedimensioneerd, zodat productthumbnails geen onbedoelde kortere viewport met extra verticale scroll veroorzaken.
+Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijke regels**; met de 52px-productthumbnail rekent de tabel daarom met een 56px bodyrij. De standaard Voorraadtabel is **25% breder** dan de eerdere baseline (kolombreedtes 55/325/225/150/200/200px) en de omliggende card/contentcontainer mag die breedte zonder vroegtijdig afkappen opnemen.
 
 - zoek- en filterregel staat direct boven de kolomtitels;
 - eerste zoekveld heet `Zoek`;
@@ -311,8 +313,8 @@ Voor **Catalogus** geldt dit expliciet: per pagina worden maximaal **10 inhoudel
 
 - bij het laden of verversen van tabelgegevens wordt de blokkerende loading-overlay pas zichtbaar nadat de laadstatus **1.000 ms onafgebroken** actief is; kortere laadacties tonen geen overlay-flits;
 - gebruik hiervoor de centrale `DelayedTableLoadingOverlay`; feature-specifieke letter-, spinner- of cirkelvarianten zijn niet toegestaan;
-- de overlay toont uitsluitend het bestaande **Inhuis-beeldmerk zonder woordmerk** (`/inhuis-app-icon.png`), dus geen losse letter `R`, geen cirkelkader en geen zichtbare tekst onder het logo;
-- op een regulier desktopvenster is het beeldmerk **250px breed**, exact vijfmaal de 50px-basishoogte van het Inhuis-logo in de desktopheader; op smallere vensters mag het responsief begrensd worden tot maximaal `70vw`;
+- de overlay toont uitsluitend het dedicated **groene Inhuis-beeldmerk zonder woordmerk** (`/inhuis-loading-mark.svg`), dus geen losse letter `R`, geen cirkelkader en geen zichtbare tekst onder het logo;
+- op een regulier desktopvenster is het laadbeeldmerk **420px breed** en responsief begrensd tot maximaal `80vw`, zodat het ook bij browserzoom duidelijk als groot Inhuis-beeldmerk herkenbaar blijft;
 - zodra laden gereed is of faalt verdwijnt de overlay direct;
 - dezelfde vertraagde overlay wordt ook gebruikt voor langdurige interactieve Catalogus-acties, waaronder het ophalen/controleren van een GPC-classificatie en het zoeken naar GPC Bricks; ook daar verschijnt het beeldmerk pas na 1.000 ms onafgebroken wachten;
 - de overlay gebruikt `role="status"`, `aria-busy="true"` en een niet-zichtbaar toegankelijk laadlabel; animatie wordt uitgeschakeld bij `prefers-reduced-motion`.
