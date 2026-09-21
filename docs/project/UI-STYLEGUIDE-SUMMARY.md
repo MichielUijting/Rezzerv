@@ -264,9 +264,13 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - **Voorraad**, **Bijna op** en **Boodschappenlijst/Winkelen** tonen dezelfde, in Catalogus opgeslagen productafbeelding als compacte thumbnail direct naast de artikelnaam wanneer het artikel canoniek aan dat Catalogusproduct is gekoppeld;
 - operationele schermen voeren geen eigen externe afbeeldingszoekactie uit: zij gebruiken uitsluitend de persistente `image_url` van het gekoppelde Catalogusproduct;
 - voor oudere huishoudartikelen zonder ingevulde `global_product_id` mag dezelfde Catalogusfoto read-only worden herleid via een bestaande canonieke `product_identities`-koppeling of een exacte opgeslagen GTIN/barcode; naamgelijkheid alleen is nooit voldoende om een productfoto te kiezen;
+- wanneer een huishoudartikel bewust aan een **generiek Catalogusproduct zonder afbeelding** is gekoppeld, mag Inhuis een huishoudspecifiek representatief exact Catalogusproduct met afbeelding gebruiken, maar uitsluitend wanneer dat exacte product dezelfde officiële GS1 GPC Brick heeft; verschillende winkelartikelnummers of GTIN's binnen diezelfde Brick mogen daarbij verschillen;
+- die representatieve foto is **geen algemene foto die aan de Brick zelf wordt gekoppeld**: de gekozen `global_product_id` wordt per `household_article_id` bewaard en de afbeelding blijft afkomstig uit de actuele `global_products.image_url`;
+- een geldige representatieve keuze blijft stabiel en wordt alleen opnieuw bepaald wanneer de keuze ontbreekt of ongeldig wordt; bestaande huishoudartikelen worden bij schema-/runtime-upgrade idempotent terugwerkend gevuld;
+- naamgelijkheid, artikelgroep of alleen een soortgelijke omschrijving mag nooit worden gebruikt om een representatieve foto te kiezen; de officiële gelijke Brick is de minimale producttypegrens;
 - de standaard operationele thumbnail is circa **52 × 52px**, gebruikt `object-fit: contain` en mag op mobiel als vaste eerste contentkolom vóór de artikeltekst staan;
 - ontbrekende of niet-laadbare afbeeldingen krijgen een rustige neutrale beeld-placeholder zonder broken-image-icoon; de artikelnaam blijft altijd zichtbaar;
-- bij Boodschappenlijst/Winkelen wordt alleen een Catalogusfoto geprojecteerd als de regel canoniek naar een huishoudartikel en daarmee naar een Catalogusproduct verwijst; producttype- of artikelgroepregels krijgen niet kunstmatig een willekeurige productfoto;
+- bij Boodschappenlijst/Winkelen wordt alleen een Catalogusfoto geprojecteerd als de regel canoniek naar een huishoudartikel verwijst en vanuit dat huishoudartikel naar een direct of representatief Catalogusproduct kan worden herleid; losse producttype- of artikelgroepregels krijgen niet kunstmatig een willekeurige productfoto;
 - een externe afbeelding-URL wordt niet automatisch gebruikt om een reeds aanwezige Catalogusafbeelding te overschrijven.
 
 ## Badges, chips en aantallen
