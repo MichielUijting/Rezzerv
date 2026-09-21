@@ -5,7 +5,7 @@
   "target_base": "main",
   "poll_seconds": 20,
   "timeout_seconds": 14400,
-  "candidate_contract": "Reuse complete successful authority evidence or attach to already-running full-scope authority evidence for the exact candidate SHA and matching PR/base or candidate branch; dispatch only missing authorities and aggregate all eleven authorities fail-closed.",
+  "candidate_contract": "Reuse complete successful exact-candidate authority evidence, keep TP-CI-02 as the only serial shared Kassa cluster, dispatch the fourteen standalone authorities that replace TP-CI-03/04/05/07 in parallel, and aggregate all twenty-one required workflows fail-closed.",
   "workflows": [
     {
       "id": "TP-CI-02",
@@ -21,62 +21,102 @@
       ]
     },
     {
-      "id": "TP-CI-03",
-      "workflow_file": ".github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml",
-      "inputs": {
-        "authority": "both"
-      },
-      "role": "p0_shared",
-      "reuse_required_success_steps": [
-        "Run P0 account session authority on shared images",
-        "Run P0 authorization isolation authority on same built images",
-        "Enforce selected authorities and shared-stack gate"
-      ]
+      "id": "P0-ACCOUNT-SESSION",
+      "workflow_file": ".github/workflows/p0-account-session-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
     },
     {
-      "id": "TP-CI-04",
-      "workflow_file": ".github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml",
-      "inputs": {
-        "authority": "both"
-      },
-      "role": "p0_shared",
-      "reuse_required_success_steps": [
-        "Run P0 Inventory correction authority on shared images",
-        "Run P0 Almost-out recalculation authority on same built images",
-        "Run F6 Inventory controlled-5xx authority on same built images",
-        "Enforce selected Inventory authorities and shared-stack gate"
-      ]
+      "id": "P0-AUTHORIZATION-ISOLATION",
+      "workflow_file": ".github/workflows/p0-authorization-isolation-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
     },
     {
-      "id": "TP-CI-05",
-      "workflow_file": ".github/workflows/tp-ci-05-receipt-shared-stack-postgresql-validation.yml",
-      "inputs": {
-        "authority": "both"
-      },
-      "role": "p0_shared",
-      "reuse_required_success_steps": [
-        "Run L4-03 Receipt inventory authority on shared images",
-        "Run L4-04 Receipt locations-off authority on shared images",
-        "Run L4-05 Receipt idempotency authority on shared images",
-        "Run P0 nonphysical Receipt authority on shared images",
-        "Run F6 Receipt controlled-5xx authority on shared images",
-        "Enforce selected Receipt authorities and shared-stack gate"
-      ]
+      "id": "P0-INVENTORY",
+      "workflow_file": ".github/workflows/p0-inventory-correction-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
     },
     {
-      "id": "TP-CI-07",
-      "workflow_file": ".github/workflows/tp-ci-07-core-p0-shared-stack-postgresql-validation.yml",
-      "inputs": {
-        "authority": "both"
-      },
-      "role": "p0_shared",
-      "reuse_required_success_steps": [
-        "Run L4-01 Onboarding authority on shared images",
-        "Run L4-06 Article Identity authority on shared images",
-        "Run L4-07 Platform Authority on shared images",
-        "Run P0 Unpacking authority on shared images",
-        "Enforce selected Core P0 authorities and shared-stack gate"
-      ]
+      "id": "P0-ALMOST-OUT",
+      "workflow_file": ".github/workflows/p0-almost-out-recalculation-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "F6-INVENTORY",
+      "workflow_file": ".github/workflows/f6-inventory-controlled-5xx-postgresql-validation.yml",
+      "inputs": {},
+      "role": "f6_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "P0-RECEIPT-INVENTORY",
+      "workflow_file": ".github/workflows/p0-receipt-inventory-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "P0-RECEIPT-LOCATIONS-OFF",
+      "workflow_file": ".github/workflows/p0-receipt-inventory-locations-off-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "P0-RECEIPT-IDEMPOTENCY",
+      "workflow_file": ".github/workflows/p0-receipt-inventory-idempotency-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "P0-RECEIPT-NONPHYSICAL",
+      "workflow_file": ".github/workflows/p0-receipt-nonphysical-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "F6-RECEIPT",
+      "workflow_file": ".github/workflows/f6-receipt-controlled-5xx-postgresql-validation.yml",
+      "inputs": {},
+      "role": "f6_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "P0-ONBOARDING",
+      "workflow_file": ".github/workflows/p0-onboarding-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "P0-ARTICLE-IDENTITY",
+      "workflow_file": ".github/workflows/p0-article-identity-history-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "P0-PLATFORM-AUTHORITY",
+      "workflow_file": ".github/workflows/p0-platform-authority-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
+    },
+    {
+      "id": "P0-UNPACKING",
+      "workflow_file": ".github/workflows/p0-unpacking-fullstack-postgresql-validation.yml",
+      "inputs": {},
+      "role": "p0_standalone_parallel",
+      "reuse_required_success_steps": []
     },
     {
       "id": "P0-HOUSEHOLD-MEMBERSHIP",
@@ -123,51 +163,51 @@
   ],
   "p0_scenario_authorities": {
     "P0-ACCOUNT-SESSION": [
-      "TP-CI-03"
+      "P0-ACCOUNT-SESSION"
     ],
     "P0-ONBOARDING": [
-      "TP-CI-07"
+      "P0-ONBOARDING"
     ],
     "P0-HOUSEHOLD-MEMBERSHIP": [
       "P0-HOUSEHOLD-MEMBERSHIP"
     ],
     "P0-AUTHORIZATION-ISOLATION": [
-      "TP-CI-03",
+      "P0-AUTHORIZATION-ISOLATION",
       "P0-HOUSEHOLD-MEMBERSHIP"
     ],
     "P0-SETTINGS-PROJECTION": [
       "F5-SETTINGS-LOCATION-POLICY",
       "F5-CONDITIONAL-LOCATIONS-TAB",
-      "TP-CI-07"
+      "P0-ONBOARDING"
     ],
     "P0-LOCATIONS-POLICY": [
       "F5-SETTINGS-LOCATION-POLICY",
       "F5-CONDITIONAL-LOCATIONS-TAB",
-      "TP-CI-05"
+      "P0-RECEIPT-LOCATIONS-OFF"
     ],
     "P0-RECEIPT-INVENTORY-ALMOSTOUT": [
-      "TP-CI-05"
+      "P0-RECEIPT-INVENTORY"
     ],
     "P0-KASSA-REVIEW": [
       "TP-CI-02"
     ],
     "P0-UNPACKING": [
-      "TP-CI-07",
-      "TP-CI-05"
+      "P0-UNPACKING",
+      "P0-RECEIPT-INVENTORY"
     ],
     "P0-INVENTORY": [
-      "TP-CI-04",
-      "TP-CI-05"
+      "P0-INVENTORY",
+      "P0-RECEIPT-INVENTORY"
     ],
     "P0-ALMOST-OUT": [
-      "TP-CI-04",
-      "TP-CI-05"
+      "P0-ALMOST-OUT",
+      "P0-RECEIPT-INVENTORY"
     ],
     "P0-ARTICLE-IDENTITY": [
-      "TP-CI-07"
+      "P0-ARTICLE-IDENTITY"
     ],
     "P0-PLATFORM-AUTHORITY": [
-      "TP-CI-07"
+      "P0-PLATFORM-AUTHORITY"
     ],
     "P0-MIGRATION-STARTUP": [
       "P0-MIGRATION-FOUNDATION",
@@ -175,7 +215,7 @@
     ]
   },
   "required_p0_scenario_count": 14,
-  "required_workflow_count": 11,
+  "required_workflow_count": 21,
   "full_frontend_workflow_id": "FULL-FRONTEND-REGRESSION",
   "reuse_contract": {
     "exact_candidate_sha": true,
@@ -186,5 +226,34 @@
       "workflow_dispatch"
     ],
     "attach_matching_in_progress": true
+  },
+  "execution_profile": {
+    "mode": "f7_parallel_standalone",
+    "serial_shared_workflows": [
+      "TP-CI-02"
+    ],
+    "replaced_shared_workflows": [
+      "TP-CI-03",
+      "TP-CI-04",
+      "TP-CI-05",
+      "TP-CI-07"
+    ],
+    "parallel_standalone_authorities": [
+      "P0-ACCOUNT-SESSION",
+      "P0-AUTHORIZATION-ISOLATION",
+      "P0-INVENTORY",
+      "P0-ALMOST-OUT",
+      "F6-INVENTORY",
+      "P0-RECEIPT-INVENTORY",
+      "P0-RECEIPT-LOCATIONS-OFF",
+      "P0-RECEIPT-IDEMPOTENCY",
+      "P0-RECEIPT-NONPHYSICAL",
+      "F6-RECEIPT",
+      "P0-ONBOARDING",
+      "P0-ARTICLE-IDENTITY",
+      "P0-PLATFORM-AUTHORITY",
+      "P0-UNPACKING"
+    ],
+    "rationale": "Normal PR CI keeps shared-stack runners; only final F7 exact-candidate execution expands the non-Kassa shared clusters into independent GitHub-hosted runners with isolated Docker/PostgreSQL stacks."
   }
 }
