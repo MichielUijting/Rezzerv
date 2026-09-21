@@ -58,9 +58,10 @@ def test_all_semantic_candidate_terms_resolve_to_bundled_official_gpc_reference(
     seed = json.loads(TAXONOMY_SEED_PATH.read_text(encoding="utf-8"))
     reference_path = TAXONOMY_SEED_PATH.parent / "gpc_bricks_2026_05_en.json"
     reference = json.loads(reference_path.read_text(encoding="utf-8"))
+    reference_rows = reference.get("bricks") or []
 
     official_terms = set()
-    for row in reference:
+    for row in reference_rows:
         for field in (
             "gpc_brick_name_en",
             "gpc_class_name_en",
