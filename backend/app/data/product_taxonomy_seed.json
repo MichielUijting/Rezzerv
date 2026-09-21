@@ -52,7 +52,7 @@
     {"intent_key":"vleeswaren.rookworst","canonical_name":"Rookworst","category":"Vleeswaren","product_type":"Rookworst","synonyms":["rookworst","rookv"],"gpc_candidate_strategy":"taxonomy_rank"},
     {"intent_key":"vleeswaren.chorizo","canonical_name":"Chorizo","category":"Vleeswaren","product_type":"Chorizo","synonyms":["chorizo ring","chorizo"],"gpc_candidate_terms":["Pork Sausages - Prepared/Processed","Mixed Species Sausages - Prepared/Processed","Meat/Poultry/Other Animals Sausages - Prepared/Processed"],"gpc_candidate_strategy":"semantic_terms"},
     {"intent_key":"vleeswaren.worst","canonical_name":"Worst","category":"Vleeswaren","product_type":"Worst","synonyms":["boerenmetworst","boeren metworst","metworst","droge metworst","droge worst","snijworst","worst"],"gpc_candidate_terms":["Pork Sausages - Prepared/Processed","Mixed Species Sausages - Prepared/Processed","Meat/Poultry/Other Animals Sausages - Prepared/Processed"],"gpc_candidate_strategy":"semantic_terms"},
-    {"intent_key":"vlees.gehakt","canonical_name":"Gehakt","category":"Vlees","product_type":"Gehakt","synonyms":["mager gehakt","gehakt"],"gpc_candidate_strategy":"taxonomy_rank"},
+    {"intent_key":"vlees.gehakt","canonical_name":"Gehakt","category":"Vlees","product_type":"Gehakt","synonyms":["gemengd gehakt","half om half gehakt","half-om-half gehakt","rundergehakt","rund gehakt","varkensgehakt","varken gehakt","mager gehakt","gehakt"],"gpc_candidate_terms":["Mixed Species Meat/Poultry/Other Animal - Alternative Meat - Prepared/Processed","Beef - Prepared/Processed","Pork - Prepared/Processed"],"gpc_candidate_strategy":"semantic_terms"},
     {"intent_key":"vlees.kipdijfilet","canonical_name":"Kipdijfilet","category":"Vlees","product_type":"Kipdijfilet","synonyms":["kipdijfilet blokjes","kipdij blokjes","kipblokje dijfil","kipdij reepje","kipdijfilet","kipdij"],"gpc_candidate_strategy":"taxonomy_rank"},
     {"intent_key":"vlees.spek","canonical_name":"Spek","category":"Vlees","product_type":"Spek","synonyms":["zeeuws spek","spekreepjes","spek"],"gpc_candidate_strategy":"taxonomy_rank"},
     {"intent_key":"drank.frisdrank","canonical_name":"Frisdrank","category":"Drank","product_type":"Frisdrank","synonyms":["cola zero","cola","frisdrank"],"gpc_candidate_strategy":"taxonomy_rank"},
@@ -104,6 +104,12 @@
     {"retailer_code": "plus", "receipt_term": "KIKKERWTEN", "normalized_term": "kikkererwten", "intent_key": "peulvrucht.kikkererwt", "confidence": 0.90, "source": "m2c2i24s_c_receipt_term"}
   ],
   "product_variant_terms": [
+    {"intent_key":"vlees.gehakt","variant_term":"gemengd gehakt","variant_type":"vleessoort","search_terms":["gemengd gehakt"],"gpc_candidate_terms":["Mixed Species Meat/Poultry/Other Animal - Alternative Meat - Prepared/Processed"],"confidence":0.98},
+    {"intent_key":"vlees.gehakt","variant_term":"half om half gehakt","variant_type":"vleessoort","search_terms":["half om half gehakt"],"gpc_candidate_terms":["Mixed Species Meat/Poultry/Other Animal - Alternative Meat - Prepared/Processed"],"confidence":0.98},
+    {"intent_key":"vlees.gehakt","variant_term":"rundergehakt","variant_type":"vleessoort","search_terms":["rundergehakt"],"gpc_candidate_terms":["Beef - Prepared/Processed"],"confidence":0.98},
+    {"intent_key":"vlees.gehakt","variant_term":"rund gehakt","variant_type":"vleessoort","search_terms":["rund gehakt"],"gpc_candidate_terms":["Beef - Prepared/Processed"],"confidence":0.98},
+    {"intent_key":"vlees.gehakt","variant_term":"varkensgehakt","variant_type":"vleessoort","search_terms":["varkensgehakt"],"gpc_candidate_terms":["Pork - Prepared/Processed"],"confidence":0.98},
+    {"intent_key":"vlees.gehakt","variant_term":"varken gehakt","variant_type":"vleessoort","search_terms":["varken gehakt"],"gpc_candidate_terms":["Pork - Prepared/Processed"],"confidence":0.98},
     {"intent_key": "zuivel.kaas", "variant_term": "gouda", "variant_type": "kaassoort", "search_terms": ["gouda kaas"], "confidence": 0.95},
     {"intent_key": "zuivel.kaas", "variant_term": "gerasp", "variant_type": "vorm", "search_terms": ["geraspte kaas", "gerasp kaas"], "confidence": 0.95},
     {"intent_key": "zuivel.kaas", "variant_term": "geraspt", "variant_type": "vorm", "search_terms": ["geraspte kaas", "gerasp kaas"], "confidence": 0.95},

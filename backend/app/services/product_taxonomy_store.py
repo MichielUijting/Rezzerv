@@ -552,12 +552,18 @@ def _variant_rules_from_seed(intent_key: str | None = None) -> list[dict[str, An
             for search_term in (item.get("search_terms") or [])
             if normalize_taxonomy_text(search_term)
         ]
+        gpc_candidate_terms = [
+            " ".join(str(candidate_term or "").strip().split())
+            for candidate_term in (item.get("gpc_candidate_terms") or [])
+            if " ".join(str(candidate_term or "").strip().split())
+        ]
         rules.append({
             "intent_key": item_intent,
             "variant_term": variant_term,
             "normalized_variant_term": normalized_variant,
             "variant_type": normalize_taxonomy_text(item.get("variant_type")),
             "search_terms": search_terms,
+            "gpc_candidate_terms": gpc_candidate_terms,
             "confidence": float(item.get("confidence") or 1.0),
             "source": str(item.get("source") or "taxonomy_seed"),
         })

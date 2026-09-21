@@ -5,8 +5,10 @@ from typing import Any, Iterable
 
 from app.services.product_taxonomy_store import (
     classify_product_intent_from_taxonomy,
+    contains_taxonomy_term,
     get_taxonomy_metadata_for_intent,
     load_gpc_candidate_terms,
+    load_product_variant_terms,
     load_taxonomy_rules,
     normalize_taxonomy_text,
 )
@@ -44,6 +46,12 @@ _FIELD_WEIGHTS = {
     "taxonomy_category": 1.05,
     "taxonomy_synonym": 1.15,
     "taxonomy_gpc_candidate_term": 0.55,
+    "taxonomy_gpc_variant_candidate_term": 1.35,
+}
+
+_SEMANTIC_GPC_SIGNAL_SOURCES = {
+    "taxonomy_gpc_candidate_term",
+    "taxonomy_gpc_variant_candidate_term",
 }
 
 _HIERARCHY_WEIGHTS = {
@@ -151,6 +159,20 @@ def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
                 weight=_FIELD_WEIGHTS[source],
             )
 
+        normalized_intent_source = normalize_taxonomy_text(intent_source)
+        for variant_rule in load_product_variant_terms(intent_key):
+            normalized_variant = str(variant_rule.get("normalized_variant_term") or "")
+            if not contains_taxonomy_term(normalized_intent_source, normalized_variant):
+                continue
+            for candidate_term in variant_rule.get("gpc_candidate_terms") or ():
+                _add_signal(
+                    signals,
+                    seen,
+                    candidate_term,
+                    source="taxonomy_gpc_variant_candidate_term",
+                    weight=_FIELD_WEIGHTS["taxonomy_gpc_variant_candidate_term"],
+                )
+
         for candidate_term in load_gpc_candidate_terms(intent_key):
             _add_signal(
                 signals,
@@ -211,7 +233,7 @@ def _signal_match(signal: dict[str, Any], haystacks: dict[str, str]) -> tuple[fl
         haystack_tokens = set(_meaningful_tokens(haystack))
         signal_token_set = set(signal_tokens)
 
-        if str(signal.get("source") or "") == "taxonomy_gpc_candidate_term":
+        if str(signal.get("source") or "") in _SEMANTIC_GPC_SIGNAL_SOURCES:
             semantic_anchors = _semantic_anchor_tokens(signal_tokens)
             if semantic_anchors and not (semantic_anchors & haystack_tokens):
                 continue
@@ -326,7 +348,7 @@ def rank_gpc_candidates(
             if normalized_term and normalized_term not in matched_terms:
                 matched_terms.append(normalized_term)
             if (
-                source == "taxonomy_gpc_candidate_term"
+                source in _SEMANTIC_GPC_SIGNAL_SOURCES
                 and normalized_term
                 and normalized_term not in semantic_terms
             ):
