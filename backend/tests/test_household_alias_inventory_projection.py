@@ -63,6 +63,8 @@ class CentralCatalogProjectionConnection:
                 'product_name': '',
                 'image_url': '',
             }])
+        if 'FROM product_identities pi' in sql:
+            return Result(rows=[])
         if 'WITH source_identities AS' in sql:
             rows = [{
                 'household_article_id': ARTICLE_ID,
@@ -111,6 +113,66 @@ class CentralCatalogProjectionEngine:
     @contextmanager
     def begin(self):
         yield CentralCatalogProjectionConnection(ambiguous=self.ambiguous)
+
+
+class CanonicalIdentityProjectionConnection:
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if 'FROM household_articles ha' in sql and 'LEFT JOIN global_products gp' in sql:
+            return Result(rows=[{
+                'id': ARTICLE_ID,
+                'household_id': 'household-a',
+                'naam': 'Gouda belegen geraspt',
+                'custom_name': '',
+                'global_product_id': None,
+                'barcode': '',
+                'product_name': '',
+                'image_url': '',
+            }])
+        if 'FROM product_identities pi' in sql:
+            return Result(rows=[{
+                'household_article_id': ARTICLE_ID,
+                'global_product_id': 'global-product-identity',
+                'image_url': 'https://images.example.test/gouda.jpg',
+            }])
+        raise AssertionError(f'Onverwachte identity-projectie-SQL: {sql}')
+
+
+class CanonicalIdentityProjectionEngine:
+    @contextmanager
+    def begin(self):
+        yield CanonicalIdentityProjectionConnection()
+
+
+class CanonicalBarcodeProjectionConnection:
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        if 'FROM household_articles ha' in sql and 'LEFT JOIN global_products gp' in sql:
+            return Result(rows=[{
+                'id': ARTICLE_ID,
+                'household_id': 'household-a',
+                'naam': 'Rijstwafel',
+                'custom_name': '',
+                'global_product_id': None,
+                'barcode': '8712345678901',
+                'product_name': '',
+                'image_url': '',
+            }])
+        if 'FROM product_identities pi' in sql:
+            return Result(rows=[])
+        if 'FROM global_products' in sql and 'primary_gtin IN' in sql:
+            return Result(rows=[{
+                'global_product_id': 'global-product-barcode',
+                'primary_gtin': '8712345678901',
+                'image_url': 'https://images.example.test/rijstwafel.jpg',
+            }])
+        raise AssertionError(f'Onverwachte barcode-projectie-SQL: {sql}')
+
+
+class CanonicalBarcodeProjectionEngine:
+    @contextmanager
+    def begin(self):
+        yield CanonicalBarcodeProjectionConnection()
 
 
 class AliasUpdatePayload:
@@ -200,6 +262,44 @@ def test_inventory_preview_uses_confirmed_central_catalog_image_without_househol
     assert projected['rows'][0]['household_article_name'] == 'Bio dadeltjes'
 
 
+def test_inventory_preview_uses_canonical_product_identity_image():
+    main_module = SimpleNamespace(
+        engine=CanonicalIdentityProjectionEngine(),
+        text=lambda value: value,
+    )
+    payload = {
+        'rows': [{
+            'id': INVENTORY_ID,
+            'household_article_id': ARTICLE_ID,
+            'artikel': 'Gouda belegen geraspt',
+            'aantal': 1,
+        }]
+    }
+
+    projected = _inventory_alias_projection(main_module, payload)
+
+    assert projected['rows'][0]['image_url'] == 'https://images.example.test/gouda.jpg'
+
+
+def test_inventory_preview_uses_household_barcode_for_catalog_image():
+    main_module = SimpleNamespace(
+        engine=CanonicalBarcodeProjectionEngine(),
+        text=lambda value: value,
+    )
+    payload = {
+        'rows': [{
+            'id': INVENTORY_ID,
+            'household_article_id': ARTICLE_ID,
+            'artikel': 'Rijstwafel',
+            'aantal': 1,
+        }]
+    }
+
+    projected = _inventory_alias_projection(main_module, payload)
+
+    assert projected['rows'][0]['image_url'] == 'https://images.example.test/rijstwafel.jpg'
+
+
 def test_inventory_preview_does_not_guess_image_when_one_household_article_maps_to_multiple_products():
     main_module = SimpleNamespace(
         engine=CentralCatalogProjectionEngine(ambiguous=True),
@@ -256,6 +356,8 @@ def test_inventory_inline_household_name_does_not_rename_inventory_identity():
 def run_contract() -> None:
     test_inventory_preview_projects_household_alias_instead_of_inventory_name()
     test_inventory_preview_uses_confirmed_central_catalog_image_without_household_product_mutation()
+    test_inventory_preview_uses_canonical_product_identity_image()
+    test_inventory_preview_uses_household_barcode_for_catalog_image()
     test_inventory_preview_does_not_guess_image_when_one_household_article_maps_to_multiple_products()
     test_inventory_inline_household_name_does_not_rename_inventory_identity()
     print('HOUSEHOLD_ALIAS_INVENTORY_PROJECTION_GREEN')
