@@ -128,6 +128,22 @@ Bij database-/startupinfrastructuur horen daarnaast expliciet:
 
 Bij wijzigingen aan de Kassabon → Voorraad → Bijna-op-keten of de ketenrunner hoort daarnaast de canonical 12/12 PostgreSQL-ketentest groen te zijn.
 
+## F7 Full Regression: shared PR-CI versus parallel eindkandidaat
+
+De normale PR-CI blijft de vijf shared-stackclusters `TP-CI-02/03/04/05/07` gebruiken om Docker-builds en voorbereiding binnen een gewone wijzigingscyclus te delen.
+
+Voor de zware F7 Full Regression op de definitieve exact-candidate geldt een ander uitvoeringsprofiel:
+
+- `TP-CI-02` blijft als gedeelde Kassa-run bestaan, omdat de twee historische standalone Kassa-fallbackworkflows niet meer bestaan;
+- de veertien authorities uit `TP-CI-03`, `TP-CI-04`, `TP-CI-05` en `TP-CI-07` worden via hun bestaande standalone workflows als onafhankelijke GitHub Actions-runs gestart;
+- iedere standalone full-stack authority krijgt daardoor een eigen runner en eigen verse Docker/PostgreSQL-omgeving;
+- de overige standalone schema-, policy-, membership- en volledige frontend-authorities blijven afzonderlijk vereist;
+- F7 aggregeert in totaal 21 workflows op exact dezelfde kandidaat-SHA en accepteert alleen complete success-evidence;
+- bestaande succesvolle evidence mag alleen volgens het exact-SHA/reuse-contract worden hergebruikt;
+- de F7-wachtrunner gebruikt unbuffered Python-output zodat de voortgang tijdens lange authorities zichtbaar blijft.
+
+Deze parallelisering verlaagt de regressiedekking niet; uitsluitend de scheduling van onafhankelijke authorities wijzigt. Een wijziging aan de kandidaat-SHA na de definitieve F7-proof maakt die proof nog steeds ongeldig.
+
 ## Releasegate
 
 Een release is technisch gereed wanneer relevante workflows groen zijn, scope en bestanden kloppen, geen onverklaarde route- of schemaafwijking bestaat, documentatie is bijgewerkt, QA/QC akkoord is en de PO expliciet GO geeft.
