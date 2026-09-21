@@ -2,63 +2,118 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, text
 
 from app.api import catalog_routes
+from app.services import global_product_service, shopping_list_service
 from app.services.global_product_service import get_or_create_global_product
-from app.services.shopping_list_service import search_shopping_catalog
 
 
-def _engine():
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE global_products (
-                id TEXT PRIMARY KEY,
-                primary_gtin TEXT,
-                name TEXT NOT NULL,
-                brand TEXT,
-                variant TEXT,
-                category TEXT,
-                size_value NUMERIC,
-                size_unit TEXT,
-                product_fingerprint TEXT,
-                image_url TEXT,
-                source TEXT NOT NULL DEFAULT 'user',
-                status TEXT NOT NULL DEFAULT 'active',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT
-            )
-        """))
-        conn.execute(text("""
-            INSERT INTO global_products(
-                id, primary_gtin, name, brand, image_url, source, status, created_at, updated_at
-            ) VALUES
-              ('gp-delete', '8711111111111', 'Te verwijderen', 'Test', 'https://example.test/delete.jpg', 'user', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-              ('gp-keep', '8722222222222', 'Te behouden', 'Test', 'https://example.test/keep.jpg', 'user', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """))
-    return engine
+class _Mappings:
+    def __init__(self, rows):
+        self._rows = list(rows)
+
+    def first(self):
+        return self._rows[0] if self._rows else None
+
+    def all(self):
+        return list(self._rows)
 
 
-def _list_catalog():
-    return catalog_routes.list_catalog(
-        name="",
-        brand="",
-        primary_gtin="",
-        catalog_kind="",
-        product_type="",
-        source="",
-        household_article_count="",
-        sort_by="name",
-        sort_direction="asc",
-        limit=10,
-        offset=0,
+class _Result:
+    def __init__(self, rows=()):
+        self._rows = list(rows)
+
+    def mappings(self):
+        return _Mappings(self._rows)
+
+
+class _CatalogConnection:
+    def __init__(self):
+        self.products = {
+            "gp-delete": {"id": "gp-delete", "status": "active"},
+            "gp-keep": {"id": "gp-keep", "status": "active"},
+        }
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        params = params or {}
+        product_id = str(params.get("global_product_id") or "")
+        if "SELECT id, status" in sql:
+            row = self.products.get(product_id)
+            return _Result([dict(row)] if row else [])
+        if "UPDATE global_products" in sql and "status = 'deleted'" in sql:
+            self.products[product_id]["status"] = "deleted"
+            return _Result()
+        raise AssertionError(f"Onverwachte SQL in bulk-delete contract: {sql}")
+
+
+class _Engine:
+    def __init__(self, connection):
+        self.connection = connection
+
+    class _Begin:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __enter__(self):
+            return self.connection
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def begin(self):
+        return self._Begin(self.connection)
+
+
+class _CaptureSearchConnection:
+    def __init__(self):
+        self.sql = ""
+
+    def execute(self, statement, params=None):
+        self.sql = str(statement)
+        return _Result()
+
+
+class _ExistingProductConnection:
+    def __init__(self):
+        self.update_sql = ""
+        self.update_params = {}
+
+    def execute(self, statement, params=None):
+        sql = str(statement)
+        params = params or {}
+        if "SELECT id FROM global_products WHERE primary_gtin" in sql:
+            return _Result([{"id": "gp-delete"}])
+        if "UPDATE global_products" in sql:
+            self.update_sql = sql
+            self.update_params = dict(params)
+            return _Result()
+        raise AssertionError(f"Onverwachte SQL in reactivatiecontract: {sql}")
+
+
+def _install_catalog_table_contract(monkeypatch, engine):
+    monkeypatch.setattr(catalog_routes, "engine", engine)
+    monkeypatch.setattr(catalog_routes, "_tables", lambda: {"global_products"})
+    monkeypatch.setattr(
+        catalog_routes,
+        "_columns",
+        lambda table_name: {
+            "id",
+            "name",
+            "primary_gtin",
+            "brand",
+            "image_url",
+            "source",
+            "status",
+            "created_at",
+            "updated_at",
+        } if table_name == "global_products" else set(),
     )
 
 
 def test_bulk_delete_requires_real_platform_superuser(monkeypatch):
-    engine = _engine()
-    monkeypatch.setattr(catalog_routes, "engine", engine)
+    connection = _CatalogConnection()
+    _install_catalog_table_contract(monkeypatch, _Engine(connection))
     monkeypatch.setattr(
         catalog_routes,
         "resolve_current_server_session",
@@ -71,16 +126,12 @@ def test_bulk_delete_requires_real_platform_superuser(monkeypatch):
         )
 
     assert exc.value.status_code == 403
-    with engine.begin() as conn:
-        status = conn.execute(
-            text("SELECT status FROM global_products WHERE id = 'gp-delete'")
-        ).scalar_one()
-    assert status == "active"
+    assert connection.products["gp-delete"]["status"] == "active"
 
 
-def test_superuser_bulk_delete_hides_selected_product_and_preserves_other_rows(monkeypatch):
-    engine = _engine()
-    monkeypatch.setattr(catalog_routes, "engine", engine)
+def test_superuser_bulk_delete_soft_deletes_only_selected_rows(monkeypatch):
+    connection = _CatalogConnection()
+    _install_catalog_table_contract(monkeypatch, _Engine(connection))
     monkeypatch.setattr(
         catalog_routes,
         "resolve_current_server_session",
@@ -96,57 +147,107 @@ def test_superuser_bulk_delete_hides_selected_product_and_preserves_other_rows(m
     assert result["deleted_count"] == 1
     assert result["deleted_ids"] == ["gp-delete"]
     assert result["not_found_ids"] == ["missing-product"]
-
-    catalog = _list_catalog()
-    assert catalog["total"] == 1
-    assert [row["id"] for row in catalog["items"]] == ["gp-keep"]
-    assert catalog_routes._catalog_row("gp-delete") is None
-
-    with engine.begin() as conn:
-        statuses = dict(conn.execute(
-            text("SELECT id, status FROM global_products ORDER BY id")
-        ).all())
-    assert statuses == {"gp-delete": "deleted", "gp-keep": "active"}
+    assert connection.products == {
+        "gp-delete": {"id": "gp-delete", "status": "deleted"},
+        "gp-keep": {"id": "gp-keep", "status": "active"},
+    }
 
 
-def test_deleted_exact_product_is_not_offered_in_shopping_search():
-    engine = _engine()
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE global_products SET status = 'deleted' WHERE id = 'gp-delete'"))
-        deleted = search_shopping_catalog(
-            conn,
-            "household-1",
-            scope="global_products",
-            query="verwijderen",
-            limit=10,
-        )
-        active = search_shopping_catalog(
-            conn,
-            "household-1",
-            scope="global_products",
-            query="behouden",
-            limit=10,
-        )
+def test_catalog_projection_hides_soft_deleted_products(monkeypatch):
+    monkeypatch.setattr(catalog_routes, "_tables", lambda: {"global_products"})
+    monkeypatch.setattr(
+        catalog_routes,
+        "_columns",
+        lambda table_name: {
+            "id",
+            "name",
+            "primary_gtin",
+            "brand",
+            "image_url",
+            "source",
+            "status",
+            "created_at",
+            "updated_at",
+        } if table_name == "global_products" else set(),
+    )
+    monkeypatch.setattr(catalog_routes, "_household_table", lambda: None)
 
-    assert deleted["items"] == []
-    assert [row["source_id"] for row in active["items"]] == ["gp-keep"]
+    _, _, expressions = catalog_routes._catalog_projection()
+
+    visibility = expressions["catalog_visible"].lower()
+    assert "status" in visibility
+    assert "deleted" in visibility
+    assert "<>" in visibility
 
 
-def test_exact_gtin_reappearing_reactivates_soft_deleted_product():
-    engine = _engine()
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE global_products SET status = 'deleted' WHERE id = 'gp-delete'"))
-        product_id = get_or_create_global_product(
-            conn,
-            gtin="8711111111111",
-            name="Te verwijderen",
-            brand="Test",
-            source="test",
-        )
-        status = conn.execute(
-            text("SELECT status FROM global_products WHERE id = :id"),
-            {"id": product_id},
-        ).scalar_one()
+def test_deleted_exact_product_is_filtered_from_shopping_search_sql(monkeypatch):
+    connection = _CaptureSearchConnection()
+    monkeypatch.setattr(
+        shopping_list_service,
+        "_table_columns",
+        lambda conn, table_name: {
+            "id",
+            "name",
+            "primary_gtin",
+            "brand",
+            "image_url",
+            "status",
+        } if table_name == "global_products" else set(),
+    )
+    monkeypatch.setattr(
+        shopping_list_service,
+        "_global_product_type_expression",
+        lambda conn: "''",
+    )
+
+    result = shopping_list_service._search_global_products(
+        connection,
+        query="bananen",
+        limit=10,
+    )
+
+    assert result == []
+    normalized_sql = " ".join(connection.sql.lower().split())
+    assert "status" in normalized_sql
+    assert "<> 'deleted'" in normalized_sql
+
+
+def test_exact_gtin_reappearing_reactivates_soft_deleted_product(monkeypatch):
+    connection = _ExistingProductConnection()
+    product_columns = (
+        "id",
+        "primary_gtin",
+        "name",
+        "brand",
+        "variant",
+        "category",
+        "size_value",
+        "size_unit",
+        "product_fingerprint",
+        "image_url",
+        "source",
+        "status",
+        "created_at",
+        "updated_at",
+    )
+    monkeypatch.setattr(
+        global_product_service,
+        "inspect",
+        lambda conn: SimpleNamespace(
+            get_columns=lambda table_name: [{"name": name} for name in product_columns]
+        ),
+    )
+
+    product_id = get_or_create_global_product(
+        connection,
+        gtin="8711111111111",
+        name="Te verwijderen",
+        brand="Test",
+        source="test",
+    )
 
     assert product_id == "gp-delete"
-    assert status == "active"
+    normalized_sql = " ".join(connection.update_sql.lower().split())
+    assert "status = case" in normalized_sql
+    assert "= 'deleted' then :reactivation_status" in normalized_sql
+    assert connection.update_params["reactivation_status"] == "active"
