@@ -274,13 +274,20 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await page.evaluate(() => {
       window.__catalogCameraRequests = [];
       const stream = new MediaStream();
-      Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      const mediaDevices = navigator.mediaDevices || {};
+      Object.defineProperty(mediaDevices, 'getUserMedia', {
         configurable: true,
         value: async (constraints) => {
           window.__catalogCameraRequests.push(constraints);
           return stream;
         },
       });
+      if (!navigator.mediaDevices) {
+        Object.defineProperty(navigator, 'mediaDevices', {
+          configurable: true,
+          value: mediaDevices,
+        });
+      }
     });
 
     await choice.getByRole('button', { name: 'Foto maken' }).click();
