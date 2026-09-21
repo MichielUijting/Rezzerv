@@ -345,8 +345,8 @@ test.describe('Externe databases OFF candidate flow', () => {
 
     const logo = page.getByTestId('table-loading-logo');
     await expect(logo).toBeVisible();
-    await expect(logo).toHaveAttribute('src', '/inhuis-app-icon.png');
-    await expect(logo).toHaveCSS('width', '250px');
+    await expect(logo).toHaveAttribute('src', '/inhuis-loading-mark.svg');
+    await expect(logo).toHaveCSS('width', '420px');
     await expect(overlay.getByText('R', { exact: true })).toHaveCount(0);
 
     releaseItems();
@@ -400,8 +400,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(overlay).toHaveAttribute('aria-busy', 'true');
     const logo = page.getByTestId('table-loading-logo');
     await expect(logo).toBeVisible();
-    await expect(logo).toHaveAttribute('src', '/inhuis-app-icon.png');
-    await expect(logo).toHaveCSS('width', '250px');
+    await expect(logo).toHaveAttribute('src', '/inhuis-loading-mark.svg');
+    await expect(logo).toHaveCSS('width', '420px');
     await expect(overlay.getByText('R', { exact: true })).toHaveCount(0);
 
     releaseSearch();
