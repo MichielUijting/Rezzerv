@@ -189,6 +189,110 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
+
+  test('Catalogusdetail laat bevoegde gebruiker foto uploaden of camera kiezen en comprimeert voor opslag', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    let imagePayload = null;
+    const productId = 'catalog-photo-product';
+
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user_id: 'catalog-editor',
+          email: 'catalog-editor@example.test',
+          active_household_id: '0',
+          context_type: 'system',
+          role: 'owner',
+          display_role: 'admin',
+          is_platform_superuser: true,
+          permissions: {
+            'platform.catalog.update': true,
+            'platform.system_household.access': true,
+          },
+        }),
+      });
+    });
+
+    await page.route(`**/api/catalog/${productId}`, async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          product: {
+            id: productId,
+            name: 'Product zonder foto',
+            brand: 'Testmerk',
+            primary_gtin: '8712345678901',
+            product_type: 'Testtype',
+            source: 'manual',
+            image_url: '',
+          },
+          identities: [],
+          household_articles: [],
+          receipt_lines: [],
+        }),
+      });
+    });
+
+    await page.route(`**/api/catalog/${productId}/gpc-brick`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ assignment: null, suggestion: null, suggestions: [] }),
+      });
+    });
+
+    await page.route(`**/api/catalog/${productId}/image`, async (route) => {
+      imagePayload = JSON.parse(route.request().postData() || '{}');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          global_product_id: productId,
+          image_url: imagePayload.image_data_url,
+        }),
+      });
+    });
+
+    await page.goto(`/catalogus/${productId}`);
+    const imageAction = page.getByTestId('catalog-product-image-action');
+    await expect(imageAction).toBeVisible();
+    await expect(imageAction).toHaveAttribute('aria-label', 'Productfoto toevoegen');
+
+    await imageAction.click();
+    const choice = page.getByTestId('catalog-image-source-choice');
+    await expect(choice).toBeVisible();
+    await expect(choice.getByRole('button', { name: 'Foto uploaden' })).toBeVisible();
+    await expect(choice.getByRole('button', { name: 'Foto maken' })).toBeVisible();
+    await expect(page.getByTestId('catalog-image-camera-input')).toHaveAttribute('capture', 'environment');
+
+    await choice.getByRole('button', { name: 'Foto uploaden' }).click();
+
+    const tinyPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mP8z/CfAQgwgImBQjAAAD0fAwV4pSIAAAAASUVORK5CYII=',
+      'base64',
+    );
+    await page.getByTestId('catalog-image-upload-input').setInputFiles({
+      name: 'product.png',
+      mimeType: 'image/png',
+      buffer: tinyPng,
+    });
+
+    await expect.poll(() => imagePayload).not.toBeNull();
+    expect(imagePayload.image_data_url).toMatch(/^data:image\/jpeg;base64,/);
+    expect(Buffer.from(imagePayload.image_data_url.split(',')[1], 'base64').length).toBeLessThanOrEqual(340 * 1024);
+    await expect(page.getByText('De foto is toegevoegd aan het catalogusartikel.')).toBeVisible();
+    await expect(imageAction.locator('img')).toHaveAttribute('src', /^data:image\/jpeg;base64,/);
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+
   test('Catalogustabel houdt titel en zoekfilters sticky en begrenst de pagina op tien inhoudelijke rijen', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let requestedLimit = null;

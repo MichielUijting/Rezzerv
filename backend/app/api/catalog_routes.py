@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -8,11 +11,33 @@ from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.db import engine
-from app.services.session_request_context import resolve_current_server_session
+from app.services.session_request_context import (
+    require_platform_permission_from_session,
+    resolve_current_server_session,
+)
 
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 router.include_router(catalog_gpc_router)
+
+CATALOG_IMAGE_UPDATE_PERMISSION = "platform.catalog.update"
+CATALOG_IMAGE_MAX_BYTES = 350_000
+CATALOG_IMAGE_DATA_URL_PATTERN = re.compile(
+    r"^data:(image/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\r\n]+)$",
+    re.IGNORECASE,
+)
+
+
+class CatalogImageUpdateRequest(BaseModel):
+    image_data_url: str
+
+    @field_validator("image_data_url")
+    @classmethod
+    def validate_image_data_url_present(cls, value: str) -> str:
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise ValueError("Foto ontbreekt")
+        return normalized
 
 
 class CatalogBulkDeleteRequest(BaseModel):
@@ -400,6 +425,95 @@ def list_catalog(
         ]
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
+
+
+def _validated_catalog_image_data_url(value: str) -> str:
+    normalized = str(value or "").strip()
+    match = CATALOG_IMAGE_DATA_URL_PATTERN.fullmatch(normalized)
+    if not match:
+        raise HTTPException(
+            status_code=400,
+            detail="Foto moet een JPEG-, PNG- of WebP-afbeelding zijn",
+        )
+    mime_type = match.group(1).lower()
+    payload = "".join(match.group(2).split())
+    try:
+        binary = base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Foto bevat ongeldige afbeeldingsdata") from exc
+    if not binary:
+        raise HTTPException(status_code=400, detail="Foto bevat geen afbeeldingsdata")
+    if len(binary) > CATALOG_IMAGE_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Foto is na compressie nog te groot",
+        )
+
+    valid_magic = (
+        mime_type == "image/jpeg" and binary.startswith(b"\xff\xd8\xff")
+    ) or (
+        mime_type == "image/png" and binary.startswith(b"\x89PNG\r\n\x1a\n")
+    ) or (
+        mime_type == "image/webp"
+        and len(binary) >= 12
+        and binary[:4] == b"RIFF"
+        and binary[8:12] == b"WEBP"
+    )
+    if not valid_magic:
+        raise HTTPException(
+            status_code=400,
+            detail="Bestandsinhoud komt niet overeen met het afbeeldingstype",
+        )
+    return f"data:{mime_type};base64,{base64.b64encode(binary).decode('ascii')}"
+
+
+@router.put("/{global_product_id}/image")
+def update_catalog_product_image(
+    global_product_id: str,
+    payload: CatalogImageUpdateRequest,
+):
+    require_platform_permission_from_session(CATALOG_IMAGE_UPDATE_PERMISSION)
+    if "global_products" not in _tables():
+        raise HTTPException(status_code=404, detail="Catalogus is niet beschikbaar")
+    product_columns = _columns("global_products")
+    if "image_url" not in product_columns:
+        raise HTTPException(
+            status_code=503,
+            detail="Catalogus ondersteunt productfoto's nog niet",
+        )
+
+    image_data_url = _validated_catalog_image_data_url(payload.image_data_url)
+    updated_at_sql = ", updated_at = CURRENT_TIMESTAMP" if "updated_at" in product_columns else ""
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("""
+                SELECT id, status
+                FROM global_products
+                WHERE id = :global_product_id
+                LIMIT 1
+            """),
+            {"global_product_id": global_product_id},
+        ).mappings().first()
+        if not row or str(row.get("status") or "").strip().lower() == "deleted":
+            raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
+
+        conn.execute(
+            text(f"""
+                UPDATE global_products
+                SET image_url = :image_data_url{updated_at_sql}
+                WHERE id = :global_product_id
+            """),
+            {
+                "global_product_id": global_product_id,
+                "image_data_url": image_data_url,
+            },
+        )
+
+    return {
+        "global_product_id": global_product_id,
+        "image_url": image_data_url,
+    }
 
 
 @router.post("/bulk-delete")

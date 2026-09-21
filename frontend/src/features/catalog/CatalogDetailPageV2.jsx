@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
+import { canCurrentUserPerform, fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 import CatalogGpcFrame from './CatalogGpcFrame'
 import CatalogProductImage from './CatalogProductImage'
+import { compressCatalogImage } from './catalogImageCompression'
 import './catalog.css'
 
 function text(value, fallback = '-') {
@@ -46,9 +48,15 @@ function identityTypeLabel(value) {
 
 export default function CatalogDetailPageV2() {
   const { globalProductId = '' } = useParams()
+  const { showFeedback } = useAppFeedback()
+  const authContext = readStoredAuthContext()
+  const canUpdateCatalogImage = canCurrentUserPerform('platform.catalog.update', authContext)
+  const uploadInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
   const [detail, setDetail] = useState(null)
   const [confirmedProductType, setConfirmedProductType] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [isImageSaving, setIsImageSaving] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -89,6 +97,66 @@ export default function CatalogDetailPageV2() {
     setConfirmedProductType(description)
   }
 
+  function openImageChoice() {
+    if (!canUpdateCatalogImage || isImageSaving) return
+    showFeedback({
+      variant: 'info',
+      title: product.image_url ? 'Productfoto wijzigen' : 'Productfoto toevoegen',
+      message: 'Hoe wil je de foto toevoegen?',
+      detail: 'De foto wordt automatisch verkleind en gecomprimeerd voordat hij wordt opgeslagen.',
+      testId: 'catalog-image-source-choice',
+      primaryActionLabel: 'Foto uploaden',
+      secondaryActionLabel: 'Foto maken',
+      onPrimaryAction: () => uploadInputRef.current?.click(),
+      onSecondaryAction: () => cameraInputRef.current?.click(),
+    })
+  }
+
+  async function handleImageFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setIsImageSaving(true)
+    try {
+      const imageDataUrl = await compressCatalogImage(file)
+      const response = await fetchJsonWithAuth(
+        `/api/catalog/${encodeURIComponent(globalProductId)}/image`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ image_data_url: imageDataUrl }),
+        },
+      )
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Productfoto kon niet worden opgeslagen')
+      }
+
+      setDetail((current) => current
+        ? {
+            ...current,
+            product: {
+              ...(current.product || {}),
+              image_url: data.image_url || imageDataUrl,
+            },
+          }
+        : current)
+      showFeedback({
+        variant: 'success',
+        title: 'Productfoto opgeslagen',
+        message: 'De foto is toegevoegd aan het catalogusartikel.',
+      })
+    } catch (imageError) {
+      showFeedback({
+        variant: 'error',
+        title: 'Productfoto niet opgeslagen',
+        message: imageError?.message || 'De productfoto kon niet worden opgeslagen.',
+      })
+    } finally {
+      setIsImageSaving(false)
+    }
+  }
+
   return (
     <AppShell title="Catalogusdetail" showExit={false}>
       <div className="rz-catalog-page" data-testid="catalog-detail-page">
@@ -100,7 +168,51 @@ export default function CatalogDetailPageV2() {
             <div className="rz-catalog-detail-grid">
               <section className="rz-catalog-detail-section">
                 <div className="rz-catalog-product-summary">
-                  <CatalogProductImage imageUrl={product.image_url} productName={product.name} />
+                  <div className="rz-catalog-product-image-editor">
+                    {canUpdateCatalogImage ? (
+                      <>
+                        <button
+                          type="button"
+                          className="rz-catalog-product-image-action"
+                          onClick={openImageChoice}
+                          disabled={isImageSaving}
+                          aria-label={product.image_url ? 'Productfoto wijzigen' : 'Productfoto toevoegen'}
+                          aria-busy={isImageSaving ? 'true' : undefined}
+                          data-testid="catalog-product-image-action"
+                        >
+                          <CatalogProductImage imageUrl={product.image_url} productName={product.name} />
+                          <span className="rz-catalog-product-image-action-label">
+                            {isImageSaving
+                              ? 'Foto verwerken…'
+                              : product.image_url
+                                ? 'Foto wijzigen'
+                                : 'Foto toevoegen'}
+                          </span>
+                        </button>
+                        <input
+                          ref={uploadInputRef}
+                          className="rz-catalog-product-image-input"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageFile}
+                          data-testid="catalog-image-upload-input"
+                          aria-label="Productfoto uploaden"
+                        />
+                        <input
+                          ref={cameraInputRef}
+                          className="rz-catalog-product-image-input"
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleImageFile}
+                          data-testid="catalog-image-camera-input"
+                          aria-label="Productfoto maken met camera"
+                        />
+                      </>
+                    ) : (
+                      <CatalogProductImage imageUrl={product.image_url} productName={product.name} />
+                    )}
+                  </div>
                   <div className="rz-catalog-product-summary-content">
                     <h2>{text(product.name, 'Universeel artikel')}</h2>
                     <dl className="rz-catalog-definition-list">
