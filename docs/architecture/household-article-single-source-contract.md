@@ -16,6 +16,7 @@ De zichtbare begrippen **Mijn artikel** in Uitpakken en **Voorraadartikel** in V
 - Standaardverwerking is een eigenschap van datzelfde huishoudartikel via `household_articles.default_inventory_handling`.
 - Een voorraadpositie is een projectie in `inventory` met `inventory.household_article_id` naar hetzelfde huishoudartikel, aangevuld met locatie en hoeveelheid.
 - Een aankoop- of voorraadgebeurtenis verwijst naar hetzelfde `household_article_id`.
+- Een representatief product voor de operationele foto is uitsluitend metadata van datzelfde huishoudartikel via `household_article_representative_products.household_article_id`; het representatieve `global_product_id` en de GPC Brick zijn **geen** nieuwe huishoudartikelidentiteit.
 
 ## Verboden dubbele bronnen
 
@@ -49,6 +50,7 @@ Namen zijn presentatie. Alleen `household_article_id` bepaalt welk huishoudartik
 - Toont voorraadposities gegroepeerd of uitgesplitst naar locatie.
 - Iedere zichtbare actieve voorraadregel moet een geldige `household_article_id` hebben.
 - Artikelnaam en artikelgroep worden via `household_articles` gelezen; zij worden niet als concurrerende waarheid uit `inventory.naam` afgeleid.
+- De productfoto mag via het huishoudartikel naar één representatief exact Catalogusproduct worden geprojecteerd wanneer dat product dezelfde officiële GS1 GPC Brick heeft. Dit verandert de `household_article_id` niet en mag nooit op alleen naamgelijkheid worden gebaseerd.
 
 ## Verwerkingscontract
 
@@ -61,6 +63,8 @@ Namen zijn presentatie. Alleen `household_article_id` bepaalt welk huishoudartik
 ## Migratie- en opruimregel
 
 Bestaande actieve voorraadregels zonder geldig `household_article_id`, met een verkeerd huishouden of met een tijdelijke alias moeten via een expliciete migratie worden hersteld of geblokkeerd. Nieuwe naamgebaseerde fallback- of synchronisatiecode is niet toegestaan.
+
+Bestaande huishoudartikelen mogen na de schema-upgrade idempotent een representatief product voor hun foto krijgen. Die backfill schrijft alleen de huishoudartikelgebonden representatieve-productrelatie en mag geen artikelidentiteit, voorraad, platformbrede winkelartikelkoppeling of artikelnaam wijzigen.
 
 ## Verplichte regressies
 
