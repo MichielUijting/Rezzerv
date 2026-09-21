@@ -2,6 +2,7 @@ export const CATALOG_IMAGE_MAX_DIMENSION = 640
 export const CATALOG_IMAGE_TARGET_BYTES = 280 * 1024
 export const CATALOG_IMAGE_HARD_MAX_BYTES = 340 * 1024
 const CATALOG_IMAGE_MAX_SOURCE_BYTES = 20 * 1024 * 1024
+export const CATALOG_CAMERA_CAPTURE_MAX_DIMENSION = 1280
 
 function dataUrlByteSize(dataUrl) {
   const base64 = String(dataUrl || '').split(',', 2)[1] || ''
@@ -71,4 +72,41 @@ export async function compressCatalogImage(file) {
 
   if (smallest && dataUrlByteSize(smallest) <= CATALOG_IMAGE_HARD_MAX_BYTES) return smallest
   throw new Error('De foto kon niet voldoende worden gecomprimeerd. Kies een andere foto.')
+}
+
+
+export function captureCatalogImageFromVideo(video) {
+  const sourceWidth = Number(video?.videoWidth || 0)
+  const sourceHeight = Number(video?.videoHeight || 0)
+  if (!sourceWidth || !sourceHeight) {
+    throw new Error('Het camerabeeld is nog niet klaar. Probeer het opnieuw zodra het beeld zichtbaar is.')
+  }
+
+  const scale = Math.min(
+    1,
+    CATALOG_CAMERA_CAPTURE_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight),
+  )
+  const width = Math.max(1, Math.round(sourceWidth * scale))
+  const height = Math.max(1, Math.round(sourceHeight * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('Het camerabeeld kan op dit toestel niet worden verwerkt.')
+
+  context.drawImage(video, 0, 0, width, height)
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('De foto kon niet uit het camerabeeld worden gemaakt.'))
+          return
+        }
+        resolve(blob)
+      },
+      'image/jpeg',
+      0.92,
+    )
+  })
 }

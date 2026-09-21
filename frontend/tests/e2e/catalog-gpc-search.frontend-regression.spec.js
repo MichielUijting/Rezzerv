@@ -270,9 +270,41 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expect(choice).toBeVisible();
     await expect(choice.getByRole('button', { name: 'Foto uploaden' })).toBeVisible();
     await expect(choice.getByRole('button', { name: 'Foto maken' })).toBeVisible();
-    await expect(page.getByTestId('catalog-image-camera-input')).toHaveAttribute('capture', 'environment');
 
-    await choice.getByRole('button', { name: 'Foto uploaden' }).click();
+    await page.evaluate(() => {
+      window.__catalogCameraRequests = [];
+      const stream = new MediaStream();
+      const mediaDevices = navigator.mediaDevices || {};
+      Object.defineProperty(mediaDevices, 'getUserMedia', {
+        configurable: true,
+        value: async (constraints) => {
+          window.__catalogCameraRequests.push(constraints);
+          return stream;
+        },
+      });
+      if (!navigator.mediaDevices) {
+        Object.defineProperty(navigator, 'mediaDevices', {
+          configurable: true,
+          value: mediaDevices,
+        });
+      }
+    });
+
+    await choice.getByRole('button', { name: 'Foto maken' }).click();
+    await expect(page.getByTestId('catalog-camera-modal')).toBeVisible();
+    await expect(page.getByTestId('catalog-image-camera-input')).toHaveCount(0);
+    await expect.poll(
+      () => page.evaluate(() => window.__catalogCameraRequests?.length || 0),
+    ).toBe(1);
+    const cameraConstraints = await page.evaluate(() => window.__catalogCameraRequests[0]);
+    expect(cameraConstraints.audio).toBe(false);
+    expect(cameraConstraints.video.facingMode.ideal).toBe('environment');
+    await page.getByTestId('catalog-camera-close').click();
+    await expect(page.getByTestId('catalog-camera-modal')).toHaveCount(0);
+
+    await imageAction.click();
+    const uploadChoice = page.getByTestId('catalog-image-source-choice');
+    await uploadChoice.getByRole('button', { name: 'Foto uploaden' }).click();
 
     const tinyPng = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mP8z/CfAQgwgImBQjAAAD0fAwV4pSIAAAAASUVORK5CYII=',

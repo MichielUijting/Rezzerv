@@ -5,9 +5,10 @@ import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { canCurrentUserPerform, fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
+import CatalogCameraModal from './CatalogCameraModal'
 import CatalogGpcFrame from './CatalogGpcFrame'
 import CatalogProductImage from './CatalogProductImage'
-import { compressCatalogImage } from './catalogImageCompression'
+import { captureCatalogImageFromVideo, compressCatalogImage } from './catalogImageCompression'
 import './catalog.css'
 
 function text(value, fallback = '-') {
@@ -52,11 +53,14 @@ export default function CatalogDetailPageV2() {
   const authContext = readStoredAuthContext()
   const canUpdateCatalogImage = canCurrentUserPerform('platform.catalog.update', authContext)
   const uploadInputRef = useRef(null)
-  const cameraInputRef = useRef(null)
+  const cameraVideoRef = useRef(null)
+  const cameraStreamRef = useRef(null)
   const [detail, setDetail] = useState(null)
   const [confirmedProductType, setConfirmedProductType] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isImageSaving, setIsImageSaving] = useState(false)
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
+  const [cameraState, setCameraState] = useState({ status: 'idle', message: '' })
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -86,6 +90,26 @@ export default function CatalogDetailPageV2() {
     return () => { cancelled = true }
   }, [globalProductId])
 
+  useEffect(() => {
+    if (!isCameraOpen) return
+    const video = cameraVideoRef.current
+    const stream = cameraStreamRef.current
+    if (!video || !stream) return
+
+    video.srcObject = stream
+    video.play().catch(() => {
+      setCameraState({
+        status: 'error',
+        message: 'Het live camerabeeld kon niet worden gestart.',
+      })
+    })
+  }, [isCameraOpen, cameraState.status])
+
+  useEffect(() => () => {
+    cameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+    cameraStreamRef.current = null
+  }, [])
+
   const product = detail?.product || {}
   const identities = Array.isArray(detail?.identities) ? detail.identities : []
   const householdArticles = Array.isArray(detail?.household_articles) ? detail.household_articles : []
@@ -108,15 +132,67 @@ export default function CatalogDetailPageV2() {
       primaryActionLabel: 'Foto uploaden',
       secondaryActionLabel: 'Foto maken',
       onPrimaryAction: () => uploadInputRef.current?.click(),
-      onSecondaryAction: () => cameraInputRef.current?.click(),
+      onSecondaryAction: startCamera,
     })
   }
 
-  async function handleImageFile(event) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
+  function cameraErrorMessage(cameraError) {
+    const name = String(cameraError?.name || '')
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      return 'Cameratoegang is geweigerd. Sta cameragebruik toe in de browser en probeer opnieuw.'
+    }
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      return 'Er is geen bruikbare camera op dit toestel gevonden.'
+    }
+    if (name === 'NotReadableError' || name === 'AbortError') {
+      return 'De camera kan niet worden geopend. Mogelijk wordt deze al door een andere app gebruikt.'
+    }
+    return cameraError?.message || 'De camera kon niet worden geopend.'
+  }
 
+  async function startCamera() {
+    setIsCameraOpen(true)
+    setCameraState({ status: 'starting', message: 'Camera wordt gestart…' })
+
+    const getUserMedia = navigator.mediaDevices?.getUserMedia
+    if (typeof getUserMedia !== 'function') {
+      setCameraState({
+        status: 'error',
+        message: 'Deze browser ondersteunt geen live cameratoegang.',
+      })
+      return
+    }
+
+    try {
+      cameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+      const stream = await getUserMedia.call(navigator.mediaDevices, {
+        audio: false,
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 1280 },
+        },
+      })
+      cameraStreamRef.current = stream
+      setCameraState({ status: 'connected', message: 'Camera wordt voorbereid…' })
+    } catch (cameraError) {
+      setCameraState({ status: 'error', message: cameraErrorMessage(cameraError) })
+    }
+  }
+
+  function handleCameraReady() {
+    setCameraState({ status: 'ready', message: 'Camera gereed.' })
+  }
+
+  function closeCamera() {
+    cameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+    cameraStreamRef.current = null
+    if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null
+    setIsCameraOpen(false)
+    setCameraState({ status: 'idle', message: '' })
+  }
+
+  async function persistCatalogImage(file) {
     setIsImageSaving(true)
     try {
       const imageDataUrl = await compressCatalogImage(file)
@@ -154,6 +230,28 @@ export default function CatalogDetailPageV2() {
       })
     } finally {
       setIsImageSaving(false)
+    }
+  }
+
+  async function handleImageFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    await persistCatalogImage(file)
+  }
+
+  async function handleCameraCapture() {
+    if (cameraState.status !== 'ready') return
+    setCameraState({ status: 'capturing', message: 'Foto wordt gemaakt…' })
+    try {
+      const photo = await captureCatalogImageFromVideo(cameraVideoRef.current)
+      closeCamera()
+      await persistCatalogImage(photo)
+    } catch (captureError) {
+      setCameraState({
+        status: 'error',
+        message: captureError?.message || 'De foto kon niet worden gemaakt.',
+      })
     }
   }
 
@@ -197,16 +295,6 @@ export default function CatalogDetailPageV2() {
                           onChange={handleImageFile}
                           data-testid="catalog-image-upload-input"
                           aria-label="Productfoto uploaden"
-                        />
-                        <input
-                          ref={cameraInputRef}
-                          className="rz-catalog-product-image-input"
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleImageFile}
-                          data-testid="catalog-image-camera-input"
-                          aria-label="Productfoto maken met camera"
                         />
                       </>
                     ) : (
@@ -300,6 +388,15 @@ export default function CatalogDetailPageV2() {
             </div>
           ) : null}
         </ScreenCard>
+
+        <CatalogCameraModal
+          open={isCameraOpen}
+          videoRef={cameraVideoRef}
+          cameraState={cameraState}
+          onVideoReady={handleCameraReady}
+          onCapture={handleCameraCapture}
+          onClose={closeCamera}
+        />
       </div>
     </AppShell>
   )
