@@ -30,6 +30,25 @@ EXPECTED_P0 = {
 }
 BAD = {"action_required", "cancelled", "failure", "startup_failure", "timed_out"}
 REUSE_EVENTS = {"pull_request", "workflow_dispatch"}
+EXPECTED_WORKFLOW_COUNT = 21
+EXPECTED_SERIAL_SHARED = {"TP-CI-02"}
+EXPECTED_REPLACED_SHARED = {"TP-CI-03", "TP-CI-04", "TP-CI-05", "TP-CI-07"}
+EXPECTED_PARALLEL_STANDALONE = {
+    "P0-ACCOUNT-SESSION",
+    "P0-AUTHORIZATION-ISOLATION",
+    "P0-INVENTORY",
+    "P0-ALMOST-OUT",
+    "F6-INVENTORY",
+    "P0-RECEIPT-INVENTORY",
+    "P0-RECEIPT-LOCATIONS-OFF",
+    "P0-RECEIPT-IDEMPOTENCY",
+    "P0-RECEIPT-NONPHYSICAL",
+    "F6-RECEIPT",
+    "P0-ONBOARDING",
+    "P0-ARTICLE-IDENTITY",
+    "P0-PLATFORM-AUTHORITY",
+    "P0-UNPACKING",
+}
 
 
 def die(message: str) -> None:
@@ -60,11 +79,21 @@ def load_config(path: str) -> dict:
 
 def validate_config(cfg: dict) -> None:
     workflows = cfg.get("workflows")
-    req(isinstance(workflows, list) and len(workflows) == 11, "expected eleven Full Regression workflows")
+    req(isinstance(workflows, list) and len(workflows) == EXPECTED_WORKFLOW_COUNT, f"expected {EXPECTED_WORKFLOW_COUNT} Full Regression workflows")
     ids = [row.get("id") for row in workflows]
     req(len(ids) == len(set(ids)), "workflow ids must be unique")
-    req(cfg.get("required_workflow_count") == 11, "required_workflow_count drift")
+    req(cfg.get("required_workflow_count") == EXPECTED_WORKFLOW_COUNT, "required_workflow_count drift")
     req(cfg.get("full_frontend_workflow_id") in ids, "full frontend workflow is not registered")
+
+    profile = cfg.get("execution_profile")
+    req(isinstance(profile, dict), "execution_profile missing")
+    req(profile.get("mode") == "f7_parallel_standalone", "execution profile mode drift")
+    req(set(profile.get("serial_shared_workflows") or []) == EXPECTED_SERIAL_SHARED, "serial shared workflow profile drift")
+    req(set(profile.get("replaced_shared_workflows") or []) == EXPECTED_REPLACED_SHARED, "replaced shared workflow profile drift")
+    req(set(profile.get("parallel_standalone_authorities") or []) == EXPECTED_PARALLEL_STANDALONE, "parallel standalone authority profile drift")
+    req(EXPECTED_SERIAL_SHARED.issubset(set(ids)), "serial shared Kassa workflow missing")
+    req(EXPECTED_REPLACED_SHARED.isdisjoint(set(ids)), "replaced shared workflows must not run in F7 parallel profile")
+    req(EXPECTED_PARALLEL_STANDALONE.issubset(set(ids)), "parallel standalone authority missing")
 
     reuse = cfg.get("reuse_contract")
     req(isinstance(reuse, dict), "reuse_contract missing")
@@ -103,7 +132,7 @@ def validate_config(cfg: dict) -> None:
         req(all(authority in valid_ids for authority in authorities), f"scenario references unknown authority: {scenario}")
 
     print("PASS f7_03_exact_14_p0_scenarios_mapped")
-    print("PASS f7_03_eleven_full_regression_workflows_registered")
+    print(f"PASS f7_03_full_regression_workflow_inventory_registered count={EXPECTED_WORKFLOW_COUNT}")
     print("PASS f7_03_full_frontend_regression_registered")
     print("PASS f7_03_exact_sha_reuse_contract_closed")
     print("F7_03_FULL_REGRESSION_CONFIG_GREEN")
