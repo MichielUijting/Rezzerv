@@ -61,36 +61,46 @@ def _unique_brick_for_article_group(conn, article_group_id: Any) -> str:
     if not group_id or "gpc_bricks" not in _tables(conn):
         return ""
 
-    translation_join = ""
-    translation_match = "FALSE"
-    if "gpc_translations" in _tables(conn):
-        translation_join = """
-            LEFT JOIN gpc_translations tr
-              ON tr.entity_type = 'brick'
-             AND tr.entity_code = gb.brick_code
-             AND tr.language_code = 'nl'
-        """
-        translation_match = "lower(trim(COALESCE(tr.translated_text, ''))) = lower(trim(ag.name))"
-
     rows = conn.execute(
         text(
-            f"""
+            """
             SELECT DISTINCT gb.brick_code
             FROM article_groups ag
             JOIN gpc_bricks gb
               ON lower(trim(COALESCE(gb.description, ''))) = lower(trim(ag.name))
-              OR ({translation_match})
-            {translation_join}
             WHERE ag.id = :article_group_id
               AND COALESCE(trim(ag.name), '') <> ''
-            ORDER BY gb.brick_code
             """
         ),
         {"article_group_id": group_id},
     ).mappings().all()
-    brick_codes = [_clean(row.get("brick_code")) for row in rows if _clean(row.get("brick_code"))]
-    return brick_codes[0] if len(set(brick_codes)) == 1 else ""
 
+    if "gpc_translations" in _tables(conn):
+        rows = list(rows) + list(
+            conn.execute(
+                text(
+                    """
+                    SELECT DISTINCT tr.entity_code AS brick_code
+                    FROM article_groups ag
+                    JOIN gpc_translations tr
+                      ON tr.entity_type = 'brick'
+                     AND tr.language_code = 'nl'
+                     AND lower(trim(COALESCE(tr.translated_text, ''))) = lower(trim(ag.name))
+                    JOIN gpc_bricks gb ON gb.brick_code = tr.entity_code
+                    WHERE ag.id = :article_group_id
+                      AND COALESCE(trim(ag.name), '') <> ''
+                    """
+                ),
+                {"article_group_id": group_id},
+            ).mappings().all()
+        )
+
+    brick_codes = sorted({
+        _clean(row.get("brick_code"))
+        for row in rows
+        if _clean(row.get("brick_code"))
+    })
+    return brick_codes[0] if len(brick_codes) == 1 else ""
 
 def _latest_exact_history_candidate(
     conn,
