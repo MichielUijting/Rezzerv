@@ -63,8 +63,8 @@ def _anchor_brick_code(conn, article: dict[str, Any]) -> str:
 
     The direct household_article -> global_product classification is authoritative
     when available. Older articles may instead derive one unambiguous Brick from
-    their canonical product identities or exact stored GTIN. Article names are
-    deliberately never used.
+    their canonical product identities, exact stored GTIN or exact products in
+    their purchase-import history. Article names are deliberately never used.
     """
     article_id = _normalized(article.get("id"))
     direct_product_id = _normalized(article.get("global_product_id"))
@@ -91,6 +91,15 @@ def _anchor_brick_code(conn, article: dict[str, Any]) -> str:
               ON assignment.global_product_id = gp.id
             WHERE :barcode <> ''
               AND gp.primary_gtin = :barcode
+
+            UNION
+
+            SELECT DISTINCT assignment.brick_code
+            FROM purchase_import_lines purchase_line
+            JOIN global_product_gpc_bricks assignment
+              ON assignment.global_product_id = purchase_line.matched_global_product_id
+            WHERE purchase_line.matched_household_article_id = :household_article_id
+              AND purchase_line.matched_global_product_id IS NOT NULL
             """
         ),
         {
