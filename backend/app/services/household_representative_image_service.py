@@ -17,14 +17,20 @@ def _clean(value: Any) -> str:
 
 
 def _tables(conn) -> set[str]:
-    return set(inspect(conn).get_table_names())
+    try:
+        return set(inspect(conn).get_table_names())
+    except Exception:
+        return set()
 
 
 def _columns(conn, table_name: str) -> set[str]:
-    inspector = inspect(conn)
-    if not inspector.has_table(table_name):
+    try:
+        inspector = inspect(conn)
+        if not inspector.has_table(table_name):
+            return set()
+        return {str(column.get("name") or "") for column in inspector.get_columns(table_name)}
+    except Exception:
         return set()
-    return {str(column.get("name") or "") for column in inspector.get_columns(table_name)}
 
 
 def _representative_schema_ready(conn) -> bool:
