@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 from types import SimpleNamespace
 
 from app.services.household_alias_policy import (
@@ -220,6 +221,22 @@ class AliasUpdateEngine:
     @contextmanager
     def begin(self):
         yield AliasUpdateConnection(self.state)
+
+
+def test_main_activates_household_alias_policy_after_api_routes_are_registered():
+    main_source = (
+        Path(__file__).resolve().parents[1] / 'app' / 'main.py'
+    ).read_text(encoding='utf-8')
+
+    import_statement = (
+        'from app.services.household_alias_policy import install_household_alias_policy'
+    )
+    install_statement = 'install_household_alias_policy(sys.modules[__name__])'
+    router_statement = 'app.include_router(api_router)'
+
+    assert import_statement in main_source
+    assert install_statement in main_source
+    assert main_source.rfind(install_statement) > main_source.rfind(router_statement)
 
 
 def test_runtime_installer_wraps_inventory_preview_with_catalog_image_projection():
