@@ -432,6 +432,79 @@ def get_taxonomy_metadata_for_intent(intent_key: str | None) -> dict[str, str]:
     )
 
 
+_ALLOWED_GPC_CANDIDATE_STRATEGIES = {
+    "taxonomy_rank",
+    "semantic_terms",
+    "manual_only",
+}
+
+
+def audit_gpc_candidate_coverage_policy() -> dict[str, Any]:
+    """Validate that every seeded product intent declares its GPC candidate path.
+
+    New taxonomy intents may use the generic taxonomy ranker, explicit semantic
+    bridge terms, or an intentional manual-only policy with a reason. This keeps
+    missing candidate logic from surfacing only in the UI.
+    """
+
+    violations: list[str] = []
+    counts = {
+        "taxonomy_rank": 0,
+        "semantic_terms": 0,
+        "manual_only": 0,
+    }
+    taxonomy_rows = list(_seed_payload().get("taxonomy") or [])
+
+    for item in taxonomy_rows:
+        intent_key = str(item.get("intent_key") or "").strip()
+        strategy = str(item.get("gpc_candidate_strategy") or "").strip()
+        terms = [
+            " ".join(str(value or "").strip().split())
+            for value in (item.get("gpc_candidate_terms") or [])
+            if " ".join(str(value or "").strip().split())
+        ]
+        exempt_reason = str(item.get("gpc_auto_suggestion_exempt_reason") or "").strip()
+
+        if not intent_key:
+            violations.append("taxonomy row without intent_key")
+            continue
+        if strategy not in _ALLOWED_GPC_CANDIDATE_STRATEGIES:
+            violations.append(
+                f"{intent_key}: missing/unknown gpc_candidate_strategy={strategy!r}"
+            )
+            continue
+
+        counts[strategy] += 1
+        if strategy == "semantic_terms" and not terms:
+            violations.append(
+                f"{intent_key}: semantic_terms strategy requires gpc_candidate_terms"
+            )
+        if strategy == "manual_only" and not exempt_reason:
+            violations.append(
+                f"{intent_key}: manual_only strategy requires gpc_auto_suggestion_exempt_reason"
+            )
+
+    return {
+        "ok": not violations,
+        "taxonomy_count": len(taxonomy_rows),
+        "counts": counts,
+        "violations": violations,
+    }
+
+
+def load_gpc_candidate_strategy(intent_key: str | None = None) -> str:
+    requested_intent = str(intent_key or "").strip()
+    if not requested_intent:
+        return ""
+
+    for item in _seed_payload().get("taxonomy") or []:
+        if str(item.get("intent_key") or "").strip() != requested_intent:
+            continue
+        return str(item.get("gpc_candidate_strategy") or "").strip()
+
+    return ""
+
+
 @lru_cache(maxsize=128)
 def load_gpc_candidate_terms(intent_key: str | None = None) -> tuple[str, ...]:
     """Return semantic GPC search terms without adding classifier synonyms.
