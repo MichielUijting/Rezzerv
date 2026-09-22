@@ -494,7 +494,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       const contextCandidate = selectedCandidate || selectedCandidates[0] || null
       const raw = contextCandidate?.raw || {}
       const productName = genericName || raw.product_name || contextCandidate?.candidateName || selectedItem.receiptLineText || ''
-      const category = raw.category || raw.categories || ''
+      const category = raw.category || raw.categories || raw.variant || ''
+      const productIntent = raw.candidate_product_intent || raw.receipt_product_intent || ''
 
       if (!productName) {
         setSelectedProductTypeId('')
@@ -534,7 +535,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             product_name: productName,
             category,
             gpc_brick_code: selectedCandidate ? candidateGpcBrickCode(selectedCandidate) : '',
-            search_text: [selectedItem?.receiptLineText, genericName, raw.product_name, raw.categories, contextCandidate?.candidateName, contextCandidate?.brand].filter(Boolean).join(' '),
+            product_intent: productIntent,
+            search_text: [selectedItem?.receiptLineText, genericName, raw.product_name, raw.category, raw.categories, raw.variant, contextCandidate?.candidateName, contextCandidate?.brand].filter(Boolean).join(' '),
           }),
         })
         const data = await response.json().catch(() => ({}))
