@@ -9,8 +9,6 @@ from app.services.product_taxonomy_store import (
     get_taxonomy_metadata_for_intent,
     load_gpc_candidate_strategy,
     load_gpc_candidate_terms,
-    load_gpc_compound_suffixes,
-    load_gpc_semantic_alias_rules,
     load_product_variant_terms,
     load_taxonomy_rules,
     normalize_taxonomy_text,
@@ -29,7 +27,14 @@ _SEMANTIC_GPC_DESCRIPTOR_TOKENS = {
     "processed",
 }
 
-_SEMANTIC_ALIAS_WEIGHT_SCALE = 0.40
+_COMPOUND_SUFFIXES = (
+    "blokjes", "blokje", "blokken", "blok",
+    "reepjes", "reepje", "repen", "reep",
+    "stukjes", "stukje", "stukken", "stuk",
+    "plakjes", "plakje", "plakken", "plak",
+    "schijfjes", "schijfje", "schijven", "schijf",
+    "snippers", "snipper",
+)
 
 
 def _semantic_anchor_tokens(signal_tokens: list[str]) -> set[str]:
@@ -57,70 +62,39 @@ _FIELD_WEIGHTS = {
 _SEMANTIC_GPC_SIGNAL_SOURCES = {
     "taxonomy_gpc_candidate_term",
     "taxonomy_gpc_variant_candidate_term",
-    "semantic_alias",
 }
 
-_HIERARCHY_WEIGHTS = {
-    "brick_description": 1.00,
+_DUTCH_HIERARCHY_WEIGHTS = {
+    "brick_description_nl": 1.00,
+    "class_description_nl": 0.72,
+    "family_description_nl": 0.42,
+    "segment_description_nl": 0.18,
+}
+
+_ENGLISH_HIERARCHY_WEIGHTS = {
     "brick_description_en": 0.95,
-    "class_description": 0.72,
-    "family_description": 0.42,
-    "segment_description": 0.18,
+    "class_description_en": 0.68,
+    "family_description_en": 0.40,
+    "segment_description_en": 0.16,
 }
 
 
-def _alias_token_variants(normalized_text: str) -> set[str]:
-    variants = {token for token in normalized_text.split() if token}
-    suffixes = sorted(
-        {
-            normalize_taxonomy_text(value).replace(" ", "")
-            for value in load_gpc_compound_suffixes()
-            if normalize_taxonomy_text(value).replace(" ", "")
-        },
-        key=len,
-        reverse=True,
-    )
-    for token in list(variants):
-        for suffix in suffixes:
-            if token.endswith(suffix) and len(token) - len(suffix) >= 3:
-                variants.add(token[:-len(suffix)])
-    return variants
-
-
-def _alias_term_matches(normalized_text: str, normalized_term: str, token_variants: set[str]) -> bool:
-    if not normalized_term:
-        return False
-    if contains_taxonomy_term(normalized_text, normalized_term):
-        return True
-    compact = normalized_term.replace(" ", "")
-    return len(compact) >= 3 and compact in token_variants
-
-
-def _semantic_alias_terms(value: str) -> list[tuple[str, float]]:
+def _compound_stems(value: str) -> list[str]:
+    """Return generic Dutch compound stems without translating product meaning."""
     normalized = normalize_taxonomy_text(value)
-    if not normalized:
-        return []
-    token_variants = _alias_token_variants(normalized)
-    result: list[tuple[str, float]] = []
+    stems: list[str] = []
     seen: set[str] = set()
-    for raw_rule in load_gpc_semantic_alias_rules():
-        if not isinstance(raw_rule, dict):
-            continue
-        terms = [normalize_taxonomy_text(term) for term in (raw_rule.get("terms") or [])]
-        if not any(_alias_term_matches(normalized, term, token_variants) for term in terms if term):
-            continue
-        try:
-            multiplier = max(0.1, min(1.5, float(raw_rule.get("weight") or 1.0)))
-        except (TypeError, ValueError):
-            multiplier = 1.0
-        for alias in raw_rule.get("aliases") or []:
-            alias_text = " ".join(str(alias or "").strip().split())
-            alias_normalized = normalize_taxonomy_text(alias_text)
-            if not alias_normalized or alias_normalized in seen:
+    for token in normalized.split():
+        for suffix in sorted(_COMPOUND_SUFFIXES, key=len, reverse=True):
+            if not token.endswith(suffix):
                 continue
-            seen.add(alias_normalized)
-            result.append((alias_text, multiplier))
-    return result
+            stem = token[:-len(suffix)]
+            if len(stem) < 4 or stem in seen:
+                break
+            seen.add(stem)
+            stems.append(stem)
+            break
+    return stems
 
 
 def _flatten_text(value: Any) -> list[str]:
@@ -180,22 +154,25 @@ def _add_signal(
 ) -> None:
     for text_value in _flatten_text(value):
         _append_signal(signals, seen, text_value, source=source, weight=weight)
-        for alias_text, alias_multiplier in _semantic_alias_terms(text_value):
+        if source in _SEMANTIC_GPC_SIGNAL_SOURCES:
+            continue
+        for stem in _compound_stems(text_value):
             _append_signal(
                 signals,
                 seen,
-                alias_text,
-                source="semantic_alias",
-                weight=float(weight) * alias_multiplier * _SEMANTIC_ALIAS_WEIGHT_SCALE,
+                stem,
+                source="compound_stem",
+                weight=float(weight) * 0.92,
             )
 
 
 def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
     """Build reusable product signals from canonical product and external metadata.
 
-    Existing product-taxonomy synonyms are reused and generic cross-language
-    concept aliases are loaded from data. The alias layer contains no Brickcode
-    allowlist: every row in the official GPC reference remains eligible.
+    Existing product-taxonomy synonyms and generic compound stems are reused.
+    Candidate ranking prefers the official Dutch GPC translations. Existing
+    semantic GPC terms and English official descriptions are fallback evidence.
+    No Brickcode allowlist is used: every official GPC row remains eligible.
     """
 
     signals: list[dict[str, Any]] = []
@@ -289,41 +266,45 @@ def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
 
 
 def _candidate_haystacks(candidate: dict[str, Any]) -> dict[str, str]:
-    return {
-        field: normalize_taxonomy_text(candidate.get(field))
-        for field in _HIERARCHY_WEIGHTS
-    }
+    result: dict[str, str] = {}
+    for level in ("brick", "class", "family", "segment"):
+        display_field = f"{level}_description"
+        nl_field = f"{level}_description_nl"
+        en_field = f"{level}_description_en"
+        display_value = normalize_taxonomy_text(candidate.get(display_field))
+        nl_value = normalize_taxonomy_text(candidate.get(nl_field))
+        en_value = normalize_taxonomy_text(candidate.get(en_field))
+        if not nl_value and display_value and en_value and display_value != en_value:
+            nl_value = display_value
+        if not en_value and display_value and not nl_value:
+            en_value = display_value
+        result[nl_field] = nl_value
+        result[en_field] = en_value
+    return result
 
 
-def _signal_match(signal: dict[str, Any], haystacks: dict[str, str]) -> tuple[float, str]:
+def _signal_match(signal: dict[str, Any], haystacks: dict[str, str], hierarchy_weights: dict[str, float]) -> tuple[float, str]:
     signal_text = str(signal.get("normalized") or "")
     signal_tokens = list(signal.get("tokens") or [])
     signal_weight = float(signal.get("weight") or 1.0)
-
     best_score = 0.0
     best_field = ""
     source = str(signal.get("source") or "")
-    for field, hierarchy_weight in _HIERARCHY_WEIGHTS.items():
-        if source == "semantic_alias" and field in {"family_description", "segment_description"}:
-            continue
+    for field, hierarchy_weight in hierarchy_weights.items():
         haystack = haystacks.get(field) or ""
         if not haystack:
             continue
-
         location_score = 0.0
         if signal_text and signal_text == haystack:
             location_score += 7.0
         elif signal_text and signal_text in haystack:
             location_score += 5.0
-
         haystack_tokens = set(_meaningful_tokens(haystack))
         signal_token_set = set(signal_tokens)
-
         if source in _SEMANTIC_GPC_SIGNAL_SOURCES:
             semantic_anchors = _semantic_anchor_tokens(signal_tokens)
             if semantic_anchors and not (semantic_anchors & haystack_tokens):
                 continue
-
         overlap = len(signal_token_set & haystack_tokens)
         if signal_tokens and overlap:
             location_score += 3.0 * (overlap / len(signal_token_set))
@@ -332,26 +313,37 @@ def _signal_match(signal: dict[str, Any], haystacks: dict[str, str]) -> tuple[fl
             for signal_token in signal_token_set:
                 if len(signal_token) < 5:
                     continue
-                if any(
-                    len(haystack_token) >= 5
-                    and (signal_token in haystack_token or haystack_token in signal_token)
-                    for haystack_token in haystack_tokens
-                ):
+                if any(len(haystack_token) >= 5 and (signal_token in haystack_token or haystack_token in signal_token) for haystack_token in haystack_tokens):
                     partial_overlap += 1
             if partial_overlap:
                 location_score += 1.8 * (partial_overlap / len(signal_token_set))
-
         if len(signal_text) >= 5 and len(haystack) >= 5:
             fuzzy = SequenceMatcher(None, signal_text, haystack).ratio()
             if fuzzy >= 0.66:
                 location_score += (fuzzy - 0.60) * 3.0
-
         weighted = location_score * hierarchy_weight * signal_weight
         if weighted > best_score:
             best_score = weighted
             best_field = field
-
     return best_score, best_field
+
+
+def _score_candidate(signals: list[dict[str, Any]], haystacks: dict[str, str], hierarchy_weights: dict[str, float]) -> tuple[float, list[tuple[float, str, str, str]]]:
+    total = 0.0
+    evidence: list[tuple[float, str, str, str]] = []
+    matched: set[tuple[str, str]] = set()
+    for signal in signals:
+        score, field = _signal_match(signal, haystacks, hierarchy_weights)
+        if score <= 0:
+            continue
+        total += score
+        key = (str(signal.get("normalized") or ""), field)
+        if key in matched:
+            continue
+        matched.add(key)
+        evidence.append((score, str(signal.get("text") or ""), field, str(signal.get("source") or "")))
+    evidence.sort(key=lambda item: (-item[0], item[1]))
+    return total, evidence[:4]
 
 
 def _confidence_label(value: float) -> str:
@@ -362,100 +354,69 @@ def _confidence_label(value: float) -> str:
     return "laag"
 
 
-def rank_gpc_candidates(
-    candidates: Iterable[dict[str, Any]],
-    signal_bundle: dict[str, Any],
-    *,
-    limit: int = 5,
-) -> list[dict[str, Any]]:
-    """Rank official GPC rows and return at most five explainable candidates.
-
-    The confidence value is an indicative match strength, not a probability.
-    """
-
+def rank_gpc_candidates(candidates: Iterable[dict[str, Any]], signal_bundle: dict[str, Any], *, limit: int = 5) -> list[dict[str, Any]]:
+    """Rank all official GPC rows, preferring official Dutch translations."""
     signals = list(signal_bundle.get("signals") or [])
     if not signals:
         return []
-
+    direct_signals = [signal for signal in signals if str(signal.get("source") or "") not in _SEMANTIC_GPC_SIGNAL_SOURCES]
     scored: list[dict[str, Any]] = []
     for raw_candidate in candidates:
         candidate = dict(raw_candidate)
-        brick_code = str(candidate.get("brick_code") or "").strip()
-        if not brick_code:
+        if not str(candidate.get("brick_code") or "").strip():
             continue
-
         haystacks = _candidate_haystacks(candidate)
-        total = 0.0
-        evidence: list[tuple[float, str, str, str]] = []
-        matched_signal_keys: set[tuple[str, str]] = set()
-
-        for signal in signals:
-            score, field = _signal_match(signal, haystacks)
-            if score <= 0:
-                continue
-            total += score
-            key = (str(signal.get("normalized") or ""), field)
-            if key not in matched_signal_keys:
-                matched_signal_keys.add(key)
-                evidence.append((
-                    score,
-                    str(signal.get("text") or ""),
-                    field,
-                    str(signal.get("source") or ""),
-                ))
-
-        if total < 0.85:
+        dutch_total, dutch_evidence = _score_candidate(direct_signals, haystacks, _DUTCH_HIERARCHY_WEIGHTS)
+        fallback_total, fallback_evidence = _score_candidate(signals, haystacks, _ENGLISH_HIERARCHY_WEIGHTS)
+        if dutch_total >= 0.85:
+            candidate["_tier"], candidate["_basis"], candidate["_score"], candidate["_evidence"] = 0, "dutch_gpc_translation", dutch_total, dutch_evidence
+        elif fallback_total >= 0.85:
+            candidate["_tier"], candidate["_basis"], candidate["_score"], candidate["_evidence"] = 1, "semantic_or_english_fallback", fallback_total, fallback_evidence
+        else:
             continue
-
-        evidence.sort(key=lambda item: (-item[0], item[1]))
-        candidate["_raw_match_score"] = total
-        candidate["_evidence"] = evidence[:4]
         scored.append(candidate)
-
     if not scored:
         return []
-
-    scored.sort(key=lambda row: (-float(row["_raw_match_score"]), str(row.get("brick_code") or "")))
-    top_score = max(float(scored[0]["_raw_match_score"]), 0.01)
-
+    scored.sort(key=lambda row: (int(row["_tier"]), -float(row["_score"]), str(row.get("brick_code") or "")))
+    selected = scored[:max(1, min(int(limit), 5))]
+    top_by_tier: dict[int, float] = {}
+    for row in selected:
+        tier = int(row["_tier"])
+        top_by_tier[tier] = max(top_by_tier.get(tier, 0.01), float(row["_score"]))
     result: list[dict[str, Any]] = []
-    for candidate in scored[: max(1, min(int(limit), 5))]:
-        raw_score = float(candidate.pop("_raw_match_score"))
+    for candidate in selected:
+        tier = int(candidate.pop("_tier"))
+        basis = str(candidate.pop("_basis"))
+        raw_score = float(candidate.pop("_score"))
         evidence = list(candidate.pop("_evidence"))
-        relative = max(0.0, min(1.0, raw_score / top_score))
+        relative = max(0.0, min(1.0, raw_score / max(top_by_tier.get(tier, 0.01), 0.01)))
         absolute = min(0.91, 0.34 + min(0.57, raw_score * 0.032))
         confidence = round(max(0.30, min(0.94, absolute * (0.70 + (0.30 * relative)))), 3)
-
         matched_terms: list[str] = []
         matched_levels: list[str] = []
         semantic_terms: list[str] = []
         for _, term, field, source in evidence:
-            normalized_term = " ".join(str(term or "").split())
-            if normalized_term and normalized_term not in matched_terms:
-                matched_terms.append(normalized_term)
-            if (
-                source in _SEMANTIC_GPC_SIGNAL_SOURCES
-                and normalized_term
-                and normalized_term not in semantic_terms
-            ):
-                semantic_terms.append(normalized_term)
-            level = field.replace("_description_en", "").replace("_description", "")
+            term = " ".join(str(term or "").split())
+            if term and term not in matched_terms:
+                matched_terms.append(term)
+            if source in _SEMANTIC_GPC_SIGNAL_SOURCES and term and term not in semantic_terms:
+                semantic_terms.append(term)
+            level = field.replace("_description_nl", "").replace("_description_en", "").replace("_description", "")
             if level and level not in matched_levels:
                 matched_levels.append(level)
-
         reason_terms = ", ".join(matched_terms[:3])
         reason_levels = ", ".join(matched_levels[:2])
-        if semantic_terms:
+        if basis == "dutch_gpc_translation":
+            reason = "Nederlandse GPC-overeenkomst" + (f": {reason_terms}" if reason_terms else "") + (f" ({reason_levels})" if reason_levels else "")
+        elif semantic_terms:
             reason = "Semantische GPC-overeenkomst via producttype: " + ", ".join(semantic_terms[:2])
         elif reason_terms:
-            reason = f"Overeenkomst met productgegevens: {reason_terms}"
-            if reason_levels:
-                reason += f" ({reason_levels})"
+            reason = f"Overeenkomst met productgegevens: {reason_terms}" + (f" ({reason_levels})" if reason_levels else "")
         else:
-            reason = "Overeenkomst met productgegevens en GPC-hiërarchie"
-
+            reason = "Overeenkomst met officiële Engelse GPC-hiërarchie"
         candidate.update({
             "suggestion_source": "gpc_candidate_engine",
+            "suggestion_match_basis": basis,
             "suggestion_reason": reason,
             "confidence": confidence,
             "confidence_label": _confidence_label(confidence),
@@ -464,5 +425,4 @@ def rank_gpc_candidates(
             "intent_key": str(signal_bundle.get("intent_key") or ""),
         })
         result.append(candidate)
-
     return result

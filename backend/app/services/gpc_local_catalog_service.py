@@ -266,7 +266,15 @@ def rank_external_gpc_candidates(*, product_name: str, category: str = "", searc
     return suggestions[:5], {
         "intent_key": str(signal_bundle.get("intent_key") or ""),
         "reference_count": len(reference_rows),
+        "dutch_reference_count": sum(
+            1 for row in reference_rows
+            if any(str(row.get(field) or "").strip() for field in (
+                "brick_description_nl", "class_description_nl",
+                "family_description_nl", "segment_description_nl",
+            ))
+        ),
         "signal_count": len(signal_bundle.get("signals") or []),
+        "matching_policy": "dutch_gpc_primary_semantic_english_fallback",
     }
 
 

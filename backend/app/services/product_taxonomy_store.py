@@ -287,8 +287,6 @@ def ensure_product_taxonomy_seeded() -> dict[str, Any]:
     load_taxonomy_metadata.cache_clear()
     load_gpc_candidate_terms.cache_clear()
     load_product_variant_terms.cache_clear()
-    load_gpc_semantic_alias_rules.cache_clear()
-    load_gpc_compound_suffixes.cache_clear()
     return {
         "ok": True,
         "taxonomy_rows": inserted_taxonomy,
@@ -537,51 +535,6 @@ def load_gpc_candidate_terms(intent_key: str | None = None) -> tuple[str, ...]:
 
     return ()
 
-
-
-@lru_cache(maxsize=1)
-def load_gpc_semantic_alias_rules() -> tuple[dict[str, Any], ...]:
-    """Return generic language bridges used by GPC candidate ranking.
-
-    The rules live in the canonical product-taxonomy seed and never contain
-    Brickcodes. They only expand product concepts before ranking the complete
-    official GPC reference.
-    """
-    result: list[dict[str, Any]] = []
-    for raw_rule in _seed_payload().get("gpc_semantic_aliases") or []:
-        if not isinstance(raw_rule, dict):
-            continue
-        terms = [
-            normalize_taxonomy_text(value)
-            for value in (raw_rule.get("terms") or [])
-            if normalize_taxonomy_text(value)
-        ]
-        aliases = [
-            " ".join(str(value or "").strip().split())
-            for value in (raw_rule.get("aliases") or [])
-            if " ".join(str(value or "").strip().split())
-        ]
-        if not terms or not aliases:
-            continue
-        try:
-            weight = max(0.1, min(1.5, float(raw_rule.get("weight") or 1.0)))
-        except (TypeError, ValueError):
-            weight = 1.0
-        result.append({"terms": terms, "aliases": aliases, "weight": weight})
-    return tuple(result)
-
-
-@lru_cache(maxsize=1)
-def load_gpc_compound_suffixes() -> tuple[str, ...]:
-    values: list[str] = []
-    seen: set[str] = set()
-    for raw_value in _seed_payload().get("gpc_compound_suffixes") or []:
-        value = normalize_taxonomy_text(raw_value).replace(" ", "")
-        if not value or value in seen:
-            continue
-        seen.add(value)
-        values.append(value)
-    return tuple(values)
 
 def _variant_rules_from_seed(intent_key: str | None = None) -> list[dict[str, Any]]:
     requested_intent = str(intent_key or "").strip()
