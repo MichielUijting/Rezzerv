@@ -106,6 +106,7 @@ def external_product_gpc_classify(payload: dict[str, Any] = Body(default_factory
         category=_payload_text(payload, 'category', 'categories'),
         explicit_gpc_brick_code=_payload_text(payload, 'gpc_brick_code', 'gpcCategoryCode'),
         search_text=_payload_text(payload, 'search_text', 'receipt_line_text'),
+        product_intent=_payload_text(payload, 'product_intent', 'candidate_product_intent'),
     )
 
 

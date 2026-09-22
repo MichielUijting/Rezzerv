@@ -89,7 +89,17 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/gpc-residual-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/gpc-residual-migration.log
-          grep -F "'revision': '20260919_01'" /tmp/gpc-residual-migration.log
+          EXPECTED_HEAD="$(python - <<'PY'
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+
+          heads = tuple(ScriptDirectory.from_config(Config("alembic.ini")).get_heads())
+          if len(heads) != 1:
+              raise SystemExit(f"Expected exactly one Alembic head, got {heads!r}")
+          print(heads[0])
+          PY
+          )"
+          grep -F "'revision': '${EXPECTED_HEAD}'" /tmp/gpc-residual-migration.log
 
       - name: Prove residual GPC paths work with DML-only runtime role
         working-directory: backend

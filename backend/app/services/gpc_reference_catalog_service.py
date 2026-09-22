@@ -31,6 +31,10 @@ def _canonical_brick_row(conn: Connection, brick_code: str) -> dict[str, Any] | 
     if not required.issubset(tables):
         return None
     has_translations = "gpc_translations" in tables
+    brick_nl = ("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='brick' AND tr.entity_code=b.brick_code AND tr.language_code='nl' LIMIT 1)" if has_translations else "NULL")
+    class_nl = ("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='class' AND tr.entity_code=c.class_code AND tr.language_code='nl' LIMIT 1)" if has_translations else "NULL")
+    family_nl = ("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='family' AND tr.entity_code=f.family_code AND tr.language_code='nl' LIMIT 1)" if has_translations else "NULL")
+    segment_nl = ("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='segment' AND tr.entity_code=s.segment_code AND tr.language_code='nl' LIMIT 1)" if has_translations else "NULL")
     brick_label = (
         "COALESCE((SELECT translated_text FROM gpc_translations tr "
         "WHERE tr.entity_type='brick' AND tr.entity_code=b.brick_code "
@@ -59,13 +63,20 @@ def _canonical_brick_row(conn: Connection, brick_code: str) -> dict[str, Any] | 
         SELECT
             b.brick_code,
             {brick_label} AS brick_description,
+            {brick_nl} AS brick_description_nl,
             b.description AS brick_description_en,
             c.class_code,
             {class_label} AS class_description,
+            {class_nl} AS class_description_nl,
+            c.description AS class_description_en,
             f.family_code,
             {family_label} AS family_description,
+            {family_nl} AS family_description_nl,
+            f.description AS family_description_en,
             s.segment_code,
             {segment_label} AS segment_description,
+            {segment_nl} AS segment_description_nl,
+            s.description AS segment_description_en,
             'gpc_bricks' AS reference_source
         FROM gpc_bricks b
         JOIN gpc_classes c ON c.class_code = b.class_code
@@ -85,13 +96,20 @@ def _product_group_row(conn: Connection, brick_code: str) -> dict[str, Any] | No
         SELECT
             gpg.gpc_brick_code AS brick_code,
             COALESCE(NULLIF(gpg.gpc_brick_name, ''), NULLIF(gpg.gpc_brick_name_en, ''), gpg.gpc_brick_code) AS brick_description,
+            CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_brick_name, '') ELSE NULL END AS brick_description_nl,
             COALESCE(NULLIF(gpg.gpc_brick_name_en, ''), NULLIF(gpg.gpc_brick_name, ''), gpg.gpc_brick_code) AS brick_description_en,
             gpg.gpc_class_code AS class_code,
             COALESCE(NULLIF(gpg.gpc_class_name, ''), NULLIF(gpg.gpc_class_name_en, ''), gpg.gpc_class_code) AS class_description,
+            CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_class_name, '') ELSE NULL END AS class_description_nl,
+            COALESCE(NULLIF(gpg.gpc_class_name_en, ''), NULLIF(gpg.gpc_class_name, ''), gpg.gpc_class_code) AS class_description_en,
             gpg.gpc_family_code AS family_code,
             COALESCE(NULLIF(gpg.gpc_family_name, ''), NULLIF(gpg.gpc_family_name_en, ''), gpg.gpc_family_code) AS family_description,
+            CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_family_name, '') ELSE NULL END AS family_description_nl,
+            COALESCE(NULLIF(gpg.gpc_family_name_en, ''), NULLIF(gpg.gpc_family_name, ''), gpg.gpc_family_code) AS family_description_en,
             gpg.gpc_segment_code AS segment_code,
             COALESCE(NULLIF(gpg.gpc_segment_name, ''), NULLIF(gpg.gpc_segment_name_en, ''), gpg.gpc_segment_code) AS segment_description,
+            CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_segment_name, '') ELSE NULL END AS segment_description_nl,
+            COALESCE(NULLIF(gpg.gpc_segment_name_en, ''), NULLIF(gpg.gpc_segment_name, ''), gpg.gpc_segment_code) AS segment_description_en,
             'gpc_product_groups' AS reference_source
         FROM gpc_product_groups gpg
         WHERE gpg.gpc_brick_code = :brick_code
@@ -112,13 +130,20 @@ def _bundled_row(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "brick_code": str(raw.get("gpc_brick_code") or "").strip(),
         "brick_description": str(raw.get("gpc_brick_name_en") or "").strip(),
+        "brick_description_nl": "",
         "brick_description_en": str(raw.get("gpc_brick_name_en") or "").strip(),
         "class_code": str(raw.get("gpc_class_code") or "").strip(),
         "class_description": str(raw.get("gpc_class_name_en") or "").strip(),
+        "class_description_nl": "",
+        "class_description_en": str(raw.get("gpc_class_name_en") or "").strip(),
         "family_code": str(raw.get("gpc_family_code") or "").strip(),
         "family_description": str(raw.get("gpc_family_name_en") or "").strip(),
+        "family_description_nl": "",
+        "family_description_en": str(raw.get("gpc_family_name_en") or "").strip(),
         "segment_code": str(raw.get("gpc_segment_code") or "").strip(),
         "segment_description": str(raw.get("gpc_segment_name_en") or "").strip(),
+        "segment_description_nl": "",
+        "segment_description_en": str(raw.get("gpc_segment_name_en") or "").strip(),
         "reference_source": _BUNDLED_REFERENCE_SOURCE,
     }
 
@@ -182,16 +207,27 @@ def list_official_gpc_bricks(conn: Connection) -> list[dict[str, Any]]:
             class_sources.append("(SELECT NULLIF(gpg.gpc_class_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_class_code=c.class_code AND gpg.language_code='nl' LIMIT 1)")
             family_sources.append("(SELECT NULLIF(gpg.gpc_family_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_family_code=f.family_code AND gpg.language_code='nl' LIMIT 1)")
             segment_sources.append("(SELECT NULLIF(gpg.gpc_segment_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_segment_code=s.segment_code AND gpg.language_code='nl' LIMIT 1)")
-        brick_label = f"COALESCE({', '.join([*brick_sources, 'b.description'])})"
-        class_label = f"COALESCE({', '.join([*class_sources, 'c.description'])})"
-        family_label = f"COALESCE({', '.join([*family_sources, 'f.description'])})"
-        segment_label = f"COALESCE({', '.join([*segment_sources, 's.description'])})"
+        brick_nl = brick_sources[0] if len(brick_sources) == 1 else (f"COALESCE({', '.join(brick_sources)})" if brick_sources else "NULL")
+        class_nl = class_sources[0] if len(class_sources) == 1 else (f"COALESCE({', '.join(class_sources)})" if class_sources else "NULL")
+        family_nl = family_sources[0] if len(family_sources) == 1 else (f"COALESCE({', '.join(family_sources)})" if family_sources else "NULL")
+        segment_nl = segment_sources[0] if len(segment_sources) == 1 else (f"COALESCE({', '.join(segment_sources)})" if segment_sources else "NULL")
+        brick_label = f"COALESCE({', '.join([*brick_sources, 'b.description'])})" if brick_sources else "b.description"
+        class_label = f"COALESCE({', '.join([*class_sources, 'c.description'])})" if class_sources else "c.description"
+        family_label = f"COALESCE({', '.join([*family_sources, 'f.description'])})" if family_sources else "f.description"
+        segment_label = f"COALESCE({', '.join([*segment_sources, 's.description'])})" if segment_sources else "s.description"
         canonical = conn.execute(text(f"""
             SELECT b.brick_code, {brick_label} AS brick_description,
+                   {brick_nl} AS brick_description_nl,
                    b.description AS brick_description_en,
                    c.class_code, {class_label} AS class_description,
+                   {class_nl} AS class_description_nl,
+                   c.description AS class_description_en,
                    f.family_code, {family_label} AS family_description,
+                   {family_nl} AS family_description_nl,
+                   f.description AS family_description_en,
                    s.segment_code, {segment_label} AS segment_description,
+                   {segment_nl} AS segment_description_nl,
+                   s.description AS segment_description_en,
                    'gpc_bricks' AS reference_source
             FROM gpc_bricks b
             JOIN gpc_classes c ON c.class_code = b.class_code
@@ -210,13 +246,20 @@ def list_official_gpc_bricks(conn: Connection) -> list[dict[str, Any]]:
         fallback = conn.execute(text(f"""
             SELECT gpg.gpc_brick_code AS brick_code,
                    COALESCE(NULLIF(gpg.gpc_brick_name, ''), NULLIF(gpg.gpc_brick_name_en, ''), gpg.gpc_brick_code) AS brick_description,
+                   CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_brick_name, '') ELSE NULL END AS brick_description_nl,
                    COALESCE(NULLIF(gpg.gpc_brick_name_en, ''), NULLIF(gpg.gpc_brick_name, ''), gpg.gpc_brick_code) AS brick_description_en,
                    gpg.gpc_class_code AS class_code,
                    COALESCE(NULLIF(gpg.gpc_class_name, ''), NULLIF(gpg.gpc_class_name_en, ''), gpg.gpc_class_code) AS class_description,
+                   CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_class_name, '') ELSE NULL END AS class_description_nl,
+                   COALESCE(NULLIF(gpg.gpc_class_name_en, ''), NULLIF(gpg.gpc_class_name, ''), gpg.gpc_class_code) AS class_description_en,
                    gpg.gpc_family_code AS family_code,
                    COALESCE(NULLIF(gpg.gpc_family_name, ''), NULLIF(gpg.gpc_family_name_en, ''), gpg.gpc_family_code) AS family_description,
+                   CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_family_name, '') ELSE NULL END AS family_description_nl,
+                   COALESCE(NULLIF(gpg.gpc_family_name_en, ''), NULLIF(gpg.gpc_family_name, ''), gpg.gpc_family_code) AS family_description_en,
                    gpg.gpc_segment_code AS segment_code,
                    COALESCE(NULLIF(gpg.gpc_segment_name, ''), NULLIF(gpg.gpc_segment_name_en, ''), gpg.gpc_segment_code) AS segment_description,
+                   CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_segment_name, '') ELSE NULL END AS segment_description_nl,
+                   COALESCE(NULLIF(gpg.gpc_segment_name_en, ''), NULLIF(gpg.gpc_segment_name, ''), gpg.gpc_segment_code) AS segment_description_en,
                    'gpc_product_groups' AS reference_source
             FROM gpc_product_groups gpg
             WHERE {active_sql}

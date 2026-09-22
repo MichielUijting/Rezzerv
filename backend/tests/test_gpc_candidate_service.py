@@ -459,3 +459,76 @@ def test_ground_meat_generic_semantic_bridge_keeps_official_species_candidates(m
     ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
     assert {row["brick_code"] for row in ranked[:3]} == {"10005767", "10005778", "10005781"}
 
+
+
+def _nl_row(code: str, brick_nl: str, brick_en: str):
+    return {
+        "brick_code": code,
+        "brick_description": brick_nl or brick_en,
+        "brick_description_nl": brick_nl,
+        "brick_description_en": brick_en,
+        "class_code": "50100000",
+        "class_description": "",
+        "class_description_nl": "",
+        "class_description_en": "",
+        "family_code": "50010000",
+        "family_description": "",
+        "family_description_nl": "",
+        "family_description_en": "",
+        "segment_code": "50000000",
+        "segment_description": "",
+        "segment_description_nl": "",
+        "segment_description_en": "",
+    }
+
+
+def test_dutch_gpc_translation_is_primary_for_compound_kipfiletblokjes():
+    bundle = service.build_product_signals({
+        "product_name": "'t Slagershuys kipfiletblokjes",
+        "external_product_name": "kipfiletblokjes",
+        "external_search_text": "slagershuys kipfiletblokjes",
+    })
+    assert any(signal["normalized"] == "kipfilet" and signal["source"] == "compound_stem" for signal in bundle["signals"])
+    rows = [
+        _nl_row("19000001", "Kipfilet - onbereid/onbewerkt", "Chicken Fillet - Unprepared/Unprocessed"),
+        _nl_row("19000002", "Kipfilet - bereid/bewerkt", "Chicken Fillet - Prepared/Processed"),
+        _nl_row("19000003", "Kipfiletproducten - overig", "Chicken Fillet Products - Other"),
+        _row("19000004", "Pork - Prepared/Processed", "Pork"),
+    ]
+    ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
+    assert len(ranked) == 3
+    assert {row["brick_code"] for row in ranked} == {"19000001", "19000002", "19000003"}
+    assert all(row["suggestion_match_basis"] == "dutch_gpc_translation" for row in ranked)
+
+
+def test_dutch_gpc_match_outranks_english_fallback():
+    signals = {"intent_key": "", "signals": [{"text": "kaas", "normalized": "kaas", "tokens": ["kaas"], "source": "product_name", "weight": 1.45}]}
+    ranked = service.rank_gpc_candidates([_nl_row("19000010", "Kaas", "Cheese"), _row("19000011", "Kaas")], signals, limit=5)
+    assert [row["brick_code"] for row in ranked] == ["19000010", "19000011"]
+    assert ranked[0]["suggestion_match_basis"] == "dutch_gpc_translation"
+    assert ranked[1]["suggestion_match_basis"] == "semantic_or_english_fallback"
+
+
+def test_valid_product_intent_hint_is_reused_for_candidate_signals(monkeypatch):
+    monkeypatch.setattr(service, "load_gpc_candidate_strategy", lambda key: "taxonomy_rank" if key == "groente.broccoli" else "")
+    monkeypatch.setattr(
+        service,
+        "get_taxonomy_metadata_for_intent",
+        lambda key: {
+            "intent_key": key,
+            "canonical_name": "Broccoli",
+            "category": "Groente",
+            "product_type": "Broccoli",
+        },
+    )
+    monkeypatch.setattr(service, "load_product_variant_terms", lambda key: ())
+    monkeypatch.setattr(service, "load_gpc_candidate_terms", lambda key: ())
+    monkeypatch.setattr(service, "load_taxonomy_rules", lambda: ())
+
+    bundle = service.build_product_signals({
+        "product_name": "onduidelijke externe naam",
+        "product_intent": "groente.broccoli",
+    })
+
+    assert bundle["intent_key"] == "groente.broccoli"
+    assert any(signal["normalized"] == "broccoli" for signal in bundle["signals"])

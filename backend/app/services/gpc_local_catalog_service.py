@@ -238,7 +238,7 @@ def _score(query: str, title: str) -> float:
     return round(0.45 * jaccard + 0.35 * coverage + 0.20 * sequence, 6)
 
 
-def rank_external_gpc_candidates(*, product_name: str, category: str = "", search_text: str = "", reference_rows: list[dict[str, Any]], limit: int = 5) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def rank_external_gpc_candidates(*, product_name: str, category: str = "", search_text: str = "", product_intent: str = "", reference_rows: list[dict[str, Any]], limit: int = 5) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     signal_bundle = build_product_signals({
         "product_name": product_name,
         "category": category,
@@ -246,6 +246,7 @@ def rank_external_gpc_candidates(*, product_name: str, category: str = "", searc
         "external_category": category,
         "external_categories": category,
         "external_search_text": search_text,
+        "product_intent": product_intent,
     })
     ranked = rank_gpc_candidates(reference_rows, signal_bundle, limit=max(1, min(int(limit), 5)))
     suggestions: list[dict[str, Any]] = []
@@ -265,11 +266,19 @@ def rank_external_gpc_candidates(*, product_name: str, category: str = "", searc
     return suggestions[:5], {
         "intent_key": str(signal_bundle.get("intent_key") or ""),
         "reference_count": len(reference_rows),
+        "dutch_reference_count": sum(
+            1 for row in reference_rows
+            if any(str(row.get(field) or "").strip() for field in (
+                "brick_description_nl", "class_description_nl",
+                "family_description_nl", "segment_description_nl",
+            ))
+        ),
         "signal_count": len(signal_bundle.get("signals") or []),
+        "matching_policy": "dutch_gpc_primary_semantic_english_fallback",
     }
 
 
-def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_brick_code: str = "", search_text: str = "") -> dict[str, Any]:
+def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_brick_code: str = "", search_text: str = "", product_intent: str = "") -> dict[str, Any]:
     ensure_local_gpc_schema()
     explicit = re.sub(r"\D+", "", explicit_gpc_brick_code or "")
     with engine.begin() as conn:
@@ -307,6 +316,7 @@ def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_
             product_name=product_name,
             category=category,
             search_text=search_text,
+            product_intent=product_intent,
             reference_rows=reference_rows,
             limit=5,
         )
