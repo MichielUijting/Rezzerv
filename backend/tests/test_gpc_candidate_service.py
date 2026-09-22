@@ -496,13 +496,14 @@ def test_generic_semantic_aliases_decompound_kipfiletblokjes_without_brick_allow
 
 
 def test_generic_semantic_alias_data_contains_no_brickcode_allowlist():
-    payload = service._semantic_alias_payload()
+    rules = service.load_gpc_semantic_alias_rules()
+    suffixes = service.load_gpc_compound_suffixes()
 
-    serialized = str(payload)
+    serialized = str(rules)
     assert "brick_code" not in serialized
     assert "gpc:" not in serialized
-    assert payload.get("rules")
-    assert payload.get("removable_suffixes")
+    assert rules
+    assert suffixes
 
 
 def test_valid_product_intent_hint_is_reused_for_candidate_signals(monkeypatch):
