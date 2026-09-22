@@ -44,15 +44,13 @@ a.rz-button-secondary[role="button"] {
   background: rgba(26, 26, 26, 0.24);
 }
 
-.rz-mobile-inventory-screen .rz-mobile-inventory-summary,
 .rz-mobile-article-screen .rz-mobile-article-action-row--primary {
   background: var(--color-ui-primary);
   color: var(--color-ui-primary-text);
 }
 
-/* Restore the earlier light-green mottled mobile backdrop as the visual
-   reference for the mobile core flow. theme.css loads last on purpose. */
-.rz-mobile-inventory-screen,
+/* Transitional legacy styling for the existing mobile article-detail screen.
+   Mobile Voorraad has its own newer PO-approved visual baseline. */
 .rz-mobile-article-screen {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(240, 249, 242, 0.10) 100%),
@@ -60,9 +58,6 @@ a.rz-button-secondary[role="button"] {
   background-color: #EEF7F0 !important;
 }
 
-.rz-mobile-inventory-toolbar,
-.rz-mobile-inventory-card,
-.rz-mobile-inventory-state,
 .rz-mobile-article-card {
   box-shadow: 0 9px 24px rgba(26, 62, 43, 0.12);
 }
@@ -206,3 +201,16 @@ a.rz-button-secondary[role="button"] {
     display: none;
   }
 }
+
+/* Mobile Voorraad (PO baseline 2026-09-22) replaces the legacy permanent
+   bottom feedback base with its own five-item navigation. Keep passive
+   AppFeedback visible directly above that navigation instead of covering it. */
+body:has([data-testid="mobile-inventory-page"]) .rz-app-feedback-bar-base,
+body:has([data-testid="mobile-inventory-page"]) [data-testid="app-feedback-bar-scroll-clearance"] {
+  display: none !important;
+}
+
+body:has([data-testid="mobile-inventory-page"]) :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
+  inset: auto 0 calc(60px + env(safe-area-inset-bottom)) 0 !important;
+}
+

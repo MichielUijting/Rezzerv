@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import {
   MOBILE_INVENTORY_MEDIA_QUERY,
   isMobileInventoryEligibleContext,
@@ -77,7 +77,7 @@ const selectorSource = readFileSync(new URL('../src/pages/VoorraadResponsive.jsx
 const selectorCss = readFileSync(new URL('../src/pages/voorraadResponsive.css', import.meta.url), 'utf8')
 const mobileSource = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
 const mobileCss = readFileSync(new URL('../src/pages/mobileVoorraad.css', import.meta.url), 'utf8')
-const orangeWallpaper = new URL('../public/inhuis-orange-wallpaper.svg', import.meta.url)
+const themeSource = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
 
 assert.match(routerSource, /import VoorraadResponsive from '\.\.\/\.\.\/pages\/VoorraadResponsive\.jsx'/)
 assert.match(routerSource, /path: '\/voorraad'.*<VoorraadResponsive \/>/)
@@ -92,8 +92,17 @@ assert.match(selectorCss, /rz-inventory-presentation--locationless[\s\S]*nth-chi
 assert.match(selectorCss, /rz-inventory-presentation--locationless[\s\S]*nth-child\(6\)/)
 
 assert.match(mobileSource, /data-testid="mobile-inventory-page"/)
+assert.match(mobileSource, /data-testid="mobile-inventory-header"/)
+assert.match(mobileSource, /<h1>Voorraad<\/h1>/)
 assert.match(mobileSource, /data-testid="mobile-inventory-add-incidental-purchase"/)
 assert.match(mobileSource, /data-testid="mobile-inventory-location-filter"/)
+assert.match(mobileSource, /data-testid="mobile-inventory-bottom-nav"/)
+assert.match(mobileSource, /Meldingen'.*route: '\/meldingen'/)
+assert.match(mobileSource, /Voorraad'.*route: '\/voorraad'/)
+assert.match(mobileSource, /Bijna op'.*route: '\/bijna-op'/)
+assert.match(mobileSource, /Winkelen'.*route: '\/winkelen'/)
+assert.match(mobileSource, /Meer'.*route: '\/home'/)
+assert.doesNotMatch(mobileSource, /<Header title="Voorraad"/)
 assert.match(mobileSource, /locationTrackingEnabled \? 'Zoek artikel, groep of locatie' : 'Zoek artikel of groep'/)
 assert.match(mobileSource, /\.\.\.\(locationTrackingEnabled \? \[\{ value: 'location', label: 'Locatie A–Z' \}\] : \[\]\)/)
 assert.match(mobileSource, /\/api\/dev\/inventory-preview/)
@@ -102,12 +111,15 @@ assert.match(mobileSource, /CatalogArticleThumbnail/)
 assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
 
-assert.equal(existsSync(orangeWallpaper), true)
-assert.match(mobileCss, /\/inhuis-orange-wallpaper\.svg/)
-assert.match(mobileCss, /backdrop-filter:\s*blur\(/)
-assert.match(mobileCss, /data-location-tracking='disabled'[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/)
-assert.match(mobileCss, /rz-mobile-inventory-card-meta span:first-child[\s\S]*border-radius:\s*999px/)
-assert.match(mobileCss, /rz-mobile-inventory-actions[\s\S]*position:\s*sticky/)
-assert.match(mobileCss, /rz-mobile-inventory-summary[\s\S]*background:\s*var\(--color-ui-primary\)[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
+assert.match(mobileCss, /--rz-mobile-proposal-green:\s*#006b3c/)
+assert.match(mobileCss, /rz-mobile-inventory-topbar[\s\S]*background:\s*rgba\(255, 255, 255, 0\.98\)/)
+assert.match(mobileCss, /rz-mobile-inventory-list[\s\S]*border:\s*1px solid var\(--rz-mobile-proposal-line\)/)
+assert.match(mobileCss, /rz-mobile-inventory-card[\s\S]*border-bottom:\s*1px solid #edf0ee/)
+assert.match(mobileCss, /rz-mobile-inventory-bottom-nav[\s\S]*position:\s*fixed/)
+assert.match(mobileCss, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/)
+assert.doesNotMatch(mobileCss, /wallpaper\.svg/)
+assert.doesNotMatch(mobileCss, /backdrop-filter/)
+assert.doesNotMatch(themeSource, /\.rz-mobile-inventory-screen,\s*\n\.rz-mobile-article-screen/)
+assert.match(themeSource, /\.rz-mobile-article-screen[\s\S]*inhuis-green-wallpaper\.svg/)
 
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')
