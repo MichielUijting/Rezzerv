@@ -7,14 +7,22 @@ import { fetchJsonWithAuth } from '../lib/authSession.js'
 import './mobileVoorraad.css'
 
 const MOBILE_NAV_ITEMS = [
+  { key: 'meldingen', label: 'Meldingen', route: '/meldingen', icon: 'bell' },
   { key: 'voorraad', label: 'Voorraad', route: '/voorraad', icon: 'inventory' },
   { key: 'bijna-op', label: 'Bijna op', route: '/bijna-op', icon: 'clock' },
   { key: 'winkelen', label: 'Winkelen', route: '/winkelen', icon: 'cart' },
-  { key: 'kassa', label: 'Kassa', route: '/kassa', icon: 'receipt' },
   { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' },
 ]
 
 function MobileNavIcon({ type }) {
+  if (type === 'bell') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 10a5 5 0 0 1 10 0v4l1.5 2H5.5L7 14v-4Z" />
+        <path d="M10 19h4" />
+      </svg>
+    )
+  }
   if (type === 'inventory') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
