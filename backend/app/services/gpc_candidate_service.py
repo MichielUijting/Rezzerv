@@ -312,7 +312,10 @@ def _signal_match(signal: dict[str, Any], haystacks: dict[str, str]) -> tuple[fl
 
     best_score = 0.0
     best_field = ""
+    source = str(signal.get("source") or "")
     for field, hierarchy_weight in _HIERARCHY_WEIGHTS.items():
+        if source == "semantic_alias" and field in {"family_description", "segment_description"}:
+            continue
         haystack = haystacks.get(field) or ""
         if not haystack:
             continue
@@ -326,7 +329,7 @@ def _signal_match(signal: dict[str, Any], haystacks: dict[str, str]) -> tuple[fl
         haystack_tokens = set(_meaningful_tokens(haystack))
         signal_token_set = set(signal_tokens)
 
-        if str(signal.get("source") or "") in _SEMANTIC_GPC_SIGNAL_SOURCES:
+        if source in _SEMANTIC_GPC_SIGNAL_SOURCES:
             semantic_anchors = _semantic_anchor_tokens(signal_tokens)
             if semantic_anchors and not (semantic_anchors & haystack_tokens):
                 continue
