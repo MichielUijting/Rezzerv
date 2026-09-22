@@ -78,7 +78,8 @@
     {"intent_key":"nonfood.smartphonehouder","canonical_name":"Smartphonehouder","category":"Non-food","product_type":"Smartphonehouder","synonyms":["auto smartphonehouder","smartphonehouder","tronic auto smartphonehouder"],"gpc_candidate_strategy":"taxonomy_rank"},
     {"intent_key":"nonfood.powerbank","canonical_name":"Powerbank","category":"Non-food","product_type":"Powerbank","synonyms":["powerbank 10000 mah","powerbank","tronic powerbank"],"gpc_candidate_strategy":"taxonomy_rank"},
     {"intent_key":"nonfood.oordopjes","canonical_name":"Bluetooth oordopjes","category":"Non-food","product_type":"Oordopjes","synonyms":["bluetooth oordopjes","oordopjes","silvercrest bluetooth oordopjes"],"gpc_candidate_strategy":"taxonomy_rank"},
-    {"intent_key":"nonfood.kruislijnlaser","canonical_name":"Kruislijnlaser","category":"Non-food","product_type":"Kruislijnlaser","synonyms":["kruislijnlaser","parkside kruislijnlaser"],"gpc_candidate_strategy":"taxonomy_rank"}
+    {"intent_key":"nonfood.kruislijnlaser","canonical_name":"Kruislijnlaser","category":"Non-food","product_type":"Kruislijnlaser","synonyms":["kruislijnlaser","parkside kruislijnlaser"],"gpc_candidate_strategy":"taxonomy_rank"},
+    {"intent_key":"huishouden.schoonmaakborstel","canonical_name":"Schoonmaakborstel","category":"Huishouden","product_type":"Borstel","synonyms":["afwasborstel","afwasborstels","vaatwasborstel","vaatwasborstels","flessenborstel","flessenborstels","schoonmaakborstel","schoonmaakborstels"],"gpc_candidate_terms":["Brooms/Brushes"],"gpc_candidate_strategy":"semantic_terms"}
   ],
   "retailer_receipt_terms": [
     {"retailer_code": "lidl", "receipt_term": "gouda belegen gerasp", "normalized_term": "gouda belegen geraspte kaas", "intent_key": "zuivel.kaas", "confidence": 0.98, "source": "m2c2i10a_lidl_receipt_term"},

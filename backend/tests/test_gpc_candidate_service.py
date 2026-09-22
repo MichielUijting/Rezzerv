@@ -573,6 +573,61 @@ def test_dutch_gpc_match_outranks_english_fallback():
     assert ranked[1]["suggestion_match_basis"] == "semantic_or_english_fallback"
 
 
+def test_afwasborstel_semantic_bridge_ranks_brooms_brushes(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "classify_product_intent_from_taxonomy",
+        lambda value: "huishouden.schoonmaakborstel",
+    )
+    monkeypatch.setattr(
+        service,
+        "get_taxonomy_metadata_for_intent",
+        lambda key: {
+            "intent_key": key,
+            "canonical_name": "Schoonmaakborstel",
+            "category": "Huishouden",
+            "product_type": "Borstel",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "load_gpc_candidate_terms",
+        lambda key: ("Brooms/Brushes",),
+    )
+    monkeypatch.setattr(service, "load_product_variant_terms", lambda key: ())
+    monkeypatch.setattr(
+        service,
+        "load_taxonomy_rules",
+        lambda: (
+            {
+                "intent_key": "huishouden.schoonmaakborstel",
+                "normalized_term": "afwasborstel",
+                "priority": 999,
+                "source": "seed",
+            },
+        ),
+    )
+
+    bundle = service.build_product_signals({
+        "product_name": "10/10 afwasborstel",
+        "external_product_name": "Afwasborstel",
+        "external_search_text": "afwasborstel",
+    })
+    rows = [
+        _row("10008122", "Brooms/Brushes", "Cleaning Aids", "Cleaning/Hygiene Supplies"),
+        _row("10000091", "Hair Brushes", "Hair Care", "Personal Care"),
+        _row("10000092", "Toothbrushes", "Oral Care", "Personal Care"),
+    ]
+
+    ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
+
+    assert ranked
+    assert ranked[0]["brick_code"] == "10008122"
+    assert ranked[0]["suggestion_reason"].startswith(
+        "Semantische GPC-overeenkomst via producttype:"
+    )
+
+
 def test_valid_product_intent_hint_is_reused_for_candidate_signals(monkeypatch):
     monkeypatch.setattr(service, "load_gpc_candidate_strategy", lambda key: "taxonomy_rank" if key == "groente.broccoli" else "")
     monkeypatch.setattr(
