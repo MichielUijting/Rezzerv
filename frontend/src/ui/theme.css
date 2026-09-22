@@ -201,3 +201,16 @@ a.rz-button-secondary[role="button"] {
     display: none;
   }
 }
+
+/* Mobile Voorraad (PO baseline 2026-09-22) replaces the legacy permanent
+   bottom feedback base with its own five-item navigation. Keep passive
+   AppFeedback visible directly above that navigation instead of covering it. */
+body:has([data-testid="mobile-inventory-page"]) .rz-app-feedback-bar-base,
+body:has([data-testid="mobile-inventory-page"]) [data-testid="app-feedback-bar-scroll-clearance"] {
+  display: none !important;
+}
+
+body:has([data-testid="mobile-inventory-page"]) :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
+  inset: auto 0 calc(60px + env(safe-area-inset-bottom)) 0 !important;
+}
+
