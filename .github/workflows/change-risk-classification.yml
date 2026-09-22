@@ -1,0 +1,119 @@
+name: Change risk classification
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact candidate commit SHA
+        required: true
+        type: string
+      base_sha:
+        description: Exact base commit SHA
+        required: true
+        type: string
+      provisional_level:
+        description: Preliminary S/M/L classification
+        required: true
+        default: L
+        type: choice
+        options:
+          - S
+          - M
+          - L
+
+permissions:
+  contents: read
+
+concurrency:
+  group: change-risk-${{ github.event.pull_request.number || inputs.candidate_sha || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    name: Classify candidate S/M/L
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
+      POLICY: quality/ci/change_risk_policy.json
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove candidate and base identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -n "$BASE_SHA"
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          fi
+          git cat-file -e "${BASE_SHA}^{commit}"
+
+      - name: Validate policy and self-tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/classify_change_risk.py
+          python scripts/ci/classify_change_risk.py --policy "$POLICY" validate-policy | tee change-risk-policy.log
+          grep -Fx 'CHANGE_RISK_POLICY_GREEN' change-risk-policy.log
+          python scripts/ci/classify_change_risk.py --policy "$POLICY" self-test | tee change-risk-self-test.log
+          grep -Fx 'CHANGE_RISK_SELF_TEST_GREEN' change-risk-self-test.log
+
+      - name: Classify complete candidate delta
+        id: risk
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            python scripts/ci/classify_change_risk.py --policy "$POLICY" classify \
+              --base-sha "$BASE_SHA" \
+              --head-sha "$CANDIDATE_SHA" \
+              --provisional-level "${{ inputs.provisional_level }}" \
+              --evidence change-risk-evidence.json \
+              | tee change-risk-classification.log
+          else
+            python scripts/ci/classify_change_risk.py --policy "$POLICY" classify \
+              --base-sha "$BASE_SHA" \
+              --head-sha "$CANDIDATE_SHA" \
+              --pr-body-env PR_BODY \
+              --evidence change-risk-evidence.json \
+              | tee change-risk-classification.log
+          fi
+          grep -E '^CHANGE_RISK_FINAL_LEVEL=[SML]$' change-risk-classification.log
+          grep -Fx 'CHANGE_RISK_CLASSIFICATION_GREEN' change-risk-classification.log
+
+      - name: Publish classification summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Rezzerv change-risk classification'
+            echo
+            echo "- Preliminary: **${{ steps.risk.outputs.provisional_level }}**"
+            echo "- Delta: **${{ steps.risk.outputs.delta_level }}**"
+            echo "- Final: **${{ steps.risk.outputs.final_level }}**"
+            echo "- Full Regression required: **${{ steps.risk.outputs.full_required }}**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload classification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: change-risk-${{ github.run_id }}
+          path: |
+            quality/ci/change_risk_policy.json
+            change-risk-policy.log
+            change-risk-self-test.log
+            change-risk-classification.log
+            change-risk-evidence.json
+          if-no-files-found: warn
+          retention-days: 14

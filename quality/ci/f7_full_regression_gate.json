@@ -5,7 +5,7 @@
   "target_base": "main",
   "poll_seconds": 20,
   "timeout_seconds": 14400,
-  "candidate_contract": "Reuse complete successful exact-candidate authority evidence, keep TP-CI-02 as the only serial shared Kassa cluster, dispatch the fourteen standalone authorities that replace TP-CI-03/04/05/07 in parallel, and aggregate all twenty-one required workflows fail-closed.",
+  "candidate_contract": "Classify every exact candidate fail-closed. Final level L preserves the twenty-one-workflow exact-SHA reuse/attach/dispatch contract; S/M record an explicit heavy-authority bypass while independently required CI remains in force.",
   "workflows": [
     {
       "id": "TP-CI-02",
@@ -255,5 +255,16 @@
       "P0-UNPACKING"
     ],
     "rationale": "Normal PR CI keeps shared-stack runners; only final F7 exact-candidate execution expands the non-Kassa shared clusters into independent GitHub-hosted runners with isolated Docker/PostgreSQL stacks."
+  },
+  "risk_policy": {
+    "contract": "quality/ci/change_risk_policy.json",
+    "classifier": "scripts/ci/classify_change_risk.py",
+    "heavy_level": "L",
+    "bypass_levels": [
+      "S",
+      "M"
+    ],
+    "required_authority_count_for_L": 21,
+    "preserve_exact_sha_reuse": true
   }
 }

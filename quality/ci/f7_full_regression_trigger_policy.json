@@ -20,5 +20,21 @@
       "candidate_sha"
     ]
   },
-  "required_authority_behavior": "The permanent trigger only selects the candidate. F7-03 reuses or dispatches twenty-one exact-candidate workflows: TP-CI-02 remains the serial two-authority Kassa cluster, fourteen authorities formerly serialized inside TP-CI-03/04/05/07 run as standalone workflows in parallel, and the six existing standalone/schema/supporting/frontend authorities remain required."
+  "required_authority_behavior": "Every non-draft candidate enters the Full Regression decision workflow. Final level L preserves the current twenty-one-authority exact-SHA reuse/attach/dispatch contract. Final level S or M records a green risk-authorized bypass of those heavy authorities; F7-02 and independently required CI remain authoritative for their scope. Manual Full Regression dispatch always forces L.",
+  "risk_policy": {
+    "contract": "quality/ci/change_risk_policy.json",
+    "classifier": "scripts/ci/classify_change_risk.py",
+    "preliminary_source": "TEST_LEVEL_PROVISIONAL marker in pull-request body; missing marker fails closed to L",
+    "delta_source": "complete base SHA to exact candidate SHA diff",
+    "decision": "final level is max(preliminary, delta); automatic downgrade is forbidden",
+    "heavy_full_regression_required_for": [
+      "L"
+    ],
+    "heavy_full_regression_bypassed_for": [
+      "S",
+      "M"
+    ],
+    "manual_dispatch_forces_level": "L",
+    "independent_required_ci_not_suppressed": true
+  }
 }

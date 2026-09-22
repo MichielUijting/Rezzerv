@@ -18,6 +18,8 @@ Deze map is de leesbare ingang voor product, ontwikkeling, kwaliteit, release en
 9. [Rollen- en accountmodel v2.0](../security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md) —
    PO-goedgekeurde functionele SSOT; v1.1 en de 190-check matrix blijven tot
    implementatiestap 9.1 de huidige runtime- en regressiebaseline.
+10. [Wijzigingsrisico en testniveaus S/M/L](CHANGE-RISK-AND-TEST-LEVELS.md) —
+    bindende fail-closed classificatie voor de vereiste regressiezwaarte.
 
 ## Bestaande formele kwaliteitsdocumenten
 
