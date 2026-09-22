@@ -81,6 +81,25 @@ def _inventory_total(conn, article_id: str) -> float:
     )
 
 
+def _set_receipt_purchase_at(engine, receipt_table_id: str, purchase_at: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE receipt_tables
+                SET purchase_at = :purchase_at
+                WHERE id = :receipt_table_id
+                  AND household_id = :household_id
+                """
+            ),
+            {
+                "purchase_at": purchase_at,
+                "receipt_table_id": receipt_table_id,
+                "household_id": TARGET_HOUSEHOLD,
+            },
+        )
+
+
 def run() -> int:
     engine = create_postgresql_runtime_test_engine()
     try:
@@ -110,6 +129,14 @@ def run() -> int:
                 engine,
                 fixture_name="normal_physical",
                 seed_key="temporary-consumable-stock-2",
+            )
+            # This scenario validates consumption of stock that existed before
+            # the repurchase day. Keep it deliberately outside the new
+            # same-product-day grouping semantics.
+            _set_receipt_purchase_at(
+                engine,
+                first_receipt["receipt_table_id"],
+                "2026-08-25T09:00:00+00:00",
             )
             first_created = client.post(
                 f"/api/receipts/{first_receipt['receipt_table_id']}/lines",
@@ -201,6 +228,11 @@ def run() -> int:
                 engine,
                 fixture_name="normal_physical",
                 seed_key="temporary-consumable-repurchase-10",
+            )
+            _set_receipt_purchase_at(
+                engine,
+                second_receipt["receipt_table_id"],
+                "2026-08-26T09:00:00+00:00",
             )
             second_created = client.post(
                 f"/api/receipts/{second_receipt['receipt_table_id']}/lines",

@@ -1,0 +1,92 @@
+name: Product-day auto-consume validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/main.py'
+      - 'backend/app/services/product_day_auto_consume_service.py'
+      - 'backend/tests/test_product_day_auto_consume_service.py'
+      - 'backend/tests/test_product_day_auto_consume_integration_contract.py'
+      - 'backend/tests/postgresql_product_day_auto_consume_selftest.py'
+      - '.github/workflows/product-day-auto-consume-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-contract:
+    name: Product-day unit and wiring contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install focused dependencies
+        run: python -m pip install --disable-pip-version-check 'sqlalchemy>=2,<3' pytest
+
+      - name: Compile product-day code
+        run: |
+          python -m py_compile \
+            backend/app/services/product_day_auto_consume_service.py \
+            backend/tests/test_product_day_auto_consume_service.py \
+            backend/tests/test_product_day_auto_consume_integration_contract.py \
+            backend/tests/postgresql_product_day_auto_consume_selftest.py
+
+      - name: Run unit and wiring regressions
+        env:
+          PYTHONPATH: backend
+        run: |
+          pytest -q \
+            backend/tests/test_product_day_auto_consume_service.py \
+            backend/tests/test_product_day_auto_consume_integration_contract.py
+
+  postgresql-runtime:
+    name: PostgreSQL product-day runtime proof
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rezzerv_product_day
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rezzerv_product_day"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/rezzerv_product_day
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PostgreSQL proof dependencies
+        run: python -m pip install --disable-pip-version-check 'sqlalchemy>=2,<3' 'psycopg[binary]>=3,<4'
+
+      - name: Run PostgreSQL product-day proof
+        env:
+          PYTHONPATH: backend
+        run: |
+          python backend/tests/postgresql_product_day_auto_consume_selftest.py | tee /tmp/product-day-postgresql.log
+          grep -Fx 'POSTGRESQL_PRODUCT_DAY_AUTO_CONSUME_CUMULATIVE_GREEN' /tmp/product-day-postgresql.log
+          grep -Fx 'POSTGRESQL_PRODUCT_DAY_AUTO_CONSUME_BACKDATED_GREEN' /tmp/product-day-postgresql.log
+          grep -Fx 'POSTGRESQL_PRODUCT_DAY_AUTO_CONSUME_HOUSEHOLD_ISOLATION_GREEN' /tmp/product-day-postgresql.log
+          grep -Fx 'POSTGRESQL_PRODUCT_DAY_AUTO_CONSUME_SELFTEST_GREEN' /tmp/product-day-postgresql.log

@@ -4,6 +4,10 @@
 
 De beoogde keten is: kassabon ontvangen, OCR en parsing, regels controleren in Kassa, koppelen aan producten of huishoudartikelen, verwerken in Uitpakken, voorraadlocatie kiezen en voorraad plus historie bijwerken. De som van de artikelen is leidend; het bon-totaal is een controlewaarde.
 
+### Automatisch verbruik bij herhaalaankopen
+
+Wanneer automatische afboeking voor een huishoudartikel actief is, worden meerdere aankopen van hetzelfde canonieke `household_article_id` op dezelfde kassabondatum als één cumulatieve productdag behandeld. De productdag is strikt huishoudgebonden en gebruikt de datum van de kassabon, niet de verwerkingsdatum. Daardoor kan voorraad die eerder op dezelfde dag is gekocht niet bij een tweede of later verwerkte kassabon opnieuw als oude voorraad worden afgeboekt. Een later verwerkte, maar eerder gedateerde kassabon op dezelfde kalenderdag blijft onderdeel van dezelfde productdag. Als geen bruikbare kassabondatum beschikbaar is, blijft de bestaande per-aankoopsemantiek gelden.
+
 ## Voorraad en artikelgroepen
 
 Voorraad, locaties en artikelgroepen zijn huishoudgebonden. Artikelgroep moet zichtbaar en volgens rol wijzigbaar zijn. Beheeracties mogen alleen aan bevoegde gebruikers worden aangeboden.
