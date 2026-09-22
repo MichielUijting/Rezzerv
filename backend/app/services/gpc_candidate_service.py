@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import json
 from difflib import SequenceMatcher
-from functools import lru_cache
-from pathlib import Path
 from typing import Any, Iterable
 
 from app.services.product_taxonomy_store import (
@@ -12,6 +9,8 @@ from app.services.product_taxonomy_store import (
     get_taxonomy_metadata_for_intent,
     load_gpc_candidate_strategy,
     load_gpc_candidate_terms,
+    load_gpc_compound_suffixes,
+    load_gpc_semantic_alias_rules,
     load_product_variant_terms,
     load_taxonomy_rules,
     normalize_taxonomy_text,
@@ -30,7 +29,6 @@ _SEMANTIC_GPC_DESCRIPTOR_TOKENS = {
     "processed",
 }
 
-_SEMANTIC_ALIAS_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_candidate_semantic_aliases.json"
 _SEMANTIC_ALIAS_WEIGHT_SCALE = 0.40
 
 
@@ -71,21 +69,12 @@ _HIERARCHY_WEIGHTS = {
 }
 
 
-@lru_cache(maxsize=1)
-def _semantic_alias_payload() -> dict[str, Any]:
-    try:
-        payload = json.loads(_SEMANTIC_ALIAS_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {"rules": [], "removable_suffixes": []}
-    return payload if isinstance(payload, dict) else {"rules": [], "removable_suffixes": []}
-
-
 def _alias_token_variants(normalized_text: str) -> set[str]:
     variants = {token for token in normalized_text.split() if token}
     suffixes = sorted(
         {
             normalize_taxonomy_text(value).replace(" ", "")
-            for value in (_semantic_alias_payload().get("removable_suffixes") or [])
+            for value in load_gpc_compound_suffixes()
             if normalize_taxonomy_text(value).replace(" ", "")
         },
         key=len,
@@ -114,7 +103,7 @@ def _semantic_alias_terms(value: str) -> list[tuple[str, float]]:
     token_variants = _alias_token_variants(normalized)
     result: list[tuple[str, float]] = []
     seen: set[str] = set()
-    for raw_rule in _semantic_alias_payload().get("rules") or []:
+    for raw_rule in load_gpc_semantic_alias_rules():
         if not isinstance(raw_rule, dict):
             continue
         terms = [normalize_taxonomy_text(term) for term in (raw_rule.get("terms") or [])]
