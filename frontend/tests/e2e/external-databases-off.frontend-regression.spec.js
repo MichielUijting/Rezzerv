@@ -50,7 +50,7 @@ function automaticSearchResponse() {
     creates_inventory_event: false,
     results: [
       {
-        gtin: '8710000000002',
+        gtin: '8710000000000',
         product_name: 'Halfvolle melk',
         brand: 'Jumbo',
         score: 0.82,
@@ -78,7 +78,7 @@ function manualSearchResponse() {
     creates_inventory_event: false,
     results: [
       {
-        gtin: '8710000000099',
+        gtin: '8710000000093',
         product_name: 'Melk halfvol handmatig',
         brand: 'Jumbo',
         score: 0.91,
@@ -157,7 +157,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Zoektype: automatisch');
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Productmutatie: nee');
 
-    const automaticRow = candidateTable.locator('tbody tr', { hasText: '8710000000002' });
+    const automaticRow = candidateTable.locator('tbody tr', { hasText: '8710000000000' });
     await expect(automaticRow).toBeVisible();
     await expect(automaticRow.getByRole('cell', { name: 'Halfvolle melk', exact: true })).toBeVisible();
     await expect(automaticRow.getByRole('cell', { name: '0,930', exact: true })).toBeVisible();
@@ -167,8 +167,8 @@ test.describe('Externe databases OFF candidate flow', () => {
 
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Zoektype: handmatig');
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Zoektekst: melk halfvol zelf zoeken');
-    await expect(candidateTable.locator('tbody tr', { hasText: '8710000000099' })).toBeVisible();
-    await expect(candidateTable.locator('tbody tr', { hasText: '8710000000002' })).toHaveCount(0);
+    await expect(candidateTable.locator('tbody tr', { hasText: '8710000000093' })).toBeVisible();
+    await expect(candidateTable.locator('tbody tr', { hasText: '8710000000000' })).toHaveCount(0);
 
     expect(offRequestBodies).toHaveLength(2);
     expect(offRequestBodies[0]).toEqual({
@@ -184,7 +184,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     });
 
     await expect(page.getByTestId('external-producttype-link-panel')).toBeVisible();
-    await candidateTable.locator('tbody tr', { hasText: '8710000000099' }).getByRole('radio').check();
+    await candidateTable.locator('tbody tr', { hasText: '8710000000093' }).getByRole('radio').check();
     await expect(page.getByLabel('Producttype', { exact: true })).toBeDisabled();
     await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('');
     await expect(page.getByLabel('Producttype', { exact: true }).locator('option:checked')).toHaveText('GPC-classificatie ontbreekt');
@@ -239,6 +239,95 @@ test.describe('Externe databases OFF candidate flow', () => {
     expect(classifyBodies.some((body) => Array.isArray(body?.category_tags) && body.category_tags.includes('en:sausages'))).toBe(true);
     await expectNoConsoleErrors(consoleErrors);
   });
+
+  test('Afwasborstel met ongeldige OFF-code kan niet exact maar wel generiek aan GPC worden gekoppeld', async ({ page }) => {
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{
+            receipt_item_id: 'purchase-import-line:afwasborstel-invalid-gtin',
+            receipt_item_type: 'purchase_import_line',
+            receipt_item_source_id: 'afwasborstel-invalid-gtin',
+            context_key: 'ctx-afwasborstel-invalid-gtin',
+            purchase_import_line_id: 'afwasborstel-invalid-gtin',
+            receipt_line_text: '10/10 afwasborstel',
+            retailer_code: '',
+            retailer_article_number: '',
+            gtin: '',
+            quantity_label: '1',
+            price: 1.99,
+            candidate_status: 'no_candidate',
+            is_receipt_item_placeholder: true,
+            is_linked_to_catalog: false,
+            is_linkable_to_catalog: false,
+            candidates: [],
+          }],
+        }),
+      })
+    })
+    await page.route('**/api/external-products/off/search', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          status: 'found',
+          provider: 'legacy_cgi',
+          query: 'afwasborstel',
+          mode: 'automatic',
+          mutated: false,
+          results: [{
+            gtin: '00181781',
+            product_name: 'Afwasborstel',
+            brand: 'Afwasborstel',
+            category: '',
+            score: 0.613,
+          }],
+        }),
+      })
+    })
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          status: 'not_classified',
+          reason: 'insufficient_confidence',
+          suggestions: [{
+            brick_code: '10008122',
+            brick_description: 'Brooms/Brushes',
+            confidence: 0.84,
+            confidence_label: 'hoog',
+            match_strength_percent: 84,
+            suggestion_reason: 'Semantische GPC-overeenkomst via producttype: Brooms/Brushes',
+          }],
+        }),
+      })
+    })
+    await page.route('**/api/inventory/groups', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ group_options: [] }) })
+    })
+
+    await page.goto('/externe-databases')
+    const receiptRow = page.getByTestId('external-receipt-items-table').locator('tbody tr', { hasText: '10/10 afwasborstel' })
+    await receiptRow.dblclick()
+
+    const candidateRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: '00181781' })
+    await expect(candidateRow).toContainText('Geen geldige GTIN/EAN')
+    await expect(candidateRow.getByRole('radio')).toBeDisabled()
+
+    const autoCandidates = page.getByTestId('external-auto-gpc-candidates')
+    await expect(autoCandidates).toContainText('10008122')
+    await autoCandidates.getByRole('option').first().click()
+
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Koppel als generiek artikel', exact: true })).toBeEnabled()
+    await expect(page.getByTestId('external-exact-link-guidance')).toContainText('geen geldige GTIN/EAN')
+    await expect(page.getByTestId('external-exact-link-guidance')).toContainText('generiek')
+  })
 
   test('Bananen gebruiken de expliciete officiële GPC Brick uit OFF zonder classificatie-omweg', async ({ page }) => {
     let classifyCalled = false;

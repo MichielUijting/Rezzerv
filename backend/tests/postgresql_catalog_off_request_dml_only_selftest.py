@@ -44,9 +44,9 @@ from app.services.product_inventory_group_store import (
     link_global_product_to_inventory_group_with_connection,
 )
 
-GTIN_ALPHA = "8712345678901"
-GTIN_BRAVO = "8712345678902"
-GTIN_CHARLIE = "8712345678903"
+GTIN_ALPHA = "8712345678906"
+GTIN_BRAVO = "8712345678913"
+GTIN_CHARLIE = "8712345678920"
 NAME_ALPHA = "postgresql catalog off proof alpha"
 NAME_BRAVO = "PostgreSQL Catalog OFF Proof Bravo"
 NAME_CHARLIE = "PostgreSQL Global OFF Scope Proof"

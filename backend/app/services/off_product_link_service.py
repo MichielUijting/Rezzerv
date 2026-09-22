@@ -37,10 +37,25 @@ def _clean_text(value: Any) -> str:
     return " ".join(str(value or "").strip().split())
 
 
+def _has_valid_gtin_check_digit(gtin: str) -> bool:
+    if not _GTIN_PATTERN.fullmatch(gtin):
+        return False
+    digits = [int(character) for character in gtin]
+    body = digits[:-1]
+    weighted_sum = sum(
+        digit * (3 if index % 2 == 0 else 1)
+        for index, digit in enumerate(reversed(body))
+    )
+    expected = (10 - (weighted_sum % 10)) % 10
+    return expected == digits[-1]
+
+
 def _normalize_gtin(value: Any) -> str:
     gtin = re.sub(r"\D+", "", str(value or ""))
     if not _GTIN_PATTERN.fullmatch(gtin):
-        raise ValueError("OFF-product bevat geen geldige GTIN van 8 tot en met 14 cijfers")
+        raise ValueError("OFF-product bevat geen geldige GTIN van 8, 12, 13 of 14 cijfers")
+    if not _has_valid_gtin_check_digit(gtin):
+        raise ValueError("OFF-product bevat een GTIN/EAN met een ongeldig controlecijfer")
     return gtin
 
 

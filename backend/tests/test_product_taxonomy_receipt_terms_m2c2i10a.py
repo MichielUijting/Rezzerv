@@ -2,6 +2,7 @@ import inspect
 
 import app.services.receipt_product_intent_analyzer as receipt_product_intent_analyzer
 from app.services.product_intent_classifier import classify_product_intent
+from app.services.product_taxonomy_store import load_gpc_candidate_terms
 from app.services.receipt_product_intent_analyzer import analyze_receipt_product_line
 
 
@@ -75,3 +76,8 @@ def test_ah_soepgr_basis_is_recognized_as_soup_vegetable_base():
         "SOEPGR BASIS",
         retailer_code="ah",
     ) == "soep.groentebasis"
+
+
+def test_afwasborstel_is_recognized_with_gpc_semantic_bridge():
+    assert classify_product_intent("10/10 afwasborstel") == "huishouden.schoonmaakborstel"
+    assert "Brooms/Brushes" in load_gpc_candidate_terms("huishouden.schoonmaakborstel")
