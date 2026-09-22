@@ -5,15 +5,29 @@ Laatst inhoudelijk vastgesteld door de PO: 20 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
-De actuele mobiele visuele baseline wordt gevormd door twee door de PO beoordeelde schermtypen:
-- **Voorraad** als referentie voor mobiele lijst-, zoek- en filterschermen;
-- **Voorraad-artikeldetail** als referentie voor mobiele detail-, veld- en snelle-actieschermen.
+De actuele mobiele visuele richting is op **22 september 2026** door de PO herijkt op basis van het ontwerpvoorstel `Inhuis – Ontwerpdocument`. **Voorraad** is de eerste concrete implementatie van die nieuwe richting. Eerdere visuele borging van de oude mobiele Voorraadvariant geldt niet meer als regressiecontract wanneer zij met dit nieuwe PO-besluit conflicteert.
 
-Nieuwe mobiele kernschermen sluiten aantoonbaar aan op deze twee referenties, tenzij de PO expliciet een afwijkend patroon vaststelt.
+Het bestaande **Voorraad-artikeldetail** blijft functioneel ongewijzigd totdat het afzonderlijk naar deze nieuwe mobiele visuele richting wordt gemigreerd. Het is daardoor tijdelijk geen visuele baseline voor nieuwe mobiele lijstschermen.
 
 Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
+
+## Mobiele ontwerpbaseline vanaf 22 september 2026
+
+Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele grammatica uit het door de PO aangeleverde ontwerpvoorstel:
+
+- een rustige, hoofdzakelijk **witte/lichtgrijze** app-surface; de eerdere gevlekte wallpaper, blur en zwevende glassmorphism-cards zijn voor de nieuwe Voorraadvariant vervallen;
+- een compacte **witte bovenbalk** met de schermtitel centraal, zonder de desktopachtige huishouden-/userboxpresentatie in deze module-root;
+- een donkere mobiele primaire groentint **`#006B3C`** voor actieve navigatie en primaire mobiele acties; de bestaande desktop-/tabelkleur `#28A99E` blijft buiten deze mobiele pilot ongewijzigd;
+- zoeken en filters staan compact boven de inhoud, zonder een grote omhullende filtercard;
+- de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
+- geen losse verhoogde card per voorraadartikel en geen decoratieve schaduwen als hoofdstructuur;
+- een vaste witte onderste navigatiebalk met vijf compacte tabitems. De Voorraadpilot gebruikt uitsluitend bestaande werkende routes: **Voorraad**, **Bijna op**, **Winkelen**, **Kassa** en **Meer**;
+- de bestaande actie **Incidentele aankoop** blijft functioneel beschikbaar, maar staat als compacte groene actie bij de lijstcontext en is niet langer een grote sticky knop boven een aparte meldingenbalk;
+- alle bestaande data-, autorisatie-, huishoudisolatie-, detailroute- en filterfunctionaliteit blijft leidend. Dit PO-besluit wijzigt de presentatie, niet het domeinmodel.
+
+Andere mobiele kernschermen worden niet stilzwijgend meegewijzigd. Totdat zij expliciet worden gemigreerd mogen zij tijdelijk nog de eerdere visuele shell gebruiken. Nieuwe of aangepaste tests mogen de oude mobiele Voorraad-wallpaper, blur, individuele schaduwcards of sticky CTA niet meer afdwingen.
 
 ## Ontwerpprincipes
 
