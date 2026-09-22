@@ -25,6 +25,8 @@ on:
       - 'backend/alembic/versions/20260921_01_household_representative_image.py'
       - 'backend/tests/postgresql_catalog_off_request_portability_selftest.py'
       - 'backend/tests/postgresql_catalog_off_request_dml_only_selftest.py'
+      - 'backend/tests/postgresql_off_link_end_to_end_selftest.py'
+      - 'backend/tests/postgresql_off_link_receipt_table_end_to_end_selftest.py'
       - '.github/workflows/postgresql-catalog-off-request-portability.yml'
   workflow_dispatch:
 
@@ -150,3 +152,18 @@ jobs:
           grep -F 'POSTGRESQL_OFF_INDEX_MATCHER_READ_PATH_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_RUNTIME_SCHEMA_UNCHANGED_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_REQUEST_DML_ONLY_SELFTEST_GREEN' /tmp/catalog-off-dml.log
+
+          env -u MIGRATION_DATABASE_URL python tests/postgresql_off_link_end_to_end_selftest.py | tee /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_PURCHASE_IMPORT_SOURCE_UNCHANGED_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_GPC_ASSIGNMENT_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_EXTERNAL_ARTICLE_CONFIRMATION_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_NO_INVENTORY_MUTATION_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_REPEAT_IDEMPOTENT_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_ITEMS_API_LOAD_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_SOURCE_UNCHANGED_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_GPC_ASSIGNMENT_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_EXTERNAL_ARTICLE_CONFIRMATION_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_NO_INVENTORY_MUTATION_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_REPEAT_IDEMPOTENT_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_RECEIPT_TABLE_END_TO_END_SELFTEST_GREEN' /tmp/off-link-e2e.log
+          grep -F 'POSTGRESQL_OFF_LINK_END_TO_END_SELFTEST_GREEN' /tmp/off-link-e2e.log
