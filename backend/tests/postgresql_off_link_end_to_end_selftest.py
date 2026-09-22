@@ -138,7 +138,7 @@ def _seed_realistic_receipt_candidate(conn) -> None:
             ) VALUES (
                 :id, :household_id, :store_provider_id, :connection_id,
                 'postgresql_off_link_e2e', 'contract:postgresql-off-link-e2e',
-                'in_review', '{}', CURRENT_TIMESTAMP
+                'in_review', '{"retailer_code":"aldi"}', CURRENT_TIMESTAMP
             )
             """
         ),
