@@ -459,3 +459,72 @@ def test_ground_meat_generic_semantic_bridge_keeps_official_species_candidates(m
     ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
     assert {row["brick_code"] for row in ranked[:3]} == {"10005767", "10005778", "10005781"}
 
+
+
+def test_generic_semantic_aliases_decompound_kipfiletblokjes_without_brick_allowlist():
+    bundle = service.build_product_signals({
+        "product_name": "'t Slagershuys kipfiletblokjes",
+        "external_product_name": "kipfiletblokjes",
+        "external_search_text": "slagershuys kipfiletblokjes",
+    })
+
+    semantic = {
+        signal["normalized"]
+        for signal in bundle["signals"]
+        if signal["source"] == "semantic_alias"
+    }
+    assert "chicken" in semantic
+    assert "poultry" in semantic
+
+    rows = [
+        _row("19000001", "Chicken - Unprepared/Unprocessed", "Poultry", "Meat/Poultry/Other Animals"),
+        _row("19000002", "Chicken - Prepared/Processed", "Poultry", "Meat/Poultry/Other Animals"),
+        _row("19000003", "Chicken Products - Other", "Poultry", "Meat/Poultry/Other Animals"),
+        _row("19000004", "Poultry - Other", "Poultry", "Meat/Poultry/Other Animals"),
+        _row("19000005", "Chicken Sausages - Prepared/Processed", "Poultry", "Meat/Poultry/Other Animals"),
+        _row("19000006", "Pork - Prepared/Processed", "Pork", "Meat/Poultry/Other Animals"),
+    ]
+
+    ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
+
+    assert len(ranked) == 5
+    assert {row["brick_code"] for row in ranked} == {
+        "19000001", "19000002", "19000003", "19000004", "19000005"
+    }
+    assert all(row["suggestion_source"] == "gpc_candidate_engine" for row in ranked)
+    assert all("Semantische GPC-overeenkomst" in row["suggestion_reason"] for row in ranked)
+
+
+def test_generic_semantic_alias_data_contains_no_brickcode_allowlist():
+    payload = service._semantic_alias_payload()
+
+    serialized = str(payload)
+    assert "brick_code" not in serialized
+    assert "gpc:" not in serialized
+    assert payload.get("rules")
+    assert payload.get("removable_suffixes")
+
+
+def test_valid_product_intent_hint_is_reused_for_candidate_signals(monkeypatch):
+    monkeypatch.setattr(service, "load_gpc_candidate_strategy", lambda key: "taxonomy_rank" if key == "groente.broccoli" else "")
+    monkeypatch.setattr(
+        service,
+        "get_taxonomy_metadata_for_intent",
+        lambda key: {
+            "intent_key": key,
+            "canonical_name": "Broccoli",
+            "category": "Groente",
+            "product_type": "Broccoli",
+        },
+    )
+    monkeypatch.setattr(service, "load_product_variant_terms", lambda key: ())
+    monkeypatch.setattr(service, "load_gpc_candidate_terms", lambda key: ())
+    monkeypatch.setattr(service, "load_taxonomy_rules", lambda: ())
+
+    bundle = service.build_product_signals({
+        "product_name": "onduidelijke externe naam",
+        "product_intent": "groente.broccoli",
+    })
+
+    assert bundle["intent_key"] == "groente.broccoli"
+    assert any(signal["normalized"] == "broccoli" for signal in bundle["signals"])
