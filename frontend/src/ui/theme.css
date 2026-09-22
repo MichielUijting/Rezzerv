@@ -44,14 +44,13 @@ a.rz-button-secondary[role="button"] {
   background: rgba(26, 26, 26, 0.24);
 }
 
-.rz-mobile-inventory-screen .rz-mobile-inventory-summary,
 .rz-mobile-article-screen .rz-mobile-article-action-row--primary {
   background: var(--color-ui-primary);
   color: var(--color-ui-primary-text);
 }
 
-/* Restore the earlier light-green mottled mobile backdrop as the visual
-   reference for the mobile core flow. theme.css loads last on purpose. */
+/* Transitional legacy styling for the existing mobile article-detail screen.
+   Mobile Voorraad has its own newer PO-approved visual baseline. */
 .rz-mobile-article-screen {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(240, 249, 242, 0.10) 100%),
