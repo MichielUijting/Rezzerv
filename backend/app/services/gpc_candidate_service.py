@@ -31,6 +31,7 @@ _SEMANTIC_GPC_DESCRIPTOR_TOKENS = {
 }
 
 _SEMANTIC_ALIAS_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_candidate_semantic_aliases.json"
+_SEMANTIC_ALIAS_WEIGHT_SCALE = 0.40
 
 
 def _semantic_anchor_tokens(signal_tokens: list[str]) -> set[str]:
@@ -196,7 +197,7 @@ def _add_signal(
                 seen,
                 alias_text,
                 source="semantic_alias",
-                weight=float(weight) * alias_multiplier,
+                weight=float(weight) * alias_multiplier * _SEMANTIC_ALIAS_WEIGHT_SCALE,
             )
 
 
