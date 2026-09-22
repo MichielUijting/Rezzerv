@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
 from difflib import SequenceMatcher
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Iterable
 
 from app.services.product_taxonomy_store import (
     classify_product_intent_from_taxonomy,
     contains_taxonomy_term,
     get_taxonomy_metadata_for_intent,
+    load_gpc_candidate_strategy,
     load_gpc_candidate_terms,
     load_product_variant_terms,
     load_taxonomy_rules,
@@ -25,6 +29,8 @@ _SEMANTIC_GPC_DESCRIPTOR_TOKENS = {
     "prepared",
     "processed",
 }
+
+_SEMANTIC_ALIAS_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_candidate_semantic_aliases.json"
 
 
 def _semantic_anchor_tokens(signal_tokens: list[str]) -> set[str]:
@@ -52,6 +58,7 @@ _FIELD_WEIGHTS = {
 _SEMANTIC_GPC_SIGNAL_SOURCES = {
     "taxonomy_gpc_candidate_term",
     "taxonomy_gpc_variant_candidate_term",
+    "semantic_alias",
 }
 
 _HIERARCHY_WEIGHTS = {
@@ -61,6 +68,69 @@ _HIERARCHY_WEIGHTS = {
     "family_description": 0.42,
     "segment_description": 0.18,
 }
+
+
+@lru_cache(maxsize=1)
+def _semantic_alias_payload() -> dict[str, Any]:
+    try:
+        payload = json.loads(_SEMANTIC_ALIAS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"rules": [], "removable_suffixes": []}
+    return payload if isinstance(payload, dict) else {"rules": [], "removable_suffixes": []}
+
+
+def _alias_token_variants(normalized_text: str) -> set[str]:
+    variants = {token for token in normalized_text.split() if token}
+    suffixes = sorted(
+        {
+            normalize_taxonomy_text(value).replace(" ", "")
+            for value in (_semantic_alias_payload().get("removable_suffixes") or [])
+            if normalize_taxonomy_text(value).replace(" ", "")
+        },
+        key=len,
+        reverse=True,
+    )
+    for token in list(variants):
+        for suffix in suffixes:
+            if token.endswith(suffix) and len(token) - len(suffix) >= 3:
+                variants.add(token[:-len(suffix)])
+    return variants
+
+
+def _alias_term_matches(normalized_text: str, normalized_term: str, token_variants: set[str]) -> bool:
+    if not normalized_term:
+        return False
+    if contains_taxonomy_term(normalized_text, normalized_term):
+        return True
+    compact = normalized_term.replace(" ", "")
+    return len(compact) >= 3 and compact in token_variants
+
+
+def _semantic_alias_terms(value: str) -> list[tuple[str, float]]:
+    normalized = normalize_taxonomy_text(value)
+    if not normalized:
+        return []
+    token_variants = _alias_token_variants(normalized)
+    result: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for raw_rule in _semantic_alias_payload().get("rules") or []:
+        if not isinstance(raw_rule, dict):
+            continue
+        terms = [normalize_taxonomy_text(term) for term in (raw_rule.get("terms") or [])]
+        if not any(_alias_term_matches(normalized, term, token_variants) for term in terms if term):
+            continue
+        try:
+            multiplier = max(0.1, min(1.5, float(raw_rule.get("weight") or 1.0)))
+        except (TypeError, ValueError):
+            multiplier = 1.0
+        for alias in raw_rule.get("aliases") or []:
+            alias_text = " ".join(str(alias or "").strip().split())
+            alias_normalized = normalize_taxonomy_text(alias_text)
+            if not alias_normalized or alias_normalized in seen:
+                continue
+            seen.add(alias_normalized)
+            result.append((alias_text, multiplier))
+    return result
 
 
 def _flatten_text(value: Any) -> list[str]:
@@ -86,6 +156,30 @@ def _meaningful_tokens(value: str) -> list[str]:
     return tokens
 
 
+def _append_signal(
+    signals: list[dict[str, Any]],
+    seen: set[str],
+    text_value: str,
+    *,
+    source: str,
+    weight: float,
+) -> None:
+    normalized = normalize_taxonomy_text(text_value)
+    if not normalized or normalized in seen:
+        return
+    tokens = _meaningful_tokens(normalized)
+    if not tokens:
+        return
+    seen.add(normalized)
+    signals.append({
+        "text": text_value,
+        "normalized": normalized,
+        "tokens": tokens,
+        "source": source,
+        "weight": float(weight),
+    })
+
+
 def _add_signal(
     signals: list[dict[str, Any]],
     seen: set[str],
@@ -95,27 +189,23 @@ def _add_signal(
     weight: float,
 ) -> None:
     for text_value in _flatten_text(value):
-        normalized = normalize_taxonomy_text(text_value)
-        if not normalized or normalized in seen:
-            continue
-        tokens = _meaningful_tokens(normalized)
-        if not tokens:
-            continue
-        seen.add(normalized)
-        signals.append({
-            "text": text_value,
-            "normalized": normalized,
-            "tokens": tokens,
-            "source": source,
-            "weight": float(weight),
-        })
+        _append_signal(signals, seen, text_value, source=source, weight=weight)
+        for alias_text, alias_multiplier in _semantic_alias_terms(text_value):
+            _append_signal(
+                signals,
+                seen,
+                alias_text,
+                source="semantic_alias",
+                weight=float(weight) * alias_multiplier,
+            )
 
 
 def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
     """Build reusable product signals from canonical product and external metadata.
 
-    Existing product-taxonomy synonyms are deliberately reused instead of adding
-    a second hard-coded grocery vocabulary to the GPC classifier.
+    Existing product-taxonomy synonyms are reused and generic cross-language
+    concept aliases are loaded from data. The alias layer contains no Brickcode
+    allowlist: every row in the official GPC reference remains eligible.
     """
 
     signals: list[dict[str, Any]] = []
@@ -145,7 +235,10 @@ def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
         + _flatten_text(metadata.get("external_categories"))
         + _flatten_text(metadata.get("external_search_text"))
     )
-    intent_key = classify_product_intent_from_taxonomy(intent_source)
+    requested_intent = str(metadata.get("product_intent") or "").strip()
+    intent_key = requested_intent if requested_intent and load_gpc_candidate_strategy(requested_intent) else ""
+    if not intent_key:
+        intent_key = classify_product_intent_from_taxonomy(intent_source)
     taxonomy_metadata = get_taxonomy_metadata_for_intent(intent_key)
 
     if intent_key:
