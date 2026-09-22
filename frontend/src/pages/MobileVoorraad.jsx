@@ -1,11 +1,59 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import Header from '../ui/Header'
 import Button from '../ui/Button'
 import Select from '../ui/Select.jsx'
 import CatalogArticleThumbnail from '../ui/CatalogArticleThumbnail.jsx'
 import { fetchJsonWithAuth } from '../lib/authSession.js'
 import './mobileVoorraad.css'
+
+const MOBILE_NAV_ITEMS = [
+  { key: 'voorraad', label: 'Voorraad', route: '/voorraad', icon: 'inventory' },
+  { key: 'bijna-op', label: 'Bijna op', route: '/bijna-op', icon: 'clock' },
+  { key: 'winkelen', label: 'Winkelen', route: '/winkelen', icon: 'cart' },
+  { key: 'kassa', label: 'Kassa', route: '/kassa', icon: 'receipt' },
+  { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' },
+]
+
+function MobileNavIcon({ type }) {
+  if (type === 'inventory') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5v-9Z" />
+        <path d="m4.5 7.7 7.5 3.4 7.5-3.4M12 11.1V20" />
+      </svg>
+    )
+  }
+  if (type === 'clock') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 8v4l2.8 1.8" />
+      </svg>
+    )
+  }
+  if (type === 'cart') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 5h2l1.5 9h10.8l2-6H6" />
+        <circle cx="9" cy="18.5" r="1.2" />
+        <circle cx="17" cy="18.5" r="1.2" />
+      </svg>
+    )
+  }
+  if (type === 'receipt') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 3h10v18l-2-1.4-2 1.4-2-1.4L9 21l-2-1.4V3Z" />
+        <path d="M9.5 8h5M9.5 11h5M9.5 14h3.5" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 7h14M5 12h14M5 17h14" />
+    </svg>
+  )
+}
 
 function normalizeText(value) {
   return String(value || '').trim().toLowerCase()
@@ -178,13 +226,22 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     setGroupFilter('')
   }
 
+  const resultSummary = isLoading
+    ? 'Voorraad laden…'
+    : (filteredRows.length === rows.length
+      ? `${rows.length} artikelen`
+      : `${filteredRows.length} van ${rows.length} artikelen`)
+
   return (
     <div
       className="rz-screen rz-mobile-inventory-screen"
       data-testid="mobile-inventory-page"
       data-location-tracking={locationTrackingEnabled ? 'enabled' : 'disabled'}
     >
-      <Header title="Voorraad" />
+      <header className="rz-mobile-inventory-topbar" data-testid="mobile-inventory-header">
+        <h1>Voorraad</h1>
+      </header>
+
       <main className="rz-mobile-inventory-content">
         <section className="rz-mobile-inventory-toolbar" aria-label="Voorraad zoeken en filteren">
           <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
@@ -199,7 +256,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
             />
           </label>
 
-          <div className={`rz-mobile-inventory-filter-grid${locationTrackingEnabled ? '' : ' rz-mobile-inventory-filter-grid--single'}`}>
+          <div className="rz-mobile-inventory-filter-strip">
             {locationTrackingEnabled ? (
               <div className="rz-mobile-inventory-field" data-testid="mobile-inventory-location-filter">
                 <span id="mobile-inventory-location-label" className="rz-mobile-inventory-label">Locatie</span>
@@ -207,6 +264,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                   ariaLabelledby="mobile-inventory-location-label"
                   value={locationFilter}
                   onChange={setLocationFilter}
+                  triggerClassName="rz-mobile-inventory-select-trigger"
                   options={[
                     { value: '', label: 'Alle locaties' },
                     ...locationOptions.map((option) => ({ value: option, label: option })),
@@ -214,27 +272,28 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                 />
               </div>
             ) : null}
+
             <div className="rz-mobile-inventory-field">
               <span id="mobile-inventory-group-label" className="rz-mobile-inventory-label">Artikelgroep</span>
               <Select
                 ariaLabelledby="mobile-inventory-group-label"
                 value={groupFilter}
                 onChange={setGroupFilter}
+                triggerClassName="rz-mobile-inventory-select-trigger"
                 options={[
                   { value: '', label: 'Alle groepen' },
                   ...articleGroupOptions.map((option) => ({ value: option, label: option })),
                 ]}
               />
             </div>
-          </div>
 
-          <div className="rz-mobile-inventory-toolbar-row">
-            <div className="rz-mobile-inventory-sort">
+            <div className="rz-mobile-inventory-field rz-mobile-inventory-sort">
               <span id="mobile-inventory-sort-label" className="rz-mobile-inventory-label">Sorteren</span>
               <Select
                 ariaLabelledby="mobile-inventory-sort-label"
                 value={sortKey}
                 onChange={setSortKey}
+                triggerClassName="rz-mobile-inventory-select-trigger"
                 options={[
                   { value: 'name', label: 'Naam A–Z' },
                   { value: 'quantity', label: 'Aantal hoog–laag' },
@@ -242,14 +301,31 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                 ]}
               />
             </div>
-            {hasActiveFilters ? (
-              <Button type="button" variant="secondary" className="rz-mobile-inventory-clear" onClick={clearFilters}>Filters wissen</Button>
-            ) : null}
           </div>
+
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="rz-mobile-inventory-clear"
+              onClick={clearFilters}
+            >
+              Filters wissen
+            </Button>
+          ) : null}
         </section>
 
-        <div className="rz-mobile-inventory-summary" aria-live="polite">
-          {isLoading ? 'Voorraad laden…' : `${filteredRows.length} van ${rows.length} artikelen`}
+        <div className="rz-mobile-inventory-summary-row">
+          <div className="rz-mobile-inventory-summary" aria-live="polite">{resultSummary}</div>
+          <Button
+            type="button"
+            variant="primary"
+            className="rz-mobile-inventory-add"
+            onClick={() => navigate('/voorraad/incidentele-aankoop')}
+            data-testid="mobile-inventory-add-incidental-purchase"
+          >
+            + Incidentele aankoop
+          </Button>
         </div>
 
         {error ? (
@@ -294,7 +370,9 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                     </div>
                   </div>
                   <div className="rz-mobile-inventory-card-side">
-                    <span className="rz-mobile-inventory-quantity" aria-label={`Aantal ${formatQuantity(row.quantity)}`}>{formatQuantity(row.quantity)}</span>
+                    <span className="rz-mobile-inventory-quantity" aria-label={`Aantal ${formatQuantity(row.quantity)}`}>
+                      {formatQuantity(row.quantity)}
+                    </span>
                     <span className="rz-mobile-inventory-chevron" aria-hidden="true">›</span>
                   </div>
                 </>
@@ -317,21 +395,25 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
             })}
           </section>
         ) : null}
-
-        <div
-          className="rz-mobile-inventory-actions"
-          style={{ bottom: 'calc(var(--size-app-bar-mobile) + 10px + env(safe-area-inset-bottom))' }}
-        >
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => navigate('/voorraad/incidentele-aankoop')}
-            data-testid="mobile-inventory-add-incidental-purchase"
-          >
-            Incidentele aankoop toevoegen
-          </Button>
-        </div>
       </main>
+
+      <nav className="rz-mobile-inventory-bottom-nav" aria-label="Hoofdnavigatie" data-testid="mobile-inventory-bottom-nav">
+        {MOBILE_NAV_ITEMS.map((item) => {
+          const active = item.key === 'voorraad'
+          return (
+            <Link
+              key={item.key}
+              to={item.route}
+              className={`rz-mobile-inventory-nav-item${active ? ' is-active' : ''}`}
+              aria-current={active ? 'page' : undefined}
+              data-testid={`mobile-inventory-nav-${item.key}`}
+            >
+              <span className="rz-mobile-inventory-nav-icon"><MobileNavIcon type={item.icon} /></span>
+              <span>{item.label}</span>
+            </Link>
+          )
+        })}
+      </nav>
     </div>
   )
 }
