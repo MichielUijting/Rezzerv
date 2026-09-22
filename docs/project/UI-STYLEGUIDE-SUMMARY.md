@@ -1,7 +1,7 @@
 # Inhuis UI-styleguide
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
-Laatst inhoudelijk vastgesteld door de PO: 20 september 2026.
+Laatst inhoudelijk vastgesteld door de PO: 22 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
@@ -23,7 +23,7 @@ Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele 
 - zoeken en filters staan compact boven de inhoud, zonder een grote omhullende filtercard;
 - de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - geen losse verhoogde card per voorraadartikel en geen decoratieve schaduwen als hoofdstructuur;
-- een vaste witte onderste navigatiebalk met vijf compacte tabitems. De Voorraadpilot gebruikt uitsluitend bestaande werkende routes: **Voorraad**, **Bijna op**, **Winkelen**, **Kassa** en **Meer**;
+- een vaste witte onderste navigatiebalk met vijf compacte tabitems. De Voorraadpilot gebruikt uitsluitend bestaande werkende routes: **Meldingen**, **Voorraad**, **Bijna op**, **Winkelen** en **Meer**;
 - de bestaande actie **Incidentele aankoop** blijft functioneel beschikbaar, maar staat als compacte groene actie bij de lijstcontext en is niet langer een grote sticky knop boven een aparte meldingenbalk;
 - alle bestaande data-, autorisatie-, huishoudisolatie-, detailroute- en filterfunctionaliteit blijft leidend. Dit PO-besluit wijzigt de presentatie, niet het domeinmodel.
 
@@ -73,14 +73,14 @@ Centrale tokens:
 - `--color-table-grid`: `#8FD19E`.
 
 Gebruik:
-- `#28A99E` is de primaire Inhuis-UI-kleur voor header, primaire gekleurde acties, tabelheaders en de meldingenbalk;
+- `#28A99E` blijft de primaire Inhuis-UI-kleur voor bestaande desktop-/tabelsurfaces en nog niet gemigreerde schermen; de mobiele Voorraadpilot gebruikt conform het PO-ontwerpbesluit `#006B3C` voor primaire actie en actieve onderste navigatie;
 - tekst en iconen op `#28A99E` gebruiken centraal `#FFFFFF`; dit geldt applicatiebreed voor primaire gekleurde surfaces en vervangt de eerdere donkere tekstkleur;
 - `#1A3E2B` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
 - normale tekst gebruikt de primaire donkere tekstkleur;
 - lichte groentinten zijn ondersteunend en concurreren niet met de primaire actie;
 - de legacy-token `--rz-accent` wordt centraal gekoppeld aan `--color-ui-primary`;
 - voeg geen nieuwe dominante merkkleur toe zonder expliciete PO-beslissing en styleguide-update;
-- witte tekst op primaire gekleurde surfaces geldt voor **alle schermen** en omvat minimaal headers, permanente footer-/meldingenbalken, primaire en secundaire gekleurde knoppen en de gekleurde titelrij van tabellen;
+- witte tekst op gekleurde primaire surfaces blijft verplicht; dit geldt zowel op `#28A99E` als op de mobiele Voorraadpilottint `#006B3C`;
 - fout-, waarschuwing- en succeskleuren mogen semantisch afwijken, maar worden niet als alternatieve merkkleur ingezet.
 
 ## Spacing, radius en elevation
@@ -114,20 +114,20 @@ Regels:
 
 ## Schermopbouw
 
-Voor mobiele kernschermen is de standaardvolgorde:
-1. header;
-2. zoeken/filteren/context of een compacte hero/contextcard;
-3. hoofdinhoud in cards/lijst/tabel of detailsecties;
+Voor mobiele modulehoofschermen is de standaardvolgorde:
+1. compacte moduleheader;
+2. zoeken/filteren/context;
+3. hoofdinhoud in lijst/cards/tabel;
 4. één dominante primaire actie waar nodig;
-5. permanente onderste meldingenbalk; tijdelijke feedback verschijnt in die balk.
+5. module-/hoofdnavigatie onderin wanneer het scherm volgens de nieuwe mobiele baseline is gemigreerd.
 
-Alle onderdelen volgen één horizontale uitlijning en herhaalbare spacing. Een scherm introduceert geen eigen navigatie- of actiepatroon wanneer een bestaand centraal patroon beschikbaar is.
+Alle onderdelen volgen één horizontale uitlijning en herhaalbare spacing. Voor de nieuwe mobiele Voorraadbaseline is de vaste onderste navigatie onderdeel van de schermshell. Niet-gemigreerde mobiele schermen mogen tijdelijk hun bestaande shell en feedback-clearance behouden.
 
-Voor de twee mobiele referentieschermen geldt daarnaast:
-- de hoofdinhoud staat gecentreerd en wordt niet breder dan `720px`;
+Voor de mobiele Voorraadpilot geldt:
+- de hoofdinhoud staat gecentreerd en wordt niet breder dan circa `640px`;
 - op smalle mobiele breedtes is circa `10px` horizontale buitenruimte de referentie; op ruimere mobiele breedtes circa `14px`;
-- opeenvolgende cards/lijstitems houden een rustig, herhaalbaar verticaal ritme van ongeveer `10–12px` aan;
-- de scherminhoud reserveert onderaan altijd voldoende scrollruimte voor de permanente meldingenbalk en eventuele safe-area.
+- de lijst gebruikt subtiele scheidingslijnen in één surface in plaats van verticale ruimte tussen losse cards;
+- de scherminhoud reserveert onderaan voldoende ruimte voor de vaste onderste navigatie plus `env(safe-area-inset-bottom)`.
 
 ## Mobiele navigatie
 
@@ -148,82 +148,68 @@ Voor een native mobiele shell geldt hetzelfde route-/stackmodel, maar zonder zic
 
 ## Header en branding
 
-- standaard headerhoogte: `58px` op grotere schermen en `64px` op mobiel;
-- achtergrond: `--color-ui-primary` (`#28A99E`);
-- schermtitel en subtitel gebruiken wit (`--color-ui-primary-text`, `#FFFFFF`);
-- op mobiel staat de schermtitel links en het witte Inhuis-logo rechts;
-- secundaire headercontext zoals subtitel/userbox wordt op het compacte mobiele patroon niet tussen titel en logo gepropt;
-- gebruikerszichtbaar merk is **Inhuis**;
-- het witte Inhuis-logo staat rechts, is verticaal gecentreerd en blijft volledig binnen de header;
-- interne technische naamgeving `Rezzerv` mag in code blijven maar wordt niet als gebruikersmerk getoond.
+De bestaande generieke/desktopheader blijft:
+- standaard `58px` hoog op grotere schermen;
+- `--color-ui-primary` (`#28A99E`) met witte titel/iconen;
+- gebruikerszichtbaar merk **Inhuis**; interne technische naamgeving `Rezzerv` wordt niet als gebruikersmerk getoond.
+
+Voor de nieuwe mobiele modulebaseline, te beginnen met **Voorraad**, geldt bewust een ander patroon:
+- compacte witte bovenbalk;
+- schermtitel gecentreerd;
+- geen desktopachtige huishoudenregel, userbox of groot merkteken in de module-root;
+- de browser-/native shell en onderste navigatie leveren de appcontext;
+- detail- en nog niet gemigreerde schermen mogen tijdelijk de bestaande header houden totdat zij expliciet worden omgezet.
 
 ## Mobiele achtergrond en surfaces
 
-De mobiele Voorraad-weergave is de visuele referentie voor de kernflow:
-- lichtgroen, zacht gevlekt en laag in contrast;
-- asset `/inhuis-green-wallpaper.svg`;
-- basisachtergrond `#EEF7F0`;
-- cards en filter-/zoekoppervlakken zijn wit of vrijwel wit en duidelijk leesbaar boven de achtergrond;
-- mobiele cards gebruiken een rustige lichte rand, royale afronding en een zachte groengetinte schaduw; zware zwarte schaduwen passen niet bij de referentie;
-- achtergronddecoratie concurreert nooit met tekst of bediening;
-- transparantie/blur mag ondersteunend worden gebruikt, maar leesbaarheid en contrast gaan voor.
+Voor de nieuwe mobiele Voorraadbaseline:
+- pagina-achtergrond is rustig wit/lichtgrijs;
+- de oude `/inhuis-green-wallpaper.svg`- en orange-wallpaperpresentatie is **geen** Voorraadbaseline meer;
+- blur/glassmorphism is niet toegestaan als hoofdstructuur;
+- zoeken en filters staan compact op de pagina zonder verhoogde omhullende card;
+- voorraadartikelen staan in één witte lijstsurface met subtiele scheidingslijnen;
+- individuele voorraadregels hebben geen decoratieve elevation of zwevende-cardpresentatie;
+- focus-, hover- en active-status blijven duidelijk zichtbaar.
 
-De eerdere oranje achtergrond is geen actuele visuele referentie meer.
+Het nog niet gemigreerde **Voorraad-artikeldetail** mag tijdelijk de oudere groen gevlekte surface behouden; die tijdelijke detailstijl is geen precedent voor nieuwe modulehoofschermen.
 
 ## Mobiele referentieschermen
 
-De huidige schermen **Voorraad** en **Voorraad-artikeldetail** zijn samen de concrete visuele baseline voor verdere mobiele kernschermen. Zij delen dezelfde shell maar gebruiken twee verschillende inhoudspatronen.
-
 ### Referentie A — mobiele lijstweergave: Voorraad
 
-Gebruik dit patroon voor schermen waar de gebruiker zoekt, filtert en een item uit een verzameling kiest.
+**Voorraad** is vanaf 22 september 2026 de concrete visuele referentie voor nieuwe mobiele module-/lijstschermen.
 
 Vaste kenmerken:
-- bovenaan staat na de header één witte zoek-/filtercard;
-- het zoekveld krijgt de meeste breedte en staat visueel als eerste ingang van de lijst;
-- zoek-, select- en filtervelden hebben minimaal circa `44px` touchhoogte; een prominent zoekveld mag circa `50px` hoog zijn;
-- een compacte status-/aantalbadge mag tussen filtercard en lijst staan, maar blijft visueel ondergeschikt aan de primaire actie;
-- lijstitems zijn witte afgeronde cards met één duidelijk klikdoel over de gehele card;
-- primaire itemnaam staat links als hoofdnadruk; artikelgroep/metadata staat daaronder in lichtere chip-/metadatavorm;
-- hoeveelheid/status staat rechts in een compacte pill en een chevron maakt navigatie herkenbaar;
-- een lijstitem heeft voldoende touchhoogte; de huidige Voorraadreferentie gebruikt ongeveer `80px` of meer;
-- lijstitems staan met ongeveer `10px` verticale tussenruimte onder elkaar;
-- één schermbrede primaire vervolgactie mag onder de lijst sticky zijn, maar moet volledig boven de permanente meldingenbalk kunnen komen en bereikbaar blijven door te scrollen.
+- compacte witte bovenbalk met gecentreerde schermtitel;
+- zoekveld als eerste ingang, gevolgd door compacte locatie-/artikelgroep-/sorteerfilters;
+- interactieve zoek-/select-/actievelden hebben minimaal circa `44px` touchhoogte;
+- aantalscontext en de bestaande actie **Incidentele aankoop** staan compact boven de lijst;
+- één witte lijstcontainer met subtiele horizontale scheidingen;
+- iedere rij toont waar beschikbaar een representatieve productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
+- de hele rij is het detailklikdoel;
+- geen afzonderlijke schaduwcard, wallpaper, blur of sticky schermbrede CTA per artikel;
+- vaste witte onderste hoofdnavigatie met **Meldingen**, **Voorraad**, **Bijna op**, **Winkelen** en **Meer**; actieve module gebruikt `#006B3C`;
+- onderaan wordt altijd ruimte gereserveerd voor de navigatie en safe-area.
 
-### Referentie B — mobiel detailscherm: Voorraad-artikeldetail
+### Referentie B — mobiel detailscherm: Voorraad-artikeldetail (tijdelijk legacy-visueel)
 
-Gebruik dit patroon voor een enkel object met actuele status, velden en gerichte vervolghandelingen.
+Het bestaande Voorraad-artikeldetail blijft voorlopig functioneel en visueel ongewijzigd. De bestaande plus/min-, locatie-, instellingen- en snelle-actiescontracten blijven geldig, maar de oudere wallpaper/card-shell is **niet** meer de visuele bron voor nieuwe mobiele schermen.
 
-Vaste kenmerken:
-- de eerste card is een compacte hero/contextcard met objectnaam/status links en directe kernbediening rechts;
-- directe plus/min-bediening gebruikt minimaal `44 × 44px` touchdoelen;
-- aanvullende informatie staat in afzonderlijke witte sectiecards met duidelijke `16px` sectietitel;
-- veldachtige detailregels zijn tweekoloms: label links, waarde/status rechts;
-- detail- en actierijen hebben links en rechts minimaal `1ch` interne ademruimte;
-- snelle acties zijn als volledige rij klikbaar waar passend; de belangrijkste vervolgstap mag als volle blauw-groene rij/knop worden weergegeven;
-- waarden rechts mogen semibold zijn om scanbaarheid te verbeteren, zonder een derde tekstgrootte te introduceren;
-- cards volgen hetzelfde horizontale ritme, dezelfde lichte surfacefamilie en dezelfde achtergrond als de lijstweergave.
+Bij latere migratie van het detailscherm wordt de presentatie naar Referentie A en het PO-ontwerpdocument gebracht zonder het domeinmodel, API's of voorraadmutaties te wijzigen.
 
-### Gedeelde mobiele shell
+### Typografie, touch en routes
 
-Voor beide referenties geldt:
-- `64px` blauw-groene header op mobiel;
-- `#28A99E` voor header, primaire actie en permanente meldingenbalk;
-- witte tekst/iconen (`#FFFFFF`) op primaire blauw-groene surfaces;
-- lichtgroen gevlekte pagina-achtergrond;
-- witte of vrijwel witte contentcards;
-- uitsluitend `14px` bodytekst en `16px` titel/hoofdnadruk in de uiteindelijke rendering;
-- minimaal circa `44px` voor primaire touchdoelen;
-- permanente meldingenbalk van `64px` onderin;
-- document-/scrollinhoud reserveert minimaal de balkhoogte plus `env(safe-area-inset-bottom)` zodat de laatste inhoud of actie volledig boven de balk kan worden gebracht;
-- sticky acties gebruiken een bottom-offset boven de meldingenbalk en mogen niet achter de balk eindigen;
-- browserzoom of responsive emulatie mag deze basisafstand, `1ch`-veldmarges of bereikbaarheid van de onderste actie niet laten verdwijnen.
-
-Deze twee schermen zijn een **patroonreferentie**, geen opdracht om functionele inhoud letterlijk te kopiëren. Nieuwe modules gebruiken dezelfde visuele grammatica met hun eigen domeininhoud.
+Voor de nieuwe Voorraadbaseline blijven de generieke toegankelijkheidscontracten van kracht:
+- uiteindelijk gerenderde tekst gebruikt `14px` body en `16px` titel/hoofdnadruk;
+- interactieve primaire touchdoelen zijn minimaal circa `44px` hoog;
+- productthumbnail blijft waar beschikbaar circa `52 × 52px`;
+- alleen bestaande geautoriseerde routes worden in de onderste navigatie opgenomen; een ontwerpitem zonder werkende appfunctie wordt niet als dode navigatie nagebouwd.
 
 ## Meldingen en feedback
 
-Voor passieve applicatiemeldingen geldt één centraal patroon:
+Voor passieve applicatiemeldingen op bestaande/niet-gemigreerde schermen geldt het bestaande centrale patroon. Voor de nieuwe mobiele Voorraadbaseline wordt **geen permanent lege meldingenbalk** naast de vaste onderste navigatie gereserveerd; eventuele passieve feedback moet zichtbaar boven die navigatie worden geplaatst en mag haar niet blokkeren.
+
+Bestaande regels:
 - succes-, fout-, waarschuwing-, informatie- en voortgangsmeldingen worden niet midden in het scherm geplaatst;
 - zij verschijnen in een vaste onderste balk over de volle schermbreedte;
 - de balk is permanent zichtbaar, ook wanneer er geen melding is; zonder melding blijft de balk leeg en toont hij geen placeholdertekst;
@@ -262,7 +248,7 @@ Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een explicie
 
 ## Cards en lijstregels
 
-Een standaard listcard bevat:
+Een standaard listcard op niet-gemigreerde schermen bevat:
 - primaire informatie links;
 - secundaire metadata/chips onder of naast de primaire tekst;
 - status/aantal/chevron aan de rechterkant wanneer relevant;
@@ -270,7 +256,7 @@ Een standaard listcard bevat:
 - witte of bijna-witte surface met rustige rand/schaduw;
 - consistente padding en afronding.
 
-De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft `14px`.
+De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft `14px`. De mobiele Voorraadpilot gebruikt in plaats van losse listcards één vlakke lijstsurface met gescheiden rijen.
 
 ## Productafbeeldingen
 
@@ -303,7 +289,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 
 ## Knoppen en acties
 
-- primaire knop: `#28A99E` met witte tekst/iconen (`#FFFFFF`);
+- primaire knop: standaard `#28A99E` met witte tekst/iconen (`#FFFFFF`); binnen de nieuwe mobiele Voorraadbaseline gebruikt de primaire actie conform PO-besluit `#006B3C` met wit;
 - knoptekst is `14px` en niet vet (`font-weight: 400`);
 - per scherm is bij voorkeur één dominante primaire actie;
 - secundaire acties krijgen minder visueel gewicht;
@@ -374,18 +360,14 @@ Maak geen lokale variant van een bestaand component alleen om kleine visuele ver
 
 ## Kernflowconsistentie
 
-Voor de mobiele kernflow **Voorraad → Bijna op → Boodschappenlijst → Kassa → Uitpakken** gelden dezelfde:
-- typografie;
-- merk- en surfacekleuren;
-- lichtgroen gevlekte achtergrond waar de kernflow die achtergrond gebruikt;
-- spacinglogica en mobiele `1ch`-binnenmarge;
-- zoek-/filtertaal;
-- card- en statuspatronen;
-- primaire-actielogica;
-- permanente onderste meldingenbalk met verplichte scroll-clearance;
-- focus- en touchregels.
+De mobiele kernflow **Voorraad → Bijna op → Boodschappenlijst → Kassa → Uitpakken** migreert gefaseerd naar de nieuwe ontwerpbaseline. Daardoor is tijdelijke visuele variatie tussen **Voorraad** en nog niet gemigreerde schermen toegestaan.
 
-Functionele verschillen tussen deze schermen mogen zichtbaar zijn, maar ze voelen als één applicatie en niet als losse modules.
+Tijdens deze overgang:
+- functionele routes, autorisatie, data-identiteit en domeinacties blijven ongewijzigd;
+- **Voorraad** is de visuele bron voor volgende migraties;
+- niet-gemigreerde schermen worden niet opportunistisch meegewijzigd in een Voorraad-PR;
+- nieuwe schermwijzigingen kopiëren geen inmiddels vervallen Voorraad-wallpaper/glassmorphism/sticky-CTA-patroon;
+- bij iedere volgende migratie wordt de canonieke styleguide in dezelfde PR bijgewerkt.
 
 ## Mobiele Boodschappenlijst
 
