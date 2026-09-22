@@ -44,7 +44,7 @@ def run_runtime_initialization(
     *,
     engine,
     logger,
-    deactivate_incomplete_confirmed_external_links: Callable[[Any], int],
+    reconcile_incomplete_confirmed_external_links: Callable[[Any], dict[str, int]],
     bootstrap_auth_registry: Callable[[], None],
     migrate_legacy_household_memberships: Callable[[Any], Any],
     refresh_runtime_users_from_db: Callable[[], None],
@@ -58,10 +58,16 @@ def run_runtime_initialization(
     _configure_receipt_source_helper_runtime(engine)
 
     with engine.begin() as connection:
-        cleanup_count = deactivate_incomplete_confirmed_external_links(connection)
+        link_reconciliation = reconcile_incomplete_confirmed_external_links(connection)
     logger.info(
-        "Incomplete kassabonartikelkoppelingen gedeactiveerd: %s",
-        cleanup_count,
+        "Kassabonartikelkoppelingen gecontroleerd: checked=%s, "
+        "invalid-GTIN->generiek=%s, GTIN-gepromoveerd=%s, "
+        "links-omgeleid=%s, gedeactiveerd=%s",
+        link_reconciliation.get("checked_products", 0),
+        link_reconciliation.get("repaired_to_generic_products", 0),
+        link_reconciliation.get("promoted_valid_gtin_products", 0),
+        link_reconciliation.get("redirected_links", 0),
+        link_reconciliation.get("deactivated_links", 0),
     )
 
     bootstrap_auth_registry()

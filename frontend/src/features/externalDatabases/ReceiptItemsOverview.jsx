@@ -539,8 +539,13 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         setNewProductTypeName(selectedCandidate.candidateName === '-' ? '' : selectedCandidate.candidateName)
         if (explicitSuggestion) {
           setSelectedProductTypeId(explicitSuggestion)
-          setProductTypeSelectionSource(selectedCandidate.isLinkedToCatalog ? '' : 'external')
-          setProductTypeClassificationStatus('Producttype bepaald via expliciete GPC Brickcode van de externe bron.')
+          if (selectedCandidate.isLinkedToCatalog) {
+            setProductTypeSelectionSource('catalog')
+            setProductTypeClassificationStatus('Producttype overgenomen uit de bestaande Cataloguskoppeling.')
+          } else {
+            setProductTypeSelectionSource('external')
+            setProductTypeClassificationStatus('Producttype bepaald via expliciete GPC Brickcode van de externe bron.')
+          }
           return
         }
         if (selectedCandidate.isLinkedToCatalog) {

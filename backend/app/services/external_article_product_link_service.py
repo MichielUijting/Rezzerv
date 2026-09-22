@@ -21,6 +21,12 @@ from typing import Any, Mapping, Optional
 
 from sqlalchemy import text
 
+from app.services.global_product_service import build_global_product_fingerprint
+from app.services.gtin_validation_service import is_valid_gtin
+from app.services.product_inventory_group_store import (
+    link_global_product_to_inventory_group_with_connection,
+)
+
 
 CONFIRMED_STATUS = "confirmed"
 INACTIVE_STATUS = "inactive"
@@ -92,7 +98,7 @@ def _complete_global_product_link_data(conn, global_product_id: str) -> dict[str
 
     product_source = str(row.get("product_source") or "").strip().lower()
     primary_gtin = str(row.get("primary_gtin") or "").strip()
-    has_valid_primary_gtin = bool(re.fullmatch(r"[0-9]{8,14}", primary_gtin))
+    has_valid_primary_gtin = is_valid_gtin(primary_gtin)
     has_matching_gtin_identity = bool(row.get("has_matching_gtin_identity"))
     has_active_official_gpc = bool(row.get("has_active_official_gpc"))
     is_generic_catalog_product = product_source == "external_databases_generic"
@@ -134,38 +140,408 @@ def _require_complete_global_product_link(conn, global_product_id: str) -> dict[
     return result
 
 
-def deactivate_incomplete_confirmed_external_links(conn) -> int:
+def _active_official_gpc_membership(conn, global_product_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        text(
+            """
+            SELECT
+                pgm.inventory_group_key,
+                pgm.comparison_group_key,
+                pgm.confidence,
+                pgm.source AS membership_source,
+                pgm.confirmed_by_user,
+                pig.gpc_brick_code
+            FROM product_group_memberships pgm
+            JOIN product_inventory_groups pig
+              ON pig.inventory_group_key = pgm.inventory_group_key
+            WHERE pgm.global_product_id = :global_product_id
+              AND COALESCE(pgm.active, 1) = 1
+              AND pgm.inventory_group_key LIKE 'gpc:%'
+              AND pig.gpc_brick_code = substr(pgm.inventory_group_key, 5)
+              AND pig.source LIKE 'gs1_gpc_%'
+              AND COALESCE(pig.active, 1) = 1
+            ORDER BY pgm.updated_at DESC, pgm.created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"global_product_id": global_product_id},
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+def _valid_gtin_identities(conn, global_product_id: str) -> list[str]:
     rows = conn.execute(
         text(
             """
-            SELECT id, global_product_id
+            SELECT identity_value, COALESCE(is_primary, FALSE) AS is_primary
+            FROM product_identities
+            WHERE global_product_id = :global_product_id
+              AND identity_type = 'gtin'
+            ORDER BY COALESCE(is_primary, FALSE) DESC, created_at, id
+            """
+        ),
+        {"global_product_id": global_product_id},
+    ).mappings().all()
+    return [
+        str(row.get("identity_value") or "").strip()
+        for row in rows
+        if is_valid_gtin(row.get("identity_value"))
+    ]
+
+
+def _copy_gpc_assignment(
+    conn,
+    *,
+    source_global_product_id: str,
+    target_global_product_id: str,
+    membership: dict[str, Any],
+) -> None:
+    source_assignment = conn.execute(
+        text(
+            """
+            SELECT brick_code, assignment_source, confidence
+            FROM global_product_gpc_bricks
+            WHERE global_product_id = :global_product_id
+            LIMIT 1
+            """
+        ),
+        {"global_product_id": source_global_product_id},
+    ).mappings().first()
+
+    brick_code = str(
+        (source_assignment or {}).get("brick_code")
+        or membership.get("gpc_brick_code")
+        or ""
+    ).strip()
+    if not brick_code:
+        return
+    membership_source = str(membership.get("membership_source") or "").lower()
+    assignment_source = str(
+        (source_assignment or {}).get("assignment_source")
+        or ("manual" if "manual" in membership_source else "external")
+    ).strip()
+    confidence = float(
+        (source_assignment or {}).get("confidence")
+        or membership.get("confidence")
+        or 1.0
+    )
+    conn.execute(
+        text(
+            """
+            INSERT INTO global_product_gpc_bricks (
+                global_product_id,
+                brick_code,
+                assignment_source,
+                confidence,
+                migrated_from,
+                updated_at
+            ) VALUES (
+                :global_product_id,
+                :brick_code,
+                :assignment_source,
+                :confidence,
+                'invalid_gtin_exact_link_repair',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT(global_product_id) DO UPDATE SET
+                brick_code = excluded.brick_code,
+                assignment_source = excluded.assignment_source,
+                confidence = excluded.confidence,
+                migrated_from = excluded.migrated_from,
+                updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {
+            "global_product_id": target_global_product_id,
+            "brick_code": brick_code,
+            "assignment_source": assignment_source,
+            "confidence": max(0.0, min(confidence, 1.0)),
+        },
+    )
+
+
+def _repair_invalid_exact_product(conn, global_product_id: str) -> dict[str, Any]:
+    product_id = str(global_product_id or "").strip()
+    product = conn.execute(
+        text(
+            """
+            SELECT
+                id, name, COALESCE(primary_gtin, '') AS primary_gtin,
+                COALESCE(source, '') AS source
+            FROM global_products
+            WHERE id = :global_product_id
+              AND lower(COALESCE(status, 'active')) = 'active'
+            LIMIT 1
+            """
+        ),
+        {"global_product_id": product_id},
+    ).mappings().first()
+    if not product:
+        return {"repaired": False, "reason": "product_missing"}
+
+    source = str(product.get("source") or "").strip().lower()
+    invalid_gtin = str(product.get("primary_gtin") or "").strip()
+    if source == "external_databases_generic" or not invalid_gtin or is_valid_gtin(invalid_gtin):
+        return {"repaired": False, "reason": "not_invalid_exact"}
+
+    membership = _active_official_gpc_membership(conn, product_id)
+    if not membership:
+        return {"repaired": False, "reason": "official_gpc_missing"}
+
+    valid_identities = _valid_gtin_identities(conn, product_id)
+    if valid_identities:
+        promoted_gtin = valid_identities[0]
+        conn.execute(
+            text(
+                """
+                UPDATE global_products
+                SET primary_gtin = :primary_gtin,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :global_product_id
+                """
+            ),
+            {"global_product_id": product_id, "primary_gtin": promoted_gtin},
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE product_identities
+                SET is_primary = CASE
+                    WHEN identity_type = 'gtin' AND identity_value = :primary_gtin
+                    THEN TRUE ELSE FALSE
+                END,
+                updated_at = CURRENT_TIMESTAMP
+                WHERE global_product_id = :global_product_id
+                  AND identity_type = 'gtin'
+                """
+            ),
+            {"global_product_id": product_id, "primary_gtin": promoted_gtin},
+        )
+        return {
+            "repaired": True,
+            "mode": "promoted_valid_gtin",
+            "global_product_id": product_id,
+            "primary_gtin": promoted_gtin,
+            "redirected_links": 0,
+        }
+
+    product_name = " ".join(str(product.get("name") or "").strip().split())
+    if not product_name:
+        return {"repaired": False, "reason": "product_name_missing"}
+
+    generic_fingerprint = build_global_product_fingerprint(product_name)
+    existing_generic = conn.execute(
+        text(
+            """
+            SELECT id
+            FROM global_products
+            WHERE id <> :global_product_id
+              AND lower(COALESCE(source, '')) = 'external_databases_generic'
+              AND lower(COALESCE(status, 'active')) = 'active'
+              AND COALESCE(trim(primary_gtin), '') = ''
+              AND product_fingerprint = :product_fingerprint
+            LIMIT 1
+            """
+        ),
+        {
+            "global_product_id": product_id,
+            "product_fingerprint": generic_fingerprint,
+        },
+    ).mappings().first()
+
+    replacement_id = str((existing_generic or {}).get("id") or "").strip()
+    if replacement_id:
+        existing_membership = _active_official_gpc_membership(conn, replacement_id)
+        existing_group = str((existing_membership or {}).get("inventory_group_key") or "").strip()
+        required_group = str(membership.get("inventory_group_key") or "").strip()
+        if existing_group and existing_group != required_group:
+            return {"repaired": False, "reason": "generic_product_gpc_conflict"}
+
+        linked = link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=replacement_id,
+            inventory_group_key=required_group,
+            comparison_group_key=(
+                str(membership.get("comparison_group_key") or "").strip()
+                or required_group
+            ),
+            confidence=float(membership.get("confidence") or 1.0),
+            source="external_databases_generic",
+            confirmed_by_user=True,
+        )
+        if not linked.get("ok"):
+            return {"repaired": False, "reason": str(linked.get("error") or "membership_copy_failed")}
+        _copy_gpc_assignment(
+            conn,
+            source_global_product_id=product_id,
+            target_global_product_id=replacement_id,
+            membership=membership,
+        )
+        redirected = conn.execute(
+            text(
+                """
+                UPDATE external_article_product_links
+                SET global_product_id = :replacement_id,
+                    confirmed_by = 'external_databases_generic_link',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE global_product_id = :global_product_id
+                  AND status = 'confirmed'
+                """
+            ),
+            {"replacement_id": replacement_id, "global_product_id": product_id},
+        )
+        conn.execute(
+            text(
+                """
+                DELETE FROM product_identities
+                WHERE global_product_id = :global_product_id
+                  AND identity_type = 'gtin'
+                """
+            ),
+            {"global_product_id": product_id},
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE global_products
+                SET status = 'deleted',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :global_product_id
+                """
+            ),
+            {"global_product_id": product_id},
+        )
+        return {
+            "repaired": True,
+            "mode": "redirected_to_existing_generic",
+            "global_product_id": replacement_id,
+            "redirected_links": int(redirected.rowcount or 0),
+        }
+
+    conn.execute(
+        text(
+            """
+            DELETE FROM product_identities
+            WHERE global_product_id = :global_product_id
+              AND identity_type = 'gtin'
+            """
+        ),
+        {"global_product_id": product_id},
+    )
+    conn.execute(
+        text(
+            """
+            UPDATE global_products
+            SET primary_gtin = NULL,
+                brand = NULL,
+                variant = NULL,
+                category = NULL,
+                size_value = NULL,
+                size_unit = NULL,
+                image_url = NULL,
+                product_fingerprint = :product_fingerprint,
+                source = 'external_databases_generic',
+                status = 'active',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :global_product_id
+            """
+        ),
+        {
+            "global_product_id": product_id,
+            "product_fingerprint": generic_fingerprint,
+        },
+    )
+    redirected = conn.execute(
+        text(
+            """
+            UPDATE external_article_product_links
+            SET confirmed_by = 'external_databases_generic_link',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE global_product_id = :global_product_id
+              AND status = 'confirmed'
+            """
+        ),
+        {"global_product_id": product_id},
+    )
+    return {
+        "repaired": True,
+        "mode": "converted_in_place_to_generic",
+        "global_product_id": product_id,
+        "redirected_links": int(redirected.rowcount or 0),
+    }
+
+
+def reconcile_incomplete_confirmed_external_links(conn) -> dict[str, int]:
+    rows = conn.execute(
+        text(
+            """
+            SELECT DISTINCT global_product_id
             FROM external_article_product_links
             WHERE status = 'confirmed'
-            ORDER BY id
+            ORDER BY global_product_id
             """
         )
     ).mappings().all()
 
-    invalid_ids = [
-        str(row.get("id") or "")
-        for row in rows
-        if not _complete_global_product_link_data(
-            conn, str(row.get("global_product_id") or "")
-        ).get("complete")
-    ]
+    stats = {
+        "checked_products": 0,
+        "repaired_to_generic_products": 0,
+        "promoted_valid_gtin_products": 0,
+        "redirected_links": 0,
+        "deactivated_links": 0,
+    }
 
-    for link_id in invalid_ids:
-        conn.execute(
+    for row in rows:
+        product_id = str(row.get("global_product_id") or "").strip()
+        if not product_id:
+            continue
+        stats["checked_products"] += 1
+        completeness = _complete_global_product_link_data(conn, product_id)
+        if completeness.get("complete"):
+            continue
+
+        if (
+            completeness.get("link_mode") == "exact"
+            and completeness.get("primary_gtin")
+            and not completeness.get("has_valid_primary_gtin")
+            and completeness.get("has_active_official_gpc")
+        ):
+            repair = _repair_invalid_exact_product(conn, product_id)
+            if repair.get("repaired"):
+                mode = str(repair.get("mode") or "")
+                if mode == "promoted_valid_gtin":
+                    stats["promoted_valid_gtin_products"] += 1
+                else:
+                    stats["repaired_to_generic_products"] += 1
+                stats["redirected_links"] += int(repair.get("redirected_links") or 0)
+                repaired_id = str(repair.get("global_product_id") or product_id)
+                if _complete_global_product_link_data(conn, repaired_id).get("complete"):
+                    continue
+
+        deactivated = conn.execute(
             text(
                 """
                 UPDATE external_article_product_links
-                SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id AND status = 'confirmed'
+                SET status = 'inactive',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE global_product_id = :global_product_id
+                  AND status = 'confirmed'
                 """
             ),
-            {"id": link_id},
+            {"global_product_id": product_id},
         )
-    return len(invalid_ids)
+        stats["deactivated_links"] += int(deactivated.rowcount or 0)
+
+    return stats
+
+
+def deactivate_incomplete_confirmed_external_links(conn) -> int:
+    """Compatibility wrapper for older callers."""
+    return int(
+        reconcile_incomplete_confirmed_external_links(conn).get(
+            "deactivated_links", 0
+        )
+    )
 
 
 def ensure_external_article_product_link_schema(conn) -> None:
@@ -340,7 +716,11 @@ def get_confirmed_external_article_product_link(
             },
         ).mappings().first()
         if row:
-            return _serialize_external_article_product_link(row)
+            serialized = _serialize_external_article_product_link(row)
+            if serialized and _complete_global_product_link_data(
+                conn, serialized.get("global_product_id") or ""
+            ).get("complete"):
+                return serialized
 
     if normalized_text:
         row = conn.execute(
@@ -363,5 +743,9 @@ def get_confirmed_external_article_product_link(
             },
         ).mappings().first()
         if row:
-            return _serialize_external_article_product_link(row)
+            serialized = _serialize_external_article_product_link(row)
+            if serialized and _complete_global_product_link_data(
+                conn, serialized.get("global_product_id") or ""
+            ).get("complete"):
+                return serialized
     return None
