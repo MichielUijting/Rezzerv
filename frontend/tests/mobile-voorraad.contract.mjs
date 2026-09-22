@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import {
   MOBILE_INVENTORY_MEDIA_QUERY,
   isMobileInventoryEligibleContext,
@@ -97,10 +97,10 @@ assert.match(mobileSource, /<h1>Voorraad<\/h1>/)
 assert.match(mobileSource, /data-testid="mobile-inventory-add-incidental-purchase"/)
 assert.match(mobileSource, /data-testid="mobile-inventory-location-filter"/)
 assert.match(mobileSource, /data-testid="mobile-inventory-bottom-nav"/)
+assert.match(mobileSource, /Meldingen'.*route: '\/meldingen'/)
 assert.match(mobileSource, /Voorraad'.*route: '\/voorraad'/)
 assert.match(mobileSource, /Bijna op'.*route: '\/bijna-op'/)
 assert.match(mobileSource, /Winkelen'.*route: '\/winkelen'/)
-assert.match(mobileSource, /Kassa'.*route: '\/kassa'/)
 assert.match(mobileSource, /Meer'.*route: '\/home'/)
 assert.doesNotMatch(mobileSource, /<Header title="Voorraad"/)
 assert.match(mobileSource, /locationTrackingEnabled \? 'Zoek artikel, groep of locatie' : 'Zoek artikel of groep'/)
