@@ -42,6 +42,7 @@ jobs:
       PR_BODY: ${{ github.event.pull_request.body || '' }}
       GATE_CONFIG: quality/ci/f7_full_regression_gate.json
       TRIGGER_POLICY: quality/ci/f7_full_regression_trigger_policy.json
+      RISK_POLICY: quality/ci/change_risk_policy.json
       TRIGGER_EVENT: ${{ github.event_name }}
       TRIGGER_ACTION: ${{ github.event.action || 'workflow_dispatch' }}
 
@@ -98,6 +99,47 @@ jobs:
           grep -Fx 'UI_STYLEGUIDE_DOCUMENT_GREEN' f7-ui-styleguide-preflight.log
           grep -Fx 'UI_STYLEGUIDE_CHANGE_POLICY_GREEN' f7-ui-styleguide-preflight.log
 
+      - name: Classify complete candidate delta
+        id: risk
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_sha="$BASE_SHA"
+          if [[ -z "$base_sha" ]]; then
+            git fetch --no-tags origin main
+            base_sha="$(git merge-base origin/main "$CANDIDATE_SHA")"
+          elif ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$base_sha"
+          fi
+          test -n "$base_sha"
+          git cat-file -e "${base_sha}^{commit}"
+          echo "F7_FULL_RISK_BASE_SHA=$base_sha"
+
+          python -m py_compile scripts/ci/classify_change_risk.py
+          python scripts/ci/classify_change_risk.py --policy "$RISK_POLICY" validate-policy | tee f7-full-risk-policy.log
+          grep -Fx 'CHANGE_RISK_POLICY_GREEN' f7-full-risk-policy.log
+          python scripts/ci/classify_change_risk.py --policy "$RISK_POLICY" self-test | tee f7-full-risk-self-test.log
+          grep -Fx 'CHANGE_RISK_SELF_TEST_GREEN' f7-full-risk-self-test.log
+
+          if [[ "$TRIGGER_EVENT" == "workflow_dispatch" ]]; then
+            python scripts/ci/classify_change_risk.py --policy "$RISK_POLICY" classify \
+              --base-sha "$base_sha" \
+              --head-sha "$CANDIDATE_SHA" \
+              --provisional-level L \
+              --evidence f7-full-risk-evidence.json \
+              | tee f7-full-risk.log
+          else
+            python scripts/ci/classify_change_risk.py --policy "$RISK_POLICY" classify \
+              --base-sha "$base_sha" \
+              --head-sha "$CANDIDATE_SHA" \
+              --pr-body-env PR_BODY \
+              --evidence f7-full-risk-evidence.json \
+              | tee f7-full-risk.log
+          fi
+          grep -Fx 'CHANGE_RISK_CLASSIFICATION_GREEN' f7-full-risk.log
+          grep -E '^CHANGE_RISK_FINAL_LEVEL=[SML]$' f7-full-risk.log
+          echo "F7_FULL_RISK_LEVEL=${{ steps.risk.outputs.final_level }}"
+
       - name: Compile and validate Full Regression contract and trigger policy
         shell: bash
         run: |
@@ -117,6 +159,7 @@ jobs:
           grep -Fx 'F7_FULL_TRIGGER_POLICY_GREEN' f7-trigger-policy.log
 
       - name: Reuse or attach proven exact-candidate authorities and dispatch only missing
+        if: ${{ steps.risk.outputs.final_level == 'L' }}
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -138,6 +181,7 @@ jobs:
           grep -Fx 'F7_FULL_REUSE_DISPATCH_GREEN' f7-full-dispatch.log
 
       - name: Aggregate reused, attached and dispatched authorities for exact candidate SHA
+        if: ${{ steps.risk.outputs.final_level == 'L' }}
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -155,6 +199,14 @@ jobs:
           grep -Fx 'F7_FULL_AGGREGATED_COUNT=21' f7-full-wait.log
           grep -Fx 'F7_FULL_REGRESSION_GATE_GREEN' f7-full-wait.log
 
+      - name: Record risk-authorized Full Regression bypass
+        if: ${{ steps.risk.outputs.final_level != 'L' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "F7_FULL_BYPASS_RISK_LEVEL=${{ steps.risk.outputs.final_level }}" | tee f7-full-bypass.log
+          echo 'F7_FULL_HEAVY_AUTHORITIES_NOT_REQUIRED_GREEN' | tee -a f7-full-bypass.log
+
       - name: Validate orchestration gate map after Full Regression proof
         shell: bash
         run: |
@@ -168,16 +220,22 @@ jobs:
         with:
           name: f7-full-regression-${{ github.run_id }}
           path: |
+            quality/ci/change_risk_policy.json
             quality/ci/f7_full_regression_gate.json
             quality/ci/f7_full_regression_trigger_policy.json
             quality/ci/f7_ci_orchestration_gate_map.json
             f7-version-preflight.log
             f7-ui-styleguide-preflight.log
+            f7-full-risk-policy.log
+            f7-full-risk-self-test.log
+            f7-full-risk.log
+            f7-full-risk-evidence.json
             f7-full-config.log
             f7-full-reuse-selftest.log
             f7-trigger-policy.log
             f7-full-dispatch.log
             f7-full-wait.log
+            f7-full-bypass.log
             f7-full-regression-evidence.json
             f7-gate-map.log
           if-no-files-found: warn

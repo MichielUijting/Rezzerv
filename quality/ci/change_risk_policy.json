@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "policy_id": "F7-RISK-01",
+  "title": "Fail-closed S/M/L change risk classification",
+  "level_order": [
+    "S",
+    "M",
+    "L"
+  ],
+  "default_level": "L",
+  "missing_provisional_level": "L",
+  "provisional_marker": "TEST_LEVEL_PROVISIONAL:",
+  "required_gates": {
+    "S": [
+      "F7-RISK classification",
+      "F7-02 cheap authorities",
+      "targeted build/smoke when applicable"
+    ],
+    "M": [
+      "F7-RISK classification",
+      "F7-02 PR Fast Regression"
+    ],
+    "L": [
+      "F7-RISK classification",
+      "F7-02 PR Fast Regression",
+      "F7 Full Regression exact-candidate gate"
+    ]
+  },
+  "version_only_bundle": {
+    "level": "S",
+    "files": [
+      "VERSION.txt",
+      "backend/VERSION.txt",
+      "version.json",
+      "frontend/version.json",
+      "frontend/public/version.json",
+      "frontend/package.json"
+    ],
+    "json_version_only_files": [
+      "version.json",
+      "frontend/version.json",
+      "frontend/public/version.json",
+      "frontend/package.json"
+    ]
+  },
+  "path_rules": [
+    {
+      "level": "L",
+      "reason": "ci_or_test_orchestration",
+      "patterns": [
+        ".github/workflows/**",
+        "quality/ci/**",
+        "scripts/ci/**",
+        "AGENTS.md",
+        "docs/project/CHATGPT-CODEX-WORKRULES.md",
+        "docs/project/CHANGE-RISK-AND-TEST-LEVELS.md",
+        "docs/project/DEVELOPMENT-TEST-RELEASE.md"
+      ]
+    },
+    {
+      "level": "L",
+      "reason": "backend_runtime_or_schema",
+      "patterns": [
+        "backend/app/**",
+        "backend/alembic/**",
+        "backend/receipt_ingestion/**",
+        "backend/requirements.txt",
+        "backend/Dockerfile"
+      ]
+    },
+    {
+      "level": "L",
+      "reason": "runtime_or_release_infrastructure",
+      "patterns": [
+        "docker-compose.yml",
+        "docker-compose.*.yml",
+        "start.bat",
+        "release.bat",
+        "sync-version.bat",
+        "bump-version.bat",
+        "validate-version-sync.bat",
+        "frontend/Dockerfile",
+        "frontend/nginx.conf",
+        "frontend/package-lock.json",
+        "frontend/package.json",
+        "VERSION.txt",
+        "backend/VERSION.txt",
+        "version.json",
+        "frontend/version.json",
+        "frontend/public/version.json"
+      ]
+    },
+    {
+      "level": "L",
+      "reason": "fullstack_authority_change",
+      "patterns": [
+        "frontend/tests/e2e/*fullstack*",
+        "frontend/playwright.fullstack.config.js"
+      ]
+    },
+    {
+      "level": "M",
+      "reason": "normal_application_or_test_change",
+      "patterns": [
+        "frontend/src/**",
+        "frontend/tests/**",
+        "frontend/playwright*.js",
+        "frontend/index.html",
+        "frontend/public/**",
+        "backend/tests/**",
+        "scripts/**",
+        "tools/**",
+        "docs/security/**",
+        "docs/technical/**",
+        "docs/architecture/**",
+        "docs/testing/**"
+      ]
+    },
+    {
+      "level": "S",
+      "reason": "documentation_or_low_risk_metadata",
+      "patterns": [
+        "docs/**",
+        "*.md"
+      ]
+    }
+  ],
+  "governance": {
+    "preliminary_before_implementation": true,
+    "final_from_complete_candidate_delta": true,
+    "final_level_is_maximum_of_preliminary_and_delta": true,
+    "automatic_downgrade_forbidden": true,
+    "unknown_paths_fail_closed_to": "L",
+    "manual_full_regression_dispatch_forces": "L",
+    "independent_required_ci_not_suppressed": true
+  },
+  "full_regression_contract": {
+    "heavy_level": "L",
+    "bypass_levels": [
+      "S",
+      "M"
+    ],
+    "required_authority_count": 21,
+    "preserve_exact_sha_reuse": true
+  }
+}

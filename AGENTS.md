@@ -315,3 +315,31 @@ Rapporteer na iedere taak:
   expliciet en rapporteer in plaats daarvan branch-/commitstatus uit GitHub.
 
 Als niets is gewijzigd, meld dat expliciet.
+
+## 11. Verplichte S/M/L-classificatie vóór iedere wijziging
+
+Voor ieder nieuw wijzigingsverzoek geldt vóór de eerste implementatiewijziging de
+bindende policy uit `docs/project/CHANGE-RISK-AND-TEST-LEVELS.md` en de
+machineleesbare bron `quality/ci/change_risk_policy.json`.
+
+- Leg vóór implementatie expliciet `TEST_LEVEL_PROVISIONAL: S`, `M` of `L` vast,
+  met een korte reden.
+- Neem dezelfde marker op in de PR-body. Ontbreekt hij, dan gebruikt CI
+  fail-closed voorlopig niveau `L`.
+- Bepaal na implementatie het niveau opnieuw uit de volledige candidate-delta
+  tussen base-SHA en exacte head-SHA; alleen de laatste commit bekijken is niet
+  voldoende.
+- Het definitieve niveau is altijd het hoogste van voorlopig niveau en
+  delta-niveau. Automatisch afschalen is verboden.
+- Niveau S gebruikt F7-RISK plus de goedkope F7-02 authorities; niveau M gebruikt
+  daarnaast de normale geselecteerde F7-02 shared authorities; niveau L gebruikt
+  daarnaast de zware F7 Full Regression op de exacte kandidaat.
+- De huidige F7 Full Regression-inventaris voor niveau L blijft 21 authorities en
+  behoudt exact-SHA reuse/attach/dispatch.
+- Onbekende paden, wijzigingen aan CI/testorchestratie, deze ontwikkelregels of
+  de risk-policy zelf classificeren fail-closed als `L`.
+- Een handmatige Full Regression-dispatch forceert altijd `L`.
+- De risicoclassificatie onderdrukt geen andere zelfstandige CI die door een
+  bestaand contract of padfilter verplicht blijft.
+- Het testniveau bepaalt uitsluitend de vereiste regressieset en geeft nooit
+  automatisch merge- of release-autorisatie.

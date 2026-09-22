@@ -144,6 +144,25 @@ Voor de zware F7 Full Regression op de definitieve exact-candidate geldt een and
 
 Deze parallelisering verlaagt de regressiedekking niet; uitsluitend de scheduling van onafhankelijke authorities wijzigt. Een wijziging aan de kandidaat-SHA na de definitieve F7-proof maakt die proof nog steeds ongeldig.
 
+## Risicogestuurde regressieniveaus S/M/L
+
+Iedere wijziging krijgt vóór implementatie een voorlopige S/M/L-classificatie en
+na implementatie een fail-closed classificatie over de volledige base...head
+kandidaatdelta. Het definitieve niveau kan alleen gelijk blijven of opschalen.
+
+- **S**: F7-RISK + goedkope F7-02 authorities; geen zware shared/full aggregate
+  alleen vanwege F7.
+- **M**: F7-RISK + F7-02 PR Fast Regression met geselecteerde shared clusters.
+- **L**: F7-RISK + F7-02 + F7 Full Regression exact-candidate.
+
+Voor L blijft de huidige F7 Full Regression bestaan uit 21 authorities met
+parallelle uitvoering en exact-SHA reuse/attach/dispatch. Voor S/M blijft de Full
+Regression decision workflow op een Ready-kandidaat zichtbaar groen met expliciet
+bypassbewijs; andere zelfstandig verplichte CI-workflows worden niet onderdrukt.
+
+Zie `docs/project/CHANGE-RISK-AND-TEST-LEVELS.md` en
+`quality/ci/change_risk_policy.json`.
+
 ## Releasegate
 
 Een release is technisch gereed wanneer relevante workflows groen zijn, scope en bestanden kloppen, geen onverklaarde route- of schemaafwijking bestaat, documentatie is bijgewerkt, QA/QC akkoord is en de PO expliciet GO geeft.

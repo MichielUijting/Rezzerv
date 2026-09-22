@@ -49,7 +49,13 @@
           },
           "description": "Fallback governance is explicit: fourteen manual-only workflows, zero duplicate PR fallbacks and two known inert Kassa references."
         }
-      ]
+      ],
+      "risk_policy": {
+        "contract": "quality/ci/change_risk_policy.json",
+        "S": "cheap authorities only inside F7-02",
+        "M": "selected shared clusters plus cheap authorities",
+        "L": "selected shared clusters plus cheap authorities before F7 Full"
+      }
     },
     "full_regression": {
       "status": "covered",
@@ -58,7 +64,7 @@
       "trigger_policy": "quality/ci/f7_full_regression_trigger_policy.json",
       "required_p0_scenarios": 14,
       "required_workflows": 21,
-      "candidate_contract": "All twenty-one registered workflows are evaluated on one exact candidate SHA. TP-CI-02 remains the serial shared Kassa cluster; the fourteen authorities formerly serialized inside TP-CI-03/04/05/07 are dispatched as standalone workflow runs in parallel; six existing standalone/schema/supporting/frontend authorities remain unchanged.",
+      "candidate_contract": "Every non-draft exact candidate receives an S/M/L decision. L requires all twenty-one registered workflows using the existing reuse/attach/dispatch contract; S/M produce explicit bypass evidence and do not suppress independently required CI.",
       "residuals": [
         {
           "id": "F7-FULL-01",
@@ -98,6 +104,18 @@
         ],
         "parallelized_shared_authorities": 14,
         "required_workflows": 21
+      },
+      "risk_policy": {
+        "contract": "quality/ci/change_risk_policy.json",
+        "heavy_required_for": [
+          "L"
+        ],
+        "heavy_bypassed_for": [
+          "S",
+          "M"
+        ],
+        "L_required_workflows": 21,
+        "preserve_exact_sha_reuse": true
       }
     },
     "deep_nightly": {
@@ -182,7 +200,10 @@
     "delta_planner": "scripts/ci/shared_fullstack_plan.py",
     "delta_planner_policy": "For pull_request synchronize events compare complete candidate scope base.sha -> head.sha; fail open on uncertainty; manual/non-PR execution runs requested authorities.",
     "candidate_identity_policy": "Every aggregate gate must emit and verify one exact candidate SHA and must reject child runs on any other SHA.",
-    "evidence_policy": "Aggregate gates retain machine-readable evidence containing candidate identity and all accepted workflow run IDs."
+    "evidence_policy": "Aggregate gates retain machine-readable evidence containing candidate identity and all accepted workflow run IDs.",
+    "change_risk_policy": "quality/ci/change_risk_policy.json",
+    "change_risk_classifier": "scripts/ci/classify_change_risk.py",
+    "change_risk_decision": "final level is max(provisional, complete candidate delta); missing markers and unknown paths fail closed to L"
   },
   "history": {
     "F7-01": {
