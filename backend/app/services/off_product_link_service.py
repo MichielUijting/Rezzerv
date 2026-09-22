@@ -9,6 +9,11 @@ from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.global_product_service import get_or_create_global_product
+from app.services.gtin_validation_service import (
+    has_supported_gtin_length,
+    is_valid_gtin,
+    normalize_gtin_digits,
+)
 from app.services.gpc_reference_catalog_service import ensure_official_gpc_brick
 from app.services.external_article_confirmation_service import (
     confirm_external_article_for_receipt_item,
@@ -24,7 +29,6 @@ from app.services.product_inventory_group_store import (
 )
 
 
-_GTIN_PATTERN = re.compile(r"^[0-9]{8,14}$")
 _QUANTITY_PATTERN = re.compile(
     r"(?:(?P<count>[0-9]+)\s*[x×]\s*)?"
     r"(?P<value>[0-9]+(?:[\.,][0-9]+)?)\s*"
@@ -37,24 +41,11 @@ def _clean_text(value: Any) -> str:
     return " ".join(str(value or "").strip().split())
 
 
-def _has_valid_gtin_check_digit(gtin: str) -> bool:
-    if not _GTIN_PATTERN.fullmatch(gtin):
-        return False
-    digits = [int(character) for character in gtin]
-    body = digits[:-1]
-    weighted_sum = sum(
-        digit * (3 if index % 2 == 0 else 1)
-        for index, digit in enumerate(reversed(body))
-    )
-    expected = (10 - (weighted_sum % 10)) % 10
-    return expected == digits[-1]
-
-
 def _normalize_gtin(value: Any) -> str:
-    gtin = re.sub(r"\D+", "", str(value or ""))
-    if not _GTIN_PATTERN.fullmatch(gtin):
+    gtin = normalize_gtin_digits(value)
+    if not has_supported_gtin_length(gtin):
         raise ValueError("OFF-product bevat geen geldige GTIN van 8, 12, 13 of 14 cijfers")
-    if not _has_valid_gtin_check_digit(gtin):
+    if not is_valid_gtin(gtin):
         raise ValueError("OFF-product bevat een GTIN/EAN met een ongeldig controlecijfer")
     return gtin
 

@@ -591,6 +591,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(linkedCandidateRow.getByRole('radio')).toBeChecked();
 
     await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('gpc:10005897');
+    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('bestaande Cataloguskoppeling');
+    await expect(page.getByTestId('external-producttype-classification-status')).not.toContainText('externe bron');
 
     await expectNoConsoleErrors(consoleErrors);
   });

@@ -6,6 +6,7 @@ on:
       - 'backend/app/api/catalog_routes.py'
       - 'backend/app/api/product_inventory_group_routes.py'
       - 'backend/app/services/off_product_link_service.py'
+      - 'backend/app/services/gtin_validation_service.py'
       - 'backend/app/services/off_search_service.py'
       - 'backend/app/services/external_product_identity_policy.py'
       - 'backend/app/services/gpc_local_catalog_service.py'
@@ -125,6 +126,7 @@ jobs:
           grep -F 'POSTGRESQL_CATALOG_IDENTITY_BOOLEAN_ORDER_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_INTEGER_MEMBERSHIP_PROJECTION_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_COMPLETE_GPC_LINK_VALIDATION_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_INVALID_GTIN_EXACT_LINK_GENERIC_REPAIR_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_EXTERNAL_ARTICLE_UI_GPC_METADATA_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_CANDIDATE_TIMESTAMP_ORDER_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_RECEIPT_TABLE_NUMERIC_QUANTITY_GREEN' /tmp/catalog-off-dml.log

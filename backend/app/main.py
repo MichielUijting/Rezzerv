@@ -90,8 +90,8 @@ from app.services.global_product_service import (
     get_or_create_global_product,
 )
 from app.services.external_article_product_link_service import (
-    deactivate_incomplete_confirmed_external_links,
     get_confirmed_external_article_product_link,
+    reconcile_incomplete_confirmed_external_links,
 )
 from app.services.authorization_foundation_service import assert_last_household_admin_remains
 from app.services.authorization_membership_service import (
@@ -13147,7 +13147,7 @@ from app.models import household, space, sublocation, inventory, store_provider,
 run_runtime_initialization(
     engine=engine,
     logger=logger,
-    deactivate_incomplete_confirmed_external_links=deactivate_incomplete_confirmed_external_links,
+    reconcile_incomplete_confirmed_external_links=reconcile_incomplete_confirmed_external_links,
     bootstrap_auth_registry=bootstrap_auth_registry,
     migrate_legacy_household_memberships=migrate_legacy_household_memberships,
     refresh_runtime_users_from_db=refresh_runtime_users_from_db,

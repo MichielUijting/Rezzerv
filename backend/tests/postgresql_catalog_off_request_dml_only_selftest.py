@@ -21,6 +21,7 @@ from app.services.external_article_ui_projection import (
 )
 from app.services.external_article_product_link_service import (
     _complete_global_product_link_data,
+    reconcile_incomplete_confirmed_external_links,
     save_external_article_product_link,
 )
 from app.services.external_product_candidate_store import (
@@ -66,6 +67,10 @@ GLOBAL_SCOPE_CANDIDATE_ID = "__postgresql_global_scope_candidate__"
 GLOBAL_SCOPE_RECEIPT_TEXT = "AH BOUILLON GLOBAL SCOPE PROOF"
 GLOBAL_SCOPE_RETAILER = "albert-heijn"
 GENERIC_SCOPE_NAME = "PostgreSQL Generic Bouillon Proof"
+INVALID_GTIN_REPAIR_NAME = "PostgreSQL Invalid GTIN Afwasborstel Proof"
+INVALID_GTIN_REPAIR_CODE = "00181781"
+INVALID_GTIN_REPAIR_RETAILER = "picnic-invalid-gtin-proof"
+INVALID_GTIN_REPAIR_RECEIPT = "10 10 afwasborstel"
 
 
 def _assert_runtime_create_denied() -> None:
@@ -532,6 +537,246 @@ def _assert_complete_official_gpc_link_validation() -> None:
 
     print("POSTGRESQL_OFF_COMPLETE_GPC_LINK_VALIDATION_GREEN")
     print("POSTGRESQL_EXTERNAL_ARTICLE_UI_GPC_METADATA_GREEN")
+
+
+def _assert_invalid_gtin_exact_link_repaired_to_generic() -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "DELETE FROM external_article_product_links "
+                "WHERE retailer_code = :retailer_code"
+            ),
+            {"retailer_code": INVALID_GTIN_REPAIR_RETAILER},
+        )
+        old_rows = conn.execute(
+            text(
+                "SELECT id FROM global_products WHERE name = :name"
+            ),
+            {"name": INVALID_GTIN_REPAIR_NAME},
+        ).mappings().all()
+        for old_row in old_rows:
+            old_id = str(old_row.get("id") or "")
+            conn.execute(
+                text("DELETE FROM global_product_gpc_bricks WHERE global_product_id = :id"),
+                {"id": old_id},
+            )
+            conn.execute(
+                text("DELETE FROM product_group_memberships WHERE global_product_id = :id"),
+                {"id": old_id},
+            )
+            conn.execute(
+                text("DELETE FROM product_identities WHERE global_product_id = :id"),
+                {"id": old_id},
+            )
+        conn.execute(
+            text("DELETE FROM global_products WHERE name = :name"),
+            {"name": INVALID_GTIN_REPAIR_NAME},
+        )
+
+        group = conn.execute(
+            text(
+                """
+                SELECT inventory_group_key
+                FROM product_inventory_groups
+                WHERE inventory_group_key = :key
+                LIMIT 1
+                """
+            ),
+            {"key": OFFICIAL_GPC_GROUP_KEY},
+        ).mappings().first()
+        if not group:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO product_inventory_groups (
+                        inventory_group_key, display_name, default_base_unit,
+                        aggregation_mode, active, gpc_brick_code,
+                        created_at, updated_at, source
+                    ) VALUES (
+                        :key, 'Brooms/Brushes proof', 'stuk',
+                        'count', 1, :brick_code,
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                        'gs1_gpc_postgresql_test'
+                    )
+                    """
+                ),
+                {
+                    "key": OFFICIAL_GPC_GROUP_KEY,
+                    "brick_code": OFFICIAL_GPC_BRICK_CODE,
+                },
+            )
+
+        product_id = get_or_create_global_product(
+            conn,
+            gtin=INVALID_GTIN_REPAIR_CODE,
+            name=INVALID_GTIN_REPAIR_NAME,
+            brand="Legacy OFF",
+            category="Cleaning",
+            source="open_food_facts",
+            status="active",
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO product_identities (
+                    id, household_article_id, global_product_id,
+                    identity_type, identity_value, source, confidence_score,
+                    is_primary, created_at, updated_at
+                ) VALUES (
+                    :id, '', :global_product_id,
+                    'gtin', :identity_value, 'open_food_facts', 1.0,
+                    TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": "__postgresql_invalid_gtin_identity__",
+                "global_product_id": product_id,
+                "identity_value": INVALID_GTIN_REPAIR_CODE,
+            },
+        )
+        membership = link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=product_id,
+            inventory_group_key=OFFICIAL_GPC_GROUP_KEY,
+            comparison_group_key=OFFICIAL_GPC_GROUP_KEY,
+            confidence=1.0,
+            source="manual_gs1_gpc",
+            confirmed_by_user=True,
+        )
+        if not membership.get("ok"):
+            raise AssertionError(membership)
+        conn.execute(
+            text(
+                """
+                INSERT INTO external_article_product_links (
+                    id, retailer_code, receipt_text_normalized,
+                    external_article_code, global_product_id, status,
+                    confirmed_by, confirmed_at, source_candidate_id,
+                    created_at, updated_at
+                ) VALUES (
+                    '__postgresql_invalid_gtin_link__',
+                    :retailer_code, :receipt_text, '',
+                    :global_product_id, 'confirmed',
+                    'external_databases_off_link', CURRENT_TIMESTAMP, NULL,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "retailer_code": INVALID_GTIN_REPAIR_RETAILER,
+                "receipt_text": INVALID_GTIN_REPAIR_RECEIPT,
+                "global_product_id": product_id,
+            },
+        )
+
+        before = _complete_global_product_link_data(conn, product_id)
+        if before.get("complete") or before.get("has_valid_primary_gtin"):
+            raise AssertionError(before)
+
+        stats = reconcile_incomplete_confirmed_external_links(conn)
+        if int(stats.get("repaired_to_generic_products") or 0) < 1:
+            raise AssertionError(stats)
+        if int(stats.get("deactivated_links") or 0) != 0:
+            raise AssertionError(stats)
+
+        repaired = conn.execute(
+            text(
+                """
+                SELECT id, primary_gtin, source, status, brand, variant
+                FROM global_products
+                WHERE id = :id
+                """
+            ),
+            {"id": product_id},
+        ).mappings().one()
+        if str(repaired.get("primary_gtin") or ""):
+            raise AssertionError(repaired)
+        if str(repaired.get("source") or "") != "external_databases_generic":
+            raise AssertionError(repaired)
+        if str(repaired.get("status") or "") != "active":
+            raise AssertionError(repaired)
+        if str(repaired.get("brand") or "") or str(repaired.get("variant") or ""):
+            raise AssertionError(repaired)
+
+        invalid_identity_count = int(
+            conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM product_identities
+                    WHERE global_product_id = :id
+                      AND identity_type = 'gtin'
+                    """
+                ),
+                {"id": product_id},
+            ).scalar()
+            or 0
+        )
+        if invalid_identity_count != 0:
+            raise AssertionError(invalid_identity_count)
+
+        repaired_link = conn.execute(
+            text(
+                """
+                SELECT global_product_id, status, confirmed_by
+                FROM external_article_product_links
+                WHERE id = '__postgresql_invalid_gtin_link__'
+                """
+            )
+        ).mappings().one()
+        if str(repaired_link.get("global_product_id") or "") != product_id:
+            raise AssertionError(repaired_link)
+        if str(repaired_link.get("status") or "") != "confirmed":
+            raise AssertionError(repaired_link)
+        if str(repaired_link.get("confirmed_by") or "") != "external_databases_generic_link":
+            raise AssertionError(repaired_link)
+
+        after = _complete_global_product_link_data(conn, product_id)
+        if not after.get("complete") or after.get("link_mode") != "generic":
+            raise AssertionError(after)
+
+        projected = project_central_link_truth(
+            conn,
+            {
+                "retailer_code": INVALID_GTIN_REPAIR_RETAILER,
+                "receipt_line_text": "10/10 afwasborstel",
+                "external_article_code": "",
+                "candidates": [],
+            },
+        )
+        if projected.get("central_link_mode") != "generic":
+            raise AssertionError(projected)
+        if str(projected.get("linked_gtin") or ""):
+            raise AssertionError(projected)
+        if projected.get("linked_product_type_id") != OFFICIAL_GPC_GROUP_KEY:
+            raise AssertionError(projected)
+
+        conn.execute(
+            text(
+                "DELETE FROM external_article_product_links "
+                "WHERE retailer_code = :retailer_code"
+            ),
+            {"retailer_code": INVALID_GTIN_REPAIR_RETAILER},
+        )
+        conn.execute(
+            text("DELETE FROM global_product_gpc_bricks WHERE global_product_id = :id"),
+            {"id": product_id},
+        )
+        conn.execute(
+            text("DELETE FROM product_group_memberships WHERE global_product_id = :id"),
+            {"id": product_id},
+        )
+        conn.execute(
+            text("DELETE FROM product_identities WHERE global_product_id = :id"),
+            {"id": product_id},
+        )
+        conn.execute(
+            text("DELETE FROM global_products WHERE id = :id"),
+            {"id": product_id},
+        )
+
+    print("POSTGRESQL_INVALID_GTIN_EXACT_LINK_GENERIC_REPAIR_GREEN")
 
 
 def _assert_candidate_identity_timestamp_order() -> None:
@@ -1114,6 +1359,7 @@ def main() -> None:
         _assert_off_identity_and_catalog_queries()
         _assert_integer_membership_projection()
         _assert_complete_official_gpc_link_validation()
+        _assert_invalid_gtin_exact_link_repaired_to_generic()
         _assert_candidate_identity_timestamp_order()
         _assert_receipt_table_off_search_postgresql_types()
         _assert_external_article_ui_membership_projection()

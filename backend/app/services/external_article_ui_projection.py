@@ -15,6 +15,7 @@ from app.services.external_article_product_link_service import (
 from app.services.external_product_identity_policy import (
     external_product_identity_compatibility,
 )
+from app.services.gtin_validation_service import is_valid_gtin
 
 
 def _text(value: Any) -> str:
@@ -73,7 +74,7 @@ def _catalog_product_by_gtin(conn, *values: Any) -> dict[str, Any] | None:
     gtin = ""
     for value in values:
         candidate = "".join(character for character in _text(value) if character.isdigit())
-        if len(candidate) in {8, 12, 13, 14}:
+        if is_valid_gtin(candidate):
             gtin = candidate
             break
     if not gtin:

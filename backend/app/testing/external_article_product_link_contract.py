@@ -184,14 +184,14 @@ def _create_test_database():
                 ) VALUES
                     (
                         'product-a',
-                        '8710000000001',
+                        '8710000000000',
                         'Volledig artikel A',
                         'user',
                         'active'
                     ),
                     (
                         'product-b',
-                        '8710000000002',
+                        '8710000000017',
                         'Volledig artikel B',
                         'user',
                         'active'
@@ -212,21 +212,21 @@ def _create_test_database():
                     ),
                     (
                         'product-no-identity',
-                        '8710000000003',
+                        '8710000000024',
                         'Artikel zonder GTIN-identiteit',
                         'user',
                         'active'
                     ),
                     (
                         'product-no-gpc',
-                        '8710000000004',
+                        '8710000000031',
                         'Artikel zonder GPC',
                         'user',
                         'active'
                     ),
                     (
                         'product-inactive',
-                        '8710000000005',
+                        '8710000000048',
                         'Inactief Product',
                         'user',
                         'inactive'
@@ -248,25 +248,25 @@ def _create_test_database():
                         'identity-a',
                         'product-a',
                         'gtin',
-                        '8710000000001'
+                        '8710000000000'
                     ),
                     (
                         'identity-b',
                         'product-b',
                         'gtin',
-                        '8710000000002'
+                        '8710000000017'
                     ),
                     (
                         'identity-no-gpc',
                         'product-no-gpc',
                         'gtin',
-                        '8710000000004'
+                        '8710000000031'
                     ),
                     (
                         'identity-inactive',
                         'product-inactive',
                         'gtin',
-                        '8710000000005'
+                        '8710000000048'
                     )
                 """
             )
