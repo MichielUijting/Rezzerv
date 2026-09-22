@@ -210,7 +210,7 @@ test.describe('Externe databases OFF candidate flow', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ receipt_item_id: 'purchase-import-line:boerenmetworst-generic', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'boerenmetworst-generic', context_key: 'ctx-boerenmetworst-generic', purchase_import_line_id: 'boerenmetworst-generic', receipt_line_text: "'t Slagershuys boerenmetworst", retailer_code: 'Picnic', retailer_article_number: '', gtin: '', quantity_label: '1', price: 3.49, candidate_status: 'no_candidate', is_receipt_item_placeholder: true, is_linked_to_catalog: false, is_linkable_to_catalog: false, candidates: [] }] }) });
     });
     await page.route('**/api/external-products/off/search', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'found', provider: 'search_a_licious', query: 'slagershuys boerenmetworst', mode: 'automatic', mutated: false, results: [{ gtin: '5413848467457', product_name: 'Boerenmetworst', brand: '', category: 'Vleeswaren, worst', categories: 'Vleeswaren, worst', score: 0.883, automatic_rank_score: 0.883, confidence: 'high' }] }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'found', provider: 'search_a_licious', query: 'slagershuys boerenmetworst', mode: 'automatic', mutated: false, results: [{ gtin: '5413848467457', product_name: 'Boerenmetworst', brand: '', category: 'Vleeswaren, worst', categories: 'Vleeswaren, worst', category_tags: ['en:meats', 'en:porks', 'en:sausages'], score: 0.883, automatic_rank_score: 0.883, confidence: 'high' }] }) });
     });
     await page.route('**/api/external-products/gpc/classify', async (route) => {
       classifyBodies.push(route.request().postDataJSON());
@@ -236,6 +236,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect.poll(() => classifyBodies.length).toBeGreaterThan(0);
     expect(classifyBodies.some((body) => String(body?.product_name || '').includes('boerenmetworst'))).toBe(true);
     expect(classifyBodies.some((body) => String(body?.search_text || '').includes('boerenmetworst'))).toBe(true);
+    expect(classifyBodies.some((body) => Array.isArray(body?.category_tags) && body.category_tags.includes('en:sausages'))).toBe(true);
     await expectNoConsoleErrors(consoleErrors);
   });
 

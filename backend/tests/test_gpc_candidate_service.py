@@ -501,6 +501,70 @@ def test_dutch_gpc_translation_is_primary_for_compound_kipfiletblokjes():
     assert all(row["suggestion_match_basis"] == "dutch_gpc_translation" for row in ranked)
 
 
+def test_off_taxonomy_tags_bridge_kipfilet_to_official_chicken_candidates(monkeypatch):
+    monkeypatch.setattr(service, "classify_product_intent_from_taxonomy", lambda value: "")
+    monkeypatch.setattr(service, "get_taxonomy_metadata_for_intent", lambda key: {})
+    monkeypatch.setattr(service, "load_taxonomy_rules", lambda: ())
+
+    bundle = service.build_product_signals({
+        "product_name": "'t Slagershuys kipfiletblokjes",
+        "external_product_name": "kipfiletblokjes",
+        "external_category_tags": [
+            "en:meats",
+            "en:poultries",
+            "en:chickens",
+        ],
+        "external_search_text": "slagershuys kipfiletblokjes",
+    })
+
+    normalized = {
+        signal["normalized"]
+        for signal in bundle["signals"]
+        if signal["source"] == "external_category_tags"
+    }
+    assert {"meat", "poultry", "chicken"}.issubset(normalized)
+
+    rows = [
+        _row(
+            "10000021",
+            "CHICKEN - UNPREPARED/UNPROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS - UNPREPARED/UNPROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS",
+        ),
+        _row(
+            "10000022",
+            "CHICKEN - PREPARED/PROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS - PREPARED/PROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS",
+        ),
+        _row(
+            "10000023",
+            "BEEF - UNPREPARED/UNPROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS - UNPREPARED/UNPROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS",
+        ),
+        _row(
+            "10000024",
+            "PORK - UNPREPARED/UNPROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS - UNPREPARED/UNPROCESSED",
+            "MEAT/POULTRY/OTHER ANIMALS",
+        ),
+    ]
+
+    ranked = service.rank_gpc_candidates(rows, bundle, limit=5)
+
+    assert len(ranked) >= 2
+    assert {row["brick_code"] for row in ranked[:2]} == {"10000021", "10000022"}
+    assert all(
+        row["suggestion_match_basis"] == "semantic_or_english_fallback"
+        for row in ranked[:2]
+    )
+    assert all(
+        row["suggestion_reason"].startswith("OFF-categorieovereenkomst:")
+        for row in ranked[:2]
+    )
+
+
 def test_dutch_gpc_match_outranks_english_fallback():
     signals = {"intent_key": "", "signals": [{"text": "kaas", "normalized": "kaas", "tokens": ["kaas"], "source": "product_name", "weight": 1.45}]}
     ranked = service.rank_gpc_candidates([_nl_row("19000010", "Kaas", "Cheese"), _row("19000011", "Kaas")], signals, limit=5)

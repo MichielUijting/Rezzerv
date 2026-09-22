@@ -50,6 +50,7 @@ _FIELD_WEIGHTS = {
     "external_product_name": 1.35,
     "external_category": 1.30,
     "external_categories": 1.15,
+    "external_category_tags": 1.50,
     "external_search_text": 1.10,
     "taxonomy_canonical_name": 1.55,
     "taxonomy_product_type": 1.50,
@@ -63,6 +64,14 @@ _SEMANTIC_GPC_SIGNAL_SOURCES = {
     "taxonomy_gpc_candidate_term",
     "taxonomy_gpc_variant_candidate_term",
 }
+
+_EXTERNAL_TAXONOMY_SIGNAL_SOURCES = {
+    "external_category_tags",
+}
+
+_ANCHOR_REQUIRED_SIGNAL_SOURCES = (
+    _SEMANTIC_GPC_SIGNAL_SOURCES | _EXTERNAL_TAXONOMY_SIGNAL_SOURCES
+)
 
 _DUTCH_HIERARCHY_WEIGHTS = {
     "brick_description_nl": 1.00,
@@ -95,6 +104,35 @@ def _compound_stems(value: str) -> list[str]:
             stems.append(stem)
             break
     return stems
+
+
+def _singularize_external_taxonomy_token(token: str) -> str:
+    if len(token) > 5 and token.endswith("ies"):
+        return token[:-3] + "y"
+    if len(token) > 5 and token.endswith(("ches", "shes", "sses", "xes", "zes", "oes")):
+        return token[:-2]
+    if len(token) > 4 and token.endswith("s") and not token.endswith(("ss", "us", "is")):
+        return token[:-1]
+    return token
+
+
+def _external_taxonomy_tag_variants(value: str) -> list[str]:
+    raw = " ".join(str(value or "").strip().split())
+    if ":" in raw:
+        prefix, remainder = raw.split(":", 1)
+        if 2 <= len(prefix) <= 3 and prefix.isalpha():
+            raw = remainder
+    normalized = normalize_taxonomy_text(raw)
+    if not normalized:
+        return []
+    variants = [normalized]
+    singular = " ".join(
+        _singularize_external_taxonomy_token(token)
+        for token in normalized.split()
+    )
+    if singular and singular != normalized:
+        variants.append(singular)
+    return variants
 
 
 def _flatten_text(value: Any) -> list[str]:
@@ -153,6 +191,10 @@ def _add_signal(
     weight: float,
 ) -> None:
     for text_value in _flatten_text(value):
+        if source in _EXTERNAL_TAXONOMY_SIGNAL_SOURCES:
+            for variant in _external_taxonomy_tag_variants(text_value):
+                _append_signal(signals, seen, variant, source=source, weight=weight)
+            continue
         _append_signal(signals, seen, text_value, source=source, weight=weight)
         if source in _SEMANTIC_GPC_SIGNAL_SOURCES:
             continue
@@ -184,6 +226,7 @@ def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
         "external_product_name",
         "external_category",
         "external_categories",
+        "external_category_tags",
         "external_search_text",
     ):
         _add_signal(
@@ -200,6 +243,7 @@ def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
         + _flatten_text(metadata.get("external_product_name"))
         + _flatten_text(metadata.get("external_category"))
         + _flatten_text(metadata.get("external_categories"))
+        + _flatten_text(metadata.get("external_category_tags"))
         + _flatten_text(metadata.get("external_search_text"))
     )
     requested_intent = str(metadata.get("product_intent") or "").strip()
@@ -301,7 +345,7 @@ def _signal_match(signal: dict[str, Any], haystacks: dict[str, str], hierarchy_w
             location_score += 5.0
         haystack_tokens = set(_meaningful_tokens(haystack))
         signal_token_set = set(signal_tokens)
-        if source in _SEMANTIC_GPC_SIGNAL_SOURCES:
+        if source in _ANCHOR_REQUIRED_SIGNAL_SOURCES:
             semantic_anchors = _semantic_anchor_tokens(signal_tokens)
             if semantic_anchors and not (semantic_anchors & haystack_tokens):
                 continue
@@ -395,12 +439,15 @@ def rank_gpc_candidates(candidates: Iterable[dict[str, Any]], signal_bundle: dic
         matched_terms: list[str] = []
         matched_levels: list[str] = []
         semantic_terms: list[str] = []
+        external_taxonomy_terms: list[str] = []
         for _, term, field, source in evidence:
             term = " ".join(str(term or "").split())
             if term and term not in matched_terms:
                 matched_terms.append(term)
             if source in _SEMANTIC_GPC_SIGNAL_SOURCES and term and term not in semantic_terms:
                 semantic_terms.append(term)
+            if source in _EXTERNAL_TAXONOMY_SIGNAL_SOURCES and term and term not in external_taxonomy_terms:
+                external_taxonomy_terms.append(term)
             level = field.replace("_description_nl", "").replace("_description_en", "").replace("_description", "")
             if level and level not in matched_levels:
                 matched_levels.append(level)
@@ -408,6 +455,8 @@ def rank_gpc_candidates(candidates: Iterable[dict[str, Any]], signal_bundle: dic
         reason_levels = ", ".join(matched_levels[:2])
         if basis == "dutch_gpc_translation":
             reason = "Nederlandse GPC-overeenkomst" + (f": {reason_terms}" if reason_terms else "") + (f" ({reason_levels})" if reason_levels else "")
+        elif external_taxonomy_terms:
+            reason = "OFF-categorieovereenkomst: " + ", ".join(external_taxonomy_terms[:2])
         elif semantic_terms:
             reason = "Semantische GPC-overeenkomst via producttype: " + ", ".join(semantic_terms[:2])
         elif reason_terms:
