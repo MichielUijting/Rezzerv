@@ -238,13 +238,14 @@ def _score(query: str, title: str) -> float:
     return round(0.45 * jaccard + 0.35 * coverage + 0.20 * sequence, 6)
 
 
-def rank_external_gpc_candidates(*, product_name: str, category: str = "", search_text: str = "", product_intent: str = "", reference_rows: list[dict[str, Any]], limit: int = 5) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def rank_external_gpc_candidates(*, product_name: str, category: str = "", category_tags: Any = None, search_text: str = "", product_intent: str = "", reference_rows: list[dict[str, Any]], limit: int = 5) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     signal_bundle = build_product_signals({
         "product_name": product_name,
         "category": category,
         "external_product_name": product_name,
         "external_category": category,
         "external_categories": category,
+        "external_category_tags": category_tags,
         "external_search_text": search_text,
         "product_intent": product_intent,
     })
@@ -278,7 +279,7 @@ def rank_external_gpc_candidates(*, product_name: str, category: str = "", searc
     }
 
 
-def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_brick_code: str = "", search_text: str = "", product_intent: str = "") -> dict[str, Any]:
+def classify_gpc_product(*, product_name: str, category: str = "", category_tags: Any = None, explicit_gpc_brick_code: str = "", search_text: str = "", product_intent: str = "") -> dict[str, Any]:
     ensure_local_gpc_schema()
     explicit = re.sub(r"\D+", "", explicit_gpc_brick_code or "")
     with engine.begin() as conn:
@@ -315,6 +316,7 @@ def classify_gpc_product(*, product_name: str, category: str = "", explicit_gpc_
         suggestions, candidate_generation = rank_external_gpc_candidates(
             product_name=product_name,
             category=category,
+            category_tags=category_tags,
             search_text=search_text,
             product_intent=product_intent,
             reference_rows=reference_rows,

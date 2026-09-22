@@ -495,6 +495,11 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       const raw = contextCandidate?.raw || {}
       const productName = genericName || raw.product_name || contextCandidate?.candidateName || selectedItem.receiptLineText || ''
       const category = raw.category || raw.categories || raw.variant || ''
+      const categoryTags = Array.isArray(raw.category_tags)
+        ? raw.category_tags
+        : Array.isArray(raw.categories_tags)
+          ? raw.categories_tags
+          : [raw.category_tags || raw.categories_tags].filter(Boolean)
       const productIntent = raw.candidate_product_intent || raw.receipt_product_intent || ''
 
       if (!productName) {
@@ -534,9 +539,10 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
           body: JSON.stringify({
             product_name: productName,
             category,
+            category_tags: categoryTags,
             gpc_brick_code: selectedCandidate ? candidateGpcBrickCode(selectedCandidate) : '',
             product_intent: productIntent,
-            search_text: [selectedItem?.receiptLineText, genericName, raw.product_name, raw.category, raw.categories, raw.variant, contextCandidate?.candidateName, contextCandidate?.brand].filter(Boolean).join(' '),
+            search_text: [selectedItem?.receiptLineText, genericName, raw.product_name, raw.category, raw.categories, ...categoryTags, raw.variant, contextCandidate?.candidateName, contextCandidate?.brand].filter(Boolean).join(' '),
           }),
         })
         const data = await response.json().catch(() => ({}))

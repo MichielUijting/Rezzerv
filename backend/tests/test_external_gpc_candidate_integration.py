@@ -24,6 +24,7 @@ def test_external_classifier_exposes_top_five_candidate_contract():
     assert '"matching_policy": "dutch_gpc_primary_semantic_english_fallback"' in service
     assert "search_text=_payload_text(payload, 'search_text', 'receipt_line_text')" in routes
     assert "product_intent=_payload_text(payload, 'product_intent', 'candidate_product_intent')" in routes
+    assert "category_tags=payload.get('category_tags')" in routes
 
 
 def test_external_ui_contract_requires_automatic_candidates_before_manual_search():
@@ -34,4 +35,6 @@ def test_external_ui_contract_requires_automatic_candidates_before_manual_search
     assert "selectSuggestedGpcBrick" in frontend
     assert "search_text:" in frontend
     assert "product_intent: productIntent" in frontend
+    assert "category_tags: categoryTags" in frontend
+    assert "...categoryTags" in frontend
     assert "raw.variant" in frontend

@@ -58,6 +58,16 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _text_list(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        return [
+            normalized
+            for item in value
+            if (normalized := _text(item))
+        ]
+    normalized = _text(value)
+    return [normalized] if normalized else []
+
 
 def _selected_front_image_url(product: dict[str, Any]) -> str:
     selected_images = product.get("selected_images")
@@ -188,6 +198,7 @@ def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
             "brand": _text(product.get("brands")),
             "category": _text(product.get("categories")),
             "categories": _text(product.get("categories")),
+            "category_tags": _text_list(product.get("categories_tags")),
             "gpc_brick_code": _text(product.get("gpcCategoryCode")),
             "explicit_gpc_brick_code": _text(product.get("gpcCategoryCode")),
             "image_url": _off_image_url(product),
@@ -587,6 +598,7 @@ def _normalize_result(
         "brand": _text(product.get("brands")),
         "quantity": _text(product.get("quantity")),
         "category": _text(product.get("categories")),
+        "category_tags": _text_list(product.get("categories_tags")),
         "gpc_brick_code": gpc_brick_code,
         "explicit_gpc_brick_code": gpc_brick_code,
         "image_url": _off_image_url(product),

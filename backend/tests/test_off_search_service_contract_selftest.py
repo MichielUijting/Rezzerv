@@ -29,6 +29,7 @@ def run_manual_search_contract() -> None:
                     "code": "8718452504435",
                     "product_name": "Tomaten Gezeefd Passata",
                     "brands": "Jumbo",
+                    "categories_tags": ["en:tomatoes", "en:tomato-sauces"],
                     "selected_images": {
                         "front": {
                             "display": {
@@ -64,6 +65,11 @@ def run_manual_search_contract() -> None:
             result["results"][0]["image_url"],
             "https://images.openfoodfacts.test/passata-selected.jpg",
             "OFF zoekresultaat gebruikt selected_images-frontfoto",
+        )
+        assert_equal(
+            result["results"][0]["category_tags"],
+            ["en:tomatoes", "en:tomato-sauces"],
+            "OFF zoekresultaat bewaart canonieke categorietags",
         )
     finally:
         service.resolve_receipt_item = original_resolve_receipt_item
@@ -128,6 +134,7 @@ def run_exact_gtin_image_contract() -> None:
                     "code": "8718452504435",
                     "product_name": "Tomaten Gezeefd Passata",
                     "brands": "Jumbo",
+                    "categories_tags": ["en:tomatoes", "en:tomato-sauces"],
                     "selected_images": {
                         "front": {
                             "display": {
@@ -147,6 +154,11 @@ def run_exact_gtin_image_contract() -> None:
             result["product"]["image_url"],
             "https://images.openfoodfacts.test/passata-selected-full.jpg",
             "exacte GTIN lookup gebruikt selected_images-frontfoto",
+        )
+        assert_equal(
+            result["product"]["category_tags"],
+            ["en:tomatoes", "en:tomato-sauces"],
+            "exacte GTIN lookup bewaart canonieke categorietags",
         )
     finally:
         service.urllib.request.urlopen = original_urlopen
