@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from sqlalchemy import create_engine, text
-
 from app.services.product_day_auto_consume_service import (
     AUTO_CONSUME_ALL_EXISTING,
     AUTO_CONSUME_NONE,
@@ -10,79 +8,42 @@ from app.services.product_day_auto_consume_service import (
 )
 
 
-def _connection():
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
-    conn = engine.connect()
-    conn.execute(
-        text(
-            """
-            CREATE TABLE inventory_events (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                household_article_id TEXT,
-                event_type TEXT NOT NULL,
-                quantity NUMERIC NOT NULL,
-                old_quantity NUMERIC,
-                new_quantity NUMERIC,
-                source TEXT NOT NULL,
-                purchase_date TEXT,
-                effective_at TEXT,
-                event_priority INTEGER,
-                source_reference TEXT,
-                source_line_id TEXT
-            )
-            """
-        )
-    )
-    return engine, conn
+class _FakeMappings:
+    def __init__(self, row):
+        self._row = row
+
+    def one(self):
+        return dict(self._row)
 
 
-def _event(
-    conn,
-    *,
-    event_id: str,
-    event_type: str,
-    quantity: int,
-    old_quantity: int,
-    source: str,
-    purchase_date: str = "2026-08-26",
-    effective_at: str = "2026-08-26T09:00:00+02:00",
-    household: str = "h1",
-    article: str = "a1",
-):
-    conn.execute(
-        text(
-            """
-            INSERT INTO inventory_events (
-                id, household_id, household_article_id, event_type, quantity,
-                old_quantity, new_quantity, source, purchase_date, effective_at,
-                event_priority, source_reference, source_line_id
-            ) VALUES (
-                :id, :household_id, :household_article_id, :event_type, :quantity,
-                :old_quantity, :new_quantity, :source, :purchase_date, :effective_at,
-                10, :source_reference, :source_line_id
-            )
-            """
-        ),
-        {
-            "id": event_id,
-            "household_id": household,
-            "household_article_id": article,
-            "event_type": event_type,
-            "quantity": quantity,
-            "old_quantity": old_quantity,
-            "new_quantity": old_quantity + quantity,
-            "source": source,
-            "purchase_date": purchase_date,
-            "effective_at": effective_at,
-            "source_reference": f"receipt:{event_id}",
-            "source_line_id": f"line:{event_id}",
-        },
-    )
+class _FakeResult:
+    def __init__(self, row):
+        self._row = row
+
+    def mappings(self):
+        return _FakeMappings(self._row)
+
+
+class _FakeConnection:
+    def __init__(self, row=None):
+        self.row = row or {
+            "purchased_quantity": 0,
+            "auto_consumed_quantity": 0,
+            "first_purchase_old_quantity": None,
+        }
+        self.execute_count = 0
+        self.last_params = None
+        self.last_statement = ""
+
+    def execute(self, statement, params):
+        self.execute_count += 1
+        self.last_statement = str(statement)
+        self.last_params = dict(params)
+        return _FakeResult(self.row)
 
 
 def _decision(
-    conn,
+    row=None,
     *,
     mode: str,
     pre: int,
@@ -91,7 +52,8 @@ def _decision(
     household: str = "h1",
     article: str = "a1",
 ):
-    return compute_product_day_auto_deduction(
+    conn = _FakeConnection(row)
+    result = compute_product_day_auto_deduction(
         conn,
         household_id=household,
         household_article_id=article,
@@ -100,205 +62,153 @@ def _decision(
         pre_purchase_total=pre,
         purchased_quantity=purchased,
     )
+    return conn, result
 
 
 def test_first_purchase_keeps_existing_semantics():
-    engine, conn = _connection()
-    try:
-        result = _decision(
-            conn,
-            mode=AUTO_CONSUME_PURCHASED_QUANTITY,
-            pre=10,
-            purchased=2,
-        )
-        assert result["product_day_applied"] is True
-        assert result["day_start_stock"] == 10
-        assert result["requested_deduction_quantity"] == 2
-    finally:
-        conn.close()
-        engine.dispose()
+    conn, result = _decision(
+        mode=AUTO_CONSUME_PURCHASED_QUANTITY,
+        pre=10,
+        purchased=2,
+    )
+    assert result["product_day_applied"] is True
+    assert result["day_start_stock"] == 10
+    assert result["requested_deduction_quantity"] == 2
+    assert conn.execute_count == 1
 
 
 def test_second_same_day_purchase_is_cumulative():
-    engine, conn = _connection()
-    try:
-        _event(
-            conn,
-            event_id="p1",
-            event_type="purchase",
-            quantity=2,
-            old_quantity=10,
-            source="store_import",
-        )
-        _event(
-            conn,
-            event_id="c1",
-            event_type="auto_repurchase",
-            quantity=-2,
-            old_quantity=12,
-            source="auto_repurchase",
-        )
-        result = _decision(
-            conn,
-            mode=AUTO_CONSUME_PURCHASED_QUANTITY,
-            pre=10,
-            purchased=3,
-        )
-        assert result["prior_day_purchased_quantity"] == 2
-        assert result["prior_day_auto_consumed_quantity"] == 2
-        assert result["cumulative_day_purchased_quantity"] == 5
-        assert result["requested_deduction_quantity"] == 3
-    finally:
-        conn.close()
-        engine.dispose()
+    _, result = _decision(
+        {
+            "purchased_quantity": 2,
+            "auto_consumed_quantity": 2,
+            "first_purchase_old_quantity": 10,
+        },
+        mode=AUTO_CONSUME_PURCHASED_QUANTITY,
+        pre=10,
+        purchased=3,
+    )
+    assert result["prior_day_purchased_quantity"] == 2
+    assert result["prior_day_auto_consumed_quantity"] == 2
+    assert result["cumulative_day_purchased_quantity"] == 5
+    assert result["requested_deduction_quantity"] == 3
 
 
 def test_purchased_quantity_stops_when_day_start_stock_is_exhausted():
-    engine, conn = _connection()
-    try:
-        _event(conn, event_id="p1", event_type="purchase", quantity=3, old_quantity=4, source="store_import")
-        _event(conn, event_id="c1", event_type="auto_repurchase", quantity=-3, old_quantity=7, source="auto_repurchase")
-        result = _decision(conn, mode=AUTO_CONSUME_PURCHASED_QUANTITY, pre=4, purchased=3)
-        assert result["requested_deduction_quantity"] == 1
-    finally:
-        conn.close()
-        engine.dispose()
+    _, result = _decision(
+        {
+            "purchased_quantity": 3,
+            "auto_consumed_quantity": 3,
+            "first_purchase_old_quantity": 4,
+        },
+        mode=AUTO_CONSUME_PURCHASED_QUANTITY,
+        pre=4,
+        purchased=3,
+    )
+    assert result["requested_deduction_quantity"] == 1
 
 
 def test_all_existing_is_consumed_only_once_per_product_day():
-    engine, conn = _connection()
-    try:
-        _event(conn, event_id="p1", event_type="purchase", quantity=2, old_quantity=5, source="store_import")
-        _event(conn, event_id="c1", event_type="auto_repurchase", quantity=-5, old_quantity=7, source="auto_repurchase")
-        result = _decision(conn, mode=AUTO_CONSUME_ALL_EXISTING, pre=2, purchased=3)
-        assert result["day_start_stock"] == 5
-        assert result["requested_deduction_quantity"] == 0
-    finally:
-        conn.close()
-        engine.dispose()
+    _, result = _decision(
+        {
+            "purchased_quantity": 2,
+            "auto_consumed_quantity": 5,
+            "first_purchase_old_quantity": 5,
+        },
+        mode=AUTO_CONSUME_ALL_EXISTING,
+        pre=2,
+        purchased=3,
+    )
+    assert result["day_start_stock"] == 5
+    assert result["requested_deduction_quantity"] == 0
 
 
-def test_different_day_starts_new_product_day():
-    engine, conn = _connection()
-    try:
-        _event(
-            conn,
-            event_id="p-old",
-            event_type="purchase",
-            quantity=4,
-            old_quantity=8,
-            source="store_import",
-            purchase_date="2026-08-25",
-            effective_at="2026-08-25T12:00:00+02:00",
-        )
-        _event(
-            conn,
-            event_id="c-old",
-            event_type="auto_repurchase",
-            quantity=-4,
-            old_quantity=12,
-            source="auto_repurchase",
-            purchase_date="2026-08-25",
-            effective_at="2026-08-25T12:00:00+02:00",
-        )
-        result = _decision(conn, mode=AUTO_CONSUME_PURCHASED_QUANTITY, pre=8, purchased=2)
-        assert result["prior_day_purchased_quantity"] == 0
-        assert result["requested_deduction_quantity"] == 2
-    finally:
-        conn.close()
-        engine.dispose()
+def test_new_day_with_no_prior_day_events_starts_fresh():
+    _, result = _decision(
+        mode=AUTO_CONSUME_PURCHASED_QUANTITY,
+        pre=8,
+        purchased=2,
+        purchase_date="2026-08-27",
+    )
+    assert result["prior_day_purchased_quantity"] == 0
+    assert result["prior_day_auto_consumed_quantity"] == 0
+    assert result["day_start_stock"] == 8
+    assert result["requested_deduction_quantity"] == 2
 
 
-def test_other_households_and_articles_are_isolated():
-    engine, conn = _connection()
-    try:
-        _event(conn, event_id="other-a", event_type="purchase", quantity=9, old_quantity=20, source="store_import", article="a2")
-        _event(conn, event_id="other-h", event_type="purchase", quantity=7, old_quantity=30, source="store_import", household="h2")
-        result = _decision(conn, mode=AUTO_CONSUME_ALL_EXISTING, pre=6, purchased=2)
-        assert result["prior_day_purchased_quantity"] == 0
-        assert result["requested_deduction_quantity"] == 6
-    finally:
-        conn.close()
-        engine.dispose()
+def test_query_scope_is_household_article_and_receipt_day():
+    conn, result = _decision(
+        mode=AUTO_CONSUME_ALL_EXISTING,
+        pre=6,
+        purchased=2,
+        household="household-A",
+        article="article-A",
+        purchase_date="2026-08-26T21:15:00+02:00",
+    )
+    assert result["purchase_day"] == "2026-08-26"
+    assert conn.last_params == {
+        "household_id": "household-A",
+        "household_article_id": "article-A",
+        "purchase_day": "2026-08-26",
+    }
+    assert "household_id = :household_id" in conn.last_statement
+    assert "household_article_id = :household_article_id" in conn.last_statement
 
 
 def test_iso_timestamp_uses_receipt_calendar_day():
-    engine, conn = _connection()
-    try:
-        _event(conn, event_id="p1", event_type="purchase", quantity=2, old_quantity=5, source="store_import")
-        _event(conn, event_id="c1", event_type="auto_repurchase", quantity=-2, old_quantity=7, source="auto_repurchase")
-        result = _decision(
-            conn,
-            mode=AUTO_CONSUME_PURCHASED_QUANTITY,
-            pre=5,
-            purchased=1,
-            purchase_date="2026-08-26T21:15:00+02:00",
-        )
-        assert result["purchase_day"] == "2026-08-26"
-        assert result["requested_deduction_quantity"] == 1
-    finally:
-        conn.close()
-        engine.dispose()
+    _, result = _decision(
+        {
+            "purchased_quantity": 2,
+            "auto_consumed_quantity": 2,
+            "first_purchase_old_quantity": 5,
+        },
+        mode=AUTO_CONSUME_PURCHASED_QUANTITY,
+        pre=5,
+        purchased=1,
+        purchase_date="2026-08-26T21:15:00+02:00",
+    )
+    assert result["purchase_day"] == "2026-08-26"
+    assert result["requested_deduction_quantity"] == 1
 
 
 def test_backdated_same_day_purchase_extends_existing_group():
-    engine, conn = _connection()
-    try:
-        _event(
-            conn,
-            event_id="p-late",
-            event_type="purchase",
-            quantity=3,
-            old_quantity=10,
-            source="store_import",
-            effective_at="2026-08-26T14:00:00+02:00",
-        )
-        _event(
-            conn,
-            event_id="c-late",
-            event_type="auto_repurchase",
-            quantity=-3,
-            old_quantity=13,
-            source="auto_repurchase",
-            effective_at="2026-08-26T14:00:00+02:00",
-        )
-        result = _decision(
-            conn,
-            mode=AUTO_CONSUME_PURCHASED_QUANTITY,
-            pre=10,
-            purchased=2,
-            purchase_date="2026-08-26T09:00:00+02:00",
-        )
-        assert result["day_start_stock"] == 10
-        assert result["cumulative_day_purchased_quantity"] == 5
-        assert result["requested_deduction_quantity"] == 2
-    finally:
-        conn.close()
-        engine.dispose()
+    _, result = _decision(
+        {
+            "purchased_quantity": 3,
+            "auto_consumed_quantity": 3,
+            "first_purchase_old_quantity": 10,
+        },
+        mode=AUTO_CONSUME_PURCHASED_QUANTITY,
+        pre=10,
+        purchased=2,
+        purchase_date="2026-08-26T09:00:00+02:00",
+    )
+    assert result["day_start_stock"] == 10
+    assert result["cumulative_day_purchased_quantity"] == 5
+    assert result["requested_deduction_quantity"] == 2
 
 
-def test_invalid_purchase_date_falls_back_to_per_purchase_behavior():
-    engine, conn = _connection()
-    try:
-        result = _decision(
-            conn,
-            mode=AUTO_CONSUME_ALL_EXISTING,
-            pre=5,
-            purchased=2,
-            purchase_date="26-08-2026",
-        )
-        assert result["product_day_applied"] is False
-        assert result["requested_deduction_quantity"] == 5
-    finally:
-        conn.close()
-        engine.dispose()
+def test_invalid_purchase_date_falls_back_without_database_read():
+    conn, result = _decision(
+        mode=AUTO_CONSUME_ALL_EXISTING,
+        pre=5,
+        purchased=2,
+        purchase_date="26-08-2026",
+    )
+    assert result["product_day_applied"] is False
+    assert result["requested_deduction_quantity"] == 5
+    assert conn.execute_count == 0
 
 
 def test_none_mode_never_consumes():
-    engine, conn = _connection()
-    try:
-        result = _decision(conn, mode=AUTO_CONSUME_NONE, pre=9, purchased=4)
-        assert result["requested_deduction_quantity"] == 0
-    finally:
-        conn.close()
-        engine.dispose()
+    _, result = _decision(
+        {
+            "purchased_quantity": 4,
+            "auto_consumed_quantity": 0,
+            "first_purchase_old_quantity": 9,
+        },
+        mode=AUTO_CONSUME_NONE,
+        pre=9,
+        purchased=4,
+    )
+    assert result["requested_deduction_quantity"] == 0
