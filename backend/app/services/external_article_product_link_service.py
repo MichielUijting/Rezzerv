@@ -336,7 +336,6 @@ def _repair_invalid_exact_product(conn, global_product_id: str) -> dict[str, Any
             SELECT id
             FROM global_products
             WHERE id <> :global_product_id
-              AND lower(COALESCE(source, '')) = 'external_databases_generic'
               AND lower(COALESCE(status, 'active')) = 'active'
               AND COALESCE(trim(primary_gtin), '') = ''
               AND product_fingerprint = :product_fingerprint
@@ -356,6 +355,40 @@ def _repair_invalid_exact_product(conn, global_product_id: str) -> dict[str, Any
         required_group = str(membership.get("inventory_group_key") or "").strip()
         if existing_group and existing_group != required_group:
             return {"repaired": False, "reason": "generic_product_gpc_conflict"}
+
+        conn.execute(
+            text(
+                """
+                DELETE FROM product_identities
+                WHERE global_product_id = :global_product_id
+                  AND identity_type = 'gtin'
+                """
+            ),
+            {"global_product_id": replacement_id},
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE global_products
+                SET primary_gtin = NULL,
+                    brand = NULL,
+                    variant = NULL,
+                    category = NULL,
+                    size_value = NULL,
+                    size_unit = NULL,
+                    image_url = NULL,
+                    product_fingerprint = :product_fingerprint,
+                    source = 'external_databases_generic',
+                    status = 'active',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :global_product_id
+                """
+            ),
+            {
+                "global_product_id": replacement_id,
+                "product_fingerprint": generic_fingerprint,
+            },
+        )
 
         linked = link_global_product_to_inventory_group_with_connection(
             conn,

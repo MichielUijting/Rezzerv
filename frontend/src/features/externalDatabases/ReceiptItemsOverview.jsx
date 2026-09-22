@@ -405,7 +405,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     externalCode: text(selectedItem.gtin),
     score: selectedItem.linkedScore ?? selectedItem.bestCandidateScore,
     status: 'Gekoppeld',
-    hasUniversalCode: true,
+    hasUniversalCode: selectedItem.gtin !== '-',
     isLinkedToCatalog: true,
     isLinkableToCatalog: false,
     raw: {
