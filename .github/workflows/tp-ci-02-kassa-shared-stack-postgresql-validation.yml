@@ -65,11 +65,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
 
-      - name: Select authorities from current delta
+      - name: Select authorities with incremental carry-forward
         id: plan
         shell: bash
         env:
           INPUT_AUTHORITY: ${{ inputs.authority || 'both' }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python scripts/ci/shared_fullstack_plan.py \
