@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from fastapi import HTTPException
 
 from app.api.article_detail_admin_routes import (
+    _install_admin_guard,
     install_article_detail_household_alias_policy,
     mutate_article_detail_inventory_admin_only,
     router,
@@ -27,6 +28,9 @@ class FakePayload:
     @classmethod
     def model_validate(cls, data):
         return cls(**dict(data or {}))
+
+    def model_dump(self, exclude_unset=False):
+        return dict(self.data)
 
 
 class FakeConnection:
@@ -73,11 +77,21 @@ def _build_main_endpoint(name, calls, *, inventory=False):
             raise HTTPException(status_code=401, detail='Unauthorized')
         return {'active_household_id': 'household-a', 'display_role': 'admin'}
 
+    def require_household_context(authorization, requested_household_id=None):
+        if authorization == 'Bearer member':
+            return {'active_household_id': 'household-a', 'display_role': 'lid'}
+        if authorization in {'Bearer admin', 'Bearer owner'}:
+            return {'active_household_id': 'household-a', 'display_role': 'admin'}
+        if authorization == 'Bearer viewer':
+            return {'active_household_id': 'household-a', 'display_role': 'viewer'}
+        raise HTTPException(status_code=401, detail='Unauthorized')
+
     namespace = {
         '__name__': 'app.main',
         'Payload': FakePayload,
         'calls': calls,
         'require_household_admin_context': require_household_admin_context,
+        'require_household_context': require_household_context,
     }
     if inventory:
         namespace.update({
@@ -103,8 +117,17 @@ def _build_main_endpoint(name, calls, *, inventory=False):
             'engine': FakeEngine(),
             'get_household_article_settings': lambda conn, household_id, article_id: {
                 'settings': {
+                    'min_stock': 2,
+                    'ideal_stock': 5,
+                    'favorite_store': 'AH',
                     'average_price': 3.45,
+                    'status': 'active',
+                    'default_location_id': 'space-a',
+                    'default_sublocation_id': 'shelf-a',
                     'auto_restock': True,
+                    'packaging_unit': 'stuk',
+                    'packaging_quantity': 1,
+                    'notes': 'Bestaande notitie',
                 }
             },
         })
@@ -185,6 +208,49 @@ def test_patch_and_settings_are_admin_only_before_delegation():
         {'notes': 'x', 'average_price': 3.45, 'auto_restock': True},
         'Bearer owner',
     )]
+
+
+def test_runtime_settings_guard_allows_member_notes_but_preserves_other_settings():
+    calls = []
+    settings_endpoint = _build_main_endpoint('settings', calls)
+    route = SimpleNamespace(
+        path='/api/household-articles/{household_article_id}/settings',
+        methods={'PUT'},
+        endpoint=settings_endpoint,
+        dependant=SimpleNamespace(call=settings_endpoint),
+    )
+    main_module = SimpleNamespace(app=SimpleNamespace(routes=[route]))
+
+    _install_admin_guard(
+        main_module,
+        '/api/household-articles/{household_article_id}/settings',
+        'PUT',
+        preserve_server_owned_settings=True,
+        allow_member_notes=True,
+    )
+
+    result = route.dependant.call(
+        household_article_id=ARTICLE_ID,
+        payload=FakePayload(notes='Gedeelde notitie', favorite_store='Niet toegestaan'),
+        authorization='Bearer member',
+    )
+    assert result == {'ok': True, 'kind': 'settings'}
+    kind, article_id, payload, authorization = calls[-1]
+    assert kind == 'settings'
+    assert article_id == ARTICLE_ID
+    assert authorization == 'Bearer member'
+    assert payload['notes'] == 'Gedeelde notitie'
+    assert payload['favorite_store'] == 'AH'
+    assert payload['min_stock'] == 2
+    assert payload['ideal_stock'] == 5
+    assert payload['average_price'] == 3.45
+    assert payload['auto_restock'] is True
+
+    _assert_member_denied(lambda: route.dependant.call(
+        household_article_id=ARTICLE_ID,
+        payload=FakePayload(notes='Kijker mag niet wijzigen'),
+        authorization='Bearer viewer',
+    ))
 
 
 def test_inventory_and_transfer_are_admin_only_and_article_scoped():
@@ -276,6 +342,7 @@ def test_product_enrichment_cannot_own_household_alias():
 
 def run_contract() -> None:
     test_patch_and_settings_are_admin_only_before_delegation()
+    test_runtime_settings_guard_allows_member_notes_but_preserves_other_settings()
     test_inventory_and_transfer_are_admin_only_and_article_scoped()
     test_product_enrichment_cannot_own_household_alias()
     print('ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN')
