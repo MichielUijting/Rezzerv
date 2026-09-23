@@ -1,0 +1,15 @@
+.rz-mobile-app-chrome {
+  min-height: 100vh;
+}
+
+.rz-mobile-app-bottom-space {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .rz-mobile-app-bottom-space {
+    display: block;
+    height: calc(64px + env(safe-area-inset-bottom));
+    pointer-events: none;
+  }
+}
