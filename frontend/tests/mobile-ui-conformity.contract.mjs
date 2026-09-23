@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 
 const mobileInventorySource = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
 const mobileInventoryCss = readFileSync(new URL('../src/pages/mobileVoorraad.css', import.meta.url), 'utf8')
+const mobileComponentsCss = readFileSync(new URL('../src/ui/mobileComponents.css', import.meta.url), 'utf8')
 const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
 
 // Sole visual conformance authority for mobile roots already migrated to the
@@ -11,13 +12,10 @@ const MIGRATED_MOBILE_UI = Object.freeze(['voorraad'])
 assert.deepEqual(MIGRATED_MOBILE_UI, ['voorraad'])
 
 assert.match(mobileInventorySource, /data-testid="mobile-inventory-page"/)
-assert.match(mobileInventorySource, /data-testid="mobile-inventory-header"/)
-assert.match(mobileInventorySource, /<h1>Voorraad<\/h1>/)
-assert.match(mobileInventorySource, /src="\/inhuis-logo-white\.png"/)
+assert.match(mobileInventorySource, /<MobileModuleHeader title="Voorraad" testId="mobile-inventory-header" \/>/)
 assert.match(mobileInventorySource, /selectRecentActionTiles/)
 assert.match(mobileInventorySource, /excludeKeys: \['voorraad'\]/)
-assert.match(mobileInventorySource, /mobile-inventory-decrease-/)
-assert.match(mobileInventorySource, /mobile-inventory-increase-/)
+assert.match(mobileInventorySource, /<QuantityStepper/)
 assert.match(mobileInventorySource, /MORE_NAV_ITEM = \{ key: 'meer', label: 'Meer', route: '\/home'/)
 assert.match(mobileInventorySource, /\{ value: 'name-asc', label: 'Naam A–Z' \}/)
 assert.match(mobileInventorySource, /\{ value: 'name-desc', label: 'Naam Z–A' \}/)
@@ -30,20 +28,12 @@ assert.match(
 assert.doesNotMatch(mobileInventoryCss, /backdrop-filter/)
 assert.doesNotMatch(mobileInventoryCss, /#006b3c|#005630/i)
 assert.match(
-  mobileInventoryCss,
-  /\.rz-mobile-inventory-screen\s*\{[\s\S]*--rz-mobile-primary:\s*#005F6A;/i,
+  mobileComponentsCss,
+  /\.rz-mobile-module-header\s*\{[\s\S]*background:\s*var\(--color-mobile-ui-primary\);/,
 )
 assert.match(
-  mobileInventoryCss,
-  /\.rz-mobile-inventory-topbar\s*\{[\s\S]*justify-content:\s*space-between;[\s\S]*background:\s*var\(--rz-mobile-primary\);/,
-)
-assert.match(
-  mobileInventoryCss,
-  /\.rz-mobile-inventory-topbar h1\s*\{[\s\S]*color:\s*var\(--color-ui-primary-text\);/,
-)
-assert.match(
-  mobileInventoryCss,
-  /\.rz-mobile-inventory-header-logo\s*\{[\s\S]*height:\s*46px;/,
+  mobileComponentsCss,
+  /\.rz-mobile-module-header-logo\s*\{[\s\S]*height:\s*46px;/,
 )
 assert.match(
   mobileInventoryCss,
@@ -54,22 +44,25 @@ assert.match(
   /\.rz-mobile-inventory-card\s*\{[\s\S]*border-bottom:\s*1px solid #edf0ee;[\s\S]*background:\s*#ffffff;/i,
 )
 assert.match(
-  mobileInventoryCss,
-  /\.rz-mobile-inventory-bottom-nav\s*\{[\s\S]*position:\s*fixed;[\s\S]*grid-template-columns:\s*repeat\(var\(--rz-mobile-nav-count, 5\), minmax\(0, 1fr\)\);[\s\S]*background:\s*rgba\(255, 255, 255, 0\.98\);/,
+  mobileComponentsCss,
+  /\.rz-mobile-action-bar\s*\{[\s\S]*position:\s*fixed;[\s\S]*grid-template-columns:\s*repeat\(var\(--rz-mobile-action-count, 5\), minmax\(0, 1fr\)\);/,
 )
 assert.match(
-  mobileInventoryCss,
-  /\.rz-mobile-inventory-quantity-button\s*\{[\s\S]*border:\s*1px solid var\(--rz-mobile-primary\);[\s\S]*color:\s*var\(--rz-mobile-primary\);/,
+  mobileComponentsCss,
+  /\.rz-quantity-stepper-button\s*\{[\s\S]*border:\s*1px solid var\(--color-mobile-ui-primary\);[\s\S]*color:\s*var\(--color-mobile-ui-primary\);/,
 )
 
-// Mobile Voorraad owns the fixed bottom action bar; passive feedback must sit above it.
+// Mobile Voorraad owns the fixed bottom action bar; passive feedback is an
+// overlay and therefore adds bottom padding instead of reserving layout space.
 assert.match(
   themeCss,
   /body:has\(\[data-testid="mobile-inventory-page"\]\) \.rz-app-feedback-bar-base,[\s\S]*display:\s*none\s*!important;/,
 )
 assert.match(
   themeCss,
-  /body:has\(\[data-testid="mobile-inventory-page"\]\)[\s\S]*inset:\s*auto 0 calc\(60px \+ env\(safe-area-inset-bottom\)\) 0\s*!important;/,
+  /body:has\(\[data-testid="mobile-inventory-page"\]\)[\s\S]*padding-bottom:\s*calc\(70px \+ env\(safe-area-inset-bottom\)\)\s*!important;/,
 )
+
+assert.doesNotMatch(mobileInventoryCss, /rz-mobile-inventory-quick-feedback|rz-mobile-inventory-topbar|rz-mobile-inventory-bottom-nav/)
 
 console.log('MOBILE_UI_CONFORMITY_GREEN')

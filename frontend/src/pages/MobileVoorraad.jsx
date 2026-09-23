@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import Button from '../ui/Button'
 import Select from '../ui/Select.jsx'
 import CatalogArticleThumbnail from '../ui/CatalogArticleThumbnail.jsx'
+import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
+import MobileRecentActionsBar from '../ui/MobileRecentActionsBar.jsx'
+import QuantityStepper from '../ui/QuantityStepper.jsx'
+import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import {
   canCurrentUserPerform,
   fetchJsonWithAuth,
@@ -33,55 +37,6 @@ function mobileNavIconType(key) {
   if (key === 'winkelen') return 'cart'
   if (key === 'kassabonnen' || key === 'kassa') return 'receipt'
   return 'menu'
-}
-
-function MobileNavIcon({ type }) {
-  if (type === 'bell') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 10a5 5 0 0 1 10 0v4l1.5 2H5.5L7 14v-4Z" />
-        <path d="M10 19h4" />
-      </svg>
-    )
-  }
-  if (type === 'inventory') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5v-9Z" />
-        <path d="m4.5 7.7 7.5 3.4 7.5-3.4M12 11.1V20" />
-      </svg>
-    )
-  }
-  if (type === 'clock') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 8v4l2.8 1.8" />
-      </svg>
-    )
-  }
-  if (type === 'cart') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 5h2l1.5 9h10.8l2-6H6" />
-        <circle cx="9" cy="18.5" r="1.2" />
-        <circle cx="17" cy="18.5" r="1.2" />
-      </svg>
-    )
-  }
-  if (type === 'receipt') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 3h10v18l-2-1.4-2 1.4-2-1.4L9 21l-2-1.4V3Z" />
-        <path d="M9.5 8h5M9.5 11h5M9.5 14h3.5" />
-      </svg>
-    )
-  }
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 7h14M5 12h14M5 17h14" />
-    </svg>
-  )
 }
 
 function normalizeText(value) {
@@ -197,7 +152,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const [groupFilter, setGroupFilter] = useState('')
   const [sortKey, setSortKey] = useState('name-asc')
   const [mutatingRowId, setMutatingRowId] = useState('')
-  const [mutationFeedback, setMutationFeedback] = useState({ type: '', message: '' })
+  const { showFeedback } = useAppFeedback()
   const context = readStoredAuthContext()
   const canEditInventory = isHouseholdAdminFromContext(context)
   const onboarding = readHouseholdOnboarding(context)
@@ -277,7 +232,6 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     if (!mutation || !row?.householdArticleId) return
 
     setMutatingRowId(row.id)
-    setMutationFeedback({ type: '', message: '' })
     try {
       const response = await fetchJsonWithAuth(
         `/api/household-articles/${encodeURIComponent(row.householdArticleId)}/inventory-events`,
@@ -297,16 +251,18 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
         throw new Error(message)
       }
       setRows(await loadMobileInventory())
-      setMutationFeedback({
-        type: 'success',
+      showFeedback({
+        variant: 'success',
         message: direction === 'decrease'
           ? `${row.householdName}: 1 afgeboekt.`
           : `${row.householdName}: 1 opgeboekt.`,
+        testId: 'mobile-inventory-quick-feedback',
       })
     } catch (err) {
-      setMutationFeedback({
-        type: 'error',
+      showFeedback({
+        variant: 'error',
         message: String(err?.message || 'Voorraadmutatie kon niet worden opgeslagen.'),
+        testId: 'mobile-inventory-quick-feedback',
       })
     } finally {
       setMutatingRowId('')
@@ -362,15 +318,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
       data-testid="mobile-inventory-page"
       data-location-tracking={locationTrackingEnabled ? 'enabled' : 'disabled'}
     >
-      <header className="rz-mobile-inventory-topbar" data-testid="mobile-inventory-header">
-        <h1>Voorraad</h1>
-        <img
-          className="rz-mobile-inventory-header-logo"
-          src="/inhuis-logo-white.png"
-          alt="Inhuis"
-          draggable="false"
-        />
-      </header>
+      <MobileModuleHeader title="Voorraad" testId="mobile-inventory-header" />
 
       <main className="rz-mobile-inventory-content">
         <section className="rz-mobile-inventory-toolbar" aria-label="Voorraad zoeken en filteren">
@@ -458,16 +406,6 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
           </Button>
         </div>
 
-        {mutationFeedback.message ? (
-          <div
-            className={`rz-mobile-inventory-quick-feedback rz-mobile-inventory-quick-feedback--${mutationFeedback.type}`}
-            role={mutationFeedback.type === 'error' ? 'alert' : 'status'}
-            data-testid="mobile-inventory-quick-feedback"
-          >
-            {mutationFeedback.message}
-          </div>
-        ) : null}
-
         {error ? (
           <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert">
             <div>{error}</div>
@@ -529,41 +467,29 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                     </div>
                   </div>
                   <div className="rz-mobile-inventory-card-side">
-                    <div className="rz-mobile-inventory-quantity-control">
-                      {canEditInventory ? (
-                        <button
-                          type="button"
-                          className="rz-mobile-inventory-quantity-button"
-                          disabled={!decreaseTarget || rowBusy}
-                          aria-label={`Boek 1 af van ${row.householdName}`}
-                          data-testid={`mobile-inventory-decrease-${row.detailId || row.id}`}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            mutateQuickInventory(row, 'decrease')
-                          }}
-                        >
-                          −
-                        </button>
-                      ) : null}
-                      <span className="rz-mobile-inventory-quantity" aria-label={`Aantal ${formatQuantity(row.quantity)}`}>
+                    {canEditInventory ? (
+                      <QuantityStepper
+                        value={formatQuantity(row.quantity)}
+                        decreaseDisabled={!decreaseTarget || rowBusy}
+                        increaseDisabled={!increaseTarget || rowBusy}
+                        decreaseLabel={`Boek 1 af van ${row.householdName}`}
+                        increaseLabel={`Boek 1 op bij ${row.householdName}`}
+                        valueLabel={`Aantal ${formatQuantity(row.quantity)}`}
+                        testIdPrefix={`mobile-inventory-${row.detailId || row.id}`}
+                        onDecrease={(event) => {
+                          event.stopPropagation()
+                          mutateQuickInventory(row, 'decrease')
+                        }}
+                        onIncrease={(event) => {
+                          event.stopPropagation()
+                          mutateQuickInventory(row, 'increase')
+                        }}
+                      />
+                    ) : (
+                      <span className="rz-mobile-inventory-readonly-quantity" aria-label={`Aantal ${formatQuantity(row.quantity)}`}>
                         {formatQuantity(row.quantity)}
                       </span>
-                      {canEditInventory ? (
-                        <button
-                          type="button"
-                          className="rz-mobile-inventory-quantity-button"
-                          disabled={!increaseTarget || rowBusy}
-                          aria-label={`Boek 1 op bij ${row.householdName}`}
-                          data-testid={`mobile-inventory-increase-${row.detailId || row.id}`}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            mutateQuickInventory(row, 'increase')
-                          }}
-                        >
-                          +
-                        </button>
-                      ) : null}
-                    </div>
+                    )}
                     <span className="rz-mobile-inventory-chevron" aria-hidden="true">›</span>
                   </div>
                 </div>
@@ -573,29 +499,13 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
         ) : null}
       </main>
 
-      <nav
-        className="rz-mobile-inventory-bottom-nav"
-        aria-label="Recent gebruikte acties"
-        data-testid="mobile-inventory-bottom-nav"
-        style={{ '--rz-mobile-nav-count': bottomNavItems.length }}
-      >
-        {bottomNavItems.map((item) => {
-          return (
-            <Link
-              key={item.key}
-              to={item.route}
-              className="rz-mobile-inventory-nav-item"
-              data-testid={`mobile-inventory-nav-${item.key}`}
-              onClick={() => {
-                if (item.key !== 'meer') recordRecentAction(item.key, context)
-              }}
-            >
-              <span className="rz-mobile-inventory-nav-icon"><MobileNavIcon type={item.icon} /></span>
-              <span>{item.label}</span>
-            </Link>
-          )
-        })}
-      </nav>
+      <MobileRecentActionsBar
+        items={bottomNavItems}
+        testId="mobile-inventory-bottom-nav"
+        onAction={(item) => {
+          if (item.key !== 'meer') recordRecentAction(item.key, context)
+        }}
+      />
     </div>
   )
 }

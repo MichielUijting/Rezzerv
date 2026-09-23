@@ -24,7 +24,7 @@ Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele 
 - de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - geen losse verhoogde card per voorraadartikel en geen decoratieve schaduwen als hoofdstructuur;
 - een vaste witte onderste actiebalk met maximaal vier door de **huidige gebruiker recent gebruikte en nog beschikbare acties**, waarbij de **actief geopende module altijd wordt uitgesloten**, aangevuld met beschikbare andere acties wanneer nog onvoldoende gebruikshistorie bestaat, plus altijd **Meer** als laatste item;
-- de bestaande actie **Incidentele aankoop** blijft functioneel beschikbaar, maar staat als compacte groene actie bij de lijstcontext en is niet langer een grote sticky knop boven een aparte meldingenbalk;
+- de bestaande actie **Incidentele aankoop** blijft functioneel beschikbaar, maar staat als compacte groene actie bij de lijstcontext en is niet langer een grote sticky knop boven een apart inline meldingenblok;
 - alle bestaande data-, autorisatie-, huishoudisolatie-, detailroute- en filterfunctionaliteit blijft leidend. Dit PO-besluit wijzigt de presentatie, niet het domeinmodel.
 
 Andere mobiele kernschermen worden niet stilzwijgend meegewijzigd. Totdat zij expliciet worden gemigreerd mogen zij tijdelijk nog de eerdere visuele shell gebruiken. Nieuwe of aangepaste tests borgen de actuele groene wallpaper, maar mogen blur, individuele zwevende schaduwcards of de oude sticky CTA niet opnieuw afdwingen.
@@ -64,7 +64,8 @@ Regels:
 
 Centrale tokens:
 - `--color-brand-primary`: `#1A3E2B` — donkere brand-ink voor tekst, iconen en focus op lichte surfaces;
-- `--color-ui-primary`: `#28A99E` — primaire blauw-groene UI-kleur voor dominante gekleurde surfaces;
+- `--color-ui-primary`: `#28A99E` — primaire blauw-groene UI-kleur voor dominante desktop-/legacy-surfaces;
+- `--color-mobile-ui-primary`: `#005F6A` — enige primaire donkere kleur voor gemigreerde mobiele headers, primaire acties, steppers, focusaccenten en passieve feedbackoverlays;
 - `--color-ui-primary-text`: `#FFFFFF` — witte tekst en iconen op primaire blauw-groene surfaces;
 - `--color-brand-light`: `#D9F5E0`;
 - `--color-text-primary`: `#1A1A1A`;
@@ -128,6 +129,19 @@ Voor de mobiele Voorraadpilot geldt:
 - op smalle mobiele breedtes is circa `10px` horizontale buitenruimte de referentie; op ruimere mobiele breedtes circa `14px`;
 - de lijst gebruikt subtiele scheidingslijnen in één surface in plaats van verticale ruimte tussen losse cards;
 - de scherminhoud reserveert onderaan voldoende ruimte voor de vaste onderste navigatie plus `env(safe-area-inset-bottom)`.
+
+## Passieve meldingen op mobiel
+
+Passieve succes-, info-, waarschuwing- en foutmeldingen gebruiken uitsluitend de centrale `AppFeedbackProvider/useAppFeedback` en worden op mobiele schermen als **overlay** gerenderd:
+- de melding neemt geen ruimte in de documentflow in en schuift onderliggende inhoud nooit op;
+- de mobiele overlay gebruikt de centrale mobiele primaire kleur `#005F6A`;
+- één klik/tap **op de melding** sluit de melding;
+- één klik/tap **elders op het scherm** sluit de melding;
+- zonder gebruikersactie verdwijnt een passieve melding automatisch na **maximaal 3.000 ms**;
+- een scherm maakt hiervoor geen lokale inline succes-/foutmelding of eigen timer;
+- interactieve bevestigingen, formulieren, technische-detaildialogen en voortgangsfeedback zijn niet transient en verdwijnen niet automatisch; zij blijven de bestaande AppFeedback-dialogsemantiek volgen.
+
+Voor Mobiel Voorraad staat de feedbackoverlay boven de vaste `MobileRecentActionsBar`, zodat melding en navigatie elkaar niet afdekken.
 
 ## Mobiele navigatie
 
@@ -209,22 +223,28 @@ Voor de nieuwe Voorraadbaseline blijven de generieke toegankelijkheidscontracten
 
 ## Meldingen en feedback
 
-Voor passieve applicatiemeldingen op bestaande/niet-gemigreerde schermen geldt het bestaande centrale patroon. Voor de nieuwe mobiele Voorraadbaseline wordt **geen permanent lege meldingenbalk** naast de vaste onderste navigatie gereserveerd; eventuele passieve feedback moet zichtbaar boven die navigatie worden geplaatst en mag haar niet blokkeren.
+De centrale authority voor feedback is `AppFeedbackProvider/useAppFeedback`. Schermen maken geen eigen tijdelijke succes-, info-, waarschuwing- of foutbalk wanneer deze centrale component het patroon afdekt.
 
-Bestaande regels:
-- succes-, fout-, waarschuwing-, informatie- en voortgangsmeldingen worden niet midden in het scherm geplaatst;
-- zij verschijnen in een vaste onderste balk over de volle schermbreedte;
-- de balk is permanent zichtbaar, ook wanneer er geen melding is; zonder melding blijft de balk leeg en toont hij geen placeholdertekst;
-- de balk heeft dezelfde hoogte als de header: `58px` op grotere schermen en `64px` op mobiel;
-- achtergrond is `#28A99E` en tekst/iconen zijn wit (`#FFFFFF`);
-- bij een melding verschijnt de feedbackinhoud op dezelfde balklaag;
-- de melding mag een compacte OK- of detailactie bevatten zolang de balkhoogte gelijk blijft;
-- technische details mogen op verzoek boven de balk worden uitgeklapt, maar de meldingenbalk zelf verandert niet van hoogte;
-- tijdelijke mobiele artikelfeedback volgt hetzelfde patroon;
-- de permanente balk ligt visueel boven de pagina-inhoud, maar mag functioneel nooit de laatste content of actie onbereikbaar maken;
-- iedere mobiele scrollcontext reserveert daarom onderaan minimaal de balkhoogte plus eventuele safe-area; de scrollbar moet ver genoeg doorlopen om de laatste actie volledig boven de balk te brengen.
+### Mobiele passieve feedback
 
-Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een expliciete keuze moet bevestigen blijven dialogen; zij zijn geen passieve melding en worden niet in de onderste balk gepropt.
+Op mobiele schermen is passieve feedback altijd een **overlay**:
+- de melding staat buiten de documentflow en schuift inhoud nooit omlaag of omhoog;
+- er wordt op mobiel geen permanente lege feedbackbalk of extra feedback-clearance gereserveerd;
+- de overlay gebruikt `--color-mobile-ui-primary` (`#005F6A`) met witte tekst;
+- tik/klik **op de melding** sluit haar direct;
+- tik/klik **elders op het scherm** sluit haar direct;
+- zonder interactie verdwijnt de melding automatisch na maximaal **3.000 ms**;
+- een scherm implementeert hiervoor geen eigen timer, lokale feedbackstate of lokale feedback-CSS;
+- op schermen met een vaste onderste actiebalk staat de overlay daar visueel boven.
+
+Interactieve bevestigingen, invoerformulieren, technische-detaildialogen en voortgangsmeldingen zijn niet transient. Zij blijven centrale AppFeedback-dialogen en verdwijnen niet automatisch.
+
+### Desktop en nog niet gemigreerde niet-mobiele feedback
+
+Op desktop mag het bestaande centrale onderste-balkpatroon blijven gelden:
+- de feedbacklaag is fixed en verschuift de pagina-inhoud niet;
+- achtergrond gebruikt de centrale desktopkleur `#28A99E` met witte tekst/iconen;
+- interactieve dialogen blijven afzonderlijke dialogen en worden niet in de balk gepropt.
 
 ## Zoeken, invoer en filters
 
@@ -297,8 +317,8 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - secundaire acties krijgen minder visueel gewicht;
 - volledige-breedteknoppen zijn op mobiel passend wanneer één duidelijke vervolgstap centraal staat;
 - disabled-, hover-, active- en focusstatus zijn zichtbaar en consistent;
-- de primaire actie mag sticky onderaan staan als dit content en meldingenbalk niet blokkeert;
-- een sticky mobiele actie krijgt expliciet voldoende bottom-offset boven de permanente meldingenbalk en de scrollcontainer reserveert daarnaast voldoende eindruimte om de actie volledig zichtbaar en bereikbaar te maken.
+- de primaire actie mag sticky onderaan staan als dit content en de tijdelijke feedbackoverlay niet blokkeert;
+- een sticky mobiele actie krijgt expliciet voldoende bottom-offset boven eventuele tijdelijke feedbackoverlay en de scrollcontainer reserveert daarnaast voldoende eindruimte om de actie volledig zichtbaar en bereikbaar te maken.
 
 ## Tabellen
 
@@ -342,23 +362,31 @@ Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijk
 - tekst en iconen op `#28A99E` gebruiken `#FFFFFF`, conform de applicatiebrede primaire-foregroundregel;
 - leesbaarheid en contrast gaan voor decoratieve transparantie.
 
-## Centrale componenten
+## Centrale componenten en verplichte hergebruikroute
 
-Nieuwe schermen hergebruiken waar passend bestaande centrale componenten en patronen, waaronder:
-- `AppShell`;
-- header/branding;
-- `AppFeedbackProvider` voor passieve applicatiemeldingen;
-- `Card`;
-- `Button`;
-- `Select` voor gebruikerszichtbare dropdowns waarvan de geopende lijst de Inhuis-typografie moet volgen;
-- `SearchCandidateList` plus `searchCandidatePolicy` voor automatisch zichtbare zoekkandidaten (maximaal 5);
-- inputs/search;
-- listcard-/badge-/statuspatronen;
-- `Table`/`DataTable`;
-- `ResizableHeaderCell`;
-- bestaande loading-, empty- en errorstates.
+De machineleesbare catalogus `frontend/src/ui/componentCatalog.js` is de technische bron voor reeds goedgekeurde herbruikbare UI-componenten. Nieuwe of aangepaste schermen raadplegen deze catalogus **vóór** lokaal UI-code wordt toegevoegd.
 
-Maak geen lokale variant van een bestaand component alleen om kleine visuele verschillen te realiseren.
+Actueel expliciet goedgekeurd en herbruikbaar zijn onder meer:
+- `AppFeedbackProvider/useAppFeedback` — tijdelijke meldingen en interactieve feedbackdialogen;
+- `Button` — primaire/secundaire acties;
+- `Select` — gebruikerszichtbare dropdowns;
+- `SearchCandidateList` + `searchCandidatePolicy` — directe zoekkandidaten;
+- `CatalogArticleThumbnail` — operationele productthumbnail met fallback;
+- `DelayedTableLoadingOverlay` — loadingoverlay na 1.000 ms;
+- `Table`/`DataTable` — canonieke tabellen;
+- `MobileModuleHeader` — compacte mobiele moduleheader;
+- `MobileRecentActionsBar` — vaste recente-actiebalk onderin gemigreerde mobiele modulehoofschermen;
+- `QuantityStepper` — canonieke `− waarde +`-bediening; domeinmutaties blijven buiten het component.
+
+Harde werkwijze:
+1. bestaand goedgekeurd component dat functioneel past wordt hergebruikt;
+2. een scherm maakt geen lokale kopie/variant voor alleen spacing, kleur, label of kleine presentatieverschillen;
+3. als geen bestaand component past, wordt een nieuw gedeeld component onder `frontend/src/ui/` gemaakt wanneer het patroon herbruikbaar is;
+4. ieder nieuw centraal component krijgt in dezelfde wijziging een catalogus-entry met **purpose**, **reuseRule**, publieke API en contracttests;
+5. nieuwe schermspecifieke lokale componenten zijn alleen toegestaan wanneer het patroon aantoonbaar niet herbruikbaar is;
+6. `frontend/tests/ui-component-reuse.contract.mjs` faalt wanneer een nieuw centraal JSX-component niet is gecatalogiseerd of wanneer een gemigreerd referentiescherm een verplichte centrale component niet meer gebruikt.
+
+De catalogus bevat ook bestaande UI-modules die nog niet als expliciet PO-goedgekeurd hergebruikcomponent zijn geclassificeerd. Zij mogen niet stilzwijgend als nieuwe standaard worden gekopieerd; bij aanraking worden zij beoordeeld en zo nodig bevorderd naar een gespecificeerd component.
 
 ## Kernflowconsistentie
 
@@ -386,9 +414,9 @@ Vaste regels:
 - **Aantal**, **Omvang** en **Opmerking** blijven bewerkbaar via dezelfde bestaande update-route;
 - wanneer dezelfde canonieke kandidaat opnieuw wordt toegevoegd, blijft één regel zichtbaar en wordt **Aantal** verhoogd; gelijke namen met verschillende bronidentiteit worden niet stil samengevoegd;
 - regels blijven selecteerbaar voor de bestaande acties **Exporteren** en **Verwijderen**;
-- **Winkelen afgerond** blijft de dominante sticky primaire afrondactie boven de permanente meldingenbalk en gebruikt dezelfde bestaande complete-route;
-- passieve succesfeedback verschijnt via de centrale onderste meldingenbalk; verwijder- en afrondbevestigingen blijven interactieve AppFeedback-dialogen;
-- content reserveert onderaan de meldingenbalk plus safe-area, zodat de laatste kaart en sticky actie volledig bereikbaar blijven.
+- **Winkelen afgerond** blijft de dominante sticky primaire afrondactie boven eventuele tijdelijke feedbackoverlay en gebruikt dezelfde bestaande complete-route;
+- passieve succesfeedback verschijnt via de centrale mobiele AppFeedback-overlay; verwijder- en afrondbevestigingen blijven interactieve AppFeedback-dialogen;
+- content reserveert onderaan de vaste navigatie/actie plus safe-area, zodat de laatste kaart en sticky actie volledig bereikbaar blijven.
 
 Niet tonen zolang hiervoor geen echte appfunctionaliteit bestaat:
 - tabs of secties **Suggesties**, **Aanbiedingen** of **Vaak gekocht**;
@@ -415,7 +443,7 @@ Vaste regels:
 De sectie **Snelle acties** bevat precies:
 1. **Voorkeurswinkel** — toont/bewerkt de bestaande huishoudinstelling `favorite_store`;
 2. **Aankoophistorie** — toont uitsluitend aankoopgebeurtenissen van het huidige huishoudartikel;
-3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve **Boodschappenlijst**, opent geen extra detailscherm en geeft feedback via de onderste meldingenbalk.
+3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve **Boodschappenlijst**, opent geen extra detailscherm en geeft feedback via de centrale mobiele AppFeedback-overlay.
 
 Niet opnemen als nieuwe mobiele functionaliteit:
 - `Naar boodschappen`;

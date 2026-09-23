@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Select from '../../ui/Select.jsx'
+import QuantityStepper from '../../ui/QuantityStepper.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   fetchJsonWithAuth,
   isHouseholdAdminFromContext,
@@ -83,22 +85,6 @@ function formatPurchaseDate(value) {
   return new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium' }).format(date)
 }
 
-function MinusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M5 12h14" />
-    </svg>
-  )
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  )
-}
-
 export default function MobileArticlePage() {
   const { articleId = '' } = useParams()
   const [searchParams] = useSearchParams()
@@ -118,7 +104,7 @@ export default function MobileArticlePage() {
   const [inventoryBusy, setInventoryBusy] = useState(false)
   const [settingsBusy, setSettingsBusy] = useState(false)
   const [shoppingBusy, setShoppingBusy] = useState(false)
-  const [feedback, setFeedback] = useState({ type: '', message: '' })
+  const { showFeedback } = useAppFeedback()
   const [error, setError] = useState('')
 
   const articleName = String(articleData?.article_name || articleData?.name || requestedArticleName || 'Voorraadartikel').trim()
@@ -189,11 +175,11 @@ export default function MobileArticlePage() {
   }, [settings?.favorite_store])
 
   function showSuccess(message) {
-    setFeedback({ type: 'success', message })
+    showFeedback({ variant: 'success', message, testId: 'mobile-article-feedback' })
   }
 
   function showError(message) {
-    setFeedback({ type: 'error', message })
+    showFeedback({ variant: 'error', message, testId: 'mobile-article-feedback' })
   }
 
   async function refreshInventoryAndHistory() {
@@ -210,7 +196,6 @@ export default function MobileArticlePage() {
     if (direction < 0 && selectedRow.quantity <= 0) return
 
     setInventoryBusy(true)
-    setFeedback({ type: '', message: '' })
     try {
       await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`, {
         method: 'POST',
@@ -239,7 +224,6 @@ export default function MobileArticlePage() {
     if (!canEditHouseholdSettings || settingsBusy || !householdArticleId || nextValue === currentValue) return
 
     setSettingsBusy(true)
-    setFeedback({ type: '', message: '' })
     try {
       const payload = buildHouseholdSettingsPayload(settings, nextValue)
       const result = await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/settings`, {
@@ -261,7 +245,6 @@ export default function MobileArticlePage() {
   async function addToShoppingList() {
     if (shoppingBusy || !householdArticleId) return
     setShoppingBusy(true)
-    setFeedback({ type: '', message: '' })
     try {
       const payload = buildShoppingListPayload(articleData || { article_name: articleName }, householdArticleId)
       await requestJson('/api/shopping-list/items', {
@@ -327,41 +310,23 @@ export default function MobileArticlePage() {
               </div>
             </div>
             <div className="rz-mobile-article-stock-control">
-              <button
-                type="button"
-                className="rz-mobile-article-stock-button"
-                aria-label="Voorraad met 1 verlagen"
-                disabled={!canEditInventory || inventoryBusy || !selectedRow || selectedRow.quantity <= 0}
-                onClick={() => changeInventory(-1)}
-                data-testid="mobile-article-stock-minus"
-              >
-                <MinusIcon />
-              </button>
-              <div className="rz-mobile-article-stock-value" data-testid="mobile-article-stock-value">{formatQuantity(displayedQuantity)}</div>
-              <button
-                type="button"
-                className="rz-mobile-article-stock-button"
-                aria-label="Voorraad met 1 verhogen"
-                disabled={!canEditInventory || inventoryBusy || !selectedRow}
-                onClick={() => changeInventory(1)}
-                data-testid="mobile-article-stock-plus"
-              >
-                <PlusIcon />
-              </button>
+              <QuantityStepper
+                value={formatQuantity(displayedQuantity)}
+                decreaseDisabled={!canEditInventory || inventoryBusy || !selectedRow || selectedRow.quantity <= 0}
+                increaseDisabled={!canEditInventory || inventoryBusy || !selectedRow}
+                decreaseLabel="Voorraad met 1 verlagen"
+                increaseLabel="Voorraad met 1 verhogen"
+                valueLabel={`Aantal ${formatQuantity(displayedQuantity)}`}
+                decreaseTestId="mobile-article-stock-minus"
+                increaseTestId="mobile-article-stock-plus"
+                valueTestId="mobile-article-stock-value"
+                onDecrease={() => changeInventory(-1)}
+                onIncrease={() => changeInventory(1)}
+              />
             </div>
           </div>
           {!canEditInventory ? <div className="rz-mobile-article-helper">Alleen een beheerder of eigenaar kan de voorraad aanpassen.</div> : null}
         </section>
-
-        {feedback.message ? (
-          <div
-            className={`rz-mobile-article-feedback rz-mobile-article-feedback--${feedback.type || 'success'}`}
-            role={feedback.type === 'error' ? 'alert' : 'status'}
-            aria-live="polite"
-          >
-            {feedback.message}
-          </div>
-        ) : null}
 
         <section className="rz-mobile-article-card rz-mobile-article-details" aria-label="Artikelgegevens">
           <div className="rz-mobile-article-section-title">Artikelgegevens</div>

@@ -11,11 +11,13 @@ const tokensCss = readFrontend('src/ui/tokens.css')
 const themeCss = readFrontend('src/ui/theme.css')
 const feedbackBarCss = readFrontend('src/ui/feedback-bar.css')
 const providerSource = readFrontend('src/ui/AppFeedbackProvider.jsx')
+const feedbackPolicySource = readFrontend('src/ui/feedbackPolicy.js')
 const appSource = readFrontend('src/App.jsx')
 
 assert.match(tokensCss, /--size-app-bar:\s*58px/)
 assert.match(tokensCss, /--size-app-bar-mobile:\s*64px/)
 assert.match(tokensCss, /--space-mobile-field-inline:\s*1ch/)
+assert.match(tokensCss, /--color-mobile-ui-primary:\s*#005F6A/i)
 
 assert.match(appSource, /import "\.\/ui\/feedback-bar\.css";/)
 assert.match(appSource, /className="rz-app-feedback-bar-base"/)
@@ -45,5 +47,22 @@ assert.match(themeCss, /:not\(:has\(\[data-testid\$="-primary-button"\]\)\)/)
 assert.match(themeCss, /:not\(:has\(\[data-testid\$="-secondary-button"\]\)\)/)
 assert.match(themeCss, /:not\(:has\(\.rz-input\)\)/)
 assert.match(themeCss, /@media \(max-width: 720px\)[\s\S]*height:\s*var\(--size-app-bar-mobile\)\s*!important/)
+
+assert.match(feedbackPolicySource, /MAX_TRANSIENT_FEEDBACK_MS\s*=\s*3000/)
+assert.match(providerSource, /MOBILE_FEEDBACK_MEDIA_QUERY\s*=\s*'\(max-width: 720px\)'/)
+assert.match(providerSource, /const mobileFeedbackViewport = useMobileFeedbackViewport\(\)/)
+assert.match(providerSource, /if \(!mobileFeedbackViewport\) return undefined[\s\S]*transientFeedbackDuration\(feedback\)/)
+assert.match(providerSource, /window\.setTimeout\(dismissFeedback, duration\)/)
+assert.match(providerSource, /const mobileTransient = mobileFeedbackViewport && isTransientFeedback\(feedback\)/)
+assert.match(providerSource, /if \(mobileTransient\) dismiss\(\)/)
+assert.match(providerSource, /canDismissWithOk && !mobileTransient/)
+assert.match(
+  themeCss,
+  /@media \(max-width: 720px\)[\s\S]*app-feedback-bar-scroll-clearance[\s\S]*display:\s*none\s*!important;/,
+)
+assert.match(
+  themeCss,
+  /@media \(max-width: 720px\)[\s\S]*inset:\s*0\s*!important;[\s\S]*align-items:\s*flex-end\s*!important;/,
+)
 
 console.log('INHUIS_FEEDBACK_BAR_CONTRACT_GREEN')
