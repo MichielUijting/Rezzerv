@@ -237,7 +237,7 @@ def cmd_detect(args: argparse.Namespace) -> int:
     result = canonical_version_only_delta(ROOT, policy, args.before_sha, args.after_sha)
     _write_evidence(args.evidence, result)
     _emit("safe", "true" if result["safe"] else "false")
-    _emit("source_sha", result.get("source_sha", ""))
+    _emit("source_sha", result.get("source_sha", "") if result["safe"] else "")
     _emit("candidate_sha", result.get("candidate_sha", ""))
     _emit("reason", result.get("reason", ""))
     print("VERSION_ONLY_CARRY_FORWARD_DETECT_GREEN")
@@ -299,7 +299,7 @@ def cmd_workflow(args: argparse.Namespace) -> int:
 
     _write_evidence(args.evidence, evidence)
     _emit("reuse", "true" if evidence["reuse"] else "false")
-    _emit("source_sha", evidence.get("source_sha", ""))
+    _emit("source_sha", evidence.get("source_sha", "") if evidence["reuse"] else "")
     _emit("source_run_id", str(evidence.get("source_run_id") or ""))
     _emit("reason", evidence.get("reason", ""))
     if evidence["reuse"]:
