@@ -12,6 +12,7 @@ from app.api.article_detail_admin_routes import (
     router,
     transfer_article_detail_inventory_admin_only,
     update_article_detail_admin_only,
+    update_article_detail_notes_for_household_member,
     update_article_detail_settings_admin_only,
 )
 from app.services.household_alias_policy import install_household_alias_policy
@@ -130,6 +131,10 @@ def _build_main_endpoint(name, calls, *, inventory=False):
                     'notes': 'Bestaande notitie',
                 }
             },
+            'update_household_article_settings': lambda conn, household_id, article_id, payload: (
+                calls.append(('notes-service', article_id, payload.data, household_id))
+                or {'settings': dict(payload.data)}
+            ),
         })
         exec(
             "def endpoint(household_article_id: str, payload: Payload, authorization=None):\n"
@@ -210,7 +215,7 @@ def test_patch_and_settings_are_admin_only_before_delegation():
     )]
 
 
-def test_runtime_settings_guard_allows_all_household_members_notes_but_preserves_other_settings():
+def test_runtime_settings_guard_remains_admin_only():
     calls = []
     settings_endpoint = _build_main_endpoint('settings', calls)
     route = SimpleNamespace(
@@ -226,19 +231,36 @@ def test_runtime_settings_guard_allows_all_household_members_notes_but_preserves
         '/api/household-articles/{household_article_id}/settings',
         'PUT',
         preserve_server_owned_settings=True,
-        allow_member_notes=True,
     )
 
-    result = route.dependant.call(
+    _assert_member_denied(lambda: route.dependant.call(
         household_article_id=ARTICLE_ID,
-        payload=FakePayload(notes='Gedeelde notitie', favorite_store='Niet toegestaan'),
+        payload=FakePayload(notes='Niet via settings'),
         authorization='Bearer member',
+    ))
+    assert calls == []
+
+
+def test_notes_route_allows_every_household_member_and_preserves_other_settings():
+    calls = []
+    settings_endpoint = _build_main_endpoint('settings', calls)
+    settings_request = _request_for(
+        settings_endpoint,
+        '/api/household-articles/{household_article_id}/settings',
+        'PUT',
     )
-    assert result == {'ok': True, 'kind': 'settings'}
-    kind, article_id, payload, authorization = calls[-1]
-    assert kind == 'settings'
+
+    member_result = update_article_detail_notes_for_household_member(
+        ARTICLE_ID,
+        settings_request,
+        {'notes': 'Gedeelde notitie'},
+        'Bearer member',
+    )
+    assert member_result['settings']['notes'] == 'Gedeelde notitie'
+    kind, article_id, payload, household_id = calls[-1]
+    assert kind == 'notes-service'
     assert article_id == ARTICLE_ID
-    assert authorization == 'Bearer member'
+    assert household_id == 'household-a'
     assert payload['notes'] == 'Gedeelde notitie'
     assert payload['favorite_store'] == 'AH'
     assert payload['min_stock'] == 2
@@ -246,22 +268,23 @@ def test_runtime_settings_guard_allows_all_household_members_notes_but_preserves
     assert payload['average_price'] == 3.45
     assert payload['auto_restock'] is True
 
-    viewer_result = route.dependant.call(
-        household_article_id=ARTICLE_ID,
-        payload=FakePayload(notes='Kijker deelt notitie', favorite_store='Niet toegestaan'),
-        authorization='Bearer viewer',
+    viewer_result = update_article_detail_notes_for_household_member(
+        ARTICLE_ID,
+        settings_request,
+        {'notes': 'Kijker deelt notitie'},
+        'Bearer viewer',
     )
-    assert viewer_result == {'ok': True, 'kind': 'settings'}
-    kind, article_id, payload, authorization = calls[-1]
-    assert kind == 'settings'
-    assert article_id == ARTICLE_ID
-    assert authorization == 'Bearer viewer'
-    assert payload['notes'] == 'Kijker deelt notitie'
-    assert payload['favorite_store'] == 'AH'
-    assert payload['min_stock'] == 2
-    assert payload['ideal_stock'] == 5
-    assert payload['average_price'] == 3.45
-    assert payload['auto_restock'] is True
+    assert viewer_result['settings']['notes'] == 'Kijker deelt notitie'
+    assert calls[-1][2]['favorite_store'] == 'AH'
+
+    call_count = len(calls)
+    _assert_member_denied(lambda: update_article_detail_notes_for_household_member(
+        ARTICLE_ID,
+        settings_request,
+        {'notes': 'Mag wel', 'favorite_store': 'Mag niet'},
+        'Bearer member',
+    ))
+    assert len(calls) == call_count
 
 
 def test_inventory_and_transfer_are_admin_only_and_article_scoped():
@@ -353,7 +376,8 @@ def test_product_enrichment_cannot_own_household_alias():
 
 def run_contract() -> None:
     test_patch_and_settings_are_admin_only_before_delegation()
-    test_runtime_settings_guard_allows_all_household_members_notes_but_preserves_other_settings()
+    test_runtime_settings_guard_remains_admin_only()
+    test_notes_route_allows_every_household_member_and_preserves_other_settings()
     test_inventory_and_transfer_are_admin_only_and_article_scoped()
     test_product_enrichment_cannot_own_household_alias()
     print('ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN')
