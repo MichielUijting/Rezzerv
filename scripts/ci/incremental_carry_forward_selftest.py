@@ -61,6 +61,16 @@ def main() -> int:
     assert carried == []
     assert unmapped == []
 
+    plan, carried, unmapped = select_authority_plan(
+        authorities,
+        ["frontend/src/unmapped/file.jsx"],
+        ["frontend/src/unmapped/file.jsx"],
+        prior_green=True,
+    )
+    assert plan == {"alpha": True, "beta": True}
+    assert carried == []
+    assert unmapped == ["frontend/src/unmapped/file.jsx"]
+
     print("INCREMENTAL_CI_CARRY_FORWARD_SELF_TEST_GREEN")
     return 0
 
