@@ -22,7 +22,12 @@
 .rz-header-left {
   display: flex;
   align-items: center;
+  gap: 10px;
   min-width: 0;
+}
+
+.rz-header .rz-mobile-back-control {
+  display: none;
 }
 
 .rz-header-titleblock {
@@ -110,6 +115,11 @@
 }
 
 @media (max-width: 720px) {
+  .rz-header .rz-mobile-back-control {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
   .rz-header {
     min-height: 64px;
     padding: 7px 14px;
