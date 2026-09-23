@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Header from '../../ui/Header.jsx'
+import MobileScreenShell from '../../ui/MobileScreenShell.jsx'
 import Button from '../../ui/Button.jsx'
 import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
@@ -286,8 +286,12 @@ export default function MobileShopping() {
   }
 
   return (
-    <div className="rz-screen rz-mobile-inventory-screen rz-mobile-shopping-screen" data-testid="mobile-shopping-page">
-      <Header title="Boodschappenlijst" />
+    <MobileScreenShell
+      title="Boodschappenlijst"
+      activeKey="winkelen"
+      testId="mobile-shopping-page"
+      className="rz-mobile-inventory-screen rz-mobile-shopping-screen"
+    >
       <main className="rz-mobile-inventory-content rz-mobile-shopping-content">
         <section className="rz-mobile-inventory-toolbar rz-mobile-shopping-toolbar" aria-label="Artikel toevoegen">
           <div className="rz-mobile-shopping-toolbar-title">Artikel toevoegen</div>
@@ -481,6 +485,6 @@ export default function MobileShopping() {
           </Button>
         </div>
       </main>
-    </div>
+    </MobileScreenShell>
   )
 }

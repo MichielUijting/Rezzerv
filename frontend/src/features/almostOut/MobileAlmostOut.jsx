@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import Header from '../../ui/Header'
+import MobileScreenShell from '../../ui/MobileScreenShell.jsx'
 import Button from '../../ui/Button'
 import Select from '../../ui/Select.jsx'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
@@ -109,12 +109,13 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
   }
 
   return (
-    <div
-      className="rz-screen rz-mobile-inventory-screen"
-      data-testid="mobile-almost-out-page"
-      data-almost-out-location-tracking={locationTrackingEnabled ? 'enabled' : 'disabled'}
+    <MobileScreenShell
+      title="Bijna op"
+      activeKey="bijna-op"
+      testId="mobile-almost-out-page"
+      className="rz-mobile-inventory-screen"
+      rootProps={{ 'data-almost-out-location-tracking': locationTrackingEnabled ? 'enabled' : 'disabled' }}
     >
-      <Header title="Bijna op" />
       <main className="rz-mobile-inventory-content">
         <section className="rz-mobile-inventory-toolbar" aria-label="Bijna op zoeken en filteren">
           <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
@@ -252,6 +253,6 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
           </section>
         ) : null}
       </main>
-    </div>
+    </MobileScreenShell>
   )
 }
