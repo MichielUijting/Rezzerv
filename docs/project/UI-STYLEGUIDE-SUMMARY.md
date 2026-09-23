@@ -64,7 +64,8 @@ Regels:
 
 Centrale tokens:
 - `--color-brand-primary`: `#1A3E2B` — donkere brand-ink voor tekst, iconen en focus op lichte surfaces;
-- `--color-ui-primary`: `#28A99E` — primaire blauw-groene UI-kleur voor dominante gekleurde surfaces;
+- `--color-ui-primary`: `#28A99E` — primaire blauw-groene UI-kleur voor dominante desktop-/legacy-surfaces;
+- `--color-mobile-ui-primary`: `#005F6A` — enige primaire donkere kleur voor gemigreerde mobiele headers, primaire acties, steppers, focusaccenten en passieve feedbackoverlays;
 - `--color-ui-primary-text`: `#FFFFFF` — witte tekst en iconen op primaire blauw-groene surfaces;
 - `--color-brand-light`: `#D9F5E0`;
 - `--color-text-primary`: `#1A1A1A`;
@@ -128,6 +129,19 @@ Voor de mobiele Voorraadpilot geldt:
 - op smalle mobiele breedtes is circa `10px` horizontale buitenruimte de referentie; op ruimere mobiele breedtes circa `14px`;
 - de lijst gebruikt subtiele scheidingslijnen in één surface in plaats van verticale ruimte tussen losse cards;
 - de scherminhoud reserveert onderaan voldoende ruimte voor de vaste onderste navigatie plus `env(safe-area-inset-bottom)`.
+
+## Passieve meldingen op mobiel
+
+Passieve succes-, info-, waarschuwing- en foutmeldingen gebruiken uitsluitend de centrale `AppFeedbackProvider/useAppFeedback` en worden op mobiele schermen als **overlay** gerenderd:
+- de melding neemt geen ruimte in de documentflow in en schuift onderliggende inhoud nooit op;
+- de mobiele overlay gebruikt de centrale mobiele primaire kleur `#005F6A`;
+- één klik/tap **op de melding** sluit de melding;
+- één klik/tap **elders op het scherm** sluit de melding;
+- zonder gebruikersactie verdwijnt een passieve melding automatisch na **maximaal 3.000 ms**;
+- een scherm maakt hiervoor geen lokale inline succes-/foutmelding of eigen timer;
+- interactieve bevestigingen, formulieren, technische-detaildialogen en voortgangsfeedback zijn niet transient en verdwijnen niet automatisch; zij blijven de bestaande AppFeedback-dialogsemantiek volgen.
+
+Voor Mobiel Voorraad staat de feedbackoverlay boven de vaste `MobileRecentActionsBar`, zodat melding en navigatie elkaar niet afdekken.
 
 ## Mobiele navigatie
 
@@ -298,7 +312,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - volledige-breedteknoppen zijn op mobiel passend wanneer één duidelijke vervolgstap centraal staat;
 - disabled-, hover-, active- en focusstatus zijn zichtbaar en consistent;
 - de primaire actie mag sticky onderaan staan als dit content en meldingenbalk niet blokkeert;
-- een sticky mobiele actie krijgt expliciet voldoende bottom-offset boven de permanente meldingenbalk en de scrollcontainer reserveert daarnaast voldoende eindruimte om de actie volledig zichtbaar en bereikbaar te maken.
+- een sticky mobiele actie krijgt expliciet voldoende bottom-offset boven eventuele tijdelijke feedbackoverlay en de scrollcontainer reserveert daarnaast voldoende eindruimte om de actie volledig zichtbaar en bereikbaar te maken.
 
 ## Tabellen
 
@@ -342,23 +356,31 @@ Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijk
 - tekst en iconen op `#28A99E` gebruiken `#FFFFFF`, conform de applicatiebrede primaire-foregroundregel;
 - leesbaarheid en contrast gaan voor decoratieve transparantie.
 
-## Centrale componenten
+## Centrale componenten en verplichte hergebruikroute
 
-Nieuwe schermen hergebruiken waar passend bestaande centrale componenten en patronen, waaronder:
-- `AppShell`;
-- header/branding;
-- `AppFeedbackProvider` voor passieve applicatiemeldingen;
-- `Card`;
-- `Button`;
-- `Select` voor gebruikerszichtbare dropdowns waarvan de geopende lijst de Inhuis-typografie moet volgen;
-- `SearchCandidateList` plus `searchCandidatePolicy` voor automatisch zichtbare zoekkandidaten (maximaal 5);
-- inputs/search;
-- listcard-/badge-/statuspatronen;
-- `Table`/`DataTable`;
-- `ResizableHeaderCell`;
-- bestaande loading-, empty- en errorstates.
+De machineleesbare catalogus `frontend/src/ui/componentCatalog.js` is de technische bron voor reeds goedgekeurde herbruikbare UI-componenten. Nieuwe of aangepaste schermen raadplegen deze catalogus **vóór** lokaal UI-code wordt toegevoegd.
 
-Maak geen lokale variant van een bestaand component alleen om kleine visuele verschillen te realiseren.
+Actueel expliciet goedgekeurd en herbruikbaar zijn onder meer:
+- `AppFeedbackProvider/useAppFeedback` — tijdelijke meldingen en interactieve feedbackdialogen;
+- `Button` — primaire/secundaire acties;
+- `Select` — gebruikerszichtbare dropdowns;
+- `SearchCandidateList` + `searchCandidatePolicy` — directe zoekkandidaten;
+- `CatalogArticleThumbnail` — operationele productthumbnail met fallback;
+- `DelayedTableLoadingOverlay` — loadingoverlay na 1.000 ms;
+- `Table`/`DataTable` — canonieke tabellen;
+- `MobileModuleHeader` — compacte mobiele moduleheader;
+- `MobileRecentActionsBar` — vaste recente-actiebalk onderin gemigreerde mobiele modulehoofschermen;
+- `QuantityStepper` — canonieke `− waarde +`-bediening; domeinmutaties blijven buiten het component.
+
+Harde werkwijze:
+1. bestaand goedgekeurd component dat functioneel past wordt hergebruikt;
+2. een scherm maakt geen lokale kopie/variant voor alleen spacing, kleur, label of kleine presentatieverschillen;
+3. als geen bestaand component past, wordt een nieuw gedeeld component onder `frontend/src/ui/` gemaakt wanneer het patroon herbruikbaar is;
+4. ieder nieuw centraal component krijgt in dezelfde wijziging een catalogus-entry met **purpose**, **reuseRule**, publieke API en contracttests;
+5. nieuwe schermspecifieke lokale componenten zijn alleen toegestaan wanneer het patroon aantoonbaar niet herbruikbaar is;
+6. `frontend/tests/ui-component-reuse.contract.mjs` faalt wanneer een nieuw centraal JSX-component niet is gecatalogiseerd of wanneer een gemigreerd referentiescherm een verplichte centrale component niet meer gebruikt.
+
+De catalogus bevat ook bestaande UI-modules die nog niet als expliciet PO-goedgekeurd hergebruikcomponent zijn geclassificeerd. Zij mogen niet stilzwijgend als nieuwe standaard worden gekopieerd; bij aanraking worden zij beoordeeld en zo nodig bevorderd naar een gespecificeerd component.
 
 ## Kernflowconsistentie
 
@@ -386,9 +408,9 @@ Vaste regels:
 - **Aantal**, **Omvang** en **Opmerking** blijven bewerkbaar via dezelfde bestaande update-route;
 - wanneer dezelfde canonieke kandidaat opnieuw wordt toegevoegd, blijft één regel zichtbaar en wordt **Aantal** verhoogd; gelijke namen met verschillende bronidentiteit worden niet stil samengevoegd;
 - regels blijven selecteerbaar voor de bestaande acties **Exporteren** en **Verwijderen**;
-- **Winkelen afgerond** blijft de dominante sticky primaire afrondactie boven de permanente meldingenbalk en gebruikt dezelfde bestaande complete-route;
-- passieve succesfeedback verschijnt via de centrale onderste meldingenbalk; verwijder- en afrondbevestigingen blijven interactieve AppFeedback-dialogen;
-- content reserveert onderaan de meldingenbalk plus safe-area, zodat de laatste kaart en sticky actie volledig bereikbaar blijven.
+- **Winkelen afgerond** blijft de dominante sticky primaire afrondactie boven eventuele tijdelijke feedbackoverlay en gebruikt dezelfde bestaande complete-route;
+- passieve succesfeedback verschijnt via de centrale mobiele AppFeedback-overlay; verwijder- en afrondbevestigingen blijven interactieve AppFeedback-dialogen;
+- content reserveert onderaan de vaste navigatie/actie plus safe-area, zodat de laatste kaart en sticky actie volledig bereikbaar blijven.
 
 Niet tonen zolang hiervoor geen echte appfunctionaliteit bestaat:
 - tabs of secties **Suggesties**, **Aanbiedingen** of **Vaak gekocht**;
