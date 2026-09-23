@@ -7,7 +7,7 @@ from shared_fullstack_plan import select_authority_plan
 
 
 def main() -> int:
-    workflow_patterns = ["frontend/src/**", "frontend/tests/e2e/**", "frontend/package.json"]
+    workflow_patterns = ["frontend/src/**", "frontend/tests/e2e/**", "frontend/tests/*.contract.mjs", "frontend/package.json"]
     assert classify_incremental_files(
         ["frontend/tests/mobile-ui-conformity.contract.mjs"],
         workflow_patterns,
