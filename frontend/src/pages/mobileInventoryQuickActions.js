@@ -44,3 +44,22 @@ export function buildQuickInventoryMutation(row, direction) {
 
   return null
 }
+
+
+export function selectExactInventoryTarget(row) {
+  const entries = normalizedEntries(row)
+  return entries.length === 1 ? entries[0] : null
+}
+
+export function buildExactInventoryMutation(row, nextQuantity) {
+  const target = selectExactInventoryTarget(row)
+  const normalizedQuantity = Number(String(nextQuantity ?? '').replace(',', '.'))
+  if (!target || !Number.isFinite(normalizedQuantity) || normalizedQuantity < 0) return null
+
+  return {
+    inventory_id: target.inventoryId,
+    quantity: normalizedQuantity,
+    event_type: 'adjustment',
+    note: 'Exact aantal aangepast via mobiele Voorraad.',
+  }
+}
