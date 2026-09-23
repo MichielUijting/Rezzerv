@@ -461,6 +461,19 @@ De CI-gate `UI styleguide governance validation` controleert fail-closed:
 - verplichte styleguide-update voor styleguide-dragende wijzigingen;
 - expliciete reviewverklaring voor overige UI-wijzigingen.
 
+## Mobiele UI-conformiteit tijdens de redesign
+
+De mobiele redesign gebruikt vanaf 23 september 2026 een gescheiden testmodel:
+
+- functionele mobiele contracttests blijven routes, data, API-gebruik, autorisatie, domeinacties en noodzakelijke interacties bewaken;
+- historische visuele assertions van nog niet gemigreerde mobiele schermen zijn geen actuele UI-authority en mogen een nieuw schermontwerp niet blokkeren;
+- de actuele visuele authority voor gemigreerde mobiele modulehoofschermen staat in `frontend/tests/mobile-ui-conformity.contract.mjs`;
+- die conformiteitstest bevat uitsluitend schermen waarvoor de PO de nieuwe baseline expliciet heeft vastgesteld;
+- bij iedere volgende mobiele schermmigratie wordt dezelfde conformiteitstest met de nieuwe schermbaseline uitgebreid en worden eventuele resterende legacy-visuele assertions voor dat scherm verwijderd;
+- functionele regressiedekking wordt daarbij niet verlaagd of omzeild: alleen de vervangen visuele baseline verhuist naar de nieuwe authority.
+
+Op dit moment is **Voorraad** het enige scherm in de nieuwe mobiele UI-conformiteitsset. **Bijna op**, **Boodschappenlijst/Winkelen** en **Voorraad-artikeldetail** behouden hun functionele regressietests, maar hebben totdat hun nieuwe ontwerp expliciet is vastgesteld geen blokkerende legacy-visuele baseline.
+
 ## Historische styleguidedocumenten
 
 `docs/Rezzerv-Styleguide_v05.08.md` en `Rezzerv-Styleguide_v05.14.md` blijven behouden als audittrail van eerdere PO-besluiten. Hun actuele regels zijn hierboven geconsolideerd. Nieuwe wijzigingen worden niet als nieuwe losse styleguideversies toegevoegd tenzij de PO daar expliciet om vraagt; de canonieke bron wordt direct bijgewerkt.
