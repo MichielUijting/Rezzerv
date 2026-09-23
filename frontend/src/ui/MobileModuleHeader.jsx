@@ -30,7 +30,6 @@ export default function MobileModuleHeader({ title, testId = 'mobile-module-head
   return (
     <header className="rz-mobile-module-header" data-testid={testId}>
       <div className="rz-mobile-module-header-leading">
-        <MobileBackControl />
         <h1>{title}</h1>
       </div>
       <img
