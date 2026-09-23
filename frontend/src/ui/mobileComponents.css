@@ -1,3 +1,37 @@
+.rz-mobile-module-header-leading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rz-mobile-back-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  min-height: 44px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  background: var(--color-mobile-ui-primary);
+  color: var(--color-ui-primary-text);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body);
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rz-mobile-back-control:hover,
+.rz-mobile-back-control:focus-visible {
+  background: var(--color-mobile-ui-primary);
+  color: var(--color-ui-primary-text);
+  outline: 2px solid rgba(255, 255, 255, 0.72);
+  outline-offset: 2px;
+}
+
 .rz-mobile-module-header {
   position: sticky;
   top: 0;
