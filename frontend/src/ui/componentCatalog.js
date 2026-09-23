@@ -67,8 +67,8 @@ export const APPROVED_UI_COMPONENTS = Object.freeze([
     id: 'mobile-module-header',
     source: 'src/ui/MobileModuleHeader.jsx',
     publicApi: 'MobileModuleHeader',
-    purpose: 'Goedgekeurde compacte mobiele moduleheader met titel links en wit Inhuis-logo rechts.',
-    reuseRule: 'Gemigreerde mobiele modulehoofschermen gebruiken deze header in plaats van lokale header-markup.',
+    purpose: 'Goedgekeurde compacte mobiele moduleheader met gedeelde Terug-knop, titel en wit Inhuis-logo.',
+    reuseRule: 'Gemigreerde mobiele modulehoofschermen gebruiken deze header in plaats van lokale header- of terugknop-markup.',
     contractTests: ['tests/mobile-ui-conformity.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
   },
   {
@@ -76,7 +76,7 @@ export const APPROVED_UI_COMPONENTS = Object.freeze([
     source: 'src/ui/MobileRecentActionsBar.jsx',
     publicApi: 'MobileRecentActionsBar',
     purpose: 'Vaste mobiele balk voor recente beschikbare acties plus Meer.',
-    reuseRule: 'Gemigreerde mobiele modulehoofschermen gebruiken deze renderer; selectie/exclusie van de actieve module blijft callerlogica.',
+    reuseRule: 'De centrale MobileAppChrome rendert deze balk voor iedere beveiligde mobiele route; schermen implementeren geen eigen bottom navigation.',
     contractTests: ['tests/mobile-ui-conformity.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
   },
   {
@@ -105,6 +105,14 @@ export const EXISTING_UI_MODULES_REQUIRING_FUTURE_REVIEW = Object.freeze([
 
 export const SCREEN_COMPONENT_REQUIREMENTS = Object.freeze([
   {
+    id: 'mobile-app-chrome',
+    source: 'src/app/MobileAppChrome.jsx',
+    requiredTokens: [
+      'MobileRecentActionsBar',
+      'mobile-global-bottom-nav',
+    ],
+  },
+  {
     id: 'mobile-voorraad',
     source: 'src/pages/MobileVoorraad.jsx',
     requiredTokens: [
@@ -113,7 +121,6 @@ export const SCREEN_COMPONENT_REQUIREMENTS = Object.freeze([
       'Select',
       'CatalogArticleThumbnail',
       'MobileModuleHeader',
-      'MobileRecentActionsBar',
       'QuantityStepper',
     ],
   },
