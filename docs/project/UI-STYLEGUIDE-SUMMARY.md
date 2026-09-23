@@ -7,7 +7,7 @@ Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijziging
 
 De mobiele Voorraadbaseline is op **22 september 2026** ingezet en op **23 september 2026** door de PO verder verfijnd. De actuele variant combineert de rustige vlakke lijststructuur met de lichtgroene gevlekte Inhuis-achtergrond, een mobiele header in de vaste primaire kleur `#005F6A` en een gebruikersspecifieke onderste actiebalk. Eerdere Voorraad-borging geldt niet meer wanneer zij met dit nieuwere PO-besluit conflicteert.
 
-Het bestaande **Voorraad-artikeldetail** blijft functioneel ongewijzigd totdat het afzonderlijk naar deze nieuwe mobiele visuele richting wordt gemigreerd. Het is daardoor tijdelijk geen visuele baseline voor nieuwe mobiele lijstschermen.
+Het mobiele **Voorraad-artikeldetail** is op **23 september 2026** naar dezelfde nieuwe mobiele richting gemigreerd. Het hoofdscherm Voorraad blijft de primaire lijstbaseline; het artikeldetail is de actuele detailbaseline voor gedeelde navigatie, kleur en artikelpresentatie.
 
 Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
