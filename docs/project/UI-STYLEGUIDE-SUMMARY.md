@@ -5,7 +5,7 @@ Laatst inhoudelijk vastgesteld door de PO: 23 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
-De mobiele Voorraadbaseline is op **22 september 2026** ingezet en op **23 september 2026** door de PO verder verfijnd. De actuele variant combineert de rustige vlakke lijststructuur met de lichtgroene gevlekte Inhuis-achtergrond, een gekleurde header in dezelfde primaire kleur als desktop en een gebruikersspecifieke onderste actiebalk. Eerdere Voorraad-borging geldt niet meer wanneer zij met dit nieuwere PO-besluit conflicteert.
+De mobiele Voorraadbaseline is op **22 september 2026** ingezet en op **23 september 2026** door de PO verder verfijnd. De actuele variant combineert de rustige vlakke lijststructuur met de lichtgroene gevlekte Inhuis-achtergrond, een mobiele header in de vaste primaire kleur `#005F6A` en een gebruikersspecifieke onderste actiebalk. Eerdere Voorraad-borging geldt niet meer wanneer zij met dit nieuwere PO-besluit conflicteert.
 
 Het bestaande **Voorraad-artikeldetail** blijft functioneel ongewijzigd totdat het afzonderlijk naar deze nieuwe mobiele visuele richting wordt gemigreerd. Het is daardoor tijdelijk geen visuele baseline voor nieuwe mobiele lijstschermen.
 
@@ -154,7 +154,7 @@ De bestaande generieke/desktopheader blijft:
 - gebruikerszichtbaar merk **Inhuis**; interne technische naamgeving `Rezzerv` wordt niet als gebruikersmerk getoond.
 
 Voor de mobiele Voorraadbaseline geldt:
-- compacte gekleurde header op dezelfde primaire surface als desktop;
+- compacte gekleurde header in de vaste mobiele primaire kleur `#005F6A`;
 - schermtitel **Voorraad** links;
 - wit Inhuis-logo rechts;
 - geen desktopachtige huishoudenregel of userbox in de module-root;
@@ -190,7 +190,7 @@ Vaste kenmerken:
 - iedere rij toont waar beschikbaar een representatieve productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - de hele rij is het detailklikdoel;
 - geen afzonderlijke schaduwcard, wallpaper, blur of sticky schermbrede CTA per artikel;
-- vaste witte onderste actiebalk met maximaal vier recent gebruikte, voor de huidige gebruiker nog beschikbare acties en altijd **Meer** als laatste item; actieve Voorraadactie gebruikt `#005F6A`;
+- vaste witte onderste actiebalk met maximaal vier recent gebruikte, voor de huidige gebruiker nog beschikbare acties en altijd **Meer** als laatste item; de actieve module zelf wordt bewust niet in die balk getoond;
 - onderaan wordt altijd ruimte gereserveerd voor de navigatie en safe-area.
 
 ### Referentie B — mobiel detailscherm: Voorraad-artikeldetail (tijdelijk legacy-visueel)
