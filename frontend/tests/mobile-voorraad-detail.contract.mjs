@@ -20,6 +20,7 @@ const liveRows = [
     sublocation_id: 'sublocation-cupboard',
     locatie: 'Keuken',
     sublocatie: 'Keukenkast',
+    image_url: 'https://example.test/broccoli.jpg',
   },
   {
     id: 'inventory-b',
@@ -48,6 +49,7 @@ const liveRows = [
 const rows = buildMobileArticleInventoryRows(liveRows, 'article-1', 'Broccoli')
 assert.equal(rows.length, 2, 'stable household article id must exclude same-name rows with another id')
 assert.equal(rows[0].quantity, 2)
+assert.equal(rows[0].imageUrl, 'https://example.test/broccoli.jpg')
 assert.equal(formatMobileLocation(rows[0]), 'Keuken / Keukenkast')
 assert.equal(chooseMobileInventoryRow(rows, { default_sublocation_id: 'sublocation-shelf' })?.id, 'inventory-b')
 assert.equal(chooseMobileInventoryRow(rows, { default_location_id: 'space-kitchen' })?.id, 'inventory-a')
@@ -102,6 +104,7 @@ assert.deepEqual(purchaseHistory.map((item) => item.id), ['1', '3'])
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const responsiveSource = readFileSync(new URL('../src/features/articles/ArticlePageResponsive.jsx', import.meta.url), 'utf8')
 const mobileSource = readFileSync(new URL('../src/features/articles/MobileArticlePage.jsx', import.meta.url), 'utf8')
+const mobileCss = readFileSync(new URL('../src/features/articles/mobileArticleDetail.css', import.meta.url), 'utf8')
 
 assert.match(routerSource, /import ArticlePageResponsive from '\.\.\/\.\.\/features\/articles\/ArticlePageResponsive\.jsx'/)
 assert.match(routerSource, /path: '\/voorraad\/:articleId'.*<ArticlePageResponsive \/>/)
@@ -111,7 +114,14 @@ assert.match(responsiveSource, /<MobileArticlePage \/>/)
 assert.match(responsiveSource, /<ArticlePage \/>/)
 
 assert.match(mobileSource, /data-testid="mobile-article-detail-page"/)
+assert.match(mobileSource, /<MobileModuleHeader title="Voorraad" testId="mobile-article-header" \/>/)
+assert.match(mobileSource, /CatalogArticleThumbnail/)
+assert.match(mobileSource, /data-testid="mobile-article-back-to-inventory"/)
+assert.match(mobileSource, /navigate\('\/voorraad'\)/)
 assert.match(mobileSource, /<QuantityStepper/)
+assert.match(mobileSource, /valueEditable=\{canDirectEditQuantity\}/)
+assert.match(mobileSource, /onValueCommit=\{setExactInventoryQuantity\}/)
+assert.match(mobileSource, /event_type: 'adjustment'/)
 assert.match(mobileSource, /decreaseTestId="mobile-article-stock-minus"/)
 assert.match(mobileSource, /increaseTestId="mobile-article-stock-plus"/)
 assert.match(mobileSource, /data-testid="mobile-article-favorite-store-action"/)
@@ -133,5 +143,10 @@ assert.doesNotMatch(mobileSource, />\s*Opslaan(?:…)?\s*</)
 assert.match(mobileSource, /useAppFeedback\(\)/)
 assert.match(mobileSource, /showFeedback\(\{ variant: 'success'/)
 assert.doesNotMatch(mobileSource, /setFeedback|rz-mobile-article-feedback|function MinusIcon|function PlusIcon/)
+assert.match(mobileCss, /url\('\/inhuis-green-wallpaper\.svg'\)/)
+assert.match(mobileCss, /background-color:\s*#EEF7F0/i)
+assert.doesNotMatch(mobileCss, /inhuis-orange-wallpaper|backdrop-filter/i)
+assert.match(mobileCss, /\.rz-mobile-article-card\s*\{[\s\S]*background:\s*#ffffff;[\s\S]*box-shadow:\s*none;/i)
+assert.match(mobileCss, /\.rz-mobile-article-back\s*\{[\s\S]*cursor:\s*pointer;/)
 
 console.log('MOBILE_VOORRAAD_DETAIL_CONTRACT_GREEN')
