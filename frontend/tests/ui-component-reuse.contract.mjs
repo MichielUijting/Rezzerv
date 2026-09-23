@@ -54,6 +54,8 @@ for (const screen of SCREEN_COMPONENT_REQUIREMENTS) {
 const mobileInventory = readFileSync(path.join(frontendRoot, 'src/pages/MobileVoorraad.jsx'), 'utf8')
 const mobileInventoryCss = readFileSync(path.join(frontendRoot, 'src/pages/mobileVoorraad.css'), 'utf8')
 const mobileArticle = readFileSync(path.join(frontendRoot, 'src/features/articles/MobileArticlePage.jsx'), 'utf8')
+const quantityStepper = readFileSync(path.join(frontendRoot, 'src/ui/QuantityStepper.jsx'), 'utf8')
+const mobileComponentsCss = readFileSync(path.join(frontendRoot, 'src/ui/mobileComponents.css'), 'utf8')
 assert.match(mobileInventory, /useAppFeedback\(\)/)
 assert.match(mobileInventory, /<MobileModuleHeader/)
 assert.match(mobileInventory, /<MobileRecentActionsBar/)
@@ -63,6 +65,12 @@ assert.doesNotMatch(mobileInventoryCss, /rz-mobile-inventory-quick-feedback|rz-m
 assert.match(mobileArticle, /useAppFeedback\(\)/)
 assert.match(mobileArticle, /<QuantityStepper/)
 assert.doesNotMatch(mobileArticle, /setFeedback|rz-mobile-article-feedback|function MinusIcon|function PlusIcon/)
+
+assert.match(quantityStepper, /inputMode="decimal"/)
+assert.match(quantityStepper, /onValueCommit/)
+assert.match(quantityStepper, /onPointerDown=\{stopPropagation\}/)
+assert.match(mobileComponentsCss, /\.rz-quantity-stepper-button\s*\{[\s\S]*width:\s*44px;[\s\S]*height:\s*44px;/)
+assert.match(mobileComponentsCss, /\.rz-quantity-stepper-value--editable/)
 
 const transient = {
   variant: 'success',

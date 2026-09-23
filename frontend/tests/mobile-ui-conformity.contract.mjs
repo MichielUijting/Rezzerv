@@ -52,6 +52,15 @@ assert.match(
   /\.rz-quantity-stepper-button\s*\{[\s\S]*border:\s*1px solid var\(--color-mobile-ui-primary\);[\s\S]*color:\s*var\(--color-mobile-ui-primary\);/,
 )
 
+assert.match(
+  mobileComponentsCss,
+  /\.rz-quantity-stepper-button\s*\{[\s\S]*width:\s*44px;[\s\S]*height:\s*44px;/,
+)
+assert.match(
+  mobileInventoryCss,
+  /\.rz-mobile-inventory-card-side\s*\{[\s\S]*gap:\s*14px;/,
+)
+
 // Mobile Voorraad owns the fixed bottom action bar; passive feedback is an
 // overlay and therefore adds bottom padding instead of reserving layout space.
 assert.match(
