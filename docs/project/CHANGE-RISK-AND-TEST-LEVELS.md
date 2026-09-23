@@ -76,6 +76,15 @@ bestaande parallelle standalone uitvoering, exact-SHA reuse, attach van reeds
 lopende geldige evidence en dispatch van alleen ontbrekende authorities blijven
 ongewijzigd.
 
+Wanneer GitHub Actions een authority-run al als `completed/success` meldt maar
+de Jobs API de verplichte step-conclusions nog niet volledig heeft bijgewerkt,
+mag F7-03 uitsluitend voor die **metadata-publicatie** maximaal de in
+`coverage_metadata_grace_seconds` vastgelegde korte grace-window wachten. Dit
+is geen testbypass: expliciet gefaalde of `skipped` verplichte stappen falen
+direct, en ontbrekende/niet-definitieve step-evidence na afloop van de grace
+faalt alsnog gesloten. Exacte kandidaat-SHA, workflowconclusie en vereiste
+authoritydekking blijven ongewijzigd verplicht.
+
 ## Incrementele carry-forward van reeds groen zwaar bewijs
 
 Naast de strikte finale version-only route mag tijdens ontwikkeling zwaar
