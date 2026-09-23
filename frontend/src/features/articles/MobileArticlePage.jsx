@@ -548,7 +548,7 @@ export default function MobileArticlePage() {
             disabled={shoppingBusy || !householdArticleId}
             data-testid="mobile-article-add-to-shopping-list"
           >
-            <span>{shoppingBusy ? 'Bezig…' : 'Naar boodschappenlijst'}</span>
+            <span>{shoppingBusy ? 'Bezig…' : 'Op boodschappenlijst'}</span>
           </button>
         </section>
       </main>
