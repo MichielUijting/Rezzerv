@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import {
   APPROVED_UI_COMPONENTS,
   EXISTING_UI_MODULES_REQUIRING_FUTURE_REVIEW,
-  MIGRATED_SCREEN_COMPONENT_REQUIREMENTS,
+  SCREEN_COMPONENT_REQUIREMENTS,
 } from '../src/ui/componentCatalog.js'
 import {
   MAX_TRANSIENT_FEEDBACK_MS,
@@ -44,7 +44,7 @@ for (const source of uiJsxFiles) {
   )
 }
 
-for (const screen of MIGRATED_SCREEN_COMPONENT_REQUIREMENTS) {
+for (const screen of SCREEN_COMPONENT_REQUIREMENTS) {
   const source = readFileSync(path.join(frontendRoot, screen.source), 'utf8')
   for (const token of screen.requiredTokens) {
     assert.match(source, new RegExp(token))
@@ -53,12 +53,16 @@ for (const screen of MIGRATED_SCREEN_COMPONENT_REQUIREMENTS) {
 
 const mobileInventory = readFileSync(path.join(frontendRoot, 'src/pages/MobileVoorraad.jsx'), 'utf8')
 const mobileInventoryCss = readFileSync(path.join(frontendRoot, 'src/pages/mobileVoorraad.css'), 'utf8')
+const mobileArticle = readFileSync(path.join(frontendRoot, 'src/features/articles/MobileArticlePage.jsx'), 'utf8')
 assert.match(mobileInventory, /useAppFeedback\(\)/)
 assert.match(mobileInventory, /<MobileModuleHeader/)
 assert.match(mobileInventory, /<MobileRecentActionsBar/)
 assert.match(mobileInventory, /<QuantityStepper/)
 assert.doesNotMatch(mobileInventory, /setMutationFeedback|mutationFeedback/)
 assert.doesNotMatch(mobileInventoryCss, /rz-mobile-inventory-quick-feedback|rz-mobile-inventory-topbar|rz-mobile-inventory-bottom-nav/)
+assert.match(mobileArticle, /useAppFeedback\(\)/)
+assert.match(mobileArticle, /<QuantityStepper/)
+assert.doesNotMatch(mobileArticle, /setFeedback|rz-mobile-article-feedback|function MinusIcon|function PlusIcon/)
 
 const transient = {
   variant: 'success',

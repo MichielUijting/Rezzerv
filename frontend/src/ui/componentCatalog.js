@@ -103,7 +103,7 @@ export const EXISTING_UI_MODULES_REQUIRING_FUTURE_REVIEW = Object.freeze([
   'src/ui/resizableTable.jsx',
 ])
 
-export const MIGRATED_SCREEN_COMPONENT_REQUIREMENTS = Object.freeze([
+export const SCREEN_COMPONENT_REQUIREMENTS = Object.freeze([
   {
     id: 'mobile-voorraad',
     source: 'src/pages/MobileVoorraad.jsx',
@@ -114,6 +114,15 @@ export const MIGRATED_SCREEN_COMPONENT_REQUIREMENTS = Object.freeze([
       'CatalogArticleThumbnail',
       'MobileModuleHeader',
       'MobileRecentActionsBar',
+      'QuantityStepper',
+    ],
+  },
+  {
+    id: 'mobile-voorraad-detail',
+    source: 'src/features/articles/MobileArticlePage.jsx',
+    requiredTokens: [
+      'useAppFeedback',
+      'Select',
       'QuantityStepper',
     ],
   },
