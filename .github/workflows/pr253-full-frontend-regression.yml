@@ -120,6 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$CONTRACT_FILES"
+          npm ci --ignore-scripts --no-audit --no-fund
           IFS=',' read -r -a files <<< "$CONTRACT_FILES"
           for file in "${files[@]}"; do
             test -f "$file"
