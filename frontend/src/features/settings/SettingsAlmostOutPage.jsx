@@ -171,7 +171,7 @@ export default function SettingsAlmostOutPage() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', fontWeight: 600 }}>
                 <input
                   type="checkbox"
-                  style={{ accentColor: '#1A3E2B', width: 16, height: 16 }}
+                  style={{ accentColor: '#005F6A', width: 16, height: 16 }}
                   checked={predictionEnabled}
                   onChange={(event) => {
                     setSaveMessage('')

@@ -9,7 +9,7 @@ import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 const STOCK = 'STOCK'
 const DIRECT_CONSUMPTION = 'DIRECT_CONSUMPTION'
 const UNASSIGNED_LABEL = 'Niet ingedeeld'
-const greenCheckboxStyle = { accentColor: '#1A3E2B', width: 16, height: 16 }
+const greenCheckboxStyle = { accentColor: '#005F6A', width: 16, height: 16 }
 
 const groupTableColumns = [
   { key: 'select', width: 48 },

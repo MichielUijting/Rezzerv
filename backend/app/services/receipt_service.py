@@ -1906,27 +1906,22 @@ def ensure_default_receipt_sources(engine, receipt_root: Path, household_id: str
         Path(definition['source_path']).mkdir(parents=True, exist_ok=True)
     with engine.begin() as conn:
         for definition in defaults:
-            exists = conn.execute(
-                text('SELECT id FROM receipt_sources WHERE id = :id LIMIT 1'),
-                {'id': definition['id']},
-            ).scalar()
-            if exists:
-                conn.execute(
-                    text(
-                        'UPDATE receipt_sources SET label = :label, source_path = :source_path, is_active = :is_active, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
-                    ),
-                    {**definition, 'is_active': True},
-                )
-            else:
-                conn.execute(
-                    text(
-                        '''
-                        INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
-                        VALUES (:id, :household_id, :type, :label, :source_path, :is_active)
-                        '''
-                    ),
-                    {**definition, 'household_id': household_id, 'is_active': True},
-                )
+            conn.execute(
+                text(
+                    '''
+                    INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
+                    VALUES (:id, :household_id, :type, :label, :source_path, :is_active)
+                    ON CONFLICT (id) DO UPDATE SET
+                        household_id = EXCLUDED.household_id,
+                        type = EXCLUDED.type,
+                        label = EXCLUDED.label,
+                        source_path = EXCLUDED.source_path,
+                        is_active = EXCLUDED.is_active,
+                        updated_at = CURRENT_TIMESTAMP
+                    '''
+                ),
+                {**definition, 'household_id': household_id, 'is_active': True},
+            )
     return defaults
 
 
