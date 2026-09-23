@@ -19,7 +19,12 @@ import { readHouseholdOnboarding } from '../features/onboarding/onboardingState.
 import { buildHomeNavigation } from '../features/home/homeNavigation.js'
 import useFeatureAvailability from '../features/platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../features/platform/actionButtonAvailability.js'
-import { buildQuickInventoryMutation, selectQuickInventoryTarget } from './mobileInventoryQuickActions.js'
+import {
+  buildExactInventoryMutation,
+  buildQuickInventoryMutation,
+  selectExactInventoryTarget,
+  selectQuickInventoryTarget,
+} from './mobileInventoryQuickActions.js'
 import {
   ACTION_ROUTE_BY_KEY,
   readRecentActionKeys,
@@ -269,6 +274,48 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     }
   }
 
+  async function setExactInventoryQuantity(row, nextQuantity) {
+    if (!canEditInventory || mutatingRowId || !row?.householdArticleId) return
+    const mutation = buildExactInventoryMutation(row, nextQuantity)
+    if (!mutation) return
+    if (Number(nextQuantity) === Number(row.quantity)) return
+
+    setMutatingRowId(row.id)
+    try {
+      const response = await fetchJsonWithAuth(
+        `/api/household-articles/${encodeURIComponent(row.householdArticleId)}/inventory-events`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ...mutation,
+            article_name: String(row.articleName || row.householdName || '').trim(),
+          }),
+        },
+      )
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const message = response.status >= 500
+          ? 'Voorraadmutatie kon niet worden opgeslagen.'
+          : (data?.detail || 'Voorraadmutatie kon niet worden opgeslagen.')
+        throw new Error(message)
+      }
+      setRows(await loadMobileInventory())
+      showFeedback({
+        variant: 'success',
+        message: `${row.householdName}: aantal aangepast naar ${formatQuantity(nextQuantity)}.`,
+        testId: 'mobile-inventory-quick-feedback',
+      })
+    } catch (err) {
+      showFeedback({
+        variant: 'error',
+        message: String(err?.message || 'Voorraadmutatie kon niet worden opgeslagen.'),
+        testId: 'mobile-inventory-quick-feedback',
+      })
+    } finally {
+      setMutatingRowId('')
+    }
+  }
+
   const locationOptions = useMemo(() => {
     if (!locationTrackingEnabled) return []
     return [...new Set(rows.map((row) => row.location).filter((value) => value && value !== 'Geen locatie'))]
@@ -428,6 +475,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                 : ''
               const decreaseTarget = selectQuickInventoryTarget(row, 'decrease')
               const increaseTarget = selectQuickInventoryTarget(row, 'increase')
+              const exactQuantityTarget = selectExactInventoryTarget(row)
               const rowBusy = mutatingRowId === row.id
 
               return (
@@ -474,8 +522,15 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                         increaseDisabled={!increaseTarget || rowBusy}
                         decreaseLabel={`Boek 1 af van ${row.householdName}`}
                         increaseLabel={`Boek 1 op bij ${row.householdName}`}
-                        valueLabel={`Aantal ${formatQuantity(row.quantity)}`}
+                        valueLabel={exactQuantityTarget
+                          ? `Aantal ${formatQuantity(row.quantity)}. Tik om aan te passen`
+                          : `Aantal ${formatQuantity(row.quantity)}`}
+                        valueEditable={Boolean(exactQuantityTarget)}
+                        valueDisabled={rowBusy}
                         testIdPrefix={`mobile-inventory-${row.detailId || row.id}`}
+                        onValueCommit={(nextQuantity) => {
+                          setExactInventoryQuantity(row, nextQuantity)
+                        }}
                         onDecrease={(event) => {
                           event.stopPropagation()
                           mutateQuickInventory(row, 'decrease')

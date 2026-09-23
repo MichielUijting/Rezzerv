@@ -264,7 +264,7 @@
 .rz-mobile-inventory-card-side {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 14px;
 }
 
 .rz-mobile-inventory-readonly-quantity {
@@ -284,6 +284,10 @@
 }
 
 .rz-mobile-inventory-chevron {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  min-height: 44px;
   color: #7b847e;
   font-size: 22px;
   font-weight: 400;

@@ -82,9 +82,9 @@ export const APPROVED_UI_COMPONENTS = Object.freeze([
   {
     id: 'quantity-stepper',
     source: 'src/ui/QuantityStepper.jsx',
-    publicApi: 'QuantityStepper',
-    purpose: 'Goedgekeurde − waarde + bediening voor éénstapsmutaties.',
-    reuseRule: 'Gebruik voor dezelfde min/plus-interactie; domeinmutatie blijft in de caller en wordt niet in het UI-component ingebouwd.',
+    publicApi: 'QuantityStepper ({ valueEditable, valueDisabled, onValueCommit })',
+    purpose: 'Goedgekeurde − waarde + bediening met optionele directe numerieke aantalinvoer.',
+    reuseRule: 'Gebruik voor dezelfde min/plus- en directe aantalinteractie; het component levert touch/keyboardgedrag, terwijl domeinmutatie en de beslissing of een waarde veilig inline bewerkbaar is in de caller blijven.',
     contractTests: ['tests/mobile-voorraad.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
   },
 ])

@@ -11,7 +11,9 @@ import {
   selectRecentActionTiles,
 } from '../src/features/home/recentActionUsage.js'
 import {
+  buildExactInventoryMutation,
   buildQuickInventoryMutation,
+  selectExactInventoryTarget,
   selectQuickInventoryTarget,
 } from '../src/pages/mobileInventoryQuickActions.js'
 
@@ -109,6 +111,9 @@ assert.match(mobileSource, /readRecentActionKeys\(context\)/)
 assert.match(mobileSource, /recordRecentAction\(item\.key, context\)/)
 assert.match(mobileSource, /excludeKeys: \['voorraad'\]/)
 assert.match(mobileSource, /<QuantityStepper/)
+assert.match(mobileSource, /valueEditable=\{Boolean\(exactQuantityTarget\)\}/)
+assert.match(mobileSource, /onValueCommit=\{\(nextQuantity\) =>/)
+assert.match(mobileSource, /setExactInventoryQuantity\(row, nextQuantity\)/)
 assert.match(mobileSource, /testIdPrefix=\{\`mobile-inventory-/)
 assert.match(mobileSource, /\/inventory-events/)
 assert.match(mobileSource, /MORE_NAV_ITEM = \{ key: 'meer', label: 'Meer', route: '\/home'/)
@@ -179,6 +184,30 @@ assert.deepEqual(buildQuickInventoryMutation(quickRow, 'increase'), {
   note: 'Snelle ophoging via mobiele Voorraad.',
 })
 assert.equal(selectQuickInventoryTarget({ inventoryEntries: [{ inventoryId: 'fraction', quantity: 0.5, sourceIndex: 0 }] }, 'decrease'), null)
+
+const exactRow = {
+  quantity: 2.5,
+  inventoryEntries: [{ inventoryId: 'inventory-exact', quantity: 2.5, sourceIndex: 0 }],
+}
+assert.deepEqual(selectExactInventoryTarget(exactRow), {
+  inventoryId: 'inventory-exact',
+  quantity: 2.5,
+  sourceIndex: 0,
+})
+assert.deepEqual(buildExactInventoryMutation(exactRow, '4,5'), {
+  inventory_id: 'inventory-exact',
+  quantity: 4.5,
+  event_type: 'adjustment',
+  note: 'Exact aantal aangepast via mobiele Voorraad.',
+})
+assert.equal(buildExactInventoryMutation({
+  quantity: 5,
+  inventoryEntries: [
+    { inventoryId: 'inventory-a', quantity: 2, sourceIndex: 0 },
+    { inventoryId: 'inventory-b', quantity: 3, sourceIndex: 1 },
+  ],
+}, 4), null)
+assert.equal(buildExactInventoryMutation(exactRow, -1), null)
 
 assert.match(mobileSource, /useAppFeedback\(\)/)
 assert.match(mobileSource, /showFeedback\(\{[\s\S]*testId: 'mobile-inventory-quick-feedback'/)
