@@ -122,10 +122,19 @@ def select_authority_plan(
         name: any(_matches_any(path, patterns) for path in complete_changed)
         for name, patterns in patterns_by_authority.items()
     }
+    all_patterns = [pattern for patterns in patterns_by_authority.values() for pattern in patterns]
+    complete_unmapped_sensitive = [
+        path
+        for path in complete_changed
+        if _matches_any(path, SENSITIVE_INCREMENTAL_PATTERNS)
+        and not _matches_any(path, all_patterns)
+    ]
+    if complete_unmapped_sensitive:
+        return {name: True for name in authorities_cfg}, [], complete_unmapped_sensitive
+
     if not prior_green or incremental_changed is None:
         return complete_plan, [], []
 
-    all_patterns = [pattern for patterns in patterns_by_authority.values() for pattern in patterns]
     unmapped_sensitive = [
         path
         for path in incremental_changed
@@ -133,7 +142,7 @@ def select_authority_plan(
         and not _matches_any(path, all_patterns)
     ]
     if unmapped_sensitive:
-        return complete_plan, [], unmapped_sensitive
+        return {name: True for name in authorities_cfg}, [], unmapped_sensitive
 
     plan: dict[str, bool] = {}
     carried: list[str] = []
