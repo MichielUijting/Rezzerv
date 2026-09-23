@@ -8,6 +8,7 @@ const mobileArticleCss = readFileSync(new URL('../src/features/articles/mobileAr
 const mobileComponentsCss = readFileSync(new URL('../src/ui/mobileComponents.css', import.meta.url), 'utf8')
 const mobileModuleHeaderSource = readFileSync(new URL('../src/ui/MobileModuleHeader.jsx', import.meta.url), 'utf8')
 const mobileAppChromeSource = readFileSync(new URL('../src/app/MobileAppChrome.jsx', import.meta.url), 'utf8')
+const mobileAppChromeCss = readFileSync(new URL('../src/app/mobileAppChrome.css', import.meta.url), 'utf8')
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
 
@@ -73,6 +74,7 @@ assert.match(
 
 // Shared mobile chrome owns navigation for every protected mobile route.
 assert.match(mobileAppChromeSource, /MobileRecentActionsBar/)
+assert.match(mobileAppChromeSource, /<MobileBackControl testId="mobile-global-back" \/>/)
 assert.match(mobileAppChromeSource, /testId="mobile-global-bottom-nav"/)
 assert.match(mobileAppChromeSource, /activeActionKey\(pathname\)/)
 assert.match(mobileAppChromeSource, /excludeKeys:\s*activeKey \? \[activeKey\] : \[\]/)
@@ -94,6 +96,14 @@ assert.match(mobileModuleHeaderSource, /navigate\(-1\)/)
 assert.match(
   mobileComponentsCss,
   /\.rz-mobile-back-control\s*\{[\s\S]*min-height:\s*44px;[\s\S]*background:\s*var\(--color-mobile-ui-primary\);/,
+)
+assert.match(
+  mobileAppChromeCss,
+  /\.rz-mobile-app-chrome > \.rz-mobile-back-control\s*\{[\s\S]*position:\s*fixed;[\s\S]*left:\s*10px;/,
+)
+assert.match(
+  mobileAppChromeCss,
+  /\.rz-mobile-app-chrome:not\(:has\(\.rz-header, \.rz-mobile-module-header\)\)\s*\{[\s\S]*padding-top:\s*calc\(58px \+ env\(safe-area-inset-top\)\);/,
 )
 
 assert.match(mobileArticleSource, /<MobileModuleHeader title="Artikel in Voorraad" testId="mobile-article-header" \/>/)
