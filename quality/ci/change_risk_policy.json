@@ -142,5 +142,27 @@
     ],
     "required_authority_count": 21,
     "preserve_exact_sha_reuse": true
+  },
+  "version_only_carry_forward": {
+    "enabled": true,
+    "require_direct_parent": true,
+    "require_exact_bundle": true,
+    "require_patch_increment": 1,
+    "require_same_pull_request": true,
+    "require_same_base_sha": true,
+    "require_same_branch": true,
+    "require_prior_success": true,
+    "preserve_complete_candidate_risk_level": true,
+    "reusable_authorities": [
+      "F7-02 selected shared clusters",
+      "PR253 full frontend regression"
+    ],
+    "final_candidate_checks_that_must_rerun": [
+      "F7-RISK classification",
+      "Release version sync validation",
+      "Release package validation",
+      "F7 Full Regression exact-candidate gate when final risk is L"
+    ],
+    "full_regression_exact_candidate_not_carried_forward": true
   }
 }

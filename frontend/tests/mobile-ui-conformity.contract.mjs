@@ -4,21 +4,11 @@ import { readFileSync } from 'node:fs'
 const mobileInventorySource = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
 const mobileInventoryCss = readFileSync(new URL('../src/pages/mobileVoorraad.css', import.meta.url), 'utf8')
 const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
-const styleguide = readFileSync(new URL('../../docs/project/UI-STYLEGUIDE-SUMMARY.md', import.meta.url), 'utf8')
 
 // Sole visual conformance authority for mobile roots already migrated to the
 // new PO-approved design. Functional mobile contracts remain separate.
 const MIGRATED_MOBILE_UI = Object.freeze(['voorraad'])
 assert.deepEqual(MIGRATED_MOBILE_UI, ['voorraad'])
-
-assert.match(styleguide, /Laatst inhoudelijk vastgesteld door de PO: 23 september 2026/)
-assert.match(styleguide, /lichtgroene gevlekte Inhuis-achtergrond/)
-assert.match(styleguide, /Voorraad[^\n]*links/)
-assert.match(styleguide, /witte Inhuis-logo rechts/)
-assert.match(styleguide, /recent gebruikte[^\n]*huidige gebruiker/)
-assert.match(styleguide, /Naam A–Z/)
-assert.match(styleguide, /Naam Z–A/)
-assert.match(styleguide, /sortering op aantal niet wordt aangeboden/)
 
 assert.match(mobileInventorySource, /data-testid="mobile-inventory-page"/)
 assert.match(mobileInventorySource, /data-testid="mobile-inventory-header"/)

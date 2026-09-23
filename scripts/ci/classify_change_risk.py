@@ -55,6 +55,17 @@ def load_policy(path: Path) -> dict:
     req(bundle.get("level") == "S", "version-only bundle must be S")
     files = bundle.get("files")
     req(isinstance(files, list) and "frontend/package.json" in files and "VERSION.txt" in files, "version-only bundle incomplete")
+    carry = data.get("version_only_carry_forward") or {}
+    req(carry.get("enabled") is True, "version-only carry-forward must be enabled")
+    req(carry.get("require_direct_parent") is True, "carry-forward must require direct parent")
+    req(carry.get("require_exact_bundle") is True, "carry-forward must require exact version bundle")
+    req(carry.get("require_patch_increment") == 1, "carry-forward must require one patch increment")
+    req(carry.get("require_same_pull_request") is True, "carry-forward must require same PR")
+    req(carry.get("require_same_base_sha") is True, "carry-forward must require same PR base")
+    req(carry.get("require_same_branch") is True, "carry-forward must require same branch")
+    req(carry.get("require_prior_success") is True, "carry-forward must require prior green evidence")
+    req(carry.get("preserve_complete_candidate_risk_level") is True, "carry-forward must preserve complete candidate risk")
+    req(carry.get("full_regression_exact_candidate_not_carried_forward") is True, "F7 Full exact candidate must remain current-SHA evidence")
     return data
 
 
@@ -67,6 +78,7 @@ def validate_integration() -> None:
         ROOT / "AGENTS.md",
         ROOT / "docs/project/CHANGE-RISK-AND-TEST-LEVELS.md",
         ROOT / "docs/project/README.md",
+        ROOT / "scripts/ci/version_only_carry_forward.py",
     ]
     for path in required:
         req(path.is_file(), f"missing risk-policy integration file: {path.relative_to(ROOT)}")
@@ -196,6 +208,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print("PASS change_risk_fail_closed_default_L")
     print("PASS change_risk_no_automatic_downgrade")
     print("PASS change_risk_required_gates_S_M_L")
+    print("PASS change_risk_version_only_carry_forward_policy")
     print("PASS change_risk_workflow_integration_locked")
     print("PASS change_risk_agents_contract_locked")
     print("CHANGE_RISK_POLICY_GREEN")

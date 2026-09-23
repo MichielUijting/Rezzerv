@@ -45,10 +45,19 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile \
+            scripts/ci/version_only_carry_forward.py \
+            scripts/ci/test_version_only_carry_forward.py \
             scripts/ci/shared_fullstack_plan.py \
             scripts/ci/f7_full_regression_gate.py \
             scripts/ci/test_f7_full_regression_reuse.py \
             scripts/ci/validate_f7_ci_orchestration_gate_map.py
+
+      - name: Validate canonical version-only carry-forward
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/test_version_only_carry_forward.py | tee f7-version-only-carry-forward-selftest.log
+          grep -Fx 'VERSION_ONLY_CARRY_FORWARD_SELFTEST_GREEN' f7-version-only-carry-forward-selftest.log
 
       - name: Validate exact-candidate Full Regression evidence reuse
         shell: bash
@@ -104,6 +113,7 @@ jobs:
             quality/ci/f7_ci_orchestration_gate_map.json
             f7-01-ci-orchestration-audit.log
             f7-01-ci-orchestration-evidence.txt
+            f7-version-only-carry-forward-selftest.log
             f7-03-reuse-config.log
             f7-03-reuse-selftest.log
           if-no-files-found: error

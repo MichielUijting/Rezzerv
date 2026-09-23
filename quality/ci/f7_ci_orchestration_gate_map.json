@@ -55,6 +55,15 @@
         "S": "cheap authorities only inside F7-02",
         "M": "selected shared clusters plus cheap authorities",
         "L": "selected shared clusters plus cheap authorities before F7 Full"
+      },
+      "version_only_carry_forward": {
+        "status": "covered",
+        "source": "scripts/ci/version_only_carry_forward.py",
+        "policy": "quality/ci/change_risk_policy.json",
+        "reuse": [
+          "selected shared clusters"
+        ],
+        "rule": "Canonical direct-parent version-only commit may reuse prior green same-PR/base/branch evidence; complete candidate risk level is preserved."
       }
     },
     "full_regression": {
@@ -116,6 +125,10 @@
         ],
         "L_required_workflows": 21,
         "preserve_exact_sha_reuse": true
+      },
+      "version_only_carry_forward": {
+        "status": "not_applied",
+        "rule": "F7 Full remains exact-candidate evidence on the final SHA, including after a canonical version-only bump."
       }
     },
     "deep_nightly": {
@@ -203,7 +216,22 @@
     "evidence_policy": "Aggregate gates retain machine-readable evidence containing candidate identity and all accepted workflow run IDs.",
     "change_risk_policy": "quality/ci/change_risk_policy.json",
     "change_risk_classifier": "scripts/ci/classify_change_risk.py",
-    "change_risk_decision": "final level is max(provisional, complete candidate delta); missing markers and unknown paths fail closed to L"
+    "change_risk_decision": "final level is max(provisional, complete candidate delta); missing markers and unknown paths fail closed to L",
+    "version_only_carry_forward": {
+      "detector": "scripts/ci/version_only_carry_forward.py",
+      "self_test": "scripts/ci/test_version_only_carry_forward.py",
+      "reusable": [
+        "F7-02 selected shared clusters",
+        "PR253 full frontend regression"
+      ],
+      "rerun": [
+        "F7-RISK classification",
+        "Release version sync validation",
+        "Release package validation",
+        "F7 Full when final risk is L"
+      ],
+      "complete_candidate_risk_preserved": true
+    }
   },
   "history": {
     "F7-01": {

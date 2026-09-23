@@ -21,6 +21,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from version_only_carry_forward import canonical_version_only_delta, load_policy
+
 GATE_VERSION = "1"
 
 
@@ -40,6 +42,8 @@ def _fail_open(reason: str) -> int:
     print(f"CI_DELTA_FAIL_OPEN={reason}")
     _emit("RUN", "true")
     _emit("MATCH_COUNT", "0")
+    _emit("CARRY_FORWARD", "false")
+    _emit("SOURCE_SHA", "")
     return 0
 
 
@@ -154,6 +158,21 @@ def main() -> int:
         return _fail_open("git_diff_failed")
 
     changed = [line.strip() for line in diff.stdout.splitlines() if line.strip()]
+    try:
+        carry = canonical_version_only_delta(Path(__file__).resolve().parents[2], load_policy(), before, after)
+    except Exception as exc:
+        print(f"CI_DELTA_CARRY_FORWARD_FAIL_OPEN={type(exc).__name__}:{exc}")
+        carry = {"safe": False}
+    if carry.get("safe"):
+        print(f"CI_DELTA_BEFORE={before}")
+        print(f"CI_DELTA_AFTER={after}")
+        print("CI_DELTA_VERSION_ONLY_CARRY_FORWARD=true")
+        _emit("RUN", "false")
+        _emit("MATCH_COUNT", "0")
+        _emit("CARRY_FORWARD", "true")
+        _emit("SOURCE_SHA", before)
+        return 0
+
     matched = [path for path in changed if any(_matches(path, pattern) for pattern in patterns)]
 
     print(f"CI_DELTA_BEFORE={before}")
@@ -166,6 +185,8 @@ def main() -> int:
 
     _emit("RUN", "true" if matched else "false")
     _emit("MATCH_COUNT", str(len(matched)))
+    _emit("CARRY_FORWARD", "false")
+    _emit("SOURCE_SHA", "")
     return 0
 
 

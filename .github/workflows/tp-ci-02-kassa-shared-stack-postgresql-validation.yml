@@ -24,6 +24,7 @@ on:
       - 'frontend/playwright.fullstack.config.js'
       - 'scripts/ci/workflow_delta_gate.py'
       - 'scripts/ci/shared_fullstack_plan.py'
+      - 'scripts/ci/version_only_carry_forward.py'
       - 'docker-compose.yml'
       - 'docker-compose.postgresql.yml'
       - '.github/workflows/p0-kassa-review-fullstack-postgresql-validation.yml'
@@ -43,6 +44,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: tp-ci-02-kassa-${{ github.event.pull_request.number || github.ref }}

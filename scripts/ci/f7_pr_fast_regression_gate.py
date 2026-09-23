@@ -12,6 +12,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from version_only_carry_forward import canonical_version_only_delta, load_policy
+
 ROOT = Path(__file__).resolve().parents[2]
 CLUSTERS = ["TP-CI-02", "TP-CI-03", "TP-CI-04", "TP-CI-05", "TP-CI-07"]
 BAD = {"action_required", "cancelled", "failure", "startup_failure", "timed_out"}
@@ -174,7 +176,22 @@ def cmd_plan(args: argparse.Namespace) -> int:
     return 0
 
 
-def api(repo: str, workflow: str, sha: str, token: str) -> dict | None:
+def run_matches_pr_context(run: dict, pr_number: str, base_sha: str) -> bool:
+    if not pr_number or not base_sha:
+        return False
+    try:
+        expected_number = int(pr_number)
+    except ValueError:
+        return False
+    for pr in run.get("pull_requests") or []:
+        if pr.get("number") != expected_number:
+            continue
+        if str((pr.get("base") or {}).get("sha") or "") == base_sha:
+            return True
+    return False
+
+
+def api(repo: str, workflow: str, sha: str, token: str, pr_number: str = "", base_sha: str = "") -> dict | None:
     workflow_id = urllib.parse.quote(Path(workflow).name, safe="")
     query = urllib.parse.urlencode({"event": "pull_request", "head_sha": sha, "per_page": 20})
     url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_id}/runs?{query}"
@@ -189,7 +206,12 @@ def api(repo: str, workflow: str, sha: str, token: str) -> dict | None:
             data = json.load(response)
     except Exception as exc:
         die(f"Actions API error for {workflow}: {type(exc).__name__}: {exc}")
-    runs = [r for r in data.get("workflow_runs", []) if r.get("head_sha") == sha and r.get("event") == "pull_request"]
+    runs = [
+        r for r in data.get("workflow_runs", [])
+        if r.get("head_sha") == sha
+        and r.get("event") == "pull_request"
+        and (not pr_number or run_matches_pr_context(r, pr_number, base_sha))
+    ]
     runs.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
     return runs[0] if runs else None
 
@@ -199,6 +221,16 @@ def cmd_wait(args: argparse.Namespace) -> int:
     ev = jload(path)
     req(ev.get("candidate_sha") == args.head_sha, "evidence SHA mismatch")
     selected = [c for c in ev.get("clusters", []) if c.get("selected")]
+    source = str(args.source_sha or "").strip()
+    if source:
+        carry = canonical_version_only_delta(ROOT, load_policy(), source, args.head_sha)
+        req(carry.get("safe") is True, f"invalid carry-forward source: {carry.get('reason')}")
+        ev["carry_forward"] = {
+            "source_sha": source,
+            "candidate_sha": args.head_sha,
+            "reason": carry.get("reason"),
+        }
+        print(f"F7_PR_FAST_CARRY_FORWARD_SOURCE={source}")
     if ev.get("mode") != "live":
         ev["status"] = "preview_green"
         path.write_text(json.dumps(ev, indent=2) + "\n", encoding="utf-8")
@@ -218,7 +250,29 @@ def cmd_wait(args: argparse.Namespace) -> int:
             cid = cluster["id"]
             if cid in resolved:
                 continue
-            run = api(args.repo, cluster["workflow_file"], args.head_sha, token)
+            run = None
+            run_source = "exact_candidate"
+            if source:
+                candidate = api(
+                    args.repo,
+                    cluster["workflow_file"],
+                    source,
+                    token,
+                    args.pr_number or "",
+                    args.base_sha or "",
+                )
+                if candidate and candidate.get("status") == "completed" and candidate.get("conclusion") == "success":
+                    run = candidate
+                    run_source = "version_only_carry_forward"
+            if run is None:
+                run = api(
+                    args.repo,
+                    cluster["workflow_file"],
+                    args.head_sha,
+                    token,
+                    args.pr_number or "",
+                    args.base_sha or "",
+                )
             if not run:
                 pending.append(f"{cid}:missing")
                 continue
@@ -232,7 +286,9 @@ def cmd_wait(args: argparse.Namespace) -> int:
                     "workflow_file": cluster["workflow_file"],
                     "run_id": run.get("id"),
                     "conclusion": conclusion,
-                    "head_sha": run.get("head_sha"),
+                    "head_sha": args.head_sha,
+                    "evidence_sha": run.get("head_sha"),
+                    "source": run_source,
                     "html_url": run.get("html_url"),
                 }
             elif conclusion in BAD or conclusion != "success":
@@ -270,6 +326,9 @@ def main() -> int:
     w.add_argument("--config", default="quality/ci/f7_pr_fast_regression_gate.json")
     w.add_argument("--head-sha", required=True)
     w.add_argument("--repo", required=True)
+    w.add_argument("--source-sha", default="")
+    w.add_argument("--pr-number", default="")
+    w.add_argument("--base-sha", default="")
     w.add_argument("--evidence", default="f7-pr-fast-regression-evidence.json")
     w.set_defaults(func=cmd_wait)
     args = parser.parse_args()

@@ -24,6 +24,7 @@ on:
       - 'quality/acceptance/p0_residual_closure.json'
       - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
       - 'scripts/ci/shared_fullstack_plan.py'
+      - 'scripts/ci/version_only_carry_forward.py'
       - 'quality/ci/tp_ci_04_inventory_shared_stack_paths.json'
       - 'docker-compose.yml'
       - 'docker-compose.postgresql.yml'
@@ -47,6 +48,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: tp-ci-04-inventory-${{ github.event.pull_request.number || github.ref }}

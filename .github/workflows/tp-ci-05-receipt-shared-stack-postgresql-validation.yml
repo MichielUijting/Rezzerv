@@ -29,6 +29,7 @@ on:
       - 'frontend/tests/e2e/f6-receipt-controlled-5xx.fullstack.spec.js'
       - 'frontend/playwright.fullstack.config.js'
       - 'scripts/ci/shared_fullstack_plan.py'
+      - 'scripts/ci/version_only_carry_forward.py'
       - 'quality/ci/tp_ci_05_receipt_shared_stack_paths.json'
       - 'docker-compose.yml'
       - 'docker-compose.postgresql.yml'
@@ -56,6 +57,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: tp-ci-05-receipt-${{ github.event.pull_request.number || github.ref }}
