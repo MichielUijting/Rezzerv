@@ -58,6 +58,7 @@ export default function ShoppingPage() {
   const [message, setMessage] = useState('')
   const checkedSaveChainsRef = useRef(new Map())
   const checkedMutationVersionsRef = useRef(new Map())
+  const catalogSearchRequestRef = useRef(0)
 
   async function loadList() {
     setLoading(true)
@@ -76,29 +77,45 @@ export default function ShoppingPage() {
 
   useEffect(() => { loadList() }, [])
 
+  function updateCatalogQuery(value) {
+    catalogSearchRequestRef.current += 1
+    setCatalogQuery(value)
+    setCatalogResults([])
+    setSelectedResultId('')
+    setSearching(false)
+  }
+
   useEffect(() => {
     const query = catalogQuery.trim()
-    setSelectedResultId('')
+    const requestId = catalogSearchRequestRef.current
+    let cancelled = false
+
     if (query.length < 2) {
-      setCatalogResults([])
-      return undefined
+      setSearching(false)
+      return () => { cancelled = true }
     }
 
     const timer = window.setTimeout(async () => {
+      if (cancelled || catalogSearchRequestRef.current !== requestId) return
       setSearching(true)
       setError('')
       try {
         const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}&limit=5`)
+        if (cancelled || catalogSearchRequestRef.current !== requestId) return
         setCatalogResults(Array.isArray(payload?.items) ? payload.items : [])
       } catch (searchError) {
+        if (cancelled || catalogSearchRequestRef.current !== requestId) return
         setCatalogResults([])
         setError(searchError?.message || 'Artikelen konden niet worden doorzocht.')
       } finally {
-        setSearching(false)
+        if (!cancelled && catalogSearchRequestRef.current === requestId) setSearching(false)
       }
     }, 250)
 
-    return () => window.clearTimeout(timer)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
   }, [catalogQuery])
 
   const selectedResult = useMemo(
@@ -166,9 +183,7 @@ export default function ShoppingPage() {
         }),
       })
       setMessage(`${selectedResult.label} toegevoegd aan de boodschappenlijst.`)
-      setCatalogQuery('')
-      setCatalogResults([])
-      setSelectedResultId('')
+      updateCatalogQuery('')
       await loadList()
     } catch (saveError) {
       setError(saveError?.message || 'Het geselecteerde resultaat kon niet worden toegevoegd.')
@@ -499,7 +514,7 @@ export default function ShoppingPage() {
                   id="shopping-catalog-query"
                   className="rz-input"
                   value={catalogQuery}
-                  onChange={(event) => setCatalogQuery(event.target.value)}
+                  onChange={(event) => updateCatalogQuery(event.target.value)}
                   placeholder="Zoek artikel, producttype of artikelgroep"
                   aria-controls="shopping-candidate-list"
                   aria-expanded={catalogResults.length > 0}
