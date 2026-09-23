@@ -210,7 +210,7 @@ def test_patch_and_settings_are_admin_only_before_delegation():
     )]
 
 
-def test_runtime_settings_guard_allows_member_notes_but_preserves_other_settings():
+def test_runtime_settings_guard_allows_all_household_members_notes_but_preserves_other_settings():
     calls = []
     settings_endpoint = _build_main_endpoint('settings', calls)
     route = SimpleNamespace(
@@ -246,11 +246,22 @@ def test_runtime_settings_guard_allows_member_notes_but_preserves_other_settings
     assert payload['average_price'] == 3.45
     assert payload['auto_restock'] is True
 
-    _assert_member_denied(lambda: route.dependant.call(
+    viewer_result = route.dependant.call(
         household_article_id=ARTICLE_ID,
-        payload=FakePayload(notes='Kijker mag niet wijzigen'),
+        payload=FakePayload(notes='Kijker deelt notitie', favorite_store='Niet toegestaan'),
         authorization='Bearer viewer',
-    ))
+    )
+    assert viewer_result == {'ok': True, 'kind': 'settings'}
+    kind, article_id, payload, authorization = calls[-1]
+    assert kind == 'settings'
+    assert article_id == ARTICLE_ID
+    assert authorization == 'Bearer viewer'
+    assert payload['notes'] == 'Kijker deelt notitie'
+    assert payload['favorite_store'] == 'AH'
+    assert payload['min_stock'] == 2
+    assert payload['ideal_stock'] == 5
+    assert payload['average_price'] == 3.45
+    assert payload['auto_restock'] is True
 
 
 def test_inventory_and_transfer_are_admin_only_and_article_scoped():
@@ -342,7 +353,7 @@ def test_product_enrichment_cannot_own_household_alias():
 
 def run_contract() -> None:
     test_patch_and_settings_are_admin_only_before_delegation()
-    test_runtime_settings_guard_allows_member_notes_but_preserves_other_settings()
+    test_runtime_settings_guard_allows_all_household_members_notes_but_preserves_other_settings()
     test_inventory_and_transfer_are_admin_only_and_article_scoped()
     test_product_enrichment_cannot_own_household_alias()
     print('ARTICLE_DETAIL_ADMIN_GATEWAY_GREEN')
