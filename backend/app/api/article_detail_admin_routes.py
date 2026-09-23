@@ -43,8 +43,8 @@ def _require_household_editor(endpoint, authorization: str | None) -> dict[str, 
         raise HTTPException(status_code=500, detail='Interne huishoudautorisatie is niet beschikbaar')
     context = require_context(authorization)
     display_role = str(context.get('display_role') or '').strip().lower()
-    if display_role not in {'admin', 'lid'}:
-        raise HTTPException(status_code=403, detail='Alleen beheerder en lid mogen huishoudnotities aanpassen')
+    if display_role not in {'admin', 'lid', 'viewer'}:
+        raise HTTPException(status_code=403, detail='Alleen leden van het huishouden mogen huishoudnotities aanpassen')
     return context
 
 
