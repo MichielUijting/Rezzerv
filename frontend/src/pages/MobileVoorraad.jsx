@@ -15,6 +15,7 @@ import { readHouseholdOnboarding } from '../features/onboarding/onboardingState.
 import { buildHomeNavigation } from '../features/home/homeNavigation.js'
 import useFeatureAvailability from '../features/platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../features/platform/actionButtonAvailability.js'
+import { buildQuickInventoryMutation, selectQuickInventoryTarget } from './mobileInventoryQuickActions.js'
 import {
   ACTION_ROUTE_BY_KEY,
   readRecentActionKeys,
@@ -134,6 +135,7 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
         imageUrl: String(item?.image_url || '').trim(),
         articleGroup,
         quantity,
+        inventoryEntries: inventoryId ? [{ inventoryId, quantity, sourceIndex: index }] : [],
         locations: new Set(location ? [location] : []),
         sublocations: new Set(sublocation ? [`${location}__${sublocation}`] : []),
         firstSeenIndex: index,
@@ -142,6 +144,7 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
     }
 
     existing.quantity += quantity
+    if (inventoryId) existing.inventoryEntries.push({ inventoryId, quantity, sourceIndex: index })
     if (location) existing.locations.add(location)
     if (sublocation) existing.sublocations.add(`${location}__${sublocation}`)
     if (!existing.detailId && inventoryId) existing.detailId = inventoryId
@@ -193,7 +196,10 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const [locationFilter, setLocationFilter] = useState('')
   const [groupFilter, setGroupFilter] = useState('')
   const [sortKey, setSortKey] = useState('name-asc')
+  const [mutatingRowId, setMutatingRowId] = useState('')
+  const [mutationFeedback, setMutationFeedback] = useState({ type: '', message: '' })
   const context = readStoredAuthContext()
+  const canEditInventory = isHouseholdAdminFromContext(context)
   const onboarding = readHouseholdOnboarding(context)
   const features = useFeatureAvailability()
   const actionAvailability = useActionButtonAvailability({
@@ -201,7 +207,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   })
 
   const visibility = {
-    canOpenAdmin: isHouseholdAdminFromContext(context),
+    canOpenAdmin: canEditInventory,
     canOpenExternalDatabases: isFrontteamMemberFromContext(context),
     isPlatformSuperuser: isPlatformSuperuserFromContext(context),
     canManageLocations: canCurrentUserPerform('locations.manage', context),
@@ -230,6 +236,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     return selectRecentActionTiles({
       recentKeys: readRecentActionKeys(context),
       availableTiles: availableActionTiles,
+      excludeKeys: ['voorraad'],
       limit: 4,
     }).map((tile) => ({
       key: tile.key,
@@ -263,6 +270,48 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     setLocationFilter('')
     setSortKey((current) => current === 'location' ? 'name-asc' : current)
   }, [locationTrackingEnabled])
+
+  async function mutateQuickInventory(row, direction) {
+    if (!canEditInventory || mutatingRowId) return
+    const mutation = buildQuickInventoryMutation(row, direction)
+    if (!mutation || !row?.householdArticleId) return
+
+    setMutatingRowId(row.id)
+    setMutationFeedback({ type: '', message: '' })
+    try {
+      const response = await fetchJsonWithAuth(
+        `/api/household-articles/${encodeURIComponent(row.householdArticleId)}/inventory-events`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ...mutation,
+            article_name: String(row.articleName || row.householdName || '').trim(),
+          }),
+        },
+      )
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const message = response.status >= 500
+          ? 'Voorraadmutatie kon niet worden opgeslagen.'
+          : (data?.detail || 'Voorraadmutatie kon niet worden opgeslagen.')
+        throw new Error(message)
+      }
+      setRows(await loadMobileInventory())
+      setMutationFeedback({
+        type: 'success',
+        message: direction === 'decrease'
+          ? `${row.householdName}: 1 afgeboekt.`
+          : `${row.householdName}: 1 opgeboekt.`,
+      })
+    } catch (err) {
+      setMutationFeedback({
+        type: 'error',
+        message: String(err?.message || 'Voorraadmutatie kon niet worden opgeslagen.'),
+      })
+    } finally {
+      setMutatingRowId('')
+    }
+  }
 
   const locationOptions = useMemo(() => {
     if (!locationTrackingEnabled) return []
@@ -409,6 +458,16 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
           </Button>
         </div>
 
+        {mutationFeedback.message ? (
+          <div
+            className={`rz-mobile-inventory-quick-feedback rz-mobile-inventory-quick-feedback--${mutationFeedback.type}`}
+            role={mutationFeedback.type === 'error' ? 'alert' : 'status'}
+            data-testid="mobile-inventory-quick-feedback"
+          >
+            {mutationFeedback.message}
+          </div>
+        ) : null}
+
         {error ? (
           <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert">
             <div>{error}</div>
@@ -429,8 +488,27 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
               const detailTarget = row.detailId
                 ? `/voorraad/${encodeURIComponent(row.detailId)}?artikel=${encodeURIComponent(row.articleName || row.householdName)}`
                 : ''
-              const content = (
-                <>
+              const decreaseTarget = selectQuickInventoryTarget(row, 'decrease')
+              const increaseTarget = selectQuickInventoryTarget(row, 'increase')
+              const rowBusy = mutatingRowId === row.id
+
+              return (
+                <div
+                  key={row.id}
+                  className={`rz-mobile-inventory-card${detailTarget ? '' : ' rz-mobile-inventory-card--disabled'}`}
+                  role={detailTarget ? 'link' : undefined}
+                  tabIndex={detailTarget ? 0 : undefined}
+                  onClick={() => {
+                    if (detailTarget && !rowBusy) navigate(detailTarget)
+                  }}
+                  onKeyDown={(event) => {
+                    if (detailTarget && !rowBusy && (event.key === 'Enter' || event.key === ' ')) {
+                      event.preventDefault()
+                      navigate(detailTarget)
+                    }
+                  }}
+                  data-testid={detailTarget ? `mobile-inventory-open-detail-${row.detailId}` : undefined}
+                >
                   <CatalogArticleThumbnail
                     imageUrl={row.imageUrl}
                     productName={row.productName || row.householdName}
@@ -451,26 +529,43 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                     </div>
                   </div>
                   <div className="rz-mobile-inventory-card-side">
-                    <span className="rz-mobile-inventory-quantity" aria-label={`Aantal ${formatQuantity(row.quantity)}`}>
-                      {formatQuantity(row.quantity)}
-                    </span>
+                    <div className="rz-mobile-inventory-quantity-control">
+                      {canEditInventory ? (
+                        <button
+                          type="button"
+                          className="rz-mobile-inventory-quantity-button"
+                          disabled={!decreaseTarget || rowBusy}
+                          aria-label={`Boek 1 af van ${row.householdName}`}
+                          data-testid={`mobile-inventory-decrease-${row.detailId || row.id}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            mutateQuickInventory(row, 'decrease')
+                          }}
+                        >
+                          −
+                        </button>
+                      ) : null}
+                      <span className="rz-mobile-inventory-quantity" aria-label={`Aantal ${formatQuantity(row.quantity)}`}>
+                        {formatQuantity(row.quantity)}
+                      </span>
+                      {canEditInventory ? (
+                        <button
+                          type="button"
+                          className="rz-mobile-inventory-quantity-button"
+                          disabled={!increaseTarget || rowBusy}
+                          aria-label={`Boek 1 op bij ${row.householdName}`}
+                          data-testid={`mobile-inventory-increase-${row.detailId || row.id}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            mutateQuickInventory(row, 'increase')
+                          }}
+                        >
+                          +
+                        </button>
+                      ) : null}
+                    </div>
                     <span className="rz-mobile-inventory-chevron" aria-hidden="true">›</span>
                   </div>
-                </>
-              )
-
-              return detailTarget ? (
-                <Link
-                  key={row.id}
-                  to={detailTarget}
-                  className="rz-mobile-inventory-card"
-                  data-testid={`mobile-inventory-open-detail-${row.detailId}`}
-                >
-                  {content}
-                </Link>
-              ) : (
-                <div key={row.id} className="rz-mobile-inventory-card rz-mobile-inventory-card--disabled">
-                  {content}
                 </div>
               )
             })}
@@ -485,13 +580,11 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
         style={{ '--rz-mobile-nav-count': bottomNavItems.length }}
       >
         {bottomNavItems.map((item) => {
-          const active = item.route === '/voorraad'
           return (
             <Link
               key={item.key}
               to={item.route}
-              className={`rz-mobile-inventory-nav-item${active ? ' is-active' : ''}`}
-              aria-current={active ? 'page' : undefined}
+              className="rz-mobile-inventory-nav-item"
               data-testid={`mobile-inventory-nav-${item.key}`}
               onClick={() => {
                 if (item.key !== 'meer') recordRecentAction(item.key, context)

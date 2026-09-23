@@ -70,11 +70,13 @@ export function recordRecentAction(actionKey, context, windowLike) {
 export function selectRecentActionTiles({
   recentKeys = [],
   availableTiles = [],
+  excludeKeys = [],
   limit = DEFAULT_RECENT_ACTION_LIMIT,
 } = {}) {
+  const excluded = new Set(excludeKeys.map((key) => String(key || '').trim()).filter(Boolean))
   const byKey = new Map(
     availableTiles
-      .filter((tile) => tile?.key && ACTION_ROUTE_BY_KEY[tile.key])
+      .filter((tile) => tile?.key && ACTION_ROUTE_BY_KEY[tile.key] && !excluded.has(String(tile.key)))
       .map((tile) => [String(tile.key), tile]),
   )
   const selected = []
@@ -89,7 +91,7 @@ export function selectRecentActionTiles({
   }
 
   for (const tile of availableTiles) {
-    if (!tile?.key || seen.has(tile.key) || !ACTION_ROUTE_BY_KEY[tile.key]) continue
+    if (!tile?.key || excluded.has(String(tile.key)) || seen.has(tile.key) || !ACTION_ROUTE_BY_KEY[tile.key]) continue
     selected.push(tile)
     seen.add(tile.key)
     if (selected.length >= limit) break

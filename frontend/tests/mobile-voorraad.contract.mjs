@@ -10,6 +10,10 @@ import {
   recordRecentAction,
   selectRecentActionTiles,
 } from '../src/features/home/recentActionUsage.js'
+import {
+  buildQuickInventoryMutation,
+  selectQuickInventoryTarget,
+} from '../src/pages/mobileInventoryQuickActions.js'
 
 const regularMember = {
   context_type: 'regular',
@@ -104,6 +108,10 @@ assert.match(mobileSource, /data-testid="mobile-inventory-bottom-nav"/)
 assert.match(mobileSource, /selectRecentActionTiles/)
 assert.match(mobileSource, /readRecentActionKeys\(context\)/)
 assert.match(mobileSource, /recordRecentAction\(item\.key, context\)/)
+assert.match(mobileSource, /excludeKeys: \['voorraad'\]/)
+assert.match(mobileSource, /mobile-inventory-decrease-/)
+assert.match(mobileSource, /mobile-inventory-increase-/)
+assert.match(mobileSource, /\/inventory-events/)
 assert.match(mobileSource, /MORE_NAV_ITEM = \{ key: 'meer', label: 'Meer', route: '\/home'/)
 assert.match(homeSource, /recordRecentAction\(tile\.key, context\)/)
 assert.doesNotMatch(mobileSource, /<Header title="Voorraad"/)
@@ -143,8 +151,34 @@ assert.deepEqual(
       { key: 'bijna-op', label: 'Bijna op', clickable: true },
     ],
     limit: 4,
+    excludeKeys: ['voorraad'],
   }).map((tile) => tile.key),
-  ['winkelen', 'voorraad', 'bijna-op'],
+  ['winkelen', 'bijna-op'],
 )
+
+const quickRow = {
+  inventoryEntries: [
+    { inventoryId: 'inventory-small', quantity: 1, sourceIndex: 0 },
+    { inventoryId: 'inventory-large', quantity: 3, sourceIndex: 1 },
+  ],
+}
+assert.deepEqual(selectQuickInventoryTarget(quickRow, 'decrease'), {
+  inventoryId: 'inventory-large',
+  quantity: 3,
+  sourceIndex: 1,
+})
+assert.deepEqual(buildQuickInventoryMutation(quickRow, 'decrease'), {
+  inventory_id: 'inventory-large',
+  quantity: 1,
+  event_type: 'consume',
+  note: 'Snelle afboeking via mobiele Voorraad.',
+})
+assert.deepEqual(buildQuickInventoryMutation(quickRow, 'increase'), {
+  inventory_id: 'inventory-large',
+  quantity: 4,
+  event_type: 'adjustment',
+  note: 'Snelle ophoging via mobiele Voorraad.',
+})
+assert.equal(selectQuickInventoryTarget({ inventoryEntries: [{ inventoryId: 'fraction', quantity: 0.5, sourceIndex: 0 }] }, 'decrease'), null)
 
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')
