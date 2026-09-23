@@ -128,6 +128,39 @@ Bij database-/startupinfrastructuur horen daarnaast expliciet:
 
 Bij wijzigingen aan de Kassabon → Voorraad → Bijna-op-keten of de ketenrunner hoort daarnaast de canonical 12/12 PostgreSQL-ketentest groen te zijn.
 
+## Incrementele carry-forward tijdens een Draft PR
+
+GitHub beoordeelt `pull_request.paths` tegen de volledige PR-diff. Daardoor kan
+een zware workflow na iedere nieuwe commit opnieuw worden ingepland, ook wanneer
+de laatste push zijn authority niet raakt. Inhuis gebruikt daarom naast de
+speciale finale version-only route ook **fail-closed incrementele carry-forward**
+voor zware Draft/preflight-authorities.
+
+De veiligheidsregels zijn:
+
+- het volledige `base...head`-verschil blijft de bron voor S/M/L-risico en voor
+  de vraag welke authorities in de PR relevant zijn;
+- alleen op een `pull_request synchronize`-event wordt aanvullend de delta
+  `vorige PR-head...nieuwe PR-head` beoordeeld;
+- carry-forward is alleen toegestaan als op de vorige head een groene run bestaat
+  van dezelfde workflow, dezelfde PR, dezelfde base-SHA en dezelfde branch;
+- een authority waarvan de laatste delta een gedeclareerd dependency-pad raakt,
+  draait opnieuw; alleen niet-geraakte reeds groene authorities worden
+  doorgeschoven;
+- een gevoelig runtime-/test-/CI-pad dat niet in de authority-map voorkomt maakt
+  de planner fail-closed en veroorzaakt normale heruitvoering;
+- PR253 kent aanvullend een `contracts`-modus: wanneer uitsluitend top-level
+  `frontend/tests/*.contract.mjs`-tests wijzigen en de vorige PR253-run groen
+  was, draaien alleen die gewijzigde contracttests opnieuw;
+- goedkope onafhankelijke checks blijven per SHA draaien;
+- **F7 Full Regression exact-candidate** wordt nooit incrementeel doorgeschoven en
+  blijft aan de definitieve kandidaat-SHA gebonden.
+
+De machineleesbare policy staat in
+`quality/ci/change_risk_policy.json`. De planners zijn
+`scripts/ci/shared_fullstack_plan.py` en
+`scripts/ci/frontend_regression_plan.py`.
+
 ## Finale patchbump zonder dubbele zware regressie
 
 De normale versievolgorde blijft: implementatie stabiliseren, daarna de

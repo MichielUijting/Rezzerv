@@ -1,0 +1,45 @@
+name: Incremental CI carry-forward validation
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ci/shared_fullstack_plan.py'
+      - 'scripts/ci/frontend_regression_plan.py'
+      - 'scripts/ci/incremental_carry_forward_selftest.py'
+      - 'scripts/ci/version_only_carry_forward.py'
+      - 'quality/ci/change_risk_policy.json'
+      - '.github/workflows/pr253-full-frontend-regression.yml'
+      - '.github/workflows/tp-ci-02-kassa-shared-stack-postgresql-validation.yml'
+      - '.github/workflows/tp-ci-03-account-authorization-shared-stack-postgresql-validation.yml'
+      - '.github/workflows/tp-ci-04-inventory-shared-stack-postgresql-validation.yml'
+      - '.github/workflows/tp-ci-05-receipt-shared-stack-postgresql-validation.yml'
+      - '.github/workflows/tp-ci-07-core-p0-shared-stack-postgresql-validation.yml'
+      - '.github/workflows/incremental-ci-carry-forward-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate fail-closed incremental CI planning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Compile planners
+        run: |
+          python -m py_compile \
+            scripts/ci/shared_fullstack_plan.py \
+            scripts/ci/frontend_regression_plan.py \
+            scripts/ci/incremental_carry_forward_selftest.py \
+            scripts/ci/version_only_carry_forward.py
+
+      - name: Run planner self-tests
+        run: |
+          python scripts/ci/frontend_regression_plan.py self-test
+          python scripts/ci/incremental_carry_forward_selftest.py
