@@ -44,7 +44,27 @@ assert.ok(mainSource.indexOf('./ui/theme.css') > mainSource.indexOf('./ui/typogr
 assert.match(tokensCss, /--color-ui-primary:\s*#005F6A/i)
 assert.match(tokensCss, /--color-ui-primary-text:\s*#FFFFFF/i)
 
-const forbiddenPrimaryColors = ['#1A3E2B', '#28A99E', '#006B3C', '#005630']
+const forbiddenPrimaryColors = [
+  '#1A3E2B',
+  '#28A99E',
+  '#006B3C',
+  '#005630',
+  '#0B5D3B',
+  '#174F2E',
+  '#0F5B32',
+  '#146C3A',
+  '#285C3A',
+  '#176B34',
+  '#2E7D4D',
+  '#0F5132',
+  '#154734',
+  '#1F7A3F',
+  '#166534',
+  '#355247',
+  '#1F4D3A',
+  '#1D4D3F',
+  '#176B35',
+]
 const sourceExtensions = new Set(['.css', '.js', '.jsx', '.ts', '.tsx'])
 function listSourceFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
