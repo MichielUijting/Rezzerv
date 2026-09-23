@@ -45,6 +45,8 @@ jobs:
       BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
       BASE_REF: ${{ inputs.base_ref || github.event.pull_request.base.ref || 'main' }}
       PR_BODY: ${{ github.event.pull_request.body || '' }}
+      PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      PREVIOUS_SHA: ${{ github.event.before || '' }}
       GATE_CONFIG: quality/ci/f7_pr_fast_regression_gate.json
       RISK_POLICY: quality/ci/change_risk_policy.json
 
@@ -69,6 +71,19 @@ jobs:
             git fetch --no-tags --depth=1 origin "$BASE_SHA"
           fi
           git cat-file -e "${BASE_SHA}^{commit}"
+
+      - name: Detect canonical final version-only carry-forward
+        id: carry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/version_only_carry_forward.py detect \
+            --before-sha "$PREVIOUS_SHA" \
+            --after-sha "$CANDIDATE_SHA" \
+            --evidence f7-version-only-carry-forward.json \
+            | tee f7-version-only-carry-forward.log
+          grep -Fx 'VERSION_ONLY_CARRY_FORWARD_DETECT_GREEN' f7-version-only-carry-forward.log
+          grep -E '^CARRY_FORWARD_SAFE=(true|false)$' f7-version-only-carry-forward.log
 
       - name: Classify complete candidate delta
         id: risk
@@ -103,6 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile \
+            scripts/ci/version_only_carry_forward.py \
             scripts/ci/shared_fullstack_plan.py \
             scripts/ci/f7_pr_fast_regression_gate.py \
             scripts/ci/validate_f7_ci_orchestration_gate_map.py
@@ -179,6 +195,9 @@ jobs:
             --config "$GATE_CONFIG" \
             --head-sha "$CANDIDATE_SHA" \
             --repo "$GITHUB_REPOSITORY" \
+            --source-sha "${{ steps.carry.outputs.source_sha }}" \
+            --pr-number "$PR_NUMBER" \
+            --base-sha "$BASE_SHA" \
             --evidence f7-pr-fast-regression-evidence.json \
             | tee f7-pr-fast-wait.log
           if [[ '${{ steps.plan.outputs.mode }}' == 'live' ]]; then
@@ -199,6 +218,8 @@ jobs:
             f7-change-risk-self-test.log
             f7-change-risk.log
             f7-change-risk-evidence.json
+            f7-version-only-carry-forward.log
+            f7-version-only-carry-forward.json
             f7-pr-fast-config.log
             f7-shared-planner-candidate.log
             f7-pr-fast-plan.log

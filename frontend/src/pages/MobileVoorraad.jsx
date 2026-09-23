@@ -3,16 +3,36 @@ import { Link, useNavigate } from 'react-router-dom'
 import Button from '../ui/Button'
 import Select from '../ui/Select.jsx'
 import CatalogArticleThumbnail from '../ui/CatalogArticleThumbnail.jsx'
-import { fetchJsonWithAuth } from '../lib/authSession.js'
+import {
+  canCurrentUserPerform,
+  fetchJsonWithAuth,
+  isFrontteamMemberFromContext,
+  isHouseholdAdminFromContext,
+  isPlatformSuperuserFromContext,
+  readStoredAuthContext,
+} from '../lib/authSession.js'
+import { readHouseholdOnboarding } from '../features/onboarding/onboardingState.js'
+import { buildHomeNavigation } from '../features/home/homeNavigation.js'
+import useFeatureAvailability from '../features/platform/useFeatureAvailability.js'
+import { useActionButtonAvailability } from '../features/platform/actionButtonAvailability.js'
+import {
+  ACTION_ROUTE_BY_KEY,
+  readRecentActionKeys,
+  recordRecentAction,
+  selectRecentActionTiles,
+} from '../features/home/recentActionUsage.js'
 import './mobileVoorraad.css'
 
-const MOBILE_NAV_ITEMS = [
-  { key: 'meldingen', label: 'Meldingen', route: '/meldingen', icon: 'bell' },
-  { key: 'voorraad', label: 'Voorraad', route: '/voorraad', icon: 'inventory' },
-  { key: 'bijna-op', label: 'Bijna op', route: '/bijna-op', icon: 'clock' },
-  { key: 'winkelen', label: 'Winkelen', route: '/winkelen', icon: 'cart' },
-  { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' },
-]
+const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' }
+
+function mobileNavIconType(key) {
+  if (key === 'meldingen') return 'bell'
+  if (key === 'voorraad') return 'inventory'
+  if (key === 'bijna-op') return 'clock'
+  if (key === 'winkelen') return 'cart'
+  if (key === 'kassabonnen' || key === 'kassa') return 'receipt'
+  return 'menu'
+}
 
 function MobileNavIcon({ type }) {
   if (type === 'bell') {
@@ -172,7 +192,54 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const [query, setQuery] = useState('')
   const [locationFilter, setLocationFilter] = useState('')
   const [groupFilter, setGroupFilter] = useState('')
-  const [sortKey, setSortKey] = useState('name')
+  const [sortKey, setSortKey] = useState('name-asc')
+  const context = readStoredAuthContext()
+  const onboarding = readHouseholdOnboarding(context)
+  const features = useFeatureAvailability()
+  const actionAvailability = useActionButtonAvailability({
+    enabled: Boolean(context && context.context_type !== 'none'),
+  })
+
+  const visibility = {
+    canOpenAdmin: isHouseholdAdminFromContext(context),
+    canOpenExternalDatabases: isFrontteamMemberFromContext(context),
+    isPlatformSuperuser: isPlatformSuperuserFromContext(context),
+    canManageLocations: canCurrentUserPerform('locations.manage', context),
+  }
+
+  const homeNavigation = buildHomeNavigation({
+    onboarding,
+    visibility,
+    features,
+    actionButtons: actionAvailability.items,
+    actionOrder: actionAvailability.order,
+  })
+
+  const availableActionTiles = useMemo(() => {
+    const seen = new Set()
+    return [...homeNavigation.primaryTiles, ...homeNavigation.moreTiles]
+      .filter((tile) => {
+        const route = ACTION_ROUTE_BY_KEY[tile.key]
+        if (!tile?.clickable || !route || seen.has(tile.key)) return false
+        seen.add(tile.key)
+        return true
+      })
+  }, [homeNavigation])
+
+  const recentNavItems = useMemo(() => {
+    return selectRecentActionTiles({
+      recentKeys: readRecentActionKeys(context),
+      availableTiles: availableActionTiles,
+      limit: 4,
+    }).map((tile) => ({
+      key: tile.key,
+      label: tile.label,
+      route: ACTION_ROUTE_BY_KEY[tile.key],
+      icon: mobileNavIconType(tile.key),
+    }))
+  }, [availableActionTiles, context?.user_id])
+
+  const bottomNavItems = [...recentNavItems, MORE_NAV_ITEM]
 
   async function reload() {
     setIsLoading(true)
@@ -194,7 +261,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   useEffect(() => {
     if (locationTrackingEnabled) return
     setLocationFilter('')
-    setSortKey((current) => current === 'location' ? 'name' : current)
+    setSortKey((current) => current === 'location' ? 'name-asc' : current)
   }, [locationTrackingEnabled])
 
   const locationOptions = useMemo(() => {
@@ -220,7 +287,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     })
 
     return nextRows.sort((a, b) => {
-      if (sortKey === 'quantity') return b.quantity - a.quantity || a.householdName.localeCompare(b.householdName, 'nl')
+      if (sortKey === 'name-desc') return b.householdName.localeCompare(a.householdName, 'nl')
       if (locationTrackingEnabled && sortKey === 'location') return a.location.localeCompare(b.location, 'nl') || a.householdName.localeCompare(b.householdName, 'nl')
       return a.householdName.localeCompare(b.householdName, 'nl')
     })
@@ -248,6 +315,12 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     >
       <header className="rz-mobile-inventory-topbar" data-testid="mobile-inventory-header">
         <h1>Voorraad</h1>
+        <img
+          className="rz-mobile-inventory-header-logo"
+          src="/inhuis-logo-white.png"
+          alt="Inhuis"
+          draggable="false"
+        />
       </header>
 
       <main className="rz-mobile-inventory-content">
@@ -303,8 +376,8 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                 onChange={setSortKey}
                 triggerClassName="rz-mobile-inventory-select-trigger"
                 options={[
-                  { value: 'name', label: 'Naam A–Z' },
-                  { value: 'quantity', label: 'Aantal hoog–laag' },
+                  { value: 'name-asc', label: 'Naam A–Z' },
+                  { value: 'name-desc', label: 'Naam Z–A' },
                   ...(locationTrackingEnabled ? [{ value: 'location', label: 'Locatie A–Z' }] : []),
                 ]}
               />
@@ -405,9 +478,14 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
         ) : null}
       </main>
 
-      <nav className="rz-mobile-inventory-bottom-nav" aria-label="Hoofdnavigatie" data-testid="mobile-inventory-bottom-nav">
-        {MOBILE_NAV_ITEMS.map((item) => {
-          const active = item.key === 'voorraad'
+      <nav
+        className="rz-mobile-inventory-bottom-nav"
+        aria-label="Recent gebruikte acties"
+        data-testid="mobile-inventory-bottom-nav"
+        style={{ '--rz-mobile-nav-count': bottomNavItems.length }}
+      >
+        {bottomNavItems.map((item) => {
+          const active = item.route === '/voorraad'
           return (
             <Link
               key={item.key}
@@ -415,6 +493,9 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
               className={`rz-mobile-inventory-nav-item${active ? ' is-active' : ''}`}
               aria-current={active ? 'page' : undefined}
               data-testid={`mobile-inventory-nav-${item.key}`}
+              onClick={() => {
+                if (item.key !== 'meer') recordRecentAction(item.key, context)
+              }}
             >
               <span className="rz-mobile-inventory-nav-icon"><MobileNavIcon type={item.icon} /></span>
               <span>{item.label}</span>

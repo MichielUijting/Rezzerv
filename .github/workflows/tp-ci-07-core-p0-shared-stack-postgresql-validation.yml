@@ -15,6 +15,7 @@ on:
       - 'scripts/acceptance/l4_06_article_identity_history.py'
       - 'scripts/acceptance/l4_07_platform_browser_authority.py'
       - 'scripts/ci/shared_fullstack_plan.py'
+      - 'scripts/ci/version_only_carry_forward.py'
       - 'scripts/ci/workflow_delta_gate.py'
       - 'quality/acceptance/**'
       - 'quality/ci/tp_ci_07_core_p0_shared_stack_paths.json'
@@ -44,6 +45,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: tp-ci-07-core-p0-${{ github.event.pull_request.number || github.ref }}

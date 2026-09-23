@@ -102,7 +102,6 @@ assert.deepEqual(purchaseHistory.map((item) => item.id), ['1', '3'])
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const responsiveSource = readFileSync(new URL('../src/features/articles/ArticlePageResponsive.jsx', import.meta.url), 'utf8')
 const mobileSource = readFileSync(new URL('../src/features/articles/MobileArticlePage.jsx', import.meta.url), 'utf8')
-const mobileCss = readFileSync(new URL('../src/features/articles/mobileArticleDetail.css', import.meta.url), 'utf8')
 
 assert.match(routerSource, /import ArticlePageResponsive from '\.\.\/\.\.\/features\/articles\/ArticlePageResponsive\.jsx'/)
 assert.match(routerSource, /path: '\/voorraad\/:articleId'.*<ArticlePageResponsive \/>/)
@@ -131,10 +130,5 @@ assert.doesNotMatch(mobileSource, />Voorraad aanpassen</)
 assert.doesNotMatch(mobileSource, />Afboeken</)
 assert.doesNotMatch(mobileSource, />\s*Opslaan(?:…)?\s*</)
 
-const explicitPixelFontSizes = [...mobileCss.matchAll(/font-size:\s*(\d+)px/g)].map((match) => Number(match[1]))
-assert.ok(explicitPixelFontSizes.every((size) => size === 14 || size === 16))
-assert.match(mobileCss, /--font-size-ui-body/)
-assert.match(mobileCss, /--font-size-ui-title/)
-assert.match(mobileCss, /\/inhuis-orange-wallpaper\.svg/)
 
 console.log('MOBILE_VOORRAAD_DETAIL_CONTRACT_GREEN')

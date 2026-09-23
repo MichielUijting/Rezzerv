@@ -86,6 +86,9 @@ def main() -> int:
     require(pr_fast.get("status") == "covered", "PR Fast Regression must be covered")
     require(pr_fast.get("shared_clusters") == ["TP-CI-02", "TP-CI-03", "TP-CI-04", "TP-CI-05", "TP-CI-07"], "shared cluster map drift")
     require(pr_fast.get("shared_authority_count") == 16, "shared authority count drift")
+    carry = pr_fast.get("version_only_carry_forward") or {}
+    require(carry.get("status") == "covered", "PR Fast version-only carry-forward must be covered")
+    require(carry.get("source") == "scripts/ci/version_only_carry_forward.py", "PR Fast carry-forward source drift")
     require((pr_fast.get("fallback_governance") or {}) == {
         "manual_only_workflows": 14,
         "known_stale_references": 2,
@@ -99,6 +102,8 @@ def main() -> int:
     require(full_gate.get("status") == "covered", "Full Regression must be covered")
     require(full_gate.get("required_p0_scenarios") == 14, "Full Regression P0 count drift")
     require(full_gate.get("required_workflows") == EXPECTED_FULL_WORKFLOW_COUNT, "Full Regression workflow count drift")
+    full_carry = full_gate.get("version_only_carry_forward") or {}
+    require(full_carry.get("status") == "not_applied", "F7 Full must remain exact-candidate after version-only bump")
     full_residuals = {row.get("id"): row for row in full_gate.get("residuals", [])}
     require(set(full_residuals) == {"F7-FULL-01", "F7-FULL-02"}, "Full residual set drift")
     require(all(row.get("status") == "closed" for row in full_residuals.values()), "Full residuals must be closed")
@@ -198,6 +203,12 @@ def main() -> int:
     require(f705.get("proof_sha") == DEEP_PROOF["candidate_sha"], "F7-05 history proof SHA drift")
     require(f705.get("artifact_id") == DEEP_PROOF["artifact_id"], "F7-05 history artifact drift")
 
+    cross = data.get("cross_cutting") or {}
+    cross_carry = cross.get("version_only_carry_forward") or {}
+    require(cross_carry.get("detector") == "scripts/ci/version_only_carry_forward.py", "carry-forward detector map drift")
+    require(cross_carry.get("self_test") == "scripts/ci/test_version_only_carry_forward.py", "carry-forward self-test map drift")
+    require(cross_carry.get("complete_candidate_risk_preserved") is True, "carry-forward must preserve complete candidate risk")
+
     open_or_active = sum(
         1
         for gate in gates.values()
@@ -207,6 +218,7 @@ def main() -> int:
 
     print("PASS f7_02_pr_fast_regression_covered")
     print("PASS f7_02_fallback_governance_closed")
+    print("PASS f7_version_only_carry_forward_covered")
     print("PASS f7_03_full_regression_contract_registered")
     print("PASS f7_03_exact_14_p0_scenarios_mapped")
     print(f"PASS f7_03_full_regression_workflow_inventory_registered count={EXPECTED_FULL_WORKFLOW_COUNT}")

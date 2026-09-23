@@ -12,10 +12,7 @@ const themeCss = readFrontend('src/ui/theme.css')
 const headerCss = readFrontend('src/ui/components/header.css')
 const buttonCss = readFrontend('src/ui/components/button.css')
 const legacyStylesCss = readFrontend('src/styles.css')
-const mobileInventoryCss = readFrontend('src/pages/mobileVoorraad.css')
-const mobileArticleCss = readFrontend('src/features/articles/mobileArticleDetail.css')
 const mainSource = readFrontend('src/main.jsx')
-const greenWallpaper = readFrontend('public/inhuis-green-wallpaper.svg')
 
 assert.match(tokensCss, /--color-ui-primary:\s*#28A99E/i)
 assert.match(tokensCss, /--color-ui-primary-text:\s*#FFFFFF/i)
@@ -30,30 +27,19 @@ assert.match(headerCss, /color:\s*var\(--color-ui-primary-text\)/)
 assert.match(buttonCss, /background:\s*var\(--color-ui-primary\)/)
 assert.match(buttonCss, /color:\s*var\(--color-ui-primary-text\)/)
 assert.match(legacyStylesCss, /--rz-accent:\s*var\(--color-ui-primary\)/)
-assert.match(mobileInventoryCss, /--rz-mobile-proposal-green:\s*#006b3c/i)
-assert.match(mobileInventoryCss, /\.rz-mobile-inventory-summary[\s\S]*color:\s*var\(--rz-mobile-proposal-muted\)/)
-assert.match(mobileInventoryCss, /\.rz-mobile-inventory-add[\s\S]*background:\s*var\(--rz-mobile-proposal-green\)\s*!important;[\s\S]*color:\s*#ffffff\s*!important/i)
-assert.match(mobileInventoryCss, /\.rz-mobile-inventory-nav-item\.is-active[\s\S]*color:\s*var\(--rz-mobile-proposal-green\)/)
-assert.match(mobileArticleCss, /\.rz-mobile-article-action-row--primary[\s\S]*background:\s*var\(--color-ui-primary\);[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-header\s*\{[\s\S]*background:\s*var\(--color-ui-primary\)/)
 assert.match(themeCss, /\.rz-header \.rz-header-title,[\s\S]*\.rz-header \.rz-header-subtitle[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-header \.rz-header-logo img[\s\S]*filter:\s*none/)
 assert.match(themeCss, /button\.rz-button-primary,[\s\S]*background:\s*var\(--color-ui-primary\);[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-table thead tr\.rz-table-header th,[\s\S]*background:\s*var\(--color-ui-primary\);[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-table-header \.rz-sort-button,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
-assert.doesNotMatch(themeCss, /\.rz-mobile-inventory-screen \.rz-mobile-inventory-summary/)
-assert.match(themeCss, /\/inhuis-green-wallpaper\.svg/)
-assert.match(themeCss, /\.rz-mobile-article-detail-row,[\s\S]*padding-left:\s*var\(--space-mobile-field-inline\)/)
-assert.match(greenWallpaper, /lichtgroene gevlekte achtergrond/i)
-assert.match(greenWallpaper, /#EEF7F0/i)
 
 assert.match(mainSource, /import "\.\/ui\/theme\.css";/)
 assert.ok(mainSource.indexOf('./ui/theme.css') > mainSource.indexOf('./styles.css'))
 assert.ok(mainSource.indexOf('./ui/theme.css') > mainSource.indexOf('./ui/typography.css'))
 
-// PO baseline 2026-09-20 remains the default for existing Inhuis surfaces.
-// PO baseline 2026-09-22 explicitly exempts the migrated mobile Voorraad pilot,
-// which uses #006B3C with white foregrounds while preserving the shared tokens.
+// Global color contract only. Migrated mobile screen visuals are governed by
+// mobile-ui-conformity.contract.mjs so legacy mobile baselines cannot block redesigns.
 assert.match(tokensCss, /--color-ui-primary:\s*#28A99E/i)
 assert.match(tokensCss, /--color-ui-primary-text:\s*#FFFFFF/i)
 

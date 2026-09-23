@@ -128,6 +128,22 @@ Bij database-/startupinfrastructuur horen daarnaast expliciet:
 
 Bij wijzigingen aan de Kassabon → Voorraad → Bijna-op-keten of de ketenrunner hoort daarnaast de canonical 12/12 PostgreSQL-ketentest groen te zijn.
 
+## Finale patchbump zonder dubbele zware regressie
+
+De normale versievolgorde blijft: implementatie stabiliseren, daarna de
+gesynchroniseerde patchversie vastleggen vóór Ready. Wanneer die laatste push
+aantoonbaar uitsluitend de officiële zes versiebestanden wijzigt, gebruikt CI
+`scripts/ci/version_only_carry_forward.py` om de vorige groene kandidaat als
+bronbewijs te controleren.
+
+De zware shared F7-02-clusters en PR253 mogen dan hun vorige groene resultaat
+hergebruiken. Dit is geen algemene SHA-bypass: dezelfde PR/base/branch zijn
+verplicht, de commit moet een directe parent/child-relatie hebben, de patch moet
+exact +1 zijn en iedere niet-versiewijziging schakelt carry-forward uit.
+
+Release/version checks draaien opnieuw op de definitieve SHA. Als de volledige
+PR als L classificeert, draait F7 Full daarna eveneens op die definitieve SHA.
+
 ## F7 Full Regression: shared PR-CI versus parallel eindkandidaat
 
 De normale PR-CI blijft de vijf shared-stackclusters `TP-CI-02/03/04/05/07` gebruiken om Docker-builds en voorbereiding binnen een gewone wijzigingscyclus te delen.

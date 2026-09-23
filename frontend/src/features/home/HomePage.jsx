@@ -15,8 +15,16 @@ import {
 import { fetchHouseholdOnboarding, readHouseholdOnboarding } from '../onboarding/onboardingState.js'
 import { PLATFORM_NAVIGATION_GROUPS, PLATFORM_NAVIGATION_ITEMS } from '../platform/platformNavigation.js'
 import { buildHomeNavigation } from './homeNavigation.js'
+import { recordRecentAction } from './recentActionUsage.js'
 import useFeatureAvailability from '../platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../platform/actionButtonAvailability.js'
+
+const TILE_ROUTES = {
+  meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
+  productgroepen: '/productgroepen', kassabonnen: '/kassabonnen', kassa: '/kassa',
+  spaartegoeden: '/spaartegoeden', 'externe-databases': '/externe-databases', catalogus: '/catalogus',
+  instellingen: '/instellingen', locaties: '/instellingen/locaties', admin: '/admin', superuser: '/superuser',
+}
 
 function visibilityFromContext(context) {
   return {
@@ -25,13 +33,6 @@ function visibilityFromContext(context) {
     isPlatformSuperuser: isPlatformSuperuserFromContext(context),
     canManageLocations: canCurrentUserPerform('locations.manage', context),
   }
-}
-
-const TILE_ROUTES = {
-  meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
-  productgroepen: '/productgroepen', kassabonnen: '/kassabonnen', kassa: '/kassa',
-  spaartegoeden: '/spaartegoeden', 'externe-databases': '/externe-databases', catalogus: '/catalogus',
-  instellingen: '/instellingen', locaties: '/instellingen/locaties', admin: '/admin', superuser: '/superuser',
 }
 
 export default function HomePage() {
@@ -135,7 +136,9 @@ export default function HomePage() {
 
   function openTile(tile) {
     const route = TILE_ROUTES[tile.key]
-    if (tile.clickable && route) navigate(route)
+    if (!tile.clickable || !route) return
+    recordRecentAction(tile.key, context)
+    navigate(route)
   }
 
   function renderTile(tile) {

@@ -40,9 +40,6 @@ assert.equal(formatAlmostOutQuantity(2.5), '2.5')
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const responsiveSource = readFileSync(new URL('../src/features/almostOut/AlmostOutResponsive.jsx', import.meta.url), 'utf8')
 const mobileSource = readFileSync(new URL('../src/features/almostOut/MobileAlmostOut.jsx', import.meta.url), 'utf8')
-const inventoryCss = readFileSync(new URL('../src/pages/mobileVoorraad.css', import.meta.url), 'utf8')
-const typographyCss = readFileSync(new URL('../src/ui/typography.css', import.meta.url), 'utf8')
-const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 
 assert.match(routerSource, /import AlmostOutResponsive from '\.\.\/\.\.\/features\/almostOut\/AlmostOutResponsive\.jsx'/)
 assert.match(routerSource, /path: '\/bijna-op'.*<AlmostOutResponsive \/>/)
@@ -68,10 +65,5 @@ assert.match(mobileSource, /\/voorraad\/\$\{encodeURIComponent\(row\.detailId\)\
 assert.doesNotMatch(mobileSource, /Alles naar Winkelen/i)
 assert.doesNotMatch(mobileSource, /Naar Winkelen/i)
 
-assert.match(inventoryCss, /rz-mobile-inventory-toolbar/)
-assert.match(inventoryCss, /rz-mobile-inventory-card/)
-assert.match(inventoryCss, /rz-mobile-inventory-quantity/)
-assert.match(typographyCss, /button,[\s\S]*input,[\s\S]*select,[\s\S]*textarea,[\s\S]*option[\s\S]*font-size: var\(--font-size-ui-body\) !important;/)
-assert.match(appSource, /data-testid="app-feedback-bar-scroll-clearance"/)
 
 console.log('MOBILE_ALMOST_OUT_CONTRACT_GREEN')

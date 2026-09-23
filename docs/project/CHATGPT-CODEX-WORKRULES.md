@@ -18,7 +18,7 @@ Deze regels vullen `AGENTS.md` en `docs/project/DEVELOPMENT-TEST-RELEASE.md` aan
 7. ChatGPT/Codex meldt aan de PO wanneer er open branches of PR's bestaan met relevante wijzigingen die nog niet in `main` zitten, voor zover die van invloed kunnen zijn op de actuele taak, mergevolgorde of release.
 8. Een PR blijft tijdens ontwikkeling standaard Draft. Ready for review betekent dat de kandidaat inhoudelijk compleet is en dat er geen geplande code- of versiewijzigingen meer openstaan.
 9. Vóór Ready worden base-SHA, definitieve head-SHA, scope, versie en de vereiste normale/preflightchecks gecontroleerd.
-10. Een commit op de kandidaat na een definitieve exact-candidate/F7-proof maakt die proof ongeldig. De nieuwe SHA moet opnieuw de toepasselijke gates doorlopen; indien nodig gaat de PR terug naar Draft.
+10. Een commit op de kandidaat na een definitieve exact-candidate/F7-proof maakt die proof ongeldig. De nieuwe SHA moet opnieuw de toepasselijke gates doorlopen; indien nodig gaat de PR terug naar Draft. Een canonieke finale version-only commit mag uitsluitend vóór die definitieve F7-proof reeds groen normaal/preflight functioneel bewijs carry-forwarden volgens `docs/project/CHANGE-RISK-AND-TEST-LEVELS.md`; F7 Full blijft altijd aan de uiteindelijke exacte kandidaat-SHA gebonden.
 
 ## 3. Versies en efficiënte CI-volgorde
 
@@ -26,7 +26,7 @@ Deze regels vullen `AGENTS.md` en `docs/project/DEVELOPMENT-TEST-RELEASE.md` aan
 12. Bij runtime-/release-relevante wijzigingen verhoogt ChatGPT/Codex de patchversie als onderdeel van het gereedmaken van de definitieve kandidaat vóór Ready. Hiervoor is binnen de opgedragen taak geen aparte tweede bevestiging nodig.
 13. Een versiebump gebeurt niet voor uitsluitend documentatie-, analyse- of andere aantoonbaar niet-runtime/release-relevante wijzigingen wanneer de bestaande releasepolicy geen bump vereist.
 14. De normale volgorde is: Draft → implementatie → gerichte/fast checks → definitieve patchversie en versiesync → preflight groen → Ready → exact-candidate Full Regression indien vereist → PO-acceptatie → expliciete PO-merge-GO → merge door de PO of door ChatGPT/Codex namens de PO.
-15. Zware regressieruns worden niet bewust op tussen-SHA's gestart. Goedkope preflightcontroles moeten ontbrekende versie- of kandidaatvoorwaarden zo vroeg mogelijk blokkeren.
+15. Zware regressieruns worden niet bewust op tussen-SHA's gestart. Goedkope preflightcontroles moeten ontbrekende versie- of kandidaatvoorwaarden zo vroeg mogelijk blokkeren. Wanneer de allerlaatste wijziging uitsluitend de canonieke gesynchroniseerde patchversiebump is, mag daarvoor reeds groen zwaar preflightbewijs fail-closed worden hergebruikt conform de risicopolicy; versie-/releasechecks en eventueel vereiste F7 Full draaien wel op de definitieve SHA.
 16. Tests, gates en contracten worden nooit versoepeld, omzeild of aangepast alleen om een kandidaat groen te laten worden. Eerst wordt de oorzaak vastgesteld en het geldende contract gecontroleerd.
 
 ## 4. Testen, Docker en PO-gebruik

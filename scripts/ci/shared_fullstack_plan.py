@@ -17,6 +17,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from version_only_carry_forward import canonical_version_only_delta, load_policy, prior_success_run
+
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, text=True, capture_output=True, check=False)
@@ -107,6 +109,40 @@ def main() -> int:
     pull_request = event.get("pull_request") or {}
     base_sha = str((pull_request.get("base") or {}).get("sha") or "").strip()
     head_sha = str((pull_request.get("head") or {}).get("sha") or event.get("after") or "").strip()
+    previous_sha = str(event.get("before") or "").strip()
+    if previous_sha and head_sha:
+        try:
+            policy = load_policy()
+            carry = canonical_version_only_delta(Path(__file__).resolve().parents[2], policy, previous_sha, head_sha)
+            workflow_ref = os.getenv("GITHUB_WORKFLOW_REF", "")
+            repo = os.getenv("GITHUB_REPOSITORY", "")
+            token = os.getenv("GITHUB_TOKEN", "")
+            marker = f"{repo}/"
+            workflow_file = ""
+            if marker and marker in workflow_ref:
+                workflow_file = workflow_ref.split(marker, 1)[1].split("@", 1)[0]
+            branch = str((pull_request.get("head") or {}).get("ref") or "").strip()
+            pr_number = str(pull_request.get("number") or event.get("number") or "").strip()
+            prior = None
+            if carry.get("safe") and repo and token and workflow_file:
+                prior = prior_success_run(
+                    repo,
+                    workflow_file,
+                    previous_sha,
+                    pr_number,
+                    base_sha,
+                    branch,
+                    token,
+                )
+        except Exception as exc:
+            print(f"SHARED_FULLSTACK_CARRY_FORWARD_FAIL_OPEN={type(exc).__name__}:{exc}")
+        else:
+            if carry.get("safe") and prior:
+                print(f"SHARED_FULLSTACK_CARRY_FORWARD_SOURCE={previous_sha}")
+                print(f"SHARED_FULLSTACK_CARRY_FORWARD_RUN={prior.get('id')}")
+                return _emit_plan({name: False for name in authorities}, "canonical_version_only_carry_forward")
+            if carry.get("safe"):
+                print("SHARED_FULLSTACK_CARRY_FORWARD_FAIL_OPEN=prior_green_evidence_missing")
     if not base_sha or not head_sha or base_sha == head_sha:
         return _fail_open(authorities, "candidate_base_head_unavailable")
 

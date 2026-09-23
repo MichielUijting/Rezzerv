@@ -76,13 +76,54 @@ bestaande parallelle standalone uitvoering, exact-SHA reuse, attach van reeds
 lopende geldige evidence en dispatch van alleen ontbrekende authorities blijven
 ongewijzigd.
 
+## Finale version-only carry-forward
+
+Een finale patchversiebump verandert op zichzelf geen functioneel applicatiegedrag.
+Daarom mag reeds groen zwaar functioneel bewijs worden hergebruikt wanneer de
+laatste PR-push aantoonbaar een **canonieke version-only commit** is.
+
+Dit is uitsluitend toegestaan als automatisch en fail-closed wordt bewezen dat:
+
+- de nieuwe SHA de directe child is van de reeds geteste bron-SHA;
+- exact de zes canonieke versiebestanden uit `version_only_bundle.files` wijzigen;
+- in JSON/packagebestanden uitsluitend het veld `version` verandert;
+- bron én kandidaat intern volledig versiesynchroon zijn;
+- major/minor gelijk blijven en patch exact met één wordt verhoogd;
+- hergebruikt workflowbewijs groen is en hoort bij dezelfde PR, dezelfde base-SHA
+  en dezelfde taakbranch.
+
+De carry-forward verandert **niet** de definitieve S/M/L-classificatie van de
+volledige PR-delta. De complete kandidaat blijft dus bijvoorbeeld M of L wanneer
+de inhoudelijke PR dat vereist. Alleen de onnodige heruitvoering van reeds groen
+zwaar bewijs wordt vermeden.
+
+Actueel herbruikbaar zwaar bewijs:
+
+- door F7-02 geselecteerde shared full-stackclusters;
+- PR253 full frontend regression.
+
+Op de nieuwe SHA blijven minimaal opnieuw draaien:
+
+- F7-RISK classificatie;
+- release-versiesynchronisatie;
+- release-package/buildvalidatie;
+- goedkope governance/preflightchecks die hun eigen actuele kandidaatbewijs nodig
+  hebben;
+- **F7 Full Regression exact-candidate** wanneer het definitieve risiconiveau L is.
+
+F7 Full wordt dus bewust **niet** over een version-only SHA-grens
+doorgeschoven. De uiteindelijke zware mergekandidaat blijft aan één exacte SHA
+gebonden. Ontbreekt enig carry-forward-bewijs of is de incrementele delta niet
+exact canoniek, dan wordt fail-closed normaal opnieuw getest.
+
 ## Fail-closed regels
 
 - ontbrekende voorlopige marker => L;
 - onbekend pad => L;
 - definitief niveau = max(voorlopig, delta);
 - handmatige Full Regression => L;
-- wijziging van de kandidaat-SHA maakt eerder exact-candidate bewijs ongeldig;
+- wijziging van de kandidaat-SHA maakt eerder **F7 Full exact-candidate** bewijs ongeldig;
+- normaal/preflight functioneel bewijs mag uitsluitend volgens de hierboven beschreven canonieke version-only carry-forward worden hergebruikt;
 - risicoclassificatie geeft nooit merge- of release-toestemming.
 
 ## Onafhankelijke CI blijft gelden

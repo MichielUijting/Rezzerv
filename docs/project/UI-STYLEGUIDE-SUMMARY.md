@@ -1,11 +1,11 @@
 # Inhuis UI-styleguide
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
-Laatst inhoudelijk vastgesteld door de PO: 22 september 2026.
+Laatst inhoudelijk vastgesteld door de PO: 23 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
-De actuele mobiele visuele richting is op **22 september 2026** door de PO herijkt op basis van het ontwerpvoorstel `Inhuis – Ontwerpdocument`. **Voorraad** is de eerste concrete implementatie van die nieuwe richting. Eerdere visuele borging van de oude mobiele Voorraadvariant geldt niet meer als regressiecontract wanneer zij met dit nieuwe PO-besluit conflicteert.
+De mobiele Voorraadbaseline is op **22 september 2026** ingezet en op **23 september 2026** door de PO verder verfijnd. De actuele variant combineert de rustige vlakke lijststructuur met de lichtgroene gevlekte Inhuis-achtergrond, een gekleurde header in dezelfde primaire kleur als desktop en een gebruikersspecifieke onderste actiebalk. Eerdere Voorraad-borging geldt niet meer wanneer zij met dit nieuwere PO-besluit conflicteert.
 
 Het bestaande **Voorraad-artikeldetail** blijft functioneel ongewijzigd totdat het afzonderlijk naar deze nieuwe mobiele visuele richting wordt gemigreerd. Het is daardoor tijdelijk geen visuele baseline voor nieuwe mobiele lijstschermen.
 
@@ -17,17 +17,17 @@ Historische besluiten die hierin zijn opgenomen:
 
 Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele grammatica uit het door de PO aangeleverde ontwerpvoorstel:
 
-- een rustige, hoofdzakelijk **witte/lichtgrijze** app-surface; de eerdere gevlekte wallpaper, blur en zwevende glassmorphism-cards zijn voor de nieuwe Voorraadvariant vervallen;
-- een compacte **witte bovenbalk** met de schermtitel centraal, zonder de desktopachtige huishouden-/userboxpresentatie in deze module-root;
+- een rustige **lichtgroene gevlekte Inhuis-achtergrond** via de bestaande groene wallpaper; blur en zwevende glassmorphism-cards blijven vervallen;
+- een compacte header in dezelfde primaire gekleurde surface als de desktopheader, met **Voorraad links** en het **witte Inhuis-logo rechts**, zonder huishouden-/userboxpresentatie in deze module-root;
 - een donkere mobiele primaire groentint **`#006B3C`** voor actieve navigatie en primaire mobiele acties; de bestaande desktop-/tabelkleur `#28A99E` blijft buiten deze mobiele pilot ongewijzigd;
 - zoeken en filters staan compact boven de inhoud, zonder een grote omhullende filtercard;
 - de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - geen losse verhoogde card per voorraadartikel en geen decoratieve schaduwen als hoofdstructuur;
-- een vaste witte onderste navigatiebalk met vijf compacte tabitems. De Voorraadpilot gebruikt uitsluitend bestaande werkende routes: **Meldingen**, **Voorraad**, **Bijna op**, **Winkelen** en **Meer**;
+- een vaste witte onderste actiebalk met maximaal vier door de **huidige gebruiker recent gebruikte en nog beschikbare acties**, aangevuld met beschikbare acties wanneer nog onvoldoende gebruikshistorie bestaat, plus altijd **Meer** als laatste item;
 - de bestaande actie **Incidentele aankoop** blijft functioneel beschikbaar, maar staat als compacte groene actie bij de lijstcontext en is niet langer een grote sticky knop boven een aparte meldingenbalk;
 - alle bestaande data-, autorisatie-, huishoudisolatie-, detailroute- en filterfunctionaliteit blijft leidend. Dit PO-besluit wijzigt de presentatie, niet het domeinmodel.
 
-Andere mobiele kernschermen worden niet stilzwijgend meegewijzigd. Totdat zij expliciet worden gemigreerd mogen zij tijdelijk nog de eerdere visuele shell gebruiken. Nieuwe of aangepaste tests mogen de oude mobiele Voorraad-wallpaper, blur, individuele schaduwcards of sticky CTA niet meer afdwingen.
+Andere mobiele kernschermen worden niet stilzwijgend meegewijzigd. Totdat zij expliciet worden gemigreerd mogen zij tijdelijk nog de eerdere visuele shell gebruiken. Nieuwe of aangepaste tests borgen de actuele groene wallpaper, maar mogen blur, individuele zwevende schaduwcards of de oude sticky CTA niet opnieuw afdwingen.
 
 ## Ontwerpprincipes
 
@@ -153,18 +153,19 @@ De bestaande generieke/desktopheader blijft:
 - `--color-ui-primary` (`#28A99E`) met witte titel/iconen;
 - gebruikerszichtbaar merk **Inhuis**; interne technische naamgeving `Rezzerv` wordt niet als gebruikersmerk getoond.
 
-Voor de nieuwe mobiele modulebaseline, te beginnen met **Voorraad**, geldt bewust een ander patroon:
-- compacte witte bovenbalk;
-- schermtitel gecentreerd;
-- geen desktopachtige huishoudenregel, userbox of groot merkteken in de module-root;
-- de browser-/native shell en onderste navigatie leveren de appcontext;
+Voor de mobiele Voorraadbaseline geldt:
+- compacte gekleurde header op dezelfde primaire surface als desktop;
+- schermtitel **Voorraad** links;
+- wit Inhuis-logo rechts;
+- geen desktopachtige huishoudenregel of userbox in de module-root;
+- de browser-/native shell en onderste actiebalk leveren de overige appcontext;
 - detail- en nog niet gemigreerde schermen mogen tijdelijk de bestaande header houden totdat zij expliciet worden omgezet.
 
 ## Mobiele achtergrond en surfaces
 
-Voor de nieuwe mobiele Voorraadbaseline:
-- pagina-achtergrond is rustig wit/lichtgrijs;
-- de oude `/inhuis-green-wallpaper.svg`- en orange-wallpaperpresentatie is **geen** Voorraadbaseline meer;
+Voor de mobiele Voorraadbaseline:
+- pagina-achtergrond gebruikt de bestaande lichtgroene gevlekte `/inhuis-green-wallpaper.svg` op een lichte groene basis;
+- de oranje wallpaper is geen Voorraadbaseline;
 - blur/glassmorphism is niet toegestaan als hoofdstructuur;
 - zoeken en filters staan compact op de pagina zonder verhoogde omhullende card;
 - voorraadartikelen staan in één witte lijstsurface met subtiele scheidingslijnen;
@@ -180,15 +181,15 @@ Het nog niet gemigreerde **Voorraad-artikeldetail** mag tijdelijk de oudere groe
 **Voorraad** is vanaf 22 september 2026 de concrete visuele referentie voor nieuwe mobiele module-/lijstschermen.
 
 Vaste kenmerken:
-- compacte witte bovenbalk met gecentreerde schermtitel;
-- zoekveld als eerste ingang, gevolgd door compacte locatie-/artikelgroep-/sorteerfilters;
+- compacte gekleurde header met **Voorraad links** en het witte Inhuis-logo rechts;
+- zoekveld als eerste ingang, gevolgd door compacte locatie-/artikelgroep-/sorteerfilters; artikelsortering biedt **Naam A–Z** en **Naam Z–A**, terwijl sortering op aantal niet wordt aangeboden;
 - interactieve zoek-/select-/actievelden hebben minimaal circa `44px` touchhoogte;
 - aantalscontext en de bestaande actie **Incidentele aankoop** staan compact boven de lijst;
 - één witte lijstcontainer met subtiele horizontale scheidingen;
 - iedere rij toont waar beschikbaar een representatieve productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - de hele rij is het detailklikdoel;
 - geen afzonderlijke schaduwcard, wallpaper, blur of sticky schermbrede CTA per artikel;
-- vaste witte onderste hoofdnavigatie met **Meldingen**, **Voorraad**, **Bijna op**, **Winkelen** en **Meer**; actieve module gebruikt `#006B3C`;
+- vaste witte onderste actiebalk met maximaal vier recent gebruikte, voor de huidige gebruiker nog beschikbare acties en altijd **Meer** als laatste item; actieve Voorraadactie gebruikt `#006B3C`;
 - onderaan wordt altijd ruimte gereserveerd voor de navigatie en safe-area.
 
 ### Referentie B — mobiel detailscherm: Voorraad-artikeldetail (tijdelijk legacy-visueel)
@@ -459,6 +460,19 @@ De CI-gate `UI styleguide governance validation` controleert fail-closed:
 - gewijzigde UI-paden ten opzichte van de PR-base;
 - verplichte styleguide-update voor styleguide-dragende wijzigingen;
 - expliciete reviewverklaring voor overige UI-wijzigingen.
+
+## Mobiele UI-conformiteit tijdens de redesign
+
+De mobiele redesign gebruikt vanaf 23 september 2026 een gescheiden testmodel:
+
+- functionele mobiele contracttests blijven routes, data, API-gebruik, autorisatie, domeinacties en noodzakelijke interacties bewaken;
+- historische visuele assertions van nog niet gemigreerde mobiele schermen zijn geen actuele UI-authority en mogen een nieuw schermontwerp niet blokkeren;
+- de actuele visuele authority voor gemigreerde mobiele modulehoofschermen staat in `frontend/tests/mobile-ui-conformity.contract.mjs`;
+- die conformiteitstest bevat uitsluitend schermen waarvoor de PO de nieuwe baseline expliciet heeft vastgesteld;
+- bij iedere volgende mobiele schermmigratie wordt dezelfde conformiteitstest met de nieuwe schermbaseline uitgebreid en worden eventuele resterende legacy-visuele assertions voor dat scherm verwijderd;
+- functionele regressiedekking wordt daarbij niet verlaagd of omzeild: alleen de vervangen visuele baseline verhuist naar de nieuwe authority.
+
+Op dit moment is **Voorraad** het enige scherm in de nieuwe mobiele UI-conformiteitsset. **Bijna op**, **Boodschappenlijst/Winkelen** en **Voorraad-artikeldetail** behouden hun functionele regressietests, maar hebben totdat hun nieuwe ontwerp expliciet is vastgesteld geen blokkerende legacy-visuele baseline.
 
 ## Historische styleguidedocumenten
 
