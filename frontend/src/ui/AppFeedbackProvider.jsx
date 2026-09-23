@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import Button from './Button'
+import { isTransientFeedback, transientFeedbackDuration } from './feedbackPolicy.js'
 
 const AppFeedbackContext = createContext(null)
 
@@ -125,6 +126,13 @@ export function AppFeedbackProvider({ children }) {
     setFeedback({ ...normalized, signature })
   }, [])
 
+  useEffect(() => {
+    const duration = transientFeedbackDuration(feedback)
+    if (!feedback || duration <= 0) return undefined
+    const timer = window.setTimeout(dismissFeedback, duration)
+    return () => window.clearTimeout(timer)
+  }, [feedback, dismissFeedback])
+
   const value = useMemo(() => ({
     feedback,
     showFeedback,
@@ -223,6 +231,7 @@ function AppFeedbackDialog({
     onPrimaryAction: hasPrimaryAction,
   } = feedback
 
+  const transient = isTransientFeedback(feedback)
   const canDismissWithOk = dismissMode !== 'blocked'
   const canDismissOutside = dismissMode === 'outside-or-ok'
 
@@ -261,8 +270,12 @@ function AppFeedbackDialog({
         aria-labelledby={`${testId}-title`}
         className={classNameForVariant(variant)}
         data-testid={testId}
+        data-feedback-transient={transient ? 'true' : 'false'}
         onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation()
+          if (transient) dismiss()
+        }}
         style={{
           width: 'min(560px, 100%)',
           maxHeight: 'calc(100vh - 48px)',

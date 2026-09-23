@@ -202,6 +202,38 @@ a.rz-button-secondary[role="button"] {
   }
 }
 
+/* On mobile passive AppFeedback is a real overlay. It never occupies layout
+   space; tapping the message or anywhere else dismisses it, while the provider
+   also applies the max-3-second transient timeout. */
+@media (max-width: 720px) {
+  .rz-app-feedback-bar-base,
+  [data-testid="app-feedback-bar-scroll-clearance"] {
+    display: none !important;
+  }
+
+  :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 0 10px calc(10px + env(safe-area-inset-bottom)) !important;
+    display: flex !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    background: transparent !important;
+  }
+
+  :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) > [role="dialog"] {
+    width: min(620px, 100%) !important;
+    height: auto !important;
+    min-height: 48px !important;
+    max-height: none !important;
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    background: var(--color-mobile-ui-primary) !important;
+    box-shadow: var(--elevation-2) !important;
+  }
+}
+
 /* Mobile Voorraad (PO baseline 2026-09-22) replaces the legacy permanent
    bottom feedback base with its own five-item navigation. Keep passive
    AppFeedback visible directly above that navigation instead of covering it. */
@@ -211,6 +243,6 @@ body:has([data-testid="mobile-inventory-page"]) [data-testid="app-feedback-bar-s
 }
 
 body:has([data-testid="mobile-inventory-page"]) :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
-  inset: auto 0 calc(60px + env(safe-area-inset-bottom)) 0 !important;
+  padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important;
 }
 
