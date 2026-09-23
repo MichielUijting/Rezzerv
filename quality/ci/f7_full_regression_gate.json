@@ -266,5 +266,6 @@
     ],
     "required_authority_count_for_L": 21,
     "preserve_exact_sha_reuse": true
-  }
+  },
+  "coverage_metadata_grace_seconds": 120
 }

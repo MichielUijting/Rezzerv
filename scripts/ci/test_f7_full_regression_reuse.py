@@ -60,6 +60,29 @@ assert module.run_has_required_coverage(ROW, full_jobs)
 assert not module.run_has_required_coverage(ROW, partial_jobs)
 assert module.run_has_required_coverage({**ROW, "reuse_required_success_steps": []}, [])
 
+metadata_lag_jobs = [{"steps": [
+    {"name": "Run A", "status": "completed", "conclusion": "success"},
+    {"name": "Run B", "status": "in_progress", "conclusion": None},
+    {"name": "Enforce", "status": "pending", "conclusion": None},
+]}]
+metadata_missing_jobs = [{"steps": [
+    {"name": "Run A", "status": "completed", "conclusion": "success"},
+]}]
+metadata_bad_jobs = [{"steps": [
+    {"name": "Run A", "status": "completed", "conclusion": "success"},
+    {"name": "Run B", "status": "completed", "conclusion": "skipped"},
+    {"name": "Enforce", "status": "completed", "conclusion": "success"},
+]}]
+assert module.required_coverage_state(ROW, full_jobs) == "success"
+assert module.required_coverage_state(ROW, metadata_lag_jobs) == "pending"
+assert module.required_coverage_state(ROW, metadata_missing_jobs) == "pending"
+assert module.required_coverage_state(ROW, metadata_bad_jobs) == "invalid"
+assert module.completed_coverage_action(ROW, metadata_lag_jobs, 0, 120) == "wait"
+assert module.completed_coverage_action(ROW, metadata_lag_jobs, 119, 120) == "wait"
+assert module.completed_coverage_action(ROW, metadata_lag_jobs, 120, 120) == "fail"
+assert module.completed_coverage_action(ROW, metadata_bad_jobs, 0, 120) == "fail"
+assert module.completed_coverage_action(ROW, full_jobs, 999, 120) == "accept"
+
 inflight_jobs = [{"steps": [
     {"name": "Run A", "status": "completed", "conclusion": "success"},
     {"name": "Run B", "status": "in_progress", "conclusion": None},
