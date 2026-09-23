@@ -3,6 +3,26 @@ import Button from './Button'
 import { isTransientFeedback, transientFeedbackDuration } from './feedbackPolicy.js'
 
 const AppFeedbackContext = createContext(null)
+const MOBILE_FEEDBACK_MEDIA_QUERY = '(max-width: 720px)'
+
+function useMobileFeedbackViewport() {
+  const [isMobileViewport, setIsMobileViewport] = useState(() => (
+    typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia(MOBILE_FEEDBACK_MEDIA_QUERY).matches
+  ))
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
+    const media = window.matchMedia(MOBILE_FEEDBACK_MEDIA_QUERY)
+    const sync = () => setIsMobileViewport(media.matches)
+    sync()
+    media.addEventListener?.('change', sync)
+    return () => media.removeEventListener?.('change', sync)
+  }, [])
+
+  return isMobileViewport
+}
 
 function normalizeVariant(variant) {
   const value = String(variant || '').trim().toLowerCase()
@@ -82,6 +102,7 @@ export function AppFeedbackProvider({ children }) {
   const [actionError, setActionError] = useState('')
   const [isActionPending, setIsActionPending] = useState(false)
   const lastFeedbackRef = useRef({ signature: '', at: 0 })
+  const mobileFeedbackViewport = useMobileFeedbackViewport()
 
   const dismissFeedback = useCallback(() => {
     setFeedback(null)
@@ -127,11 +148,12 @@ export function AppFeedbackProvider({ children }) {
   }, [])
 
   useEffect(() => {
+    if (!mobileFeedbackViewport) return undefined
     const duration = transientFeedbackDuration(feedback)
     if (!feedback || duration <= 0) return undefined
     const timer = window.setTimeout(dismissFeedback, duration)
     return () => window.clearTimeout(timer)
-  }, [feedback, dismissFeedback])
+  }, [feedback, dismissFeedback, mobileFeedbackViewport])
 
   const value = useMemo(() => ({
     feedback,
@@ -181,6 +203,7 @@ export function AppFeedbackProvider({ children }) {
             setIsActionPending(false)
           }
         }}
+        mobileFeedbackViewport={mobileFeedbackViewport}
         onSecondaryAction={async () => {
           try {
             await feedback?.onSecondaryAction?.()
@@ -210,6 +233,7 @@ function AppFeedbackDialog({
   onFieldChange,
   onToggleTechnical,
   onDismiss,
+  mobileFeedbackViewport = false,
   onPrimaryAction,
   onSecondaryAction,
 }) {
@@ -231,7 +255,7 @@ function AppFeedbackDialog({
     onPrimaryAction: hasPrimaryAction,
   } = feedback
 
-  const transient = isTransientFeedback(feedback)
+  const mobileTransient = mobileFeedbackViewport && isTransientFeedback(feedback)
   const canDismissWithOk = dismissMode !== 'blocked'
   const canDismissOutside = dismissMode === 'outside-or-ok'
 
@@ -270,11 +294,11 @@ function AppFeedbackDialog({
         aria-labelledby={`${testId}-title`}
         className={classNameForVariant(variant)}
         data-testid={testId}
-        data-feedback-transient={transient ? 'true' : 'false'}
+        data-feedback-transient={mobileTransient ? 'true' : 'false'}
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.stopPropagation()
-          if (transient) dismiss()
+          if (mobileTransient) dismiss()
         }}
         style={{
           width: 'min(560px, 100%)',
@@ -466,7 +490,7 @@ function AppFeedbackDialog({
               {isActionPending ? 'Opslaan...' : primaryActionLabel}
             </Button>
           </div>
-        ) : canDismissWithOk && !transient ? (
+        ) : canDismissWithOk && !mobileTransient ? (
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <Button
               type="button"

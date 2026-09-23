@@ -49,10 +49,13 @@ assert.match(themeCss, /:not\(:has\(\.rz-input\)\)/)
 assert.match(themeCss, /@media \(max-width: 720px\)[\s\S]*height:\s*var\(--size-app-bar-mobile\)\s*!important/)
 
 assert.match(feedbackPolicySource, /MAX_TRANSIENT_FEEDBACK_MS\s*=\s*3000/)
-assert.match(providerSource, /transientFeedbackDuration\(feedback\)/)
+assert.match(providerSource, /MOBILE_FEEDBACK_MEDIA_QUERY\s*=\s*'\(max-width: 720px\)'/)
+assert.match(providerSource, /const mobileFeedbackViewport = useMobileFeedbackViewport\(\)/)
+assert.match(providerSource, /if \(!mobileFeedbackViewport\) return undefined[\s\S]*transientFeedbackDuration\(feedback\)/)
 assert.match(providerSource, /window\.setTimeout\(dismissFeedback, duration\)/)
-assert.match(providerSource, /if \(transient\) dismiss\(\)/)
-assert.match(providerSource, /canDismissWithOk && !transient/)
+assert.match(providerSource, /const mobileTransient = mobileFeedbackViewport && isTransientFeedback\(feedback\)/)
+assert.match(providerSource, /if \(mobileTransient\) dismiss\(\)/)
+assert.match(providerSource, /canDismissWithOk && !mobileTransient/)
 assert.match(
   themeCss,
   /@media \(max-width: 720px\)[\s\S]*app-feedback-bar-scroll-clearance[\s\S]*display:\s*none\s*!important;/,
