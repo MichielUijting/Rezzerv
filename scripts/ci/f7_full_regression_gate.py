@@ -84,6 +84,11 @@ def validate_config(cfg: dict) -> None:
     req(len(ids) == len(set(ids)), "workflow ids must be unique")
     req(cfg.get("required_workflow_count") == EXPECTED_WORKFLOW_COUNT, "required_workflow_count drift")
     req(cfg.get("full_frontend_workflow_id") in ids, "full frontend workflow is not registered")
+    metadata_grace = cfg.get("coverage_metadata_grace_seconds")
+    req(
+        isinstance(metadata_grace, int) and 20 <= metadata_grace <= 300,
+        "coverage_metadata_grace_seconds must be an integer between 20 and 300",
+    )
 
     profile = cfg.get("execution_profile")
     req(isinstance(profile, dict), "execution_profile missing")
@@ -212,11 +217,59 @@ def run_matches_reuse_identity(run: dict, ref: str, sha: str, pr_number: str, ba
     return True
 
 
-def run_has_required_coverage(row: dict, jobs: list[dict]) -> bool:
+def required_coverage_state(row: dict, jobs: list[dict]) -> str:
+    """Return success, pending or invalid for required workflow step evidence.
+
+    GitHub Actions may report a workflow run as completed/success before the
+    jobs endpoint has converged to the final step conclusions. Missing required
+    step metadata and recognized non-final states are therefore pending for a
+    bounded grace window; explicit skipped/bad/unknown terminal states are
+    invalid immediately.
+    """
     required = set(row.get("reuse_required_success_steps") or [])
     if not required:
-        return True
-    return required.issubset(successful_step_names(jobs))
+        return "success"
+
+    states: dict[str, tuple[str, str | None]] = {}
+    for job in jobs:
+        for step in job.get("steps") or []:
+            name = step.get("name")
+            if name:
+                states[str(name)] = (str(step.get("status") or ""), step.get("conclusion"))
+
+    if not required.issubset(states):
+        return "pending"
+
+    pending = False
+    for name in required:
+        status, conclusion = states[name]
+        if conclusion == "success":
+            continue
+        if conclusion in BAD or conclusion == "skipped":
+            return "invalid"
+        if status in {"queued", "in_progress", "pending"} or (status == "completed" and conclusion in {None, ""}):
+            pending = True
+            continue
+        return "invalid"
+    return "pending" if pending else "success"
+
+
+def completed_coverage_action(
+    row: dict,
+    jobs: list[dict],
+    elapsed_seconds: float,
+    grace_seconds: int,
+) -> str:
+    state = required_coverage_state(row, jobs)
+    if state == "success":
+        return "accept"
+    if state == "invalid":
+        return "fail"
+    return "wait" if elapsed_seconds < grace_seconds else "fail"
+
+
+def run_has_required_coverage(row: dict, jobs: list[dict]) -> bool:
+    return required_coverage_state(row, jobs) == "success"
 
 
 def run_has_planned_coverage(row: dict, jobs: list[dict]) -> bool:
@@ -231,13 +284,7 @@ def run_has_planned_coverage(row: dict, jobs: list[dict]) -> bool:
                 states[str(name)] = (str(step.get("status") or ""), step.get("conclusion"))
     if not required.issubset(states):
         return False
-    for name in required:
-        status, conclusion = states[name]
-        if conclusion in BAD or conclusion == "skipped":
-            return False
-        if status not in {"queued", "in_progress", "completed", "pending"}:
-            return False
-    return True
+    return required_coverage_state(row, jobs) != "invalid"
 
 
 def existing_reusable_run(
@@ -455,6 +502,8 @@ def cmd_wait(args: argparse.Namespace) -> int:
 
     deadline = time.monotonic() + int(cfg.get("timeout_seconds", 14400))
     poll = int(cfg.get("poll_seconds", 20))
+    coverage_grace = int(cfg["coverage_metadata_grace_seconds"])
+    coverage_pending_since: dict[str, float] = {}
 
     while len(resolved) < len(cfg["workflows"]):
         waiting: list[str] = []
@@ -477,7 +526,23 @@ def cmd_wait(args: argparse.Namespace) -> int:
                 if conclusion != "success":
                     die(f"{wid} attached run completed non-success: run={run_id} conclusion={conclusion}")
                 jobs = run_jobs(args.repo, run_id, token)
-                req(run_has_required_coverage(row, jobs), f"attached run coverage mismatch: {wid}")
+                state = required_coverage_state(row, jobs)
+                first_pending = coverage_pending_since.setdefault(wid, time.monotonic())
+                elapsed = time.monotonic() - first_pending
+                action = completed_coverage_action(row, jobs, elapsed, coverage_grace)
+                if action == "wait":
+                    print(
+                        f"F7_FULL_COVERAGE_METADATA_PENDING {wid} run={run_id} "
+                        f"state={state} elapsed={int(elapsed)} grace={coverage_grace}"
+                    )
+                    waiting.append(f"{wid}:coverage-metadata")
+                    continue
+                if action == "fail":
+                    die(
+                        f"attached run coverage mismatch: {wid} "
+                        f"state={state} grace={coverage_grace}s"
+                    )
+                coverage_pending_since.pop(wid, None)
                 resolved[wid] = {
                     "id": wid,
                     "workflow_file": row["workflow_file"],
@@ -509,8 +574,25 @@ def cmd_wait(args: argparse.Namespace) -> int:
                     die(f"{wid} completed non-success: run={run.get('id')} conclusion={conclusion}")
                 waiting.append(f"{wid}:no-conclusion")
                 continue
-            jobs = run_jobs(args.repo, int(run.get("id")), token)
-            req(run_has_required_coverage(row, jobs), f"dispatched run coverage mismatch: {wid}")
+            run_id = int(run.get("id"))
+            jobs = run_jobs(args.repo, run_id, token)
+            state = required_coverage_state(row, jobs)
+            first_pending = coverage_pending_since.setdefault(wid, time.monotonic())
+            elapsed = time.monotonic() - first_pending
+            action = completed_coverage_action(row, jobs, elapsed, coverage_grace)
+            if action == "wait":
+                print(
+                    f"F7_FULL_COVERAGE_METADATA_PENDING {wid} run={run_id} "
+                    f"state={state} elapsed={int(elapsed)} grace={coverage_grace}"
+                )
+                waiting.append(f"{wid}:coverage-metadata")
+                continue
+            if action == "fail":
+                die(
+                    f"dispatched run coverage mismatch: {wid} "
+                    f"state={state} grace={coverage_grace}s"
+                )
+            coverage_pending_since.pop(wid, None)
             resolved[wid] = {
                 "id": wid,
                 "workflow_file": row["workflow_file"],
