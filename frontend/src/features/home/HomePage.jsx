@@ -15,6 +15,7 @@ import {
 import { fetchHouseholdOnboarding, readHouseholdOnboarding } from '../onboarding/onboardingState.js'
 import { PLATFORM_NAVIGATION_GROUPS, PLATFORM_NAVIGATION_ITEMS } from '../platform/platformNavigation.js'
 import { buildHomeNavigation } from './homeNavigation.js'
+import { ACTION_ROUTE_BY_KEY, recordRecentAction } from './recentActionUsage.js'
 import useFeatureAvailability from '../platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../platform/actionButtonAvailability.js'
 
@@ -25,13 +26,6 @@ function visibilityFromContext(context) {
     isPlatformSuperuser: isPlatformSuperuserFromContext(context),
     canManageLocations: canCurrentUserPerform('locations.manage', context),
   }
-}
-
-const TILE_ROUTES = {
-  meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
-  productgroepen: '/productgroepen', kassabonnen: '/kassabonnen', kassa: '/kassa',
-  spaartegoeden: '/spaartegoeden', 'externe-databases': '/externe-databases', catalogus: '/catalogus',
-  instellingen: '/instellingen', locaties: '/instellingen/locaties', admin: '/admin', superuser: '/superuser',
 }
 
 export default function HomePage() {
@@ -134,12 +128,14 @@ export default function HomePage() {
   }
 
   function openTile(tile) {
-    const route = TILE_ROUTES[tile.key]
-    if (tile.clickable && route) navigate(route)
+    const route = ACTION_ROUTE_BY_KEY[tile.key]
+    if (!tile.clickable || !route) return
+    recordRecentAction(tile.key, context)
+    navigate(route)
   }
 
   function renderTile(tile) {
-    const route = TILE_ROUTES[tile.key]
+    const route = ACTION_ROUTE_BY_KEY[tile.key]
     const clickable = Boolean(tile.clickable && route)
     return (
       <div key={tile.key} className="rz-tile" data-testid={`home-tile-${tile.key}`}
