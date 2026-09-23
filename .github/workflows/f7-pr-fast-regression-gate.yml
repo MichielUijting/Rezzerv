@@ -148,7 +148,7 @@ jobs:
             --event f7-shared-planner-event.json \
             --manifest quality/ci/tp_ci_02_kassa_shared_stack_paths.json \
             | tee f7-shared-planner-candidate.log
-          grep -Fx 'SHARED_FULLSTACK_PLAN_REASON=synchronize_candidate' f7-shared-planner-candidate.log
+          grep -Fx 'SHARED_FULLSTACK_PLAN_REASON=synchronize_complete_candidate_no_previous_head' f7-shared-planner-candidate.log
           grep -Fx "SHARED_FULLSTACK_CANDIDATE_BASE=$BASE_SHA" f7-shared-planner-candidate.log
           grep -Fx "SHARED_FULLSTACK_CANDIDATE_HEAD=$CANDIDATE_SHA" f7-shared-planner-candidate.log
           echo 'F7_SHARED_PLANNER_CANDIDATE_SCOPE_GREEN'
