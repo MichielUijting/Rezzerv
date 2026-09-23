@@ -93,14 +93,15 @@ def _is_top_level_contract(path: str) -> bool:
 
 
 def classify_incremental_files(changed: list[str], workflow_patterns: list[str]) -> tuple[str, list[str], str]:
+    contracts = sorted(path for path in changed if _is_top_level_contract(path))
     full_matches = [
         path for path in changed
-        if any(_matches(path, pattern) for pattern in workflow_patterns)
+        if not _is_top_level_contract(path)
+        and any(_matches(path, pattern) for pattern in workflow_patterns)
     ]
     if full_matches:
         return "full", [], f"workflow_dependency_changed:{full_matches[0]}"
 
-    contracts = sorted(path for path in changed if _is_top_level_contract(path))
     unknown = [
         path for path in changed
         if path not in contracts
@@ -221,7 +222,7 @@ def cmd_workflow(args: argparse.Namespace) -> int:
 
 
 def cmd_self_test(_: argparse.Namespace) -> int:
-    patterns = ["frontend/src/**", "frontend/tests/e2e/**", "frontend/package.json"]
+    patterns = ["frontend/src/**", "frontend/tests/e2e/**", "frontend/tests/*.contract.mjs", "frontend/package.json"]
     assert classify_incremental_files(["frontend/tests/mobile-ui-conformity.contract.mjs"], patterns)[0] == "contracts"
     assert classify_incremental_files(["docs/note.md"], patterns)[0] == "reuse"
     assert classify_incremental_files(["frontend/src/App.jsx"], patterns)[0] == "full"
