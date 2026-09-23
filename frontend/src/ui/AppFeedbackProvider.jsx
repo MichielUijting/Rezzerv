@@ -466,7 +466,7 @@ function AppFeedbackDialog({
               {isActionPending ? 'Opslaan...' : primaryActionLabel}
             </Button>
           </div>
-        ) : canDismissWithOk ? (
+        ) : canDismissWithOk && !transient ? (
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <Button
               type="button"
