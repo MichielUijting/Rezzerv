@@ -882,9 +882,9 @@ function ReceiptUploadProgressOverlay({ uploadProgress }) {
           style={{ display: 'grid', gap: '8px' }}
         >
           <div style={{ height: '14px', borderRadius: '999px', overflow: 'hidden', background: '#EAECF0' }}>
-            <div style={{ width: `${percent}%`, height: '100%', background: '#166534', transition: 'width 220ms ease' }} />
+            <div style={{ width: `${percent}%`, height: '100%', background: '#005F6A', transition: 'width 220ms ease' }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#166534', fontSize: '14px', fontWeight: 700 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#005F6A', fontSize: '14px', fontWeight: 700 }}>
             <span>Voortgang</span>
             <span data-testid="kassa-upload-progress-percent">{percent}%</span>
           </div>
@@ -895,7 +895,7 @@ function ReceiptUploadProgressOverlay({ uploadProgress }) {
             const isComplete = index < currentStepIndex || (step.key === 'ready' && percent >= 100)
             const isCurrent = index === currentStepIndex && !isComplete
             return (
-              <li key={step.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', color: isComplete || isCurrent ? '#166534' : '#667085', fontWeight: isCurrent ? 700 : 400 }}>
+              <li key={step.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', color: isComplete || isCurrent ? '#005F6A' : '#667085', fontWeight: isCurrent ? 700 : 400 }}>
                 <span
                   aria-hidden="true"
                   style={{
@@ -906,8 +906,8 @@ function ReceiptUploadProgressOverlay({ uploadProgress }) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     flex: '0 0 22px',
-                    border: isComplete || isCurrent ? '1px solid #166534' : '1px solid #D0D5DD',
-                    background: isComplete ? '#166534' : isCurrent ? '#FFFFFF' : '#FFFFFF',
+                    border: isComplete || isCurrent ? '1px solid #005F6A' : '1px solid #D0D5DD',
+                    background: isComplete ? '#005F6A' : isCurrent ? '#FFFFFF' : '#FFFFFF',
                     color: isComplete ? '#FFFFFF' : '#667085',
                     fontSize: '13px',
                     fontWeight: 800,
@@ -916,7 +916,7 @@ function ReceiptUploadProgressOverlay({ uploadProgress }) {
                   {isComplete ? '✓' : index + 1}
                 </span>
                 <span>{step.label}</span>
-                {isCurrent ? <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#166534' }}>Bezig</span> : null}
+                {isCurrent ? <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#005F6A' }}>Bezig</span> : null}
               </li>
             )
           })}
@@ -1427,7 +1427,7 @@ async function saveLine(lineId, overrides = null) {
           ) : null}
         </div>
 
-        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={detailAmountsAccepted ? '#166534' : '#B54708'}>
+        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={detailAmountsAccepted ? '#005F6A' : '#B54708'}>
           {(activeTab) => {
             if (activeTab === 'Bonkop') {
               return (
@@ -1723,7 +1723,7 @@ function ReceiptSourceHubContent({
               aria-label="Sleep een .eml, .pdf of bonfoto naar Inhuis, klik om een bestand te kiezen of plak vanuit het klembord"
               data-testid="kassa-email-dropzone"
             >
-              <div style={{ fontSize: '22px', fontWeight: 700, color: '#166534' }}>Sleep hier je kassabon of e-mail</div>
+              <div style={{ fontSize: '22px', fontWeight: 700, color: '#005F6A' }}>Sleep hier je kassabon of e-mail</div>
               <div style={{ color: '#344054', fontSize: '15px', maxWidth: '640px' }}>
                 Ondersteund in deze landingsplaats: <strong>.eml</strong>, <strong>.pdf</strong>, <strong>.zip</strong>, <strong>.png</strong>, <strong>.jpg</strong>, <strong>.jpeg</strong> en <strong>.webp</strong>.
               </div>
