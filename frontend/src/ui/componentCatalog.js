@@ -122,6 +122,8 @@ export const SCREEN_COMPONENT_REQUIREMENTS = Object.freeze([
     source: 'src/features/articles/MobileArticlePage.jsx',
     requiredTokens: [
       'useAppFeedback',
+      'CatalogArticleThumbnail',
+      'MobileModuleHeader',
       'Select',
       'QuantityStepper',
     ],
