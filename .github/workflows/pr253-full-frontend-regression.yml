@@ -5,6 +5,7 @@ on:
     paths:
       - 'frontend/src/**'
       - 'frontend/tests/e2e/**'
+      - 'frontend/tests/*.contract.mjs'
       - 'frontend/playwright.config.js'
       - 'frontend/package.json'
       - 'frontend/package-lock.json'
