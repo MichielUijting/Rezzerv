@@ -76,6 +76,36 @@ bestaande parallelle standalone uitvoering, exact-SHA reuse, attach van reeds
 lopende geldige evidence en dispatch van alleen ontbrekende authorities blijven
 ongewijzigd.
 
+## Incrementele carry-forward van reeds groen zwaar bewijs
+
+Naast de strikte finale version-only route mag tijdens ontwikkeling zwaar
+Draft/preflightbewijs per push worden hergebruikt wanneer de **laatste**
+`previous-head...new-head` delta de betreffende authority aantoonbaar niet raakt.
+
+Dit verandert niets aan de risicoclassificatie: S/M/L blijft altijd bepaald uit
+de volledige `base...head` kandidaatdelta. Incrementele carry-forward bepaalt
+alleen of een reeds groene zware authority opnieuw moet worden uitgevoerd.
+
+Voorwaarden:
+
+- alleen `pull_request synchronize`;
+- vorige groene workflowrun op exact de vorige head;
+- dezelfde PR, base-SHA en taakbranch;
+- volledige dependency-map voor de betreffende authority;
+- geraakte authority => opnieuw draaien;
+- onbekend of gevoelig niet-gemapt pad => fail-closed opnieuw draaien;
+- ontbrekend of niet-groen bronbewijs => opnieuw draaien.
+
+Voor PR253 is één extra gerichte modus toegestaan: wanneer sinds de vorige
+groene PR253-run uitsluitend top-level `frontend/tests/*.contract.mjs`-bestanden
+(en eventueel documentatie) wijzigen, worden alleen die gewijzigde contracttests
+op de nieuwe head uitgevoerd. Iedere runtime-, E2E-, backend-, package-, Docker-
+of onbekende wijziging houdt PR253 in volledige modus.
+
+Deze route geldt voor PR253 en de TP-CI-02/03/04/05/07 shared authorities.
+Goedkope onafhankelijke checks blijven opnieuw draaien. F7 Full exact-candidate
+is expliciet uitgesloten.
+
 ## Finale version-only carry-forward
 
 Een finale patchversiebump verandert op zichzelf geen functioneel applicatiegedrag.
@@ -123,7 +153,7 @@ exact canoniek, dan wordt fail-closed normaal opnieuw getest.
 - definitief niveau = max(voorlopig, delta);
 - handmatige Full Regression => L;
 - wijziging van de kandidaat-SHA maakt eerder **F7 Full exact-candidate** bewijs ongeldig;
-- normaal/preflight functioneel bewijs mag uitsluitend volgens de hierboven beschreven canonieke version-only carry-forward worden hergebruikt;
+- normaal/preflight zwaar bewijs mag uitsluitend volgens de hierboven beschreven fail-closed incrementele carry-forward of canonieke finale version-only carry-forward worden hergebruikt;
 - risicoclassificatie geeft nooit merge- of release-toestemming.
 
 ## Onafhankelijke CI blijft gelden
