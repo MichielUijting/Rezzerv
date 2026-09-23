@@ -68,7 +68,7 @@ a.rz-button-secondary[role="button"] {
   border-radius: 0 !important;
   background: var(--color-ui-primary) !important;
   color: var(--color-ui-primary-text) !important;
-  box-shadow: 0 -5px 18px rgba(8, 41, 29, 0.18) !important;
+  box-shadow: 0 -5px 18px rgba(0, 95, 106, 0.18) !important;
   display: flex !important;
   align-items: center !important;
   gap: 12px !important;
