@@ -63,7 +63,7 @@
   border-radius: 12px;
   background: #FFFFFF;
   color: var(--color-text-primary);
-  box-shadow: 0 12px 28px rgba(26, 62, 43, 0.20);
+  box-shadow: 0 12px 28px rgba(0, 95, 106, 0.20);
   font-family: var(--font-family-base);
   font-size: var(--font-size-ui-body) !important;
 }
@@ -98,7 +98,7 @@
 
 .rz-select-option:focus-visible,
 .rz-select-trigger:focus-visible {
-  outline: 3px solid rgba(26, 62, 43, 0.22);
+  outline: 3px solid rgba(0, 95, 106, 0.22);
   outline-offset: 2px;
 }
 
