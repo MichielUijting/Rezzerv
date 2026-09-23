@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import MobileRecentActionsBar from '../ui/MobileRecentActionsBar.jsx'
+import { MobileBackControl } from '../ui/MobileModuleHeader.jsx'
 import {
   AUTH_CONTEXT_CHANGED_EVENT,
   canCurrentUserPerform,
@@ -129,6 +130,7 @@ export default function MobileAppChrome({ children }) {
 
   return (
     <div className="rz-mobile-app-chrome" data-testid="mobile-app-chrome">
+      <MobileBackControl testId="mobile-global-back" />
       {children}
       <div className="rz-mobile-app-bottom-space" aria-hidden="true" />
       <MobileBottomNavigationRuntime context={context} pathname={location.pathname} />
