@@ -25,12 +25,13 @@ export default function CatalogArticleThumbnail({
 
   if (!src || failed) {
     return (
-      <span className={classes} aria-hidden="true" data-testid="catalog-article-thumbnail-empty">
-        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-          <rect x="3.5" y="5" width="17" height="14" rx="2" />
-          <circle cx="9" cy="10" r="1.5" />
-          <path d="m5.5 17 4.2-4 3.1 2.8 2.3-2.2 3.4 3.4" />
-        </svg>
+      <span
+        className={classes}
+        role="img"
+        aria-label={normalizeText(productName) ? `Geen foto beschikbaar voor ${normalizeText(productName)}` : 'Geen foto beschikbaar'}
+        data-testid="catalog-article-thumbnail-empty"
+      >
+        <span className="rz-catalog-article-thumbnail-empty-label">Geen foto</span>
       </span>
     )
   }

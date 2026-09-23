@@ -1,6 +1,5 @@
 /* Inhuis primary UI surface theme.
-   Keep dark brand ink for text/icons on light surfaces; use the canonical
-   blue-green for primary surfaces and white foregrounds on that color. */
+   #005F6A is the single primary/dark-green authority for brand and UI surfaces. */
 
 :root {
   /* Bridge the legacy login/action token to the canonical Inhuis UI token. */
@@ -42,24 +41,6 @@ a.rz-button-secondary[role="button"] {
 .rz-column-resize-handle:hover,
 .rz-table--resizable-columns thead tr:first-child th:hover::after {
   background: rgba(26, 26, 26, 0.24);
-}
-
-.rz-mobile-article-screen .rz-mobile-article-action-row--primary {
-  background: var(--color-ui-primary);
-  color: var(--color-ui-primary-text);
-}
-
-/* Transitional legacy styling for the existing mobile article-detail screen.
-   Mobile Voorraad has its own newer PO-approved visual baseline. */
-.rz-mobile-article-screen {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(240, 249, 242, 0.10) 100%),
-    url('/inhuis-green-wallpaper.svg') center top / cover no-repeat !important;
-  background-color: #EEF7F0 !important;
-}
-
-.rz-mobile-article-card {
-  box-shadow: 0 9px 24px rgba(26, 62, 43, 0.12);
 }
 
 /* Passive AppFeedback messages use one fixed bottom bar. Interactive prompts
@@ -213,12 +194,12 @@ a.rz-button-secondary[role="button"] {
 /* Mobile Voorraad (PO baseline 2026-09-22) replaces the legacy permanent
    bottom feedback base with its own five-item navigation. Keep passive
    AppFeedback visible directly above that navigation instead of covering it. */
-body:has([data-testid="mobile-inventory-page"]) .rz-app-feedback-bar-base,
-body:has([data-testid="mobile-inventory-page"]) [data-testid="app-feedback-bar-scroll-clearance"] {
+body:has(.rz-mobile-screen-shell) .rz-app-feedback-bar-base,
+body:has(.rz-mobile-screen-shell) [data-testid="app-feedback-bar-scroll-clearance"] {
   display: none !important;
 }
 
-body:has([data-testid="mobile-inventory-page"]) :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
+body:has(.rz-mobile-screen-shell) :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
   padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important;
 }
 

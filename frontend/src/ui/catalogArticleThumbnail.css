@@ -24,14 +24,14 @@
   color: #8b9b92;
 }
 
-.rz-catalog-article-thumbnail--empty svg {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.rz-catalog-article-thumbnail-empty-label {
+  display: block;
+  padding: 2px;
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.05;
+  text-align: center;
 }
 
 .rz-product-row-identity {
