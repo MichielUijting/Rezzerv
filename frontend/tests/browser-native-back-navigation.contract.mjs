@@ -39,6 +39,7 @@ function normalizeBackLabel(rawLabel) {
 }
 
 const violations = []
+const centralMobileBackPath = 'src/ui/MobileModuleHeader.jsx'
 
 for (const filePath of listSourceFiles(sourceRoot)) {
   const relativePath = path.relative(frontendRoot, filePath).replaceAll('\\', '/')
@@ -47,7 +48,8 @@ for (const filePath of listSourceFiles(sourceRoot)) {
   for (const { label, pattern } of forbiddenHistoryPatterns) {
     pattern.lastIndex = 0
     for (const match of content.matchAll(pattern)) {
-      violations.push(`${relativePath}:${lineNumberAt(content, match.index)} gebruikt ${label}; gebruik browsernavigatie.`)
+      if (relativePath === centralMobileBackPath && label === 'navigate(-1)') continue
+      violations.push(`${relativePath}:${lineNumberAt(content, match.index)} gebruikt ${label}; gebruik de centrale mobiele Terug-knop.`)
     }
   }
 
@@ -57,6 +59,14 @@ for (const filePath of listSourceFiles(sourceRoot)) {
     if (allowedLocalStateBackLabels.has(normalized)) continue
     violations.push(`${relativePath}:${lineNumberAt(content, match.index)} bevat ongewenste terugnavigatie: “${normalized}”.`)
   }
+}
+
+const centralBackContent = fs.readFileSync(path.join(frontendRoot, centralMobileBackPath), 'utf8')
+if (!/className="rz-mobile-back-control"/.test(centralBackContent)) {
+  violations.push('Centrale mobiele Terug-knop ontbreekt.')
+}
+if (!/navigate\(\s*-1\s*\)/.test(centralBackContent) || !/navigate\('\/home'\)/.test(centralBackContent)) {
+  violations.push('Centrale mobiele Terug-knop moet browserhistorie gebruiken met /home als veilige fallback.')
 }
 
 if (violations.length) {
