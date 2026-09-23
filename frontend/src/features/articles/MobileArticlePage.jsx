@@ -335,6 +335,7 @@ export default function MobileArticlePage() {
     >
       <MobileModuleHeader title="Voorraad" testId="mobile-article-header" />
       <main className="rz-mobile-article-content">
+        <button type="button" className="rz-mobile-article-back" onClick={() => navigate('/voorraad')} data-testid="mobile-article-back-to-inventory">‹ Voorraad</button>
         <section className="rz-mobile-article-card rz-mobile-article-hero" aria-label="Actuele voorraad">
           <div className="rz-mobile-article-identity">
             <CatalogArticleThumbnail
