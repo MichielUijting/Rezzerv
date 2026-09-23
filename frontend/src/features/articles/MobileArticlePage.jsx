@@ -8,7 +8,6 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   fetchJsonWithAuth,
   isHouseholdAdminFromContext,
-  isHouseholdViewerFromContext,
   readStoredAuthContext,
 } from '../../lib/authSession.js'
 import {
@@ -109,7 +108,7 @@ export default function MobileArticlePage() {
   const authContext = readStoredAuthContext() || {}
   const canEditInventory = isHouseholdAdminFromContext(authContext)
   const canEditHouseholdSettings = isHouseholdAdminFromContext(authContext)
-  const canEditNotes = !isHouseholdViewerFromContext(authContext)
+  const canEditNotes = authContext?.context_type === 'regular'
 
   const [articleData, setArticleData] = useState(null)
   const [liveRows, setLiveRows] = useState([])
