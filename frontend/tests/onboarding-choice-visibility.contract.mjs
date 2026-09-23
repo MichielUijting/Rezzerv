@@ -18,7 +18,7 @@ function sourceFiles(directory) {
 
 function isCanonicalAccent(value) {
   const normalized = String(value || '').replace(/\s+/g, '').toLowerCase()
-  return normalized === 'var(--color-brand-primary)' || normalized === '#1a3e2b'
+  return normalized === 'var(--color-brand-primary)' || normalized === '#005f6a'
 }
 
 const login = read('src/features/auth/LoginPage.jsx')
@@ -87,7 +87,7 @@ const checks = [
   [settings.includes('data-testid="settings-active-profile"'), 'completed household keeps active profile visible in Settings'],
   [settings.includes('Jouw Inhuis'), 'Settings labels persistent active profile clearly'],
   [settings.includes('buildActiveProfileItems'), 'Settings derives visible profile from authoritative onboarding product configuration'],
-  [tokens.includes('--color-brand-primary: #1A3E2B;'), 'canonical Rezzerv primary color token remains defined'],
+  [tokens.includes('--color-brand-primary: #005F6A;'), 'canonical Inhuis primary color token remains defined'],
   [main.includes('import "./ui/form-controls.css";'), 'global native form-control branding is loaded'],
   [formControls.includes("input[type='checkbox']") && formControls.includes("input[type='radio']"), 'global branding covers native checkboxes and radios'],
   [formControls.includes('accent-color: var(--color-brand-primary);'), 'native selected state uses Rezzerv primary color'],
