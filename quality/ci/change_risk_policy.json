@@ -164,5 +164,27 @@
       "F7 Full Regression exact-candidate gate when final risk is L"
     ],
     "full_regression_exact_candidate_not_carried_forward": true
+  },
+  "incremental_carry_forward": {
+    "enabled": true,
+    "require_previous_green_workflow": true,
+    "require_same_pull_request": true,
+    "require_same_base_sha": true,
+    "require_same_branch": true,
+    "preserve_complete_candidate_risk_level": true,
+    "fail_closed_on_unmapped_sensitive_delta": true,
+    "reusable_heavy_workflows": [
+      "PR253 full frontend regression",
+      "TP-CI-02 Kassa shared full-stack PostgreSQL validation",
+      "TP-CI-03 Account and authorization shared full-stack PostgreSQL validation",
+      "TP-CI-04 Inventory shared full-stack PostgreSQL validation",
+      "TP-CI-05 Receipt shared full-stack PostgreSQL validation",
+      "TP-CI-07 Core P0 shared full-stack PostgreSQL validation"
+    ],
+    "pr253_contract_only_pattern": "frontend/tests/*.contract.mjs",
+    "exact_candidate_exclusions": [
+      "F7 Full Regression exact-candidate gate",
+      "release/version checks that require the current candidate"
+    ]
   }
 }
