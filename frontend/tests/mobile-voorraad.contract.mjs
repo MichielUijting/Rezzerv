@@ -100,17 +100,16 @@ assert.match(selectorCss, /rz-inventory-presentation--locationless[\s\S]*nth-chi
 assert.match(selectorCss, /rz-inventory-presentation--locationless[\s\S]*nth-child\(6\)/)
 
 assert.match(mobileSource, /data-testid="mobile-inventory-page"/)
-assert.match(mobileSource, /data-testid="mobile-inventory-header"/)
-assert.match(mobileSource, /<h1>Voorraad<\/h1>/)
+assert.match(mobileSource, /<MobileModuleHeader title="Voorraad" testId="mobile-inventory-header" \/>/)
 assert.match(mobileSource, /data-testid="mobile-inventory-add-incidental-purchase"/)
 assert.match(mobileSource, /data-testid="mobile-inventory-location-filter"/)
-assert.match(mobileSource, /data-testid="mobile-inventory-bottom-nav"/)
+assert.match(mobileSource, /<MobileRecentActionsBar[\s\S]*testId="mobile-inventory-bottom-nav"/)
 assert.match(mobileSource, /selectRecentActionTiles/)
 assert.match(mobileSource, /readRecentActionKeys\(context\)/)
 assert.match(mobileSource, /recordRecentAction\(item\.key, context\)/)
 assert.match(mobileSource, /excludeKeys: \['voorraad'\]/)
-assert.match(mobileSource, /mobile-inventory-decrease-/)
-assert.match(mobileSource, /mobile-inventory-increase-/)
+assert.match(mobileSource, /<QuantityStepper/)
+assert.match(mobileSource, /testIdPrefix=\{\`mobile-inventory-/)
 assert.match(mobileSource, /\/inventory-events/)
 assert.match(mobileSource, /MORE_NAV_ITEM = \{ key: 'meer', label: 'Meer', route: '\/home'/)
 assert.match(homeSource, /recordRecentAction\(tile\.key, context\)/)
@@ -180,5 +179,9 @@ assert.deepEqual(buildQuickInventoryMutation(quickRow, 'increase'), {
   note: 'Snelle ophoging via mobiele Voorraad.',
 })
 assert.equal(selectQuickInventoryTarget({ inventoryEntries: [{ inventoryId: 'fraction', quantity: 0.5, sourceIndex: 0 }] }, 'decrease'), null)
+
+assert.match(mobileSource, /useAppFeedback\(\)/)
+assert.match(mobileSource, /showFeedback\(\{[\s\S]*testId: 'mobile-inventory-quick-feedback'/)
+assert.doesNotMatch(mobileSource, /mutationFeedback|setMutationFeedback/)
 
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')
