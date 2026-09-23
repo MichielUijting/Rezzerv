@@ -24,7 +24,7 @@ Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele 
 - de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - geen losse verhoogde card per voorraadartikel en geen decoratieve schaduwen als hoofdstructuur;
 - een vaste witte onderste actiebalk met maximaal vier door de **huidige gebruiker recent gebruikte en nog beschikbare acties**, waarbij de **actief geopende module altijd wordt uitgesloten**, aangevuld met beschikbare andere acties wanneer nog onvoldoende gebruikshistorie bestaat, plus altijd **Meer** als laatste item;
-- de bestaande actie **Incidentele aankoop** blijft functioneel beschikbaar, maar staat als compacte groene actie bij de lijstcontext en is niet langer een grote sticky knop boven een aparte meldingenbalk;
+- de bestaande actie **Incidentele aankoop** blijft functioneel beschikbaar, maar staat als compacte groene actie bij de lijstcontext en is niet langer een grote sticky knop boven een apart inline meldingenblok;
 - alle bestaande data-, autorisatie-, huishoudisolatie-, detailroute- en filterfunctionaliteit blijft leidend. Dit PO-besluit wijzigt de presentatie, niet het domeinmodel.
 
 Andere mobiele kernschermen worden niet stilzwijgend meegewijzigd. Totdat zij expliciet worden gemigreerd mogen zij tijdelijk nog de eerdere visuele shell gebruiken. Nieuwe of aangepaste tests borgen de actuele groene wallpaper, maar mogen blur, individuele zwevende schaduwcards of de oude sticky CTA niet opnieuw afdwingen.
@@ -223,22 +223,28 @@ Voor de nieuwe Voorraadbaseline blijven de generieke toegankelijkheidscontracten
 
 ## Meldingen en feedback
 
-Voor passieve applicatiemeldingen op bestaande/niet-gemigreerde schermen geldt het bestaande centrale patroon. Voor de nieuwe mobiele Voorraadbaseline wordt **geen permanent lege meldingenbalk** naast de vaste onderste navigatie gereserveerd; eventuele passieve feedback moet zichtbaar boven die navigatie worden geplaatst en mag haar niet blokkeren.
+De centrale authority voor feedback is `AppFeedbackProvider/useAppFeedback`. Schermen maken geen eigen tijdelijke succes-, info-, waarschuwing- of foutbalk wanneer deze centrale component het patroon afdekt.
 
-Bestaande regels:
-- succes-, fout-, waarschuwing-, informatie- en voortgangsmeldingen worden niet midden in het scherm geplaatst;
-- zij verschijnen in een vaste onderste balk over de volle schermbreedte;
-- de balk is permanent zichtbaar, ook wanneer er geen melding is; zonder melding blijft de balk leeg en toont hij geen placeholdertekst;
-- de balk heeft dezelfde hoogte als de header: `58px` op grotere schermen en `64px` op mobiel;
-- achtergrond is `#28A99E` en tekst/iconen zijn wit (`#FFFFFF`);
-- bij een melding verschijnt de feedbackinhoud op dezelfde balklaag;
-- de melding mag een compacte OK- of detailactie bevatten zolang de balkhoogte gelijk blijft;
-- technische details mogen op verzoek boven de balk worden uitgeklapt, maar de meldingenbalk zelf verandert niet van hoogte;
-- tijdelijke mobiele artikelfeedback volgt hetzelfde patroon;
-- de permanente balk ligt visueel boven de pagina-inhoud, maar mag functioneel nooit de laatste content of actie onbereikbaar maken;
-- iedere mobiele scrollcontext reserveert daarom onderaan minimaal de balkhoogte plus eventuele safe-area; de scrollbar moet ver genoeg doorlopen om de laatste actie volledig boven de balk te brengen.
+### Mobiele passieve feedback
 
-Interactieve dialogen waarin de gebruiker gegevens moet invoeren of een expliciete keuze moet bevestigen blijven dialogen; zij zijn geen passieve melding en worden niet in de onderste balk gepropt.
+Op mobiele schermen is passieve feedback altijd een **overlay**:
+- de melding staat buiten de documentflow en schuift inhoud nooit omlaag of omhoog;
+- er wordt op mobiel geen permanente lege feedbackbalk of extra feedback-clearance gereserveerd;
+- de overlay gebruikt `--color-mobile-ui-primary` (`#005F6A`) met witte tekst;
+- tik/klik **op de melding** sluit haar direct;
+- tik/klik **elders op het scherm** sluit haar direct;
+- zonder interactie verdwijnt de melding automatisch na maximaal **3.000 ms**;
+- een scherm implementeert hiervoor geen eigen timer, lokale feedbackstate of lokale feedback-CSS;
+- op schermen met een vaste onderste actiebalk staat de overlay daar visueel boven.
+
+Interactieve bevestigingen, invoerformulieren, technische-detaildialogen en voortgangsmeldingen zijn niet transient. Zij blijven centrale AppFeedback-dialogen en verdwijnen niet automatisch.
+
+### Desktop en nog niet gemigreerde niet-mobiele feedback
+
+Op desktop mag het bestaande centrale onderste-balkpatroon blijven gelden:
+- de feedbacklaag is fixed en verschuift de pagina-inhoud niet;
+- achtergrond gebruikt de centrale desktopkleur `#28A99E` met witte tekst/iconen;
+- interactieve dialogen blijven afzonderlijke dialogen en worden niet in de balk gepropt.
 
 ## Zoeken, invoer en filters
 
@@ -311,7 +317,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 - secundaire acties krijgen minder visueel gewicht;
 - volledige-breedteknoppen zijn op mobiel passend wanneer één duidelijke vervolgstap centraal staat;
 - disabled-, hover-, active- en focusstatus zijn zichtbaar en consistent;
-- de primaire actie mag sticky onderaan staan als dit content en meldingenbalk niet blokkeert;
+- de primaire actie mag sticky onderaan staan als dit content en de tijdelijke feedbackoverlay niet blokkeert;
 - een sticky mobiele actie krijgt expliciet voldoende bottom-offset boven eventuele tijdelijke feedbackoverlay en de scrollcontainer reserveert daarnaast voldoende eindruimte om de actie volledig zichtbaar en bereikbaar te maken.
 
 ## Tabellen
@@ -437,7 +443,7 @@ Vaste regels:
 De sectie **Snelle acties** bevat precies:
 1. **Voorkeurswinkel** — toont/bewerkt de bestaande huishoudinstelling `favorite_store`;
 2. **Aankoophistorie** — toont uitsluitend aankoopgebeurtenissen van het huidige huishoudartikel;
-3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve **Boodschappenlijst**, opent geen extra detailscherm en geeft feedback via de onderste meldingenbalk.
+3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve **Boodschappenlijst**, opent geen extra detailscherm en geeft feedback via de centrale mobiele AppFeedback-overlay.
 
 Niet opnemen als nieuwe mobiele functionaliteit:
 - `Naar boodschappen`;
