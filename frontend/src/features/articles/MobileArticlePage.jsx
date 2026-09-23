@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
-import Header from '../../ui/Header.jsx'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
+import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Select from '../../ui/Select.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
@@ -86,6 +87,7 @@ function formatPurchaseDate(value) {
 }
 
 export default function MobileArticlePage() {
+  const navigate = useNavigate()
   const { articleId = '' } = useParams()
   const [searchParams] = useSearchParams()
   const requestedArticleName = String(searchParams.get('artikel') || '').trim()
@@ -133,6 +135,10 @@ export default function MobileArticlePage() {
   const displayedQuantity = locationTrackingEnabled && inventoryRows.length > 1
     ? (selectedRow?.quantity ?? 0)
     : totalQuantity
+  const canDirectEditQuantity = canEditInventory
+    && Boolean(selectedRow?.id)
+    && (inventoryRows.length === 1 || locationTrackingEnabled)
+  const articleImageUrl = String(selectedRow?.imageUrl || articleData?.image_url || '').trim()
   const almostOut = isMobileArticleAlmostOut(totalQuantity, settings?.min_stock)
   const purchaseHistory = useMemo(() => filterPurchaseHistory(historyRows), [historyRows])
 
@@ -218,6 +224,33 @@ export default function MobileArticlePage() {
     }
   }
 
+  async function setExactInventoryQuantity(nextQuantity) {
+    if (!canDirectEditQuantity || inventoryBusy || !householdArticleId || !selectedRow?.id) return
+    const normalizedQuantity = Number(String(nextQuantity ?? '').replace(',', '.'))
+    if (!Number.isFinite(normalizedQuantity) || normalizedQuantity < 0) return
+    if (normalizedQuantity === Number(displayedQuantity)) return
+
+    setInventoryBusy(true)
+    try {
+      await requestJson('/api/household-articles/' + encodeURIComponent(householdArticleId) + '/inventory-events', {
+        method: 'POST',
+        body: JSON.stringify({
+          inventory_id: selectedRow.id,
+          article_name: articleName,
+          quantity: normalizedQuantity,
+          event_type: 'adjustment',
+          note: 'Exact aantal aangepast via mobiel artikeldetail.',
+        }),
+      })
+      await refreshInventoryAndHistory()
+      showSuccess('Voorraad aangepast naar ' + formatQuantity(normalizedQuantity) + '.')
+    } catch (mutationError) {
+      showError(mutationError?.message || 'Voorraad kon niet worden aangepast.')
+    } finally {
+      setInventoryBusy(false)
+    }
+  }
+
   async function saveFavoriteStore() {
     const currentValue = String(settings?.favorite_store || '').trim()
     const nextValue = String(favoriteStoreDraft || '').trim()
@@ -266,8 +299,9 @@ export default function MobileArticlePage() {
   if (loading) {
     return (
       <div className="rz-screen rz-mobile-article-screen" data-testid="mobile-article-detail-page">
-        <Header title={requestedArticleName || 'Voorraadartikel'} />
+        <MobileModuleHeader title="Voorraad" testId="mobile-article-header" />
         <main className="rz-mobile-article-content">
+          <button type="button" className="rz-mobile-article-back" onClick={() => navigate('/voorraad')} data-testid="mobile-article-back-to-inventory">‹ Voorraad</button>
           <section className="rz-mobile-article-card rz-mobile-article-state">Artikeldetails laden…</section>
         </main>
       </div>
@@ -277,8 +311,9 @@ export default function MobileArticlePage() {
   if (error || !articleData) {
     return (
       <div className="rz-screen rz-mobile-article-screen" data-testid="mobile-article-detail-page">
-        <Header title={requestedArticleName || 'Voorraadartikel'} />
+        <MobileModuleHeader title="Voorraad" testId="mobile-article-header" />
         <main className="rz-mobile-article-content">
+          <button type="button" className="rz-mobile-article-back" onClick={() => navigate('/voorraad')} data-testid="mobile-article-back-to-inventory">‹ Voorraad</button>
           <section className="rz-mobile-article-card rz-mobile-article-state rz-mobile-article-state--error" role="alert">
             <strong>Artikel niet beschikbaar</strong>
             <span>{error || 'Voor dit artikel zijn geen gegevens beschikbaar.'}</span>
@@ -298,28 +333,47 @@ export default function MobileArticlePage() {
       data-testid="mobile-article-detail-page"
       data-location-tracking={locationTrackingEnabled ? 'enabled' : 'disabled'}
     >
-      <Header title={articleName} />
+      <MobileModuleHeader title="Voorraad" testId="mobile-article-header" />
       <main className="rz-mobile-article-content">
         <section className="rz-mobile-article-card rz-mobile-article-hero" aria-label="Actuele voorraad">
-          <div className="rz-mobile-article-heading">
-            <div>
+          <div className="rz-mobile-article-identity">
+            <CatalogArticleThumbnail
+              imageUrl={articleImageUrl}
+              productName={articleName}
+              className="rz-mobile-article-product-thumbnail"
+            />
+            <div className="rz-mobile-article-identity-copy">
               <div className="rz-mobile-article-name">{articleName}</div>
               <div className="rz-mobile-article-chips">
                 <span className="rz-mobile-article-chip">{articleGroup || 'Niet ingedeeld'}</span>
                 {almostOut ? <span className="rz-mobile-article-chip rz-mobile-article-chip--warning">Bijna op</span> : null}
               </div>
             </div>
+          </div>
+
+          <div className="rz-mobile-article-stock-row">
+            <div className="rz-mobile-article-stock-copy">
+              <span className="rz-mobile-article-stock-label">Actuele voorraad</span>
+              {locationTrackingEnabled && inventoryRows.length > 1 ? (
+                <span className="rz-mobile-article-stock-location">{formatMobileLocation(selectedRow)}</span>
+              ) : null}
+            </div>
             <div className="rz-mobile-article-stock-control">
               <QuantityStepper
                 value={formatQuantity(displayedQuantity)}
                 decreaseDisabled={!canEditInventory || inventoryBusy || !selectedRow || selectedRow.quantity <= 0}
                 increaseDisabled={!canEditInventory || inventoryBusy || !selectedRow}
+                valueEditable={canDirectEditQuantity}
+                valueDisabled={inventoryBusy}
                 decreaseLabel="Voorraad met 1 verlagen"
                 increaseLabel="Voorraad met 1 verhogen"
-                valueLabel={`Aantal ${formatQuantity(displayedQuantity)}`}
+                valueLabel={canDirectEditQuantity
+                  ? 'Aantal ' + formatQuantity(displayedQuantity) + '. Tik om aan te passen'
+                  : 'Aantal ' + formatQuantity(displayedQuantity)}
                 decreaseTestId="mobile-article-stock-minus"
                 increaseTestId="mobile-article-stock-plus"
                 valueTestId="mobile-article-stock-value"
+                onValueCommit={setExactInventoryQuantity}
                 onDecrease={() => changeInventory(-1)}
                 onIncrease={() => changeInventory(1)}
               />
