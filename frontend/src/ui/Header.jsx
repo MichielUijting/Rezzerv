@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import BrandLogo from "./BrandLogo.jsx";
+import { MobileBackControl } from "./MobileModuleHeader.jsx";
 import {
   AUTH_CONTEXT_CHANGED_EVENT,
   fetchAuthContext,
@@ -82,6 +83,7 @@ export default function Header({ title }) {
   return (
     <div className="rz-header" data-testid="app-header">
       <div className="rz-header-left">
+        <MobileBackControl testId="mobile-header-back" />
         <div className="rz-header-titleblock">
           <div className="rz-header-title">{title}</div>
           {showHouseholdLine && (
