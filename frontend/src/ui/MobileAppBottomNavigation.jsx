@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import { readStoredAuthContext, canCurrentUserPerform, isFrontteamMemberFromContext, isHouseholdAdminFromContext, isPlatformSuperuserFromContext } from '../lib/authSession.js'
 import { readHouseholdOnboarding } from '../features/onboarding/onboardingState.js'
 import { buildHomeNavigation } from '../features/home/homeNavigation.js'
@@ -14,6 +15,14 @@ import MobileRecentActionsBar from './MobileRecentActionsBar.jsx'
 
 const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' }
 
+export function resolveActiveMobileNavKey(pathname = '') {
+  const normalized = String(pathname || '').split('?')[0]
+  const entries = Object.entries(ACTION_ROUTE_BY_KEY)
+    .sort(([, a], [, b]) => b.length - a.length)
+  const match = entries.find(([, route]) => normalized === route || normalized.startsWith(`${route}/`))
+  return match?.[0] || ''
+}
+
 function mobileNavIconType(key) {
   if (key === 'meldingen') return 'bell'
   if (key === 'voorraad') return 'inventory'
@@ -27,7 +36,9 @@ export default function MobileAppBottomNavigation({
   activeKey = '',
   testId = 'mobile-app-bottom-navigation',
 }) {
+  const location = useLocation()
   const context = readStoredAuthContext()
+  const resolvedActiveKey = activeKey || resolveActiveMobileNavKey(location.pathname)
   const onboarding = readHouseholdOnboarding(context)
   const features = useFeatureAvailability()
   const actionAvailability = useActionButtonAvailability({
@@ -64,7 +75,7 @@ export default function MobileAppBottomNavigation({
     const recent = selectRecentActionTiles({
       recentKeys: readRecentActionKeys(context),
       availableTiles: availableActionTiles,
-      excludeKeys: activeKey ? [activeKey] : [],
+      excludeKeys: resolvedActiveKey ? [resolvedActiveKey] : [],
       limit: 4,
     }).map((tile) => ({
       key: tile.key,
@@ -73,7 +84,7 @@ export default function MobileAppBottomNavigation({
       icon: mobileNavIconType(tile.key),
     }))
     return [...recent, MORE_NAV_ITEM]
-  }, [activeKey, availableActionTiles, context?.user_id])
+  }, [resolvedActiveKey, availableActionTiles, context?.user_id])
 
   return (
     <MobileRecentActionsBar

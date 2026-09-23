@@ -43,6 +43,7 @@ import PlatformSupportPage from '../../features/support/PlatformSupportPage.jsx'
 import ShoppingResponsive from '../../features/shopping/ShoppingResponsive.jsx'
 import SuperuserControlPage from '../../features/superuser/SuperuserControlPage.jsx'
 import { clearAuthSession } from '../../lib/authSession.js'
+import MobileNavigationBoundary from '../../ui/MobileNavigationBoundary.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import FrontteamGuard from './FrontteamGuard'
@@ -94,20 +95,27 @@ function LegacyReceiptLineRouteRedirect() {
   return <Navigate to={target} replace />
 }
 
-function Protected({ children, allowNone = false }) {
-  return <AuthGuard allowNone={allowNone}>{children}</AuthGuard>
+function Protected({ children, allowNone = false, mobileNavigation = true }) {
+  const content = mobileNavigation ? <MobileNavigationBoundary>{children}</MobileNavigationBoundary> : children
+  return <AuthGuard allowNone={allowNone}>{content}</AuthGuard>
 }
 
 function ProtectedAdmin({ children }) {
-  return <AuthGuard><AdminGuard>{children}</AdminGuard></AuthGuard>
+  return <AuthGuard><AdminGuard><MobileNavigationBoundary>{children}</MobileNavigationBoundary></AdminGuard></AuthGuard>
 }
 
 function ProtectedFrontteam({ children }) {
-  return <AuthGuard><FrontteamGuard>{children}</FrontteamGuard></AuthGuard>
+  return <AuthGuard><FrontteamGuard><MobileNavigationBoundary>{children}</MobileNavigationBoundary></FrontteamGuard></AuthGuard>
 }
 
 function ProtectedPermission({ permission, children, message, allowNone = false }) {
-  return <AuthGuard allowNone={allowNone}><PermissionGuard permission={permission} message={message}>{children}</PermissionGuard></AuthGuard>
+  return (
+    <AuthGuard allowNone={allowNone}>
+      <PermissionGuard permission={permission} message={message}>
+        <MobileNavigationBoundary>{children}</MobileNavigationBoundary>
+      </PermissionGuard>
+    </AuthGuard>
+  )
 }
 
 function ProtectedSettingsRoute({ children, settingKey = null }) {
@@ -129,14 +137,14 @@ function ProtectedSettingsRoute({ children, settingKey = null }) {
         allowViewer={policy.allowViewer}
         allowedContexts={policy.allowedContexts}
       >
-        {content}
+        <MobileNavigationBoundary>{content}</MobileNavigationBoundary>
       </SettingsGuard>
     </AuthGuard>
   )
 }
 
 function ProtectedSuperuser({ children }) {
-  return <AuthGuard><SuperuserGuard>{children}</SuperuserGuard></AuthGuard>
+  return <AuthGuard><SuperuserGuard><MobileNavigationBoundary>{children}</MobileNavigationBoundary></SuperuserGuard></AuthGuard>
 }
 
 const platformRoutes = PLATFORM_NAVIGATION_ITEMS.map((item) => ({
@@ -160,7 +168,7 @@ const router = createBrowserRouter([
   { path: '/uitnodiging/:token', element: <InvitationAcceptancePage /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
-  { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
+  { path: '/onboarding', element: <Protected mobileNavigation={false}><OnboardingRoute /></Protected> },
   { path: '/home', element: <Protected allowNone><HomePage /></Protected> },
   ...platformRoutes,
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },

@@ -99,8 +99,8 @@ export const APPROVED_UI_COMPONENTS = Object.freeze([
     id: 'mobile-screen-shell',
     source: 'src/ui/MobileScreenShell.jsx',
     publicApi: 'MobileScreenShell ({ title, activeKey, testId, className, rootProps, children })',
-    purpose: 'Canonieke mobiele schermshell met header, Terug en bottom navigation.',
-    reuseRule: 'Ieder nieuw of gemigreerd mobiel applicatiescherm gebruikt deze shell zodat navigatie, kleur en spacing niet per scherm kunnen afwijken.',
+    purpose: 'Canonieke mobiele visuele schermshell met moduleheader; globale Terug- en bottom navigation komen uit MobileNavigationBoundary.',
+    reuseRule: 'Ieder nieuw of gemigreerd mobiel modulescherm gebruikt deze shell voor de schermheader; navigatie blijft centraal.',
     contractTests: ['tests/mobile-ui-conformity.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
   },
   {
@@ -110,6 +110,14 @@ export const APPROVED_UI_COMPONENTS = Object.freeze([
     purpose: 'Goedgekeurde − waarde + bediening met optionele directe numerieke aantalinvoer.',
     reuseRule: 'Gebruik voor dezelfde min/plus- en directe aantalinteractie; het component levert touch/keyboardgedrag, terwijl domeinmutatie en de beslissing of een waarde veilig inline bewerkbaar is in de caller blijven.',
     contractTests: ['tests/mobile-voorraad.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
+  },
+  {
+    id: 'mobile-navigation-boundary',
+    source: 'src/ui/MobileNavigationBoundary.jsx',
+    publicApi: 'MobileNavigationBoundary',
+    purpose: 'Centrale mobiele app-shell die op ieder beschermd applicatiescherm Terug en bottom navigation toevoegt.',
+    reuseRule: 'Routeguards voegen deze boundary centraal toe; schermen implementeren geen eigen Terug- of bottom-navigationlaag.',
+    contractTests: ['tests/mobile-ui-conformity.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
   },
 ])
 
