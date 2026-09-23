@@ -49,6 +49,7 @@ import FrontteamGuard from './FrontteamGuard'
 import PermissionGuard from './PermissionGuard'
 import SettingsGuard from './SettingsGuard'
 import SuperuserGuard from './SuperuserGuard.jsx'
+import MobileAppChrome from '../MobileAppChrome.jsx'
 
 function LoginRoute() {
   const navigate = useNavigate()
@@ -95,19 +96,25 @@ function LegacyReceiptLineRouteRedirect() {
 }
 
 function Protected({ children, allowNone = false }) {
-  return <AuthGuard allowNone={allowNone}>{children}</AuthGuard>
+  return <AuthGuard allowNone={allowNone}><MobileAppChrome>{children}</MobileAppChrome></AuthGuard>
 }
 
 function ProtectedAdmin({ children }) {
-  return <AuthGuard><AdminGuard>{children}</AdminGuard></AuthGuard>
+  return <AuthGuard><MobileAppChrome><AdminGuard>{children}</AdminGuard></MobileAppChrome></AuthGuard>
 }
 
 function ProtectedFrontteam({ children }) {
-  return <AuthGuard><FrontteamGuard>{children}</FrontteamGuard></AuthGuard>
+  return <AuthGuard><MobileAppChrome><FrontteamGuard>{children}</FrontteamGuard></MobileAppChrome></AuthGuard>
 }
 
 function ProtectedPermission({ permission, children, message, allowNone = false }) {
-  return <AuthGuard allowNone={allowNone}><PermissionGuard permission={permission} message={message}>{children}</PermissionGuard></AuthGuard>
+  return (
+    <AuthGuard allowNone={allowNone}>
+      <MobileAppChrome>
+        <PermissionGuard permission={permission} message={message}>{children}</PermissionGuard>
+      </MobileAppChrome>
+    </AuthGuard>
+  )
 }
 
 function ProtectedSettingsRoute({ children, settingKey = null }) {
@@ -125,18 +132,20 @@ function ProtectedSettingsRoute({ children, settingKey = null }) {
 
   return (
     <AuthGuard>
-      <SettingsGuard
-        allowViewer={policy.allowViewer}
-        allowedContexts={policy.allowedContexts}
-      >
-        {content}
-      </SettingsGuard>
+      <MobileAppChrome>
+        <SettingsGuard
+          allowViewer={policy.allowViewer}
+          allowedContexts={policy.allowedContexts}
+        >
+          {content}
+        </SettingsGuard>
+      </MobileAppChrome>
     </AuthGuard>
   )
 }
 
 function ProtectedSuperuser({ children }) {
-  return <AuthGuard><SuperuserGuard>{children}</SuperuserGuard></AuthGuard>
+  return <AuthGuard><MobileAppChrome><SuperuserGuard>{children}</SuperuserGuard></MobileAppChrome></AuthGuard>
 }
 
 const platformRoutes = PLATFORM_NAVIGATION_ITEMS.map((item) => ({
