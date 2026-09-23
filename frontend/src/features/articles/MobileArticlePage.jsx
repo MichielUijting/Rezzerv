@@ -314,15 +314,14 @@ export default function MobileArticlePage() {
 
     setSettingsBusy(true)
     try {
-      const payload = {
-        ...buildHouseholdSettingsPayload(settings, settings?.favorite_store || ''),
-        notes: nextValue,
-      }
-      const result = await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/settings`, {
+      const payload = { notes: nextValue }
+      const result = await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/notes`, {
         method: 'PUT',
         body: JSON.stringify(payload),
       })
-      const nextSettings = result?.settings && typeof result.settings === 'object' ? result.settings : payload
+      const nextSettings = result?.settings && typeof result.settings === 'object'
+        ? result.settings
+        : { ...settings, notes: nextValue }
       setArticleData((current) => ({ ...(current || {}), settings: nextSettings }))
       setNotesDraft(String(nextSettings.notes || ''))
       showSuccess('Notities opgeslagen.')
