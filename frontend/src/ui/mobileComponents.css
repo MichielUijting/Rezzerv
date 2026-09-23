@@ -89,8 +89,8 @@
 .rz-quantity-stepper-button {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 1px solid var(--color-mobile-ui-primary);
   border-radius: 7px;
@@ -121,8 +121,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  min-height: 30px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 4px 8px;
   border: 1px solid #d6dfd9;
   border-radius: 7px;
@@ -131,4 +131,24 @@
   font-size: var(--font-size-ui-body);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+}
+
+.rz-quantity-stepper-value--editable {
+  box-sizing: border-box;
+  width: 54px;
+  font-family: var(--font-family-base);
+  line-height: 1;
+  text-align: center;
+  outline: none;
+}
+
+.rz-quantity-stepper-value--editable:focus {
+  border-color: var(--color-mobile-ui-primary);
+  background: #ffffff;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-mobile-ui-primary) 18%, transparent);
+}
+
+.rz-quantity-stepper-value--editable:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
