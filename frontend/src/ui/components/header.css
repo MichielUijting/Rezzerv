@@ -26,10 +26,6 @@
   min-width: 0;
 }
 
-.rz-header .rz-mobile-back-control {
-  display: none;
-}
-
 .rz-header-titleblock {
   display: flex;
   flex-direction: column;
@@ -115,11 +111,6 @@
 }
 
 @media (max-width: 720px) {
-  .rz-header .rz-mobile-back-control {
-    display: inline-flex;
-    flex: 0 0 auto;
-  }
-
   .rz-header {
     min-height: 64px;
     padding: 7px 14px;
