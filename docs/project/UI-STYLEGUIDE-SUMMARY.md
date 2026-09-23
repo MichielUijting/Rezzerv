@@ -376,7 +376,7 @@ Actueel expliciet goedgekeurd en herbruikbaar zijn onder meer:
 - `Table`/`DataTable` — canonieke tabellen;
 - `MobileModuleHeader` — compacte mobiele moduleheader;
 - `MobileRecentActionsBar` — vaste recente-actiebalk onderin gemigreerde mobiele modulehoofschermen;
-- `QuantityStepper` — canonieke `− waarde +`-bediening; domeinmutaties blijven buiten het component.
+- `QuantityStepper` — canonieke `− waarde +`-bediening met optionele directe numerieke aantalinvoer; domeinmutaties en de beslissing of inline bewerken veilig is blijven buiten het component.
 
 Harde werkwijze:
 1. bestaand goedgekeurd component dat functioneel past wordt hergebruikt;
@@ -398,6 +398,15 @@ Tijdens deze overgang:
 - niet-gemigreerde schermen worden niet opportunistisch meegewijzigd in een Voorraad-PR;
 - nieuwe schermwijzigingen kopiëren geen inmiddels vervallen Voorraad-wallpaper/glassmorphism/sticky-CTA-patroon;
 - bij iedere volgende migratie wordt de canonieke styleguide in dezelfde PR bijgewerkt.
+
+### Mobiele Voorraad — aantalbediening
+
+- de `−`, waarde- en `+`-bediening gebruikt touchdoelen van minimaal **44 × 44px**;
+- tussen de `+`-bediening en de `>`-navigatie staat extra visuele/tactiele ruimte; de mobiele Voorraadbaseline gebruikt **14px** tussen de stepper en de chevron;
+- een tik op het aantal mag **nooit** doorbubbelen naar de artikeldetailnavigatie;
+- wanneer de zichtbare regel exact één onderliggende voorraadregel heeft en de gebruiker mag muteren, is het aantal direct numeriek bewerkbaar; `inputMode="decimal"` opent op ondersteunde telefoons het numerieke toetsenbord en Enter/veld verlaten bevestigt de nieuwe exacte waarde;
+- directe aantalinvoer gebruikt dezelfde bestaande huishoudartikel-`inventory-events` authority en maakt geen parallel voorraadmodel;
+- wanneer één zichtbare Voorraadregel meerdere onderliggende voorraadlocaties samenvoegt, wordt het samengevoegde totaal niet inline als één locatie overschreven; de waarde blijft wel een afgeschermd niet-navigerend touchgebied en locatiegerichte aanpassing verloopt via het artikeldetail.
 
 ## Mobiele Boodschappenlijst
 
