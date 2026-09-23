@@ -404,6 +404,7 @@ Tijdens deze overgang:
 - de `−`, waarde- en `+`-bediening gebruikt touchdoelen van minimaal **44 × 44px**;
 - tussen de `+`-bediening en de `>`-navigatie staat extra visuele/tactiele ruimte; de mobiele Voorraadbaseline gebruikt **14px** tussen de stepper en de chevron;
 - een tik op het aantal mag **nooit** doorbubbelen naar de artikeldetailnavigatie;
+- een klikbare Voorraadkaart en de detailchevron `>` tonen op pointer-apparaten `cursor: pointer`; bij hover krijgt de chevron een subtiele teal/groene nadruk zodat zichtbaar is dat dit de detailnavigatie is;
 - wanneer de zichtbare regel exact één onderliggende voorraadregel heeft en de gebruiker mag muteren, is het aantal direct numeriek bewerkbaar; `inputMode="decimal"` opent op ondersteunde telefoons het numerieke toetsenbord en Enter/veld verlaten bevestigt de nieuwe exacte waarde;
 - directe aantalinvoer gebruikt dezelfde bestaande huishoudartikel-`inventory-events` authority en maakt geen parallel voorraadmodel;
 - wanneer één zichtbare Voorraadregel meerdere onderliggende voorraadlocaties samenvoegt, wordt het samengevoegde totaal niet inline als één locatie overschreven; de waarde blijft wel een afgeschermd niet-navigerend touchgebied en locatiegerichte aanpassing verloopt via het artikeldetail.
@@ -439,13 +440,17 @@ Het mobiele detailscherm van een voorraadartikel is een vereenvoudigde presentat
 
 Vaste regels:
 - het scherm gebruikt hetzelfde huishoudartikel en dezelfde voorraad-/historie-/settings-API's als het bestaande desktop-detailscherm;
-- de actuele voorraad staat bovenaan met een directe `−`- en `+`-bediening;
+- het detailscherm gebruikt dezelfde **groene Voorraadbaseline** als het mobiele hoofdscherm: `MobileModuleHeader` met titel **Voorraad**, `/inhuis-green-wallpaper.svg`, achtergrond `#EEF7F0`, witte kaarten met 12px-radius en zonder glassmorphism of zware schaduw;
+- direct onder de moduleheader staat een expliciete mobiele terugactie **‹ Voorraad** met minimaal 44px touchhoogte;
+- de artikelkop toont waar beschikbaar dezelfde representatieve `CatalogArticleThumbnail`, de artikelnaam en artikelgroep/statuschips;
+- de actuele voorraad staat in dezelfde artikelkaart met de centrale `QuantityStepper`;
 - `−` verlaagt de voorraad met één via de bestaande afboek-/inventory-eventlogica;
 - `+` verhoogt de voorraad met één via de bestaande handmatige voorraadcorrectie;
+- wanneer exact één voorraadregel actief is, of wanneer bij meerdere locaties expliciet één locatie is geselecteerd, is het zichtbare aantal direct numeriek bewerkbaar via dezelfde bestaande `inventory-events`-authority; het mobiele numerieke toetsenbord wordt via de gedeelde `QuantityStepper` gebruikt;
 - aparte snelle acties **Voorraad aanpassen** en **Afboeken** worden niet getoond;
 - de rij **Locatie** wordt alleen getoond wanneer **Waar Inhuis** actief is (`location_tracking_level != none`);
-- bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+` en `−` werken;
-- detail- en actierijen houden altijd de centrale `1ch`-binnenmarge aan, ook bij browserzoom of responsive emulatie;
+- bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+`, `−` en directe aantalinvoer werken;
+- detail- en actierijen gebruiken dezelfde compacte 14px/16px typografie, neutrale scheidingslijnen en teal `#005F6A` interactiekleur als Mobiele Voorraad;
 - het detailscherm heeft geen vaste algemene `Opslaan`-knop; een specifieke instelling wordt direct/expliciet opgeslagen vanuit zijn eigen interactie;
 - de gebruikerszichtbare term voor de shoppingmodule en de lijst is **Boodschappenlijst**; interne route en technische sleutel mogen `winkelen` blijven.
 
@@ -510,7 +515,7 @@ De mobiele redesign gebruikt vanaf 23 september 2026 een gescheiden testmodel:
 - bij iedere volgende mobiele schermmigratie wordt dezelfde conformiteitstest met de nieuwe schermbaseline uitgebreid en worden eventuele resterende legacy-visuele assertions voor dat scherm verwijderd;
 - functionele regressiedekking wordt daarbij niet verlaagd of omzeild: alleen de vervangen visuele baseline verhuist naar de nieuwe authority.
 
-Op dit moment is **Voorraad** het enige scherm in de nieuwe mobiele UI-conformiteitsset. **Bijna op**, **Boodschappenlijst/Winkelen** en **Voorraad-artikeldetail** behouden hun functionele regressietests, maar hebben totdat hun nieuwe ontwerp expliciet is vastgesteld geen blokkerende legacy-visuele baseline.
+Op dit moment vallen **Voorraad** en **Voorraad-artikeldetail** onder de nieuwe mobiele UI-conformiteitsset. **Bijna op** en **Boodschappenlijst/Winkelen** behouden hun functionele regressietests, maar hebben totdat hun nieuwe ontwerp expliciet is vastgesteld geen blokkerende legacy-visuele baseline.
 
 ## Historische styleguidedocumenten
 

@@ -22,6 +22,7 @@ export function buildMobileArticleInventoryRows(liveRows = [], articleId = '', a
       id: String(row?.id || '').trim(),
       householdArticleId: String(row?.household_article_id || '').trim(),
       quantity: Number(row?.aantal ?? row?.quantity ?? 0) || 0,
+      imageUrl: String(row?.image_url || '').trim(),
       spaceId: String(row?.space_id || '').trim(),
       sublocationId: String(row?.sublocation_id || '').trim(),
       location: String(row?.locatie || row?.space_name || '').trim(),
