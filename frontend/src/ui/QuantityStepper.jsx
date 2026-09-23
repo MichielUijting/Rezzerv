@@ -10,6 +10,9 @@ export default function QuantityStepper({
   increaseLabel = 'Aantal met 1 verhogen',
   valueLabel = '',
   testIdPrefix = 'quantity-stepper',
+  decreaseTestId = '',
+  increaseTestId = '',
+  valueTestId = '',
 }) {
   return (
     <div className="rz-quantity-stepper">
@@ -18,12 +21,16 @@ export default function QuantityStepper({
         className="rz-quantity-stepper-button"
         disabled={decreaseDisabled}
         aria-label={decreaseLabel}
-        data-testid={`${testIdPrefix}-decrease`}
+        data-testid={decreaseTestId || `${testIdPrefix}-decrease`}
         onClick={onDecrease}
       >
         −
       </button>
-      <span className="rz-quantity-stepper-value" aria-label={valueLabel || `Aantal ${value}`}>
+      <span
+        className="rz-quantity-stepper-value"
+        aria-label={valueLabel || `Aantal ${value}`}
+        data-testid={valueTestId || undefined}
+      >
         {value}
       </span>
       <button
@@ -31,7 +38,7 @@ export default function QuantityStepper({
         className="rz-quantity-stepper-button"
         disabled={increaseDisabled}
         aria-label={increaseLabel}
-        data-testid={`${testIdPrefix}-increase`}
+        data-testid={increaseTestId || `${testIdPrefix}-increase`}
         onClick={onIncrease}
       >
         +
