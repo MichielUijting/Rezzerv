@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
-import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import MobileScreenShell from '../../ui/MobileScreenShell.jsx'
 import Select from '../../ui/Select.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
@@ -59,6 +59,21 @@ async function fetchMobileLocationTracking() {
   }
 }
 
+async function fetchMobileStoreOptions() {
+  try {
+    const payload = await requestJson('/api/store-providers', { method: 'GET', cache: 'no-store' })
+    return (Array.isArray(payload) ? payload : [])
+      .map((item) => ({
+        value: String(item?.name || '').trim(),
+        label: String(item?.name || '').trim(),
+      }))
+      .filter((item) => Boolean(item.value))
+      .sort((a, b) => a.label.localeCompare(b.label, 'nl'))
+  } catch {
+    return []
+  }
+}
+
 async function fetchMobilePurchaseHistory(articleId, articleName) {
   try {
     const normalizedId = String(articleId || '').trim()
@@ -87,7 +102,6 @@ function formatPurchaseDate(value) {
 }
 
 export default function MobileArticlePage() {
-  const navigate = useNavigate()
   const { articleId = '' } = useParams()
   const [searchParams] = useSearchParams()
   const requestedArticleName = String(searchParams.get('artikel') || '').trim()
@@ -101,10 +115,13 @@ export default function MobileArticlePage() {
   const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false)
   const [selectedInventoryId, setSelectedInventoryId] = useState('')
   const [favoriteStoreDraft, setFavoriteStoreDraft] = useState('')
+  const [storeOptions, setStoreOptions] = useState([])
+  const [notesDraft, setNotesDraft] = useState('')
   const [activeQuickPanel, setActiveQuickPanel] = useState('')
   const [loading, setLoading] = useState(true)
   const [inventoryBusy, setInventoryBusy] = useState(false)
   const [settingsBusy, setSettingsBusy] = useState(false)
+  const [notesBusy, setNotesBusy] = useState(false)
   const [shoppingBusy, setShoppingBusy] = useState(false)
   const { showFeedback } = useAppFeedback()
   const [error, setError] = useState('')
@@ -141,15 +158,27 @@ export default function MobileArticlePage() {
   const articleImageUrl = String(selectedRow?.imageUrl || articleData?.image_url || '').trim()
   const almostOut = isMobileArticleAlmostOut(totalQuantity, settings?.min_stock)
   const purchaseHistory = useMemo(() => filterPurchaseHistory(historyRows), [historyRows])
+  const favoriteStoreOptions = useMemo(() => {
+    const currentValue = String(favoriteStoreDraft || settings?.favorite_store || '').trim()
+    const byValue = new Map(storeOptions.map((item) => [String(item.value || '').trim(), item]))
+    if (currentValue && !byValue.has(currentValue)) {
+      byValue.set(currentValue, { value: currentValue, label: currentValue })
+    }
+    return [
+      { value: '', label: 'Geen voorkeurswinkel' },
+      ...[...byValue.values()].filter((item) => item.value),
+    ]
+  }, [favoriteStoreDraft, settings?.favorite_store, storeOptions])
 
   async function loadAll({ showLoading = true } = {}) {
     if (showLoading) setLoading(true)
     setError('')
     try {
-      const [details, inventory, locationTracking] = await Promise.all([
+      const [details, inventory, locationTracking, stores] = await Promise.all([
         fetchMobileArticleDetails(articleId),
         fetchMobileInventoryRows(),
         fetchMobileLocationTracking(),
+        fetchMobileStoreOptions(),
       ])
       const resolvedName = String(details?.article_name || details?.name || requestedArticleName || '').trim()
       const resolvedId = String(details?.household_article_id || details?.article_id || (isStableHouseholdArticleId(articleId) ? articleId : '')).trim()
@@ -158,7 +187,9 @@ export default function MobileArticlePage() {
       setLiveRows(inventory)
       setHistoryRows(history)
       setLocationTrackingEnabled(locationTracking)
+      setStoreOptions(stores)
       setFavoriteStoreDraft(String(details?.settings?.favorite_store || ''))
+      setNotesDraft(String(details?.settings?.notes || details?.notes || ''))
     } catch (loadError) {
       setError(loadError?.message || 'Artikeldetails konden niet worden geladen.')
     } finally {
@@ -179,6 +210,10 @@ export default function MobileArticlePage() {
   useEffect(() => {
     setFavoriteStoreDraft(String(settings?.favorite_store || ''))
   }, [settings?.favorite_store])
+
+  useEffect(() => {
+    setNotesDraft(String(settings?.notes || articleData?.notes || ''))
+  }, [settings?.notes, articleData?.notes])
 
   function showSuccess(message) {
     showFeedback({ variant: 'success', message, testId: 'mobile-article-feedback' })
@@ -251,9 +286,9 @@ export default function MobileArticlePage() {
     }
   }
 
-  async function saveFavoriteStore() {
+  async function saveFavoriteStore(nextStoreValue) {
     const currentValue = String(settings?.favorite_store || '').trim()
-    const nextValue = String(favoriteStoreDraft || '').trim()
+    const nextValue = String(nextStoreValue ?? favoriteStoreDraft ?? '').trim()
     if (!canEditHouseholdSettings || settingsBusy || !householdArticleId || nextValue === currentValue) return
 
     setSettingsBusy(true)
@@ -275,6 +310,32 @@ export default function MobileArticlePage() {
     }
   }
 
+  async function saveNotes() {
+    const currentValue = String(settings?.notes || articleData?.notes || '').trim()
+    const nextValue = String(notesDraft || '').trim()
+    if (notesBusy || !householdArticleId || nextValue === currentValue) return
+
+    setNotesBusy(true)
+    try {
+      const result = await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/notes`, {
+        method: 'PUT',
+        body: JSON.stringify({ notes: nextValue || null }),
+      })
+      const savedNotes = String(result?.notes || '')
+      setNotesDraft(savedNotes)
+      setArticleData((current) => ({
+        ...(current || {}),
+        settings: { ...((current?.settings && typeof current.settings === 'object') ? current.settings : {}), notes: savedNotes || null },
+      }))
+      showSuccess('Notities opgeslagen.')
+    } catch (notesError) {
+      setNotesDraft(currentValue)
+      showError(notesError?.message || 'Notities konden niet worden opgeslagen.')
+    } finally {
+      setNotesBusy(false)
+    }
+  }
+
   async function addToShoppingList() {
     if (shoppingBusy || !householdArticleId) return
     setShoppingBusy(true)
@@ -284,9 +345,9 @@ export default function MobileArticlePage() {
         method: 'POST',
         body: JSON.stringify(payload),
       })
-      showSuccess(`${articleName} toegevoegd aan Winkelen.`)
+      showSuccess(`${articleName} toegevoegd aan de boodschappenlijst.`)
     } catch (shoppingError) {
-      showError(shoppingError?.message || 'Artikel kon niet aan Winkelen worden toegevoegd.')
+      showError(shoppingError?.message || 'Artikel kon niet aan de boodschappenlijst worden toegevoegd.')
     } finally {
       setShoppingBusy(false)
     }
@@ -298,44 +359,55 @@ export default function MobileArticlePage() {
 
   if (loading) {
     return (
-      <div className="rz-screen rz-mobile-article-screen" data-testid="mobile-article-detail-page">
-        <MobileModuleHeader title="Voorraad" testId="mobile-article-header" />
+      <MobileScreenShell
+        title="Artikel in Voorraad"
+        activeKey="voorraad"
+        testId="mobile-article-detail-page"
+        headerTestId="mobile-article-header"
+        className="rz-mobile-article-screen"
+        backFallbackRoute="/voorraad"
+      >
         <main className="rz-mobile-article-content">
-          <button type="button" className="rz-mobile-article-back" onClick={() => navigate('/voorraad')} data-testid="mobile-article-back-to-inventory">‹ Voorraad</button>
           <section className="rz-mobile-article-card rz-mobile-article-state">Artikeldetails laden…</section>
         </main>
-      </div>
+      </MobileScreenShell>
     )
   }
 
   if (error || !articleData) {
     return (
-      <div className="rz-screen rz-mobile-article-screen" data-testid="mobile-article-detail-page">
-        <MobileModuleHeader title="Voorraad" testId="mobile-article-header" />
+      <MobileScreenShell
+        title="Artikel in Voorraad"
+        activeKey="voorraad"
+        testId="mobile-article-detail-page"
+        headerTestId="mobile-article-header"
+        className="rz-mobile-article-screen"
+        backFallbackRoute="/voorraad"
+      >
         <main className="rz-mobile-article-content">
-          <button type="button" className="rz-mobile-article-back" onClick={() => navigate('/voorraad')} data-testid="mobile-article-back-to-inventory">‹ Voorraad</button>
           <section className="rz-mobile-article-card rz-mobile-article-state rz-mobile-article-state--error" role="alert">
             <strong>Artikel niet beschikbaar</strong>
             <span>{error || 'Voor dit artikel zijn geen gegevens beschikbaar.'}</span>
             <button type="button" className="rz-mobile-article-text-action" onClick={() => loadAll()}>Opnieuw proberen</button>
           </section>
         </main>
-      </div>
+      </MobileScreenShell>
     )
   }
 
   const articleGroup = String(articleData?.article_group_name || articleData?.article_group || articleData?.category || 'Niet ingedeeld').trim()
-  const notes = String(settings?.notes || articleData?.notes || '').trim()
 
   return (
-    <div
-      className="rz-screen rz-mobile-article-screen"
-      data-testid="mobile-article-detail-page"
-      data-location-tracking={locationTrackingEnabled ? 'enabled' : 'disabled'}
+    <MobileScreenShell
+      title="Artikel in Voorraad"
+      activeKey="voorraad"
+      testId="mobile-article-detail-page"
+      headerTestId="mobile-article-header"
+      className="rz-mobile-article-screen"
+      backFallbackRoute="/voorraad"
+      rootProps={{ 'data-location-tracking': locationTrackingEnabled ? 'enabled' : 'disabled' }}
     >
-      <MobileModuleHeader title="Voorraad" testId="mobile-article-header" />
       <main className="rz-mobile-article-content">
-        <button type="button" className="rz-mobile-article-back" onClick={() => navigate('/voorraad')} data-testid="mobile-article-back-to-inventory">‹ Voorraad</button>
         <section className="rz-mobile-article-card rz-mobile-article-hero" aria-label="Actuele voorraad">
           <div className="rz-mobile-article-identity">
             <CatalogArticleThumbnail
@@ -409,41 +481,38 @@ export default function MobileArticlePage() {
               )}
             </div>
           ) : null}
-          <div className="rz-mobile-article-detail-row">
-            <span>Notities</span>
-            <strong>{notes || 'Geen notities'}</strong>
+          <div className="rz-mobile-article-detail-row rz-mobile-article-detail-row--notes">
+            <label htmlFor="mobile-article-notes">Notities</label>
+            <textarea
+              id="mobile-article-notes"
+              className="rz-mobile-article-notes-input"
+              value={notesDraft}
+              onChange={(event) => setNotesDraft(event.target.value)}
+              onBlur={saveNotes}
+              disabled={notesBusy}
+              placeholder="Voeg een notitie toe"
+              data-testid="mobile-article-notes"
+            />
+          </div>
+          <div className="rz-mobile-article-detail-row rz-mobile-article-detail-row--location">
+            <span id="mobile-article-favorite-store-label">Voorkeurswinkel</span>
+            <Select
+              value={favoriteStoreDraft}
+              onChange={(value) => {
+                setFavoriteStoreDraft(value)
+                void saveFavoriteStore(value)
+              }}
+              options={favoriteStoreOptions}
+              ariaLabelledby="mobile-article-favorite-store-label"
+              triggerClassName="rz-mobile-article-select"
+              dataTestId="mobile-article-favorite-store-select"
+              disabled={!canEditHouseholdSettings || settingsBusy}
+            />
           </div>
         </section>
 
         <section className="rz-mobile-article-card rz-mobile-article-quick-actions" aria-label="Snelle acties">
           <div className="rz-mobile-article-section-title">Snelle acties</div>
-
-          <button
-            type="button"
-            className="rz-mobile-article-action-row"
-            onClick={() => togglePanel('favorite-store')}
-            aria-expanded={activeQuickPanel === 'favorite-store'}
-            data-testid="mobile-article-favorite-store-action"
-          >
-            <span>Voorkeurswinkel</span>
-            <span className="rz-mobile-article-action-value">{String(settings?.favorite_store || '').trim() || 'Niet ingesteld'}</span>
-          </button>
-          {activeQuickPanel === 'favorite-store' ? (
-            <div className="rz-mobile-article-inline-panel" data-testid="mobile-article-favorite-store-panel">
-              <label className="rz-mobile-article-field">
-                <span>Voorkeurswinkel</span>
-                <input
-                  className="rz-mobile-article-input"
-                  value={favoriteStoreDraft}
-                  onChange={(event) => setFavoriteStoreDraft(event.target.value)}
-                  onBlur={saveFavoriteStore}
-                  disabled={!canEditHouseholdSettings || settingsBusy}
-                  placeholder="Bijvoorbeeld: AH"
-                />
-              </label>
-              <div className="rz-mobile-article-helper">Wijzigingen worden opgeslagen zodra je het veld verlaat.</div>
-            </div>
-          ) : null}
 
           <button
             type="button"
@@ -479,11 +548,10 @@ export default function MobileArticlePage() {
             disabled={shoppingBusy || !householdArticleId}
             data-testid="mobile-article-add-to-shopping-list"
           >
-            <span>Naar inkooplijstje</span>
-            <span className="rz-mobile-article-action-value">{shoppingBusy ? 'Bezig…' : 'Winkelen'}</span>
+            <span>{shoppingBusy ? 'Bezig…' : 'Naar boodschappenlijst'}</span>
           </button>
         </section>
       </main>
-    </div>
+    </MobileScreenShell>
   )
 }

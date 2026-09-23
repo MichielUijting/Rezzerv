@@ -13,33 +13,14 @@
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  padding: 10px 14px calc(32px + env(safe-area-inset-bottom));
+  padding: 10px 14px calc(86px + env(safe-area-inset-bottom));
   display: grid;
   gap: 10px;
 }
 
-.rz-mobile-article-back {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 6px 6px 6px 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-mobile-ui-primary);
-  font-family: var(--font-family-base);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.rz-mobile-article-back:hover {
-  text-decoration: underline;
-}
-
-.rz-mobile-article-back:focus-visible,
 .rz-mobile-article-action-row:focus-visible,
 .rz-mobile-article-input:focus,
+.rz-mobile-article-notes-input:focus,
 .rz-mobile-article-select:focus,
 .rz-mobile-article-text-action:focus-visible {
   outline: 2px solid rgba(0, 95, 106, 0.18);

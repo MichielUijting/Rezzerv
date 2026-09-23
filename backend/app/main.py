@@ -770,6 +770,18 @@ class ArticleHouseholdDetailsUpdateRequest(BaseModel):
         return str(value).strip()
 
 
+class HouseholdArticleNotesUpdateRequest(BaseModel):
+    notes: str | None = None
+
+    @field_validator('notes', mode='before')
+    @classmethod
+    def normalize_notes(cls, value):
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+
 class HouseholdArticleSettingsUpdateRequest(BaseModel):
     min_stock: float | None = None
     ideal_stock: float | None = None
@@ -12969,6 +12981,46 @@ def update_household_article_settings_endpoint(household_article_id: str, payloa
     household_id = str(context.get('active_household_id') or '')
     with engine.begin() as conn:
         return update_household_article_settings(conn, household_id, str(household_article_id or '').strip(), payload)
+
+
+@app.put("/api/household-articles/{household_article_id}/notes")
+def update_household_article_notes_endpoint(household_article_id: str, payload: HouseholdArticleNotesUpdateRequest, authorization: Optional[str] = Header(None)):
+    context = require_household_context(authorization)
+    if str(context.get('context_type') or '').strip().lower() != 'regular':
+        raise HTTPException(status_code=403, detail='Alleen leden van het actieve huishouden mogen notities aanpassen')
+    household_id = str(context.get('active_household_id') or '')
+    normalized_article_id = str(household_article_id or '').strip()
+    with engine.begin() as conn:
+        article_row = get_household_article_row_by_id(conn, household_id, normalized_article_id)
+        if not article_row:
+            raise HTTPException(status_code=404, detail='Artikel niet gevonden')
+        notes = normalize_optional_text_field(payload.notes)
+        if notes is None:
+            conn.execute(
+                text("DELETE FROM household_article_notes WHERE household_article_id = :household_article_id"),
+                {'household_article_id': normalized_article_id},
+            )
+        else:
+            conn.execute(
+                text("""
+                    INSERT INTO household_article_notes (id, household_article_id, note, created_at, updated_at)
+                    VALUES (:id, :household_article_id, :note, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT(household_article_id)
+                    DO UPDATE SET note = excluded.note, updated_at = CURRENT_TIMESTAMP
+                """),
+                {
+                    'id': str(uuid.uuid4()),
+                    'household_article_id': normalized_article_id,
+                    'note': notes,
+                },
+            )
+        updated = get_household_article_settings(conn, household_id, normalized_article_id).get('settings') or {}
+    return {
+        'status': 'ok',
+        'household_article_id': normalized_article_id,
+        'notes': updated.get('notes'),
+        'notes_updated_at': updated.get('notes_updated_at'),
+    }
 
 
 @app.post("/api/household-articles/{household_article_id}/archive")
