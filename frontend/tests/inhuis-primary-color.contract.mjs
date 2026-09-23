@@ -65,7 +65,7 @@ const forbiddenPrimaryColors = [
   '#1D4D3F',
   '#176B35',
 ]
-const sourceExtensions = new Set(['.css', '.js', '.jsx', '.ts', '.tsx'])
+const sourceExtensions = new Set(['.css', '.js', '.jsx', '.ts', '.tsx', '.svg'])
 function listSourceFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name)
@@ -74,11 +74,13 @@ function listSourceFiles(directory) {
   })
 }
 const primaryColorViolations = []
-for (const filePath of listSourceFiles(path.join(frontendRoot, 'src'))) {
-  const content = fs.readFileSync(filePath, 'utf8').toUpperCase()
-  for (const forbiddenColor of forbiddenPrimaryColors) {
-    if (content.includes(forbiddenColor)) {
-      primaryColorViolations.push(`${path.relative(frontendRoot, filePath)} bevat oude primaire kleur ${forbiddenColor}`)
+for (const root of ['src', 'public']) {
+  for (const filePath of listSourceFiles(path.join(frontendRoot, root))) {
+    const content = fs.readFileSync(filePath, 'utf8').toUpperCase()
+    for (const forbiddenColor of forbiddenPrimaryColors) {
+      if (content.includes(forbiddenColor)) {
+        primaryColorViolations.push(`${path.relative(frontendRoot, filePath)} bevat oude primaire kleur ${forbiddenColor}`)
+      }
     }
   }
 }
