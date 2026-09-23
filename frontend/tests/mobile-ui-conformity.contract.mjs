@@ -15,6 +15,9 @@ assert.match(mobileInventorySource, /data-testid="mobile-inventory-header"/)
 assert.match(mobileInventorySource, /<h1>Voorraad<\/h1>/)
 assert.match(mobileInventorySource, /src="\/inhuis-logo-white\.png"/)
 assert.match(mobileInventorySource, /selectRecentActionTiles/)
+assert.match(mobileInventorySource, /excludeKeys: \['voorraad'\]/)
+assert.match(mobileInventorySource, /mobile-inventory-decrease-/)
+assert.match(mobileInventorySource, /mobile-inventory-increase-/)
 assert.match(mobileInventorySource, /MORE_NAV_ITEM = \{ key: 'meer', label: 'Meer', route: '\/home'/)
 assert.match(mobileInventorySource, /\{ value: 'name-asc', label: 'Naam A–Z' \}/)
 assert.match(mobileInventorySource, /\{ value: 'name-desc', label: 'Naam Z–A' \}/)
@@ -25,9 +28,14 @@ assert.match(
   /\.rz-mobile-inventory-screen\s*\{[\s\S]*url\('\/inhuis-green-wallpaper\.svg'\)[\s\S]*background-color:\s*#EEF7F0/i,
 )
 assert.doesNotMatch(mobileInventoryCss, /backdrop-filter/)
+assert.doesNotMatch(mobileInventoryCss, /#006b3c|#005630/i)
 assert.match(
   mobileInventoryCss,
-  /\.rz-mobile-inventory-topbar\s*\{[\s\S]*justify-content:\s*space-between;[\s\S]*background:\s*var\(--color-ui-primary\);/,
+  /\.rz-mobile-inventory-screen\s*\{[\s\S]*--rz-mobile-primary:\s*#005F6A;/i,
+)
+assert.match(
+  mobileInventoryCss,
+  /\.rz-mobile-inventory-topbar\s*\{[\s\S]*justify-content:\s*space-between;[\s\S]*background:\s*var\(--rz-mobile-primary\);/,
 )
 assert.match(
   mobileInventoryCss,
@@ -51,7 +59,7 @@ assert.match(
 )
 assert.match(
   mobileInventoryCss,
-  /\.rz-mobile-inventory-nav-item\.is-active\s*\{[\s\S]*color:\s*var\(--rz-mobile-proposal-green\);/,
+  /\.rz-mobile-inventory-quantity-button\s*\{[\s\S]*border:\s*1px solid var\(--rz-mobile-primary\);[\s\S]*color:\s*var\(--rz-mobile-primary\);/,
 )
 
 // Mobile Voorraad owns the fixed bottom action bar; passive feedback must sit above it.

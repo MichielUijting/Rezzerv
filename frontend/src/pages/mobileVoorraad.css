@@ -1,6 +1,5 @@
 .rz-mobile-inventory-screen {
-  --rz-mobile-proposal-green: #006b3c;
-  --rz-mobile-proposal-green-dark: #005630;
+  --rz-mobile-primary: #005F6A;
   --rz-mobile-proposal-muted: #69716c;
   --rz-mobile-proposal-line: #e1e6e2;
   min-height: 100vh;
@@ -21,7 +20,7 @@
   min-height: 58px;
   padding: 4px 14px;
   border-bottom: 1px solid rgba(26, 26, 26, 0.18);
-  background: var(--color-ui-primary);
+  background: var(--rz-mobile-primary);
 }
 
 .rz-mobile-inventory-topbar h1 {
@@ -108,9 +107,9 @@
 }
 
 .rz-mobile-inventory-search .rz-input:focus {
-  border-color: var(--rz-mobile-proposal-green);
+  border-color: var(--rz-mobile-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 107, 60, 0.12);
+  box-shadow: 0 0 0 2px rgba(0, 95, 106, 0.12);
 }
 
 .rz-mobile-inventory-filter-strip {
@@ -136,8 +135,8 @@
 }
 
 .rz-mobile-inventory-select-trigger:focus-visible {
-  border-color: var(--rz-mobile-proposal-green) !important;
-  outline: 2px solid rgba(0, 107, 60, 0.14) !important;
+  border-color: var(--rz-mobile-primary) !important;
+  outline: 2px solid rgba(0, 95, 106, 0.14) !important;
   outline-offset: 1px;
 }
 
@@ -148,7 +147,7 @@
   padding: 5px 9px;
   border: 0;
   background: transparent !important;
-  color: var(--rz-mobile-proposal-green) !important;
+  color: var(--rz-mobile-primary) !important;
   font-size: 14px;
   box-shadow: none !important;
 }
@@ -172,9 +171,9 @@
   width: auto;
   min-height: 44px;
   padding: 8px 12px;
-  border: 1px solid var(--rz-mobile-proposal-green);
+  border: 1px solid var(--rz-mobile-primary);
   border-radius: 9px;
-  background: var(--rz-mobile-proposal-green) !important;
+  background: var(--rz-mobile-primary) !important;
   color: #ffffff !important;
   font-size: 14px;
   font-weight: 400;
@@ -184,7 +183,7 @@
 
 .rz-mobile-inventory-add:hover,
 .rz-mobile-inventory-add:focus-visible {
-  background: var(--rz-mobile-proposal-green-dark) !important;
+  background: var(--rz-mobile-primary) !important;
 }
 
 .rz-mobile-inventory-list {
@@ -219,7 +218,7 @@
 .rz-mobile-inventory-card:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid var(--rz-mobile-proposal-green);
+  outline: 2px solid var(--rz-mobile-primary);
   outline-offset: -2px;
 }
 
@@ -297,6 +296,43 @@
   gap: 5px;
 }
 
+.rz-mobile-inventory-quantity-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rz-mobile-inventory-quantity-button {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--rz-mobile-primary);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--rz-mobile-primary);
+  font-family: var(--font-family-base);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rz-mobile-inventory-quantity-button:hover,
+.rz-mobile-inventory-quantity-button:focus-visible {
+  border-color: var(--rz-mobile-primary);
+  background: var(--rz-mobile-primary);
+  color: #ffffff;
+  outline: none;
+}
+
+.rz-mobile-inventory-quantity-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
 .rz-mobile-inventory-quantity {
   display: inline-flex;
   align-items: center;
@@ -307,7 +343,7 @@
   border: 1px solid #d6dfd9;
   border-radius: 7px;
   background: #f7faf8;
-  color: var(--rz-mobile-proposal-green);
+  color: var(--rz-mobile-primary);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
@@ -318,6 +354,26 @@
   font-size: 22px;
   font-weight: 400;
   line-height: 1;
+}
+
+.rz-mobile-inventory-quick-feedback {
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--rz-mobile-proposal-line);
+  border-radius: 9px;
+  background: #ffffff;
+  color: #545c57;
+  font-size: 14px;
+}
+
+.rz-mobile-inventory-quick-feedback--success {
+  border-color: var(--rz-mobile-primary);
+  color: var(--rz-mobile-primary);
+}
+
+.rz-mobile-inventory-quick-feedback--error {
+  border-color: #e5b9b5;
+  color: #9f2f25;
 }
 
 .rz-mobile-inventory-state {
@@ -340,8 +396,8 @@
 .rz-mobile-inventory-state .rz-button-secondary {
   width: fit-content;
   background: #ffffff !important;
-  color: var(--rz-mobile-proposal-green) !important;
-  border: 1px solid var(--rz-mobile-proposal-green);
+  color: var(--rz-mobile-primary) !important;
+  border: 1px solid var(--rz-mobile-primary);
   box-shadow: none !important;
 }
 
@@ -377,12 +433,12 @@
 }
 
 .rz-mobile-inventory-nav-item.is-active {
-  color: var(--rz-mobile-proposal-green);
+  color: var(--rz-mobile-primary);
   font-weight: 700;
 }
 
 .rz-mobile-inventory-nav-item:focus-visible {
-  outline: 2px solid var(--rz-mobile-proposal-green);
+  outline: 2px solid var(--rz-mobile-primary);
   outline-offset: -2px;
   border-radius: 8px;
 }

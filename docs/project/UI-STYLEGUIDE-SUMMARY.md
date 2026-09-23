@@ -18,12 +18,12 @@ Historische besluiten die hierin zijn opgenomen:
 Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele grammatica uit het door de PO aangeleverde ontwerpvoorstel:
 
 - een rustige **lichtgroene gevlekte Inhuis-achtergrond** via de bestaande groene wallpaper; blur en zwevende glassmorphism-cards blijven vervallen;
-- een compacte header in dezelfde primaire gekleurde surface als de desktopheader, met **Voorraad links** en het **witte Inhuis-logo rechts**, zonder huishouden-/userboxpresentatie in deze module-root;
-- een donkere mobiele primaire groentint **`#006B3C`** voor actieve navigatie en primaire mobiele acties; de bestaande desktop-/tabelkleur `#28A99E` blijft buiten deze mobiele pilot ongewijzigd;
+- een compacte header in de vaste mobiele primaire kleur `#005F6A`, met **Voorraad links** en het **witte Inhuis-logo rechts**, zonder huishouden-/userboxpresentatie in deze module-root;
+- één vaste mobiele primaire donkergroene/blauwgroene kleur **`#005F6A`** voor headers, primaire mobiele knoppen, voorraadmutatieknoppen, focusaccenten en actieve mobiele accenten; er wordt binnen de gemigreerde mobiele schermen geen tweede donkergroene primaire tint gebruikt; de bestaande desktop-/tabelkleur `#28A99E` blijft buiten deze mobiele redesign ongewijzigd;
 - zoeken en filters staan compact boven de inhoud, zonder een grote omhullende filtercard;
 - de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - geen losse verhoogde card per voorraadartikel en geen decoratieve schaduwen als hoofdstructuur;
-- een vaste witte onderste actiebalk met maximaal vier door de **huidige gebruiker recent gebruikte en nog beschikbare acties**, aangevuld met beschikbare acties wanneer nog onvoldoende gebruikshistorie bestaat, plus altijd **Meer** als laatste item;
+- een vaste witte onderste actiebalk met maximaal vier door de **huidige gebruiker recent gebruikte en nog beschikbare acties**, waarbij de **actief geopende module altijd wordt uitgesloten**, aangevuld met beschikbare andere acties wanneer nog onvoldoende gebruikshistorie bestaat, plus altijd **Meer** als laatste item;
 - de bestaande actie **Incidentele aankoop** blijft functioneel beschikbaar, maar staat als compacte groene actie bij de lijstcontext en is niet langer een grote sticky knop boven een aparte meldingenbalk;
 - alle bestaande data-, autorisatie-, huishoudisolatie-, detailroute- en filterfunctionaliteit blijft leidend. Dit PO-besluit wijzigt de presentatie, niet het domeinmodel.
 
@@ -73,14 +73,14 @@ Centrale tokens:
 - `--color-table-grid`: `#8FD19E`.
 
 Gebruik:
-- `#28A99E` blijft de primaire Inhuis-UI-kleur voor bestaande desktop-/tabelsurfaces en nog niet gemigreerde schermen; de mobiele Voorraadpilot gebruikt conform het PO-ontwerpbesluit `#006B3C` voor primaire actie en actieve onderste navigatie;
+- `#28A99E` blijft de primaire Inhuis-UI-kleur voor bestaande desktop-/tabelsurfaces en nog niet gemigreerde schermen; de mobiele Voorraadpilot gebruikt conform het PO-ontwerpbesluit `#005F6A` voor primaire actie en actieve onderste navigatie;
 - tekst en iconen op `#28A99E` gebruiken centraal `#FFFFFF`; dit geldt applicatiebreed voor primaire gekleurde surfaces en vervangt de eerdere donkere tekstkleur;
 - `#1A3E2B` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
 - normale tekst gebruikt de primaire donkere tekstkleur;
 - lichte groentinten zijn ondersteunend en concurreren niet met de primaire actie;
 - de legacy-token `--rz-accent` wordt centraal gekoppeld aan `--color-ui-primary`;
 - voeg geen nieuwe dominante merkkleur toe zonder expliciete PO-beslissing en styleguide-update;
-- witte tekst op gekleurde primaire surfaces blijft verplicht; dit geldt zowel op `#28A99E` als op de mobiele Voorraadpilottint `#006B3C`;
+- witte tekst op gekleurde primaire surfaces blijft verplicht; dit geldt zowel op `#28A99E` als op de mobiele Voorraadpilottint `#005F6A`;
 - fout-, waarschuwing- en succeskleuren mogen semantisch afwijken, maar worden niet als alternatieve merkkleur ingezet.
 
 ## Spacing, radius en elevation
@@ -183,13 +183,14 @@ Het nog niet gemigreerde **Voorraad-artikeldetail** mag tijdelijk de oudere groe
 Vaste kenmerken:
 - compacte gekleurde header met **Voorraad links** en het witte Inhuis-logo rechts;
 - zoekveld als eerste ingang, gevolgd door compacte locatie-/artikelgroep-/sorteerfilters; artikelsortering biedt **Naam A–Z** en **Naam Z–A**, terwijl sortering op aantal niet wordt aangeboden;
+- iedere voorraadregel toont voor bevoegde Admin/Eigenaar direct `−` vóór en `+` na het aantal; `−` boekt exact één eenheid af via de bestaande inventory-eventlogica en `+` verhoogt exact één eenheid via de bestaande handmatige voorraadcorrectie; na iedere mutatie wordt de backendvoorraad opnieuw geladen;
 - interactieve zoek-/select-/actievelden hebben minimaal circa `44px` touchhoogte;
 - aantalscontext en de bestaande actie **Incidentele aankoop** staan compact boven de lijst;
 - één witte lijstcontainer met subtiele horizontale scheidingen;
 - iedere rij toont waar beschikbaar een representatieve productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - de hele rij is het detailklikdoel;
 - geen afzonderlijke schaduwcard, wallpaper, blur of sticky schermbrede CTA per artikel;
-- vaste witte onderste actiebalk met maximaal vier recent gebruikte, voor de huidige gebruiker nog beschikbare acties en altijd **Meer** als laatste item; actieve Voorraadactie gebruikt `#006B3C`;
+- vaste witte onderste actiebalk met maximaal vier recent gebruikte, voor de huidige gebruiker nog beschikbare acties en altijd **Meer** als laatste item; actieve Voorraadactie gebruikt `#005F6A`;
 - onderaan wordt altijd ruimte gereserveerd voor de navigatie en safe-area.
 
 ### Referentie B — mobiel detailscherm: Voorraad-artikeldetail (tijdelijk legacy-visueel)
@@ -290,7 +291,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 
 ## Knoppen en acties
 
-- primaire knop: standaard `#28A99E` met witte tekst/iconen (`#FFFFFF`); binnen de nieuwe mobiele Voorraadbaseline gebruikt de primaire actie conform PO-besluit `#006B3C` met wit;
+- primaire knop: standaard `#28A99E` met witte tekst/iconen (`#FFFFFF`); binnen gemigreerde mobiele schermen gebruikt header én primaire/interactieve actie conform PO-besluit uitsluitend `#005F6A` met wit of als outline-accent;
 - knoptekst is `14px` en niet vet (`font-weight: 400`);
 - per scherm is bij voorkeur één dominante primaire actie;
 - secundaire acties krijgen minder visueel gewicht;
