@@ -18,7 +18,7 @@ Historische besluiten die hierin zijn opgenomen:
 Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele grammatica uit het door de PO aangeleverde ontwerpvoorstel:
 
 - een rustige **lichtgroene gevlekte Inhuis-achtergrond** via de bestaande groene wallpaper; blur en zwevende glassmorphism-cards blijven vervallen;
-- een compacte header in de vaste mobiele primaire kleur `#005F6A`, met links altijd de gedeelde knop **Terug**, daarna de schermtitel en rechts het **witte Inhuis-logo**, zonder huishouden-/userboxpresentatie in deze module-root;
+- ieder beveiligd mobiel scherm krijgt vanuit de centrale `MobileAppChrome` linksboven de gedeelde knop **Terug** in `#005F6A`; een aanwezige module-/appheader reserveert hiervoor links ruimte en toont daarnaast de schermtitel en waar van toepassing het **witte Inhuis-logo**;
 - één applicatiebrede primaire donkergroene/blauwgroene kleur **`#005F6A`** voor headers, primaire knoppen, tabelheaders, voorraadmutatieknoppen, focusaccenten en actieve mobiele accenten; er wordt geen tweede primaire donkergroene tint gebruikt;
 - zoeken en filters staan compact boven de inhoud, zonder een grote omhullende filtercard;
 - de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
@@ -142,7 +142,7 @@ Passieve succes-, info-, waarschuwing- en foutmeldingen gebruiken uitsluitend de
 - een scherm maakt hiervoor geen lokale inline succes-/foutmelding of eigen timer;
 - interactieve bevestigingen, formulieren, technische-detaildialogen en voortgangsfeedback zijn niet transient en verdwijnen niet automatisch; zij blijven de bestaande AppFeedback-dialogsemantiek volgen.
 
-Voor Mobiel Voorraad staat de feedbackoverlay boven de vaste `MobileRecentActionsBar`, zodat melding en navigatie elkaar niet afdekken.
+Op ieder beveiligd mobiel scherm staat de feedbackoverlay boven de vaste `MobileRecentActionsBar`, zodat melding en navigatie elkaar niet afdekken.
 
 ## Mobiele navigatie
 
@@ -152,7 +152,7 @@ Inhuis gebruikt op mobiel twee navigatieniveaus:
 
 Voor de browserapp geldt:
 - de browsergeschiedenis blijft de inhoudelijke bron voor terugnavigatie;
-- elk beveiligd mobiel scherm toont linksboven de gedeelde knop **Terug**; alleen dit centrale component mag `navigate(-1)` gebruiken en valt zonder bruikbare geschiedenis veilig terug op `/home`;
+- elk beveiligd mobiel scherm toont linksboven de gedeelde knop **Terug** vanuit `MobileAppChrome`; alleen het centrale `MobileBackControl` mag `navigate(-1)` gebruiken en valt zonder bruikbare geschiedenis veilig terug op `/home`;
 - schermspecifieke terugknoppen of hard gecodeerde terugroutes zijn niet toegestaan;
 - een detailroute wordt normaal via routing geopend;
 - terugkeren naar een lijst hoort zoek-/filter-/sorteringscontext en scrollpositie zo veel mogelijk te behouden.
@@ -377,7 +377,8 @@ Actueel expliciet goedgekeurd en herbruikbaar zijn onder meer:
 - `DelayedTableLoadingOverlay` — loadingoverlay na 1.000 ms;
 - `Table`/`DataTable` — canonieke tabellen;
 - `MobileModuleHeader` — compacte mobiele moduleheader;
-- `MobileRecentActionsBar` — vaste recente-actiebalk onderin gemigreerde mobiele modulehoofschermen;
+- `MobileBackControl` via `MobileAppChrome` — één centrale terugactie linksboven op ieder beveiligd mobiel scherm;
+- `MobileRecentActionsBar` — vaste recente-actiebalk onderin ieder beveiligd mobiel scherm;
 - `QuantityStepper` — canonieke `− waarde +`-bediening met optionele directe numerieke aantalinvoer; domeinmutaties en de beslissing of inline bewerken veilig is blijven buiten het component.
 
 Harde werkwijze:
@@ -443,7 +444,7 @@ Het mobiele detailscherm van een voorraadartikel is een vereenvoudigde presentat
 Vaste regels:
 - het scherm gebruikt hetzelfde huishoudartikel en dezelfde voorraad-/historie-/settings-API's als het bestaande desktop-detailscherm;
 - het detailscherm gebruikt dezelfde **groene Voorraadbaseline** als het mobiele hoofdscherm: `MobileModuleHeader` met titel **Artikel in Voorraad**, `/inhuis-green-wallpaper.svg`, achtergrond `#EEF7F0`, witte kaarten met 12px-radius en zonder glassmorphism of zware schaduw;
-- terugnavigatie komt uitsluitend uit de gedeelde knop **Terug** in de mobiele header; het detailscherm heeft geen eigen `‹ Voorraad`-knop;
+- terugnavigatie komt uitsluitend uit de gedeelde knop **Terug** van `MobileAppChrome`; het detailscherm en zijn header hebben geen eigen `‹ Voorraad`- of andere terugknop;
 - de artikelkop toont waar beschikbaar dezelfde representatieve `CatalogArticleThumbnail`, de artikelnaam en artikelgroep/statuschips;
 - de actuele voorraad staat in dezelfde artikelkaart met de centrale `QuantityStepper`;
 - `−` verlaagt de voorraad met één via de bestaande afboek-/inventory-eventlogica;
