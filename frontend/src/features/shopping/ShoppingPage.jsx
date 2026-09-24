@@ -514,6 +514,7 @@ export default function ShoppingPage() {
                   id="shopping-catalog-query"
                   className="rz-input"
                   value={catalogQuery}
+                  disabled={saving}
                   onChange={(event) => updateCatalogQuery(event.target.value)}
                   placeholder="Zoek artikel, producttype of artikelgroep"
                   aria-controls="shopping-candidate-list"

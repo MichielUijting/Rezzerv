@@ -18,7 +18,11 @@ function sourceFiles(directory) {
 
 function isCanonicalAccent(value) {
   const normalized = String(value || '').replace(/\s+/g, '').toLowerCase()
-  return normalized === 'var(--color-brand-primary)' || normalized === '#005f6a'
+  return [
+    'var(--color-brand-primary)',
+    'var(--color-ui-primary)',
+    'var(--color-mobile-ui-primary)',
+  ].includes(normalized)
 }
 
 const login = read('src/features/auth/LoginPage.jsx')
@@ -90,11 +94,11 @@ const checks = [
   [tokens.includes('--color-brand-primary: #005F6A;'), 'canonical Inhuis primary color token remains defined'],
   [main.includes('import "./ui/form-controls.css";'), 'global native form-control branding is loaded'],
   [formControls.includes("input[type='checkbox']") && formControls.includes("input[type='radio']"), 'global branding covers native checkboxes and radios'],
-  [formControls.includes('accent-color: var(--color-brand-primary);'), 'native selected state uses Rezzerv primary color'],
+  [formControls.includes('accent-color: var(--color-brand-primary);'), 'native selected state uses canonical Inhuis primary color token'],
   [formControls.includes("input[type='checkbox']:focus-visible") && formControls.includes("input[type='radio']:focus-visible"), 'keyboard focus branding covers checkboxes and radios'],
-  [formControls.includes('outline: 2px solid var(--color-brand-primary);'), 'native focus ring uses Rezzerv primary color'],
+  [formControls.includes('outline: 2px solid var(--color-brand-primary);'), 'native focus ring uses canonical Inhuis primary color token'],
   [checkboxComponent.includes("accentColor: 'var(--color-brand-primary)'"), 'shared Checkbox component uses canonical brand token'],
-  [nonCanonicalAccents.length === 0, `all frontend accent declarations use canonical Rezzerv green${nonCanonicalAccents.length ? `: ${nonCanonicalAccents.join(', ')}` : ''}`],
+  [nonCanonicalAccents.length === 0, `all frontend accent declarations use canonical Inhuis primary token${nonCanonicalAccents.length ? `: ${nonCanonicalAccents.join(', ')}` : ''}`],
 ]
 
 for (const [ok, label] of checks) {

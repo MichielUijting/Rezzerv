@@ -297,6 +297,7 @@ export default function MobileShopping() {
               className="rz-input"
               type="search"
               value={catalogQuery}
+              disabled={saving}
               onChange={(event) => setCatalogQuery(event.target.value)}
               placeholder="Zoek artikel, producttype of artikelgroep"
               aria-label="Artikel toevoegen"
