@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import HTTPException
 from sqlalchemy import text
 
-from app.services.canonical_direct_location_service import ensure_canonical_direct_location
 from app.services.household_product_configuration_service import (
     resolve_household_product_configuration,
 )
@@ -54,12 +53,10 @@ def _prepare_receipt_batch_for_direct_inventory(
             detail="Directe voorraadverwerking vereist geen of alleen globale locaties",
         )
 
-    direct_location_id = None
-    if location_level == "global":
-        direct_location_id = ensure_canonical_direct_location(
-            conn,
-            household_id=normalized_household_id,
-        )
+    # Kassa may bypass Uitpakken when location assignment is unavailable.
+    # "Direct" is not a physical stock location: ordinary STOCK lines must
+    # enter inventory with real NULL/NULL location fields.
+    target_location_id = None
 
     lines = conn.execute(
         text(
@@ -119,12 +116,9 @@ def _prepare_receipt_batch_for_direct_inventory(
                     match_status = 'matched',
                     review_decision = 'selected',
                     target_location_id = :target_location_id,
-                    suggested_location_id = COALESCE(
-                        suggested_location_id,
-                        :suggested_location_id
-                    ),
+                    suggested_location_id = NULL,
                     article_override_mode = 'auto',
-                    location_override_mode = 'auto',
+                    location_override_mode = 'cleared',
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :line_id
                   AND batch_id = :batch_id
@@ -132,8 +126,7 @@ def _prepare_receipt_batch_for_direct_inventory(
             ),
             {
                 "article_id": str(article_id),
-                "target_location_id": direct_location_id,
-                "suggested_location_id": direct_location_id,
+                "target_location_id": target_location_id,
                 "line_id": line_id,
                 "batch_id": normalized_batch_id,
             },
