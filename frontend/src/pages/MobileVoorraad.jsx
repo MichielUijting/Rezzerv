@@ -4,45 +4,20 @@ import Button from '../ui/Button'
 import Select from '../ui/Select.jsx'
 import CatalogArticleThumbnail from '../ui/CatalogArticleThumbnail.jsx'
 import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
-import MobileRecentActionsBar from '../ui/MobileRecentActionsBar.jsx'
 import QuantityStepper from '../ui/QuantityStepper.jsx'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import {
-  canCurrentUserPerform,
   fetchJsonWithAuth,
-  isFrontteamMemberFromContext,
   isHouseholdAdminFromContext,
-  isPlatformSuperuserFromContext,
   readStoredAuthContext,
 } from '../lib/authSession.js'
-import { readHouseholdOnboarding } from '../features/onboarding/onboardingState.js'
-import { buildHomeNavigation } from '../features/home/homeNavigation.js'
-import useFeatureAvailability from '../features/platform/useFeatureAvailability.js'
-import { useActionButtonAvailability } from '../features/platform/actionButtonAvailability.js'
 import {
   buildExactInventoryMutation,
   buildQuickInventoryMutation,
   selectExactInventoryTarget,
   selectQuickInventoryTarget,
 } from './mobileInventoryQuickActions.js'
-import {
-  ACTION_ROUTE_BY_KEY,
-  readRecentActionKeys,
-  recordRecentAction,
-  selectRecentActionTiles,
-} from '../features/home/recentActionUsage.js'
 import './mobileVoorraad.css'
-
-const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' }
-
-function mobileNavIconType(key) {
-  if (key === 'meldingen') return 'bell'
-  if (key === 'voorraad') return 'inventory'
-  if (key === 'bijna-op') return 'clock'
-  if (key === 'winkelen') return 'cart'
-  if (key === 'kassabonnen' || key === 'kassa') return 'receipt'
-  return 'menu'
-}
 
 function normalizeText(value) {
   return String(value || '').trim().toLowerCase()
@@ -160,54 +135,6 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
   const { showFeedback } = useAppFeedback()
   const context = readStoredAuthContext()
   const canEditInventory = isHouseholdAdminFromContext(context)
-  const onboarding = readHouseholdOnboarding(context)
-  const features = useFeatureAvailability()
-  const actionAvailability = useActionButtonAvailability({
-    enabled: Boolean(context && context.context_type !== 'none'),
-  })
-
-  const visibility = {
-    canOpenAdmin: canEditInventory,
-    canOpenExternalDatabases: isFrontteamMemberFromContext(context),
-    isPlatformSuperuser: isPlatformSuperuserFromContext(context),
-    canManageLocations: canCurrentUserPerform('locations.manage', context),
-  }
-
-  const homeNavigation = buildHomeNavigation({
-    onboarding,
-    visibility,
-    features,
-    actionButtons: actionAvailability.items,
-    actionOrder: actionAvailability.order,
-  })
-
-  const availableActionTiles = useMemo(() => {
-    const seen = new Set()
-    return [...homeNavigation.primaryTiles, ...homeNavigation.moreTiles]
-      .filter((tile) => {
-        const route = ACTION_ROUTE_BY_KEY[tile.key]
-        if (!tile?.clickable || !route || seen.has(tile.key)) return false
-        seen.add(tile.key)
-        return true
-      })
-  }, [homeNavigation])
-
-  const recentNavItems = useMemo(() => {
-    return selectRecentActionTiles({
-      recentKeys: readRecentActionKeys(context),
-      availableTiles: availableActionTiles,
-      excludeKeys: ['voorraad'],
-      limit: 4,
-    }).map((tile) => ({
-      key: tile.key,
-      label: tile.label,
-      route: ACTION_ROUTE_BY_KEY[tile.key],
-      icon: mobileNavIconType(tile.key),
-    }))
-  }, [availableActionTiles, context?.user_id])
-
-  const bottomNavItems = [...recentNavItems, MORE_NAV_ITEM]
-
   async function reload() {
     setIsLoading(true)
     setError('')
@@ -554,13 +481,6 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
         ) : null}
       </main>
 
-      <MobileRecentActionsBar
-        items={bottomNavItems}
-        testId="mobile-inventory-bottom-nav"
-        onAction={(item) => {
-          if (item.key !== 'meer') recordRecentAction(item.key, context)
-        }}
-      />
     </div>
   )
 }

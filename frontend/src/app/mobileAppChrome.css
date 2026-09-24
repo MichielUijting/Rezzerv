@@ -1,0 +1,37 @@
+.rz-mobile-app-chrome {
+  min-height: 100vh;
+}
+
+.rz-mobile-app-chrome > .rz-mobile-back-control,
+.rz-mobile-app-bottom-space {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .rz-mobile-app-chrome {
+    position: relative;
+  }
+
+  .rz-mobile-app-chrome > .rz-mobile-back-control {
+    display: inline-flex;
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top));
+    left: 10px;
+    z-index: 100;
+  }
+
+  .rz-mobile-app-chrome:has(.rz-header) .rz-header,
+  .rz-mobile-app-chrome:has(.rz-mobile-module-header) .rz-mobile-module-header {
+    padding-left: 88px;
+  }
+
+  .rz-mobile-app-chrome:not(:has(.rz-header, .rz-mobile-module-header)) {
+    padding-top: calc(58px + env(safe-area-inset-top));
+  }
+
+  .rz-mobile-app-bottom-space {
+    display: block;
+    height: calc(64px + env(safe-area-inset-bottom));
+    pointer-events: none;
+  }
+}

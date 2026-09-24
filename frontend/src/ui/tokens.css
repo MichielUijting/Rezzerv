@@ -6,11 +6,15 @@
 
   /* ================= Colors ================= */
 
-  --color-brand-primary: #1A3E2B;
-  --color-ui-primary: #28A99E;
+  --color-brand-primary: #005F6A;
+  --color-ui-primary: #005F6A;
   --color-mobile-ui-primary: #005F6A;
   --color-ui-primary-text: #FFFFFF;
   --color-brand-light: #D9F5E0;
+
+  /* Compatibility aliases; never define an independent dark-green value. */
+  --rz-green-dark: var(--color-ui-primary);
+  --rz-green-light: var(--color-brand-light);
 
   --color-text-primary: #1A1A1A;
   --color-text-inverse: #FFFFFF;

@@ -1907,8 +1907,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           {!isReceiptLineDetail ? (<>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
             <div style={{ display: 'grid', gap: '4px' }}>
-                            <div style={{ color: '#2e7d4d' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
-              <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
+                            <div style={{ color: 'var(--color-ui-primary)' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+              <div style={{ color: 'var(--color-ui-primary)' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
@@ -1917,7 +1917,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             </div>
           </div>
 
-          <div style={{ color: '#2e7d4d' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
+          <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
 
           <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths), '--rz-sticky-header-offset': '36px' }}>
               <colgroup>
@@ -2249,7 +2249,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   />
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '14px', overflow: 'hidden', marginTop: '12px' }}>
                     <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
-                      <div style={{ color: '#2e7d4d', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 1: locatie</div>
+                      <div style={{ color: 'var(--color-ui-primary)', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 1: locatie</div>
                       <div style={{ display: 'grid', gap: '6px', height: '246px', overflowY: 'auto', padding: '6px', border: '1px solid #d8e8de', borderRadius: '12px', background: '#f8fbf9', alignContent: 'start', gridAutoRows: '42px' }}>
                         {pickerOptions.length ? pickerOptions.map((location) => {
                           const sublocations = sublocationOptionsForSpace(locationOptions, location.space_id || location.id)
@@ -2273,9 +2273,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                               style={{
                                 appearance: 'none',
                                 width: '100%',
-                                border: active ? '1px solid #2e7d4d' : '1px solid #d8e8de',
+                                border: active ? '1px solid var(--color-ui-primary)' : '1px solid #d8e8de',
                                 background: active ? '#e8f4ec' : '#ffffff',
-                                color: '#163020',
+                                color: 'var(--color-text-primary)',
                                 borderRadius: '10px',
                                 height: '42px',
                                 padding: '0 12px',
@@ -2288,11 +2288,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                                 lineHeight: 1.3,
                                 textAlign: 'left',
                                 cursor: pickerLineBusy ? 'not-allowed' : 'pointer',
-                                boxShadow: active ? '0 0 0 1px rgba(46, 125, 77, 0.08)' : 'none',
+                                boxShadow: active ? '0 0 0 1px color-mix(in srgb, var(--color-ui-primary) 8%, transparent)' : 'none',
                               }}
                             >
                               <span>{location.label}</span>
-                              <span style={{ color: hasSublocations ? '#2e7d4d' : '#9aa8a0', fontSize: 14, fontWeight: 700 }}>
+                              <span style={{ color: hasSublocations ? 'var(--color-ui-primary)' : '#9aa8a0', fontSize: 14, fontWeight: 700 }}>
                                 {hasSublocations ? '›' : ''}
                               </span>
                             </button>
@@ -2315,7 +2315,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     </div>
 
                     <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
-                      <div style={{ color: '#2e7d4d', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 2: sublocatie</div>
+                      <div style={{ color: 'var(--color-ui-primary)', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 2: sublocatie</div>
                       <div style={{ display: 'grid', gap: '6px', height: '246px', overflowY: 'auto', padding: '6px', border: '1px solid #d8e8de', borderRadius: '12px', background: '#f8fbf9', alignContent: 'start', gridAutoRows: '42px' }}>
                         {activeSublocationOptions().length ? activeSublocationOptions().map((location) => (
                           <button
@@ -2328,7 +2328,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                               width: '100%',
                               border: '1px solid #d8e8de',
                               background: '#ffffff',
-                              color: '#163020',
+                              color: 'var(--color-text-primary)',
                               borderRadius: '10px',
                               height: '42px',
                               padding: '0 12px',
@@ -2344,7 +2344,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             }}
                           >
                             <span>{location.sublocation_label || location.label}</span>
-                            <span style={{ color: '#2e7d4d', fontSize: 14, fontWeight: 700 }}>✓</span>
+                            <span style={{ color: 'var(--color-ui-primary)', fontSize: 14, fontWeight: 700 }}>✓</span>
                           </button>
                         )) : null}
                       </div>
@@ -2366,7 +2366,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       data-testid="receipt-location-create-panel"
                       style={{ marginTop: 14, padding: 12, border: '1px solid #d8e8de', borderRadius: 12, background: '#f8fbf9', display: 'grid', gap: 10 }}
                     >
-                      <div style={{ color: '#163020', fontWeight: 600 }}>
+                      <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
                         {locationCreateMode === 'space' ? 'Nieuwe locatie' : 'Nieuwe sublocatie'}
                       </div>
                       {locationCreateMode === 'sublocation' ? (

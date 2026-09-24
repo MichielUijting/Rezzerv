@@ -22,7 +22,7 @@ function Feedback({ type = 'info', children }) {
   const isError = type === 'error'
   const background = isError ? '#fef2f2' : '#ecfdf3'
   const border = isError ? '#fecaca' : '#bbf7d0'
-  const color = isError ? '#991b1b' : '#166534'
+  const color = isError ? '#991b1b' : 'var(--color-ui-primary)'
   return <div style={{ padding: '12px 14px', borderRadius: 12, border: `1px solid ${border}`, background, color }}>{children}</div>
 }
 
@@ -47,7 +47,7 @@ function SpaceModal({ mode, form, onChange, onClose, onSubmit, busy }) {
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', fontWeight: 600 }}>
             <input
               type="checkbox"
-              style={{ accentColor: '#1A3E2B', width: 16, height: 16 }}
+              style={{ accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }}
               checked={Boolean(form.active)}
               onChange={(event) => onChange({ ...form, active: event.target.checked })}
             />
@@ -318,7 +318,7 @@ export default function SettingsSpacesPage() {
                   <th>
 <input
                       type="checkbox"
-                      style={{ accentColor: '#1A3E2B', width: 16, height: 16 }}
+                      style={{ accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }}
                       checked={allFilteredSelected}
                       onChange={toggleAllFiltered}
                       aria-label="Selecteer alle zichtbare ruimtes"
@@ -344,7 +344,7 @@ export default function SettingsSpacesPage() {
                       <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
                         <input
                           type="checkbox"
-                          style={{ accentColor: '#1A3E2B', width: 16, height: 16 }}
+                          style={{ accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }}
                           checked={filters.actiefJa}
                           onChange={(event) => setFilters((current) => ({ ...current, actiefJa: event.target.checked }))}
                           aria-label="Filter actief"
@@ -354,7 +354,7 @@ export default function SettingsSpacesPage() {
                       <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
                         <input
                           type="checkbox"
-                          style={{ accentColor: '#1A3E2B', width: 16, height: 16 }}
+                          style={{ accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }}
                           checked={filters.actiefNee}
                           onChange={(event) => setFilters((current) => ({ ...current, actiefNee: event.target.checked }))}
                           aria-label="Filter inactief"
@@ -386,7 +386,7 @@ export default function SettingsSpacesPage() {
                       <td>
 <input
                           type="checkbox"
-                          style={{ accentColor: '#1A3E2B', width: 16, height: 16 }}
+                          style={{ accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }}
                           checked={selected}
                           onChange={() => toggleSelected(item.id)}
                           aria-label={`Selecteer ${item.naam}`}
@@ -404,7 +404,7 @@ export default function SettingsSpacesPage() {
                         </button>
                       </td>
                       <td className="rz-num">
-                        <input type="checkbox" style={{ accentColor: '#1A3E2B', width: 16, height: 16 }} checked={Boolean(item.active)} readOnly aria-label={`Actief ${item.naam}`} />
+                        <input type="checkbox" style={{ accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }} checked={Boolean(item.active)} readOnly aria-label={`Actief ${item.naam}`} />
                       </td>
                       <td className="rz-num">{Number(item.sublocation_count || 0)}</td>
                     </tr>

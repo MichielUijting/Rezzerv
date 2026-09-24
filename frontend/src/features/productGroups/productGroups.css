@@ -14,7 +14,7 @@
 
 .rz-product-groups-title {
   margin: 0 0 6px;
-  color: var(--rz-green-dark, #174f2e);
+  color: var(--color-ui-primary);
 }
 
 .rz-product-groups-subtitle {
@@ -31,7 +31,7 @@
 
 .rz-product-groups-crud-frame h3 {
   margin: 0 0 14px;
-  color: var(--rz-green-dark, #174f2e);
+  color: var(--color-ui-primary);
 }
 
 .rz-product-groups-crud .rz-inline-input {
@@ -56,7 +56,7 @@
 
 .rz-product-groups-section-header h3 {
   margin: 0;
-  color: var(--rz-green-dark, #174f2e);
+  color: var(--color-ui-primary);
 }
 
 .rz-product-groups-muted {

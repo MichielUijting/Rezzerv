@@ -65,8 +65,8 @@ button.rz-button-secondary:disabled,
 a.rz-button-primary[aria-disabled="true"],
 a.rz-button-secondary[aria-disabled="true"]{
   background: #d8f3dc;
-  color: #0f5b32;
-  border: 1px solid #0f5b32;
+  color: var(--color-ui-primary);
+  border: 1px solid var(--color-ui-primary);
   box-shadow: none;
   cursor: not-allowed;
   opacity: 1;

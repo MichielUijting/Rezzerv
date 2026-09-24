@@ -162,7 +162,7 @@ function SummaryCard({ data }) {
 
 function ReceiptCard({ item, isSelected, onSelect }) {
   return (
-    <div style={{ border: isSelected ? '2px solid #0f3d24' : '1px solid #d9e1da', borderRadius: '14px', padding: '12px', background: '#fff', display: 'grid', gap: '8px' }}>
+    <div style={{ border: isSelected ? '2px solid var(--color-ui-primary)' : '1px solid #d9e1da', borderRadius: '14px', padding: '12px', background: '#fff', display: 'grid', gap: '8px' }}>
       <div style={{ fontWeight: 700 }}>{item.receipt_id || item.file_name}</div>
       <div><strong>Advies:</strong> {userActionLabel(item)}</div>
       <div><strong>Reden:</strong> {reasonLabel(item)}</div>
@@ -177,7 +177,7 @@ function ReceiptCard({ item, isSelected, onSelect }) {
           border: '1px solid #d4ddd5',
           borderRadius: '10px',
           padding: '8px 12px',
-          background: '#0f3d24',
+          background: 'var(--color-ui-primary)',
           color: '#fff',
           cursor: 'pointer',
           justifySelf: 'start',

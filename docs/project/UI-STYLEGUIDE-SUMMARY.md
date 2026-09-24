@@ -1,13 +1,13 @@
 # Inhuis UI-styleguide
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
-Laatst inhoudelijk vastgesteld door de PO: 23 september 2026.
+Laatst inhoudelijk vastgesteld door de PO: 24 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
-De mobiele Voorraadbaseline is op **22 september 2026** ingezet en op **23 september 2026** door de PO verder verfijnd. De actuele variant combineert de rustige vlakke lijststructuur met de lichtgroene gevlekte Inhuis-achtergrond, een mobiele header in de vaste primaire kleur `#005F6A` en een gebruikersspecifieke onderste actiebalk. Eerdere Voorraad-borging geldt niet meer wanneer zij met dit nieuwere PO-besluit conflicteert.
+De mobiele Voorraadbaseline is op **22 september 2026** ingezet en op **23 september 2026** door de PO verder verfijnd. De actuele variant combineert de rustige vlakke lijststructuur met de lichtgroene gevlekte Inhuis-achtergrond, een mobiele header via de centrale primaire kleurtoken (standaard `#005F6A`) en een gebruikersspecifieke onderste actiebalk. Eerdere Voorraad-borging geldt niet meer wanneer zij met dit nieuwere PO-besluit conflicteert.
 
-Het bestaande **Voorraad-artikeldetail** blijft functioneel ongewijzigd totdat het afzonderlijk naar deze nieuwe mobiele visuele richting wordt gemigreerd. Het is daardoor tijdelijk geen visuele baseline voor nieuwe mobiele lijstschermen.
+Het mobiele **Voorraad-artikeldetail** is op **23 september 2026** naar dezelfde nieuwe mobiele richting gemigreerd. Het hoofdscherm Voorraad blijft de primaire lijstbaseline; het artikeldetail is de actuele detailbaseline voor gedeelde navigatie, kleur en artikelpresentatie.
 
 Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
@@ -18,8 +18,8 @@ Historische besluiten die hierin zijn opgenomen:
 Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele grammatica uit het door de PO aangeleverde ontwerpvoorstel:
 
 - een rustige **lichtgroene gevlekte Inhuis-achtergrond** via de bestaande groene wallpaper; blur en zwevende glassmorphism-cards blijven vervallen;
-- een compacte header in de vaste mobiele primaire kleur `#005F6A`, met **Voorraad links** en het **witte Inhuis-logo rechts**, zonder huishouden-/userboxpresentatie in deze module-root;
-- één vaste mobiele primaire donkergroene/blauwgroene kleur **`#005F6A`** voor headers, primaire mobiele knoppen, voorraadmutatieknoppen, focusaccenten en actieve mobiele accenten; er wordt binnen de gemigreerde mobiele schermen geen tweede donkergroene primaire tint gebruikt; de bestaande desktop-/tabelkleur `#28A99E` blijft buiten deze mobiele redesign ongewijzigd;
+- ieder beveiligd mobiel scherm krijgt vanuit de centrale `MobileAppChrome` linksboven de gedeelde knop **Terug** via `--color-mobile-ui-primary` (standaard `#005F6A`); een aanwezige module-/appheader reserveert hiervoor links ruimte en toont daarnaast de schermtitel en waar van toepassing het **witte Inhuis-logo**;
+- één applicatiebrede primaire donkergroene/blauwgroene tokenfamilie met standaardkleur **`#005F6A`** voor headers, primaire knoppen, tabelheaders, voorraadmutatieknoppen, focusaccenten en actieve mobiele accenten; er wordt geen tweede primaire donkergroene tint gebruikt;
 - zoeken en filters staan compact boven de inhoud, zonder een grote omhullende filtercard;
 - de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - geen losse verhoogde card per voorraadartikel en geen decoratieve schaduwen als hoofdstructuur;
@@ -63,9 +63,12 @@ Regels:
 ## Kleuren
 
 Centrale tokens:
-- `--color-brand-primary`: `#1A3E2B` — donkere brand-ink voor tekst, iconen en focus op lichte surfaces;
-- `--color-ui-primary`: `#28A99E` — primaire blauw-groene UI-kleur voor dominante desktop-/legacy-surfaces;
-- `--color-mobile-ui-primary`: `#005F6A` — enige primaire donkere kleur voor gemigreerde mobiele headers, primaire acties, steppers, focusaccenten en passieve feedbackoverlays;
+- `--color-brand-primary`: `#005F6A` — centrale brand-/interactiekleur;
+- `--color-ui-primary`: `#005F6A` — dezelfde centrale primaire UI-kleur voor desktop, tabellen en gedeelde componenten;
+- `--color-mobile-ui-primary`: `#005F6A` — dezelfde centrale primaire UI-kleur voor mobiele headers, acties, steppers, focusaccenten en passieve feedbackoverlays;
+- deze drie tokens mogen niet naar verschillende donkergroene/blauwgroene hexwaarden divergeren; de standaardwaarde is `#005F6A`.
+- **Instellingen → Weergave** mag op het huidige apparaat één afwijkende donkere hoofdkleur kiezen; die runtimevoorkeur overschrijft alle drie primary-tokens tegelijk en wordt lokaal in de browser bewaard. **Standaard herstellen** zet alle drie terug op `#005F6A`.
+- de instelbare hoofdkleur moet met witte tekst minimaal WCAG-contrast 4,5:1 behouden; te lichte kleuren worden geweigerd.
 - `--color-ui-primary-text`: `#FFFFFF` — witte tekst en iconen op primaire blauw-groene surfaces;
 - `--color-brand-light`: `#D9F5E0`;
 - `--color-text-primary`: `#1A1A1A`;
@@ -74,14 +77,14 @@ Centrale tokens:
 - `--color-table-grid`: `#8FD19E`.
 
 Gebruik:
-- `#28A99E` blijft de primaire Inhuis-UI-kleur voor bestaande desktop-/tabelsurfaces en nog niet gemigreerde schermen; de mobiele Voorraadpilot gebruikt conform het PO-ontwerpbesluit `#005F6A` voor primaire actie en actieve onderste navigatie;
-- tekst en iconen op `#28A99E` gebruiken centraal `#FFFFFF`; dit geldt applicatiebreed voor primaire gekleurde surfaces en vervangt de eerdere donkere tekstkleur;
-- `#1A3E2B` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
+- `#005F6A` is de standaard primaire Inhuis-UI-kleur; alle primaire surfaces lezen de centrale tokens zodat een geldige lokale Weergave-voorkeur applicatiebreed tegelijk doorwerkt;
+- tekst en iconen op `#005F6A` gebruiken centraal `#FFFFFF`; dit geldt applicatiebreed voor primaire gekleurde surfaces en vervangt de eerdere donkere tekstkleur;
+- `#005F6A` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
 - normale tekst gebruikt de primaire donkere tekstkleur;
 - lichte groentinten zijn ondersteunend en concurreren niet met de primaire actie;
-- de legacy-token `--rz-accent` wordt centraal gekoppeld aan `--color-ui-primary`;
+- de legacy-tokens `--rz-accent` en `--rz-green-dark` worden centraal gekoppeld aan `--color-ui-primary`; zij definiëren nooit een eigen donkergroene waarde;
 - voeg geen nieuwe dominante merkkleur toe zonder expliciete PO-beslissing en styleguide-update;
-- witte tekst op gekleurde primaire surfaces blijft verplicht; dit geldt zowel op `#28A99E` als op de mobiele Voorraadpilottint `#005F6A`;
+- witte tekst op gekleurde primaire surfaces blijft verplicht; dit geldt zowel op `#005F6A` als op de mobiele Voorraadpilottint `#005F6A`;
 - fout-, waarschuwing- en succeskleuren mogen semantisch afwijken, maar worden niet als alternatieve merkkleur ingezet.
 
 ## Spacing, radius en elevation
@@ -120,9 +123,9 @@ Voor mobiele modulehoofschermen is de standaardvolgorde:
 2. zoeken/filteren/context;
 3. hoofdinhoud in lijst/cards/tabel;
 4. één dominante primaire actie waar nodig;
-5. module-/hoofdnavigatie onderin wanneer het scherm volgens de nieuwe mobiele baseline is gemigreerd.
+5. vaste `MobileRecentActionsBar` onderin op ieder beveiligd mobiel scherm.
 
-Alle onderdelen volgen één horizontale uitlijning en herhaalbare spacing. Voor de nieuwe mobiele Voorraadbaseline is de vaste onderste navigatie onderdeel van de schermshell. Niet-gemigreerde mobiele schermen mogen tijdelijk hun bestaande shell en feedback-clearance behouden.
+Alle onderdelen volgen één horizontale uitlijning en herhaalbare spacing. De vaste onderste navigatie is onderdeel van de centrale mobiele applicatieshell en wordt niet meer per scherm geïmplementeerd.
 
 Voor de mobiele Voorraadpilot geldt:
 - de hoofdinhoud staat gecentreerd en wordt niet breder dan circa `640px`;
@@ -134,14 +137,14 @@ Voor de mobiele Voorraadpilot geldt:
 
 Passieve succes-, info-, waarschuwing- en foutmeldingen gebruiken uitsluitend de centrale `AppFeedbackProvider/useAppFeedback` en worden op mobiele schermen als **overlay** gerenderd:
 - de melding neemt geen ruimte in de documentflow in en schuift onderliggende inhoud nooit op;
-- de mobiele overlay gebruikt de centrale mobiele primaire kleur `#005F6A`;
+- de mobiele overlay gebruikt `--color-mobile-ui-primary` (standaard `#005F6A`);
 - één klik/tap **op de melding** sluit de melding;
 - één klik/tap **elders op het scherm** sluit de melding;
 - zonder gebruikersactie verdwijnt een passieve melding automatisch na **maximaal 3.000 ms**;
 - een scherm maakt hiervoor geen lokale inline succes-/foutmelding of eigen timer;
 - interactieve bevestigingen, formulieren, technische-detaildialogen en voortgangsfeedback zijn niet transient en verdwijnen niet automatisch; zij blijven de bestaande AppFeedback-dialogsemantiek volgen.
 
-Voor Mobiel Voorraad staat de feedbackoverlay boven de vaste `MobileRecentActionsBar`, zodat melding en navigatie elkaar niet afdekken.
+Op ieder beveiligd mobiel scherm staat de feedbackoverlay boven de vaste `MobileRecentActionsBar`, zodat melding en navigatie elkaar niet afdekken.
 
 ## Mobiele navigatie
 
@@ -150,8 +153,9 @@ Inhuis gebruikt op mobiel twee navigatieniveaus:
 - details en vervolgstappen liggen op een navigatiestack boven de module waaruit zij zijn geopend.
 
 Voor de browserapp geldt:
-- de browsergeschiedenis blijft leidend voor terugnavigatie;
-- voeg geen schermspecifieke `navigate(-1)`, `history.back()` of hard gecodeerde terugactie toe zolang de webapp in de browser draait;
+- de browsergeschiedenis blijft de inhoudelijke bron voor terugnavigatie;
+- elk beveiligd mobiel scherm toont linksboven de gedeelde knop **Terug** vanuit `MobileAppChrome`; alleen het centrale `MobileBackControl` mag `navigate(-1)` gebruiken en valt zonder bruikbare geschiedenis veilig terug op `/home`;
+- schermspecifieke terugknoppen of hard gecodeerde terugroutes zijn niet toegestaan;
 - een detailroute wordt normaal via routing geopend;
 - terugkeren naar een lijst hoort zoek-/filter-/sorteringscontext en scrollpositie zo veel mogelijk te behouden.
 
@@ -164,11 +168,11 @@ Voor een native mobiele shell geldt hetzelfde route-/stackmodel, maar zonder zic
 
 De bestaande generieke/desktopheader blijft:
 - standaard `58px` hoog op grotere schermen;
-- `--color-ui-primary` (`#28A99E`) met witte titel/iconen;
+- `--color-ui-primary` (standaard `#005F6A`) met witte titel/iconen;
 - gebruikerszichtbaar merk **Inhuis**; interne technische naamgeving `Rezzerv` wordt niet als gebruikersmerk getoond.
 
 Voor de mobiele Voorraadbaseline geldt:
-- compacte gekleurde header in de vaste mobiele primaire kleur `#005F6A`;
+- compacte gekleurde header via `--color-mobile-ui-primary` (standaard `#005F6A`);
 - schermtitel **Voorraad** links;
 - wit Inhuis-logo rechts;
 - geen desktopachtige huishoudenregel of userbox in de module-root;
@@ -230,7 +234,7 @@ De centrale authority voor feedback is `AppFeedbackProvider/useAppFeedback`. Sch
 Op mobiele schermen is passieve feedback altijd een **overlay**:
 - de melding staat buiten de documentflow en schuift inhoud nooit omlaag of omhoog;
 - er wordt op mobiel geen permanente lege feedbackbalk of extra feedback-clearance gereserveerd;
-- de overlay gebruikt `--color-mobile-ui-primary` (`#005F6A`) met witte tekst;
+- de overlay gebruikt `--color-mobile-ui-primary` (standaard `#005F6A`) met witte tekst;
 - tik/klik **op de melding** sluit haar direct;
 - tik/klik **elders op het scherm** sluit haar direct;
 - zonder interactie verdwijnt de melding automatisch na maximaal **3.000 ms**;
@@ -243,7 +247,7 @@ Interactieve bevestigingen, invoerformulieren, technische-detaildialogen en voor
 
 Op desktop mag het bestaande centrale onderste-balkpatroon blijven gelden:
 - de feedbacklaag is fixed en verschuift de pagina-inhoud niet;
-- achtergrond gebruikt de centrale desktopkleur `#28A99E` met witte tekst/iconen;
+- achtergrond gebruikt `--color-ui-primary` (standaard `#005F6A`) met witte tekst/iconen;
 - interactieve dialogen blijven afzonderlijke dialogen en worden niet in de balk gepropt.
 
 ## Zoeken, invoer en filters
@@ -311,7 +315,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 
 ## Knoppen en acties
 
-- primaire knop: standaard `#28A99E` met witte tekst/iconen (`#FFFFFF`); binnen gemigreerde mobiele schermen gebruikt header én primaire/interactieve actie conform PO-besluit uitsluitend `#005F6A` met wit of als outline-accent;
+- primaire knop gebruikt `--color-ui-primary` met witte tekst/iconen (`#FFFFFF`); standaard is dat `#005F6A`, en een geldige Weergave-voorkeur overschrijft de primaire tokenfamilie als één geheel;
 - knoptekst is `14px` en niet vet (`font-weight: 400`);
 - per scherm is bij voorkeur één dominante primaire actie;
 - secundaire acties krijgen minder visueel gewicht;
@@ -335,7 +339,7 @@ Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijk
 - titel, filter en cellen van één kolom gebruiken exact dezelfde uitlijning;
 - Nederlandse decimaalnotatie wordt gebruikt waar van toepassing;
 - sortering is beschikbaar waar het tabelcontract dit voorschrijft;
-- tabelheaders gebruiken `#28A99E` met witte tekst; sorteerindicatoren op de header zijn eveneens wit en resize-indicatoren blijven visueel herkenbaar;
+- tabelheaders gebruiken `--color-ui-primary` (standaard `#005F6A`) met witte tekst; sorteerindicatoren op de header zijn eveneens wit en resize-indicatoren blijven visueel herkenbaar;
 - actieve kolom/focus op lichte surfaces gebruikt de donkere brand-ink;
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
 - hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen;
@@ -359,7 +363,7 @@ Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijk
 - klikbare iconen hebben een bruikbaar touch-/klikgebied;
 - interactieve elementen hebben een zichtbare focusstatus;
 - kleur is nooit het enige signaal voor betekenis;
-- tekst en iconen op `#28A99E` gebruiken `#FFFFFF`, conform de applicatiebrede primaire-foregroundregel;
+- tekst en iconen op `#005F6A` gebruiken `#FFFFFF`, conform de applicatiebrede primaire-foregroundregel;
 - leesbaarheid en contrast gaan voor decoratieve transparantie.
 
 ## Centrale componenten en verplichte hergebruikroute
@@ -375,7 +379,8 @@ Actueel expliciet goedgekeurd en herbruikbaar zijn onder meer:
 - `DelayedTableLoadingOverlay` — loadingoverlay na 1.000 ms;
 - `Table`/`DataTable` — canonieke tabellen;
 - `MobileModuleHeader` — compacte mobiele moduleheader;
-- `MobileRecentActionsBar` — vaste recente-actiebalk onderin gemigreerde mobiele modulehoofschermen;
+- `MobileBackControl` via `MobileAppChrome` — één centrale terugactie linksboven op ieder beveiligd mobiel scherm;
+- `MobileRecentActionsBar` — vaste recente-actiebalk onderin ieder beveiligd mobiel scherm;
 - `QuantityStepper` — canonieke `− waarde +`-bediening met optionele directe numerieke aantalinvoer; domeinmutaties en de beslissing of inline bewerken veilig is blijven buiten het component.
 
 Harde werkwijze:
@@ -440,8 +445,8 @@ Het mobiele detailscherm van een voorraadartikel is een vereenvoudigde presentat
 
 Vaste regels:
 - het scherm gebruikt hetzelfde huishoudartikel en dezelfde voorraad-/historie-/settings-API's als het bestaande desktop-detailscherm;
-- het detailscherm gebruikt dezelfde **groene Voorraadbaseline** als het mobiele hoofdscherm: `MobileModuleHeader` met titel **Voorraad**, `/inhuis-green-wallpaper.svg`, achtergrond `#EEF7F0`, witte kaarten met 12px-radius en zonder glassmorphism of zware schaduw;
-- direct onder de moduleheader staat een expliciete mobiele terugactie **‹ Voorraad** met minimaal 44px touchhoogte;
+- het detailscherm gebruikt dezelfde **groene Voorraadbaseline** als het mobiele hoofdscherm: `MobileModuleHeader` met titel **Artikel in Voorraad**, `/inhuis-green-wallpaper.svg`, achtergrond `#EEF7F0`, witte kaarten met 12px-radius en zonder glassmorphism of zware schaduw;
+- terugnavigatie komt uitsluitend uit de gedeelde knop **Terug** van `MobileAppChrome`; het detailscherm en zijn header hebben geen eigen `‹ Voorraad`- of andere terugknop;
 - de artikelkop toont waar beschikbaar dezelfde representatieve `CatalogArticleThumbnail`, de artikelnaam en artikelgroep/statuschips;
 - de actuele voorraad staat in dezelfde artikelkaart met de centrale `QuantityStepper`;
 - `−` verlaagt de voorraad met één via de bestaande afboek-/inventory-eventlogica;
@@ -451,13 +456,16 @@ Vaste regels:
 - de rij **Locatie** wordt alleen getoond wanneer **Waar Inhuis** actief is (`location_tracking_level != none`);
 - bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+`, `−` en directe aantalinvoer werken;
 - detail- en actierijen gebruiken dezelfde compacte 14px/16px typografie, neutrale scheidingslijnen en teal `#005F6A` interactiekleur als Mobiele Voorraad;
+- **Notities** is een altijd zichtbaar vrij tekstveld; ieder lid van het actieve huishouden, inclusief de rol **Kijker**, mag de gedeelde huishoudnotitie wijzigen; deze uitzondering geeft geen wijzigingsrecht op andere artikel- of huishoudinstellingen;
+- **Voorkeurswinkel** gebruikt een dropdown met beschikbare winkels en blijft een beheerinstelling;
+- iedere artikelpresentatie via de gedeelde `CatalogArticleThumbnail` toont bij ontbrekende of fout geladen afbeelding zichtbaar **Geen foto**;
 - het detailscherm heeft geen vaste algemene `Opslaan`-knop; een specifieke instelling wordt direct/expliciet opgeslagen vanuit zijn eigen interactie;
 - de gebruikerszichtbare term voor de shoppingmodule en de lijst is **Boodschappenlijst**; interne route en technische sleutel mogen `winkelen` blijven.
 
 De sectie **Snelle acties** bevat precies:
 1. **Voorkeurswinkel** — toont/bewerkt de bestaande huishoudinstelling `favorite_store`;
 2. **Aankoophistorie** — toont uitsluitend aankoopgebeurtenissen van het huidige huishoudartikel;
-3. **Naar inkooplijstje** — voegt het huidige huishoudartikel direct toe aan de actieve **Boodschappenlijst**, opent geen extra detailscherm en geeft feedback via de centrale mobiele AppFeedback-overlay.
+3. **Op boodschappenlijst** — voegt het huidige huishoudartikel direct toe aan de actieve **Boodschappenlijst**, opent geen extra detailscherm en geeft feedback via de centrale mobiele AppFeedback-overlay.
 
 Niet opnemen als nieuwe mobiele functionaliteit:
 - `Naar boodschappen`;

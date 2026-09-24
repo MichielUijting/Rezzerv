@@ -37,6 +37,17 @@ def _require_admin(endpoint, authorization: str | None) -> dict[str, Any]:
     return require_admin(authorization)
 
 
+def _require_household_editor(endpoint, authorization: str | None) -> dict[str, Any]:
+    require_context = getattr(endpoint, '__globals__', {}).get('require_household_context')
+    if not callable(require_context):
+        raise HTTPException(status_code=500, detail='Interne huishoudautorisatie is niet beschikbaar')
+    context = require_context(authorization)
+    display_role = str(context.get('display_role') or '').strip().lower()
+    if display_role not in {'admin', 'lid', 'viewer'}:
+        raise HTTPException(status_code=403, detail='Alleen leden van het huishouden mogen huishoudnotities aanpassen')
+    return context
+
+
 def _payload_model(endpoint, payload: dict[str, Any]):
     try:
         annotation = get_type_hints(endpoint, globalns=getattr(endpoint, '__globals__', {})).get('payload')
@@ -82,8 +93,7 @@ def _assert_inventory_belongs_to_article(endpoint, context: dict[str, Any], hous
         raise HTTPException(status_code=409, detail='Voorraadregel hoort niet bij dit artikel')
 
 
-def _preserve_server_owned_settings(endpoint, context: dict[str, Any], household_article_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Keep server-owned settings unchanged during an Artikeldetail update."""
+def _current_household_article_settings(endpoint, context: dict[str, Any], household_article_id: str) -> dict[str, Any]:
     globals_map = getattr(endpoint, '__globals__', {})
     engine = globals_map.get('engine')
     get_settings = globals_map.get('get_household_article_settings')
@@ -94,15 +104,82 @@ def _preserve_server_owned_settings(endpoint, context: dict[str, Any], household
     with engine.begin() as conn:
         current = get_settings(conn, household_id, str(household_article_id or '').strip()) or {}
     current_settings = current.get('settings') if isinstance(current, dict) else {}
-    current_settings = current_settings if isinstance(current_settings, dict) else {}
+    return current_settings if isinstance(current_settings, dict) else {}
 
+
+def _preserve_server_owned_settings(endpoint, context: dict[str, Any], household_article_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep server-owned settings unchanged during an Artikeldetail update."""
+    current_settings = _current_household_article_settings(endpoint, context, household_article_id)
     sanitized = dict(payload or {})
     sanitized['average_price'] = current_settings.get('average_price')
     sanitized['auto_restock'] = current_settings.get('auto_restock')
     return sanitized
 
 
-def _install_admin_guard(main_module, path: str, method: str, *, preserve_server_owned_settings: bool = False) -> None:
+def _member_note_only_settings(current_settings: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    """Merge one shared note into current settings while rejecting every other member mutation."""
+    raw_payload = dict(payload or {})
+    unexpected_fields = sorted(set(raw_payload) - {'notes'})
+    if unexpected_fields:
+        raise HTTPException(
+            status_code=403,
+            detail='Huishoudleden mogen via deze route uitsluitend Notities aanpassen',
+        )
+    if 'notes' not in raw_payload:
+        raise HTTPException(status_code=400, detail='Notities ontbreken')
+
+    protected_keys = (
+        'min_stock',
+        'ideal_stock',
+        'favorite_store',
+        'average_price',
+        'status',
+        'default_location_id',
+        'default_sublocation_id',
+        'auto_restock',
+        'packaging_unit',
+        'packaging_quantity',
+    )
+    sanitized = {key: current_settings.get(key) for key in protected_keys}
+    sanitized['notes'] = raw_payload.get('notes')
+    return sanitized
+
+
+def _update_household_member_note(
+    endpoint,
+    context: dict[str, Any],
+    household_article_id: str,
+    payload: dict[str, Any],
+):
+    globals_map = getattr(endpoint, '__globals__', {})
+    engine = globals_map.get('engine')
+    get_settings = globals_map.get('get_household_article_settings')
+    update_settings = globals_map.get('update_household_article_settings')
+    if engine is None or not callable(get_settings) or not callable(update_settings):
+        raise HTTPException(status_code=500, detail='Interne huishoudnotitie-service is niet beschikbaar')
+
+    household_id = str(context.get('active_household_id') or '').strip()
+    article_id = str(household_article_id or '').strip()
+    with engine.begin() as conn:
+        current = get_settings(conn, household_id, article_id) or {}
+        current_settings = current.get('settings') if isinstance(current, dict) else {}
+        current_settings = current_settings if isinstance(current_settings, dict) else {}
+        sanitized = _member_note_only_settings(current_settings, payload)
+        return update_settings(
+            conn,
+            household_id,
+            article_id,
+            _payload_model(endpoint, sanitized),
+        )
+
+
+def _install_admin_guard(
+    main_module,
+    path: str,
+    method: str,
+    *,
+    preserve_server_owned_settings: bool = False,
+) -> None:
     route = _main_app_route(main_module.app, path, method)
     original_endpoint = route.endpoint
     dependant = getattr(route, 'dependant', None)
@@ -171,6 +248,18 @@ def update_article_detail_settings_admin_only(
     context = _require_admin(endpoint, authorization)
     sanitized_payload = _preserve_server_owned_settings(endpoint, context, household_article_id, payload)
     return endpoint(household_article_id, _payload_model(endpoint, sanitized_payload), authorization)
+
+
+@router.put('/api/household-articles/{household_article_id}/notes')
+def update_article_detail_notes_for_household_member(
+    household_article_id: str,
+    request: Request,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    authorization: str | None = Header(default=None),
+):
+    endpoint = _main_route_endpoint(request, '/api/household-articles/{household_article_id}/settings', 'PUT')
+    context = _require_household_editor(endpoint, authorization)
+    return _update_household_member_note(endpoint, context, household_article_id, payload)
 
 
 @router.post('/api/household-articles/{household_article_id}/inventory-events')

@@ -514,7 +514,7 @@ async function closeStoreCreateArticleModal(frame) {
 }
 
 function getBrandPrimaryRgb(doc) {
-  const color = doc?.defaultView?.getComputedStyle(doc.documentElement).getPropertyValue('--color-brand-primary') || '#1A3E2B'
+  const color = doc?.defaultView?.getComputedStyle(doc.documentElement).getPropertyValue('--color-brand-primary') || '#005F6A'
   const hex = color.trim().replace('#', '')
   if (hex.length === 6) {
     const r = parseInt(hex.slice(0, 2), 16)

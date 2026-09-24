@@ -44,11 +44,6 @@ a.rz-button-secondary[role="button"] {
   background: rgba(26, 26, 26, 0.24);
 }
 
-.rz-mobile-article-screen .rz-mobile-article-action-row--primary {
-  background: var(--color-ui-primary);
-  color: var(--color-ui-primary-text);
-}
-
 /* Transitional legacy styling for the existing mobile article-detail screen.
    Mobile Voorraad has its own newer PO-approved visual baseline. */
 .rz-mobile-article-screen {
@@ -59,7 +54,7 @@ a.rz-button-secondary[role="button"] {
 }
 
 .rz-mobile-article-card {
-  box-shadow: 0 9px 24px rgba(26, 62, 43, 0.12);
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--color-ui-primary) 12%, transparent);
 }
 
 /* Passive AppFeedback messages use one fixed bottom bar. Interactive prompts
@@ -210,15 +205,14 @@ a.rz-button-secondary[role="button"] {
   }
 }
 
-/* Mobile Voorraad (PO baseline 2026-09-22) replaces the legacy permanent
-   bottom feedback base with its own five-item navigation. Keep passive
-   AppFeedback visible directly above that navigation instead of covering it. */
-body:has([data-testid="mobile-inventory-page"]) .rz-app-feedback-bar-base,
-body:has([data-testid="mobile-inventory-page"]) [data-testid="app-feedback-bar-scroll-clearance"] {
+/* Every authenticated mobile screen uses the shared fixed bottom navigation.
+   Passive feedback must sit above that global navigation. */
+body:has([data-testid="mobile-app-chrome"]) .rz-app-feedback-bar-base,
+body:has([data-testid="mobile-app-chrome"]) [data-testid="app-feedback-bar-scroll-clearance"] {
   display: none !important;
 }
 
-body:has([data-testid="mobile-inventory-page"]) :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
+body:has([data-testid="mobile-app-chrome"]) :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
   padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important;
 }
 

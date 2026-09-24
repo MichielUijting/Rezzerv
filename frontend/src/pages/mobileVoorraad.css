@@ -80,7 +80,7 @@
 .rz-mobile-inventory-search .rz-input:focus {
   border-color: var(--color-mobile-ui-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 95, 106, 0.12);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ui-primary) 12%, transparent);
 }
 
 .rz-mobile-inventory-filter-strip {
@@ -107,7 +107,7 @@
 
 .rz-mobile-inventory-select-trigger:focus-visible {
   border-color: var(--color-mobile-ui-primary) !important;
-  outline: 2px solid rgba(0, 95, 106, 0.14) !important;
+  outline: 2px solid color-mix(in srgb, var(--color-ui-primary) 14%, transparent) !important;
   outline-offset: 1px;
 }
 

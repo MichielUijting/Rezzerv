@@ -5,7 +5,7 @@
   --rz-text: #111827;
   --rz-muted: #6b7280;
   --rz-accent: var(--color-ui-primary); /* canonical Inhuis primary */
-  --rz-accent-dark: #2e7d4d;
+  --rz-accent-dark: var(--color-ui-primary);
   --rz-danger: #b42318;
   --rz-radius: 18px;
   --rz-shadow: 0 10px 30px rgba(0,0,0,0.08);
@@ -173,7 +173,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-processing--processed {
-  color: #0f5132;
+  color: var(--color-ui-primary);
 }
 
 .rz-store-processing--failed {
@@ -208,7 +208,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-suggestion--auto {
-  color: #0f5132;
+  color: var(--color-ui-primary);
 }
 
 .rz-store-suggestion--check {
@@ -236,7 +236,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 .rz-store-workbench-eyebrow{
   font-size:13px;
   font-weight:800;
-  color:#2e7d4d;
+  color:var(--color-ui-primary);
   text-transform:uppercase;
   letter-spacing:0.04em;
 }
@@ -274,7 +274,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-summary-tile.is-active{
-  border-color:#2e7d4d;
+  border-color:var(--color-ui-primary);
   background:#eef8f1;
 }
 
@@ -343,7 +343,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 
 .rz-store-badge--known{
   background:#eef8f1;
-  color:#2e7d4d;
+  color:var(--color-ui-primary);
 }
 
 .rz-store-status-badge{
@@ -357,7 +357,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 
 .rz-store-status-badge--ready{
   background:#eef8f1;
-  color:#2e7d4d;
+  color:var(--color-ui-primary);
 }
 
 .rz-store-status-badge--action_needed{
@@ -372,7 +372,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 
 .rz-store-status-badge--processed{
   background:#eef8f1;
-  color:#154734;
+  color:var(--color-ui-primary);
 }
 
 .rz-store-status-badge--new{
@@ -454,7 +454,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-primary{
-  color:#154734;
+  color:var(--color-ui-primary);
   font-weight:700;
 }
 
@@ -493,7 +493,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-article-search select option{
-  color:#154734;
+  color:var(--color-ui-primary);
 }
 
 
@@ -640,14 +640,14 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1px solid rgba(15, 91, 50, 0.18);
+  border: 1px solid color-mix(in srgb, var(--color-ui-primary) 18%, transparent);
   border-radius: 12px;
   background: rgba(141, 216, 166, 0.08);
 }
 
 .rz-stock-mutation-title {
   font-weight: 600;
-  color: #0f5b32;
+  color: var(--color-ui-primary);
 }
 
 .rz-stock-row-with-actions {
@@ -656,7 +656,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   gap: 12px;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(15, 91, 50, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-ui-primary) 8%, transparent);
 }
 
 .rz-stock-row-with-actions:last-child {
@@ -685,15 +685,15 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 .rz-stock-selected-row-summary {
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(15, 91, 50, 0.08);
-  color: #0f5b32;
+  background: color-mix(in srgb, var(--color-ui-primary) 8%, transparent);
+  color: var(--color-ui-primary);
   font-size: 14px;
 }
 
 .rz-stock-summary-table {
   display: grid;
   gap: 0;
-  border: 1px solid rgba(15, 91, 50, 0.12);
+  border: 1px solid color-mix(in srgb, var(--color-ui-primary) 12%, transparent);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -708,15 +708,15 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-stock-summary-table-header {
-  background: rgba(15, 91, 50, 0.08);
-  color: #0f5b32;
+  background: color-mix(in srgb, var(--color-ui-primary) 8%, transparent);
+  color: var(--color-ui-primary);
   font-weight: 600;
 }
 
 .rz-stock-summary-table-row {
   width: 100%;
   border: 0;
-  border-top: 1px solid rgba(15, 91, 50, 0.08);
+  border-top: 1px solid color-mix(in srgb, var(--color-ui-primary) 8%, transparent);
   background: #fff;
   color: inherit;
   text-align: left;
