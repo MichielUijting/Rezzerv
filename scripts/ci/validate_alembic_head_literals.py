@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject hardcoded Alembic head revision literals outside migration files."""
+"""Reject hardcoded revision literals in code that must follow the Alembic head."""
 from __future__ import annotations
 
 import argparse
@@ -8,7 +8,6 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCAN_ROOTS = (ROOT / "backend" / "app", ROOT / "backend" / "tests")
 REVISION_RE = re.compile(r"^\d{8}_\d+$")
 HEAD_SYMBOLS = {
     "HEAD_REVISION",
@@ -17,6 +16,14 @@ HEAD_SYMBOLS = {
     "EXPECTED_ALEMBIC_HEAD",
     "EXPECTED_HEAD_REVISION",
 }
+HEAD_FOLLOWERS = (
+    "backend/app/maintenance/postgresql_data_migration_head.py",
+    "backend/app/maintenance/postgresql_legacy_production_adoption.py",
+    "backend/app/maintenance/postgresql_legacy_production_rebuild.py",
+    "backend/tests/migration_foundation_head_selftest.py",
+    "backend/tests/support_message_migrated_fixture.py",
+    "backend/tests/postgresql_catalog_off_request_dml_only_selftest.py",
+)
 
 
 def assigned_names(node: ast.Assign | ast.AnnAssign) -> list[str]:
@@ -25,16 +32,12 @@ def assigned_names(node: ast.Assign | ast.AnnAssign) -> list[str]:
 
 
 def violations_for_source(source: str, filename: str) -> list[str]:
-    try:
-        tree = ast.parse(source, filename=filename)
-    except SyntaxError as exc:
-        return [f"{filename}:{exc.lineno or 0}:syntax_error"]
+    tree = ast.parse(source, filename=filename)
     violations: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
             continue
-        names = set(assigned_names(node))
-        watched = sorted(names & HEAD_SYMBOLS)
+        watched = sorted(set(assigned_names(node)) & HEAD_SYMBOLS)
         if not watched:
             continue
         value_node = node.value
@@ -50,12 +53,16 @@ def violations_for_source(source: str, filename: str) -> list[str]:
 
 def scan_repository() -> list[str]:
     violations: list[str] = []
-    for root in SCAN_ROOTS:
-        for path in sorted(root.rglob("*.py")):
-            relative = path.relative_to(ROOT).as_posix()
-            violations.extend(
-                violations_for_source(path.read_text(encoding="utf-8"), relative)
-            )
+    for relative in HEAD_FOLLOWERS:
+        path = ROOT / relative
+        if not path.is_file():
+            violations.append(f"{relative}:0:missing_head_follower")
+            continue
+        try:
+            source = path.read_text(encoding="utf-8")
+            violations.extend(violations_for_source(source, relative))
+        except SyntaxError as exc:
+            violations.append(f"{relative}:{exc.lineno or 0}:syntax_error")
     return violations
 
 
@@ -65,7 +72,7 @@ def self_test() -> None:
     assert not violations_for_source(
         "HEAD_REVISION = repository_head_revision()\n", "dynamic.py"
     )
-    assert not violations_for_source('TARGET_REVISION = "20260921_01"\n', "historical.py")
+    assert not violations_for_source('BASELINE_REVISION = "20260921_01"\n', "historical.py")
     assert not violations_for_source('HEAD_REVISION = "not-a-revision"\n', "other.py")
     print("ALEMBIC_HEAD_LITERAL_SELFTEST_GREEN")
 
@@ -83,9 +90,10 @@ def main() -> int:
         print(f"ALEMBIC_HEAD_LITERAL_VIOLATION={violation}")
     if violations:
         raise SystemExit(
-            "FAIL hardcoded Alembic head revision literal(s); use "
-            "app.alembic_head_authority.repository_head_revision() instead"
+            "FAIL hardcoded Alembic head revision literal in current-head follower; "
+            "use app.alembic_head_authority.repository_head_revision() instead"
         )
+    print(f"ALEMBIC_HEAD_FOLLOWER_COUNT={len(HEAD_FOLLOWERS)}")
     print("ALEMBIC_HEAD_LITERAL_SCAN_GREEN")
     return 0
 

@@ -121,7 +121,7 @@ jobs:
         run: |
           env -u MIGRATION_DATABASE_URL python tests/postgresql_catalog_off_request_dml_only_selftest.py | tee /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_RUNTIME_CREATE_DENIED_GREEN' /tmp/catalog-off-dml.log
-          grep -F 'POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_20260921_01_GREEN' /tmp/catalog-off-dml.log
+          grep -F 'POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_GREEN revision=' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_BOOLEAN_TYPES_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_CATALOG_OFF_VALIDATION_ONLY_SCHEMA_GREEN' /tmp/catalog-off-dml.log
           grep -F 'POSTGRESQL_OFF_IDENTITY_INSERT_UPDATE_BOOLEAN_GREEN' /tmp/catalog-off-dml.log

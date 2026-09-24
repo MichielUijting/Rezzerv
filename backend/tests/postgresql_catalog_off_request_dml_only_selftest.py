@@ -11,6 +11,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.alembic_head_authority import repository_head_revision
 from app.api import catalog_routes
 from app.db import engine
 from app.services.external_database_off_index_matchers import match_retailer_receipt_line
@@ -52,7 +53,7 @@ NAME_ALPHA = "postgresql catalog off proof alpha"
 NAME_BRAVO = "PostgreSQL Catalog OFF Proof Bravo"
 NAME_CHARLIE = "PostgreSQL Global OFF Scope Proof"
 NAME_FILTER = "postgresql catalog off proof"
-ALEMBIC_HEAD = "20260921_01"
+ALEMBIC_HEAD = repository_head_revision()
 TEST_GROUP_KEY = "__postgresql_catalog_off_membership_group__"
 OFFICIAL_GPC_GROUP_KEY = "gpc:99999999"
 OFFICIAL_GPC_BRICK_CODE = "99999999"
@@ -264,7 +265,7 @@ def _assert_schema_contract() -> None:
     if before_tables != after_tables:
         raise AssertionError("Catalog/OFF validation unexpectedly mutated runtime schema")
 
-    print("POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_20260921_01_GREEN")
+    print(f"POSTGRESQL_CATALOG_OFF_ALEMBIC_HEAD_GREEN revision={ALEMBIC_HEAD}")
     print("POSTGRESQL_CATALOG_OFF_IMAGE_SCHEMA_GREEN")
     print("POSTGRESQL_CATALOG_OFF_BOOLEAN_TYPES_GREEN")
     print("POSTGRESQL_CATALOG_OFF_VALIDATION_ONLY_SCHEMA_GREEN")
