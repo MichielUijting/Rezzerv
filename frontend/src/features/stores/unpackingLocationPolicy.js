@@ -10,6 +10,28 @@ function normalizeLocationTrackingLevel(value) {
   return LOCATION_EXACT
 }
 
+export function buildSelectableLocationIds(locationOptions) {
+  return new Set(
+    (locationOptions || [])
+      .filter((location) => location?.type === 'sublocation' || !location?.has_sublocations)
+      .map((location) => String(location?.id || ''))
+      .filter(Boolean),
+  )
+}
+
+export function isLocationSelectionValid(
+  locationTrackingLevel,
+  locationId,
+  selectableLocationIds,
+) {
+  const level = normalizeLocationTrackingLevel(locationTrackingLevel)
+  if (level === LOCATION_NONE) return true
+
+  const normalizedLocationId = String(locationId || '').trim()
+  if (!normalizedLocationId) return false
+  return selectableLocationIds.has(normalizedLocationId)
+}
+
 export function buildActiveLocationOptions(
   spacesData,
   sublocationsData,

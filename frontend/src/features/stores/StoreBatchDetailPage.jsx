@@ -7,7 +7,11 @@ import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
-import { buildActiveLocationOptions } from './unpackingLocationPolicy.js'
+import {
+  buildActiveLocationOptions,
+  buildSelectableLocationIds,
+  isLocationSelectionValid,
+} from './unpackingLocationPolicy.js'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import {
   articleFallbackOptions,
@@ -131,7 +135,13 @@ function sublocationOptionsForSpace(locationOptions, spaceId) {
   )
 }
 
-function deriveLineSelectionState({ line, draft, validLocationIds, processingStatus }) {
+function deriveLineSelectionState({
+  line,
+  draft,
+  validLocationIds,
+  processingStatus,
+  locationTrackingLevel,
+}) {
   const effectiveArticleId = String(draft?.articleId || '')
   const effectiveGlobalProductId = String(line?.matched_global_product_id || '')
   const effectiveRawArticleName = String(line?.article_name_raw || '').trim()
@@ -144,7 +154,11 @@ function deriveLineSelectionState({ line, draft, validLocationIds, processingSta
   const hasProcessSource = Boolean(effectiveArticleId || effectiveGlobalProductId || effectiveRawArticleName)
   const hasArticleGroup = Boolean(effectiveArticleGroupId)
   const hasValidQuantity = Number.isFinite(effectiveQuantity) && effectiveQuantity > 0
-  const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
+  const hasValidLocation = isLocationSelectionValid(
+    locationTrackingLevel,
+    effectiveLocationId,
+    validLocationIds,
+  )
   const isProcessable = hasProcessSource
     && hasValidQuantity
     && hasValidLocation
@@ -248,7 +262,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const activeProviderCode = batch?.store_provider_code || null
   const activeProvider = activeProviderCode ? providersByCode[activeProviderCode] || null : null
-  const validLocationIds = useMemo(() => new Set(locationOptions.map((location) => String(location.id))), [locationOptions])
+  const validLocationIds = useMemo(() => buildSelectableLocationIds(locationOptions), [locationOptions])
   const isViewer = Boolean(household?.is_viewer)
 
 
@@ -1490,7 +1504,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         const hasRawArticleName = Boolean(String(line.article_name_raw || '').trim())
         const quantity = Number(line.quantity_raw ?? 0)
         const hasValidQuantity = Number.isFinite(quantity) && quantity > 0
-        const hasValidLocation = validLocationIds.has(String(draft.locationId || ''))
+        const hasValidLocation = isLocationSelectionValid(
+          household?.location_tracking_level,
+          draft.locationId,
+          validLocationIds,
+        )
         return !hasArticle
           && hasRawArticleName
           && hasValidQuantity
@@ -1598,7 +1616,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const defaultInventoryHandling = defaultPresentation.handling || 'STOCK'
       const inventoryHandlingOverride = inventoryHandlingOverridesByLineId[String(line.id)] || null
       const inventoryHandling = lineInventoryHandlingPresentation(defaultInventoryHandling, inventoryHandlingOverride)
-      const selectionState = deriveLineSelectionState({ line, draft, validLocationIds, processingStatus })
+      const selectionState = deriveLineSelectionState({
+        line,
+        draft,
+        validLocationIds,
+        processingStatus,
+        locationTrackingLevel: household?.location_tracking_level,
+      })
       const {
         effectiveArticleId,
         hasValidArticle,
@@ -1685,7 +1709,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           .toLowerCase(),
       }
     })
-  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds, inventoryHandlingByArticleId, inventoryHandlingOverridesByLineId])
+  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds, inventoryHandlingByArticleId, inventoryHandlingOverridesByLineId, household?.location_tracking_level])
 
   useEffect(() => {
     if (handlingReconcileRef.current || isLoading || busyLineId || isProcessingBatch) return

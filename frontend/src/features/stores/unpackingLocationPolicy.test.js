@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildActiveLocationOptions,
+  buildSelectableLocationIds,
+  isLocationSelectionValid,
   LOCATION_EXACT,
   LOCATION_GLOBAL,
   LOCATION_NONE,
@@ -42,5 +44,24 @@ describe('Uitpakken location policy', () => {
       sublocation_id: 'sub-kast',
       label: 'Keuken / Kast',
     })
+  })
+
+  it('treats locationless lines as ready without a synthetic location', () => {
+    const selectable = buildSelectableLocationIds([])
+    expect(isLocationSelectionValid(LOCATION_NONE, '', selectable)).toBe(true)
+    expect(isLocationSelectionValid(LOCATION_NONE, 'legacy-direct', selectable)).toBe(true)
+  })
+
+  it('only treats selectable global/exact targets as ready', () => {
+    const exactOptions = buildActiveLocationOptions(spacesData, sublocationsData, LOCATION_EXACT)
+    const exactSelectable = buildSelectableLocationIds(exactOptions)
+    expect(isLocationSelectionValid(LOCATION_EXACT, 'space-k', exactSelectable)).toBe(false)
+    expect(isLocationSelectionValid(LOCATION_EXACT, 'sub-kast', exactSelectable)).toBe(true)
+    expect(isLocationSelectionValid(LOCATION_EXACT, 'space-b', exactSelectable)).toBe(true)
+
+    const globalOptions = buildActiveLocationOptions(spacesData, sublocationsData, LOCATION_GLOBAL)
+    const globalSelectable = buildSelectableLocationIds(globalOptions)
+    expect(isLocationSelectionValid(LOCATION_GLOBAL, 'space-k', globalSelectable)).toBe(true)
+    expect(isLocationSelectionValid(LOCATION_GLOBAL, 'sub-kast', globalSelectable)).toBe(false)
   })
 })
