@@ -19,8 +19,8 @@ export const APPROVED_UI_COMPONENTS = Object.freeze([
     id: 'select',
     source: 'src/ui/Select.jsx',
     publicApi: 'Select',
-    purpose: 'Gebruikerszichtbare overlay-dropdowns met Inhuis-typografie, maximaal vijf zichtbare opties en interne scroll voor langere lijsten.',
-    reuseRule: 'Gebruik Select voor alle gebruikerszichtbare keuzelijsten; lengte van de optieset verandert het dropdownpatroon niet en schermspecifieke of native alternatieven zijn niet toegestaan.',
+    purpose: 'Gebruikerszichtbare overlay-dropdowns; mobiel met vast zoekveld, maximaal vijf zichtbare opties en interne scroll voor langere lijsten.',
+    reuseRule: 'Gebruik Select voor alle gebruikerszichtbare keuzelijsten; op mobiel heeft iedere geopende dropdown hetzelfde zoekbare overlaypatroon, ongeacht de lengte van de optieset. Schermspecifieke of native alternatieven zijn niet toegestaan.',
     contractTests: ['tests/inhuis-select.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
   },
   {

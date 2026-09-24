@@ -267,4 +267,169 @@ test.describe('Artikeldetail frontend-regressie', () => {
     );
     expect(unexpectedConsoleErrors).toEqual([]);
   });
+
+  test('mobiele voorkeurswinkel gebruikt de standaard zoekbare scroll-dropdown zonder layoutverschuiving', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const consoleErrors = attachConsoleErrorCollector(page);
+    const articleId = 'household-article-dropdown-test';
+    const articleName = 'Dropdown testartikel';
+    let savedFavoriteStore = '';
+
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: { id: 'test-admin@rezzerv.local', email: 'test-admin@rezzerv.local' },
+          user_id: 'test-admin@rezzerv.local',
+          email: 'test-admin@rezzerv.local',
+          active_household_id: '0',
+          active_household_name: 'Systeemhuishouden',
+          context_type: 'regular',
+          role: 'owner',
+          display_role: 'owner',
+          permissions: {},
+          supported_permissions: [],
+          is_frontteam: false,
+          is_platform_superuser: false,
+        }),
+      });
+    });
+
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          onboarding_status: 'completed',
+          onboarding_step: 'done',
+          primary_use_case: 'wat_inhuis',
+          initial_choice_required: false,
+          shared_household_minimum_required: false,
+          can_manage: true,
+          product_configuration: { location_tracking_level: 'none' },
+        }),
+      });
+    });
+
+    await page.route('**/api/dev/inventory-preview?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          rows: [{
+            id: 'inventory-dropdown-test',
+            household_article_id: articleId,
+            artikel: articleName,
+            aantal: 2,
+          }],
+        }),
+      });
+    });
+
+    await page.route('**/api/store-providers', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [
+            { name: 'Albert Heijn' },
+            { name: 'Aldi' },
+            { name: 'Coop' },
+            { name: 'Dirk' },
+            { name: 'Jumbo' },
+            { name: 'Kassabon' },
+            { name: 'Lidl' },
+            { name: 'Plus' },
+          ],
+        }),
+      });
+    });
+
+    await page.route(`**/api/household-articles/${articleId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          article_id: articleId,
+          household_article_id: articleId,
+          article_name: articleName,
+          article_group_name: 'Testgroep',
+          settings: {
+            favorite_store: '',
+            min_stock: null,
+            notes: '',
+          },
+        }),
+      });
+    });
+
+    await page.route(`**/api/household-articles/${articleId}/events`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [] }),
+      });
+    });
+
+    await page.route(`**/api/household-articles/${articleId}/settings`, async (route) => {
+      const payload = JSON.parse(route.request().postData() || '{}');
+      savedFavoriteStore = String(payload.favorite_store || '');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ settings: payload }),
+      });
+    });
+
+    await page.goto(`/voorraad/${articleId}`);
+    await expect(page.getByTestId('mobile-article-detail-page')).toBeVisible();
+
+    const trigger = page.getByTestId('mobile-article-favorite-store-select');
+    const purchaseHistory = page.getByTestId('mobile-article-purchase-history-action');
+    const before = await purchaseHistory.boundingBox();
+    expect(before).not.toBeNull();
+
+    await trigger.click();
+
+    const popover = page.getByTestId('mobile-article-favorite-store-select-popover');
+    const search = page.getByTestId('mobile-article-favorite-store-select-search');
+    const listbox = page.getByTestId('mobile-article-favorite-store-select-listbox');
+
+    await expect(popover).toBeVisible();
+    await expect(search).toBeVisible();
+    await expect(search).toHaveAttribute('placeholder', 'Zoeken…');
+    await expect(listbox.getByRole('option')).toHaveCount(9);
+
+    const popoverMetrics = await popover.evaluate((element) => ({
+      position: getComputedStyle(element).position,
+    }));
+    expect(popoverMetrics.position).toBe('fixed');
+
+    const listMetrics = await listbox.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      overflowY: getComputedStyle(element).overflowY,
+    }));
+    expect(listMetrics.clientHeight).toBeLessThanOrEqual(220);
+    expect(listMetrics.scrollHeight).toBeGreaterThan(listMetrics.clientHeight);
+    expect(listMetrics.overflowY).toBe('auto');
+
+    const after = await purchaseHistory.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.abs(after.y - before.y)).toBeLessThan(1);
+
+    await listbox.hover();
+    await page.mouse.wheel(0, 500);
+    await expect.poll(async () => listbox.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+    await search.fill('Plus');
+    await expect(listbox.getByRole('option')).toHaveCount(1);
+    await expect(listbox.getByRole('option', { name: 'Plus', exact: true })).toBeVisible();
+    await listbox.getByRole('option', { name: 'Plus', exact: true }).click();
+
+    await expect(trigger).toContainText('Plus');
+    expect(savedFavoriteStore).toBe('Plus');
+    expect(consoleErrors).toEqual([]);
+  });
 });
