@@ -12,6 +12,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any, Sequence
 
+from app.alembic_head_authority import repository_head_revision
 from . import postgresql_legacy_production_rebuild as _rebuild
 from .postgresql_legacy_production_rebuild import (
     ALEMBIC_CONFIG,
@@ -26,7 +27,7 @@ from .postgresql_legacy_production_rebuild import (
 )
 
 
-HEAD_REVISION = "20260921_01"
+HEAD_REVISION = repository_head_revision()
 PURCHASE_IMPORT_LINES_TABLE = "purchase_import_lines"
 PURCHASE_IMPORT_QUANTITY_COLUMN = "quantity_raw"
 
