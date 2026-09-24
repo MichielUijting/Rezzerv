@@ -236,11 +236,7 @@ def _normalize_purchase_import_lines(bind, *, direct_location_ids: list[str]) ->
             for name in location_columns
         ]
         if "location_override_mode" in line_columns:
-            assignments.append(
-                "location_override_mode = CASE "
-                "WHEN target_location_id = :location_id THEN 'cleared' "
-                "ELSE location_override_mode END"
-            )
+            assignments.append("location_override_mode = 'cleared'")
         if "updated_at" in line_columns:
             assignments.append("updated_at = CURRENT_TIMESTAMP")
 
