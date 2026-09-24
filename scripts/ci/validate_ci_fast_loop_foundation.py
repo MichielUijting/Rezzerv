@@ -63,6 +63,12 @@ def main() -> int:
         )
         require(text.count("jobs:") == 1, f"{relative} jobs root duplicated")
 
+    migration_workflow = (ROOT / ".github/workflows/postgresql-migration-foundation-validation.yml").read_text(encoding="utf-8")
+    require(
+        "python scripts/ci/validate_alembic_head_literals.py" in migration_workflow,
+        "migration foundation lost stale Alembic literal preflight",
+    )
+
     release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
     require("ready_for_review" in release, "release version check must rerun when Draft becomes Ready")
     require("PR_DRAFT: ${{ github.event.pull_request.draft }}" in release, "release version check lost Draft signal")
@@ -78,6 +84,7 @@ def main() -> int:
     print(f"CI_FAST_LOOP_CANCEL_WORKFLOWS={len(CANCEL_REQUIRED)}")
     print(f"CI_FAST_LOOP_IMPACT_WORKFLOWS={len(mapped)}")
     print("CI_FAST_LOOP_MIGRATION_METADATA=required")
+    print("CI_FAST_LOOP_ALEMBIC_LITERAL_SCAN=enabled")
     print("CI_FAST_LOOP_DRAFT_VERSION_DEFERRED=true")
     print("CI_FAST_LOOP_READY_VERSION_ENFORCED=true")
     print("CI_FAST_LOOP_FOUNDATION_GREEN")

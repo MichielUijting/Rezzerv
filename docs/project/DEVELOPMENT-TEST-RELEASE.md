@@ -173,7 +173,7 @@ Tijdens Draft-ontwikkeling mogen zware domeinauthorities incrementeel worden ove
 
 Nieuwe of gewijzigde Alembic-migraties declareren fail-closed hun CI-impact via `CI_IMPACT_DOMAINS`. De policy `quality/ci/draft_domain_impact_policy.json` bepaalt de toegestane domeinen. Ontbrekende of ongeldige metadata veroorzaakt geen stille skip: de Draft-planner kiest dan zwaar testen en de centrale migration-foundation-preflight blokkeert de kandidaat. Daarmee kan bijvoorbeeld een expliciete inventory/receipt-migratie Support, GPC en Invitations tijdens iteratieve Draft-pushes ontzien, terwijl onbekende migraties breed blijven testen.
 
-De planner staat in `scripts/ci/draft_domain_impact.py`. De optimalisatie verandert niets aan de definitieve S/M/L-classificatie of aan F7 Full exact-candidate evidence.
+De planner staat in `scripts/ci/draft_domain_impact.py`. De optimalisatie verandert niets aan de definitieve S/M/L-classificatie of aan F7 Full exact-candidate evidence. Een aanvullende statische preflight (`scripts/ci/validate_alembic_head_literals.py`) weigert gedateerde Alembic-head-literals in runtime- en testcode; zulke code moet de centrale `repository_head_revision()`-authority gebruiken.
 
 ## Finale patchbump zonder dubbele zware regressie
 

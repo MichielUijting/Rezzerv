@@ -52,6 +52,7 @@ jobs:
             scripts/ci/test_f7_full_regression_reuse.py \
             scripts/ci/validate_ci_fast_loop_foundation.py \
             scripts/ci/draft_domain_impact.py \
+            scripts/ci/validate_alembic_head_literals.py \
             scripts/ci/validate_f7_ci_orchestration_gate_map.py
 
       - name: Validate canonical version-only carry-forward
@@ -78,6 +79,10 @@ jobs:
           grep -Fx 'CI_FAST_LOOP_FOUNDATION_GREEN' ci-fast-loop-foundation.log
           python scripts/ci/draft_domain_impact.py self-test | tee draft-domain-impact-selftest.log
           grep -Fx 'DRAFT_DOMAIN_IMPACT_SELFTEST_GREEN' draft-domain-impact-selftest.log
+          python scripts/ci/validate_alembic_head_literals.py --self-test | tee alembic-head-literal-selftest.log
+          grep -Fx 'ALEMBIC_HEAD_LITERAL_SELFTEST_GREEN' alembic-head-literal-selftest.log
+          python scripts/ci/validate_alembic_head_literals.py | tee alembic-head-literal-scan.log
+          grep -Fx 'ALEMBIC_HEAD_LITERAL_SCAN_GREEN' alembic-head-literal-scan.log
 
       - name: Validate F7-01 orchestration gate map
         shell: bash
@@ -127,6 +132,8 @@ jobs:
             f7-version-only-carry-forward-selftest.log
             ci-fast-loop-foundation.log
             draft-domain-impact-selftest.log
+            alembic-head-literal-selftest.log
+            alembic-head-literal-scan.log
             f7-03-reuse-config.log
             f7-03-reuse-selftest.log
           if-no-files-found: error

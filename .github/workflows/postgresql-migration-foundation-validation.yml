@@ -29,6 +29,7 @@ on:
       - 'docs/technical/POSTGRESQL-SCHEMA-AUTHORITY-CUTOVER.md'
       - 'scripts/ci/draft_domain_impact.py'
       - 'quality/ci/draft_domain_impact_policy.json'
+      - 'scripts/ci/validate_alembic_head_literals.py'
       - '.github/workflows/postgresql-migration-foundation-validation.yml'
   workflow_dispatch:
 
@@ -56,6 +57,8 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          python scripts/ci/validate_alembic_head_literals.py --self-test
+          python scripts/ci/validate_alembic_head_literals.py
           python scripts/ci/draft_domain_impact.py self-test
           python scripts/ci/draft_domain_impact.py validate-migrations --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA"
 
