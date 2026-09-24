@@ -10,6 +10,10 @@ on:
       - 'backend/tests/test_support_message_service.py'
       - '.github/workflows/support-message-foundation-validation.yml'
 
+concurrency:
+  group: ci-support-message-foundation-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   support-message-foundation:
     runs-on: ubuntu-latest

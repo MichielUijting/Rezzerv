@@ -21,6 +21,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-postgresql-data-migration-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   data-migration-equivalence:
     name: SQLite head to PostgreSQL head equivalence

@@ -37,6 +37,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-postgresql-runtime-startup-schema-authority-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   runtime-startup-ddl-lockdown:
     runs-on: ubuntu-latest

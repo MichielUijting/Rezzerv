@@ -13,6 +13,10 @@ on:
       - '.github/workflows/household-invitation-delivery-validation.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ci-household-invitation-delivery-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest

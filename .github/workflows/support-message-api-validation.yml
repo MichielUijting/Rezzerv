@@ -18,6 +18,10 @@ on:
       - 'backend/tests/test_support_platform_route_authorization.py'
       - '.github/workflows/support-message-api-validation.yml'
 
+concurrency:
+  group: ci-support-message-api-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   support-message-api:
     runs-on: ubuntu-latest

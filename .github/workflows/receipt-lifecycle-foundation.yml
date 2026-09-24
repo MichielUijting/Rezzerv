@@ -16,6 +16,10 @@ on:
       - '.github/workflows/receipt-lifecycle-foundation.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ci-receipt-lifecycle-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   foundation:
     runs-on: ubuntu-latest
