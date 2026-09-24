@@ -213,6 +213,50 @@
   box-shadow: none !important;
 }
 
+.rz-mobile-article-favorite-store-row {
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding: 4px 2px;
+  border-top: 1px solid #edf0ee;
+  color: #171a18;
+  font-family: var(--font-family-base);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.rz-mobile-article-favorite-store-select {
+  min-width: 0;
+}
+
+.rz-mobile-article-favorite-store-trigger {
+  min-height: 44px;
+  padding: 0 28px 0 6px !important;
+  border: 0 !important;
+  border-radius: 8px;
+  background: transparent !important;
+  color: var(--color-mobile-ui-primary) !important;
+  font-weight: 600;
+  text-align: right;
+  box-shadow: none !important;
+}
+
+.rz-mobile-article-favorite-store-trigger:hover {
+  background: #f7faf8 !important;
+}
+
+.rz-mobile-article-favorite-store-trigger .rz-select-value {
+  margin-left: auto;
+}
+
+.rz-mobile-article-favorite-store-trigger .rz-select-caret {
+  right: 6px;
+}
+
 .rz-mobile-article-action-row {
   box-sizing: border-box;
   width: 100%;

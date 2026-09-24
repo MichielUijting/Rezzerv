@@ -481,37 +481,27 @@ export default function MobileArticlePage() {
         <section className="rz-mobile-article-card rz-mobile-article-quick-actions" aria-label="Snelle acties">
           <div className="rz-mobile-article-section-title">Snelle acties</div>
 
-          <button
-            type="button"
-            className="rz-mobile-article-action-row"
-            onClick={() => togglePanel('favorite-store')}
-            aria-expanded={activeQuickPanel === 'favorite-store'}
+          <div
+            className="rz-mobile-article-favorite-store-row"
             data-testid="mobile-article-favorite-store-action"
           >
             <span>Voorkeurswinkel</span>
-            <span className="rz-mobile-article-action-value">{String(settings?.favorite_store || '').trim() || 'Niet ingesteld'}</span>
-          </button>
-          {activeQuickPanel === 'favorite-store' ? (
-            <div className="rz-mobile-article-inline-panel" data-testid="mobile-article-favorite-store-panel">
-              <label className="rz-mobile-article-field">
-                <span>Voorkeurswinkel</span>
-                <Select
-                  value={favoriteStoreDraft}
-                  onChange={(value) => {
-                    setFavoriteStoreDraft(value)
-                    void saveFavoriteStore(value)
-                  }}
-                  options={favoriteStoreOptions}
-                  disabled={!canEditHouseholdSettings || settingsBusy}
-                  ariaLabel="Voorkeurswinkel"
-                  triggerClassName="rz-mobile-article-select"
-                  dataTestId="mobile-article-favorite-store-select"
-                />
-              </label>
-              {!canEditHouseholdSettings ? (
-                <div className="rz-mobile-article-helper">Alleen een beheerder of eigenaar kan de voorkeurswinkel wijzigen.</div>
-              ) : null}
-            </div>
+            <Select
+              value={favoriteStoreDraft}
+              onChange={(value) => {
+                setFavoriteStoreDraft(value)
+                void saveFavoriteStore(value)
+              }}
+              options={favoriteStoreOptions}
+              disabled={!canEditHouseholdSettings || settingsBusy}
+              ariaLabel="Voorkeurswinkel"
+              className="rz-mobile-article-favorite-store-select"
+              triggerClassName="rz-mobile-article-favorite-store-trigger"
+              dataTestId="mobile-article-favorite-store-select"
+            />
+          </div>
+          {!canEditHouseholdSettings ? (
+            <div className="rz-mobile-article-helper">Alleen een beheerder of eigenaar kan de voorkeurswinkel wijzigen.</div>
           ) : null}
 
           <button

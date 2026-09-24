@@ -457,7 +457,7 @@ Vaste regels:
 - bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+`, `−` en directe aantalinvoer werken;
 - detail- en actierijen gebruiken dezelfde compacte 14px/16px typografie, neutrale scheidingslijnen en teal `#005F6A` interactiekleur als Mobiele Voorraad;
 - **Notities** is een altijd zichtbaar vrij tekstveld; ieder lid van het actieve huishouden, inclusief de rol **Kijker**, mag de gedeelde huishoudnotitie wijzigen; deze uitzondering geeft geen wijzigingsrecht op andere artikel- of huishoudinstellingen;
-- **Voorkeurswinkel** gebruikt een dropdown met beschikbare winkels en blijft een beheerinstelling;
+- **Voorkeurswinkel** gebruikt de centrale `Select` als overlay-dropdown met beschikbare winkels en blijft een beheerinstelling; het openen van de keuzelijst verandert de hoogte of positie van de omliggende detailcontent niet;
 - iedere artikelpresentatie via de gedeelde `CatalogArticleThumbnail` toont bij ontbrekende of fout geladen afbeelding zichtbaar **Geen foto**;
 - het detailscherm heeft geen vaste algemene `Opslaan`-knop; een specifieke instelling wordt direct/expliciet opgeslagen vanuit zijn eigen interactie;
 - de gebruikerszichtbare term voor de shoppingmodule en de lijst is **Boodschappenlijst**; interne route en technische sleutel mogen `winkelen` blijven.
