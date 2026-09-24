@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
 
 import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect, text
 
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
 import migration_foundation_selftest as foundation_test
+from app.alembic_head_authority import repository_head_revision
 
 
-HEAD_REVISION = "20260921_01"
+HEAD_REVISION = repository_head_revision()
 EXPECTED_POSTGRESQL_APPLICATION_TABLES = 89
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
@@ -493,7 +500,7 @@ def main() -> None:
     finally:
         engine.dispose()
 
-    print("MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN")
+    print(f"MIGRATION_FOUNDATION_REVISION_GREEN revision={HEAD_REVISION}")
 
 
 if __name__ == "__main__":

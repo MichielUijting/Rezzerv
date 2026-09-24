@@ -161,6 +161,12 @@ De machineleesbare policy staat in
 `scripts/ci/shared_fullstack_plan.py` en
 `scripts/ci/frontend_regression_plan.py`.
 
+## Centrale CI-dependencies en Alembic-head authority
+
+Backend acceptance- en API-selftests gebruiken de centrale backend dependencyset uit `backend/requirements.txt`; de FastAPI/Starlette `TestClient`-dependency `httpx` wordt daar expliciet gepind zodat workflows geen lokale installatiestap hoeven te onderhouden.
+
+De actuele Alembic-head wordt niet als datumcode in CI-, migration- of selftest-authorities vastgelegd. `backend/app/alembic_head_authority.py` leest fail-closed exact één head uit de repository-migratiegraph. Migration helpers, foundation-selftests en workflows vergelijken hun database-revision met deze dynamische authority. `backend/tests/alembic_head_authority_selftest.py` bewaakt dat de actuele head niet opnieuw in de centrale authoritybestanden wordt hardcoded.
+
 ## Finale patchbump zonder dubbele zware regressie
 
 De normale versievolgorde blijft: implementatie stabiliseren, daarna de
