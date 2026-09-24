@@ -16,6 +16,10 @@ HEAD_SYMBOLS = {
     "EXPECTED_ALEMBIC_HEAD",
     "EXPECTED_HEAD_REVISION",
 }
+TEXT_HEAD_FOLLOWERS = (
+    ".github/workflows/postgresql-catalog-off-request-portability.yml",
+)
+
 HEAD_FOLLOWERS = (
     "backend/app/maintenance/postgresql_data_migration_head.py",
     "backend/app/maintenance/postgresql_legacy_production_adoption.py",
@@ -63,6 +67,14 @@ def scan_repository() -> list[str]:
             violations.extend(violations_for_source(source, relative))
         except SyntaxError as exc:
             violations.append(f"{relative}:{exc.lineno or 0}:syntax_error")
+    for relative in TEXT_HEAD_FOLLOWERS:
+        path = ROOT / relative
+        if not path.is_file():
+            violations.append(f"{relative}:0:missing_text_head_follower")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in REVISION_RE.finditer(text):
+            violations.append(f"{relative}:0:hardcoded_revision={match.group(0)}")
     return violations
 
 
@@ -94,6 +106,7 @@ def main() -> int:
             "use app.alembic_head_authority.repository_head_revision() instead"
         )
     print(f"ALEMBIC_HEAD_FOLLOWER_COUNT={len(HEAD_FOLLOWERS)}")
+    print(f"ALEMBIC_HEAD_TEXT_FOLLOWER_COUNT={len(TEXT_HEAD_FOLLOWERS)}")
     print("ALEMBIC_HEAD_LITERAL_SCAN_GREEN")
     return 0
 

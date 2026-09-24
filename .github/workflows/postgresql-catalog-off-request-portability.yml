@@ -114,7 +114,8 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/catalog-off-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/catalog-off-migration.log
-          grep -F "'revision': '20260921_01'" /tmp/catalog-off-migration.log
+          expected_head="$(python -c 'from app.alembic_head_authority import repository_head_revision; print(repository_head_revision())')"
+          grep -F "'revision': '$expected_head'" /tmp/catalog-off-migration.log
 
       - name: Prove catalog/OFF paths with DML-only runtime role
         working-directory: backend
