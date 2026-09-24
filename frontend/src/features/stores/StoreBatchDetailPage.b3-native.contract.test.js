@@ -27,4 +27,16 @@ describe('B3 location-only native contract', () => {
     expect(source).toContain('restoredOverride')
     expect(source).toContain('await refreshBatch(batch?.batch_id)')
   })
+
+  it('never leaves a rejected location visible as if it was persisted', () => {
+    expect(source).toContain('locationId: originalLocationId')
+    expect(source).toContain('if (options.throwOnError) throw err')
+    expect(source).toContain('throwOnError: true')
+    expect(source).toContain('if (saved) closeLocationPicker()')
+  })
+
+  it('builds location choices from the active household location policy', () => {
+    expect(source).toContain('household?.location_tracking_level')
+    expect(source).toContain('householdData?.location_tracking_level')
+  })
 })

@@ -112,6 +112,10 @@ from app.services.household_alias_policy import install_household_alias_policy
 from app.services.household_representative_image_service import (
     backfill_household_representative_images,
 )
+from app.services.household_product_configuration_service import (
+    public_household_product_configuration_payload,
+    resolve_household_product_configuration,
+)
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -12452,6 +12456,12 @@ def get_household(authorization: Optional[str] = Header(None)):
     household = get_household_payload_for_user(user)
     with engine.begin() as conn:
         household["store_import_simplification_level"] = get_household_store_import_simplification_level(conn, household["id"])
+        try:
+            product_configuration = resolve_household_product_configuration(conn, household["id"])
+        except LookupError:
+            product_configuration = None
+        if product_configuration is not None:
+            household.update(public_household_product_configuration_payload(product_configuration))
     return household
 
 
