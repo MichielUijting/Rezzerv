@@ -150,6 +150,40 @@ def test_global_policy_requires_one_owned_main_space_and_rejects_sublocations(en
         assert exc_info.value.status_code == 404
 
 
+def test_global_target_is_locationless_when_unpacking_is_disabled(engine):
+    with engine.begin() as conn:
+        _seed(conn)
+        resolved = resolve_inventory_target_location(
+            conn,
+            "house-global",
+            None,
+        )
+        assert resolved == {
+            "location_id": None,
+            "space_id": None,
+            "sublocation_id": None,
+            "location_label": "",
+        }
+
+
+def test_global_target_still_requires_location_when_unpacking_is_enabled(engine):
+    with engine.begin() as conn:
+        _seed(conn)
+        conn.execute(
+            text(
+                """
+                UPDATE household_product_configuration
+                SET unpacking_enabled = 1
+                WHERE household_id = 'house-global'
+                """
+            )
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            resolve_inventory_target_location(conn, "house-global", None)
+        assert exc_info.value.status_code == 400
+        assert "hoofdruimte" in str(exc_info.value.detail).lower()
+
+
 def test_exact_policy_preserves_terminal_location_contract(engine):
     with engine.begin() as conn:
         _seed(conn)
