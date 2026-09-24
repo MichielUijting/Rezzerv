@@ -2,6 +2,11 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { createPortal } from 'react-dom'
 import './components/select.css'
 
+const SELECT_MAX_VISIBLE_OPTIONS = 5
+const SELECT_OPTION_HEIGHT = 44
+const SELECT_LISTBOX_VERTICAL_PADDING = 8
+const SELECT_LISTBOX_MAX_HEIGHT = (SELECT_MAX_VISIBLE_OPTIONS * SELECT_OPTION_HEIGHT) + SELECT_LISTBOX_VERTICAL_PADDING
+
 function normalizeOptions(options = []) {
   return options.map((option) => ({
     value: String(option?.value ?? ''),
@@ -30,14 +35,14 @@ function getMenuPosition(trigger) {
   const viewportHeight = window.innerHeight
   const availableBelow = Math.max(0, viewportHeight - rect.bottom - edge - gap)
   const availableAbove = Math.max(0, rect.top - edge - gap)
-  const openAbove = availableBelow < 176 && availableAbove > availableBelow
+  const openAbove = availableBelow < SELECT_LISTBOX_MAX_HEIGHT && availableAbove > availableBelow
   const available = openAbove ? availableAbove : availableBelow
   const width = Math.min(rect.width, Math.max(0, viewportWidth - (edge * 2)))
   const left = Math.min(
     Math.max(edge, rect.left),
     Math.max(edge, viewportWidth - edge - width),
   )
-  const maxHeight = Math.max(44, Math.min(264, available))
+  const maxHeight = Math.max(SELECT_OPTION_HEIGHT, Math.min(SELECT_LISTBOX_MAX_HEIGHT, available))
 
   if (openAbove) {
     return {
@@ -111,6 +116,12 @@ export default function Select({
       window.removeEventListener('scroll', updatePosition, true)
     }
   }, [isOpen])
+
+  useLayoutEffect(() => {
+    if (!isOpen || activeIndex < 0) return
+    const activeOption = listboxRef.current?.querySelector(`[data-select-option-index="${activeIndex}"]`)
+    activeOption?.scrollIntoView({ block: 'nearest' })
+  }, [isOpen, activeIndex])
 
   function openMenu() {
     if (disabled) return
@@ -193,6 +204,7 @@ export default function Select({
             aria-selected={index === selectedIndex}
             disabled={option.disabled}
             tabIndex={-1}
+            data-select-option-index={index}
             className={[
               'rz-select-option',
               index === activeIndex ? 'rz-select-option--active' : '',
