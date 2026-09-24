@@ -178,7 +178,8 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/runtime-startup-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/runtime-startup-migration.log
-          grep -F "'revision': '20260921_01'" /tmp/runtime-startup-migration.log
+          expected_head="$(python -m app.alembic_head_authority)"
+          grep -F "'revision': '$expected_head'" /tmp/runtime-startup-migration.log
 
       - name: Prove runtime role has no schema CREATE privilege
         run: |

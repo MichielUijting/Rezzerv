@@ -6,9 +6,10 @@ import sqlite3
 from pathlib import Path
 from typing import Sequence
 
+from app.alembic_head_authority import repository_head_revision
 from app.maintenance import postgresql_data_migration as migration
 
-HEAD_REVISION = "20260921_01"
+HEAD_REVISION = repository_head_revision()
 EXPECTED_APPLICATION_TABLES = 89
 
 

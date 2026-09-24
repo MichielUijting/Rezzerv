@@ -57,6 +57,9 @@ jobs:
           REZZERV_EXPECT_MIGRATION_MODE: sqlite-baseline
         run: |
           rm -f /tmp/rezzerv-migration-baseline.sqlite
+          python backend/tests/alembic_head_authority_selftest.py | tee /tmp/alembic-head-authority.log
+          grep -F 'ALEMBIC_HEAD_AUTHORITY_GREEN revision=' /tmp/alembic-head-authority.log
+          grep -F 'BACKEND_TESTCLIENT_DEPENDENCY_GREEN httpx=0.28.1' /tmp/alembic-head-authority.log
           python -m alembic -c backend/alembic.ini upgrade head
           python backend/tests/migration_foundation_head_selftest.py | tee /tmp/migration-sqlite.log
           grep -F 'MIGRATION_SQLITE_SCHEMA_CONTRACT_GREEN' /tmp/migration-sqlite.log
@@ -74,7 +77,7 @@ jobs:
           grep -F 'SQLITE_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN' /tmp/migration-sqlite.log
           grep -F 'SQLITE_HOUSEHOLD_REPRESENTATIVE_IMAGE_SCHEMA_GREEN' /tmp/migration-sqlite.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-sqlite.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN' /tmp/migration-sqlite.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_GREEN revision=' /tmp/migration-sqlite.log
           python backend/tests/password_reset_security_selftest.py | tee /tmp/password-reset-security.log
           grep -F 'PASSWORD_RESET_SECURITY_GREEN' /tmp/password-reset-security.log
           python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/zero-residual.log
@@ -90,9 +93,9 @@ jobs:
           python backend/tests/receipt_lifecycle_schema_authority_selftest.py
           python -m app.testing.external_article_product_link_contract
           python -m alembic -c backend/alembic.ini current | tee /tmp/sqlite-current.log
-          grep -F '20260921_01' /tmp/sqlite-current.log
+          grep -F '(head)' /tmp/sqlite-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/sqlite-heads.log
-          grep -F '20260921_01' /tmp/sqlite-heads.log
+          grep -F '(head)' /tmp/sqlite-heads.log
 
   sqlite-existing-adoption:
     name: Existing SQLite baseline is validated and adopted
@@ -160,9 +163,9 @@ jobs:
           grep -F 'SQLITE_HOME_ACTION_ORDER_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'SQLITE_HOUSEHOLD_REPRESENTATIVE_IMAGE_SCHEMA_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
+          grep -F 'MIGRATION_FOUNDATION_REVISION_GREEN revision=' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' "$RUNNER_TEMP/rezzerv-schema/migration-adoption.log"
-          grep -F '20260921_01' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
+          grep -F '(head)' "$RUNNER_TEMP/rezzerv-schema/alembic-current.log"
 
   postgresql-lineage:
     name: PostgreSQL 17 migration lineage and authority
@@ -225,7 +228,7 @@ jobs:
           grep -F 'POSTGRESQL_CATALOG_IMAGE_SCHEMA_AUTHORITY_GREEN' /tmp/migration-postgresql.log
           grep -F 'POSTGRESQL_HOUSEHOLD_REPRESENTATIVE_IMAGE_SCHEMA_GREEN' /tmp/migration-postgresql.log
           grep -F 'MIGRATION_FOUNDATION_SELFTEST_GREEN' /tmp/migration-postgresql.log
-          grep -F 'MIGRATION_FOUNDATION_REVISION_20260921_01_GREEN' /tmp/migration-postgresql.log
+          grep -F 'MIGRATION_FOUNDATION_REVISION_GREEN revision=' /tmp/migration-postgresql.log
           python backend/tests/password_reset_security_selftest.py | tee /tmp/password-reset-security.log
           grep -F 'PASSWORD_RESET_SECURITY_GREEN' /tmp/password-reset-security.log
           python backend/tests/postgresql_zero_residual_selftest.py | tee /tmp/zero-residual.log
@@ -281,6 +284,6 @@ jobs:
           print('POSTGRESQL_HOME_ACTION_ORDER_MIGRATION_AUTHORITY_GREEN')
           PY
           python -m alembic -c backend/alembic.ini current | tee /tmp/postgresql-current.log
-          grep -F '20260921_01' /tmp/postgresql-current.log
+          grep -F '(head)' /tmp/postgresql-current.log
           python -m alembic -c backend/alembic.ini heads | tee /tmp/postgresql-heads.log
-          grep -F '20260921_01' /tmp/postgresql-heads.log
+          grep -F '(head)' /tmp/postgresql-heads.log

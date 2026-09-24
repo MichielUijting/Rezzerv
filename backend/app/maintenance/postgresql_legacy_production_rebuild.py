@@ -21,7 +21,9 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 from urllib.parse import quote
 
-HEAD_REVISION = "20260921_01"
+from app.alembic_head_authority import repository_head_revision
+
+HEAD_REVISION = repository_head_revision()
 BASELINE_REVISION = "20260827_01"
 EXPECTED_APPLICATION_TABLES = 89
 SYSTEM_TABLES = frozenset({"alembic_version", "sqlite_sequence"})
