@@ -56,8 +56,14 @@
 .rz-select-listbox {
   position: fixed;
   z-index: 9000;
-  max-height: min(264px, 52vh);
+  max-height: 228px;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   padding: 4px;
   border: 1px solid #aab6af;
   border-radius: 12px;
