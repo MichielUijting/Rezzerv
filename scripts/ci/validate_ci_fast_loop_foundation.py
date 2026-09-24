@@ -53,6 +53,15 @@ def main() -> int:
         require(f"--domain {domain}" in text, f"{relative} domain planner drift")
         require("needs: impact-plan" in text, f"{relative} heavy job is not planner-gated")
         require("if: needs.impact-plan.outputs.run_heavy == 'true'" in text, f"{relative} heavy job gate missing")
+        require(
+            "grep -E '^RUN_HEAVY=(true|false)$' draft-domain-impact.log" in text,
+            f"{relative} planner output assertion malformed",
+        )
+        require(
+            "grep -Fx 'DRAFT_DOMAIN_IMPACT_GREEN' draft-domain-impact.log" in text,
+            f"{relative} planner green marker assertion malformed",
+        )
+        require(text.count("jobs:") == 1, f"{relative} jobs root duplicated")
 
     release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
     require("ready_for_review" in release, "release version check must rerun when Draft becomes Ready")
