@@ -168,7 +168,7 @@ export default function SuperuserActionButtonsSection() {
                 onDragEnd={() => { setDraggedKey(''); setDragOverKey('') }}
                 style={{
                   cursor: savingOrder ? 'wait' : 'grab',
-                  outline: isDragTarget ? '3px solid var(--color-brand-primary, #2e7d4d)' : 'none',
+                  outline: isDragTarget ? '3px solid var(--color-brand-primary, var(--color-ui-primary))' : 'none',
                   outlineOffset: 2,
                   borderRadius: 12,
                 }}

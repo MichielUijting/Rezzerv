@@ -313,7 +313,7 @@ export default function SettingsCapabilitiesPage() {
                     <div style={{ color: '#667085', fontSize: 14 }}>{item.description}</div>
                   </div>
                   {active ? (
-                    <span style={{ fontWeight: 700, color: '#005F6A' }} data-testid={`capability-active-${item.key}`}>Actief</span>
+                    <span style={{ fontWeight: 700, color: 'var(--color-ui-primary)' }} data-testid={`capability-active-${item.key}`}>Actief</span>
                   ) : (
                     <Button type="button" variant="secondary" onClick={() => chooseUseCase(item.key)} data-testid={`capability-add-${item.key}`}>Toevoegen</Button>
                   )}

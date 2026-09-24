@@ -54,7 +54,7 @@
   padding: 0 !important;
   box-sizing: border-box !important;
   vertical-align: middle;
-  accent-color: #1a3e2b;
+  accent-color: var(--color-ui-primary);
 }
 
 [data-testid="shopping-list-table"] thead tr:nth-child(2) th:first-child,

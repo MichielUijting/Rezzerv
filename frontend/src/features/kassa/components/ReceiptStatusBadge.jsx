@@ -17,7 +17,7 @@ function inboxStatusStyle(value) {
   if (value === 'Controle nodig') {
     return {
       background: '#FFFAEB',
-      color: '#005F6A',
+      color: 'var(--color-ui-primary)',
       border: '1px solid #FEDF89',
     }
   }

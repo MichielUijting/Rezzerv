@@ -22,7 +22,7 @@
 .rz-mobile-article-input:focus,
 .rz-mobile-article-select:focus,
 .rz-mobile-article-text-action:focus-visible {
-  outline: 2px solid rgba(0, 95, 106, 0.18);
+  outline: 2px solid color-mix(in srgb, var(--color-ui-primary) 18%, transparent);
   outline-offset: 2px;
 }
 

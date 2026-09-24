@@ -41,7 +41,7 @@
 .rz-input:focus-visible {
   border-color: var(--color-brand-primary);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(26, 62, 43, 0.16);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ui-primary) 16%, transparent);
 }
 .rz-label {
   margin-bottom: 0;

@@ -3,12 +3,20 @@ import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import AuthorizedControl from '../../ui/AuthorizedControl'
+import Button from '../../ui/Button'
 import { readStoredAuthContext } from '../../lib/authSession.js'
 import {
   fetchHouseholdOnboarding,
   readHouseholdOnboarding,
 } from '../onboarding/onboardingState.js'
 import { buildSettingsNavigation } from './settingsNavigation.js'
+import {
+  DEFAULT_PRIMARY_COLOR,
+  normalizePrimaryColor,
+  readPrimaryColorPreference,
+  resetPrimaryColorPreference,
+  writePrimaryColorPreference,
+} from '../../ui/primaryColorPreference.js'
 
 const PRIMARY_USE_CASE_LABELS = {
   inhuis_halen: 'Inhuis halen',
@@ -47,6 +55,9 @@ function buildActiveProfileItems(onboarding) {
 export default function SettingsPage() {
   const context = readStoredAuthContext()
   const [onboarding, setOnboarding] = useState(() => readHouseholdOnboarding(context))
+  const [primaryColor, setPrimaryColor] = useState(() => readPrimaryColorPreference())
+  const [primaryColorDraft, setPrimaryColorDraft] = useState(() => readPrimaryColorPreference())
+  const [primaryColorError, setPrimaryColorError] = useState('')
   const navigation = buildSettingsNavigation({ onboarding })
   const activeProfileItems = buildActiveProfileItems(onboarding)
 
@@ -70,11 +81,29 @@ export default function SettingsPage() {
     }
   }, [context?.user_id, context?.active_household_id, context?.context_type])
 
+  function applyPrimaryColor() {
+    try {
+      const applied = writePrimaryColorPreference(primaryColorDraft)
+      setPrimaryColor(applied)
+      setPrimaryColorDraft(applied)
+      setPrimaryColorError('')
+    } catch (error) {
+      setPrimaryColorError(error?.message || 'De hoofdkleur kon niet worden toegepast.')
+    }
+  }
+
+  function restorePrimaryColor() {
+    const applied = resetPrimaryColorPreference()
+    setPrimaryColor(applied)
+    setPrimaryColorDraft(applied)
+    setPrimaryColorError('')
+  }
+
   function getTileStyle(disabled = false) {
     return {
       display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px',
-      border: `1px solid ${disabled ? '#0f5b32' : '#dfe4ea'}`, borderRadius: '12px',
-      color: disabled ? '#0f5b32' : 'inherit', textDecoration: 'none',
+      border: `1px solid ${disabled ? 'var(--color-ui-primary)' : '#dfe4ea'}`, borderRadius: '12px',
+      color: disabled ? 'var(--color-ui-primary)' : 'inherit', textDecoration: 'none',
       background: disabled ? '#d8f3dc' : '#ffffff', cursor: disabled ? 'not-allowed' : 'pointer',
       boxShadow: disabled ? 'none' : undefined, opacity: 1, width: '100%', boxSizing: 'border-box',
     }
@@ -128,6 +157,92 @@ export default function SettingsPage() {
                 : 'Beheer hier je persoonlijke voorkeuren en de inrichting van je huishouden.'}
             </p>
           </div>
+
+          <section
+            data-testid="settings-primary-color"
+            style={{
+              display: 'grid',
+              gap: 12,
+              padding: '14px 16px',
+              border: '1px solid #dfe4ea',
+              borderRadius: 12,
+              background: '#ffffff',
+            }}
+          >
+            <div>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Weergave</h3>
+              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>
+                Donkergroene hoofdkleur voor headers, primaire knoppen, tabelkoppen, focus en actieve accenten.
+                De standaardkleur is {DEFAULT_PRIMARY_COLOR}; deze voorkeur geldt op dit apparaat.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>Kleur kiezen</span>
+                <input
+                  type="color"
+                  value={normalizePrimaryColor(primaryColorDraft) || primaryColor}
+                  onChange={(event) => {
+                    setPrimaryColorDraft(event.target.value.toUpperCase())
+                    setPrimaryColorError('')
+                  }}
+                  aria-label="Donkergroene hoofdkleur kiezen"
+                  data-testid="settings-primary-color-picker"
+                  style={{ width: 52, height: 42, padding: 2, cursor: 'pointer' }}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 6, minWidth: 150 }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>Hexkleur</span>
+                <input
+                  className="rz-input"
+                  value={primaryColorDraft}
+                  onChange={(event) => {
+                    setPrimaryColorDraft(event.target.value.toUpperCase())
+                    setPrimaryColorError('')
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      applyPrimaryColor()
+                    }
+                  }}
+                  inputMode="text"
+                  maxLength={7}
+                  aria-label="Hexkleur hoofdkleur"
+                  data-testid="settings-primary-color-hex"
+                />
+              </label>
+              <Button type="button" variant="primary" onClick={applyPrimaryColor} data-testid="settings-primary-color-apply">
+                Toepassen
+              </Button>
+              <Button type="button" variant="secondary" onClick={restorePrimaryColor} data-testid="settings-primary-color-reset">
+                Standaard herstellen
+              </Button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14 }}>
+              <span>Actief:</span>
+              <span
+                data-testid="settings-primary-color-active"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  minHeight: 30,
+                  padding: '4px 10px',
+                  borderRadius: 8,
+                  background: primaryColor,
+                  color: '#FFFFFF',
+                  fontWeight: 600,
+                }}
+              >
+                {primaryColor}
+              </span>
+            </div>
+            {primaryColorError ? (
+              <div role="alert" style={{ color: '#b42318', fontSize: 14 }} data-testid="settings-primary-color-error">
+                {primaryColorError}
+              </div>
+            ) : null}
+          </section>
 
           {context?.context_type === 'regular' && activeProfileItems.length ? (
             <section

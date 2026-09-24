@@ -13,6 +13,8 @@ const headerCss = readFrontend('src/ui/components/header.css')
 const buttonCss = readFrontend('src/ui/components/button.css')
 const legacyStylesCss = readFrontend('src/styles.css')
 const mainSource = readFrontend('src/main.jsx')
+const preferenceSource = readFrontend('src/ui/primaryColorPreference.js')
+const settingsSource = readFrontend('src/features/settings/SettingsPage.jsx')
 
 assert.match(tokensCss, /--color-ui-primary:\s*#005F6A/i)
 assert.match(tokensCss, /--color-ui-primary-text:\s*#FFFFFF/i)
@@ -36,6 +38,17 @@ assert.match(themeCss, /\.rz-table thead tr\.rz-table-header th,[\s\S]*backgroun
 assert.match(themeCss, /\.rz-table-header \.rz-sort-button,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 
 assert.match(mainSource, /import "\.\/ui\/theme\.css";/)
+assert.match(mainSource, /initializePrimaryColorPreference\(\)/)
+assert.match(preferenceSource, /DEFAULT_PRIMARY_COLOR\s*=\s*['"]#005F6A['"]/i)
+assert.match(preferenceSource, /--color-brand-primary/)
+assert.match(preferenceSource, /--color-ui-primary/)
+assert.match(preferenceSource, /--color-mobile-ui-primary/)
+assert.match(preferenceSource, /PRIMARY_COLOR_STORAGE_KEY\s*=\s*['"]inhuis\.ui\.primary-color['"]/i)
+assert.match(preferenceSource, /contrastWithWhite/)
+assert.match(preferenceSource, />=\s*4\.5/)
+assert.match(settingsSource, /data-testid="settings-primary-color-picker"/)
+assert.match(settingsSource, /data-testid="settings-primary-color-hex"/)
+assert.match(settingsSource, /Standaard herstellen/)
 assert.ok(mainSource.indexOf('./ui/theme.css') > mainSource.indexOf('./styles.css'))
 assert.ok(mainSource.indexOf('./ui/theme.css') > mainSource.indexOf('./ui/typography.css'))
 
@@ -64,6 +77,9 @@ const forbiddenPrimaryColors = [
   '#1F4D3A',
   '#1D4D3F',
   '#176B35',
+  '#0F3D24',
+  '#2E7D32',
+  '#163020',
 ]
 const sourceExtensions = new Set(['.css', '.js', '.jsx', '.ts', '.tsx', '.svg'])
 function listSourceFiles(directory) {
@@ -85,5 +101,25 @@ for (const root of ['src', 'public']) {
   }
 }
 assert.deepEqual(primaryColorViolations, [], primaryColorViolations.join('\n'))
+
+const allowedDefaultLiteralFiles = new Set([
+  'src/ui/tokens.css',
+  'src/ui/primaryColorPreference.js',
+  'src/features/admin/lib/browserRegressionRunner.js',
+  'public/inhuis-loading-mark.svg',
+  'public/rezzerv-share-icon.svg',
+])
+const hardcodedDefaultViolations = []
+for (const root of ['src', 'public']) {
+  for (const filePath of listSourceFiles(path.join(frontendRoot, root))) {
+    const relativePath = path.relative(frontendRoot, filePath).replaceAll('\\', '/')
+    if (allowedDefaultLiteralFiles.has(relativePath)) continue
+    const content = fs.readFileSync(filePath, 'utf8').toUpperCase()
+    if (content.includes('#005F6A')) {
+      hardcodedDefaultViolations.push(`${relativePath} hardcodet #005F6A in plaats van de centrale runtime-token`)
+    }
+  }
+}
+assert.deepEqual(hardcodedDefaultViolations, [], hardcodedDefaultViolations.join('\n'))
 
 console.log('INHUIS_PRIMARY_COLOR_CONTRACT_GREEN')

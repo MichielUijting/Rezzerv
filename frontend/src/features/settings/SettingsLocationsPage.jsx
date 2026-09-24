@@ -24,7 +24,7 @@ const sublocationTableColumns = [
   { key: 'actief', width: 140 },
 ]
 const sublocationColumnWidths = Object.fromEntries(sublocationTableColumns.map(({ key, width }) => [key, width]))
-const greenCheckboxStyle = { accentColor: '#005F6A', width: 16, height: 16 }
+const greenCheckboxStyle = { accentColor: 'var(--color-ui-primary)', width: 16, height: 16 }
 
 function FeedbackOverlay({ type = 'info', message, onClose }) {
   if (!message) return null

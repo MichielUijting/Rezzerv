@@ -65,7 +65,7 @@ export default function MetricTrendCard({ label, value, trend = [], detail = '',
             preserveAspectRatio="none"
             role="img"
             aria-label={`${label}, ontwikkeling afgelopen 7 kalenderdagen: ${trendLabel}`}
-            style={{ position: 'absolute', zIndex: 0, left: -2, right: -2, bottom: 23, width: 'calc(100% + 4px)', height: 76, color: 'var(--color-brand-primary, #2e7d4d)', opacity: 0.28, pointerEvents: 'none' }}
+            style={{ position: 'absolute', zIndex: 0, left: -2, right: -2, bottom: 23, width: 'calc(100% + 4px)', height: 76, color: 'var(--color-brand-primary, var(--color-ui-primary))', opacity: 0.28, pointerEvents: 'none' }}
           >
             <path d={area} fill="currentColor" opacity="0.30" />
             <path d={line} fill="none" stroke="currentColor" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />

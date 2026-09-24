@@ -1,11 +1,11 @@
 # Inhuis UI-styleguide
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
-Laatst inhoudelijk vastgesteld door de PO: 23 september 2026.
+Laatst inhoudelijk vastgesteld door de PO: 24 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
-De mobiele Voorraadbaseline is op **22 september 2026** ingezet en op **23 september 2026** door de PO verder verfijnd. De actuele variant combineert de rustige vlakke lijststructuur met de lichtgroene gevlekte Inhuis-achtergrond, een mobiele header in de vaste primaire kleur `#005F6A` en een gebruikersspecifieke onderste actiebalk. Eerdere Voorraad-borging geldt niet meer wanneer zij met dit nieuwere PO-besluit conflicteert.
+De mobiele Voorraadbaseline is op **22 september 2026** ingezet en op **23 september 2026** door de PO verder verfijnd. De actuele variant combineert de rustige vlakke lijststructuur met de lichtgroene gevlekte Inhuis-achtergrond, een mobiele header via de centrale primaire kleurtoken (standaard `#005F6A`) en een gebruikersspecifieke onderste actiebalk. Eerdere Voorraad-borging geldt niet meer wanneer zij met dit nieuwere PO-besluit conflicteert.
 
 Het mobiele **Voorraad-artikeldetail** is op **23 september 2026** naar dezelfde nieuwe mobiele richting gemigreerd. Het hoofdscherm Voorraad blijft de primaire lijstbaseline; het artikeldetail is de actuele detailbaseline voor gedeelde navigatie, kleur en artikelpresentatie.
 
@@ -18,8 +18,8 @@ Historische besluiten die hierin zijn opgenomen:
 Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele grammatica uit het door de PO aangeleverde ontwerpvoorstel:
 
 - een rustige **lichtgroene gevlekte Inhuis-achtergrond** via de bestaande groene wallpaper; blur en zwevende glassmorphism-cards blijven vervallen;
-- ieder beveiligd mobiel scherm krijgt vanuit de centrale `MobileAppChrome` linksboven de gedeelde knop **Terug** in `#005F6A`; een aanwezige module-/appheader reserveert hiervoor links ruimte en toont daarnaast de schermtitel en waar van toepassing het **witte Inhuis-logo**;
-- één applicatiebrede primaire donkergroene/blauwgroene kleur **`#005F6A`** voor headers, primaire knoppen, tabelheaders, voorraadmutatieknoppen, focusaccenten en actieve mobiele accenten; er wordt geen tweede primaire donkergroene tint gebruikt;
+- ieder beveiligd mobiel scherm krijgt vanuit de centrale `MobileAppChrome` linksboven de gedeelde knop **Terug** via `--color-mobile-ui-primary` (standaard `#005F6A`); een aanwezige module-/appheader reserveert hiervoor links ruimte en toont daarnaast de schermtitel en waar van toepassing het **witte Inhuis-logo**;
+- één applicatiebrede primaire donkergroene/blauwgroene tokenfamilie met standaardkleur **`#005F6A`** voor headers, primaire knoppen, tabelheaders, voorraadmutatieknoppen, focusaccenten en actieve mobiele accenten; er wordt geen tweede primaire donkergroene tint gebruikt;
 - zoeken en filters staan compact boven de inhoud, zonder een grote omhullende filtercard;
 - de voorraadlijst vormt één rustige witte lijstgroep met subtiele scheidingslijnen; iedere rij toont productfoto, artikelnaam, ondersteunende metadata, hoeveelheid en chevron;
 - geen losse verhoogde card per voorraadartikel en geen decoratieve schaduwen als hoofdstructuur;
@@ -66,7 +66,9 @@ Centrale tokens:
 - `--color-brand-primary`: `#005F6A` — centrale brand-/interactiekleur;
 - `--color-ui-primary`: `#005F6A` — dezelfde centrale primaire UI-kleur voor desktop, tabellen en gedeelde componenten;
 - `--color-mobile-ui-primary`: `#005F6A` — dezelfde centrale primaire UI-kleur voor mobiele headers, acties, steppers, focusaccenten en passieve feedbackoverlays;
-- deze drie tokens mogen niet naar verschillende donkergroene/blauwgroene hexwaarden divergeren.
+- deze drie tokens mogen niet naar verschillende donkergroene/blauwgroene hexwaarden divergeren; de standaardwaarde is `#005F6A`.
+- **Instellingen → Weergave** mag op het huidige apparaat één afwijkende donkere hoofdkleur kiezen; die runtimevoorkeur overschrijft alle drie primary-tokens tegelijk en wordt lokaal in de browser bewaard. **Standaard herstellen** zet alle drie terug op `#005F6A`.
+- de instelbare hoofdkleur moet met witte tekst minimaal WCAG-contrast 4,5:1 behouden; te lichte kleuren worden geweigerd.
 - `--color-ui-primary-text`: `#FFFFFF` — witte tekst en iconen op primaire blauw-groene surfaces;
 - `--color-brand-light`: `#D9F5E0`;
 - `--color-text-primary`: `#1A1A1A`;
@@ -75,12 +77,12 @@ Centrale tokens:
 - `--color-table-grid`: `#8FD19E`.
 
 Gebruik:
-- `#005F6A` blijft de primaire Inhuis-UI-kleur voor bestaande desktop-/tabelsurfaces en nog niet gemigreerde schermen; de mobiele Voorraadpilot gebruikt conform het PO-ontwerpbesluit `#005F6A` voor primaire actie en actieve onderste navigatie;
+- `#005F6A` is de standaard primaire Inhuis-UI-kleur; alle primaire surfaces lezen de centrale tokens zodat een geldige lokale Weergave-voorkeur applicatiebreed tegelijk doorwerkt;
 - tekst en iconen op `#005F6A` gebruiken centraal `#FFFFFF`; dit geldt applicatiebreed voor primaire gekleurde surfaces en vervangt de eerdere donkere tekstkleur;
 - `#005F6A` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
 - normale tekst gebruikt de primaire donkere tekstkleur;
 - lichte groentinten zijn ondersteunend en concurreren niet met de primaire actie;
-- de legacy-token `--rz-accent` wordt centraal gekoppeld aan `--color-ui-primary`;
+- de legacy-tokens `--rz-accent` en `--rz-green-dark` worden centraal gekoppeld aan `--color-ui-primary`; zij definiëren nooit een eigen donkergroene waarde;
 - voeg geen nieuwe dominante merkkleur toe zonder expliciete PO-beslissing en styleguide-update;
 - witte tekst op gekleurde primaire surfaces blijft verplicht; dit geldt zowel op `#005F6A` als op de mobiele Voorraadpilottint `#005F6A`;
 - fout-, waarschuwing- en succeskleuren mogen semantisch afwijken, maar worden niet als alternatieve merkkleur ingezet.
@@ -135,7 +137,7 @@ Voor de mobiele Voorraadpilot geldt:
 
 Passieve succes-, info-, waarschuwing- en foutmeldingen gebruiken uitsluitend de centrale `AppFeedbackProvider/useAppFeedback` en worden op mobiele schermen als **overlay** gerenderd:
 - de melding neemt geen ruimte in de documentflow in en schuift onderliggende inhoud nooit op;
-- de mobiele overlay gebruikt de centrale mobiele primaire kleur `#005F6A`;
+- de mobiele overlay gebruikt `--color-mobile-ui-primary` (standaard `#005F6A`);
 - één klik/tap **op de melding** sluit de melding;
 - één klik/tap **elders op het scherm** sluit de melding;
 - zonder gebruikersactie verdwijnt een passieve melding automatisch na **maximaal 3.000 ms**;
@@ -166,11 +168,11 @@ Voor een native mobiele shell geldt hetzelfde route-/stackmodel, maar zonder zic
 
 De bestaande generieke/desktopheader blijft:
 - standaard `58px` hoog op grotere schermen;
-- `--color-ui-primary` (`#005F6A`) met witte titel/iconen;
+- `--color-ui-primary` (standaard `#005F6A`) met witte titel/iconen;
 - gebruikerszichtbaar merk **Inhuis**; interne technische naamgeving `Rezzerv` wordt niet als gebruikersmerk getoond.
 
 Voor de mobiele Voorraadbaseline geldt:
-- compacte gekleurde header in de vaste mobiele primaire kleur `#005F6A`;
+- compacte gekleurde header via `--color-mobile-ui-primary` (standaard `#005F6A`);
 - schermtitel **Voorraad** links;
 - wit Inhuis-logo rechts;
 - geen desktopachtige huishoudenregel of userbox in de module-root;
@@ -232,7 +234,7 @@ De centrale authority voor feedback is `AppFeedbackProvider/useAppFeedback`. Sch
 Op mobiele schermen is passieve feedback altijd een **overlay**:
 - de melding staat buiten de documentflow en schuift inhoud nooit omlaag of omhoog;
 - er wordt op mobiel geen permanente lege feedbackbalk of extra feedback-clearance gereserveerd;
-- de overlay gebruikt `--color-mobile-ui-primary` (`#005F6A`) met witte tekst;
+- de overlay gebruikt `--color-mobile-ui-primary` (standaard `#005F6A`) met witte tekst;
 - tik/klik **op de melding** sluit haar direct;
 - tik/klik **elders op het scherm** sluit haar direct;
 - zonder interactie verdwijnt de melding automatisch na maximaal **3.000 ms**;
@@ -245,7 +247,7 @@ Interactieve bevestigingen, invoerformulieren, technische-detaildialogen en voor
 
 Op desktop mag het bestaande centrale onderste-balkpatroon blijven gelden:
 - de feedbacklaag is fixed en verschuift de pagina-inhoud niet;
-- achtergrond gebruikt de centrale desktopkleur `#005F6A` met witte tekst/iconen;
+- achtergrond gebruikt `--color-ui-primary` (standaard `#005F6A`) met witte tekst/iconen;
 - interactieve dialogen blijven afzonderlijke dialogen en worden niet in de balk gepropt.
 
 ## Zoeken, invoer en filters
@@ -313,7 +315,7 @@ De primaire itemnaam mag `16px` gebruiken als hoofdnadruk; overige tekst blijft 
 
 ## Knoppen en acties
 
-- primaire knop: standaard `#005F6A` met witte tekst/iconen (`#FFFFFF`); binnen gemigreerde mobiele schermen gebruikt header én primaire/interactieve actie conform PO-besluit uitsluitend `#005F6A` met wit of als outline-accent;
+- primaire knop gebruikt `--color-ui-primary` met witte tekst/iconen (`#FFFFFF`); standaard is dat `#005F6A`, en een geldige Weergave-voorkeur overschrijft de primaire tokenfamilie als één geheel;
 - knoptekst is `14px` en niet vet (`font-weight: 400`);
 - per scherm is bij voorkeur één dominante primaire actie;
 - secundaire acties krijgen minder visueel gewicht;
@@ -337,7 +339,7 @@ Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijk
 - titel, filter en cellen van één kolom gebruiken exact dezelfde uitlijning;
 - Nederlandse decimaalnotatie wordt gebruikt waar van toepassing;
 - sortering is beschikbaar waar het tabelcontract dit voorschrijft;
-- tabelheaders gebruiken `#005F6A` met witte tekst; sorteerindicatoren op de header zijn eveneens wit en resize-indicatoren blijven visueel herkenbaar;
+- tabelheaders gebruiken `--color-ui-primary` (standaard `#005F6A`) met witte tekst; sorteerindicatoren op de header zijn eveneens wit en resize-indicatoren blijven visueel herkenbaar;
 - actieve kolom/focus op lichte surfaces gebruikt de donkere brand-ink;
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
 - hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen;

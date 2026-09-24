@@ -232,8 +232,8 @@ body {
 
 .rz-inline-input:focus{
   outline:none;
-  border:1px solid #005F6A; /* donkergroen */
-  box-shadow:0 0 0 1px #005F6A;
+  border:1px solid var(--color-ui-primary); /* donkergroen */
+  box-shadow:0 0 0 1px var(--color-ui-primary);
 }
 
 
@@ -281,7 +281,7 @@ body {
 
 .rz-admin-message{
   margin-top:12px;
-  color:#005F6A;
+  color:var(--color-ui-primary);
 }
 
 
@@ -293,7 +293,7 @@ body {
 }
 
 .rz-inline-feedback--warning {
-  color: #005F6A;
+  color: var(--color-ui-primary);
   background: #f4fbf6;
   border: 2px solid var(--color-brand-primary);
 }
@@ -463,7 +463,7 @@ button.rz-tab.rz-tab-active {
 
 .rz-modal-title {
   margin: 0;
-  color: #005F6A;
+  color: var(--color-ui-primary);
   font-size: 18px;
   font-weight: 600;
 }
@@ -523,7 +523,7 @@ button.rz-tab.rz-tab-active {
 }
 
 .rz-admin-report-meta-line {
-  color: #005F6A;
+  color: var(--color-ui-primary);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -941,7 +941,7 @@ button.rz-tab.rz-tab-active {
 }
 
 .rz-analytics-accordion-indicator {
-  color: #005F6A;
+  color: var(--color-ui-primary);
   font-size: 18px;
   line-height: 1;
   transform: rotate(-90deg);
@@ -978,7 +978,7 @@ button.rz-tab.rz-tab-active {
 .rz-analytics-period-button {
   border: 0;
   background: transparent;
-  color: #005F6A;
+  color: var(--color-ui-primary);
   font-weight: 400;
   padding: 8px 12px;
   border-radius: 999px;
@@ -987,7 +987,7 @@ button.rz-tab.rz-tab-active {
 
 .rz-analytics-period-button.is-active {
   background: #dcefdc;
-  color: #005F6A;
+  color: var(--color-ui-primary);
   font-weight: 700;
 }
 
@@ -1008,7 +1008,7 @@ button.rz-tab.rz-tab-active {
 
 .rz-automation-setting-title {
   font-weight: 700;
-  color: #005F6A;
+  color: var(--color-ui-primary);
 }
 
 .rz-automation-setting-text {
@@ -1017,7 +1017,7 @@ button.rz-tab.rz-tab-active {
 }
 
 .rz-history-meta-value--auto {
-  color: #005F6A;
+  color: var(--color-ui-primary);
   font-weight: 700;
 }
 
@@ -1205,7 +1205,7 @@ button.rz-tab.rz-tab-active {
 }
 
 .rz-stock-row-interactive:focus-visible{
-  outline: 2px solid #005F6A;
+  outline: 2px solid var(--color-ui-primary);
   outline-offset: -2px;
 }
 
@@ -1386,11 +1386,11 @@ button.rz-tab.rz-tab-active {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 2px solid #005F6A;
+  border: 2px solid var(--color-ui-primary);
   border-radius: 999px;
   background: linear-gradient(180deg, #ffffff 0%, #f3f7f4 100%);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.18), 0 3px 8px rgba(26, 62, 43, 0.14);
-  color: #005F6A;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.18), 0 3px 8px color-mix(in srgb, var(--color-ui-primary) 14%, transparent);
+  color: var(--color-ui-primary);
   font-size: 18px;
   font-weight: 700;
   line-height: 1;
@@ -1403,11 +1403,11 @@ button.rz-tab.rz-tab-active {
 
 .rz-expand-chip:hover {
   background: linear-gradient(180deg, #ffffff 0%, #ecf3ef 100%);
-  box-shadow: 0 2px 4px rgba(16, 24, 40, 0.22), 0 6px 12px rgba(26, 62, 43, 0.16);
+  box-shadow: 0 2px 4px rgba(16, 24, 40, 0.22), 0 6px 12px color-mix(in srgb, var(--color-ui-primary) 16%, transparent);
 }
 
 .rz-expand-chip:focus-visible {
-  outline: 2px solid rgba(26, 62, 43, 0.28);
+  outline: 2px solid color-mix(in srgb, var(--color-ui-primary) 28%, transparent);
   outline-offset: 2px;
 }
 
@@ -1954,7 +1954,7 @@ body,
 
 .rz-detail-status--ready {
   background: #e6f4ea;
-  color: #005F6A;
+  color: var(--color-ui-primary);
 }
 
 .rz-detail-status--action_needed,

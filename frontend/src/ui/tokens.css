@@ -12,6 +12,10 @@
   --color-ui-primary-text: #FFFFFF;
   --color-brand-light: #D9F5E0;
 
+  /* Compatibility aliases; never define an independent dark-green value. */
+  --rz-green-dark: var(--color-ui-primary);
+  --rz-green-light: var(--color-brand-light);
+
   --color-text-primary: #1A1A1A;
   --color-text-inverse: #FFFFFF;
 

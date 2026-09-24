@@ -16,7 +16,7 @@ const SOURCE_LABELS = {
 }
 
 const CHECKBOX_STYLE = {
-  accentColor: '#005F6A',
+  accentColor: 'var(--color-ui-primary)',
   width: 18,
   height: 18,
   margin: 0,
@@ -543,7 +543,7 @@ export default function ShoppingPage() {
             </div>
 
             {error ? <div role="alert" style={{ color: '#9b1c1c' }}>{error}</div> : null}
-            {message ? <div role="status" style={{ color: '#005F6A' }}>{message}</div> : null}
+            {message ? <div role="status" style={{ color: 'var(--color-ui-primary)' }}>{message}</div> : null}
 
             <DataTable
               columns={shoppingColumns}

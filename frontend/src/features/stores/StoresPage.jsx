@@ -296,7 +296,7 @@ export default function StoresPage() {
 
         {status ? (
           <Card>
-            <div style={{ color: '#0f5132', fontWeight: 700 }}>{status}</div>
+            <div style={{ color: 'var(--color-ui-primary)', fontWeight: 700 }}>{status}</div>
           </Card>
         ) : null}
 

@@ -54,7 +54,7 @@ a.rz-button-secondary[role="button"] {
 }
 
 .rz-mobile-article-card {
-  box-shadow: 0 9px 24px rgba(26, 62, 43, 0.12);
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--color-ui-primary) 12%, transparent);
 }
 
 /* Passive AppFeedback messages use one fixed bottom bar. Interactive prompts

@@ -417,7 +417,7 @@ function AppFeedbackDialog({
                   height: '100%',
                   width: `${progress}%`,
                   borderRadius: '999px',
-                  background: '#2E7D32',
+                  background: 'var(--color-ui-primary)',
                   transition: 'width 180ms ease',
                 }}
               />
