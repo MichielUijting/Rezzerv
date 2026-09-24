@@ -2,6 +2,11 @@ name: Receipt lifecycle foundation validation
 
 on:
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     paths:
       - 'backend/alembic/**'
       - 'backend/app/__init__.py'
@@ -13,15 +18,75 @@ on:
       - 'backend/tests/test_receipt_explicit_approval_lifecycle.py'
       - 'scripts/run-receipt-lifecycle-release-a.ps1'
       - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-A.md'
+      - 'scripts/ci/draft_domain_impact.py'
+      - 'quality/ci/draft_domain_impact_policy.json'
       - '.github/workflows/receipt-lifecycle-foundation.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
 
 concurrency:
   group: ci-receipt-lifecycle-foundation-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  impact-plan:
+    name: Draft receipt impact plan
+    runs-on: ubuntu-latest
+    outputs:
+      run_heavy: ${{ steps.plan.outputs.run_heavy }}
+    steps:
+      - name: Checkout exact candidate for impact planning
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Decide whether the heavy receipt authority is required
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/draft_domain_impact.py plan \
+            --domain receipt \
+            --workflow .github/workflows/receipt-lifecycle-foundation.yml \
+            | tee draft-domain-impact.log
+          grep -E '^RUN_HEAVY=(true|false)    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install --quiet pytest sqlalchemy alembic fastapi
+      - name: Compile Release A foundation
+        run: python -m compileall -q app/services/receipt_lifecycle_foundation_service.py app/models/receipt.py tests/test_receipt_lifecycle_foundation.py tests/test_receipt_explicit_approval_lifecycle.py tests/receipt_lifecycle_schema_authority_selftest.py
+      - name: Validate minimal schema runtime installer and explicit approval invariants
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q tests/test_receipt_lifecycle_foundation.py tests/test_receipt_explicit_approval_lifecycle.py
+      - name: Validate exact SQLite receipt household authority delta
+        env:
+          PYTHONPATH: .
+        run: |
+          python tests/receipt_lifecycle_schema_authority_selftest.py | tee /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_HOUSEHOLD_AUTHORITY_SQLITE_DELTA_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_HOUSEHOLD_AUTHORITY_LEGACY_RECOVERY_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_MALFORMED_INDEX_REJECTED_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_MALFORMED_TRIGGER_REJECTED_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+          grep -F 'RECEIPT_LIFECYCLE_SCHEMA_AUTHORITY_SELFTEST_GREEN' /tmp/receipt-lifecycle-schema-authority.log
+ draft-domain-impact.log
+          grep -Fx 'DRAFT_DOMAIN_IMPACT_GREEN' draft-domain-impact.log
+
   foundation:
+    needs: impact-plan
+    if: needs.impact-plan.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

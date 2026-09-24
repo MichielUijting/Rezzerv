@@ -51,6 +51,7 @@ jobs:
             scripts/ci/f7_full_regression_gate.py \
             scripts/ci/test_f7_full_regression_reuse.py \
             scripts/ci/validate_ci_fast_loop_foundation.py \
+            scripts/ci/draft_domain_impact.py \
             scripts/ci/validate_f7_ci_orchestration_gate_map.py
 
       - name: Validate canonical version-only carry-forward
@@ -75,6 +76,8 @@ jobs:
           set -euo pipefail
           python scripts/ci/validate_ci_fast_loop_foundation.py | tee ci-fast-loop-foundation.log
           grep -Fx 'CI_FAST_LOOP_FOUNDATION_GREEN' ci-fast-loop-foundation.log
+          python scripts/ci/draft_domain_impact.py self-test | tee draft-domain-impact-selftest.log
+          grep -Fx 'DRAFT_DOMAIN_IMPACT_SELFTEST_GREEN' draft-domain-impact-selftest.log
 
       - name: Validate F7-01 orchestration gate map
         shell: bash
@@ -123,6 +126,7 @@ jobs:
             f7-01-ci-orchestration-evidence.txt
             f7-version-only-carry-forward-selftest.log
             ci-fast-loop-foundation.log
+            draft-domain-impact-selftest.log
             f7-03-reuse-config.log
             f7-03-reuse-selftest.log
           if-no-files-found: error

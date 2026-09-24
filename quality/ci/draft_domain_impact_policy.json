@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "policy_id": "CI-DRAFT-IMPACT-01",
+  "migration_metadata_constant": "CI_IMPACT_DOMAINS",
+  "allowed_domains": [
+    "auth",
+    "catalog",
+    "gpc",
+    "invitations",
+    "inventory",
+    "onboarding",
+    "platform",
+    "receipt",
+    "support",
+    "shared"
+  ],
+  "shared_domain": "shared",
+  "workflow_domains": {
+    ".github/workflows/support-message-api-validation.yml": "support",
+    ".github/workflows/support-message-foundation-validation.yml": "support",
+    ".github/workflows/gpc-catalog-validation.yml": "gpc",
+    ".github/workflows/gpc-translation-validation.yml": "gpc",
+    ".github/workflows/household-invitation-foundation-validation.yml": "invitations",
+    ".github/workflows/household-invitation-delivery-validation.yml": "invitations",
+    ".github/workflows/household-invitation-acceptance-validation.yml": "invitations",
+    ".github/workflows/receipt-lifecycle-foundation.yml": "receipt"
+  },
+  "governance": {
+    "draft_only_optimization": true,
+    "ready_candidate_always_runs": true,
+    "unknown_migration_metadata_fail_closed": true,
+    "changed_migration_metadata_required": true,
+    "prior_green_required_for_incremental_carry_forward": true
+  }
+}
