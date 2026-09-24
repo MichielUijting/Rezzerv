@@ -2,10 +2,19 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { createPortal } from 'react-dom'
 import './components/select.css'
 
+const MOBILE_SELECT_MEDIA_QUERY = '(max-width: 720px)'
 const SELECT_MAX_VISIBLE_OPTIONS = 5
 const SELECT_OPTION_HEIGHT = 44
-const SELECT_LISTBOX_VERTICAL_PADDING = 8
-const SELECT_LISTBOX_MAX_HEIGHT = (SELECT_MAX_VISIBLE_OPTIONS * SELECT_OPTION_HEIGHT) + SELECT_LISTBOX_VERTICAL_PADDING
+const SELECT_SEARCH_HEIGHT = 44
+const SELECT_GAP = 4
+const SELECT_POPOVER_PADDING = 8
+const SELECT_OPTIONS_MAX_HEIGHT = SELECT_MAX_VISIBLE_OPTIONS * SELECT_OPTION_HEIGHT
+const SELECT_DESKTOP_POPOVER_MAX_HEIGHT = SELECT_OPTIONS_MAX_HEIGHT + SELECT_POPOVER_PADDING
+const SELECT_MOBILE_POPOVER_MAX_HEIGHT = SELECT_DESKTOP_POPOVER_MAX_HEIGHT + SELECT_SEARCH_HEIGHT + SELECT_GAP
+
+function isMobileSelectViewport() {
+  return typeof window !== 'undefined' && window.matchMedia(MOBILE_SELECT_MEDIA_QUERY).matches
+}
 
 function normalizeOptions(options = []) {
   return options.map((option) => ({
@@ -25,7 +34,7 @@ function findNextEnabled(options, startIndex, direction) {
   return -1
 }
 
-function getMenuPosition(trigger) {
+function getMenuPosition(trigger, mobileViewport = false) {
   if (!trigger || typeof window === 'undefined') return null
 
   const rect = trigger.getBoundingClientRect()
@@ -35,14 +44,15 @@ function getMenuPosition(trigger) {
   const viewportHeight = window.innerHeight
   const availableBelow = Math.max(0, viewportHeight - rect.bottom - edge - gap)
   const availableAbove = Math.max(0, rect.top - edge - gap)
-  const openAbove = availableBelow < SELECT_LISTBOX_MAX_HEIGHT && availableAbove > availableBelow
+  const desiredHeight = mobileViewport ? SELECT_MOBILE_POPOVER_MAX_HEIGHT : SELECT_DESKTOP_POPOVER_MAX_HEIGHT
+  const openAbove = availableBelow < desiredHeight && availableAbove > availableBelow
   const available = openAbove ? availableAbove : availableBelow
   const width = Math.min(rect.width, Math.max(0, viewportWidth - (edge * 2)))
   const left = Math.min(
     Math.max(edge, rect.left),
     Math.max(edge, viewportWidth - edge - width),
   )
-  const maxHeight = Math.max(SELECT_OPTION_HEIGHT, Math.min(SELECT_LISTBOX_MAX_HEIGHT, available))
+  const maxHeight = Math.max(SELECT_OPTION_HEIGHT + SELECT_POPOVER_PADDING, Math.min(desiredHeight, available))
 
   if (openAbove) {
     return {
@@ -74,7 +84,9 @@ export default function Select({
 }) {
   const rootRef = useRef(null)
   const triggerRef = useRef(null)
+  const popoverRef = useRef(null)
   const listboxRef = useRef(null)
+  const searchInputRef = useRef(null)
   const generatedId = useId()
   const listboxId = `rz-select-${generatedId.replace(/:/g, '')}`
   const normalizedOptions = useMemo(() => normalizeOptions(options), [options])
@@ -83,22 +95,41 @@ export default function Select({
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(selectedIndex >= 0 ? selectedIndex : 0)
   const [menuPosition, setMenuPosition] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [mobileViewport, setMobileViewport] = useState(isMobileSelectViewport)
+
+  const visibleOptions = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase('nl-NL')
+    if (!mobileViewport || !query) return normalizedOptions
+    return normalizedOptions.filter((option) => option.label.toLocaleLowerCase('nl-NL').includes(query))
+  }, [mobileViewport, normalizedOptions, searchQuery])
+
+  const visibleSelectedIndex = visibleOptions.findIndex((option) => option.value === String(value ?? ''))
 
   useEffect(() => {
     if (!isOpen) return undefined
     const handlePointerDown = (event) => {
       const target = event.target
-      if (rootRef.current?.contains(target) || listboxRef.current?.contains(target)) return
+      if (rootRef.current?.contains(target) || popoverRef.current?.contains(target)) return
       setIsOpen(false)
+      setSearchQuery('')
     }
     document.addEventListener('pointerdown', handlePointerDown)
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [isOpen])
 
   useEffect(() => {
+    const media = window.matchMedia(MOBILE_SELECT_MEDIA_QUERY)
+    const updateViewport = () => setMobileViewport(media.matches)
+    updateViewport()
+    media.addEventListener('change', updateViewport)
+    return () => media.removeEventListener('change', updateViewport)
+  }, [])
+
+  useEffect(() => {
     if (!isOpen) return
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : findNextEnabled(normalizedOptions, -1, 1))
-  }, [isOpen, selectedIndex, normalizedOptions])
+    setActiveIndex(visibleSelectedIndex >= 0 ? visibleSelectedIndex : findNextEnabled(visibleOptions, -1, 1))
+  }, [isOpen, visibleOptions, visibleSelectedIndex])
 
   useLayoutEffect(() => {
     if (!isOpen) {
@@ -106,7 +137,7 @@ export default function Select({
       return undefined
     }
 
-    const updatePosition = () => setMenuPosition(getMenuPosition(triggerRef.current))
+    const updatePosition = () => setMenuPosition(getMenuPosition(triggerRef.current, mobileViewport))
     updatePosition()
 
     window.addEventListener('resize', updatePosition)
@@ -115,7 +146,7 @@ export default function Select({
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [isOpen])
+  }, [isOpen, mobileViewport])
 
   useLayoutEffect(() => {
     if (!isOpen || activeIndex < 0) return
@@ -125,14 +156,20 @@ export default function Select({
 
   function openMenu() {
     if (disabled) return
+    setSearchQuery('')
     setIsOpen(true)
   }
 
+  function closeMenu() {
+    setIsOpen(false)
+    setSearchQuery('')
+  }
+
   function chooseOption(index) {
-    const option = normalizedOptions[index]
+    const option = visibleOptions[index]
     if (!option || option.disabled) return
     onChange?.(option.value)
-    setIsOpen(false)
+    closeMenu()
   }
 
   function handleKeyDown(event) {
@@ -141,7 +178,7 @@ export default function Select({
     if (event.key === 'Escape') {
       if (isOpen) {
         event.preventDefault()
-        setIsOpen(false)
+        closeMenu()
       }
       return
     }
@@ -158,19 +195,19 @@ export default function Select({
         return
       }
       const direction = event.key === 'ArrowDown' ? 1 : -1
-      setActiveIndex((current) => findNextEnabled(normalizedOptions, current, direction))
+      setActiveIndex((current) => findNextEnabled(visibleOptions, current, direction))
       return
     }
 
     if (event.key === 'Home' && isOpen) {
       event.preventDefault()
-      setActiveIndex(findNextEnabled(normalizedOptions, -1, 1))
+      setActiveIndex(findNextEnabled(visibleOptions, -1, 1))
       return
     }
 
     if (event.key === 'End' && isOpen) {
       event.preventDefault()
-      setActiveIndex(findNextEnabled(normalizedOptions, 0, -1))
+      setActiveIndex(findNextEnabled(visibleOptions, 0, -1))
       return
     }
 
@@ -186,36 +223,79 @@ export default function Select({
   const listbox = isOpen && menuPosition && typeof document !== 'undefined'
     ? createPortal(
       <div
-        ref={listboxRef}
-        id={listboxId}
-        className="rz-select-listbox"
-        role="listbox"
-        aria-label={ariaLabel}
-        aria-labelledby={ariaLabelledby}
-        aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+        ref={popoverRef}
+        className="rz-select-popover"
         style={menuPosition}
+        data-testid={dataTestId ? `${dataTestId}-popover` : undefined}
       >
-        {normalizedOptions.map((option, index) => (
-          <button
-            key={`${option.value}-${index}`}
-            id={`${listboxId}-option-${index}`}
-            type="button"
-            role="option"
-            aria-selected={index === selectedIndex}
-            disabled={option.disabled}
-            tabIndex={-1}
-            data-select-option-index={index}
-            className={[
-              'rz-select-option',
-              index === activeIndex ? 'rz-select-option--active' : '',
-              index === selectedIndex ? 'rz-select-option--selected' : '',
-            ].filter(Boolean).join(' ')}
-            onMouseEnter={() => setActiveIndex(index)}
-            onClick={() => chooseOption(index)}
-          >
-            {option.label}
-          </button>
-        ))}
+        <label className="rz-select-search">
+          <svg className="rz-select-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
+            <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <input
+            ref={searchInputRef}
+            type="search"
+            className="rz-select-search-input"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                closeMenu()
+                triggerRef.current?.focus()
+                return
+              }
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault()
+                const direction = event.key === 'ArrowDown' ? 1 : -1
+                setActiveIndex((current) => findNextEnabled(visibleOptions, current, direction))
+                return
+              }
+              if (event.key === 'Enter' && activeIndex >= 0) {
+                event.preventDefault()
+                chooseOption(activeIndex)
+              }
+            }}
+            placeholder="Zoeken…"
+            aria-label={ariaLabel ? `Zoek in ${ariaLabel}` : 'Zoek in dropdown'}
+            data-testid={dataTestId ? `${dataTestId}-search` : undefined}
+          />
+        </label>
+        <div
+          ref={listboxRef}
+          id={listboxId}
+          className="rz-select-listbox"
+          role="listbox"
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledby}
+          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+          data-testid={dataTestId ? `${dataTestId}-listbox` : undefined}
+        >
+          {visibleOptions.length ? visibleOptions.map((option, index) => (
+            <button
+              key={`${option.value}-${index}`}
+              id={`${listboxId}-option-${index}`}
+              type="button"
+              role="option"
+              aria-selected={option.value === String(value ?? '')}
+              disabled={option.disabled}
+              tabIndex={-1}
+              data-select-option-index={index}
+              className={[
+                'rz-select-option',
+                index === activeIndex ? 'rz-select-option--active' : '',
+                option.value === String(value ?? '') ? 'rz-select-option--selected' : '',
+              ].filter(Boolean).join(' ')}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => chooseOption(index)}
+            >
+              {option.label}
+            </button>
+          )) : (
+            <div className="rz-select-empty" role="status">Geen resultaten</div>
+          )}
+        </div>
       </div>,
       document.body,
     )
@@ -234,7 +314,10 @@ export default function Select({
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledby}
         data-testid={dataTestId}
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => {
+          if (isOpen) closeMenu()
+          else openMenu()
+        }}
       >
         <span className="rz-select-value">{selectedOption?.label || ''}</span>
         <span className="rz-select-caret" aria-hidden="true" />

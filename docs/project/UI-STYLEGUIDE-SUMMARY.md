@@ -369,10 +369,13 @@ Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijk
 ## Dropdowns en keuzelijsten
 
 - alle gebruikerszichtbare keuzelijsten gebruiken de centrale `Select`; er worden geen schermspecifieke korte/lange dropdownvarianten gemaakt;
+- op mobiel bestaat de gesloten dropdown uit één veld met de huidige selectie of placeholder plus pijl; bij openen verschijnt altijd hetzelfde overlaypaneel;
+- iedere geopende **mobiele** dropdown bevat bovenaan een vast zoekveld **Zoeken…**; typen filtert de opties zonder een ander dropdowntype te openen;
 - de geopende lijst staat als portal/overlay boven de bestaande pagina en verandert nooit de hoogte of positie van omliggende content;
-- hetzelfde listbox-patroon geldt ongeacht het aantal opties: maximaal **5 opties** zijn tegelijk zichtbaar; vanaf de zesde optie scrollt uitsluitend de dropdown zelf verticaal;
+- hetzelfde mobiele listbox-patroon geldt ongeacht het aantal opties: maximaal **5 opties** zijn tegelijk zichtbaar; vanaf de zesde optie scrollt uitsluitend de optiesviewport van de dropdown zelf verticaal;
 - muiswiel, touch/pan en toetsenbordnavigatie blijven binnen de dropdown werken; de actieve toetsenbordoptie wordt automatisch in beeld gescrold;
 - de dropdown reserveert een stabiele scrollbarzone zodat een lange lijst niet ineens een ander breedte-/uitlijningspatroon krijgt;
+- de mobiele zoekregel blijft boven de scrollbare opties staan en scrollt dus niet mee;
 - alleen de plaatsing boven of onder het veld mag wisselen wanneer de beschikbare viewport dat vereist; de dropdowncomponent en interactie blijven identiek.
 
 ## Centrale componenten en verplichte hergebruikroute

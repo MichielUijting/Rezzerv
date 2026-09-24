@@ -53,17 +53,13 @@
   pointer-events: none;
 }
 
-.rz-select-listbox {
+.rz-select-popover {
   position: fixed;
   z-index: 9000;
-  max-height: 228px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
   padding: 4px;
   border: 1px solid #aab6af;
   border-radius: 12px;
@@ -72,6 +68,71 @@
   box-shadow: 0 12px 28px color-mix(in srgb, var(--color-ui-primary) 20%, transparent);
   font-family: var(--font-family-base);
   font-size: var(--font-size-ui-body) !important;
+}
+
+.rz-select-search {
+  display: none;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.rz-select-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  color: #69716c;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.rz-select-search-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 9px 10px 9px 38px;
+  border: 1px solid #c7d0ca;
+  border-radius: 9px;
+  background: #FFFFFF;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body) !important;
+  font-weight: 400;
+  outline: none;
+}
+
+.rz-select-search-input:focus {
+  border-color: var(--color-ui-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ui-primary) 16%, transparent);
+}
+
+.rz-select-listbox {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 220px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rz-select-empty {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 9px 10px;
+  color: #69716c;
+  font-size: var(--font-size-ui-body) !important;
+}
+
+@media (max-width: 720px) {
+  .rz-select-search {
+    display: block;
+  }
 }
 
 .rz-select-option {
