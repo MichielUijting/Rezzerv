@@ -31,11 +31,19 @@ def _columns(bind, table_name: str) -> set[str]:
 
 
 def _direct_spaces(bind) -> list[dict]:
-    space_columns = _columns(bind, "spaces")
+    inspector = sa.inspect(bind)
+    space_column_map = {
+        str(column.get("name") or ""): column
+        for column in inspector.get_columns("spaces")
+    }
     predicates: list[str] = []
-    if "is_direct" in space_columns:
-        predicates.append("COALESCE(is_direct, FALSE) = TRUE")
-    if "system_key" in space_columns:
+    direct_column = space_column_map.get("is_direct")
+    if direct_column is not None:
+        if isinstance(direct_column.get("type"), sa.Boolean):
+            predicates.append("COALESCE(is_direct, FALSE) = TRUE")
+        else:
+            predicates.append("COALESCE(is_direct, 0) <> 0")
+    if "system_key" in space_column_map:
         predicates.append("COALESCE(system_key, '') = 'system.direct'")
     if not predicates:
         raise RuntimeError("spaces mist canonical Direct-markering")
