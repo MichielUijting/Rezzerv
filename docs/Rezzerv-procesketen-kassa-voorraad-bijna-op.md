@@ -109,6 +109,8 @@ Een herkende aankoopregel wordt eerst een importregel in **Uitpakken**. De gebru
 - regels negeren of parkeren;
 - geselecteerde geldige regels verwerken.
 
+De Uitpakken-UI volgt exact het locatieniveau van het actieve huishouden: bij `none` wordt geen locatiekeuze aangeboden, bij `global` alleen een hoofdruimte en bij `exact` een geldige terminale ruimte of sublocatie. Een locatiekeuze telt pas als gekozen nadat de backend deze heeft opgeslagen. Een afgewezen save wordt direct teruggedraaid in de UI en mag niet zichtbaar blijven alsof hij persistent is.
+
 De locatiebediening in de hoofdtabel opent de searchable **Locatie / sublocatie kiezen**-picker. Bij een gewone voorraadregel blijft de locatiekeuze onderdeel van de bestaande B3-verwerking: Rezzerv bewaakt de samenhang tussen `STOCK`, `DIRECT_CONSUMPTION`, de actie **Standaard gebruiken**, de gekozen locatie en rollback bij een mislukte write.
 
 Een huishoud-Admin kan tijdens deze locatiekeuze, zonder de huidige bonregelcontext te verlaten:

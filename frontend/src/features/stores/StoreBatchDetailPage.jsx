@@ -7,6 +7,11 @@ import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
+import {
+  buildActiveLocationOptions,
+  buildSelectableLocationIds,
+  isLocationSelectionValid,
+} from './unpackingLocationPolicy.js'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import {
   articleFallbackOptions,
@@ -113,57 +118,6 @@ function firstTextValue(...values) {
 }
 
 
-function buildActiveLocationOptions(spacesData, sublocationsData) {
-  const activeSpaces = Array.isArray(spacesData?.items) ? spacesData.items.filter((item) => Boolean(item?.active)) : []
-  const activeSublocations = Array.isArray(sublocationsData?.items) ? sublocationsData.items.filter((item) => Boolean(item?.active)) : []
-  const sublocationsBySpaceId = new Map()
-
-  activeSublocations.forEach((item) => {
-    const key = String(item?.space_id || '')
-    if (!key) return
-    const current = sublocationsBySpaceId.get(key) || []
-    current.push(item)
-    sublocationsBySpaceId.set(key, current)
-  })
-
-  const rows = []
-  activeSpaces.forEach((space) => {
-    const spaceId = String(space?.id || '')
-    const spaceName = String(space?.naam || '').trim()
-    if (!spaceId || !spaceName) return
-
-    const linked = sortOptionObjects(sublocationsBySpaceId.get(spaceId) || [], (item) => item?.naam || '')
-
-    rows.push({
-      id: spaceId,
-      label: spaceName,
-      type: 'space',
-      space_id: spaceId,
-      sublocation_id: '',
-      has_sublocations: linked.length > 0,
-    })
-
-    linked.forEach((sublocation) => {
-      const sublocationId = String(sublocation?.id || '')
-      const sublocationName = String(sublocation?.naam || '').trim()
-      if (!sublocationId || !sublocationName) return
-
-      rows.push({
-        id: sublocationId,
-        label: `${spaceName} / ${sublocationName}`,
-        type: 'sublocation',
-        space_id: spaceId,
-        sublocation_id: sublocationId,
-        parent_label: spaceName,
-        sublocation_label: sublocationName,
-        has_sublocations: false,
-      })
-    })
-  })
-
-  return sortOptionObjects(rows, (location) => location?.label || '')
-}
-
 function spaceLocationOptions(locationOptions) {
   const bySpace = new Map()
   ;(locationOptions || []).forEach((location) => {
@@ -181,7 +135,13 @@ function sublocationOptionsForSpace(locationOptions, spaceId) {
   )
 }
 
-function deriveLineSelectionState({ line, draft, validLocationIds, processingStatus }) {
+function deriveLineSelectionState({
+  line,
+  draft,
+  validLocationIds,
+  processingStatus,
+  locationTrackingLevel,
+}) {
   const effectiveArticleId = String(draft?.articleId || '')
   const effectiveGlobalProductId = String(line?.matched_global_product_id || '')
   const effectiveRawArticleName = String(line?.article_name_raw || '').trim()
@@ -194,7 +154,11 @@ function deriveLineSelectionState({ line, draft, validLocationIds, processingSta
   const hasProcessSource = Boolean(effectiveArticleId || effectiveGlobalProductId || effectiveRawArticleName)
   const hasArticleGroup = Boolean(effectiveArticleGroupId)
   const hasValidQuantity = Number.isFinite(effectiveQuantity) && effectiveQuantity > 0
-  const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
+  const hasValidLocation = isLocationSelectionValid(
+    locationTrackingLevel,
+    effectiveLocationId,
+    validLocationIds,
+  )
   const isProcessable = hasProcessSource
     && hasValidQuantity
     && hasValidLocation
@@ -298,7 +262,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const activeProviderCode = batch?.store_provider_code || null
   const activeProvider = activeProviderCode ? providersByCode[activeProviderCode] || null : null
-  const validLocationIds = useMemo(() => new Set(locationOptions.map((location) => String(location.id))), [locationOptions])
+  const validLocationIds = useMemo(() => buildSelectableLocationIds(locationOptions), [locationOptions])
   const isViewer = Boolean(household?.is_viewer)
 
 
@@ -805,7 +769,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       await persistLineDraft(
         entry.line,
         { locationId: String(nextLocationId || '') },
-        { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true },
+        { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true, throwOnError: true },
       )
       locationSaved = true
       return savedOverride
@@ -836,7 +800,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()
     if (!householdId) {
       showUitpakkenFeedback('error', 'Het actieve huishouden kon niet worden vastgesteld.')
-      return
+      return false
     }
 
     const lineId = String(entry?.line?.id || '')
@@ -863,7 +827,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           previousOverride,
           previousLocationId,
         })
-        return
+        return true
       }
 
       const selectedLocation = availableLocationOptions.find(
@@ -880,7 +844,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           previousOverride,
           previousLocationId,
         })
-        return
+        return true
       }
 
       if (!isDirect && !selectedLocation) {
@@ -894,11 +858,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         previousOverride,
         previousLocationId,
       })
+      return true
     } catch (handlingError) {
       const message = normalizeErrorMessage(handlingError?.message || handlingError) || 'Locatie kon niet worden opgeslagen.'
       showUitpakkenFeedback('error', message, { key: `uitpakken-location-handling-${lineId}-${Date.now()}` })
       await refreshInventoryHandling(batch, household).catch(() => null)
       await refreshBatch(batch?.batch_id).catch(() => null)
+      return false
     } finally {
       setBusyLineId('')
     }
@@ -909,7 +875,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       fetchJson('/api/spaces?_ts=' + Date.now()).catch(() => ({ items: [] })),
       fetchJson('/api/sublocations?_ts=' + Date.now()).catch(() => ({ items: [] })),
     ])
-    const nextLocations = buildActiveLocationOptions(spacesData, sublocationsData)
+    const nextLocations = buildActiveLocationOptions(spacesData, sublocationsData, household?.location_tracking_level)
     setLocationOptions(nextLocations)
     return nextLocations
   }
@@ -1084,7 +1050,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       }
 
       for (const entry of targetEntries) {
-        await persistLineDraft(entry.line, { locationId: nextLocationId }, { suppressSuccessFeedback: true })
+        const saved = await persistLineDraft(entry.line, { locationId: nextLocationId }, { suppressSuccessFeedback: true })
+        if (!saved) return
       }
 
       setStatus(nextLocationId
@@ -1102,8 +1069,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
 
     if (locationPickerSaveMode === 'handling') {
-      await handleLocationChoice(pickerEntry, nextLocationId, locationOptionsOverride || locationOptions)
-      closeLocationPicker()
+      const saved = await handleLocationChoice(pickerEntry, nextLocationId, locationOptionsOverride || locationOptions)
+      if (saved) closeLocationPicker()
       return
     }
 
@@ -1118,12 +1085,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       return
     }
 
-    await persistLineDraft(
+    const saved = await persistLineDraft(
       pickerEntry.line,
       { locationId: nextLocationId },
       { defaultLocationPolicy: 'line_only' }
     )
-    closeLocationPicker()
+    if (saved) closeLocationPicker()
   }
 
   async function confirmDefaultLocationChoice(defaultLocationPolicy) {
@@ -1150,7 +1117,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }
 
   async function persistLineDraft(line, patch = {}, options = {}) {
-    if (!batch) return
+    if (!batch) return false
     const draftValues = getDraftValues(line)
     const nextArticleId = String(patch.articleId !== undefined ? (patch.articleId ?? '') : draftValues.articleId)
     const nextArticleGroupId = String(patch.articleGroupId !== undefined ? (patch.articleGroupId ?? '') : draftValues.articleGroupId)
@@ -1178,7 +1145,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           currentLocationId: originalLocationId,
         },
       }))
-      return
+      return true
     }
 
     setBusyLineId(line.id)
@@ -1251,8 +1218,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           { key: `uitpakken-line-saved-${String(line.id)}-${Date.now()}` }
         )
       }
+      return true
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'Opslaan mislukt'
+      setLineDraftValue(line.id, {
+        articleId: originalArticleId,
+        articleGroupId: originalArticleGroupId,
+        locationId: originalLocationId,
+      })
       setError(message)
       showUitpakkenFeedback('error', message, { key: `uitpakken-save-error-${String(line.id)}-${Date.now()}` })
       setLineSaveState((current) => ({
@@ -1265,6 +1238,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           error: message,
         },
       }))
+      if (options.throwOnError) throw err
+      return false
     } finally {
       setBusyLineId('')
     }
@@ -1372,7 +1347,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setProviders(providerData)
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? sortOptionObjects(backendArticles, (article) => articleLabel(article)) : articleFallbackOptions)
       setArticleGroupOptions(sortOptionObjects(Array.isArray(articleGroupsData?.items) ? articleGroupsData.items.filter((group) => String(group?.status || 'active') === 'active') : [], (group) => group?.name || ''))
-      setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData))
+      setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData, householdData?.location_tracking_level))
       setBatch(loadedBatch)
       await refreshInventoryHandling(loadedBatch, householdData)
       setBatchDiagnostics(null)
@@ -1529,7 +1504,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         const hasRawArticleName = Boolean(String(line.article_name_raw || '').trim())
         const quantity = Number(line.quantity_raw ?? 0)
         const hasValidQuantity = Number.isFinite(quantity) && quantity > 0
-        const hasValidLocation = validLocationIds.has(String(draft.locationId || ''))
+        const hasValidLocation = isLocationSelectionValid(
+          household?.location_tracking_level,
+          draft.locationId,
+          validLocationIds,
+        )
         return !hasArticle
           && hasRawArticleName
           && hasValidQuantity
@@ -1637,7 +1616,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const defaultInventoryHandling = defaultPresentation.handling || 'STOCK'
       const inventoryHandlingOverride = inventoryHandlingOverridesByLineId[String(line.id)] || null
       const inventoryHandling = lineInventoryHandlingPresentation(defaultInventoryHandling, inventoryHandlingOverride)
-      const selectionState = deriveLineSelectionState({ line, draft, validLocationIds, processingStatus })
+      const selectionState = deriveLineSelectionState({
+        line,
+        draft,
+        validLocationIds,
+        processingStatus,
+        locationTrackingLevel: household?.location_tracking_level,
+      })
       const {
         effectiveArticleId,
         hasValidArticle,
@@ -1724,7 +1709,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           .toLowerCase(),
       }
     })
-  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds, inventoryHandlingByArticleId, inventoryHandlingOverridesByLineId])
+  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds, inventoryHandlingByArticleId, inventoryHandlingOverridesByLineId, household?.location_tracking_level])
 
   useEffect(() => {
     if (handlingReconcileRef.current || isLoading || busyLineId || isProcessingBatch) return
