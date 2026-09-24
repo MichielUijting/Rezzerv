@@ -211,6 +211,13 @@ def resolve_inventory_target_location(
         raise HTTPException(status_code=400, detail="Een exacte voorraadlocatie is verplicht voor dit huishouden")
 
     if level == LOCATION_GLOBAL:
+        if not normalized_target_id and not bool(
+            getattr(configuration, "unpacking_enabled", False)
+        ):
+            # When Uitpakken is disabled there is no location-assignment step.
+            # Direct-to-inventory receipt processing therefore stores ordinary
+            # stock locationless instead of inventing the system "Direct" space.
+            return _locationless_payload()
         return resolve_inventory_location(
             conn,
             normalized_household_id,
