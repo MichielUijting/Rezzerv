@@ -4,13 +4,14 @@ import os
 
 from sqlalchemy import create_engine, text
 
+from app.alembic_head_authority import repository_head_revision
 from app.testing.postgresql_onboarding_selftest_fixture import (
     create_postgresql_runtime_test_engine,
     reset_postgresql_test_database,
 )
 
 
-HEAD_REVISION = "20260921_01"
+HEAD_REVISION = repository_head_revision()
 
 
 def migrated_support_engine():

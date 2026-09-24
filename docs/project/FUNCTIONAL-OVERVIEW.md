@@ -2,7 +2,7 @@
 
 ## Kassabon naar voorraad
 
-De beoogde keten is: kassabon ontvangen, OCR en parsing, regels controleren in Kassa, koppelen aan producten of huishoudartikelen, verwerken in Uitpakken, voorraadlocatie kiezen en voorraad plus historie bijwerken. De som van de artikelen is leidend; het bon-totaal is een controlewaarde.
+De beoogde keten is: kassabon ontvangen, OCR en parsing, regels controleren in Kassa, koppelen aan producten of huishoudartikelen en daarna verwerken naar Voorraad. **Uitpakken is alleen een tussenstap wanneer locatie-toewijzing daadwerkelijk actief is.** Als Uitpakken/Waar Inhuis niet actief is, gaat een goedgekeurde gewone voorraadregel rechtstreeks naar Voorraad met een echte locatievrije opslag (`space_id=NULL`, `sublocation_id=NULL`); de systeemterm **Direct** is daarbij geen voorraadlocatie en wordt niet als locatie geprojecteerd. Een artikel met afhandeling `DIRECT_CONSUMPTION` blijft daarvan strikt gescheiden: aankoop/consumptie wordt geregistreerd, maar er ontstaat geen voorraadmutatie. De som van de artikelen is leidend; het bon-totaal is een controlewaarde.
 
 ### Automatisch verbruik bij herhaalaankopen
 

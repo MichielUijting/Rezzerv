@@ -100,7 +100,9 @@ Frontend- en voorraadhandelingen gebruiken `household_article_id` als anker. Nie
 
 ## 8. Uitpakken en toewijzen
 
-Een herkende aankoopregel wordt eerst een importregel in **Uitpakken**. De gebruiker kan daar:
+Een herkende aankoopregel wordt als importregel verwerkt. Wanneer Uitpakken/Waar Inhuis actief is, gaat de regel via **Uitpakken**. Wanneer Uitpakken niet actief is en het huishouden directe voorraadverwerking met locatieniveau `none` of `global` gebruikt, gaat een gewone `STOCK`-regel rechtstreeks naar Voorraad met een echte locatievrije opslag (`space_id=NULL`, `sublocation_id=NULL`). De systeemterm **Direct** is daarbij geen fysieke voorraadlocatie. Een artikel met afhandeling `DIRECT_CONSUMPTION` blijft een aparte route: aankoop en consumptie worden geregistreerd, maar er ontstaat geen voorraadpositie.
+
+Wanneer Uitpakken actief is, kan de gebruiker daar:
 
 - de artikelmatch controleren of corrigeren;
 - hoeveelheid en prijs controleren;
@@ -123,7 +125,7 @@ De create-acties gebruiken de bestaande Admin-only serverroutes voor locaties en
 
 Gewone leden en kijkers krijgen geen create- of beheeracties voor locaties; zij kunnen alleen de locatiekeuzes gebruiken die hun bestaande rechten toestaan. De detailpicker en bulkpicker zijn afzonderlijke flows en vallen niet onder deze inline create-regel.
 
-Een regel mag pas naar Voorraad wanneer minimaal huishoudartikel, hoeveelheid en geldige doellocatie bekend zijn, behalve wanneer de geldende B3-regel de aankoop expliciet als `DIRECT_CONSUMPTION` afhandelt en daarmee buiten fysieke voorraad houdt.
+Een regel mag pas naar Voorraad wanneer minimaal huishoudartikel en hoeveelheid bekend zijn. Wanneer Uitpakken en locatie-toewijzing actief zijn, is daarnaast een geldige doellocatie vereist volgens het locatieniveau. Wanneer Uitpakken uit staat en directe voorraadverwerking voor `none` of `global` actief is, wordt gewone `STOCK` bewust locatievrij opgeslagen. `DIRECT_CONSUMPTION` blijft daarvan strikt gescheiden en maakt geen fysieke voorraadpositie.
 
 ## 9. Inventory event: aankoop
 
@@ -191,7 +193,7 @@ Een toekomstige automatische actie vereist expliciete productregels, toestemming
 4. Producttypen vormen een centrale merk- en verpakkingsonafhankelijke aggregatielaag.
 5. Huishoudartikelen zijn het functionele anker voor gebruikershandelingen.
 6. Voorraad is event-based en per locatie herleidbaar.
-7. Uitpakken vormt de gecontroleerde overgang van aankoopregel naar inventory event.
+7. Uitpakken vormt de gecontroleerde overgang van aankoopregel naar inventory event wanneer locatie-toewijzing actief is; zonder Uitpakken mag de expliciete directe voorraadroute gewone STOCK locatievrij verwerken.
 8. Bijna op gebruikt de voorraadprojectie en huishoudspecifieke grenzen.
 9. Spaar- en koopzegels gaan naar Spaartegoeden en nooit naar fysieke Voorraad.
 10. Onzekere matches, mappings of voorspellingen blijven zichtbaar reviewbaar en worden niet stil als waarheid verwerkt.
@@ -212,7 +214,7 @@ De totale keten is functioneel geborgd wanneer:
 - de nieuw aangemaakte locatie of sublocatie na serveropslag direct op dezelfde bonregel wordt geselecteerd;
 - een gewoon lid geen locatie-create- of beheeracties krijgt;
 - `STOCK`, `DIRECT_CONSUMPTION`, **Standaard gebruiken** en rollback bij locatiekeuze hun bestaande semantiek behouden;
-- Uitpakken alleen geldige regels met locatie verwerkt, behalve expliciete Direct-consumption-regels die buiten fysieke voorraad vallen;
+- Uitpakken alleen geldige regels met de volgens het locatieniveau vereiste locatie verwerkt; wanneer Uitpakken uit staat, verwerkt de expliciete directe route gewone STOCK locatievrij en blijft DIRECT_CONSUMPTION buiten fysieke voorraad;
 - verwerking exact één aankoop-event per importregel schrijft;
 - de voorraadprojectie overeenkomt met de inventory events;
 - Voorraad alleen gegevens van het actieve huishouden toont;
