@@ -243,7 +243,7 @@ test.describe('Mobiele Boodschappen', () => {
     await expect(candidateList.getByRole('option')).toHaveCount(5)
     await candidateList.getByRole('option', { name: 'Bananen — Huishoudartikel', exact: true }).click()
     await page.getByTestId('mobile-shopping-add').click()
-    await expect(page.getByText('3 artikelen • 2 nog te vinden', { exact: true })).toBeVisible()
+    await expect(page.getByText('3 artikelen • 3 nog te vinden', { exact: true })).toBeVisible()
     await expect(page.getByText('Bananen', { exact: true })).toBeVisible()
 
     const addSearchbox = page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true })
@@ -253,7 +253,7 @@ test.describe('Mobiele Boodschappen', () => {
       await page.getByTestId('mobile-shopping-add').click()
       await expect(addSearchbox).toHaveValue('')
     }
-    await expect(page.getByText('3 artikelen • 2 nog te vinden', { exact: true })).toBeVisible()
+    await expect(page.getByText('3 artikelen • 3 nog te vinden', { exact: true })).toBeVisible()
     const bananaCard = page.getByTestId('mobile-shopping-item-mobile-bananen')
     await expect(bananaCard.getByText('3', { exact: true })).toBeVisible()
     await expect(page.getByTestId('mobile-shopping-item-mobile-bananen')).toHaveCount(1)
