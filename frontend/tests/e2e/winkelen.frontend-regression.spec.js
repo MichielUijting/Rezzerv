@@ -6,7 +6,7 @@ import {
 } from './helpers/rezzervAssertions.js';
 
 
-test.describe('Boodschappenlijst frontend-regressie', () => {
+test.describe('Boodschappen frontend-regressie', () => {
   test('echte gecombineerde artikelzoekroute levert resultaten zonder API-fout', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
 
@@ -149,7 +149,7 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
     const table = page.getByTestId('shopping-list-table');
 
     await expect(shoppingPage).toBeVisible();
-    await expect(shoppingPage.getByRole('heading', { name: 'Boodschappenlijst — 0 artikelen' })).toBeVisible();
+    await expect(shoppingPage.getByRole('heading', { name: 'Boodschappen — 0 artikelen' })).toBeVisible();
     await expect(page.getByText('Artikel toevoegen', { exact: true })).toBeVisible();
     await expect(page.getByText('Zoek tegelijk in Huishoudartikelen')).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: /Artikelgroep/ })).toHaveCount(0);
@@ -233,14 +233,14 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
     await expect(candidateList.getByRole('option')).toHaveCount(5);
     await candidateList.getByRole('option', { name: 'Melk — Huishoudartikel', exact: true }).click();
     await page.getByRole('button', { name: 'Toevoegen' }).click();
-    await expect(page.getByRole('heading', { name: 'Boodschappenlijst — 1 artikelen' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Boodschappen — 1 artikelen' })).toBeVisible();
 
     for (let repeat = 0; repeat < 2; repeat += 1) {
       await page.getByLabel('Artikel toevoegen', { exact: true }).fill('melk');
       await page.getByTestId('shopping-candidate-list').getByRole('option', { name: 'Melk — Huishoudartikel', exact: true }).click();
       await page.getByRole('button', { name: 'Toevoegen' }).click();
     }
-    await expect(page.getByRole('heading', { name: 'Boodschappenlijst — 1 artikelen' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Boodschappen — 1 artikelen' })).toBeVisible();
     await expect(page.getByLabel('Aantal Melk')).toHaveValue('3');
     await expect(page.getByRole('cell', { name: 'Zuivel', exact: true })).toHaveCount(0);
     await expect(page.getByRole('cell', { name: 'Halfvolle melk', exact: true })).toBeVisible();
@@ -289,7 +289,7 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
 
     await shoppingPage.getByRole('button', { name: 'Verwijderen' }).click();
     await page.getByTestId('shopping-delete-confirmation-primary-button').click();
-    await expect(page.getByRole('heading', { name: 'Boodschappenlijst — 0 artikelen' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Boodschappen — 0 artikelen' })).toBeVisible();
     await expect(page.getByLabel('Selecteer Melk')).toHaveCount(0);
 
     await page.getByLabel('Artikel toevoegen', { exact: true }).fill('pasta');
@@ -301,9 +301,9 @@ test.describe('Boodschappenlijst frontend-regressie', () => {
     await expect(completeDialog).toBeVisible();
     await expect(completeDialog.getByText('Voorraad en bronlijsten blijven ongewijzigd.', { exact: true })).toBeVisible();
     await page.getByTestId('shopping-complete-confirmation-primary-button').click();
-    await expect(page.getByText('Winkelen is afgerond. De boodschappenlijst is leeggemaakt.')).toBeVisible();
+    await expect(page.getByText('Winkelen is afgerond. De boodschappen is leeggemaakt.')).toBeVisible();
     expect(nativeDialogs).toEqual([]);
-    await expect(page.getByText('Nog geen artikelen op de boodschappenlijst.')).toBeVisible();
+    await expect(page.getByText('Nog geen artikelen op de boodschappen.')).toBeVisible();
 
     await expectNoConsoleErrors(consoleErrors);
   });
