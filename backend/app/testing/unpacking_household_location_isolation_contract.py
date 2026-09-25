@@ -3,6 +3,9 @@ from __future__ import annotations
 from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 
+from app.services.inventory_location_household_patch import (
+    validate_purchase_import_target_location_for_policy,
+)
 from app.services.unpacking_household_location_patch import (
     resolve_space_and_sublocation_ids,
     validate_purchase_import_target_location,
@@ -33,12 +36,30 @@ def run_contract() -> None:
                 ui_sort_order INTEGER
             )
         """))
-        conn.execute(text("CREATE TABLE spaces (id TEXT PRIMARY KEY, naam TEXT NOT NULL, household_id TEXT NOT NULL)"))
-        conn.execute(text("CREATE TABLE sublocations (id TEXT PRIMARY KEY, naam TEXT NOT NULL, space_id TEXT NOT NULL)"))
+        conn.execute(text("CREATE TABLE spaces (id TEXT PRIMARY KEY, naam TEXT NOT NULL, household_id TEXT NOT NULL, active BOOLEAN DEFAULT TRUE)"))
+        conn.execute(text("CREATE TABLE sublocations (id TEXT PRIMARY KEY, naam TEXT NOT NULL, space_id TEXT NOT NULL, active BOOLEAN DEFAULT TRUE)"))
+        conn.execute(text("""
+            CREATE TABLE household_product_configuration (
+                household_id TEXT PRIMARY KEY,
+                inventory_tracking_level TEXT NOT NULL,
+                location_tracking_level TEXT NOT NULL,
+                shopping_enabled BOOLEAN NOT NULL,
+                almost_out_enabled BOOLEAN NOT NULL,
+                almost_out_notifications_enabled BOOLEAN NOT NULL,
+                receipt_processing_enabled BOOLEAN NOT NULL,
+                recipes_enabled BOOLEAN NOT NULL,
+                unpacking_enabled BOOLEAN NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """))
 
         conn.execute(text("""
             INSERT INTO purchase_import_batches (id, household_id)
-            VALUES ('batch-a', 'household-a'), ('batch-b', 'household-b')
+            VALUES
+                ('batch-a', 'household-a'),
+                ('batch-b', 'household-b'),
+                ('batch-zero', '0')
         """))
         conn.execute(text("""
             INSERT INTO purchase_import_lines (
@@ -46,19 +67,22 @@ def run_contract() -> None:
                 target_location_id, review_decision, ui_sort_order
             ) VALUES
                 ('line-a', 'batch-a', 'a-1', 'Melk', NULL, 'selected', 0),
-                ('line-b', 'batch-b', 'b-1', 'Brood', NULL, 'selected', 0)
+                ('line-b', 'batch-b', 'b-1', 'Brood', NULL, 'selected', 0),
+                ('line-zero', 'batch-zero', 'zero-1', 'Systeemartikel', NULL, 'selected', 0)
         """))
         conn.execute(text("""
             INSERT INTO spaces (id, naam, household_id)
             VALUES
                 ('space-a', 'Voorraadkast', 'household-a'),
-                ('space-b', 'Voorraadkast', 'household-b')
+                ('space-b', 'Voorraadkast', 'household-b'),
+                ('space-zero', 'Systeemkast', '0')
         """))
         conn.execute(text("""
             INSERT INTO sublocations (id, naam, space_id)
             VALUES
                 ('sub-a', 'Boven', 'space-a'),
-                ('sub-b', 'Boven', 'space-b')
+                ('sub-b', 'Boven', 'space-b'),
+                ('sub-zero', 'Systeemplank', 'space-zero')
         """))
 
         resolved, line_ref = validate_purchase_import_target_location(conn, 'line-a', 'space-a')
@@ -77,6 +101,41 @@ def run_contract() -> None:
             404,
             lambda: validate_purchase_import_target_location(conn, 'missing-line', 'space-a'),
         )
+
+        # Systeemhuishouden 0 kan uit oudere data bestaan zonder
+        # household_product_configuration. Een eigen terminale sublocatie moet
+        # dan nog steeds veilig koppelbaar zijn, zonder cross-household fallback.
+        legacy_zero_resolved, legacy_zero_error = (
+            validate_purchase_import_target_location_for_policy(
+                conn,
+                '0',
+                'sub-zero',
+            )
+        )
+        assert legacy_zero_error is None
+        assert legacy_zero_resolved
+        assert legacy_zero_resolved['location_id'] == 'sub-zero'
+        assert legacy_zero_resolved['space_id'] == 'space-zero'
+
+        legacy_cross_resolved, legacy_cross_error = (
+            validate_purchase_import_target_location_for_policy(
+                conn,
+                '0',
+                'sub-b',
+            )
+        )
+        assert legacy_cross_resolved is None
+        assert legacy_cross_error
+
+        legacy_parent_resolved, legacy_parent_error = (
+            validate_purchase_import_target_location_for_policy(
+                conn,
+                '0',
+                'space-zero',
+            )
+        )
+        assert legacy_parent_resolved is None
+        assert legacy_parent_error
 
         own_space, own_sub = resolve_space_and_sublocation_ids(
             conn,

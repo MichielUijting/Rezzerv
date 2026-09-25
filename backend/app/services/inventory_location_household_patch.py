@@ -292,6 +292,71 @@ def normalize_persisted_purchase_import_target_location(
         return None
 
 
+def _resolve_unconfigured_household_terminal_location(
+    conn,
+    household_id: Any,
+    target_location_id: Any,
+) -> dict[str, Any] | None:
+    """Legacy-safe target resolver for households without product configuration.
+
+    Older/system households can legitimately predate household_product_configuration.
+    Keep their historical terminal-location semantics, but never fall back to the
+    old global resolver: every lookup remains scoped to the owning household.
+    """
+
+    normalized_household_id = _required_household_id(household_id)
+    normalized_target_id = str(target_location_id or "").strip()
+    if not normalized_target_id:
+        return None
+
+    sublocation = _owned_active_sublocation_parent(
+        conn,
+        normalized_household_id,
+        normalized_target_id,
+    )
+    if sublocation:
+        return {
+            "location_id": str(sublocation["sublocation_id"]),
+            "space_id": str(sublocation["space_id"]),
+            "sublocation_id": str(sublocation["sublocation_id"]),
+            "location_label": (
+                f"{sublocation['space_name']} / {sublocation['sublocation_name']}"
+            ),
+        }
+
+    space = conn.execute(
+        text(
+            """
+            SELECT s.id, s.naam
+            FROM spaces s
+            WHERE s.id = :space_id
+              AND s.household_id = :household_id
+              AND COALESCE(s.active, TRUE) = TRUE
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM sublocations sl
+                  WHERE sl.space_id = s.id
+                    AND COALESCE(sl.active, TRUE) = TRUE
+              )
+            LIMIT 1
+            """
+        ),
+        {
+            "space_id": normalized_target_id,
+            "household_id": normalized_household_id,
+        },
+    ).mappings().first()
+    if not space:
+        return None
+
+    return {
+        "location_id": str(space["id"]),
+        "space_id": str(space["id"]),
+        "sublocation_id": None,
+        "location_label": str(space.get("naam") or ""),
+    }
+
+
 def validate_purchase_import_target_location_for_policy(
     conn,
     household_id: Any,
@@ -312,6 +377,19 @@ def validate_purchase_import_target_location_for_policy(
                 normalized_target_id,
             ),
             None,
+        )
+    except LookupError:
+        legacy_resolved = _resolve_unconfigured_household_terminal_location(
+            conn,
+            normalized_household_id,
+            normalized_target_id,
+        )
+        if legacy_resolved is not None:
+            return legacy_resolved, None
+        return (
+            None,
+            "Kies een geldige locatie binnen het actieve huishouden. "
+            "Kies een sublocatie binnen een ruimte met sublocaties.",
         )
     except HTTPException as exc:
         detail = str(exc.detail or "Ongeldige locatie gekozen")
