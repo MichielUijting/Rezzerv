@@ -68,7 +68,7 @@ assert.doesNotMatch(mobileSource, /Aantal hoog–laag/)
 assert.match(mobileSource, /\.\.\.\(locationTrackingEnabled \? \[\{ value: 'location', label: 'Locatie A–Z' \}\] : \[\]\)/)
 assert.match(mobileSource, /\/api\/dev\/inventory-preview/)
 assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
-assert.match(mobileSource, /CatalogArticleThumbnail/)
+assert.match(mobileSource, /MobileArticleRow/)
 assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
 
@@ -93,7 +93,7 @@ assert.deepEqual(
     recentKeys: ['winkelen', 'kassa', 'voorraad'],
     availableTiles: [
       { key: 'voorraad', label: 'Voorraad', clickable: true },
-      { key: 'winkelen', label: 'Boodschappenlijst', clickable: true },
+      { key: 'winkelen', label: 'Boodschappen', clickable: true },
       { key: 'bijna-op', label: 'Bijna op', clickable: true },
     ],
     limit: 4,

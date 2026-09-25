@@ -4,7 +4,7 @@ import {
   expectNoConsoleErrors,
 } from './helpers/rezzervAssertions.js'
 
-test.describe('Mobiele Boodschappenlijst', () => {
+test.describe('Mobiele Boodschappen', () => {
   test('gebruikt bestaande winkellijstfuncties in de mobiele kernflow', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     const consoleErrors = attachConsoleErrorCollector(page)
@@ -203,9 +203,9 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await page.goto('/winkelen')
     await expect(page.getByTestId('mobile-shopping-page')).toBeVisible()
     await expect(page.getByTestId('shopping-page')).toHaveCount(0)
-    await expect(page.getByText('Mijn lijst', { exact: true })).toBeVisible()
-    await expect(page.getByText('2 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
-    await expect(page.getByRole('region', { name: 'Boodschappenlijst', exact: true })).toBeVisible()
+    await expect(page.getByText('Mijn boodschappen', { exact: true })).toBeVisible()
+    await expect(page.getByText('2 artikelen • 2 nog te vinden', { exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Boodschappen', exact: true })).toBeVisible()
     await expect(page.getByLabel('Zoek in winkellijst')).toHaveCount(0)
     await expect(page.getByTestId('mobile-shopping-producttype')).toHaveCount(0)
     await expect(page.getByTestId('mobile-shopping-sort')).toHaveCount(0)
@@ -214,17 +214,28 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await expect(page.getByText('Aanbiedingen', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Vaak gekocht', { exact: true })).toHaveCount(0)
 
-    await expect(page.getByText('Zuivel', { exact: true }).first()).toBeVisible()
-    await expect(page.getByText('Brood', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Zuivel', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Halfvolle melk', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Volkoren brood', { exact: true })).toHaveCount(0)
 
-    await page.getByLabel('Gekocht Melk').check()
-    await expect(page.getByText('2 artikelen • 1 nog te kopen', { exact: true })).toBeVisible()
+    const statusFilter = page.getByTestId('mobile-shopping-status-filter')
+    await expect(statusFilter).not.toBeChecked()
+    await page.getByLabel('Melk in kar leggen').click()
+    await expect(page.getByText('2 artikelen • 1 nog te vinden', { exact: true })).toBeVisible()
+    await expect(page.getByTestId('mobile-shopping-item-mobile-melk')).toHaveCount(0)
 
+    await statusFilter.click()
     const melkCard = page.getByTestId('mobile-shopping-item-mobile-melk')
-    await melkCard.getByRole('button', { name: 'Bewerken' }).click()
-    await melkCard.getByLabel('Opmerking Melk').fill('Halfvol')
-    await melkCard.getByLabel('Opmerking Melk').blur()
-    await expect(page.getByText('Halfvol', { exact: true })).toBeVisible()
+    await expect(melkCard).toBeVisible()
+    await page.getByLabel('Melk uit kar halen').click()
+    await expect(melkCard).toHaveCount(0)
+    await statusFilter.click()
+    const restoredMelkCard = page.getByTestId('mobile-shopping-item-mobile-melk')
+    await expect(restoredMelkCard).toBeVisible()
+    await expect(restoredMelkCard.getByRole('button', { name: 'Bewerken' })).toHaveCount(0)
+    await restoredMelkCard.getByRole('button', { name: 'Verhoog aantal van Melk' }).click()
+    await expect(restoredMelkCard).toContainText('2')
+
 
     await page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true }).fill('ban')
     const candidateList = page.getByTestId('mobile-shopping-candidate-list')
@@ -232,7 +243,7 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await expect(candidateList.getByRole('option')).toHaveCount(5)
     await candidateList.getByRole('option', { name: 'Bananen — Huishoudartikel', exact: true }).click()
     await page.getByTestId('mobile-shopping-add').click()
-    await expect(page.getByText('3 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
+    await expect(page.getByText('3 artikelen • 3 nog te vinden', { exact: true })).toBeVisible()
     await expect(page.getByText('Bananen', { exact: true })).toBeVisible()
 
     const addSearchbox = page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true })
@@ -242,22 +253,19 @@ test.describe('Mobiele Boodschappenlijst', () => {
       await page.getByTestId('mobile-shopping-add').click()
       await expect(addSearchbox).toHaveValue('')
     }
-    await expect(page.getByText('3 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
+    await expect(page.getByText('3 artikelen • 3 nog te vinden', { exact: true })).toBeVisible()
     const bananaCard = page.getByTestId('mobile-shopping-item-mobile-bananen')
-    await expect(bananaCard).toContainText('Aantal 3')
+    await expect(bananaCard.getByText('3', { exact: true })).toBeVisible()
     await expect(page.getByTestId('mobile-shopping-item-mobile-bananen')).toHaveCount(1)
 
-    await page.getByLabel('Selecteer Brood').check()
-    await expect(page.getByText('1 geselecteerd', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Verwijderen' }).click()
-    await expect(page.getByTestId('shopping-delete-confirmation')).toBeVisible()
-    await page.getByTestId('shopping-delete-confirmation-primary-button').click()
-    await expect(page.getByText('Brood', { exact: true })).toHaveCount(0)
+    await expect(page.getByLabel('Selecteer Brood')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Verwijderen' })).toHaveCount(0)
+
 
     await page.getByTestId('mobile-shopping-complete').click()
     await expect(page.getByTestId('shopping-complete-confirmation')).toBeVisible()
     await page.getByTestId('shopping-complete-confirmation-primary-button').click()
-    await expect(page.getByText('Nog geen artikelen op de boodschappenlijst.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Nog geen artikelen bij Boodschappen.', { exact: true })).toBeVisible()
 
     await expectNoConsoleErrors(consoleErrors)
   })

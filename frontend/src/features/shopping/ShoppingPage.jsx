@@ -69,7 +69,7 @@ export default function ShoppingPage() {
       const existingIds = new Set((payload.items || []).map((item) => item.id))
       setSelectedItemIds((current) => current.filter((id) => existingIds.has(id)))
     } catch (loadError) {
-      setError(loadError?.message || 'Boodschappenlijst kon niet worden geladen.')
+      setError(loadError?.message || 'Boodschappen kon niet worden geladen.')
     } finally {
       setLoading(false)
     }
@@ -182,7 +182,7 @@ export default function ShoppingPage() {
           source_id: selectedResult.source_id,
         }),
       })
-      setMessage(`${selectedResult.label} toegevoegd aan de boodschappenlijst.`)
+      setMessage(`${selectedResult.label} toegevoegd aan de boodschappen.`)
       updateCatalogQuery('')
       await loadList()
     } catch (saveError) {
@@ -202,7 +202,7 @@ export default function ShoppingPage() {
       })
       await loadList()
     } catch (saveError) {
-      setError(saveError?.message || 'Boodschappenlijstregel kon niet worden bijgewerkt.')
+      setError(saveError?.message || 'Boodschappenregel kon niet worden bijgewerkt.')
       await loadList()
     } finally {
       setSaving(false)
@@ -260,7 +260,7 @@ export default function ShoppingPage() {
       variant: 'warning',
       title: count === 1 ? 'Rij verwijderen' : 'Rijen verwijderen',
       message: count === 1 ? '1 geselecteerde rij verwijderen?' : `${count} geselecteerde rijen verwijderen?`,
-      detail: 'De geselecteerde regels verdwijnen uit de actuele boodschappenlijst.',
+      detail: 'De geselecteerde regels verdwijnen uit de actuele boodschappen.',
       testId: 'shopping-delete-confirmation',
       primaryActionLabel: 'Verwijderen',
       secondaryActionLabel: 'Annuleren',
@@ -305,7 +305,7 @@ export default function ShoppingPage() {
     showFeedback({
       variant: 'warning',
       title: 'Winkelen afronden',
-      message: 'De actuele boodschappenlijst wordt leeggemaakt.',
+      message: 'De actuele boodschappen wordt leeggemaakt.',
       detail: 'Voorraad en bronlijsten blijven ongewijzigd.',
       testId: 'shopping-complete-confirmation',
       primaryActionLabel: 'Afronden',
@@ -317,7 +317,7 @@ export default function ShoppingPage() {
         try {
           await requestJson('/api/shopping-list/complete', { method: 'POST' })
           setSelectedItemIds([])
-          setMessage('Winkelen is afgerond. De boodschappenlijst is leeggemaakt.')
+          setMessage('Winkelen is afgerond. De boodschappen is leeggemaakt.')
           await loadList()
         } catch (completeError) {
           throw new Error(completeError?.message || 'Winkelen kon niet worden afgerond.')
@@ -368,7 +368,7 @@ export default function ShoppingPage() {
       sortable: true,
       filterable: true,
       filterPlaceholder: 'Zoeken',
-      filterLabel: 'Zoeken in boodschappenlijst',
+      filterLabel: 'Zoeken in boodschappen',
       getFilterValue: (item) => item.article_name || '',
       getSortValue: (item) => item.article_name || '',
       renderCell: (item) => (
@@ -501,11 +501,11 @@ export default function ShoppingPage() {
   }
 
   return (
-    <AppShell title="Boodschappenlijst" showExit={false}>
+    <AppShell title="Boodschappen" showExit={false}>
       <div style={{ display: 'grid', gap: 18, width: '100%' }}>
         <Card>
           <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="shopping-page">
-            <h2 style={{ margin: 0 }}>Boodschappenlijst — {Number(list.item_count || 0)} artikelen</h2>
+            <h2 style={{ margin: 0 }}>Boodschappen — {Number(list.item_count || 0)} artikelen</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) auto', gap: 12, alignItems: 'start' }}>
               <div className="rz-input-field">
@@ -551,7 +551,7 @@ export default function ShoppingPage() {
               data={list.items || []}
               dataTestId="shopping-list-table"
               getRowKey={(item) => item.id}
-              emptyMessage={loading ? 'Boodschappenlijst laden…' : 'Nog geen artikelen op de boodschappenlijst.'}
+              emptyMessage={loading ? 'Boodschappen laden…' : 'Nog geen artikelen op de boodschappen.'}
               filterState={dataTableFilters}
               onFilterChange={handleDataTableFilterChange}
               sortState={sort}

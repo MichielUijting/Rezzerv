@@ -257,3 +257,37 @@
     padding: 12px 11px;
   }
 }
+
+/* Boodschappen reuses the canonical mobile inventory row; only module-specific slots live here. */
+.rz-mobile-shopping-list .rz-mobile-inventory-card { border-radius: 0; box-shadow: none; border-left: 0; border-right: 0; border-top: 0; }
+.rz-mobile-shopping-list .rz-mobile-inventory-card:last-child { border-bottom: 0; }
+.rz-mobile-shopping-filter-header { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; }
+.rz-mobile-shopping-status-filter { display: flex; align-items: center; justify-content: center; min-height: 44px; cursor: pointer; }
+.rz-mobile-shopping-status-filter input { width: 20px; height: 20px; margin: 0; accent-color: var(--color-ui-primary); }
+.rz-mobile-shopping-list .rz-mobile-inventory-card-side { min-width: 108px; }
+
+/* Boodschappen is deliberately denser than detail-oriented article lists: one shopping action row. */
+.rz-mobile-shopping-list .rz-mobile-inventory-card {
+  grid-template-columns: 24px 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 7px 10px;
+}
+.rz-mobile-shopping-list .rz-mobile-inventory-card-main { min-width: 0; }
+.rz-mobile-shopping-list .rz-mobile-inventory-card-title {
+  overflow: hidden;
+  font-size: 0.9rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rz-mobile-shopping-list .rz-mobile-inventory-card-subtitle,
+.rz-mobile-shopping-list .rz-mobile-inventory-card-meta { display: none; }
+.rz-mobile-shopping-list .rz-mobile-inventory-card-side {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.rz-mobile-shopping-list .rz-quantity-stepper { flex-wrap: nowrap; }
