@@ -372,6 +372,22 @@ test.describe('Artikeldetail frontend-regressie', () => {
       });
     });
 
+    await page.route(`**/api/household-articles/${articleId}/automation-override`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          article_id: articleId,
+          household_article_id: articleId,
+          requested_article_id: articleId,
+          mode: 'follow_household',
+          has_explicit_override: false,
+          consumable: true,
+          article_name: articleName,
+        }),
+      });
+    });
+
     await page.route(`**/api/household-articles/${articleId}/settings`, async (route) => {
       const payload = JSON.parse(route.request().postData() || '{}');
       savedFavoriteStore = String(payload.favorite_store || '');
