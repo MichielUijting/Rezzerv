@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  MOBILE_INVENTORY_MEDIA_QUERY,
-  isMobileInventoryEligibleContext,
-  isMobileInventoryViewport,
-} from '../src/pages/mobileInventoryAccess.js'
+  MOBILE_APP_MEDIA_QUERY,
+  isMobileAppViewport,
+} from '../src/app/mobileViewport.js'
 import {
   readRecentActionKeys,
   recordRecentAction,
@@ -17,71 +16,10 @@ import {
   selectQuickInventoryTarget,
 } from '../src/pages/mobileInventoryQuickActions.js'
 
-const regularMember = {
-  context_type: 'regular',
-  role: 'member',
-  display_role: 'member',
-  permissions: {},
-  is_frontteam: false,
-  is_platform_superuser: false,
-}
-
-const regularAdmin = {
-  context_type: 'regular',
-  role: 'admin',
-  display_role: 'admin',
-  permissions: { 'admin.access': true },
-  is_frontteam: false,
-  is_platform_superuser: false,
-}
-
-assert.equal(isMobileInventoryEligibleContext(regularMember), true)
-assert.equal(isMobileInventoryEligibleContext(regularAdmin), true)
-assert.equal(isMobileInventoryEligibleContext({ ...regularAdmin, display_role: 'beheerder' }), true)
-assert.equal(isMobileInventoryEligibleContext({ ...regularAdmin, display_role: 'owner' }), true)
-
-assert.equal(isMobileInventoryEligibleContext({ ...regularMember, display_role: 'viewer', role: 'viewer' }), false)
-assert.equal(isMobileInventoryEligibleContext({ ...regularMember, display_role: 'advanced_member', role: 'advanced_member' }), false)
-
-assert.equal(isMobileInventoryEligibleContext({
-  ...regularAdmin,
-  is_frontteam: true,
-}), false)
-
-assert.equal(isMobileInventoryEligibleContext({
-  ...regularAdmin,
-  permissions: { 'frontteam.external_databases.access': true },
-}), false)
-
-assert.equal(isMobileInventoryEligibleContext({
-  context_type: 'system',
-  role: 'owner',
-  display_role: 'owner',
-  permissions: { 'platform.system_household.access': true },
-  is_platform_superuser: true,
-}), false)
-
-assert.equal(isMobileInventoryEligibleContext({
-  context_type: 'none',
-  role: null,
-  display_role: null,
-  permissions: { 'platform.feature_flags.manage': true },
-}), false)
-
-assert.equal(isMobileInventoryEligibleContext({
-  ...regularAdmin,
-  permissions: { 'platform.functional_features.manage': true },
-}), false)
-
-assert.equal(isMobileInventoryEligibleContext({
-  ...regularAdmin,
-  permissions: { 'platform.special_roles.manage': true },
-}), false)
-
-assert.equal(MOBILE_INVENTORY_MEDIA_QUERY, '(max-width: 720px)')
-assert.equal(isMobileInventoryViewport({ matches: true }), true)
-assert.equal(isMobileInventoryViewport({ matches: false }), false)
-assert.equal(isMobileInventoryViewport(null), false)
+assert.equal(MOBILE_APP_MEDIA_QUERY, '(max-width: 720px)')
+assert.equal(isMobileAppViewport({ matches: true }), true)
+assert.equal(isMobileAppViewport({ matches: false }), false)
+assert.equal(isMobileAppViewport(null), false)
 
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const selectorSource = readFileSync(new URL('../src/pages/VoorraadResponsive.jsx', import.meta.url), 'utf8')
@@ -92,7 +30,9 @@ const homeSource = readFileSync(new URL('../src/features/home/HomePage.jsx', imp
 
 assert.match(routerSource, /import VoorraadResponsive from '\.\.\/\.\.\/pages\/VoorraadResponsive\.jsx'/)
 assert.match(routerSource, /path: '\/voorraad'.*<VoorraadResponsive \/>/)
-assert.match(selectorSource, /isMobileViewport && isMobileInventoryEligibleContext\(context\)/)
+assert.match(selectorSource, /const isMobileViewport = useMobileAppViewport\(\)/)
+assert.match(selectorSource, /if \(isMobileViewport\)/)
+assert.doesNotMatch(selectorSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin/)
 assert.match(selectorSource, /product_configuration\?\.location_tracking_level/)
 assert.match(selectorSource, /fetchHouseholdOnboarding\(context, \{ force: true \}\)/)
 assert.doesNotMatch(selectorSource, /primary_use_case\s*===\s*['"]waar_inhuis['"]/) 

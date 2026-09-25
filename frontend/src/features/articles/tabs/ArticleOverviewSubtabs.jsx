@@ -80,11 +80,18 @@ function classifyOverviewSections(root, readOnly) {
   })
 }
 
-export default function ArticleOverviewSubtabs(props) {
-  const [activeSubtab, setActiveSubtab] = useState(readInitialSubtab)
+export default function ArticleOverviewSubtabs({
+  activeSubtab: controlledActiveSubtab = null,
+  showTabs = true,
+  ...props
+}) {
+  const [internalActiveSubtab, setInternalActiveSubtab] = useState(readInitialSubtab)
   const rootRef = useRef(null)
   const canMutate = isHouseholdAdminFromContext(readStoredAuthContext() || {})
   const readOnly = !canMutate
+  const activeSubtab = OVERVIEW_SUBTABS.includes(controlledActiveSubtab)
+    ? controlledActiveSubtab
+    : internalActiveSubtab
   const activeKey = SUBTAB_KEY[activeSubtab] || 'article'
   const articleData = props?.articleData
 
@@ -93,9 +100,34 @@ export default function ArticleOverviewSubtabs(props) {
   }, [readOnly, articleData, activeSubtab])
 
   function handleSubtabChange(nextSubtab) {
-    setActiveSubtab(nextSubtab)
-    persistSubtab(nextSubtab)
+    if (!OVERVIEW_SUBTABS.includes(nextSubtab)) return
+    if (controlledActiveSubtab == null) {
+      setInternalActiveSubtab(nextSubtab)
+      persistSubtab(nextSubtab)
+    }
   }
+
+  const content = (
+    <div
+      className="rz-article-subtab-frame"
+      data-testid={`article-overview-frame-${activeKey}`}
+    >
+      {readOnly ? <div className="rz-article-readonly-note" data-testid="article-detail-readonly-note">Alleen-lezen. Alleen een beheerder of eigenaar kan deze artikelgegevens wijzigen.</div> : null}
+      {activeSubtab === 'Artikel' ? (
+        <div className="rz-article-subtab-help" data-testid="article-household-name-help">
+          Naam in dit huishouden is een optionele eigen benaming voor dit artikel. Laat het veld leeg om de gewone artikelnaam te gebruiken.
+        </div>
+      ) : null}
+      {activeSubtab === 'Huishouden' ? (
+        <div className="rz-article-subtab-help" data-testid="article-household-settings-help">
+          Deze voorkeuren sturen voorraadniveaus, aanvuladvies, voorkeurswinkel, standaardopslag en verpakkingsgrootte voor dit huishouden.
+        </div>
+      ) : null}
+      <ArticleOverviewTab {...props} />
+      {activeSubtab === 'Identiteit' ? <ArticleIdentitySummary articleData={articleData} /> : null}
+      {activeSubtab === 'Productdata' ? <ArticleProductSummary articleData={articleData} /> : null}
+    </div>
+  )
 
   return (
     <div
@@ -105,43 +137,25 @@ export default function ArticleOverviewSubtabs(props) {
       data-readonly={readOnly ? 'true' : 'false'}
       data-active-subtab={activeKey}
     >
-      <Tabs
-        tabs={OVERVIEW_SUBTABS}
-        activeTab={activeSubtab}
-        onTabChange={handleSubtabChange}
-        className="rz-article-subtabs"
-        ariaLabel="Overzicht subtabs"
-        rootTestId="article-overview-subtabs"
-        tablistTestId="article-overview-subtablist"
-        tabTestIdMap={{
-          Artikel: 'article-overview-subtab-article',
-          Huishouden: 'article-overview-subtab-household',
-          Identiteit: 'article-overview-subtab-identity',
-          Productdata: 'article-overview-subtab-productdata',
-        }}
-      >
-        {() => (
-          <div
-            className="rz-article-subtab-frame"
-            data-testid={`article-overview-frame-${activeKey}`}
-          >
-            {readOnly ? <div className="rz-article-readonly-note" data-testid="article-detail-readonly-note">Alleen-lezen. Alleen een beheerder of eigenaar kan deze artikelgegevens wijzigen.</div> : null}
-            {activeSubtab === 'Artikel' ? (
-              <div className="rz-article-subtab-help" data-testid="article-household-name-help">
-                Naam in dit huishouden is een optionele eigen benaming voor dit artikel. Laat het veld leeg om de gewone artikelnaam te gebruiken.
-              </div>
-            ) : null}
-            {activeSubtab === 'Huishouden' ? (
-              <div className="rz-article-subtab-help" data-testid="article-household-settings-help">
-                Deze voorkeuren sturen voorraadniveaus, aanvuladvies, voorkeurswinkel, standaardopslag en verpakkingsgrootte voor dit huishouden.
-              </div>
-            ) : null}
-            <ArticleOverviewTab {...props} />
-            {activeSubtab === 'Identiteit' ? <ArticleIdentitySummary articleData={articleData} /> : null}
-            {activeSubtab === 'Productdata' ? <ArticleProductSummary articleData={articleData} /> : null}
-          </div>
-        )}
-      </Tabs>
+      {showTabs ? (
+        <Tabs
+          tabs={OVERVIEW_SUBTABS}
+          activeTab={activeSubtab}
+          onTabChange={handleSubtabChange}
+          className="rz-article-subtabs"
+          ariaLabel="Overzicht subtabs"
+          rootTestId="article-overview-subtabs"
+          tablistTestId="article-overview-subtablist"
+          tabTestIdMap={{
+            Artikel: 'article-overview-subtab-article',
+            Huishouden: 'article-overview-subtab-household',
+            Identiteit: 'article-overview-subtab-identity',
+            Productdata: 'article-overview-subtab-productdata',
+          }}
+        >
+          {() => content}
+        </Tabs>
+      ) : content}
     </div>
   )
 }

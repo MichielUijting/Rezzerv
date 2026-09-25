@@ -372,6 +372,22 @@ test.describe('Artikeldetail frontend-regressie', () => {
       });
     });
 
+    await page.route(`**/api/household-articles/${articleId}/automation-override`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          article_id: articleId,
+          household_article_id: articleId,
+          requested_article_id: articleId,
+          mode: 'follow_household',
+          has_explicit_override: false,
+          consumable: true,
+          article_name: articleName,
+        }),
+      });
+    });
+
     await page.route(`**/api/household-articles/${articleId}/settings`, async (route) => {
       const payload = JSON.parse(route.request().postData() || '{}');
       savedFavoriteStore = String(payload.favorite_store || '');
@@ -385,9 +401,12 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await page.goto(`/voorraad/${articleId}`);
     await expect(page.getByTestId('mobile-article-detail-page')).toBeVisible();
 
+    await page.getByTestId('mobile-article-tab-household').click();
     const trigger = page.getByTestId('mobile-article-favorite-store-select');
-    const purchaseHistory = page.getByTestId('mobile-article-purchase-history-action');
-    const before = await purchaseHistory.boundingBox();
+    const settingsSection = page.getByTestId('article-household-settings-section');
+    await expect(trigger).toBeVisible();
+    await expect(settingsSection).toBeVisible();
+    const before = await settingsSection.boundingBox();
     expect(before).not.toBeNull();
 
     await trigger.click();
@@ -415,7 +434,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     expect(listMetrics.scrollHeight).toBeGreaterThan(listMetrics.clientHeight);
     expect(listMetrics.overflowY).toBe('auto');
 
-    const after = await purchaseHistory.boundingBox();
+    const after = await settingsSection.boundingBox();
     expect(after).not.toBeNull();
     expect(Math.abs(after.y - before.y)).toBeLessThan(1);
 
@@ -429,7 +448,8 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await listbox.getByRole('option', { name: 'Plus', exact: true }).click();
 
     await expect(trigger).toContainText('Plus');
-    expect(savedFavoriteStore).toBe('Plus');
+    await page.getByTestId('article-household-settings-save').click();
+    await expect.poll(() => savedFavoriteStore).toBe('Plus');
     expect(consoleErrors).toEqual([]);
   });
 });

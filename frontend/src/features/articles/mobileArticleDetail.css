@@ -390,3 +390,100 @@
     align-self: flex-end;
   }
 }
+
+/* Mobiel Artikel in Voorraad: Voorraadbaseline + één vlakke hoofdtablaag. */
+.rz-mobile-article-functional-card {
+  padding: 10px;
+  overflow: hidden;
+}
+
+.rz-mobile-article-functional-tabs {
+  min-width: 0;
+}
+
+.rz-mobile-article-functional-tabs > .rz-tabbar {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0 0 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  border-bottom: 1px solid #e1e6e2;
+  scroll-snap-type: x proximity;
+}
+
+.rz-mobile-article-functional-tabs > .rz-tabbar .rz-tab {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 7px 11px;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--color-mobile-ui-primary) !important;
+  font-size: 14px;
+  font-weight: 400 !important;
+  white-space: nowrap;
+  box-shadow: none !important;
+  scroll-snap-align: start;
+}
+
+.rz-mobile-article-functional-tabs > .rz-tabbar .rz-tab.rz-tab-active {
+  border-color: #cfe3dd !important;
+  background: #edf5f3 !important;
+  color: var(--color-mobile-ui-primary) !important;
+  font-weight: 600 !important;
+}
+
+.rz-mobile-article-functional-tabs > .rz-tabcontent,
+.rz-mobile-article-functional-tabs .rz-tabpanel-shell {
+  min-width: 0;
+}
+
+.rz-mobile-article-functional-card .rz-article-subtab-frame {
+  padding: 4px 2px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.rz-mobile-article-functional-card .rz-article-subtabs > .rz-tabbar {
+  display: none !important;
+}
+
+.rz-mobile-article-tab-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.rz-mobile-article-functional-card input,
+.rz-mobile-article-functional-card select,
+.rz-mobile-article-functional-card textarea {
+  max-width: 100%;
+}
+
+.rz-mobile-article-functional-card .rz-stock-tab,
+.rz-mobile-article-functional-card .rz-locations-tab {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .rz-mobile-article-functional-card .rz-field-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 6px;
+  }
+
+  .rz-mobile-article-functional-card .rz-field-row > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .rz-mobile-article-functional-card .rz-stock-actions-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rz-mobile-article-functional-card .rz-stock-action-buttons {
+    justify-content: flex-start;
+  }
+}

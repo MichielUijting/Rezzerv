@@ -20,7 +20,7 @@ import {
 } from '../features/home/recentActionUsage.js'
 import useFeatureAvailability from '../features/platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../features/platform/actionButtonAvailability.js'
-import { MOBILE_INVENTORY_MEDIA_QUERY } from '../pages/mobileInventoryAccess.js'
+import { useMobileAppViewport } from './mobileViewport.js'
 import './mobileAppChrome.css'
 
 const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' }
@@ -32,11 +32,6 @@ function mobileNavIconType(key) {
   if (key === 'winkelen') return 'cart'
   if (key === 'kassabonnen' || key === 'kassa') return 'receipt'
   return 'menu'
-}
-
-function readMobileViewport() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
-  return window.matchMedia(MOBILE_INVENTORY_MEDIA_QUERY).matches
 }
 
 function activeActionKey(pathname = '') {
@@ -109,21 +104,12 @@ function MobileBottomNavigationRuntime({ context, pathname }) {
 export default function MobileAppChrome({ children }) {
   const location = useLocation()
   const [context, setContext] = useState(() => readStoredAuthContext())
-  const [isMobileViewport, setIsMobileViewport] = useState(readMobileViewport)
+  const isMobileViewport = useMobileAppViewport()
 
   useEffect(() => {
     const handleContextChange = () => setContext(readStoredAuthContext())
     window.addEventListener(AUTH_CONTEXT_CHANGED_EVENT, handleContextChange)
     return () => window.removeEventListener(AUTH_CONTEXT_CHANGED_EVENT, handleContextChange)
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
-    const mediaQuery = window.matchMedia(MOBILE_INVENTORY_MEDIA_QUERY)
-    const handleViewportChange = () => setIsMobileViewport(Boolean(mediaQuery.matches))
-    handleViewportChange()
-    mediaQuery.addEventListener?.('change', handleViewportChange)
-    return () => mediaQuery.removeEventListener?.('change', handleViewportChange)
   }, [])
 
   if (!isMobileViewport) return children

@@ -8,8 +8,9 @@ const desktop = readFileSync(new URL('../src/features/shopping/ShoppingPage.jsx'
 
 assert.match(router, /import ShoppingResponsive from '..\/..\/features\/shopping\/ShoppingResponsive\.jsx'/)
 assert.match(router, /<ShoppingResponsive \/>/)
-assert.match(responsive, /MOBILE_INVENTORY_MEDIA_QUERY/)
-assert.match(responsive, /isMobileInventoryEligibleContext/)
+assert.match(responsive, /useMobileAppViewport/)
+assert.match(responsive, /if \(isMobileViewport\)/)
+assert.doesNotMatch(responsive, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin/)
 assert.match(responsive, /return <MobileShopping \/>/)
 assert.match(responsive, /return <ShoppingPage \/>/)
 

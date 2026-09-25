@@ -2,24 +2,28 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
-import Select from '../../ui/Select.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
+import Tabs from '../../ui/Tabs.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   fetchJsonWithAuth,
   isHouseholdAdminFromContext,
   readStoredAuthContext,
 } from '../../lib/authSession.js'
+import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility.js'
+import ArticleOverviewSubtabs from './tabs/ArticleOverviewSubtabs.jsx'
+import ArticleStockTab from './tabs/ArticleStockTab.jsx'
+import ArticleLocationsTab from './tabs/ArticleLocationsTab.jsx'
 import {
-  buildHouseholdSettingsPayload,
   buildMobileArticleInventoryRows,
   buildShoppingListPayload,
   chooseMobileInventoryRow,
-  filterPurchaseHistory,
   formatMobileLocation,
   isMobileArticleAlmostOut,
+  isMobileArticleLocationTrackingEnabled,
   isStableHouseholdArticleId,
 } from './mobileArticleDetailModel.js'
+import './articleDetailMutationPolicy.css'
 import './mobileArticleDetail.css'
 
 async function requestJson(url, options = {}) {
@@ -49,42 +53,13 @@ async function fetchMobileInventoryRows() {
   return Array.isArray(payload?.rows) ? payload.rows : []
 }
 
-async function fetchMobileLocationTracking() {
+async function fetchMobileLocationTracking(authContext = {}) {
+  if (isMobileArticleLocationTrackingEnabled(authContext)) return true
   try {
     const payload = await requestJson('/api/onboarding', { method: 'GET', cache: 'no-store' })
-    return String(payload?.product_configuration?.location_tracking_level || 'none').trim().toLowerCase() !== 'none'
+    return isMobileArticleLocationTrackingEnabled(authContext, payload)
   } catch {
     return false
-  }
-}
-
-async function fetchMobileStoreOptions() {
-  try {
-    const payload = await requestJson('/api/store-providers', { method: 'GET', cache: 'no-store' })
-    const items = Array.isArray(payload) ? payload : (Array.isArray(payload?.items) ? payload.items : [])
-    return items
-      .map((item) => ({
-        value: String(item?.name || item?.code || '').trim(),
-        label: String(item?.name || item?.code || '').trim(),
-      }))
-      .filter((item) => item.value)
-      .sort((left, right) => left.label.localeCompare(right.label, 'nl'))
-  } catch {
-    return []
-  }
-}
-
-async function fetchMobilePurchaseHistory(articleId, articleName) {
-  try {
-    const normalizedId = String(articleId || '').trim()
-    if (isStableHouseholdArticleId(normalizedId)) {
-      const payload = await requestJson(`/api/household-articles/${encodeURIComponent(normalizedId)}/events`, { method: 'GET', cache: 'no-store' })
-      return Array.isArray(payload?.items) ? payload.items : []
-    }
-    const payload = await requestJson(`/api/dev/article-history?article_name=${encodeURIComponent(String(articleName || '').trim())}`, { method: 'GET', cache: 'no-store' })
-    return Array.isArray(payload?.rows) ? payload.rows : []
-  } catch {
-    return []
   }
 }
 
@@ -94,34 +69,27 @@ function formatQuantity(value) {
   return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(2)))
 }
 
-function formatPurchaseDate(value) {
-  if (!value) return 'Datum onbekend'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  return new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium' }).format(date)
-}
-
 export default function MobileArticlePage() {
   const { articleId = '' } = useParams()
   const [searchParams] = useSearchParams()
   const requestedArticleName = String(searchParams.get('artikel') || '').trim()
   const authContext = readStoredAuthContext() || {}
   const canEditInventory = isHouseholdAdminFromContext(authContext)
-  const canEditHouseholdSettings = isHouseholdAdminFromContext(authContext)
-  const canEditNotes = authContext?.context_type === 'regular'
+  const {
+    visibilityMap,
+    isLoading: visibilityLoading,
+    error: visibilityError,
+  } = useArticleFieldVisibility()
 
   const [articleData, setArticleData] = useState(null)
   const [liveRows, setLiveRows] = useState([])
-  const [historyRows, setHistoryRows] = useState([])
-  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false)
+  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(() => (
+    isMobileArticleLocationTrackingEnabled(authContext)
+  ))
   const [selectedInventoryId, setSelectedInventoryId] = useState('')
-  const [favoriteStoreDraft, setFavoriteStoreDraft] = useState('')
-  const [storeOptions, setStoreOptions] = useState([])
-  const [notesDraft, setNotesDraft] = useState('')
-  const [activeQuickPanel, setActiveQuickPanel] = useState('')
+  const [activeDetailTab, setActiveDetailTab] = useState('Artikel')
   const [loading, setLoading] = useState(true)
   const [inventoryBusy, setInventoryBusy] = useState(false)
-  const [settingsBusy, setSettingsBusy] = useState(false)
   const [shoppingBusy, setShoppingBusy] = useState(false)
   const { showFeedback } = useAppFeedback()
   const [error, setError] = useState('')
@@ -157,36 +125,51 @@ export default function MobileArticlePage() {
     && (inventoryRows.length === 1 || locationTrackingEnabled)
   const articleImageUrl = String(selectedRow?.imageUrl || articleData?.image_url || '').trim()
   const almostOut = isMobileArticleAlmostOut(totalQuantity, settings?.min_stock)
-  const purchaseHistory = useMemo(() => filterPurchaseHistory(historyRows), [historyRows])
-  const favoriteStoreOptions = useMemo(() => {
-    const options = [{ value: '', label: 'Niet ingesteld' }, ...storeOptions]
-    const currentValue = String(favoriteStoreDraft || settings?.favorite_store || '').trim()
-    if (currentValue && !options.some((option) => option.value === currentValue)) {
-      options.push({ value: currentValue, label: currentValue })
+
+  const detailTabs = useMemo(
+    () => locationTrackingEnabled
+      ? ['Artikel', 'Huishouden', 'Identiteit', 'Productdata', 'Voorraad', 'Locaties']
+      : ['Artikel', 'Huishouden', 'Identiteit', 'Productdata', 'Voorraad'],
+    [locationTrackingEnabled],
+  )
+
+  const fullArticleData = useMemo(() => {
+    if (!articleData) return null
+    const locations = inventoryRows.map((row) => ({
+      id: row.id,
+      space_id: row.spaceId,
+      sublocation_id: row.sublocationId,
+      locatie: row.location,
+      sublocatie: row.sublocation,
+      aantal: row.quantity,
+    }))
+    const primaryLocation = locations[0] || {}
+    return {
+      ...articleData,
+      id: articleData?.id || householdArticleId || articleId,
+      household_article_id: articleData?.household_article_id || householdArticleId,
+      article_id: articleData?.article_id || householdArticleId,
+      name: articleName,
+      article_name: articleName,
+      locations,
+      total_quantity: totalQuantity,
+      main_location: primaryLocation.locatie || '',
+      sub_location: primaryLocation.sublocatie || '',
     }
-    return options
-  }, [favoriteStoreDraft, settings?.favorite_store, storeOptions])
+  }, [articleData, articleId, articleName, householdArticleId, inventoryRows, totalQuantity])
 
   async function loadAll({ showLoading = true } = {}) {
     if (showLoading) setLoading(true)
     setError('')
     try {
-      const [details, inventory, locationTracking, stores] = await Promise.all([
+      const [details, inventory, locationTracking] = await Promise.all([
         fetchMobileArticleDetails(articleId),
         fetchMobileInventoryRows(),
-        fetchMobileLocationTracking(),
-        fetchMobileStoreOptions(),
+        fetchMobileLocationTracking(authContext),
       ])
-      const resolvedName = String(details?.article_name || details?.name || requestedArticleName || '').trim()
-      const resolvedId = String(details?.household_article_id || details?.article_id || (isStableHouseholdArticleId(articleId) ? articleId : '')).trim()
-      const history = await fetchMobilePurchaseHistory(resolvedId || articleId, resolvedName)
       setArticleData(details)
       setLiveRows(inventory)
-      setHistoryRows(history)
       setLocationTrackingEnabled(locationTracking)
-      setStoreOptions(stores)
-      setFavoriteStoreDraft(String(details?.settings?.favorite_store || ''))
-      setNotesDraft(String(details?.settings?.notes || details?.notes || ''))
     } catch (loadError) {
       setError(loadError?.message || 'Artikeldetails konden niet worden geladen.')
     } finally {
@@ -205,12 +188,10 @@ export default function MobileArticlePage() {
   }, [inventoryRows, selectedInventoryId, settings?.default_location_id, settings?.default_sublocation_id])
 
   useEffect(() => {
-    setFavoriteStoreDraft(String(settings?.favorite_store || ''))
-  }, [settings?.favorite_store])
-
-  useEffect(() => {
-    setNotesDraft(String(settings?.notes || articleData?.notes || ''))
-  }, [articleData?.notes, settings?.notes])
+    if (!detailTabs.includes(activeDetailTab)) {
+      setActiveDetailTab('Artikel')
+    }
+  }, [activeDetailTab, detailTabs])
 
   function showSuccess(message) {
     showFeedback({ variant: 'success', message, testId: 'mobile-article-feedback' })
@@ -220,13 +201,9 @@ export default function MobileArticlePage() {
     showFeedback({ variant: 'error', message, testId: 'mobile-article-feedback' })
   }
 
-  async function refreshInventoryAndHistory() {
-    const [inventory, history] = await Promise.all([
-      fetchMobileInventoryRows(),
-      fetchMobilePurchaseHistory(householdArticleId || articleId, articleName),
-    ])
+  async function refreshInventory() {
+    const inventory = await fetchMobileInventoryRows()
     setLiveRows(inventory)
-    setHistoryRows(history)
   }
 
   async function changeInventory(direction) {
@@ -247,7 +224,7 @@ export default function MobileArticlePage() {
             : 'Voorraad verlaagd via mobiel artikeldetail.',
         }),
       })
-      await refreshInventoryAndHistory()
+      await refreshInventory()
       showSuccess(direction > 0 ? 'Voorraad met 1 verhoogd.' : 'Voorraad met 1 verlaagd.')
     } catch (mutationError) {
       showError(mutationError?.message || 'Voorraad kon niet worden aangepast.')
@@ -264,7 +241,7 @@ export default function MobileArticlePage() {
 
     setInventoryBusy(true)
     try {
-      await requestJson('/api/household-articles/' + encodeURIComponent(householdArticleId) + '/inventory-events', {
+      await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/inventory-events`, {
         method: 'POST',
         body: JSON.stringify({
           inventory_id: selectedRow.id,
@@ -274,62 +251,12 @@ export default function MobileArticlePage() {
           note: 'Exact aantal aangepast via mobiel artikeldetail.',
         }),
       })
-      await refreshInventoryAndHistory()
+      await refreshInventory()
       showSuccess('Voorraad aangepast naar ' + formatQuantity(normalizedQuantity) + '.')
     } catch (mutationError) {
       showError(mutationError?.message || 'Voorraad kon niet worden aangepast.')
     } finally {
       setInventoryBusy(false)
-    }
-  }
-
-  async function saveFavoriteStore(value = favoriteStoreDraft) {
-    const currentValue = String(settings?.favorite_store || '').trim()
-    const nextValue = String(value || '').trim()
-    if (!canEditHouseholdSettings || settingsBusy || !householdArticleId || nextValue === currentValue) return
-
-    setSettingsBusy(true)
-    try {
-      const payload = buildHouseholdSettingsPayload(settings, nextValue)
-      const result = await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/settings`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      })
-      const nextSettings = result?.settings && typeof result.settings === 'object' ? result.settings : payload
-      setArticleData((current) => ({ ...(current || {}), settings: nextSettings }))
-      setFavoriteStoreDraft(String(nextSettings.favorite_store || ''))
-      showSuccess(nextValue ? `Voorkeurswinkel ingesteld op ${nextValue}.` : 'Voorkeurswinkel verwijderd.')
-    } catch (settingsError) {
-      setFavoriteStoreDraft(currentValue)
-      showError(settingsError?.message || 'Voorkeurswinkel kon niet worden opgeslagen.')
-    } finally {
-      setSettingsBusy(false)
-    }
-  }
-
-  async function saveNotes() {
-    const currentValue = String(settings?.notes || articleData?.notes || '').trim()
-    const nextValue = String(notesDraft || '').trim()
-    if (!canEditNotes || settingsBusy || !householdArticleId || nextValue === currentValue) return
-
-    setSettingsBusy(true)
-    try {
-      const payload = { notes: nextValue }
-      const result = await requestJson(`/api/household-articles/${encodeURIComponent(householdArticleId)}/notes`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      })
-      const nextSettings = result?.settings && typeof result.settings === 'object'
-        ? result.settings
-        : { ...settings, notes: nextValue }
-      setArticleData((current) => ({ ...(current || {}), settings: nextSettings }))
-      setNotesDraft(String(nextSettings.notes || ''))
-      showSuccess('Notities opgeslagen.')
-    } catch (settingsError) {
-      setNotesDraft(currentValue)
-      showError(settingsError?.message || 'Notities konden niet worden opgeslagen.')
-    } finally {
-      setSettingsBusy(false)
     }
   }
 
@@ -348,10 +275,6 @@ export default function MobileArticlePage() {
     } finally {
       setShoppingBusy(false)
     }
-  }
-
-  function togglePanel(panel) {
-    setActiveQuickPanel((current) => current === panel ? '' : panel)
   }
 
   if (loading) {
@@ -409,7 +332,7 @@ export default function MobileArticlePage() {
           <div className="rz-mobile-article-stock-row">
             <div className="rz-mobile-article-stock-copy">
               <span className="rz-mobile-article-stock-label">Actuele voorraad</span>
-              {locationTrackingEnabled && inventoryRows.length > 1 ? (
+              {locationTrackingEnabled && selectedRow ? (
                 <span className="rz-mobile-article-stock-location">{formatMobileLocation(selectedRow)}</span>
               ) : null}
             </div>
@@ -437,110 +360,68 @@ export default function MobileArticlePage() {
           {!canEditInventory ? <div className="rz-mobile-article-helper">Alleen een beheerder of eigenaar kan de voorraad aanpassen.</div> : null}
         </section>
 
-        <section className="rz-mobile-article-card rz-mobile-article-details" aria-label="Artikelgegevens">
-          <div className="rz-mobile-article-section-title">Artikelgegevens</div>
-          <div className="rz-mobile-article-detail-row">
-            <span>Minimumvoorraad</span>
-            <strong>{settings?.min_stock == null || settings?.min_stock === '' ? 'Niet ingesteld' : formatQuantity(settings.min_stock)}</strong>
-          </div>
-          {locationTrackingEnabled ? (
-            <div className="rz-mobile-article-detail-row rz-mobile-article-detail-row--location" data-testid="mobile-article-location-row">
-              <span>Locatie</span>
-              {inventoryRows.length > 1 ? (
-                <Select
-                  value={selectedRow?.id || ''}
-                  onChange={setSelectedInventoryId}
-                  options={inventoryRows.map((row) => ({
-                    value: row.id,
-                    label: `${formatMobileLocation(row)} — ${formatQuantity(row.quantity)}`,
-                  }))}
-                  ariaLabel="Voorraadlocatie"
-                  triggerClassName="rz-mobile-article-select"
-                  dataTestId="mobile-article-location-select"
-                />
-              ) : (
-                <strong>{formatMobileLocation(selectedRow)}</strong>
-              )}
-            </div>
-          ) : null}
-          <label className="rz-mobile-article-notes-field">
-            <span>Notities</span>
-            <textarea
-              className="rz-mobile-article-input rz-mobile-article-notes-input"
-              value={notesDraft}
-              onChange={(event) => setNotesDraft(event.target.value)}
-              onBlur={saveNotes}
-              disabled={!canEditNotes || settingsBusy}
-              rows={4}
-              placeholder="Notities voor dit huishouden"
-              data-testid="mobile-article-notes"
-            />
-          </label>
-        </section>
-
-        <section className="rz-mobile-article-card rz-mobile-article-quick-actions" aria-label="Snelle acties">
-          <div className="rz-mobile-article-section-title">Snelle acties</div>
-
-          <div
-            className="rz-mobile-article-favorite-store-row"
-            data-testid="mobile-article-favorite-store-action"
+        <section
+          className="rz-mobile-article-card rz-mobile-article-functional-card"
+          aria-label="Artikeldetails"
+          data-testid="mobile-article-full-details"
+        >
+          <Tabs
+            tabs={detailTabs}
+            activeTab={activeDetailTab}
+            onTabChange={setActiveDetailTab}
+            className="rz-mobile-article-functional-tabs"
+            ariaLabel="Artikeldetails"
+            rootTestId="mobile-article-detail-tabs"
+            tablistTestId="mobile-article-detail-tablist"
+            tabTestIdMap={{
+              Artikel: 'mobile-article-tab-article',
+              Huishouden: 'mobile-article-tab-household',
+              Identiteit: 'mobile-article-tab-identity',
+              Productdata: 'mobile-article-tab-productdata',
+              Voorraad: 'mobile-article-tab-stock',
+              Locaties: 'mobile-article-tab-locations',
+            }}
           >
-            <span>Voorkeurswinkel</span>
-            <Select
-              value={favoriteStoreDraft}
-              onChange={(value) => {
-                setFavoriteStoreDraft(value)
-                void saveFavoriteStore(value)
-              }}
-              options={favoriteStoreOptions}
-              disabled={!canEditHouseholdSettings || settingsBusy}
-              ariaLabel="Voorkeurswinkel"
-              className="rz-mobile-article-favorite-store-select"
-              triggerClassName="rz-mobile-article-favorite-store-trigger"
-              dataTestId="mobile-article-favorite-store-select"
-            />
-          </div>
-          {!canEditHouseholdSettings ? (
-            <div className="rz-mobile-article-helper">Alleen een beheerder of eigenaar kan de voorkeurswinkel wijzigen.</div>
-          ) : null}
-
-          <button
-            type="button"
-            className="rz-mobile-article-action-row"
-            onClick={() => togglePanel('purchase-history')}
-            aria-expanded={activeQuickPanel === 'purchase-history'}
-            data-testid="mobile-article-purchase-history-action"
-          >
-            <span>Aankoophistorie</span>
-            <span className="rz-mobile-article-action-value">{purchaseHistory.length}</span>
-          </button>
-          {activeQuickPanel === 'purchase-history' ? (
-            <div className="rz-mobile-article-inline-panel" data-testid="mobile-article-purchase-history-panel">
-              {purchaseHistory.length === 0 ? (
-                <div className="rz-mobile-article-helper">Nog geen aankopen geregistreerd.</div>
-              ) : (
-                <div className="rz-mobile-article-history-list">
-                  {purchaseHistory.map((event, index) => (
-                    <div key={event?.id || `${event?.created_at || event?.datetime || 'purchase'}-${index}`} className="rz-mobile-article-history-row">
-                      <span>{formatPurchaseDate(event?.created_at || event?.datetime)}</span>
-                      <strong>{event?.quantity == null ? 'Aankoop' : `+${formatQuantity(event.quantity)}`}</strong>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          <button
-            type="button"
-            className="rz-mobile-article-action-row rz-mobile-article-action-row--primary"
-            onClick={addToShoppingList}
-            disabled={shoppingBusy || !householdArticleId}
-            data-testid="mobile-article-add-to-shopping-list"
-          >
-            <span>Op boodschappenlijst</span>
-            {shoppingBusy ? <span className="rz-mobile-article-action-value">Bezig…</span> : null}
-          </button>
+            {(currentTab) => {
+              if (!fullArticleData) return null
+              if (['Artikel', 'Huishouden', 'Identiteit', 'Productdata'].includes(currentTab)) {
+                return (
+                  <div className="rz-mobile-article-tab-stack">
+                    <ArticleOverviewSubtabs
+                      articleData={fullArticleData}
+                      activeSubtab={currentTab}
+                      showTabs={false}
+                      visibilityMap={visibilityMap}
+                      visibilityLoading={visibilityLoading}
+                      visibilityError={visibilityError}
+                      onDetailsSaved={(details) => {
+                        setArticleData((current) => ({ ...(current || {}), ...(details || {}) }))
+                      }}
+                    />
+                    {currentTab === 'Artikel' ? (
+                      <button
+                        type="button"
+                        className="rz-mobile-article-action-row rz-mobile-article-action-row--primary"
+                        onClick={addToShoppingList}
+                        disabled={shoppingBusy || !householdArticleId}
+                        data-testid="mobile-article-add-to-shopping-list"
+                      >
+                        <span>Op boodschappenlijst</span>
+                        {shoppingBusy ? <span className="rz-mobile-article-action-value">Bezig…</span> : null}
+                      </button>
+                    ) : null}
+                  </div>
+                )
+              }
+              if (currentTab === 'Voorraad') {
+                return <ArticleStockTab articleData={fullArticleData} onInventoryChanged={refreshInventory} />
+              }
+              if (currentTab === 'Locaties') {
+                return <ArticleLocationsTab articleData={fullArticleData} onInventoryChanged={refreshInventory} />
+              }
+              return null
+            }}
+          </Tabs>
         </section>
       </main>
     </div>

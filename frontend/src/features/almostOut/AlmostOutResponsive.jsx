@@ -9,16 +9,7 @@ import {
   fetchHouseholdOnboarding,
   readHouseholdOnboarding,
 } from '../onboarding/onboardingState.js'
-import {
-  MOBILE_INVENTORY_MEDIA_QUERY,
-  isMobileInventoryEligibleContext,
-  isMobileInventoryViewport,
-} from '../../pages/mobileInventoryAccess.js'
-
-function readViewportMatch() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
-  return window.matchMedia(MOBILE_INVENTORY_MEDIA_QUERY).matches
-}
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
 
 export function isAlmostOutLocationTrackingEnabled(onboarding) {
   const level = String(onboarding?.product_configuration?.location_tracking_level || 'none')
@@ -34,26 +25,16 @@ function readInitialLocationTracking(context) {
 
 export default function AlmostOutResponsive() {
   const [context, setContext] = useState(() => readStoredAuthContext())
-  const [isMobileViewport, setIsMobileViewport] = useState(readViewportMatch)
+  const isMobileViewport = useMobileAppViewport()
   const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(() => {
     const initialContext = readStoredAuthContext()
     return readInitialLocationTracking(initialContext)
   })
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
-    const mediaQuery = window.matchMedia(MOBILE_INVENTORY_MEDIA_QUERY)
-    const handleViewportChange = () => setIsMobileViewport(isMobileInventoryViewport(mediaQuery))
     const handleContextChange = () => setContext(readStoredAuthContext())
-
-    handleViewportChange()
     window.addEventListener(AUTH_CONTEXT_CHANGED_EVENT, handleContextChange)
-    mediaQuery.addEventListener?.('change', handleViewportChange)
-
-    return () => {
-      window.removeEventListener(AUTH_CONTEXT_CHANGED_EVENT, handleContextChange)
-      mediaQuery.removeEventListener?.('change', handleViewportChange)
-    }
+    return () => window.removeEventListener(AUTH_CONTEXT_CHANGED_EVENT, handleContextChange)
   }, [])
 
   useEffect(() => {
@@ -81,7 +62,7 @@ export default function AlmostOutResponsive() {
     }
   }, [context?.user_id, context?.active_household_id, context?.context_type])
 
-  if (isMobileViewport && isMobileInventoryEligibleContext(context)) {
+  if (isMobileViewport) {
     return <MobileAlmostOut locationTrackingEnabled={locationTrackingEnabled} />
   }
 
