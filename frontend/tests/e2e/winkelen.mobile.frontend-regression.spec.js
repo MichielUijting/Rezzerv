@@ -203,8 +203,8 @@ test.describe('Mobiele Boodschappen', () => {
     await page.goto('/winkelen')
     await expect(page.getByTestId('mobile-shopping-page')).toBeVisible()
     await expect(page.getByTestId('shopping-page')).toHaveCount(0)
-    await expect(page.getByText('Mijn lijst', { exact: true })).toBeVisible()
-    await expect(page.getByText('2 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
+    await expect(page.getByText('Mijn boodschappen', { exact: true })).toBeVisible()
+    await expect(page.getByText('2 artikelen • 2 nog te vinden', { exact: true })).toBeVisible()
     await expect(page.getByRole('region', { name: 'Boodschappen', exact: true })).toBeVisible()
     await expect(page.getByLabel('Zoek in winkellijst')).toHaveCount(0)
     await expect(page.getByTestId('mobile-shopping-producttype')).toHaveCount(0)
@@ -217,14 +217,14 @@ test.describe('Mobiele Boodschappen', () => {
     await expect(page.getByText('Zuivel', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Brood', { exact: true }).first()).toBeVisible()
 
-    await page.getByLabel('Gekocht Melk').check()
-    await expect(page.getByText('2 artikelen • 1 nog te kopen', { exact: true })).toBeVisible()
+    await page.getByLabel('Melk in kar leggen').check()
+    await expect(page.getByText('2 artikelen • 1 nog te vinden', { exact: true })).toBeVisible()
 
     const melkCard = page.getByTestId('mobile-shopping-item-mobile-melk')
-    await melkCard.getByRole('button', { name: 'Bewerken' }).click()
-    await melkCard.getByLabel('Opmerking Melk').fill('Halfvol')
-    await melkCard.getByLabel('Opmerking Melk').blur()
-    await expect(page.getByText('Halfvol', { exact: true })).toBeVisible()
+    await expect(melkCard.getByRole('button', { name: 'Bewerken' })).toHaveCount(0)
+    await melkCard.getByRole('button', { name: 'Verhoog aantal van Melk' }).click()
+    await expect(melkCard).toContainText('2')
+
 
     await page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true }).fill('ban')
     const candidateList = page.getByTestId('mobile-shopping-candidate-list')
@@ -232,7 +232,7 @@ test.describe('Mobiele Boodschappen', () => {
     await expect(candidateList.getByRole('option')).toHaveCount(5)
     await candidateList.getByRole('option', { name: 'Bananen — Huishoudartikel', exact: true }).click()
     await page.getByTestId('mobile-shopping-add').click()
-    await expect(page.getByText('3 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
+    await expect(page.getByText('3 artikelen • 2 nog te vinden', { exact: true })).toBeVisible()
     await expect(page.getByText('Bananen', { exact: true })).toBeVisible()
 
     const addSearchbox = page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true })
@@ -242,22 +242,19 @@ test.describe('Mobiele Boodschappen', () => {
       await page.getByTestId('mobile-shopping-add').click()
       await expect(addSearchbox).toHaveValue('')
     }
-    await expect(page.getByText('3 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
+    await expect(page.getByText('3 artikelen • 2 nog te vinden', { exact: true })).toBeVisible()
     const bananaCard = page.getByTestId('mobile-shopping-item-mobile-bananen')
     await expect(bananaCard).toContainText('Aantal 3')
     await expect(page.getByTestId('mobile-shopping-item-mobile-bananen')).toHaveCount(1)
 
-    await page.getByLabel('Selecteer Brood').check()
-    await expect(page.getByText('1 geselecteerd', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Verwijderen' }).click()
-    await expect(page.getByTestId('shopping-delete-confirmation')).toBeVisible()
-    await page.getByTestId('shopping-delete-confirmation-primary-button').click()
-    await expect(page.getByText('Brood', { exact: true })).toHaveCount(0)
+    await expect(page.getByLabel('Selecteer Brood')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Verwijderen' })).toHaveCount(0)
+
 
     await page.getByTestId('mobile-shopping-complete').click()
     await expect(page.getByTestId('shopping-complete-confirmation')).toBeVisible()
     await page.getByTestId('shopping-complete-confirmation-primary-button').click()
-    await expect(page.getByText('Nog geen artikelen op de boodschappen.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Nog geen artikelen bij Boodschappen.', { exact: true })).toBeVisible()
 
     await expectNoConsoleErrors(consoleErrors)
   })
