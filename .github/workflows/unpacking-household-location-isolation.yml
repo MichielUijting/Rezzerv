@@ -5,12 +5,20 @@ on:
     branches:
       - main
     paths:
+      - '.github/actions/postgresql-acceptance-foundation/action.yml'
+      - 'backend/alembic/**'
+      - 'backend/app/services/inventory_location_household_patch.py'
       - 'backend/app/services/unpacking_household_location_patch.py'
+      - 'backend/app/testing/postgresql_acceptance_foundation.py'
+      - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
       - 'backend/app/testing/unpacking_household_location_isolation_contract.py'
       - 'backend/tests/**/*unpacking*'
       - 'frontend/src/features/**/*unpack*'
       - '.github/workflows/unpacking-household-location-isolation.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: unpacking-household-location-${{ github.event.pull_request.number || github.ref }}
@@ -19,31 +27,86 @@ concurrency:
 jobs:
   validate-unpacking-household-location-isolation:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rezzerv_bootstrap
+          POSTGRES_PASSWORD: rezzerv_bootstrap_ci
+          POSTGRES_DB: rezzerv_unpacking_location_ci
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rezzerv_bootstrap -d rezzerv_unpacking_location_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PYTHONPATH: backend
+      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:55432/rezzerv_unpacking_location_ci
+      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:55432/rezzerv_unpacking_location_ci
+      REZZERV_DATASTORE_POLICY: postgresql-only
+      REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
 
-      - name: Set up Python
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Installeer minimale backend-afhankelijkheden
+      - name: Install PostgreSQL client and backend dependencies
         run: |
-          python -m pip install --quiet \
-            fastapi==0.115.0 \
-            sqlalchemy==2.0.36
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
 
-      - name: Compileer gewijzigde modules
+      - name: Prepare shared PostgreSQL acceptance foundation
+        uses: ./.github/actions/postgresql-acceptance-foundation
+        with:
+          database-name: rezzerv_unpacking_location_ci
+          bootstrap-user: rezzerv_bootstrap
+          bootstrap-password: rezzerv_bootstrap_ci
+          port: '55432'
+          migrator-password: rezzerv_migrator_ci
+          runtime-password: rezzerv_app_ci
+          migration-mode: alembic
+          evidence-file: unpacking-household-location-postgresql-foundation.log
+
+      - name: Compile changed location authority
         run: |
           python -m py_compile \
-            backend/app/__init__.py \
+            backend/app/services/inventory_location_household_patch.py \
             backend/app/services/unpacking_household_location_patch.py \
             backend/app/testing/unpacking_household_location_isolation_contract.py
 
-      - name: Voer A-B-Uitpakken-locatiecontract uit
-        env:
-          PYTHONPATH: backend
+      - name: Prove household location isolation on canonical PostgreSQL
+        shell: bash
         run: |
-          python -m app.testing.unpacking_household_location_isolation_contract | tee unpacking-household-location-isolation.log
+          set -euo pipefail
+          python -m app.testing.unpacking_household_location_isolation_contract \
+            | tee unpacking-household-location-isolation.log
+          grep -F 'PASS postgresql_dml_only_runtime' unpacking-household-location-isolation.log
+          grep -F 'PASS household_a_b_location_isolation' unpacking-household-location-isolation.log
+          grep -F 'PASS system_household_zero_without_product_configuration' unpacking-household-location-isolation.log
+          grep -F 'PASS cross_household_location_rejected' unpacking-household-location-isolation.log
           grep -F 'UNPACKING_HOUSEHOLD_LOCATION_ISOLATION_GREEN' unpacking-household-location-isolation.log
+
+      - name: Upload isolation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unpacking-household-location-postgresql-evidence
+          path: |
+            unpacking-household-location-postgresql-foundation.log
+            unpacking-household-location-isolation.log
+          if-no-files-found: warn
+          retention-days: 7
