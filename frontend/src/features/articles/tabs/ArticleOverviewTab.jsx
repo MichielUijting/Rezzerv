@@ -8,6 +8,7 @@ import { resolveArticleFieldValue, EMPTY_VALUE } from '../lib/articleFieldValueR
 import { mergeIncomingFormStatePreservingDirtyFields } from '../lib/householdSettingsFormState'
 import { AUTO_CONSUME_MODES, fetchArticleAutoConsumeMode, getArticleAutoConsumeMode, saveArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
 import { sortOptionObjects } from '../../../ui/sorting'
+import Select from '../../../ui/Select'
 
 const GROUP_LABELS = {
   basic: 'Basis',
@@ -386,6 +387,7 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
   const [isLoadingLocations, setIsLoadingLocations] = useState(false)
   const [locationOptions, setLocationOptions] = useState([])
   const [sublocationOptions, setSublocationOptions] = useState([])
+  const [storeOptions, setStoreOptions] = useState([])
 
   useEffect(() => {
     const incomingState = buildHouseholdSettingsFormState(settings)
@@ -441,6 +443,31 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
       }
     }
     loadLocations()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadStoreOptions() {
+      try {
+        const response = await fetchJsonWithAuth('/api/store-providers')
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) return
+        if (cancelled) return
+        const names = (Array.isArray(data?.items) ? data.items : [])
+          .map((item) => String(item?.name || '').trim())
+          .filter(Boolean)
+        setStoreOptions(sortOptionObjects([
+          { value: '', label: 'Geen voorkeurswinkel' },
+          ...names.map((name) => ({ value: name, label: name })),
+        ]))
+      } catch {
+        // Store providers are optional for rendering the remaining household settings.
+      }
+    }
+    loadStoreOptions()
     return () => {
       cancelled = true
     }
@@ -508,7 +535,21 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
       <div style={{ display: 'grid', gap: 8 }}>
         <EditableHouseholdFieldRow field={{ key: 'min_stock', label: 'Minimumvoorraad', type: 'number', placeholder: '0', step: '0.1' }} draftValue={formState.min_stock} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
         <EditableHouseholdFieldRow field={{ key: 'ideal_stock', label: 'Streefvoorraad', type: 'number', placeholder: '0', step: '0.1' }} draftValue={formState.ideal_stock} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
-        <EditableHouseholdFieldRow field={{ key: 'favorite_store', label: 'Voorkeurswinkel', type: 'text', placeholder: 'Bijvoorbeeld: Jumbo' }} draftValue={formState.favorite_store} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
+        <div className="rz-mobile-article-favorite-store-row" data-testid="article-inline-row-favorite_store">
+          <label className="rz-field-row-label">Voorkeurswinkel:</label>
+          <Select
+            value={formState.favorite_store}
+            onChange={(value) => updateField('favorite_store', value)}
+            options={storeOptions.length ? storeOptions : [
+              { value: formState.favorite_store, label: formState.favorite_store || 'Geen voorkeurswinkel' },
+            ]}
+            className="rz-mobile-article-favorite-store-select"
+            triggerClassName="rz-mobile-article-favorite-store-trigger"
+            ariaLabel="Voorkeurswinkel"
+            disabled={!canEdit || isSaving}
+            dataTestId="mobile-article-favorite-store-select"
+          />
+        </div>
         <EditableHouseholdFieldRow field={{ key: 'average_price', label: 'Prijsindicatie', type: 'number', placeholder: '0', step: '0.01' }} draftValue={formState.average_price} onChange={updateField} onBlur={() => {}} onKeyDown={() => {}} isSaving={isSaving} canEdit={canEdit} />
         <div className="rz-field-row rz-field-row--editable">
           <label className="rz-field-row-label" htmlFor="article-household-settings-status">Status:</label>
