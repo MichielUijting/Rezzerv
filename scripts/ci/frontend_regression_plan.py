@@ -305,7 +305,8 @@ def cmd_self_test(_: argparse.Namespace) -> int:
     patterns = ["frontend/src/**", "frontend/tests/e2e/**", "frontend/tests/*.contract.mjs", "frontend/package.json"]
     assert classify_incremental_files(["frontend/tests/mobile-ui-conformity.contract.mjs"], patterns)[0] == "contracts"
     assert classify_incremental_files(["docs/note.md"], patterns)[0] == "reuse"
-    assert E2E_SPEC_PATTERN.search("tests/e2e/article-detail.frontend-regression.spec.js:437")\n    assert classify_incremental_files(["frontend/src/App.jsx"], patterns)[0] == "full"
+    assert E2E_SPEC_PATTERN.search("tests/e2e/article-detail.frontend-regression.spec.js:437")
+    assert classify_incremental_files(["frontend/src/App.jsx"], patterns)[0] == "full"
     assert classify_incremental_files(["frontend/tests/unknown.txt"], patterns)[0] == "full"
     assert classify_incremental_files(
         ["frontend/tests/mobile-ui-conformity.contract.mjs", "docs/note.md"],
