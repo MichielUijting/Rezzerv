@@ -95,10 +95,9 @@ jobs:
           GRANT CONNECT ON DATABASE rezzerv TO rezzerv_migrator, rezzerv_app;
           GRANT USAGE, CREATE ON SCHEMA public TO rezzerv_migrator;
           GRANT USAGE ON SCHEMA public TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rezzerv_app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE rezzerv_migrator IN SCHEMA public
-            GRANT USAGE, SELECT ON SEQUENCES TO rezzerv_app;
+          -- Deliberately omit table/sequence grants here. This models a
+          -- long-lived PostgreSQL volume from before runtime default privileges
+          -- existed. The Alembic chain must reconcile that drift fail-closed.
           SQL
 
       - name: Prove production startup has no schema mutator calls
@@ -187,6 +186,10 @@ jobs:
 
       - name: Prove runtime role has no schema CREATE privilege
         run: |
+          for privilege in SELECT INSERT UPDATE DELETE; do
+            test "$(psql -h 127.0.0.1 -U postgres -d rezzerv -Atc "SELECT has_table_privilege('rezzerv_app', 'public.purchase_import_line_inventory_handling_overrides', '$privilege')")" = "t"
+          done
+          echo 'POSTGRESQL_RUNTIME_DML_PRIVILEGES_RECONCILED_GREEN'
           test "$(psql -h 127.0.0.1 -U postgres -d rezzerv -Atc "SELECT has_schema_privilege('rezzerv_app', 'public', 'CREATE')")" = "f"
           if psql -h 127.0.0.1 -U rezzerv_app -d rezzerv -v ON_ERROR_STOP=1 -c 'CREATE TABLE runtime_ddl_should_fail(id integer)'; then
             echo 'Runtime role unexpectedly created a table' >&2
@@ -275,6 +278,7 @@ jobs:
           env -u MIGRATION_DATABASE_URL python tests/postgresql_day_article_direct_dml_only_selftest.py | tee /tmp/day-article-direct-dml-only.log
           grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_RUNTIME_CREATE_DENIED_GREEN' /tmp/day-article-direct-dml-only.log
           grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_SCHEMA_VALIDATION_ONLY_GREEN' /tmp/day-article-direct-dml-only.log
+          grep -F 'POSTGRESQL_DAY_ARTICLE_LINE_OVERRIDE_UPSERT_GREEN' /tmp/day-article-direct-dml-only.log
           grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_CONSUMPTION_DML_ONLY_GREEN' /tmp/day-article-direct-dml-only.log
           grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_BOOLEAN_TIMESTAMP_GREEN' /tmp/day-article-direct-dml-only.log
           grep -F 'POSTGRESQL_DAY_ARTICLE_DIRECT_DML_ONLY_GREEN' /tmp/day-article-direct-dml-only.log
