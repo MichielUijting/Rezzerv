@@ -80,6 +80,14 @@ export const APPROVED_UI_COMPONENTS = Object.freeze([
     contractTests: ['tests/mobile-ui-conformity.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
   },
   {
+    id: 'mobile-article-row',
+    source: 'src/ui/MobileArticleRow.jsx',
+    publicApi: 'MobileArticleRow',
+    purpose: 'Canonieke mobiele artikelregel voor operationele artikeloverzichten, met vaste thumbnail-, titel-, metadata-, leading- en side-slots.',
+    reuseRule: 'Gebruik voor mobiele artikelregels zoals Voorraad en Boodschappen; maak geen feature-specifieke kopie van dezelfde rijstructuur.',
+    contractTests: ['tests/mobile-winkelen.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
+  },
+  {
     id: 'quantity-stepper',
     source: 'src/ui/QuantityStepper.jsx',
     publicApi: 'QuantityStepper ({ valueEditable, valueDisabled, onValueCommit })',
