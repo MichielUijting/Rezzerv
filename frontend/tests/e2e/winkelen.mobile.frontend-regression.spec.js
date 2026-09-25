@@ -214,8 +214,9 @@ test.describe('Mobiele Boodschappen', () => {
     await expect(page.getByText('Aanbiedingen', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Vaak gekocht', { exact: true })).toHaveCount(0)
 
-    await expect(page.getByText('Zuivel', { exact: true }).first()).toBeVisible()
-    await expect(page.getByText('Brood', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Zuivel', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Halfvolle melk', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Volkoren brood', { exact: true })).toHaveCount(0)
 
     await page.getByLabel('Melk in kar leggen').check()
     await expect(page.getByText('2 artikelen • 1 nog te vinden', { exact: true })).toBeVisible()
