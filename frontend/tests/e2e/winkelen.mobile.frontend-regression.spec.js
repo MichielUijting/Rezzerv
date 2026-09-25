@@ -244,7 +244,7 @@ test.describe('Mobiele Boodschappen', () => {
     }
     await expect(page.getByText('3 artikelen • 2 nog te vinden', { exact: true })).toBeVisible()
     const bananaCard = page.getByTestId('mobile-shopping-item-mobile-bananen')
-    await expect(bananaCard.getByRole('button', { name: 'Aantal 3' })).toBeVisible()
+    await expect(bananaCard.getByText('3', { exact: true })).toBeVisible()
     await expect(page.getByTestId('mobile-shopping-item-mobile-bananen')).toHaveCount(1)
 
     await expect(page.getByLabel('Selecteer Brood')).toHaveCount(0)
