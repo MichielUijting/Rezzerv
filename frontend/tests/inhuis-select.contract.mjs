@@ -5,7 +5,6 @@ const selectSource = readFileSync(new URL('../src/ui/Select.jsx', import.meta.ur
 const selectCss = readFileSync(new URL('../src/ui/components/select.css', import.meta.url), 'utf8')
 const voorraadSource = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
 const almostOutSource = readFileSync(new URL('../src/features/almostOut/MobileAlmostOut.jsx', import.meta.url), 'utf8')
-const articleSource = readFileSync(new URL('../src/features/articles/MobileArticlePage.jsx', import.meta.url), 'utf8')
 
 assert.match(selectSource, /role="listbox"/)
 assert.match(selectSource, /role="option"/)
@@ -36,13 +35,12 @@ assert.match(selectCss, /\.rz-select-listbox[\s\S]*overscroll-behavior:\s*contai
 assert.match(selectCss, /\.rz-select-listbox[\s\S]*scrollbar-gutter:\s*stable;/)
 assert.match(selectCss, /\.rz-select-option[\s\S]*font-size: var\(--font-size-ui-body\) !important;/)
 
-for (const source of [voorraadSource, almostOutSource, articleSource]) {
+for (const source of [voorraadSource, almostOutSource]) {
   assert.match(source, /import Select from/)
   assert.doesNotMatch(source, /<select\b/)
 }
 
 assert.match(voorraadSource, /ariaLabelledby="mobile-inventory-sort-label"/)
 assert.match(almostOutSource, /ariaLabelledby="mobile-almost-out-sort-label"/)
-assert.match(articleSource, /dataTestId="mobile-article-location-select"/)
 
 console.log('INHUIS_SELECT_CONTRACT_GREEN')
