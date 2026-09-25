@@ -96,7 +96,7 @@ jobs:
             --evidence pr253-incremental-plan.json \
             | tee pr253-incremental-plan.log
           grep -Fx 'FRONTEND_INCREMENTAL_PLAN_GREEN' pr253-incremental-plan.log
-          grep -E '^FRONTEND_INCREMENTAL_MODE=(full|contracts|reuse)$' pr253-incremental-plan.log
+          grep -E '^FRONTEND_INCREMENTAL_MODE=(full|contracts|e2e|reuse) pr253-incremental-plan.log
 
       - name: Record incremental PR253 carry-forward evidence
         if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'reuse'
@@ -137,7 +137,7 @@ jobs:
           echo 'PR253_INCREMENTAL_CONTRACTS_GREEN'
 
       - name: Generate temporary test credentials
-        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         shell: bash
         run: |
           admin_password="Rt$(python - <<'PY'
@@ -158,11 +158,11 @@ jobs:
           echo "::add-mask::$superuser_password"
 
       - name: Build and start Rezzerv
-        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         run: docker compose up -d --build
 
       - name: Wait for backend health
-        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         shell: bash
         run: |
           for attempt in $(seq 1 180); do
@@ -181,11 +181,11 @@ jobs:
           exit 1
 
       - name: Validate fresh article-groups startup schema
-        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         run: docker compose exec -T backend python /app/tests/test_article_group_startup_schema.py
 
       - name: Provision temporary system superuser
-        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         shell: bash
         run: |
           docker compose exec -T \
@@ -206,7 +206,7 @@ jobs:
           PY
 
       - name: Validate authorization matrix and provision test admin
-        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         run: |
           docker compose exec -T \
             -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
@@ -217,7 +217,7 @@ jobs:
             backend python /app/tests/authorization_role_matrix_selftest.py
 
       - name: Grant temporary IP-owner role to frontend test admin
-        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         shell: bash
         run: |
           docker compose exec -T \
@@ -269,7 +269,7 @@ jobs:
           PY
 
       - name: Prepare household-zero fixtures
-        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py prepare
 
       - name: Run complete frontend regression set
@@ -289,8 +289,46 @@ jobs:
             mcr.microsoft.com/playwright:v1.58.2-noble \
             bash -lc "npm ci && npm run test:e2e:frontend-regression"
 
+      - name: Rerun only previously failed Playwright specs
+        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'e2e'
+        shell: bash
+        env:
+          E2E_FILES: ${{ steps.incremental.outputs.e2e_files }}
+        run: |
+          set -euo pipefail
+          test -n "$E2E_FILES"
+          IFS=',' read -r -a specs <<< "$E2E_FILES"
+          args=()
+          for spec in "${specs[@]}"; do
+            [[ "$spec" == tests/e2e/*.spec.js ]]
+            test -f "frontend/$spec"
+            args+=("$spec")
+            echo "PR253_TARGETED_E2E=$spec"
+          done
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e CI=true \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_API_URL="$PLAYWRIGHT_API_URL" \
+            -e PLAYWRIGHT_TEST_ADMIN_EMAIL="$PLAYWRIGHT_TEST_ADMIN_EMAIL" \
+            -e PLAYWRIGHT_TEST_ADMIN_PASSWORD="$PLAYWRIGHT_TEST_ADMIN_PASSWORD" \
+            -e PLAYWRIGHT_HOUSEHOLD_ID="$PLAYWRIGHT_HOUSEHOLD_ID" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "npm ci && npx playwright test ${args[*]}"
+          {
+            echo '## PR253 targeted repair rerun'
+            echo
+            echo "Previous failed SHA: ${{ steps.incremental.outputs.source_sha }}"
+            echo "Source failed run: ${{ steps.incremental.outputs.source_run_id }}"
+            echo "Reran only failed Playwright specs: $E2E_FILES"
+            echo "A full PR253 run remains mandatory when the PR becomes Ready for review."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo 'PR253_TARGETED_E2E_GREEN'
+
       - name: Upload Playwright report
-        if: always() && steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: always() && steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         uses: actions/upload-artifact@v4
         with:
           name: pr253-full-frontend-playwright-report
@@ -299,15 +337,230 @@ jobs:
           retention-days: 7
 
       - name: Cleanup household-zero fixtures
-        if: always() && steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: always() && steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py cleanup || true
 
       - name: Show container logs on failure
-        if: failure() && steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: failure() && steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         run: |
           docker compose ps
           docker compose logs --no-color backend frontend
 
       - name: Stop containers
-        if: always() && steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'full'
+        if: always() && steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        run: docker compose down --volumes
+ pr253-incremental-plan.log
+
+      - name: Record incremental PR253 carry-forward evidence
+        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'reuse'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## PR253 incremental carry-forward'
+            echo
+            echo "Previous green SHA: ${{ steps.incremental.outputs.source_sha }}"
+            echo "Source run: ${{ steps.incremental.outputs.source_run_id }}"
+            echo "Latest push does not touch PR253 runtime/test dependencies."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run only changed frontend contract tests
+        if: steps.carry.outputs.reuse != 'true' && steps.incremental.outputs.mode == 'contracts'
+        working-directory: frontend
+        shell: bash
+        env:
+          CONTRACT_FILES: ${{ steps.incremental.outputs.contract_files }}
+        run: |
+          set -euo pipefail
+          test -n "$CONTRACT_FILES"
+          npm ci --ignore-scripts --no-audit --no-fund
+          IFS=',' read -r -a files <<< "$CONTRACT_FILES"
+          for file in "${files[@]}"; do
+            test -f "$file"
+            echo "PR253_INCREMENTAL_CONTRACT=$file"
+            node "$file"
+          done
+          {
+            echo '## PR253 targeted contract rerun'
+            echo
+            echo "Previous green SHA: ${{ steps.incremental.outputs.source_sha }}"
+            echo "Source run: ${{ steps.incremental.outputs.source_run_id }}"
+            echo "Reran only changed contract tests: $CONTRACT_FILES"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo 'PR253_INCREMENTAL_CONTRACTS_GREEN'
+
+      - name: Generate temporary test credentials
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        shell: bash
+        run: |
+          admin_password="Rt$(python - <<'PY'
+          import secrets
+          print(secrets.token_hex(24))
+          PY
+          )"
+          superuser_password="Rs$(python - <<'PY'
+          import secrets
+          print(secrets.token_hex(24))
+          PY
+          )"
+          echo "PLAYWRIGHT_TEST_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+          echo "REZZERV_TEST_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+          echo "REZZERV_TEST_ADMIN_EMAIL=test-admin@rezzerv.local" >> "$GITHUB_ENV"
+          echo "REZZERV_TEST_SUPERUSER_PASSWORD=$superuser_password" >> "$GITHUB_ENV"
+          echo "::add-mask::$admin_password"
+          echo "::add-mask::$superuser_password"
+
+      - name: Build and start Rezzerv
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        run: docker compose up -d --build
+
+      - name: Wait for backend health
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        shell: bash
+        run: |
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
+              echo "Backend health is groen na $attempt pogingen."
+              exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              docker compose logs --no-color --tail=80 backend
+            fi
+            sleep 2
+          done
+          echo "Backend werd niet gezond binnen 360 seconden."
+          docker compose ps
+          docker compose logs --no-color --tail=500 backend
+          exit 1
+
+      - name: Validate fresh article-groups startup schema
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        run: docker compose exec -T backend python /app/tests/test_article_group_startup_schema.py
+
+      - name: Provision temporary system superuser
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e REZZERV_SUPERGEBRUIKER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
+            backend python - <<'PY'
+          from app.db import engine
+          from app.services.system_superuser_session_provisioning import ensure_system_superuser_for_session_runtime
+
+          with engine.begin() as conn:
+              result = ensure_system_superuser_for_session_runtime(conn)
+
+          print(
+              "system_superuser_fixture: PASS; "
+              f"email={result.email}; household={result.household_id}; "
+              f"membership={result.membership_id}"
+          )
+          PY
+
+      - name: Validate authorization matrix and provision test admin
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        run: |
+          docker compose exec -T \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
+            -e REZZERV_TEST_SUPERUSER_EMAIL="$REZZERV_TEST_SUPERUSER_EMAIL" \
+            -e REZZERV_TEST_SUPERUSER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
+            -e REZZERV_TEST_ADMIN_EMAIL="$REZZERV_TEST_ADMIN_EMAIL" \
+            -e REZZERV_TEST_ADMIN_PASSWORD="$REZZERV_TEST_ADMIN_PASSWORD" \
+            backend python /app/tests/authorization_role_matrix_selftest.py
+
+      - name: Grant temporary IP-owner role to frontend test admin
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e REZZERV_TEST_ADMIN_EMAIL="$REZZERV_TEST_ADMIN_EMAIL" \
+            backend python - <<'PY'
+          import os
+
+          from sqlalchemy import text
+
+          from app.db import engine
+          from app.services.authorization_foundation_service import ensure_authorization_foundation
+
+          user_id = os.environ["REZZERV_TEST_ADMIN_EMAIL"]
+
+          with engine.begin() as conn:
+              ensure_authorization_foundation(conn)
+
+              existing_ip_owner = conn.execute(
+                  text("""
+                      SELECT user_id
+                      FROM auth_platform_user_roles
+                      WHERE role_key = 'platform.ip_owner'
+                        AND active = TRUE
+                        AND user_id <> :user_id
+                      LIMIT 1
+                  """),
+                  {"user_id": user_id},
+              ).scalar()
+
+              if existing_ip_owner:
+                  raise RuntimeError(
+                      f"Onverwachte actieve IP-owner in regressieomgeving: {existing_ip_owner}"
+                  )
+
+              conn.execute(
+                  text("""
+                      INSERT INTO auth_platform_user_roles
+                          (user_id, role_key, active, created_at, updated_at)
+                      VALUES
+                          (:user_id, 'platform.ip_owner', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                      ON CONFLICT(user_id, role_key) DO UPDATE SET
+                          active = TRUE,
+                          updated_at = CURRENT_TIMESTAMP
+                  """),
+                  {"user_id": user_id},
+              )
+
+          print(f"frontend_test_admin_ip_owner: PASS; user_id={user_id}")
+          PY
+
+      - name: Prepare household-zero fixtures
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py prepare
+
+      - name: Run complete frontend regression set
+        if: steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        shell: bash
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e CI=true \
+            -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+            -e PLAYWRIGHT_API_URL="$PLAYWRIGHT_API_URL" \
+            -e PLAYWRIGHT_TEST_ADMIN_EMAIL="$PLAYWRIGHT_TEST_ADMIN_EMAIL" \
+            -e PLAYWRIGHT_TEST_ADMIN_PASSWORD="$PLAYWRIGHT_TEST_ADMIN_PASSWORD" \
+            -e PLAYWRIGHT_HOUSEHOLD_ID="$PLAYWRIGHT_HOUSEHOLD_ID" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble \
+            bash -lc "npm ci && npm run test:e2e:frontend-regression"
+
+      - name: Upload Playwright report
+        if: always() && steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr253-full-frontend-playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup household-zero fixtures
+        if: always() && steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        run: docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py cleanup || true
+
+      - name: Show container logs on failure
+        if: failure() && steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
+        run: |
+          docker compose ps
+          docker compose logs --no-color backend frontend
+
+      - name: Stop containers
+        if: always() && steps.carry.outputs.reuse != 'true' && (steps.incremental.outputs.mode == 'full' || steps.incremental.outputs.mode == 'e2e')
         run: docker compose down --volumes
