@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../ui/Button'
 import Select from '../ui/Select.jsx'
-import CatalogArticleThumbnail from '../ui/CatalogArticleThumbnail.jsx'
+import MobileArticleRow from '../ui/MobileArticleRow.jsx'
 import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../ui/QuantityStepper.jsx'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
@@ -406,75 +406,54 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
               const rowBusy = mutatingRowId === row.id
 
               return (
-                <div
+                <MobileArticleRow
                   key={row.id}
-                  className={`rz-mobile-inventory-card${detailTarget ? '' : ' rz-mobile-inventory-card--disabled'}`}
-                  role={detailTarget ? 'link' : undefined}
-                  tabIndex={detailTarget ? 0 : undefined}
-                  onClick={() => {
-                    if (detailTarget && !rowBusy) navigate(detailTarget)
-                  }}
-                  onKeyDown={(event) => {
-                    if (detailTarget && !rowBusy && (event.key === 'Enter' || event.key === ' ')) {
-                      event.preventDefault()
-                      navigate(detailTarget)
-                    }
-                  }}
-                  data-testid={detailTarget ? `mobile-inventory-open-detail-${row.detailId}` : undefined}
-                >
-                  <CatalogArticleThumbnail
-                    imageUrl={row.imageUrl}
-                    productName={row.productName || row.householdName}
-                    className="rz-mobile-inventory-product-thumbnail"
-                  />
-                  <div className="rz-mobile-inventory-card-main">
-                    <div className="rz-mobile-inventory-card-title">{row.householdName}</div>
-                    {row.productName && row.productName !== row.householdName ? (
-                      <div className="rz-mobile-inventory-card-product">{row.productName}</div>
-                    ) : null}
-                    <div className="rz-mobile-inventory-card-meta">
-                      <span>{row.articleGroup || 'Niet ingedeeld'}</span>
-                      {locationTrackingEnabled ? (
-                        <span data-testid={`mobile-inventory-location-${row.detailId || row.id}`}>
-                          {row.sublocation ? `${row.location} / ${row.sublocation}` : row.location}
+                  title={row.householdName}
+                  subtitle={row.productName && row.productName !== row.householdName ? row.productName : ''}
+                  meta={[
+                    row.articleGroup || 'Niet ingedeeld',
+                    locationTrackingEnabled
+                      ? (row.sublocation ? `${row.location} / ${row.sublocation}` : row.location)
+                      : '',
+                  ]}
+                  imageUrl={row.imageUrl}
+                  imageProductName={row.productName || row.householdName}
+                  onActivate={detailTarget && !rowBusy ? () => navigate(detailTarget) : null}
+                  testId={detailTarget ? `mobile-inventory-open-detail-${row.detailId}` : undefined}
+                  side={(
+                    <>
+                      {canEditInventory ? (
+                        <QuantityStepper
+                          value={formatQuantity(row.quantity)}
+                          decreaseDisabled={!decreaseTarget || rowBusy}
+                          increaseDisabled={!increaseTarget || rowBusy}
+                          decreaseLabel={`Boek 1 af van ${row.householdName}`}
+                          increaseLabel={`Boek 1 op bij ${row.householdName}`}
+                          valueLabel={exactQuantityTarget
+                            ? `Aantal ${formatQuantity(row.quantity)}. Tik om aan te passen`
+                            : `Aantal ${formatQuantity(row.quantity)}`}
+                          valueEditable={Boolean(exactQuantityTarget)}
+                          valueDisabled={rowBusy}
+                          testIdPrefix={`mobile-inventory-${row.detailId || row.id}`}
+                          onValueCommit={(nextQuantity) => setExactInventoryQuantity(row, nextQuantity)}
+                          onDecrease={(event) => {
+                            event.stopPropagation()
+                            mutateQuickInventory(row, 'decrease')
+                          }}
+                          onIncrease={(event) => {
+                            event.stopPropagation()
+                            mutateQuickInventory(row, 'increase')
+                          }}
+                        />
+                      ) : (
+                        <span className="rz-mobile-inventory-readonly-quantity" aria-label={`Aantal ${formatQuantity(row.quantity)}`}>
+                          {formatQuantity(row.quantity)}
                         </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="rz-mobile-inventory-card-side">
-                    {canEditInventory ? (
-                      <QuantityStepper
-                        value={formatQuantity(row.quantity)}
-                        decreaseDisabled={!decreaseTarget || rowBusy}
-                        increaseDisabled={!increaseTarget || rowBusy}
-                        decreaseLabel={`Boek 1 af van ${row.householdName}`}
-                        increaseLabel={`Boek 1 op bij ${row.householdName}`}
-                        valueLabel={exactQuantityTarget
-                          ? `Aantal ${formatQuantity(row.quantity)}. Tik om aan te passen`
-                          : `Aantal ${formatQuantity(row.quantity)}`}
-                        valueEditable={Boolean(exactQuantityTarget)}
-                        valueDisabled={rowBusy}
-                        testIdPrefix={`mobile-inventory-${row.detailId || row.id}`}
-                        onValueCommit={(nextQuantity) => {
-                          setExactInventoryQuantity(row, nextQuantity)
-                        }}
-                        onDecrease={(event) => {
-                          event.stopPropagation()
-                          mutateQuickInventory(row, 'decrease')
-                        }}
-                        onIncrease={(event) => {
-                          event.stopPropagation()
-                          mutateQuickInventory(row, 'increase')
-                        }}
-                      />
-                    ) : (
-                      <span className="rz-mobile-inventory-readonly-quantity" aria-label={`Aantal ${formatQuantity(row.quantity)}`}>
-                        {formatQuantity(row.quantity)}
-                      </span>
-                    )}
-                    <span className="rz-mobile-inventory-chevron" aria-hidden="true">›</span>
-                  </div>
-                </div>
+                      )}
+                      <span className="rz-mobile-inventory-chevron" aria-hidden="true">›</span>
+                    </>
+                  )}
+                />
               )
             })}
           </section>
