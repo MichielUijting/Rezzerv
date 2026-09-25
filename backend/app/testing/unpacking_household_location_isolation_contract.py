@@ -36,6 +36,34 @@ def _expect_http_error(status_code: int, callback) -> None:
     raise AssertionError(f"Verwachte HTTP {status_code} bleef uit")
 
 
+def _assert_postgresql_boolean_contract(conn) -> None:
+    rows = conn.execute(
+        text(
+            """
+            SELECT table_name, column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND (table_name, column_name) IN (
+                  ('purchase_import_lines', 'is_auto_prefilled'),
+                  ('spaces', 'active'),
+                  ('sublocations', 'active')
+              )
+            ORDER BY table_name, column_name
+            """
+        )
+    ).mappings().all()
+    actual = {
+        (str(row["table_name"]), str(row["column_name"])): str(row["data_type"])
+        for row in rows
+    }
+    expected = {
+        ("purchase_import_lines", "is_auto_prefilled"): "boolean",
+        ("spaces", "active"): "boolean",
+        ("sublocations", "active"): "boolean",
+    }
+    assert actual == expected, {"expected": expected, "actual": actual}
+
+
 def _seed_provider(conn) -> str:
     provider_id = str(
         conn.execute(
@@ -172,6 +200,8 @@ def _prepare_database(engine) -> tuple[str, str]:
     reset_postgresql_test_database()
 
     with engine.begin() as conn:
+        _assert_postgresql_boolean_contract(conn)
+
         seed_household(conn, household_id=HOUSEHOLD_A, name="Uitpakken huishouden A")
         seed_household(conn, household_id=HOUSEHOLD_B, name="Uitpakken huishouden B")
         seed_household(
@@ -202,9 +232,9 @@ def _prepare_database(engine) -> tuple[str, str]:
                 """
                 INSERT INTO spaces (id, naam, household_id, active)
                 VALUES
-                    ('unpacking-space-a', 'Voorraadkast', :household_a, 1),
-                    ('unpacking-space-b', 'Voorraadkast', :household_b, 1),
-                    ('unpacking-space-zero', 'Systeemkast', :household_zero, 1)
+                    ('unpacking-space-a', 'Voorraadkast', :household_a, TRUE),
+                    ('unpacking-space-b', 'Voorraadkast', :household_b, TRUE),
+                    ('unpacking-space-zero', 'Systeemkast', :household_zero, TRUE)
                 """
             ),
             {
@@ -218,9 +248,9 @@ def _prepare_database(engine) -> tuple[str, str]:
                 """
                 INSERT INTO sublocations (id, naam, space_id, active)
                 VALUES
-                    ('unpacking-sub-a', 'Boven', 'unpacking-space-a', 1),
-                    ('unpacking-sub-b', 'Boven', 'unpacking-space-b', 1),
-                    ('unpacking-sub-zero', 'Systeemplank', 'unpacking-space-zero', 1)
+                    ('unpacking-sub-a', 'Boven', 'unpacking-space-a', TRUE),
+                    ('unpacking-sub-b', 'Boven', 'unpacking-space-b', TRUE),
+                    ('unpacking-sub-zero', 'Systeemplank', 'unpacking-space-zero', TRUE)
                 """
             )
         )
