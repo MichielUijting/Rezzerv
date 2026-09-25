@@ -355,3 +355,9 @@
     width: 100%;
   }
 }
+
+/* Shared mobile article-row slots. Voorraad and following article lists use this geometry. */
+.rz-mobile-article-row--static { cursor: default; }
+.rz-mobile-article-row--checked { opacity: 0.72; }
+.rz-mobile-article-row-leading { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.rz-mobile-article-row-leading input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--color-ui-primary); }
