@@ -387,10 +387,10 @@ test.describe('Artikeldetail frontend-regressie', () => {
 
     await page.getByTestId('mobile-article-tab-household').click();
     const trigger = page.getByTestId('mobile-article-favorite-store-select');
-    const averagePrice = page.getByTestId('article-details-input-average_price');
+    const settingsSection = page.getByTestId('article-household-settings-section');
     await expect(trigger).toBeVisible();
-    await expect(averagePrice).toBeVisible();
-    const before = await averagePrice.boundingBox();
+    await expect(settingsSection).toBeVisible();
+    const before = await settingsSection.boundingBox();
     expect(before).not.toBeNull();
 
     await trigger.click();
@@ -418,7 +418,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     expect(listMetrics.scrollHeight).toBeGreaterThan(listMetrics.clientHeight);
     expect(listMetrics.overflowY).toBe('auto');
 
-    const after = await averagePrice.boundingBox();
+    const after = await settingsSection.boundingBox();
     expect(after).not.toBeNull();
     expect(Math.abs(after.y - before.y)).toBeLessThan(1);
 
