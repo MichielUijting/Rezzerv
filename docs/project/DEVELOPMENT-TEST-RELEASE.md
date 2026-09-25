@@ -175,6 +175,22 @@ Nieuwe of gewijzigde Alembic-migraties declareren fail-closed hun CI-impact via 
 
 De planner staat in `scripts/ci/draft_domain_impact.py`. De optimalisatie verandert niets aan de definitieve S/M/L-classificatie of aan F7 Full exact-candidate evidence. Een aanvullende statische preflight (`scripts/ci/validate_alembic_head_literals.py`) weigert gedateerde Alembic-head-literals in runtime- en testcode; zulke code moet de centrale `repository_head_revision()`-authority gebruiken.
 
+## Gerichte repair-loop na rode regressie
+
+Een rode regressierun wordt tijdens Draft-ontwikkeling niet gebruikt als aanleiding om na iedere reparatie onmiddellijk de volledige regressieset opnieuw te draaien.
+
+Voor PR253 geldt fail-closed de volgende herstelvolgorde:
+
+1. analyseer eerst de volledige foutoutput en bepaal de primaire oorzaak;
+2. inspecteer de geraakte code en nabije potentiële fouthaarden voordat een reparatie wordt gepusht;
+3. wanneer de vorige PR253-run op de directe vorige PR-head rood was en de mislukte Playwright-specbestanden eenduidig uit de GitHub-joblogs kunnen worden afgeleid, plant de volgende Draft-`synchronize` uitsluitend die mislukte specs opnieuw in;
+4. als de mislukte specs niet veilig/eenduidig kunnen worden vastgesteld, valt de planner terug op de volledige regressieset;
+5. een gerichte groene repair-run is uitsluitend iteratief bewijs en vervangt nooit de finale brede regressie;
+6. zodra de PR Ready for review wordt, is de eventactie geen Draft-`synchronize` meer en draait PR253 opnieuw volledig op de definitieve kandidaat;
+7. F7 Full exact-candidate blijft ongewijzigd en kan nooit door gericht repair-bewijs worden vervangen.
+
+De planner hiervoor is `scripts/ci/frontend_regression_plan.py`. De PR253-workflow vermeldt in de job summary expliciet wanneer alleen eerder mislukte Playwright-specs zijn herhaald. Hierdoor blijft het onderscheid tussen snelle foutreparatie en finale regressiedekking zichtbaar.
+
 ## Finale patchbump zonder dubbele zware regressie
 
 De normale versievolgorde blijft: implementatie stabiliseren, daarna de
