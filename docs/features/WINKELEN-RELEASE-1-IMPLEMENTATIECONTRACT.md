@@ -253,6 +253,6 @@ Dit besluit vervangt strijdige eerdere mobiele UI-regels.
 - De mobiele moduleheader gebruikt `MobileModuleHeader`; de globale mobiele Terug-bediening blijft centraal in `MobileAppChrome` sticky/fixed geregeld.
 - Een gebruiker kan naast een cataloguskandidaat ook vrije tekst toevoegen. Zo'n regel krijgt `source_type=manual` en blijft tijdelijk ongestructureerd totdat latere kassabonverwerking de artikelidentiteit structureert.
 - De enige checkbox per artikelregel is de koopstatus: aan = in de kar, uit = nog te vinden.
-- Boven de koopstatuskolom staat een driestandenfilter: beide, nog te vinden, in de kar.
+- Boven de koopstatuskolom staat een tweestandenfilter: uit = nog te vinden, aan = in de kar. Standaard worden de nog te vinden artikelen getoond. Een artikel dat in de kar wordt gezet verdwijnt uit die weergave, maar blijft via de aangevinkte filterstand zichtbaar en kan daar weer uit de kar worden gehaald.
 - Mobiel heeft geen afzonderlijke Selectie-checkbox en geen actie Bewerken per regel.
 - Aantal staat direct in de artikelregel en gebruikt de centrale `QuantityStepper` met min/plus.

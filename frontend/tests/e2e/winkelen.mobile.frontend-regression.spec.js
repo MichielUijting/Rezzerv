@@ -218,13 +218,23 @@ test.describe('Mobiele Boodschappen', () => {
     await expect(page.getByText('Halfvolle melk', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Volkoren brood', { exact: true })).toHaveCount(0)
 
+    const statusFilter = page.getByTestId('mobile-shopping-status-filter')
+    await expect(statusFilter).not.toBeChecked()
     await page.getByLabel('Melk in kar leggen').check()
     await expect(page.getByText('2 artikelen • 1 nog te vinden', { exact: true })).toBeVisible()
+    await expect(page.getByTestId('mobile-shopping-item-mobile-melk')).toHaveCount(0)
 
+    await statusFilter.check()
     const melkCard = page.getByTestId('mobile-shopping-item-mobile-melk')
-    await expect(melkCard.getByRole('button', { name: 'Bewerken' })).toHaveCount(0)
-    await melkCard.getByRole('button', { name: 'Verhoog aantal van Melk' }).click()
-    await expect(melkCard).toContainText('2')
+    await expect(melkCard).toBeVisible()
+    await page.getByLabel('Melk uit kar halen').uncheck()
+    await expect(melkCard).toHaveCount(0)
+    await statusFilter.uncheck()
+    const restoredMelkCard = page.getByTestId('mobile-shopping-item-mobile-melk')
+    await expect(restoredMelkCard).toBeVisible()
+    await expect(restoredMelkCard.getByRole('button', { name: 'Bewerken' })).toHaveCount(0)
+    await restoredMelkCard.getByRole('button', { name: 'Verhoog aantal van Melk' }).click()
+    await expect(restoredMelkCard).toContainText('2')
 
 
     await page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true }).fill('ban')

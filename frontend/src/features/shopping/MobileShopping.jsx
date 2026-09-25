@@ -38,12 +38,11 @@ export default function MobileShopping() {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
   const [selectedResultId, setSelectedResultId] = useState('')
-  const [checkedFilter, setCheckedFilter] = useState('all')
+  const [checkedFilter, setCheckedFilter] = useState('unchecked')
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const filterCheckboxRef = useRef(null)
   const checkedSaveChainsRef = useRef(new Map())
   const checkedMutationVersionsRef = useRef(new Map())
 
@@ -61,11 +60,6 @@ export default function MobileShopping() {
 
   useEffect(() => { loadList() }, [])
 
-  useEffect(() => {
-    if (filterCheckboxRef.current) {
-      filterCheckboxRef.current.indeterminate = checkedFilter === 'all'
-    }
-  }, [checkedFilter])
 
   useEffect(() => {
     const query = catalogQuery.trim()
@@ -99,9 +93,7 @@ export default function MobileShopping() {
     [list.items],
   )
   const visibleItems = useMemo(() => {
-    if (checkedFilter === 'checked') return (list.items || []).filter((item) => item.checked)
-    if (checkedFilter === 'unchecked') return (list.items || []).filter((item) => !item.checked)
-    return list.items || []
+    return (list.items || []).filter((item) => checkedFilter === 'checked' ? item.checked : !item.checked)
   }, [checkedFilter, list.items])
 
   function patchListItem(itemId, patch) {
@@ -187,8 +179,8 @@ export default function MobileShopping() {
     void nextChain.catch(() => undefined)
   }
 
-  function cycleCheckedFilter() {
-    setCheckedFilter((current) => current === 'all' ? 'unchecked' : current === 'unchecked' ? 'checked' : 'all')
+  function toggleCheckedFilter() {
+    setCheckedFilter((current) => current === 'checked' ? 'unchecked' : 'checked')
   }
 
   function completeShopping() {
@@ -265,13 +257,13 @@ export default function MobileShopping() {
         {!error && (list.items || []).length > 0 ? (
           <section className="rz-mobile-shopping-group" aria-label="Boodschappen">
             <div className="rz-mobile-shopping-group-header rz-mobile-shopping-filter-header">
-              <label className="rz-mobile-shopping-status-filter" title="Filter: in kar, nog te vinden of beide">
+              <label className="rz-mobile-shopping-status-filter" title={checkedFilter === 'checked' ? 'Toon artikelen die nog te vinden zijn' : 'Toon artikelen in de kar'}>
                 <input
-                  ref={filterCheckboxRef}
                   type="checkbox"
                   checked={checkedFilter === 'checked'}
-                  onChange={cycleCheckedFilter}
-                  aria-label={`Filter koopstatus: ${checkedFilter === 'all' ? 'beide' : checkedFilter === 'checked' ? 'in kar' : 'nog te vinden'}`}
+                  onChange={toggleCheckedFilter}
+                  aria-label={`Filter koopstatus: ${checkedFilter === 'checked' ? 'in kar' : 'nog te vinden'}`}
+                  data-testid="mobile-shopping-status-filter"
                 />
               </label>
               <div className="rz-mobile-shopping-group-title">Boodschappen</div>
