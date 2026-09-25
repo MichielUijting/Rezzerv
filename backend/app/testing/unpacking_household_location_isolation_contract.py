@@ -84,7 +84,7 @@ def _seed_purchase_line(
             INSERT INTO household_articles (
                 id, household_id, naam, consumable, status, updated_at
             ) VALUES (
-                :id, :household_id, :name, TRUE, 'active', CURRENT_TIMESTAMP
+                :id, :household_id, :name, 1, 'active', CURRENT_TIMESTAMP
             )
             """
         ),
@@ -152,7 +152,7 @@ def _seed_purchase_line(
                 0, :article_id, NULL,
                 'pending', :article_id,
                 NULL, 'high', 'Uitpakken household location isolation contract',
-                FALSE, 'auto', 'auto', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                0, 'auto', 'auto', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """
         ),
@@ -202,9 +202,9 @@ def _prepare_database(engine) -> tuple[str, str]:
                 """
                 INSERT INTO spaces (id, naam, household_id, active)
                 VALUES
-                    ('unpacking-space-a', 'Voorraadkast', :household_a, TRUE),
-                    ('unpacking-space-b', 'Voorraadkast', :household_b, TRUE),
-                    ('unpacking-space-zero', 'Systeemkast', :household_zero, TRUE)
+                    ('unpacking-space-a', 'Voorraadkast', :household_a, 1),
+                    ('unpacking-space-b', 'Voorraadkast', :household_b, 1),
+                    ('unpacking-space-zero', 'Systeemkast', :household_zero, 1)
                 """
             ),
             {
@@ -218,9 +218,9 @@ def _prepare_database(engine) -> tuple[str, str]:
                 """
                 INSERT INTO sublocations (id, naam, space_id, active)
                 VALUES
-                    ('unpacking-sub-a', 'Boven', 'unpacking-space-a', TRUE),
-                    ('unpacking-sub-b', 'Boven', 'unpacking-space-b', TRUE),
-                    ('unpacking-sub-zero', 'Systeemplank', 'unpacking-space-zero', TRUE)
+                    ('unpacking-sub-a', 'Boven', 'unpacking-space-a', 1),
+                    ('unpacking-sub-b', 'Boven', 'unpacking-space-b', 1),
+                    ('unpacking-sub-zero', 'Systeemplank', 'unpacking-space-zero', 1)
                 """
             )
         )
