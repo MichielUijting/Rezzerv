@@ -23,6 +23,8 @@ from app.services.day_article_service import (
 HOUSEHOLD_ID = "postgresql-pr2m-day-article"
 ARTICLE_ID = "postgresql-pr2m-day-article-item"
 IDEMPOTENCY_KEY = "postgresql-pr2m-direct-consumption"
+LINE_OVERRIDE_ID = "postgresql-pr2m-line-override"
+LINE_OVERRIDE_ACTOR = "postgresql-pr2m-line-override-actor"
 
 
 def _engine_url():
@@ -119,6 +121,102 @@ def _seed_article(conn) -> None:
     )
 
 
+def _assert_line_inventory_override_dml_only(engine) -> None:
+    """Prove the exact Uitpakken line-override upsert works as rezzerv_app."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                DELETE FROM purchase_import_line_inventory_handling_overrides
+                WHERE purchase_import_line_id = :line_id
+                """
+            ),
+            {"line_id": LINE_OVERRIDE_ID},
+        )
+
+        statement = text(
+            """
+            INSERT INTO purchase_import_line_inventory_handling_overrides (
+                purchase_import_line_id,
+                household_id,
+                inventory_handling,
+                updated_by_user_id,
+                updated_at
+            ) VALUES (
+                :line_id,
+                :household_id,
+                :inventory_handling,
+                :user_id,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT(purchase_import_line_id) DO UPDATE SET
+                household_id = excluded.household_id,
+                inventory_handling = excluded.inventory_handling,
+                updated_by_user_id = excluded.updated_by_user_id,
+                updated_at = CURRENT_TIMESTAMP
+            """
+        )
+        conn.execute(
+            statement,
+            {
+                "line_id": LINE_OVERRIDE_ID,
+                "household_id": "0",
+                "inventory_handling": "STOCK",
+                "user_id": LINE_OVERRIDE_ACTOR,
+            },
+        )
+        inserted = conn.execute(
+            text(
+                """
+                SELECT household_id, inventory_handling, updated_by_user_id
+                FROM purchase_import_line_inventory_handling_overrides
+                WHERE purchase_import_line_id = :line_id
+                """
+            ),
+            {"line_id": LINE_OVERRIDE_ID},
+        ).mappings().one()
+        if dict(inserted) != {
+            "household_id": "0",
+            "inventory_handling": "STOCK",
+            "updated_by_user_id": LINE_OVERRIDE_ACTOR,
+        }:
+            raise AssertionError(inserted)
+
+        conn.execute(
+            statement,
+            {
+                "line_id": LINE_OVERRIDE_ID,
+                "household_id": "0",
+                "inventory_handling": DIRECT_CONSUMPTION,
+                "user_id": LINE_OVERRIDE_ACTOR,
+            },
+        )
+        updated = conn.execute(
+            text(
+                """
+                SELECT inventory_handling
+                FROM purchase_import_line_inventory_handling_overrides
+                WHERE purchase_import_line_id = :line_id
+                """
+            ),
+            {"line_id": LINE_OVERRIDE_ID},
+        ).scalar_one()
+        if str(updated) != DIRECT_CONSUMPTION:
+            raise AssertionError(updated)
+
+        conn.execute(
+            text(
+                """
+                DELETE FROM purchase_import_line_inventory_handling_overrides
+                WHERE purchase_import_line_id = :line_id
+                """
+            ),
+            {"line_id": LINE_OVERRIDE_ID},
+        )
+
+    print("POSTGRESQL_DAY_ARTICLE_LINE_OVERRIDE_UPSERT_GREEN")
+
+
 def _assert_direct_consumption_dml_only(engine) -> None:
     with engine.begin() as conn:
         _cleanup(conn)
@@ -203,6 +301,7 @@ def main() -> None:
     try:
         _assert_runtime_create_denied(engine)
         _assert_schema_validation_only(engine)
+        _assert_line_inventory_override_dml_only(engine)
         _assert_direct_consumption_dml_only(engine)
     finally:
         engine.dispose()

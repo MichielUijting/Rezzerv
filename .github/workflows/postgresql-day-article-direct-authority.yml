@@ -85,7 +85,8 @@ jobs:
         run: |
           python -m app.schema_migration_preflight | tee /tmp/day-article-direct-migration.log
           grep -F "'dialect': 'postgresql'" /tmp/day-article-direct-migration.log
-          grep -F "'revision': '20260829_12'" /tmp/day-article-direct-migration.log
+          expected_head="$(python -m app.alembic_head_authority)"
+          grep -F "'revision': '$expected_head'" /tmp/day-article-direct-migration.log
 
       - name: Prove day article Direct paths work with DML-only runtime role
         working-directory: backend
