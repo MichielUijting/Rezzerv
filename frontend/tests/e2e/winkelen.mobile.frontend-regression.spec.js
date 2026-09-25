@@ -4,7 +4,7 @@ import {
   expectNoConsoleErrors,
 } from './helpers/rezzervAssertions.js'
 
-test.describe('Mobiele Boodschappenlijst', () => {
+test.describe('Mobiele Boodschappen', () => {
   test('gebruikt bestaande winkellijstfuncties in de mobiele kernflow', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     const consoleErrors = attachConsoleErrorCollector(page)
@@ -205,7 +205,7 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await expect(page.getByTestId('shopping-page')).toHaveCount(0)
     await expect(page.getByText('Mijn lijst', { exact: true })).toBeVisible()
     await expect(page.getByText('2 artikelen • 2 nog te kopen', { exact: true })).toBeVisible()
-    await expect(page.getByRole('region', { name: 'Boodschappenlijst', exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Boodschappen', exact: true })).toBeVisible()
     await expect(page.getByLabel('Zoek in winkellijst')).toHaveCount(0)
     await expect(page.getByTestId('mobile-shopping-producttype')).toHaveCount(0)
     await expect(page.getByTestId('mobile-shopping-sort')).toHaveCount(0)
@@ -257,7 +257,7 @@ test.describe('Mobiele Boodschappenlijst', () => {
     await page.getByTestId('mobile-shopping-complete').click()
     await expect(page.getByTestId('shopping-complete-confirmation')).toBeVisible()
     await page.getByTestId('shopping-complete-confirmation-primary-button').click()
-    await expect(page.getByText('Nog geen artikelen op de boodschappenlijst.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Nog geen artikelen op de boodschappen.', { exact: true })).toBeVisible()
 
     await expectNoConsoleErrors(consoleErrors)
   })
