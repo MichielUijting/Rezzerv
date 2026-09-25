@@ -152,7 +152,7 @@ def _seed_purchase_line(
                 0, :article_id, NULL,
                 'pending', :article_id,
                 NULL, 'high', 'Uitpakken household location isolation contract',
-                0, 'auto', 'auto', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                FALSE, 'auto', 'auto', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """
         ),
