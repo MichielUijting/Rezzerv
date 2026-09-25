@@ -555,6 +555,27 @@ Op dit moment vallen **Voorraad** en **Voorraad-artikeldetail** onder de nieuwe 
 `docs/Rezzerv-Styleguide_v05.08.md` en `Rezzerv-Styleguide_v05.14.md` blijven behouden als audittrail van eerdere PO-besluiten. Hun actuele regels zijn hierboven geconsolideerd. Nieuwe wijzigingen worden niet als nieuwe losse styleguideversies toegevoegd tenzij de PO daar expliciet om vraagt; de canonieke bron wordt direct bijgewerkt.
 
 
+## Mobiele Kassa
+
+De mobiele **Kassa** is camera-first en gebruikt de bestaande receipt-lifecycle als functionele authority. Desktop Kassa blijft ongewijzigd.
+
+Vaste mobiele flow:
+1. **Kassa** opent direct de achtercamera waar browser/permissies dit toelaten;
+2. de camerashot wordt via de bestaande bonimport en herkenning verwerkt;
+3. **Bon controleren** toont de gestructureerde winkel-, datum-, totaal- en artikelgegevens;
+4. **Annuleren** verwijdert uitsluitend de zojuist gemaakte scan en keert terug naar cameramodus;
+5. **Opslaan** bewaart de scan en opent **Bonnen**;
+6. **Bonnen** is het mobiele detailscherm met opgeslagen kassabonnen en een actie **Nieuwe scan**;
+7. **Kassabon** biedt correctie van bongegevens en **Bon bevestigen** gebruikt de bestaande approve-/voorraadketen.
+
+Presentatieregels:
+- de mobiele modulekop gebruikt `MobileModuleHeader`; globale terugnavigatie blijft uitsluitend de centrale **Terug**-bediening;
+- lokale toestandnavigatie gebruikt geen labels **Terug naar ...**; vanuit Kassabon heet de lokale actie **Bonnen**;
+- cameraweergave is dominant; administratieve bonhistorie staat niet op het camerascherm;
+- wanneer directe `getUserMedia`-toegang ontbreekt of wordt geweigerd, blijft native camera/file-capture beschikbaar als fallback;
+- de gestructureerde bonweergave gebruikt 14/16px typografie en de centrale primaire Inhuis-kleur; feature-CSS introduceert geen alternatieve primaire kleur;
+- mobiel wijzigt alleen de presentatie en bediening, niet de receipt-, Uitpakken- of Voorraad-authority.
+
 ## Mobiele componenthergebruik (bindend)
 
 - Mobiele schermen met artikelregels gebruiken `frontend/src/ui/MobileArticleRow.jsx`; Voorraad is de visuele referentie. Geen feature-specifieke kopie van dezelfde rijstructuur.
