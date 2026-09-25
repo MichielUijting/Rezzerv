@@ -9,6 +9,7 @@ previous head for the same PR/base/branch.
 Modes:
 - full: run the existing full Docker + Playwright regression;
 - contracts: rerun only changed top-level *.contract.mjs tests;
+- e2e: after a failed Draft run, rerun only the failed Playwright spec file(s);
 - reuse: no frontend test changed; reuse the previous green PR253 evidence.
 
 Any unknown or runtime-sensitive delta falls back to full.
@@ -19,13 +20,17 @@ import argparse
 import fnmatch
 import json
 import os
+import re
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from version_only_carry_forward import prior_success_run
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATTERN = "frontend/tests/*.contract.mjs"
+E2E_SPEC_PATTERN = re.compile(r"(?:^|/)(tests/e2e/[A-Za-z0-9_.-]+\.spec\.js)(?::\d+)?")
 SAFE_IRRELEVANT_PATTERNS = ("docs/**", "*.md")
 
 
@@ -114,6 +119,71 @@ def classify_incremental_files(changed: list[str], workflow_patterns: list[str])
     return "reuse", [], "incremental_delta_irrelevant_to_pr253"
 
 
+def _github_json(url: str, token: str) -> object:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _github_text(url: str, token: str) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read().decode("utf-8", errors="replace")
+
+
+def prior_failed_e2e_specs(repo: str, workflow_file: str, sha: str, pr_number: str, token: str) -> tuple[dict | None, list[str]]:
+    """Return failed PR253 run plus exact failed Playwright spec paths, or no evidence."""
+    workflow_name = workflow_file.rsplit("/", 1)[-1]
+    url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_name}/runs?event=pull_request&head_sha={sha}&per_page=20"
+    try:
+        payload = _github_json(url, token)
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None, []
+    runs = payload.get("workflow_runs", []) if isinstance(payload, dict) else []
+    for run in runs:
+        if run.get("status") != "completed" or run.get("conclusion") != "failure":
+            continue
+        prs = run.get("pull_requests") or []
+        if pr_number and prs and str(prs[0].get("number") or "") != str(pr_number):
+            continue
+        run_id = run.get("id")
+        if not run_id:
+            continue
+        try:
+            jobs_payload = _github_json(f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100", token)
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            continue
+        specs: set[str] = set()
+        for job in jobs_payload.get("jobs", []) if isinstance(jobs_payload, dict) else []:
+            if job.get("conclusion") != "failure" or not job.get("id"):
+                continue
+            try:
+                log = _github_text(f"https://api.github.com/repos/{repo}/actions/jobs/{job['id']}/logs", token)
+            except (urllib.error.URLError, TimeoutError, UnicodeError):
+                continue
+            for match in E2E_SPEC_PATTERN.finditer(log):
+                relative = match.group(1)
+                if relative.startswith("tests/e2e/"):
+                    specs.add(relative)
+        if specs:
+            return run, sorted(specs)
+    return None, []
+
+
 def _ensure_commit(sha: str) -> bool:
     if not sha:
         return False
@@ -125,11 +195,12 @@ def _ensure_commit(sha: str) -> bool:
 
 
 def _full(reason: str, evidence_path: str = "") -> int:
-    evidence = {"mode": "full", "reason": reason, "contract_files": []}
+    evidence = {"mode": "full", "reason": reason, "contract_files": [], "e2e_files": []}
     if evidence_path:
         Path(evidence_path).write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     _emit("mode", "full")
     _emit("contract_files", "")
+    _emit("e2e_files", "")
     _emit("source_sha", "")
     _emit("source_run_id", "")
     _emit("reason", reason)
@@ -181,19 +252,26 @@ def cmd_workflow(args: argparse.Namespace) -> int:
         print(f"FRONTEND_INCREMENTAL_CHANGED={path}")
 
     token = os.getenv("GITHUB_TOKEN", "").strip()
-    source_run = prior_success_run(
-        args.repo,
-        args.workflow_file,
-        before,
-        pr_number,
-        base_sha,
-        branch,
-        token,
-    ) if token and pr_number and base_sha and branch else None
-    if not source_run:
-        return _full("prior_green_pr253_missing", args.evidence)
-
-    mode, contracts, reason = classify_incremental_files(changed, patterns)
+    failed_run, failed_e2e = prior_failed_e2e_specs(
+        args.repo, args.workflow_file, before, pr_number, token
+    ) if token and pr_number else (None, [])
+    if failed_run and failed_e2e:
+        mode, contracts, reason = "e2e", [], "rerun_previous_failed_e2e_specs"
+        source_run = failed_run
+    else:
+        source_run = prior_success_run(
+            args.repo,
+            args.workflow_file,
+            before,
+            pr_number,
+            base_sha,
+            branch,
+            token,
+        ) if token and pr_number and base_sha and branch else None
+        if not source_run:
+            return _full("prior_green_or_targetable_failure_missing", args.evidence)
+        mode, contracts, reason = classify_incremental_files(changed, patterns)
+        failed_e2e = []
     evidence = {
         "mode": mode,
         "reason": reason,
@@ -206,6 +284,7 @@ def cmd_workflow(args: argparse.Namespace) -> int:
         "branch": branch,
         "changed_files": changed,
         "contract_files": contracts,
+        "e2e_files": failed_e2e,
     }
     if args.evidence:
         Path(args.evidence).write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
@@ -213,6 +292,7 @@ def cmd_workflow(args: argparse.Namespace) -> int:
     contract_relative = [path.removeprefix("frontend/") for path in contracts]
     _emit("mode", mode)
     _emit("contract_files", ",".join(contract_relative))
+    _emit("e2e_files", ",".join(failed_e2e))
     _emit("source_sha", before)
     _emit("source_run_id", str(source_run.get("id") or ""))
     _emit("reason", reason)
@@ -225,7 +305,7 @@ def cmd_self_test(_: argparse.Namespace) -> int:
     patterns = ["frontend/src/**", "frontend/tests/e2e/**", "frontend/tests/*.contract.mjs", "frontend/package.json"]
     assert classify_incremental_files(["frontend/tests/mobile-ui-conformity.contract.mjs"], patterns)[0] == "contracts"
     assert classify_incremental_files(["docs/note.md"], patterns)[0] == "reuse"
-    assert classify_incremental_files(["frontend/src/App.jsx"], patterns)[0] == "full"
+    assert E2E_SPEC_PATTERN.search("tests/e2e/article-detail.frontend-regression.spec.js:437")\n    assert classify_incremental_files(["frontend/src/App.jsx"], patterns)[0] == "full"
     assert classify_incremental_files(["frontend/tests/unknown.txt"], patterns)[0] == "full"
     assert classify_incremental_files(
         ["frontend/tests/mobile-ui-conformity.contract.mjs", "docs/note.md"],
