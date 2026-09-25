@@ -3,7 +3,7 @@ import { FEATURE_GERECHTEN, isFeatureEnabled } from '../platform/featureAvailabi
 const LEGACY_TILES = [
   { key: 'meldingen', label: 'Meldingen', icon: '✉️', clickable: true },
   { key: 'bijna-op', label: 'Bijna op', icon: '📉', clickable: true },
-  { key: 'winkelen', label: 'Boodschappenlijst', icon: '🛒', clickable: true },
+  { key: 'winkelen', label: 'Boodschappen', icon: '🛒', clickable: true },
   { key: 'prognoses', label: 'Prognoses', icon: '📊', clickable: false },
   { key: 'uitlenen', label: 'Uitlenen', icon: '🔁', clickable: false },
   { key: 'voorraad', label: 'Voorraad', icon: '📦', clickable: true },
