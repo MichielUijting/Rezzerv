@@ -222,7 +222,7 @@ export default function MobileKassa() {
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-detail">
           <ReceiptSummary receipt={receipt} lines={lines} editable onHeaderChange={updateHeader} onLineChange={updateLine} />
           <div className="rz-mobile-kassa-primary-actions">
-            <Button type="button" variant="secondary" onClick={() => { setReceipt(null); setMode('list') }}>Terug naar bonnen</Button>
+            <Button type="button" variant="secondary" onClick={() => { setReceipt(null); setMode('list') }}>Bonnen</Button>
             <Button type="button" onClick={approve} disabled={busy}>{busy ? 'Bevestigen…' : 'Bon bevestigen'}</Button>
           </div>
         </main>
