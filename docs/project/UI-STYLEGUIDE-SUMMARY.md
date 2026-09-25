@@ -553,3 +553,12 @@ Op dit moment vallen **Voorraad** en **Voorraad-artikeldetail** onder de nieuwe 
 ## Historische styleguidedocumenten
 
 `docs/Rezzerv-Styleguide_v05.08.md` en `Rezzerv-Styleguide_v05.14.md` blijven behouden als audittrail van eerdere PO-besluiten. Hun actuele regels zijn hierboven geconsolideerd. Nieuwe wijzigingen worden niet als nieuwe losse styleguideversies toegevoegd tenzij de PO daar expliciet om vraagt; de canonieke bron wordt direct bijgewerkt.
+
+
+## Mobiele componenthergebruik (bindend)
+
+- Mobiele schermen met artikelregels gebruiken `frontend/src/ui/MobileArticleRow.jsx`; Voorraad is de visuele referentie. Geen feature-specifieke kopie van dezelfde rijstructuur.
+- Aantalbediening gebruikt `frontend/src/ui/QuantityStepper.jsx` wanneer min/plus nodig is.
+- Mobiele modulekoppen gebruiken `frontend/src/ui/MobileModuleHeader.jsx` en de globale Terug-bediening uit `MobileAppChrome`; featurepagina's implementeren geen eigen sticky Terug-knop.
+- Een afwijkende artikelregel of moduleheader vereist een expliciet functioneel verschil en een contracttest die die afwijking motiveert.
+- Nieuwe mobiele modules controleren eerst de centrale UI-componentcatalogus voordat feature-specifieke markup of CSS wordt toegevoegd.
