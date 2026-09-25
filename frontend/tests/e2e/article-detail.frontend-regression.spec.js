@@ -385,9 +385,12 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await page.goto(`/voorraad/${articleId}`);
     await expect(page.getByTestId('mobile-article-detail-page')).toBeVisible();
 
+    await page.getByTestId('mobile-article-tab-household').click();
     const trigger = page.getByTestId('mobile-article-favorite-store-select');
-    const purchaseHistory = page.getByTestId('mobile-article-purchase-history-action');
-    const before = await purchaseHistory.boundingBox();
+    const averagePrice = page.getByTestId('article-details-input-average_price');
+    await expect(trigger).toBeVisible();
+    await expect(averagePrice).toBeVisible();
+    const before = await averagePrice.boundingBox();
     expect(before).not.toBeNull();
 
     await trigger.click();
@@ -415,7 +418,7 @@ test.describe('Artikeldetail frontend-regressie', () => {
     expect(listMetrics.scrollHeight).toBeGreaterThan(listMetrics.clientHeight);
     expect(listMetrics.overflowY).toBe('auto');
 
-    const after = await purchaseHistory.boundingBox();
+    const after = await averagePrice.boundingBox();
     expect(after).not.toBeNull();
     expect(Math.abs(after.y - before.y)).toBeLessThan(1);
 
@@ -429,7 +432,8 @@ test.describe('Artikeldetail frontend-regressie', () => {
     await listbox.getByRole('option', { name: 'Plus', exact: true }).click();
 
     await expect(trigger).toContainText('Plus');
-    expect(savedFavoriteStore).toBe('Plus');
+    await page.getByTestId('article-household-settings-save').click();
+    await expect.poll(() => savedFavoriteStore).toBe('Plus');
     expect(consoleErrors).toEqual([]);
   });
 });
