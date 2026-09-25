@@ -127,7 +127,7 @@ export const SCREEN_COMPONENT_REQUIREMENTS = Object.freeze([
       'useAppFeedback',
       'Button',
       'Select',
-      'CatalogArticleThumbnail',
+      'MobileArticleRow',
       'MobileModuleHeader',
       'QuantityStepper',
     ],
