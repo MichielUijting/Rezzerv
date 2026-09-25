@@ -282,8 +282,8 @@ export default function MobileShopping() {
                 <MobileArticleRow
                   key={item.id}
                   title={item.article_name}
-                  subtitle={String(item.product_type_name || '').trim()}
-                  meta={[String(item.article_group_name || '').trim(), item.size || '', item.note || '']}
+                  subtitle=""
+                  meta={[]}
                   imageUrl={item.image_url}
                   imageProductName={item.article_name}
                   checked={Boolean(item.checked)}
