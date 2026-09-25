@@ -56,6 +56,14 @@ export function formatMobileLocation(row) {
   return row.location || row.sublocation || 'Geen locatie'
 }
 
+export function isMobileArticleLocationTrackingEnabled(context = {}, onboarding = null) {
+  if (context?.context_type && context.context_type !== 'regular') return true
+  const level = String(onboarding?.product_configuration?.location_tracking_level || 'none')
+    .trim()
+    .toLowerCase()
+  return level !== 'none'
+}
+
 function nullableNumber(value) {
   if (value === '' || value == null) return null
   const number = Number(value)

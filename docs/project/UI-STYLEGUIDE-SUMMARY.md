@@ -1,7 +1,7 @@
 # Inhuis UI-styleguide
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
-Laatst inhoudelijk vastgesteld door de PO: 24 september 2026.
+Laatst inhoudelijk vastgesteld door de PO: 25 september 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
@@ -12,6 +12,19 @@ Het mobiele **Voorraad-artikeldetail** is op **23 september 2026** naar dezelfde
 Historische besluiten die hierin zijn opgenomen:
 - `docs/Rezzerv-Styleguide_v05.08.md`: knoptekst is niet vet;
 - `Rezzerv-Styleguide_v05.14.md`: niet-numerieke tabelkolommen links, numerieke kolommen rechts, met gelijke uitlijning voor titel/filter/cellen.
+
+## App-brede responsieve UI-selectie vanaf 25 september 2026
+
+De keuze tussen desktop-/tabelpresentatie en een beschikbare mobiele presentatie is **uitsluitend viewport-gestuurd** en geldt app-breed:
+
+- `<=720px` gebruikt de mobiele app-chrome en, waar een scherm al een mobiele variant heeft, die mobiele variant;
+- `>720px` gebruikt de desktop-/tabelpresentatie;
+- gebruikersrol, Superuser/Admin/Lid, platformrechten, huishoudenstype en locatieconfiguratie bepalen **nooit** welke UI-variant wordt gekozen;
+- Inhuis toont **geen functionele schakelaar** voor Mobiel/Tabel/Automatisch;
+- op desktop/laptop kan de mobiele variant voor testen worden geactiveerd door de browserviewport responsief/smal te maken, bijvoorbeeld via de browser-device-mode (Ctrl+Shift+M waar ondersteund);
+- tabletgedrag volgt dezelfde viewportregel; oriëntatie, split-screen of browserweergave kan daardoor de effectieve variant veranderen;
+- locatieconfiguratie bepaalt alleen welke locatiegegevens, filters en sorteringen binnen een scherm beschikbaar zijn, niet de keuze van de schermvariant;
+- toekomstige responsive schermwrappers gebruiken dezelfde centrale `MOBILE_APP_MEDIA_QUERY`/viewport-hook en introduceren geen eigen rol- of permissiegate voor presentatiekeuze.
 
 ## Mobiele ontwerpbaseline vanaf 22 september 2026
 
@@ -431,7 +444,7 @@ Tijdens deze overgang:
 De mobiele **Boodschappenlijst** is een responsive presentatie van de bestaande actieve shopping-list en introduceert geen parallel domeinmodel. Interne route-, permissie- en technische sleutels mogen `winkelen` blijven heten.
 
 Vaste regels:
-- desktop `/winkelen` behoudt de bestaande `DataTable`; reguliere huishoudgebruikers krijgen op `<=720px` de mobiele presentatie;
+- desktop `/winkelen` behoudt de bestaande `DataTable`; iedere gebruiker krijgt op `<=720px` de mobiele presentatie, uitsluitend bepaald door de app-brede viewportregel;
 - dezelfde bestaande shopping-list endpoints en permissies blijven de enige functionele authority;
 - bovenaan staat uitsluitend het blok **Artikel toevoegen**; na minimaal twee zoektekens verschijnen maximaal **5 kandidaten direct onder het zoekveld**, zonder extra klik op een gesloten resultaatselectie;
 - de compacte **Mijn lijst**-contextcard staat direct vóór de reeds geselecteerde artikelen en toont totaal aantal regels en aantal **nog te kopen**;
@@ -453,37 +466,37 @@ Niet tonen zolang hiervoor geen echte appfunctionaliteit bestaat:
 
 ## Mobiel Voorraad-artikeldetail
 
-Het mobiele detailscherm van een voorraadartikel is een vereenvoudigde presentatie van bestaande Voorraad-functionaliteit en introduceert geen parallel domeinmodel.
+Het mobiele **Artikel in Voorraad** bouwt visueel voort op de mobiele Voorraadbaseline. Mobiel is een doelgerichte werkweergave en hoeft niet alle desktopinformatie te tonen.
 
-Vaste regels:
-- het scherm gebruikt hetzelfde huishoudartikel en dezelfde voorraad-/historie-/settings-API's als het bestaande desktop-detailscherm;
-- het detailscherm gebruikt dezelfde **groene Voorraadbaseline** als het mobiele hoofdscherm: `MobileModuleHeader` met titel **Artikel in Voorraad**, `/inhuis-green-wallpaper.svg`, achtergrond `#EEF7F0`, witte kaarten met 12px-radius en zonder glassmorphism of zware schaduw;
-- terugnavigatie komt uitsluitend uit de gedeelde knop **Terug** van `MobileAppChrome`; het detailscherm en zijn header hebben geen eigen `‹ Voorraad`- of andere terugknop;
-- de artikelkop toont waar beschikbaar dezelfde representatieve `CatalogArticleThumbnail`, de artikelnaam en artikelgroep/statuschips;
-- de actuele voorraad staat in dezelfde artikelkaart met de centrale `QuantityStepper`;
-- `−` verlaagt de voorraad met één via de bestaande afboek-/inventory-eventlogica;
-- `+` verhoogt de voorraad met één via de bestaande handmatige voorraadcorrectie;
-- wanneer exact één voorraadregel actief is, of wanneer bij meerdere locaties expliciet één locatie is geselecteerd, is het zichtbare aantal direct numeriek bewerkbaar via dezelfde bestaande `inventory-events`-authority; het mobiele numerieke toetsenbord wordt via de gedeelde `QuantityStepper` gebruikt;
-- aparte snelle acties **Voorraad aanpassen** en **Afboeken** worden niet getoond;
-- de rij **Locatie** wordt alleen getoond wanneer **Waar Inhuis** actief is (`location_tracking_level != none`);
-- bij meerdere actieve voorraadlocaties bepaalt de geselecteerde locatie op welke voorraadrij `+`, `−` en directe aantalinvoer werken;
-- detail- en actierijen gebruiken dezelfde compacte 14px/16px typografie, neutrale scheidingslijnen en teal `#005F6A` interactiekleur als Mobiele Voorraad;
-- **Notities** is een altijd zichtbaar vrij tekstveld; ieder lid van het actieve huishouden, inclusief de rol **Kijker**, mag de gedeelde huishoudnotitie wijzigen; deze uitzondering geeft geen wijzigingsrecht op andere artikel- of huishoudinstellingen;
-- **Voorkeurswinkel** gebruikt de centrale `Select` als overlay-dropdown met beschikbare winkels en blijft een beheerinstelling; het openen van de keuzelijst verandert de hoogte of positie van de omliggende detailcontent niet;
-- iedere artikelpresentatie via de gedeelde `CatalogArticleThumbnail` toont bij ontbrekende of fout geladen afbeelding zichtbaar **Geen foto**;
-- het detailscherm heeft geen vaste algemene `Opslaan`-knop; een specifieke instelling wordt direct/expliciet opgeslagen vanuit zijn eigen interactie;
-- de gebruikerszichtbare term voor de shoppingmodule en de lijst is **Boodschappenlijst**; interne route en technische sleutel mogen `winkelen` blijven.
+Vaste opbouw:
+1. de gedeelde mobiele header **Artikel in Voorraad**;
+2. één compacte artikel-/voorraadkaart met foto of **Geen foto**, artikelnaam, artikelgroep/status, actuele locatie en de centrale `QuantityStepper`;
+3. direct daaronder één horizontaal scrollbare mobiele tabbalk;
+4. de inhoud van precies één actieve tab.
 
-De sectie **Snelle acties** bevat precies:
-1. **Voorkeurswinkel** — toont/bewerkt de bestaande huishoudinstelling `favorite_store`;
-2. **Aankoophistorie** — toont uitsluitend aankoopgebeurtenissen van het huidige huishoudartikel;
-3. **Op boodschappenlijst** — voegt het huidige huishoudartikel direct toe aan de actieve **Boodschappenlijst**, opent geen extra detailscherm en geeft feedback via de centrale mobiele AppFeedback-overlay.
+De mobiele hoofdtabbladen zijn:
+- **Artikel**;
+- **Huishouden**;
+- **Identiteit**;
+- **Productdata**;
+- **Voorraad**;
+- **Locaties**, uitsluitend wanneer locatie-ondersteuning actief is.
 
-Niet opnemen als nieuwe mobiele functionaliteit:
-- `Naar boodschappen`;
-- `Verbruik registreren`;
-- een los verwijder-/archiveerpatroon dat niet al functioneel is overeengekomen;
-- een generieke Opslaan-knop voor het gehele detailscherm.
+Er is op mobiel **geen Overzicht-tab met subtabs**. De vier desktop-onderdelen Artikel, Huishouden, Identiteit en Productdata zijn ieder een zelfstandig hoofdtabblad. De bestaande gedeelde artikelcomponenten blijven de inhoudelijke authority, maar hun desktop-subtabbalk wordt in deze mobiele presentatie verborgen.
+
+**Historie** en **Analyse** zijn bewust desktop-only en worden niet als mobiele tabs aangeboden. Dit is een expliciete PO-keuze en geen ontbrekende implementatie.
+
+Mobiele presentatieregels:
+- de tabbalk gebruikt compacte pill-tabs zonder desktopachtige knopshadow; actieve tab is duidelijk gemarkeerd en de balk mag horizontaal scrollen;
+- velden en acties worden op smalle schermen verticaal gestapeld; horizontaal pagina-scrollen is niet nodig;
+- **Voorraad** gebruikt dezelfde bestaande voorraadmutatie-authority als desktop;
+- **Locaties** gebruikt dezelfde bestaande locatie-/verplaatsauthority als desktop;
+- bij actieve locatie-ondersteuning wordt de actuele locatie ook in de bovenste voorraadkaart getoond;
+- voor het **Systeemhuishouden** geldt de systeemcontext als locatie-ondersteunend, ook zonder reguliere `household_product_configuration`;
+- **Op boodschappenlijst** blijft als compacte mobiele actie onder de tab **Artikel** beschikbaar;
+- terugnavigatie komt uitsluitend uit de gedeelde knop **Terug** van `MobileAppChrome`;
+- passieve feedback gebruikt uitsluitend de centrale `AppFeedbackProvider/useAppFeedback`;
+- er is geen aparte generieke Opslaan-knop voor het volledige scherm.
 
 ## Wijzigings- en governance-regel
 

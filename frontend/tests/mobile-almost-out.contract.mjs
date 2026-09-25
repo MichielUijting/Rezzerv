@@ -44,8 +44,9 @@ const mobileSource = readFileSync(new URL('../src/features/almostOut/MobileAlmos
 assert.match(routerSource, /import AlmostOutResponsive from '\.\.\/\.\.\/features\/almostOut\/AlmostOutResponsive\.jsx'/)
 assert.match(routerSource, /path: '\/bijna-op'.*<AlmostOutResponsive \/>/)
 
-assert.match(responsiveSource, /MOBILE_INVENTORY_MEDIA_QUERY/)
-assert.match(responsiveSource, /isMobileInventoryEligibleContext\(context\)/)
+assert.match(responsiveSource, /useMobileAppViewport/)
+assert.match(responsiveSource, /if \(isMobileViewport\)/)
+assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin/)
 assert.match(responsiveSource, /fetchHouseholdOnboarding\(context, \{ force: true \}\)/)
 assert.match(responsiveSource, /product_configuration\?\.location_tracking_level/)
 assert.match(responsiveSource, /<MobileAlmostOut locationTrackingEnabled=\{locationTrackingEnabled\} \/>/)

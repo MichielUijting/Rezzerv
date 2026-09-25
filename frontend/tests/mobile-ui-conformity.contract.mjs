@@ -8,6 +8,11 @@ const mobileArticleCss = readFileSync(new URL('../src/features/articles/mobileAr
 const mobileComponentsCss = readFileSync(new URL('../src/ui/mobileComponents.css', import.meta.url), 'utf8')
 const mobileModuleHeaderSource = readFileSync(new URL('../src/ui/MobileModuleHeader.jsx', import.meta.url), 'utf8')
 const mobileAppChromeSource = readFileSync(new URL('../src/app/MobileAppChrome.jsx', import.meta.url), 'utf8')
+const inventoryResponsiveSource = readFileSync(new URL('../src/pages/VoorraadResponsive.jsx', import.meta.url), 'utf8')
+const almostOutResponsiveSource = readFileSync(new URL('../src/features/almostOut/AlmostOutResponsive.jsx', import.meta.url), 'utf8')
+const shoppingResponsiveSource = readFileSync(new URL('../src/features/shopping/ShoppingResponsive.jsx', import.meta.url), 'utf8')
+const articleResponsiveSource = readFileSync(new URL('../src/features/articles/ArticlePageResponsive.jsx', import.meta.url), 'utf8')
+const mobileViewportSource = readFileSync(new URL('../src/app/mobileViewport.js', import.meta.url), 'utf8')
 const mobileAppChromeCss = readFileSync(new URL('../src/app/mobileAppChrome.css', import.meta.url), 'utf8')
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
@@ -73,6 +78,12 @@ assert.match(
 )
 
 // Shared mobile chrome owns navigation for every protected mobile route.
+assert.match(mobileViewportSource, /MOBILE_APP_MEDIA_QUERY = '\(max-width: 720px\)'/)
+assert.match(mobileAppChromeSource, /useMobileAppViewport\(\)/)
+for (const responsiveSource of [inventoryResponsiveSource, almostOutResponsiveSource, shoppingResponsiveSource, articleResponsiveSource]) {
+  assert.match(responsiveSource, /useMobileAppViewport\(\)/)
+  assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin|display_role|context_type\s*===\s*['"]system['"]/)
+}
 assert.match(mobileAppChromeSource, /MobileRecentActionsBar/)
 assert.match(mobileAppChromeSource, /<MobileBackControl testId="mobile-global-back" \/>/)
 assert.match(mobileAppChromeSource, /testId="mobile-global-bottom-nav"/)

@@ -8,6 +8,7 @@ import {
   filterPurchaseHistory,
   formatMobileLocation,
   isMobileArticleAlmostOut,
+  isMobileArticleLocationTrackingEnabled,
 } from '../src/features/articles/mobileArticleDetailModel.js'
 
 const liveRows = [
@@ -56,6 +57,19 @@ assert.equal(chooseMobileInventoryRow(rows, { default_location_id: 'space-kitche
 assert.equal(isMobileArticleAlmostOut(2, 2), true)
 assert.equal(isMobileArticleAlmostOut(3, 2), false)
 assert.equal(isMobileArticleAlmostOut(0, null), false)
+
+assert.equal(isMobileArticleLocationTrackingEnabled(
+  { context_type: 'regular' },
+  { product_configuration: { location_tracking_level: 'none' } },
+), false)
+assert.equal(isMobileArticleLocationTrackingEnabled(
+  { context_type: 'regular' },
+  { product_configuration: { location_tracking_level: 'exact' } },
+), true)
+assert.equal(isMobileArticleLocationTrackingEnabled(
+  { context_type: 'system', active_household_id: '0', is_platform_superuser: true },
+  null,
+), true)
 
 const legacyRows = buildMobileArticleInventoryRows([
   { id: 'legacy-broccoli', artikel: 'Broccoli', aantal: 1 },
@@ -108,12 +122,28 @@ const mobileCss = readFileSync(new URL('../src/features/articles/mobileArticleDe
 
 assert.match(routerSource, /import ArticlePageResponsive from '\.\.\/\.\.\/features\/articles\/ArticlePageResponsive\.jsx'/)
 assert.match(routerSource, /path: '\/voorraad\/:articleId'.*<ArticlePageResponsive \/>/)
-assert.match(responsiveSource, /MOBILE_INVENTORY_MEDIA_QUERY/)
-assert.match(responsiveSource, /isMobileInventoryEligibleContext\(context\)/)
+assert.match(responsiveSource, /useMobileAppViewport/)
+assert.match(responsiveSource, /if \(isMobileViewport\)/)
+assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin/)
 assert.match(responsiveSource, /<MobileArticlePage \/>/)
 assert.match(responsiveSource, /<ArticlePage \/>/)
 
 assert.match(mobileSource, /data-testid="mobile-article-detail-page"/)
+assert.match(mobileSource, /ArticleOverviewSubtabs/)
+assert.match(mobileSource, /ArticleStockTab/)
+assert.match(mobileSource, /ArticleLocationsTab/)
+assert.doesNotMatch(mobileSource, /ArticleHistoryTab|ArticleAnalyticsSubtabs/)
+assert.match(mobileSource, /tabs=\{detailTabs\}/)
+assert.match(mobileSource, /\['Artikel', 'Huishouden', 'Identiteit', 'Productdata', 'Voorraad', 'Locaties'\]/)
+assert.match(mobileSource, /activeSubtab=\{currentTab\}/)
+assert.match(mobileSource, /showTabs=\{false\}/)
+assert.match(mobileSource, /mobile-article-tab-article/)
+assert.match(mobileSource, /mobile-article-tab-household/)
+assert.match(mobileSource, /mobile-article-tab-identity/)
+assert.match(mobileSource, /mobile-article-tab-productdata/)
+assert.match(mobileSource, /mobile-article-tab-stock/)
+assert.match(mobileSource, /mobile-article-tab-locations/)
+assert.doesNotMatch(mobileSource, /mobile-article-tab-history|mobile-article-tab-analysis/)
 assert.match(mobileSource, /<MobileModuleHeader title="Artikel in Voorraad" testId="mobile-article-header" \/>/)
 assert.match(mobileSource, /CatalogArticleThumbnail/)
 assert.doesNotMatch(mobileSource, /mobile-article-back-to-inventory|navigate\('\/voorraad'\)/)
@@ -123,28 +153,13 @@ assert.match(mobileSource, /onValueCommit=\{setExactInventoryQuantity\}/)
 assert.match(mobileSource, /event_type: 'adjustment'/)
 assert.match(mobileSource, /decreaseTestId="mobile-article-stock-minus"/)
 assert.match(mobileSource, /increaseTestId="mobile-article-stock-plus"/)
-assert.match(mobileSource, /data-testid="mobile-article-favorite-store-action"/)
-assert.match(mobileSource, /dataTestId="mobile-article-favorite-store-select"/)
-assert.match(mobileSource, /options=\{favoriteStoreOptions\}/)
-assert.match(mobileSource, /className="rz-mobile-article-favorite-store-row"/)
-assert.match(mobileSource, /triggerClassName="rz-mobile-article-favorite-store-trigger"/)
-assert.doesNotMatch(mobileSource, /togglePanel\('favorite-store'\)|mobile-article-favorite-store-panel/)
-assert.match(mobileCss, /\.rz-mobile-article-favorite-store-trigger\s*\{[\s\S]*background:\s*transparent\s*!important;/)
-assert.match(mobileSource, /data-testid="mobile-article-notes"/)
-assert.match(mobileSource, /<textarea/)
-assert.match(mobileSource, /const payload = \{ notes: nextValue \}/)
-assert.match(mobileSource, /encodeURIComponent\(householdArticleId\)\}\/notes/)
-assert.match(mobileSource, /const canEditNotes = authContext\?\.context_type === 'regular'/)
-assert.doesNotMatch(mobileSource, /isHouseholdViewerFromContext/)
-assert.match(mobileSource, /data-testid="mobile-article-purchase-history-action"/)
 assert.match(mobileSource, /data-testid="mobile-article-add-to-shopping-list"/)
-assert.match(mobileSource, />Voorkeurswinkel</)
-assert.match(mobileSource, />Aankoophistorie</)
 assert.match(mobileSource, />Op boodschappenlijst</)
 assert.match(mobileSource, /\/api\/shopping-list\/items/)
 assert.match(mobileSource, /staat op de boodschappenlijst/)
 assert.match(mobileSource, /locationTrackingEnabled \? \(/)
-assert.match(mobileSource, /data-testid="mobile-article-location-row"/)
+assert.match(mobileSource, /fetchMobileLocationTracking\(authContext\)/)
+assert.match(mobileSource, /isMobileArticleLocationTrackingEnabled\(authContext\)/)
 assert.match(mobileSource, /event_type: direction > 0 \? 'adjustment' : 'consume'/)
 assert.doesNotMatch(mobileSource, /Naar boodschappen|Naar inkooplijstje/i)
 assert.doesNotMatch(mobileSource, /Verbruik registreren/i)
@@ -158,7 +173,10 @@ assert.match(mobileCss, /url\('\/inhuis-green-wallpaper\.svg'\)/)
 assert.match(mobileCss, /background-color:\s*#EEF7F0/i)
 assert.doesNotMatch(mobileCss, /inhuis-orange-wallpaper|backdrop-filter/i)
 assert.match(mobileCss, /\.rz-mobile-article-card\s*\{[\s\S]*background:\s*#ffffff;[\s\S]*box-shadow:\s*none;/i)
-assert.match(mobileCss, /\.rz-mobile-article-notes-field\s*\{/)
+assert.match(mobileCss, /\.rz-mobile-article-functional-tabs > \.rz-tabbar\s*\{[\s\S]*overflow-x:\s*auto;/)
+assert.match(mobileCss, /\.rz-mobile-article-functional-tabs > \.rz-tabbar \.rz-tab\.rz-tab-active\s*\{[\s\S]*border-radius:\s*999px/)
+assert.match(mobileCss, /\.rz-mobile-article-functional-card \.rz-article-subtabs > \.rz-tabbar\s*\{[\s\S]*display:\s*none/)
+assert.match(mobileCss, /\.rz-mobile-article-functional-card \.rz-field-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/)
 assert.doesNotMatch(mobileCss, /\.rz-mobile-article-back\s*\{/)
 
 console.log('MOBILE_VOORRAAD_DETAIL_CONTRACT_GREEN')
