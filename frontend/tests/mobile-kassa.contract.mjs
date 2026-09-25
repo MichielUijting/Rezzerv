@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+const wrapper=readFileSync(new URL('../src/features/kassa/KassaPage.jsx',import.meta.url),'utf8')
+const mobile=readFileSync(new URL('../src/features/kassa/MobileKassa.jsx',import.meta.url),'utf8')
+assert.match(wrapper,/useMobileAppViewport/)
+assert.match(wrapper,/MobileKassa/)
+assert.match(mobile,/getUserMedia/)
+assert.match(mobile,/facingMode/)
+assert.match(mobile,/data-testid="mobile-kassa-camera"/)
+assert.match(mobile,/Bon controleren/)
+assert.match(mobile,/>Annuleren</)
+assert.match(mobile,/>Opslaan</)
+assert.match(mobile,/data-testid="mobile-kassa-list"/)
+assert.match(mobile,/Nieuwe scan/)
+assert.match(mobile,/data-testid="mobile-kassa-detail"/)
+assert.match(mobile,/\/approve/)
+assert.match(mobile,/\/api\/receipts\/delete/)
+console.log('MOBILE_KASSA_CONTRACT_GREEN')
