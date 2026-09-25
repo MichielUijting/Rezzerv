@@ -2,6 +2,11 @@ name: Support message API validation
 
 on:
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     paths:
       - 'backend/alembic/**'
       - 'backend/app/api/support_message_routes.py'
@@ -16,10 +21,47 @@ on:
       - 'backend/tests/test_support_message_api_contract.py'
       - 'backend/tests/test_support_message_service.py'
       - 'backend/tests/test_support_platform_route_authorization.py'
+      - 'scripts/ci/draft_domain_impact.py'
+      - 'quality/ci/draft_domain_impact_policy.json'
       - '.github/workflows/support-message-api-validation.yml'
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ci-support-message-api-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  impact-plan:
+    name: Draft support impact plan
+    runs-on: ubuntu-latest
+    outputs:
+      run_heavy: ${{ steps.plan.outputs.run_heavy }}
+    steps:
+      - name: Checkout exact candidate for impact planning
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Decide whether the heavy support authority is required
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/draft_domain_impact.py plan \
+            --domain support \
+            --workflow .github/workflows/support-message-api-validation.yml \
+            | tee draft-domain-impact.log
+          grep -E '^RUN_HEAVY=(true|false)$' draft-domain-impact.log
+          grep -Fx 'DRAFT_DOMAIN_IMPACT_GREEN' draft-domain-impact.log
+
   support-message-api:
+    needs: impact-plan
+    if: needs.impact-plan.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:

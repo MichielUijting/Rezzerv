@@ -2,6 +2,11 @@ name: Release version sync validation
 
 on:
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
   push:
     branches:
       - main
@@ -28,6 +33,7 @@ jobs:
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BASE_SHA: ${{ github.event.before }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
             $baseSha = $env:PR_BASE_SHA
@@ -96,6 +102,11 @@ jobs:
 
           if ($releaseRelevantPaths.Count -eq 0) {
             Write-Host '[OK] Alleen niet-runtimebestanden gewijzigd; geen appversieverhoging vereist.'
+            exit 0
+          }
+
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:PR_DRAFT -eq 'true') {
+            Write-Host '[OK] Draft PR: patchversie wordt pas voor de definitieve kandidaat vóór Ready afgedwongen.'
             exit 0
           }
 

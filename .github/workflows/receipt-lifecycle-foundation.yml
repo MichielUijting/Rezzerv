@@ -2,6 +2,11 @@ name: Receipt lifecycle foundation validation
 
 on:
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     paths:
       - 'backend/alembic/**'
       - 'backend/app/__init__.py'
@@ -13,11 +18,48 @@ on:
       - 'backend/tests/test_receipt_explicit_approval_lifecycle.py'
       - 'scripts/run-receipt-lifecycle-release-a.ps1'
       - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-A.md'
+      - 'scripts/ci/draft_domain_impact.py'
+      - 'quality/ci/draft_domain_impact_policy.json'
       - '.github/workflows/receipt-lifecycle-foundation.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ci-receipt-lifecycle-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  impact-plan:
+    name: Draft receipt impact plan
+    runs-on: ubuntu-latest
+    outputs:
+      run_heavy: ${{ steps.plan.outputs.run_heavy }}
+    steps:
+      - name: Checkout exact candidate for impact planning
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Decide whether the heavy receipt authority is required
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/draft_domain_impact.py plan \
+            --domain receipt \
+            --workflow .github/workflows/receipt-lifecycle-foundation.yml \
+            | tee draft-domain-impact.log
+          grep -E '^RUN_HEAVY=(true|false)$' draft-domain-impact.log
+          grep -Fx 'DRAFT_DOMAIN_IMPACT_GREEN' draft-domain-impact.log
+
   foundation:
+    needs: impact-plan
+    if: needs.impact-plan.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

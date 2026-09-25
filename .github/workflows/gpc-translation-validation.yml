@@ -2,6 +2,11 @@ name: GPC translation validation
 
 on:
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     paths:
       - "backend/alembic/**"
       - "backend/app/services/gpc_translation_service.py"
@@ -11,14 +16,48 @@ on:
       - "backend/tests/test_gpc_translation_service.py"
       - "backend/tests/test_gpc_official_translation_source.py"
       - "backend/tests/test_gpc_catalog_service.py"
+      - "scripts/ci/draft_domain_impact.py"
+      - "quality/ci/draft_domain_impact_policy.json"
       - ".github/workflows/gpc-translation-validation.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
+
+concurrency:
+  group: ci-gpc-translation-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  impact-plan:
+    name: Draft gpc impact plan
+    runs-on: ubuntu-latest
+    outputs:
+      run_heavy: ${{ steps.plan.outputs.run_heavy }}
+    steps:
+      - name: Checkout exact candidate for impact planning
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Decide whether the heavy gpc authority is required
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/draft_domain_impact.py plan \
+            --domain gpc \
+            --workflow .github/workflows/gpc-translation-validation.yml \
+            | tee draft-domain-impact.log
+          grep -E '^RUN_HEAVY=(true|false)$' draft-domain-impact.log
+          grep -Fx 'DRAFT_DOMAIN_IMPACT_GREEN' draft-domain-impact.log
+
   validate-gpc-translations:
+    needs: impact-plan
+    if: needs.impact-plan.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:

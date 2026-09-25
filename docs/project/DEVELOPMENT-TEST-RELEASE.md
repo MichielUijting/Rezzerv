@@ -167,6 +167,14 @@ Backend acceptance- en API-selftests gebruiken de centrale backend dependencyset
 
 De actuele Alembic-head wordt niet als datumcode in CI-, migration- of selftest-authorities vastgelegd. `backend/app/alembic_head_authority.py` leest fail-closed exact één head uit de repository-migratiegraph. Migration helpers, foundation-selftests en workflows vergelijken hun database-revision met deze dynamische authority. `backend/tests/alembic_head_authority_selftest.py` bewaakt dat de actuele head niet opnieuw in de centrale authoritybestanden wordt hardcoded.
 
+## Draft fast-loop en migratie-impact
+
+Tijdens Draft-ontwikkeling mogen zware domeinauthorities incrementeel worden overgeslagen wanneer de laatste kandidaatdelta hun gedeclareerde afhankelijkheden niet raakt en, waar nodig, eerder groen bewijs voor dezelfde PR/base/branch bestaat. Een niet-Draft/Ready-kandidaat draait de betreffende authority opnieuw.
+
+Nieuwe of gewijzigde Alembic-migraties declareren fail-closed hun CI-impact via `CI_IMPACT_DOMAINS`. De policy `quality/ci/draft_domain_impact_policy.json` bepaalt de toegestane domeinen. Ontbrekende of ongeldige metadata veroorzaakt geen stille skip: de Draft-planner kiest dan zwaar testen en de centrale migration-foundation-preflight blokkeert de kandidaat. Daarmee kan bijvoorbeeld een expliciete inventory/receipt-migratie Support, GPC en Invitations tijdens iteratieve Draft-pushes ontzien, terwijl onbekende migraties breed blijven testen.
+
+De planner staat in `scripts/ci/draft_domain_impact.py`. De optimalisatie verandert niets aan de definitieve S/M/L-classificatie of aan F7 Full exact-candidate evidence. Een aanvullende statische preflight (`scripts/ci/validate_alembic_head_literals.py`) weigert gedateerde Alembic-head-literals in runtime- en testcode; zulke code moet de centrale `repository_head_revision()`-authority gebruiken.
+
 ## Finale patchbump zonder dubbele zware regressie
 
 De normale versievolgorde blijft: implementatie stabiliseren, daarna de
