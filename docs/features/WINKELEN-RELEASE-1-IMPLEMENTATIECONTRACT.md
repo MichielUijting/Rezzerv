@@ -234,11 +234,25 @@ Geen merge, release of deployment zonder:
 
 Dit besluit vervangt strijdige eerdere UI- en duplicaatregels in dit document.
 
-- De gebruikerszichtbare naam van de module/lijst is **Boodschappenlijst**. De interne route `/winkelen`, permissies en technische sleutels mogen `winkelen` blijven heten.
+- De gebruikerszichtbare naam van de module/lijst is **Boodschappen**. De interne route `/winkelen`, permissies en technische sleutels mogen `winkelen` blijven heten.
 - Zoekgestuurde kandidaatselectie toont kandidaten direct zodra de zoekactie resultaten heeft; een extra klik op een gesloten resultaatselectie is niet nodig.
 - Er worden maximaal **5 kandidaten** tegelijk getoond. Dit is de applicatiebrede regel voor zoekvelden waarbij de gebruiker één kandidaat uit zoekresultaten kiest; gewone filters en statische keuzelijsten vallen hier niet onder.
-- Mobiel en desktop gebruiken voor Boodschappenlijst dezelfde directe kandidaatpresentatie.
-- Wanneer dezelfde canonieke kandidaat (`source_type` + `source_id`) opnieuw aan dezelfde actieve boodschappenlijst wordt toegevoegd, ontstaat geen tweede regel. Het bestaande veld **Aantal** wordt verhoogd.
+- Mobiel en desktop gebruiken voor Boodschappen dezelfde directe kandidaatpresentatie.
+- Wanneer dezelfde canonieke kandidaat (`source_type` + `source_id`) opnieuw aan dezelfde actieve boodschappen wordt toegevoegd, ontstaat geen tweede regel. Het bestaande veld **Aantal** wordt verhoogd.
 - Voor een eerste canonieke kandidaat zonder expliciet aantal geldt **Aantal = 1**.
 - Bestaande duplicaten met dezelfde canonieke kandidaatidentiteit op een actieve lijst worden eenmalig geconsolideerd; aantallen worden daarbij opgeteld. Voltooide/historische lijsten worden niet herschreven.
 - Kandidaten met alleen dezelfde zichtbare naam maar een verschillende canonieke bronidentiteit worden niet stilzwijgend samengevoegd.
+
+
+## Aanvullend PO-besluit 2026-09-25 — mobiele Boodschappen-UI
+
+Dit besluit vervangt strijdige eerdere mobiele UI-regels.
+
+- De gebruikerszichtbare modulenaam is **Boodschappen**; interne technische namen zoals `/winkelen` en `shopping_list` blijven toegestaan.
+- Een mobiele artikelregel gebruikt de centrale `MobileArticleRow`, dezelfde regelgeometrie als Voorraad. Nieuwe mobiele artikeloverzichten mogen deze structuur niet lokaal kopiëren.
+- De mobiele moduleheader gebruikt `MobileModuleHeader`; de globale mobiele Terug-bediening blijft centraal in `MobileAppChrome` sticky/fixed geregeld.
+- Een gebruiker kan naast een cataloguskandidaat ook vrije tekst toevoegen. Zo'n regel krijgt `source_type=manual` en blijft tijdelijk ongestructureerd totdat latere kassabonverwerking de artikelidentiteit structureert.
+- De enige checkbox per artikelregel is de koopstatus: aan = in de kar, uit = nog te vinden.
+- Boven de koopstatuskolom staat een driestandenfilter: beide, nog te vinden, in de kar.
+- Mobiel heeft geen afzonderlijke Selectie-checkbox en geen actie Bewerken per regel.
+- Aantal staat direct in de artikelregel en gebruikt de centrale `QuantityStepper` met min/plus.
