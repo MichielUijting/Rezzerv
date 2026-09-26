@@ -15,7 +15,7 @@
   .rz-mobile-app-chrome > .rz-mobile-back-control {
     display: inline-flex;
     position: fixed;
-    top: calc(10px + env(safe-area-inset-top));
+    top: calc(7px + env(safe-area-inset-top));
     left: 10px;
     z-index: 100;
   }
