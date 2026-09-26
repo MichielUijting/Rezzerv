@@ -18,6 +18,8 @@ import { buildHomeNavigation } from './homeNavigation.js'
 import { recordRecentAction } from './recentActionUsage.js'
 import useFeatureAvailability from '../platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../platform/actionButtonAvailability.js'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
+import MobileHomePage from './MobileHomePage.jsx'
 
 const TILE_ROUTES = {
   meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
@@ -37,6 +39,7 @@ function visibilityFromContext(context) {
 
 export default function HomePage() {
   const navigate = useNavigate()
+  const isMobileViewport = useMobileAppViewport()
   const initialContext = readStoredAuthContext()
   const [context, setContext] = useState(initialContext)
   const [onboarding, setOnboarding] = useState(() => readHouseholdOnboarding(initialContext))
@@ -151,6 +154,10 @@ export default function HomePage() {
         <div className="rz-tile-label">{tile.label}</div>
       </div>
     )
+  }
+
+  if (isMobileViewport) {
+    return <MobileHomePage context={context} navigation={navigation} visibility={visibility} onOpenTile={openTile} />
   }
 
   return (
