@@ -21,11 +21,10 @@ export const SETTINGS_SECTIONS = [
   },
 ]
 
-const REGULAR_SETTINGS_CONTEXTS = ['regular']
-const ROOT_SETTINGS_CONTEXTS = ['regular', 'system']
+const SETTINGS_CONTEXTS = ['regular', 'system']
 
 export const SETTINGS_ROOT_POLICY = {
-  allowedContexts: ROOT_SETTINGS_CONTEXTS,
+  allowedContexts: SETTINGS_CONTEXTS,
   allowViewer: true,
 }
 
@@ -38,7 +37,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'account',
     scope: 'personal',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
   {
@@ -50,7 +49,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -61,7 +60,7 @@ const SETTINGS_TILES = [
     relevance: 'inventory',
     section: 'account',
     scope: 'personal',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
   {
@@ -73,7 +72,7 @@ const SETTINGS_TILES = [
     relevance: 'inventory',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -84,7 +83,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'account',
     scope: 'personal',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
   {
@@ -96,7 +95,7 @@ const SETTINGS_TILES = [
     relevance: 'locations',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -108,7 +107,7 @@ const SETTINGS_TILES = [
     relevance: 'shopping-or-receipts',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -120,7 +119,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'household',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -131,7 +130,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'household',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
   {
@@ -143,7 +142,7 @@ const SETTINGS_TILES = [
     relevance: 'quantity-inventory',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -155,7 +154,7 @@ const SETTINGS_TILES = [
     relevance: 'almost-out',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -166,7 +165,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'help',
     scope: 'personal',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
 ]
