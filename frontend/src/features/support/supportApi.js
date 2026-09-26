@@ -104,3 +104,12 @@ export function downloadPlatformSupportCsv(status = '') {
     URL.revokeObjectURL(href)
   })
 }
+
+
+export function listHouseholdNotifications() {
+  return request(`/api/notifications${freshQuery()}`)
+}
+
+export function markHouseholdNotificationRead(notificationId) {
+  return request(`/api/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'POST' })
+}
