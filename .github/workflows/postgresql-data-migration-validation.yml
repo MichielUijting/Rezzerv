@@ -152,9 +152,9 @@ jobs:
             | tee /tmp/pr352-migration.log
           expected_head="$(PYTHONPATH=backend python -m app.alembic_head_authority)"
           grep -F "POSTGRESQL_DATA_MIGRATION_HEAD_GREEN revision=$expected_head" /tmp/pr352-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_TABLE_SET_GREEN tables=89' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_TABLE_SET_GREEN tables=90' /tmp/pr352-migration.log
           grep -F 'POSTGRESQL_DATA_MIGRATION_SEQUENCES_GREEN' /tmp/pr352-migration.log
-          grep -F 'POSTGRESQL_DATA_MIGRATION_EQUIVALENCE_GREEN tables=89' /tmp/pr352-migration.log
+          grep -F 'POSTGRESQL_DATA_MIGRATION_EQUIVALENCE_GREEN tables=90' /tmp/pr352-migration.log
           grep -F 'POSTGRESQL_DATA_MIGRATION_GREEN' /tmp/pr352-migration.log
           python - <<'PY'
           import json
@@ -163,8 +163,8 @@ jobs:
           expected_head = repository_head_revision()
           assert report['source_revision'] == expected_head
           assert report['target_revision'] == expected_head
-          assert report['application_tables'] == 89
-          assert len(report['tables']) == 89
+          assert report['application_tables'] == 90
+          assert len(report['tables']) == 90
           assert all(t['source_rows'] == t['target_rows'] for t in report['tables'])
           assert all(t['source_sha256'] == t['target_sha256'] for t in report['tables'])
           print('POSTGRESQL_DATA_MIGRATION_REPORT_GREEN')
