@@ -43,7 +43,6 @@ for (const [roleKey, label] of [
   ['household.viewer', 'Kijker (bestaande rol)'],
   ['household.advanced_member', 'Geavanceerd lid (bestaande rol)'],
   ['household.owner', 'Superuser'],
-  ['household.frontteam', 'Frontteamlid'],
 ]) {
   assert.ok(householdSource.includes(`'${roleKey}': '${label}'`))
 }
@@ -52,7 +51,6 @@ for (const [roleKey, label] of [
   ['household.member', 'Lid'],
   ['household.admin', 'Beheerder'],
   ['household.owner', 'Superuser'],
-  ['household.frontteam', 'Frontteamlid'],
 ]) {
   assert.ok(authorizationSource.includes(`'${roleKey}': '${label}'`))
 }
@@ -76,7 +74,6 @@ for (const roleKey of [
   'household.member',
   'household.admin',
   'household.owner',
-  'household.frontteam',
 ]) {
   assert.ok(canonicalRoleQuery.includes(`'${roleKey}'`))
 }
