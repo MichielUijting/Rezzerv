@@ -37,11 +37,9 @@ export function useActionButtonAvailability({ enabled = true } = {}) {
     }
 
     async function refresh() {
-      setState((current) => ({
-        items: current.ready ? current.items : {},
-        order: current.ready ? current.order : [],
-        ready: false,
-      }))
+      setState((current) => current.ready
+        ? current
+        : { items: {}, order: [], ready: false })
       try {
         const projection = await fetchAvailability()
         if (active) setState({ ...projection, ready: true })
