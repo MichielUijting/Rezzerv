@@ -548,7 +548,7 @@ De mobiele redesign gebruikt vanaf 23 september 2026 een gescheiden testmodel:
 - bij iedere volgende mobiele schermmigratie wordt dezelfde conformiteitstest met de nieuwe schermbaseline uitgebreid en worden eventuele resterende legacy-visuele assertions voor dat scherm verwijderd;
 - functionele regressiedekking wordt daarbij niet verlaagd of omzeild: alleen de vervangen visuele baseline verhuist naar de nieuwe authority.
 
-Op dit moment vallen **Startpagina**, **Voorraad** en **Voorraad-artikeldetail** onder de nieuwe mobiele UI-conformiteitsset. **Bijna op** en **Boodschappenlijst/Winkelen** behouden hun functionele regressietests, maar hebben totdat hun nieuwe ontwerp expliciet is vastgesteld geen blokkerende legacy-visuele baseline.
+De applicatiebrede mobiele UI-conformiteitsset omvat **Startpagina, Voorraad, Voorraad-artikeldetail, Bijna op, Boodschappenlijst/Winkelen en Kassa**. Deze schermen staan centraal in één manifest in `frontend/tests/mobile-ui-conformity.contract.mjs`. De gate controleert voor ieder geregistreerd mobiel scherm minimaal de gedeelde `MobileModuleHeader`, uitsluitend de twee centrale lettergroottes `--font-size-ui-body` en `--font-size-ui-title`, en het verbod op alternatieve primaire groentinten. Een bestaand scherm mag niet stilzwijgend uit het manifest verdwijnen.
 
 ## Historische styleguidedocumenten
 
