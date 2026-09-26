@@ -42,7 +42,7 @@ function reorder(keys, key, direction) {
   if (index < 0 || target < 0 || target >= keys.length) return keys
   const next = [...keys]; [next[index], next[target]] = [next[target], next[index]]; return next
 }
-export default function MobileHomePage({ context, navigation, welcomeText = 'Fijn dat je er weer bent.', onOpenTile, onExit }) {
+export default function MobileHomePage({ context, navigation, welcomeText = 'Fijn dat je er weer bent.', onOpenTile }) {
   const availableTiles = useMemo(() => {
     const map = new Map([...navigation.primaryTiles, ...navigation.moreTiles].filter((tile) => tile?.clickable).map((tile) => [tile.key, tile]))
     map.delete('locaties')
@@ -75,7 +75,7 @@ export default function MobileHomePage({ context, navigation, welcomeText = 'Fij
       })}</div>
     </section>
   </main>
-  return <main className="rz-mobile-home" data-testid="mobile-home-page"><MobileModuleHeader title="Startpagina" testId="mobile-home-header" showBack onBack={onExit} backLabel="Terug" /><section className="rz-mobile-home-inner">
+  return <main className="rz-mobile-home" data-testid="mobile-home-page"><MobileModuleHeader title="Startpagina" testId="mobile-home-header" /><section className="rz-mobile-home-inner">
     <h1 className="rz-mobile-home-welcome">Welkom {name} <InHuisWordmark /></h1><p className="rz-mobile-home-subtitle">{welcomeText}</p>
     <button type="button" className="rz-mobile-home-notifications" onClick={() => onOpenTile({ key: 'meldingen', clickable: true })}><span className="rz-mobile-home-notification-icon" aria-hidden="true">{ACTION_ICONS.meldingen}</span><span><strong>{openNotifications === null ? 'Openstaande meldingen' : openNotifications + ' openstaande melding' + (openNotifications === 1 ? '' : 'en')}</strong><small>Bekijk wat aandacht vraagt</small></span><span aria-hidden="true">›</span></button>
     <div className="rz-mobile-home-section-title"><h2>Wat wil je doen?</h2><button type="button" onClick={() => setEditing(true)} data-testid="mobile-home-customize">⚙ Aanpassen</button></div>
