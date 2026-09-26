@@ -1,10 +1,14 @@
 import { useNavigate } from 'react-router-dom'
 import './mobileComponents.css'
 
-export function MobileBackControl({ testId = 'mobile-global-back' }) {
+export function MobileBackControl({ testId = 'mobile-global-back', onBack = null }) {
   const navigate = useNavigate()
 
   function handleBack() {
+    if (onBack) {
+      onBack()
+      return
+    }
     const historyIndex = Number(window.history.state?.idx ?? 0)
     if (historyIndex > 0) {
       navigate(-1)

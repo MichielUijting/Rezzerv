@@ -7,7 +7,7 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { readStoredAuthContext } from '../../lib/authSession.js'
+import { isFrontteamMemberFromContext, readStoredAuthContext } from '../../lib/authSession.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
 import {
   createHouseholdThread,
@@ -28,7 +28,9 @@ export default function HouseholdSupportPage() {
   const query = useMemo(() => new URLSearchParams(location.search), [location.search])
   const originRoute = query.get('from') || '/meldingen'
   const originScreen = query.get('screen') || 'Inhuis'
-  const currentUserId = String(readStoredAuthContext()?.user_id || readStoredAuthContext()?.email || '').trim().toLowerCase()
+  const authContext = readStoredAuthContext()
+  const currentUserId = String(authContext?.user_id || authContext?.email || '').trim().toLowerCase()
+  const canMessageSuperuser = isFrontteamMemberFromContext(authContext)
 
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
@@ -120,6 +122,7 @@ export default function HouseholdSupportPage() {
 
   async function submitNew(event) {
     event.preventDefault()
+    if (!canMessageSuperuser) return
     setBusy(true)
     setFeedback('')
     try {
@@ -135,6 +138,7 @@ export default function HouseholdSupportPage() {
 
   async function submitReply(event) {
     event.preventDefault()
+    if (!canMessageSuperuser) return
     if (!selected?.thread?.id) return
     setBusy(true)
     setFeedback('')
@@ -197,14 +201,14 @@ export default function HouseholdSupportPage() {
                   </article>
                 ))}
               </div>
-              {Number(selected.thread.reply_allowed) === 1 ? (
+              {canMessageSuperuser && Number(selected.thread.reply_allowed) === 1 ? (
                 <form onSubmit={submitReply} className="rz-support-form">
                   <label>Reactie<textarea value={reply} onChange={(event) => setReply(event.target.value)} required maxLength={10000} /></label>
                   <Button variant="primary" type="submit" disabled={busy || !reply.trim()}>Versturen</Button>
                 </form>
-              ) : <p>De superuser heeft antwoorden voor deze melding uitgeschakeld.</p>}
+              ) : canMessageSuperuser ? <p>De superuser heeft antwoorden voor deze melding uitgeschakeld.</p> : null}
             </>
-          ) : (
+          ) : canMessageSuperuser ? (
             <form onSubmit={submitNew} className="rz-support-form">
               <h2>Nieuwe melding</h2>
               <p>Herkomst: <strong>{originScreen}</strong> · <code>{originRoute}</code></p>
@@ -212,7 +216,7 @@ export default function HouseholdSupportPage() {
               <label>Bericht<textarea value={message} onChange={(event) => setMessage(event.target.value)} required maxLength={10000} /></label>
               <Button variant="primary" type="submit" disabled={busy || !subject.trim() || !message.trim()}>Melding versturen</Button>
             </form>
-          )}
+          ) : <p>Alleen leden van het Frontteam kunnen een bericht naar de Superuser sturen.</p>}
           {feedback ? <p className="rz-support-feedback" role="status">{feedback}</p> : null}
         </Card>
       </div>
