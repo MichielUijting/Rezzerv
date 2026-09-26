@@ -81,7 +81,13 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
         "name": str(runtime.get("name") or runtime.get("display_name") or runtime.get("email") or "Inhuis-gebruiker"),
         "role": role or "household.member",
         "household_id": str(context.active_household_id),
+        "is_frontteam": bool(runtime.get("is_frontteam") or runtime.get("is_frontteam_member") or role in {"frontteam", "frontteamlid", "household.frontteam"}),
     }
+
+
+def _require_frontteam_actor(actor: dict[str, Any]) -> None:
+    if not actor.get("is_frontteam"):
+        raise HTTPException(status_code=403, detail="Alleen leden van het Frontteam mogen berichten naar de Superuser sturen")
 
 
 def _platform_actor(authorization: str | None, permission_key: str) -> dict[str, Any]:
@@ -141,6 +147,7 @@ def _support_error(exc: SupportMessageError):
 @router.post("/api/support/threads", status_code=201)
 def create_household_support_thread(payload: HouseholdThreadCreateRequest, authorization: str | None = Header(None)):
     actor = _household_actor(authorization)
+    _require_frontteam_actor(actor)
     try:
         with _main_module().engine.begin() as conn:
             result = create_support_thread(
@@ -191,6 +198,7 @@ def get_household_support_thread(thread_id: str, authorization: str | None = Hea
 @router.post("/api/support/threads/{thread_id}/messages", status_code=201)
 def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest, authorization: str | None = Header(None)):
     actor = _household_actor(authorization)
+    _require_frontteam_actor(actor)
     try:
         with _main_module().engine.begin() as conn:
             header = _thread_header(conn, thread_id, household_id=actor["household_id"])
