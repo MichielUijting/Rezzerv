@@ -1953,6 +1953,8 @@ export default function KassaPage() {
   const [isTechnicalUploadErrorOpen, setIsTechnicalUploadErrorOpen] = useState(false)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
+  const desktopCameraVideoRef = useRef(null)
+  const desktopCameraStreamRef = useRef(null)
   const uploadBatchPollerRef = useRef(null)
   const uploadBatchLastProcessedRef = useRef(-1)
   const uploadProgressTimersRef = useRef([])
@@ -2829,14 +2831,53 @@ export default function KassaPage() {
     })
   }
 
-  function handleChooseCameraFromHub() {
-    setUploadMode('camera_capture')
+  async function handleChooseCameraFromHub() {
+    setUploadMode('camera_live')
     setStatus('')
     setError('')
     setDuplicateNotice('')
     setCameraError('')
     setReceiptInboxFocusId('')
-    setTimeout(() => cameraInputRef.current?.click(), 0)
+    desktopCameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+    desktopCameraStreamRef.current = null
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera is niet beschikbaar in deze browser.')
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      desktopCameraStreamRef.current = stream
+      if (desktopCameraVideoRef.current) {
+        desktopCameraVideoRef.current.srcObject = stream
+        await desktopCameraVideoRef.current.play().catch(() => {})
+      }
+    } catch {
+      setUploadMode('manual')
+      setCameraError('De camera kon niet worden geopend. Controleer de cameratoestemming van de browser en Windows.')
+    }
+  }
+
+  async function captureDesktopCameraPhoto() {
+    const video = desktopCameraVideoRef.current
+    if (!video?.videoWidth || !video?.videoHeight) {
+      setCameraError('De camera is nog niet gereed. Probeer opnieuw zodra het camerabeeld zichtbaar is.')
+      return
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d')?.drawImage(video, 0, 0)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+    if (!blob) return
+    desktopCameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+    desktopCameraStreamRef.current = null
+    const file = new File([blob], `kassabon-${Date.now()}.jpg`, { type: 'image/jpeg' })
+    clearCameraDraft()
+    setCameraDraft({ file, previewUrl: window.URL.createObjectURL(file) })
+    setUploadMode('camera_capture')
+  }
+
+  function cancelDesktopLiveCamera() {
+    desktopCameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+    desktopCameraStreamRef.current = null
+    setUploadMode('manual')
   }
 
 
@@ -3510,6 +3551,19 @@ export default function KassaPage() {
       ) : null}
 
       <ReceiptUploadProgressOverlay uploadProgress={uploadProgress} />
+
+      {uploadMode === 'camera_live' ? (
+        <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', padding: '16px 20px 20px' }}>
+          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-label="Camera kassabon" data-testid="kassa-live-camera-modal" style={{ width: 'min(900px, 100%)', padding: '24px', gap: '16px' }}>
+            <h2 className="rz-modal-title">Kassabon fotograferen</h2>
+            <video ref={desktopCameraVideoRef} playsInline muted autoPlay data-testid="kassa-live-camera-video" style={{ width: '100%', maxHeight: '65vh', objectFit: 'contain', background: '#111', borderRadius: '12px' }} />
+            <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+              <Button type="button" variant="secondary" onClick={cancelDesktopLiveCamera}>Annuleren</Button>
+              <Button type="button" variant="primary" onClick={captureDesktopCameraPhoto} data-testid="kassa-live-camera-shutter">Foto maken</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <CameraCaptureModal
         isOpen={Boolean(cameraDraft)}
