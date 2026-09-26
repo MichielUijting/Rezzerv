@@ -14,7 +14,7 @@ async function fetchAvailability() {
     .sort((a, b) => Number(a?.sort_order ?? 9999) - Number(b?.sort_order ?? 9999))
     .map((item) => String(item.home_tile_key))
 
-  return { items, order }
+  return { items, order, welcomeText: String(payload?.welcome_text || 'Fijn dat je er weer bent.').trim() }
 }
 
 export function refreshActionButtonAvailability() {
@@ -25,6 +25,7 @@ export function useActionButtonAvailability({ enabled = true } = {}) {
   const [state, setState] = useState(() => ({
     items: {},
     order: [],
+    welcomeText: 'Fijn dat je er weer bent.',
     ready: !enabled,
   }))
 
@@ -32,14 +33,14 @@ export function useActionButtonAvailability({ enabled = true } = {}) {
     let active = true
 
     if (!enabled) {
-      setState({ items: {}, order: [], ready: true })
+      setState({ items: {}, order: [], welcomeText: 'Fijn dat je er weer bent.', ready: true })
       return () => { active = false }
     }
 
     async function refresh() {
       setState((current) => current.ready
         ? current
-        : { items: {}, order: [], ready: false })
+        : { items: {}, order: [], welcomeText: 'Fijn dat je er weer bent.', ready: false })
       try {
         const projection = await fetchAvailability()
         if (active) setState({ ...projection, ready: true })
