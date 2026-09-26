@@ -42,9 +42,10 @@ function reorder(keys, key, direction) {
   if (index < 0 || target < 0 || target >= keys.length) return keys
   const next = [...keys]; [next[index], next[target]] = [next[target], next[index]]; return next
 }
-export default function MobileHomePage({ context, navigation, visibility, welcomeText = 'Fijn dat je er weer bent.', onOpenTile }) {
+export default function MobileHomePage({ context, navigation, welcomeText = 'Fijn dat je er weer bent.', onOpenTile }) {
   const availableTiles = useMemo(() => {
     const map = new Map([...navigation.primaryTiles, ...navigation.moreTiles].filter((tile) => tile?.clickable).map((tile) => [tile.key, tile]))
+    map.delete('locaties')
     return [...map.values()]
   }, [navigation])
   const availableKeys = useMemo(() => availableTiles.map((tile) => tile.key), [availableTiles])
