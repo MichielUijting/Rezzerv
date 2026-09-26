@@ -22,9 +22,10 @@ export const SETTINGS_SECTIONS = [
 ]
 
 const REGULAR_SETTINGS_CONTEXTS = ['regular']
+const ROOT_SETTINGS_CONTEXTS = ['regular', 'system']
 
 export const SETTINGS_ROOT_POLICY = {
-  allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+  allowedContexts: ROOT_SETTINGS_CONTEXTS,
   allowViewer: true,
 }
 
