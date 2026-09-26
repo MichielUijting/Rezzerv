@@ -28,6 +28,7 @@ MANAGED_SPECIAL_ROLE_KEYS = (
 )
 PLATFORM_PERMISSIONS_MANAGE = "platform.permissions.manage"
 PLATFORM_SPECIAL_ROLES_MANAGE = "platform.special_roles.manage"
+PLATFORM_FRONTTEAM_ROLES_MANAGE = "platform.frontteam_roles.manage"
 
 
 class PlatformAuthorizationNotFoundError(LookupError):
@@ -193,18 +194,6 @@ def _grant_block_reason(
     if role_key == FRONTTEAM_ROLE_KEY:
         if active_role_keys & {SUPERUSER_ROLE_KEY, PLATFORM_ADMIN_ROLE_KEY, IP_OWNER_ROLE_KEY}:
             return "Frontteamlid kan niet met een systeem- of Platformbeheerderrol worden gecombineerd"
-        target_user_id = str(row["id"])
-        mapped_household_id = resolve_frontteam_personal_household_id(conn, target_user_id)
-        personal_household_id = str(
-            mapped_household_id or frontteam_personal_household_id(target_user_id)
-        )
-        unrelated = [
-            household_id
-            for household_id in _active_regular_household_ids(conn, target_user_id)
-            if household_id != personal_household_id
-        ]
-        if unrelated:
-            return "Frontteamlid vereist een eigen persoonlijk huishouden zonder andere actieve huishoudlidmaatschappen"
         return None
 
     if FRONTTEAM_ROLE_KEY in active_role_keys:
@@ -230,6 +219,7 @@ def _role_actions(
     *,
     role_keys: list[str],
     can_manage_special_roles: bool,
+    can_manage_frontteam_roles: bool,
 ) -> dict[str, dict[str, Any]]:
     active_role_keys = set(role_keys)
     result: dict[str, dict[str, Any]] = {}
@@ -241,14 +231,17 @@ def _role_actions(
             active_role_keys=active_role_keys,
         )
         revoke_reason = _revoke_block_reason(role_key, active_role_keys)
+        can_manage_role = can_manage_special_roles or (
+            role_key == FRONTTEAM_ROLE_KEY and can_manage_frontteam_roles
+        )
         result[role_key] = {
             "active": role_key in active_role_keys,
-            "can_grant": bool(can_manage_special_roles and grant_reason is None),
-            "can_revoke": bool(can_manage_special_roles and revoke_reason is None),
-            "grant_blocked_reason": None if can_manage_special_roles else "Alleen de IP-eigenaar beheert speciale rollen",
-            "revoke_blocked_reason": None if can_manage_special_roles else "Alleen de IP-eigenaar beheert speciale rollen",
+            "can_grant": bool(can_manage_role and grant_reason is None),
+            "can_revoke": bool(can_manage_role and revoke_reason is None),
+            "grant_blocked_reason": None if can_manage_role else "Onvoldoende bevoegdheid voor deze platformrol",
+            "revoke_blocked_reason": None if can_manage_role else "Onvoldoende bevoegdheid voor deze platformrol",
         }
-        if can_manage_special_roles:
+        if can_manage_role:
             result[role_key]["grant_blocked_reason"] = grant_reason
             result[role_key]["revoke_blocked_reason"] = revoke_reason
     return result
@@ -262,6 +255,7 @@ def _safe_user_item(
     role_keys: list[str],
     effective_permissions: list[str],
     can_manage_special_roles: bool,
+    can_manage_frontteam_roles: bool,
 ) -> dict[str, Any]:
     user_id = str(row.get("id") or "")
     account_status = _normalize_status(row.get("account_status")) or "active"
@@ -278,6 +272,7 @@ def _safe_user_item(
             row,
             role_keys=role_keys,
             can_manage_special_roles=can_manage_special_roles,
+            can_manage_frontteam_roles=can_manage_frontteam_roles,
         ),
     }
 
@@ -295,6 +290,11 @@ def list_platform_authorizations(
         user_id=str(current_user_id),
         permission_key=PLATFORM_SPECIAL_ROLES_MANAGE,
     ).allowed
+    can_manage_frontteam_roles = evaluate_platform_permission(
+        conn,
+        user_id=str(current_user_id),
+        permission_key=PLATFORM_FRONTTEAM_ROLES_MANAGE,
+    ).allowed
     users = conn.execute(text("""
         SELECT id, email, account_status
         FROM app_users
@@ -309,6 +309,7 @@ def list_platform_authorizations(
                 role_keys=role_keys_by_user.get(str(row.get("id") or ""), []),
                 effective_permissions=permissions_by_user.get(str(row.get("id") or ""), []),
                 can_manage_special_roles=can_manage_special_roles,
+                can_manage_frontteam_roles=can_manage_frontteam_roles,
             )
             for row in users
         ],
@@ -317,6 +318,7 @@ def list_platform_authorizations(
         "special_roles_permission": PLATFORM_SPECIAL_ROLES_MANAGE,
         "managed_role_keys": list(MANAGED_SPECIAL_ROLE_KEYS),
         "can_manage_special_roles": can_manage_special_roles,
+        "can_manage_frontteam_roles": can_manage_frontteam_roles,
     }
 
 
@@ -334,6 +336,11 @@ def _safe_item_for_user(
         user_id=str(current_user_id),
         permission_key=PLATFORM_SPECIAL_ROLES_MANAGE,
     ).allowed
+    can_manage_frontteam_roles = evaluate_platform_permission(
+        conn,
+        user_id=str(current_user_id),
+        permission_key=PLATFORM_FRONTTEAM_ROLES_MANAGE,
+    ).allowed
     return _safe_user_item(
         conn,
         row,
@@ -341,6 +348,7 @@ def _safe_item_for_user(
         role_keys=role_keys,
         effective_permissions=permissions,
         can_manage_special_roles=can_manage_special_roles,
+        can_manage_frontteam_roles=can_manage_frontteam_roles,
     )
 
 
@@ -375,11 +383,13 @@ def grant_special_role(
     """), {"user_id": target_user_id, "role_key": normalized_role_key})
 
     if normalized_role_key == FRONTTEAM_ROLE_KEY:
-        ensure_frontteam_personal_household_for_user(
-            conn,
-            user_id=target_user_id,
-            email=str(row.get("email") or ""),
-        )
+        regular_households = _active_regular_household_ids(conn, target_user_id)
+        if not regular_households:
+            ensure_frontteam_personal_household_for_user(
+                conn,
+                user_id=target_user_id,
+                email=str(row.get("email") or ""),
+            )
 
     write_authorization_audit(
         conn,
