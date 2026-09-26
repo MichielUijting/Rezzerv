@@ -32,12 +32,10 @@ export default function MobileModuleHeader({ title, testId = 'mobile-module-head
       <div className="rz-mobile-module-header-leading">
         <h1>{title}</h1>
       </div>
-      <img
-        className="rz-mobile-module-header-logo"
-        src="/inhuis-logo-white.png"
-        alt="Inhuis"
-        draggable="false"
-      />
+      <span className="rz-mobile-module-header-wordmark" aria-label="InHuis">
+        <span className="rz-mobile-module-header-wordmark-in">In</span>
+        <span className="rz-mobile-module-header-wordmark-huis">Huis</span>
+      </span>
     </header>
   )
 }
