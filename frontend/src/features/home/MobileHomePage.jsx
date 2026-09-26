@@ -4,15 +4,25 @@ import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import './mobileHome.css'
 
 const DEFAULT_ORDER = ['kassa', 'kassabonnen', 'winkelen', 'voorraad', 'bijna-op', 'catalogus', 'locaties', 'meldingen']
+const ACTION_ICONS = {
+  kassa: <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 22V12h10M42 12h10v10M52 42v10H42M22 52H12V42M20 24v16M26 22v20M32 24v16M38 22v20M44 24v16" /></svg>,
+  kassabonnen: <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M18 10h28v44l-7-5-7 5-7-5-7 5V10ZM24 22h16M24 30h16M24 38h11" /></svg>,
+  winkelen: <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 27h36l-4 25H18l-4-25ZM22 27l10-15 10 15M25 35v9M32 35v9M39 35v9" /></svg>,
+  voorraad: <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M24 10h16v16H24V10ZM10 38h16v16H10V38ZM38 38h16v16H38V38ZM18 18h4M42 18h4M18 46h4M46 46h4" /></svg>,
+  'bijna-op': <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="23" /><path d="M32 18v19M32 45h.01" /></svg>,
+  catalogus: <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 15c10-3 18 0 24 6v34c-6-6-14-9-24-6V15ZM56 15c-10-3-18 0-24 6v34c6-6 14-9 24-6V15Z" /></svg>,
+  locaties: <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 56s17-17 17-31a17 17 0 1 0-34 0c0 14 17 31 17 31Z" /><circle cx="32" cy="25" r="6" /></svg>,
+  meldingen: <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M15 45h34c-5-5-6-10-6-19a11 11 0 0 0-22 0c0 9-1 14-6 19ZM27 50a5 5 0 0 0 10 0" /></svg>,
+}
 const META = {
-  kassa: { label: 'Kassa', detail: 'Kassabon scannen', icon: '▤', tone: 'coral' },
-  kassabonnen: { label: 'Uitpakken', detail: 'Artikelen opruimen', icon: '□', tone: 'blue' },
-  winkelen: { label: 'Boodschappen', detail: 'Bekijk je boodschappenlijst', icon: '🛒', tone: 'purple' },
-  voorraad: { label: 'Voorraad', detail: 'Bekijk je voorraad', icon: '▣', tone: 'green' },
-  'bijna-op': { label: 'Bijna op', detail: 'Bekijk wat bijna op is', icon: '!' },
-  catalogus: { label: 'Catalogus', detail: 'Bekijk de productcatalogus', icon: '≡' },
-  locaties: { label: 'Waar InHuis', detail: 'Beheer locaties in huis', icon: '⌖' },
-  meldingen: { label: 'Meldingen', detail: 'Bekijk je meldingen', icon: '●' },
+  kassa: { label: 'Kassa', detail: 'Kassabon scannen', icon: ACTION_ICONS.kassa, tone: 'mint' },
+  kassabonnen: { label: 'Uitpakken', detail: 'Artikelen opruimen', icon: ACTION_ICONS.kassabonnen, tone: 'orange' },
+  winkelen: { label: 'Boodschappen', detail: 'Bekijk je boodschappenlijst', icon: ACTION_ICONS.winkelen, tone: 'red' },
+  voorraad: { label: 'Voorraad', detail: 'Bekijk je voorraad', icon: ACTION_ICONS.voorraad, tone: 'blue' },
+  'bijna-op': { label: 'Bijna op', detail: 'Bekijk wat bijna op is', icon: ACTION_ICONS['bijna-op'], tone: 'yellow' },
+  catalogus: { label: 'Catalogus', detail: 'Bekijk de productcatalogus', icon: ACTION_ICONS.catalogus, tone: 'purple' },
+  locaties: { label: 'Waar InHuis', detail: 'Beheer locaties in huis', icon: ACTION_ICONS.locaties, tone: 'green' },
+  meldingen: { label: 'Meldingen', detail: 'Bekijk je meldingen', icon: ACTION_ICONS.meldingen, tone: 'blue' },
 }
 function identityKey(context) { return String(context?.user_id || context?.email || 'anonymous').trim().toLowerCase() }
 function storageKey(context) { return 'inhuis-mobile-home-order:' + identityKey(context) }
