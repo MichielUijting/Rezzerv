@@ -216,13 +216,19 @@ def test_admin_cannot_assign_legacy_or_special_role():
             'household.viewer',
             'household.advanced_member',
             'household.owner',
-            'household.frontteam',
         ):
             response = client.put(
                 '/api/households/h1/authorization/members/m-member/role',
                 json={'role_key': role_key},
             )
             assert response.status_code == 400
+
+        frontteam = client.put(
+            '/api/households/h1/authorization/members/m-member/role',
+            json={'role_key': 'household.frontteam'},
+        )
+        assert frontteam.status_code == 403
+        assert frontteam.json()['detail']['reason'] == 'superuser_required_for_frontteam_membership'
 
         with engine.begin() as conn:
             role = conn.execute(text("""
