@@ -7,7 +7,7 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { isFrontteamMemberFromContext, readStoredAuthContext } from '../../lib/authSession.js'
+import { isHouseholdFrontteamFromContext, readStoredAuthContext } from '../../lib/authSession.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
 import {
   createHouseholdThread,
@@ -30,7 +30,7 @@ export default function HouseholdSupportPage() {
   const originScreen = query.get('screen') || 'Inhuis'
   const authContext = readStoredAuthContext()
   const currentUserId = String(authContext?.user_id || authContext?.email || '').trim().toLowerCase()
-  const canMessageSuperuser = isFrontteamMemberFromContext(authContext)
+  const canMessageSuperuser = isHouseholdFrontteamFromContext(authContext)
 
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
