@@ -26,10 +26,11 @@ export function MobileBackControl({ testId = 'mobile-global-back' }) {
   )
 }
 
-export default function MobileModuleHeader({ title, testId = 'mobile-module-header' }) {
+export default function MobileModuleHeader({ title, testId = 'mobile-module-header', showBack = false, onBack = null, backLabel = 'Terug' }) {
   return (
     <header className="rz-mobile-module-header" data-testid={testId}>
       <div className="rz-mobile-module-header-leading">
+        {showBack ? <button type="button" className="rz-mobile-module-header-back" onClick={onBack}>{backLabel}</button> : null}
         <h1>{title}</h1>
       </div>
       <span className="rz-mobile-module-header-wordmark" aria-label="InHuis">
