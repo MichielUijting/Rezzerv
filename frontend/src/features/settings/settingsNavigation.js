@@ -213,12 +213,14 @@ function buildSections(tiles) {
     .filter((section) => section.tiles.length > 0)
 }
 
-export function buildSettingsNavigation({ onboarding } = {}) {
+export function buildSettingsNavigation({ onboarding, contextType = 'regular' } = {}) {
   const configuration = normalizedConfiguration(onboarding)
   const mode = configuration ? 'dynamic' : 'legacy'
+  const normalizedContextType = String(contextType || 'regular').trim().toLowerCase()
+  const contextTiles = SETTINGS_TILES.filter((tile) => tile.allowedContexts.includes(normalizedContextType))
   const tiles = configuration
-    ? SETTINGS_TILES.filter((tile) => isRelevant(tile, configuration))
-    : SETTINGS_TILES
+    ? contextTiles.filter((tile) => isRelevant(tile, configuration))
+    : contextTiles
 
   return {
     mode,

@@ -47,7 +47,6 @@ for (const tile of SETTINGS_TILES) {
     'privacy-data-sharing',
     'locations',
     'store-import',
-    'frontteam',
     'household',
     'authorizations',
     'household-automation',
@@ -56,7 +55,7 @@ for (const tile of SETTINGS_TILES) {
   ])
   assert.deepEqual(sectionKeys(navigation), {
     account: ['account', 'article-details', 'privacy-data-sharing'],
-    household: ['frontteam', 'household', 'authorizations'],
+    household: ['household', 'authorizations'],
     usage: [
       'capabilities',
       'article-groups',
@@ -149,7 +148,6 @@ for (const tile of SETTINGS_TILES) {
     'article-groups',
     'privacy-data-sharing',
     'locations',
-    'frontteam',
     'household',
     'authorizations',
     'household-automation',
@@ -193,6 +191,15 @@ for (const tile of SETTINGS_TILES) {
     },
   })
   assert.deepEqual(keys(sameCapabilitiesDifferentStart), keys(navigation))
+}
+
+{
+  const systemNavigation = buildSettingsNavigation({
+    contextType: 'system',
+    onboarding: null,
+  })
+  assert.ok(keys(systemNavigation).includes('frontteam'))
+  assert.equal(systemNavigation.tiles.find((tile) => tile.key === 'frontteam')?.permission, 'platform.frontteam_roles.manage')
 }
 
 console.log('DYNAMIC_SETTINGS_NAVIGATION_CONTRACT_GREEN')

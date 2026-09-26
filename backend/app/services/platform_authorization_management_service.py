@@ -430,7 +430,12 @@ def grant_special_role(
         _ensure_frontteam_membership_registry(conn, target_user_id, status="active")
         mapped_household_id = resolve_frontteam_personal_household_id(conn, target_user_id)
         regular_households = _active_regular_household_ids(conn, target_user_id)
-        if mapped_household_id or not regular_households:
+        canonical_personal_household_id = frontteam_personal_household_id(target_user_id)
+        if (
+            mapped_household_id
+            or not regular_households
+            or canonical_personal_household_id in regular_households
+        ):
             ensure_frontteam_personal_household_for_user(
                 conn,
                 user_id=target_user_id,
@@ -500,7 +505,7 @@ def revoke_special_role(
         object_id=target_user_id,
         old_value={"role_key": normalized_role_key},
         new_value=None,
-        reason=PLATFORM_SPECIAL_ROLES_MANAGE,
+        reason=(PLATFORM_FRONTTEAM_ROLES_MANAGE if normalized_role_key == FRONTTEAM_ROLE_KEY else PLATFORM_SPECIAL_ROLES_MANAGE),
     )
     return _safe_item_for_user(conn, row, current_user_id=str(actor_user_id))
 
