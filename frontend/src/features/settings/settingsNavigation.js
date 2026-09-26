@@ -111,6 +111,18 @@ const SETTINGS_TILES = [
     allowViewer: false,
   },
   {
+    key: 'frontteam',
+    title: 'Frontteam beheren',
+    description: 'Ken aanvullende Frontteambevoegdheden toe aan bestaande gebruikers',
+    to: '/instellingen/frontteam',
+    permission: 'platform.frontteam_roles.manage',
+    relevance: 'always',
+    section: 'household',
+    scope: 'platform',
+    allowedContexts: ['system'],
+    allowViewer: false,
+  },
+  {
     key: 'household',
     title: 'Huishouden',
     description: 'Naam, leden en rollen beheren',
