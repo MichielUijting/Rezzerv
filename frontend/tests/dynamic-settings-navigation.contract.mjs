@@ -89,7 +89,6 @@ for (const tile of SETTINGS_TILES) {
     'article-groups',
     'privacy-data-sharing',
     'store-import',
-    'frontteam',
     'household',
     'authorizations',
     'household-automation',
