@@ -1261,9 +1261,18 @@ async function saveLine(lineId, overrides = null) {
     try {
       let updated = null
       for (const lineId of selectedLineIds) {
+        const draft = lineDrafts[lineId] || {}
         updated = await fetchJson(`/api/receipts/${encodeURIComponent(receipt.id)}/lines/${encodeURIComponent(lineId)}`, {
           method: 'PATCH',
-          body: JSON.stringify({ ...(lineDrafts[lineId] || {}), is_deleted: true }),
+          body: JSON.stringify({
+            article_name: draft.article_name,
+            quantity: draft.quantity === '' || !Number.isFinite(Number(draft.quantity)) ? null : Number(draft.quantity),
+            unit: draft.unit,
+            unit_price: draft.unit_price === '' || !Number.isFinite(Number(draft.unit_price)) ? null : Number(draft.unit_price),
+            line_total: draft.line_total === '' || !Number.isFinite(Number(draft.line_total)) ? null : Number(draft.line_total),
+            is_validated: Boolean(draft.is_validated),
+            is_deleted: true,
+          }),
         })
       }
       if (updated) onReceiptUpdated?.(updated)
