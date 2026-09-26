@@ -608,3 +608,15 @@ Vaste regels:
 - De mobiele Startpagina toont geen huishoudnaam boven de begroeting; de persoonlijke begroeting is `Welkom <voornaam> InHuis`.
 - Primaire actie-iconen zijn groter dan de standaard body-iconen en mogen per actie een eigen zachte accentkleur hebben; dit verandert de centrale primaire UI-kleur niet.
 - De regel onder de begroeting is platformbreed configureerbare content en wordt beheerd bij Superuser > Actieknoppen; de standaardtekst is `Fijn dat je er weer bent.`.
+
+
+## Mobiele Meldingen — geïntegreerde inbox
+
+- De mobiele route **Meldingen** gebruikt de gedeelde `MobileModuleHeader`, globale **Terug**-bediening en globale bottom navigation.
+- De inbox combineert menselijke **Berichten** met door **Inhuis** gegenereerde applicatiemeldingen in één chronologische lijst.
+- De vaste filters zijn **Alles**, **Berichten** en **Inhuis**; **Alles** is standaard.
+- Menselijke communicatie blijft een supportgesprek met onderwerp, status en antwoordmogelijkheid; applicatiemeldingen openen via een deeplink het relevante onderdeel.
+- Applicatiemeldingen gebruiken naast tekst een semantische linkerrand: rood actie nodig, oranje aandacht, groen succesvol en blauw informatief. Kleur is nooit de enige informatiedrager.
+- Ongelezen applicatiemeldingen krijgen een zichtbare stip en een persistente server-side gelezenstatus.
+- Reguliere mobiele typografie blijft beperkt tot `--font-size-ui-body` en `--font-size-ui-title`.
+- Een lege inbox toont **Geen nieuwe meldingen** en **Alles is op dit moment bijgewerkt.**
