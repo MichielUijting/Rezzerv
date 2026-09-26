@@ -304,9 +304,21 @@ def set_household_membership_role(
     allowed_roles = {
         "household.member",
         "household.admin",
+        "household.frontteam",
     }
     if role_key not in allowed_roles:
         raise ValueError("Unknown or non-household role")
+
+    actor_role = conn.execute(text("""
+        SELECT role_key FROM auth_membership_roles
+        WHERE household_id = :household_id
+          AND membership_id = :membership_id
+          AND active IS TRUE
+        LIMIT 1
+    """), {
+        "household_id": str(household_id),
+        "membership_id": str(actor_membership_id),
+    }).scalar()
 
     old_role = conn.execute(text("""
         SELECT role_key FROM auth_membership_roles
@@ -318,6 +330,11 @@ def set_household_membership_role(
         "household_id": str(household_id),
         "membership_id": str(target_membership_id),
     }).scalar()
+
+    if (old_role == "household.frontteam" or role_key == "household.frontteam") and actor_role != "household.owner":
+        raise AuthorizationDeniedError(
+            AuthorizationDecision(False, "superuser_required_for_frontteam_membership", "members.manage")
+        )
 
     if old_role == "household.admin" and role_key != "household.admin":
         assert_last_household_admin_remains(
