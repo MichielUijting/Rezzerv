@@ -548,7 +548,7 @@ De mobiele redesign gebruikt vanaf 23 september 2026 een gescheiden testmodel:
 - bij iedere volgende mobiele schermmigratie wordt dezelfde conformiteitstest met de nieuwe schermbaseline uitgebreid en worden eventuele resterende legacy-visuele assertions voor dat scherm verwijderd;
 - functionele regressiedekking wordt daarbij niet verlaagd of omzeild: alleen de vervangen visuele baseline verhuist naar de nieuwe authority.
 
-Op dit moment vallen **Voorraad** en **Voorraad-artikeldetail** onder de nieuwe mobiele UI-conformiteitsset. **Bijna op** en **Boodschappenlijst/Winkelen** behouden hun functionele regressietests, maar hebben totdat hun nieuwe ontwerp expliciet is vastgesteld geen blokkerende legacy-visuele baseline.
+De applicatiebrede mobiele UI-conformiteitsset omvat **Startpagina, Voorraad, Voorraad-artikeldetail, Bijna op, Boodschappenlijst/Winkelen en Kassa**. Deze schermen staan centraal in één manifest in `frontend/tests/mobile-ui-conformity.contract.mjs`. De gate controleert voor ieder geregistreerd mobiel scherm minimaal de gedeelde `MobileModuleHeader`, uitsluitend de twee centrale lettergroottes `--font-size-ui-body` en `--font-size-ui-title`, en het verbod op alternatieve primaire groentinten. Een bestaand scherm mag niet stilzwijgend uit het manifest verdwijnen.
 
 ## Historische styleguidedocumenten
 
@@ -583,3 +583,21 @@ Presentatieregels:
 - Mobiele modulekoppen gebruiken `frontend/src/ui/MobileModuleHeader.jsx` en de globale Terug-bediening uit `MobileAppChrome`; featurepagina's implementeren geen eigen sticky Terug-knop.
 - Een afwijkende artikelregel of moduleheader vereist een expliciet functioneel verschil en een contracttest die die afwijking motiveert.
 - Nieuwe mobiele modules controleren eerst de centrale UI-componentcatalogus voordat feature-specifieke markup of CSS wordt toegevoegd.
+
+
+## Mobiele Startpagina — persoonlijke snelstart
+
+De mobiele **Startpagina** is vanaf 26 september 2026 een persoonlijke snelstart en gebruikt op `<=720px` een eigen mobiele presentatie; desktop blijft de bestaande Startpagina gebruiken.
+
+Vaste regels:
+- de gedeelde donkergroene `MobileModuleHeader` met titel **Startpagina** staat altijd bovenaan; alleen de globale **Terug**-knop ontbreekt op deze navigatieroot;
+- alle reguliere tekst op de mobiele Startpagina gebruikt uitsluitend de twee centrale groottes `--font-size-ui-body` en `--font-size-ui-title`; het InHuis-woordmerk mag qua lettervorm afwijken, niet qua grootte;
+- bovenaan staat één begroeting **Welkom <voornaam> InHuis**; er staat geen tweede InHuis-logo of huis-icoon op de Startpagina;
+- het woordmerk is tekstueel **InHuis**: **In** in een schuin geschreven accentvorm in `#28a99e`, **Huis** direct aansluitend in de centrale donkergroene kleur; dak-, blad- en losse decoratieve streepjes zijn niet toegestaan;
+- het woordmerk is de enige expliciete typografische uitzondering op Arial; overige gebruikerszichtbare tekst blijft de centrale 14/16px-typografie volgen;
+- een compacte meldingenkaart toont het actuele aantal open gebruikersmeldingen wanneer dit beschikbaar is en opent de centrale route **Meldingen**; toekomstige applicatiemeldingen sluiten op dezelfde centrale meldingenervaring aan en vormen geen tweede losse inbox op de Startpagina;
+- de eerste vier persoonlijke acties worden als grote snelstartregels getoond; resterende beschikbare acties staan compact onder **Meer acties**;
+- **Aanpassen** opent een mobiele ordeningsweergave waarin de gebruiker acties omhoog/omlaag kan plaatsen; de persoonlijke volgorde wordt per gebruiker op het apparaat bewaard en bij een volgende lokale sessie opnieuw toegepast;
+- globale platformbeschikbaarheid, autorisatie en featureflags blijven leidend: persoonlijk ordenen kan een niet-beschikbare actie nooit zichtbaar maken;
+- de vaste globale mobiele bottom navigation blijft onderdeel van `MobileAppChrome` en staat los van de persoonlijke snelstartvolgorde;
+- de Startpagina zelf toont geen globale **Terug**-knop, omdat zij het navigatiebeginpunt van de mobiele sessie is.

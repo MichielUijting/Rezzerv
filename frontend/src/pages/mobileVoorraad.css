@@ -67,7 +67,7 @@
   border-radius: 10px;
   background: #f2f4f2;
   color: #171a18;
-  font-size: 14px;
+  font-size: var(--font-size-ui-body);
   font-weight: 400;
   box-shadow: none;
 }
@@ -100,7 +100,7 @@
   border-radius: 9px !important;
   background: #ffffff !important;
   color: #2b302d !important;
-  font-size: 13px !important;
+  font-size: var(--font-size-ui-body) !important;
   font-weight: 400 !important;
   box-shadow: none !important;
 }
@@ -119,7 +119,7 @@
   border: 0;
   background: transparent !important;
   color: var(--color-mobile-ui-primary) !important;
-  font-size: 14px;
+  font-size: var(--font-size-ui-body);
   box-shadow: none !important;
 }
 
@@ -133,7 +133,7 @@
 
 .rz-mobile-inventory-summary {
   color: var(--rz-mobile-proposal-muted);
-  font-size: 14px;
+  font-size: var(--font-size-ui-body);
   font-weight: 600;
   line-height: 1.3;
 }
@@ -146,7 +146,7 @@
   border-radius: 9px;
   background: var(--color-mobile-ui-primary) !important;
   color: #ffffff !important;
-  font-size: 14px;
+  font-size: var(--font-size-ui-body);
   font-weight: 400;
   box-shadow: none !important;
   white-space: nowrap;
@@ -223,7 +223,7 @@
 .rz-mobile-inventory-card-title {
   overflow: hidden;
   color: #171a18;
-  font-size: 14px;
+  font-size: var(--font-size-ui-body);
   font-weight: 650;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -233,7 +233,7 @@
 .rz-mobile-inventory-card-product {
   overflow: hidden;
   color: var(--rz-mobile-proposal-muted);
-  font-size: 14px;
+  font-size: var(--font-size-ui-body);
   font-weight: 400;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -247,7 +247,7 @@
   align-items: center;
   flex-wrap: wrap;
   color: var(--rz-mobile-proposal-muted);
-  font-size: 14px;
+  font-size: var(--font-size-ui-body);
   font-weight: 400;
   line-height: 1.25;
 }
@@ -294,7 +294,7 @@
   min-height: 44px;
   border-radius: 8px;
   color: #7b847e;
-  font-size: 22px;
+  font-size: var(--font-size-ui-title);
   font-weight: 400;
   line-height: 1;
   cursor: pointer;
@@ -316,7 +316,7 @@
   border-radius: 12px;
   background: #ffffff;
   color: #545c57;
-  font-size: 14px;
+  font-size: var(--font-size-ui-body);
 }
 
 .rz-mobile-inventory-state--error {

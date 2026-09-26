@@ -277,7 +277,7 @@
 .rz-mobile-shopping-list .rz-mobile-inventory-card-main { min-width: 0; }
 .rz-mobile-shopping-list .rz-mobile-inventory-card-title {
   overflow: hidden;
-  font-size: 0.9rem;
+  font-size: var(--font-size-ui-body);
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;

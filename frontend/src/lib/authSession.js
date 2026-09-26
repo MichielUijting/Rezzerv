@@ -67,6 +67,7 @@ function normalizeSessionContext(context) {
   return {
     user_id: normalizedHouseholdContext.user_id || normalizedHouseholdContext.user?.id || '',
     email: normalizedHouseholdContext.email || normalizedHouseholdContext.user?.email || '',
+    first_name: normalizedHouseholdContext.first_name || normalizedHouseholdContext.user?.first_name || normalizedHouseholdContext.given_name || normalizedHouseholdContext.user?.given_name || '',
     active_household_id: hasNoHouseholdContext ? null : normalizedHouseholdContext.active_household_id ?? '',
     active_household_name: normalizedHouseholdContext.active_household_name || '',
     context_type: contextType,
