@@ -31,7 +31,7 @@ assert.deepEqual(
   'Settings v2 moet exact de vier canonical informatiesecties definiëren',
 )
 
-assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
+assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
 
 const expectedTiles = {
@@ -57,7 +57,7 @@ for (const [key, expected] of Object.entries(expectedTiles)) {
   assert.equal(tile.scope, expected.scope)
   assert.equal(tile.permission ?? null, expected.permission)
   assert.equal(tile.allowViewer, expected.allowViewer)
-  assert.deepEqual(tile.allowedContexts, ['regular'])
+  assert.deepEqual(tile.allowedContexts, ['regular', 'system'])
 }
 
 for (const deferredKey of ['notifications', 'recipes']) {
