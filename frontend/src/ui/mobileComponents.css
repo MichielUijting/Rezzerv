@@ -201,3 +201,5 @@
   cursor: default;
   opacity: 0.6;
 }
+
+.rz-mobile-module-header-leading{display:flex;align-items:center;gap:8px}.rz-mobile-module-header-back{border:1px solid rgba(255,255,255,.72);border-radius:8px;background:transparent;color:#fff;min-height:36px;padding:0 10px;font:inherit;font-size:var(--font-size-ui-body);font-weight:700;cursor:pointer}.rz-mobile-module-header-back:focus-visible{outline:2px solid #fff;outline-offset:2px}
