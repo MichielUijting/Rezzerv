@@ -13,14 +13,25 @@ const almostOutResponsiveSource = readFileSync(new URL('../src/features/almostOu
 const shoppingResponsiveSource = readFileSync(new URL('../src/features/shopping/ShoppingResponsive.jsx', import.meta.url), 'utf8')
 const articleResponsiveSource = readFileSync(new URL('../src/features/articles/ArticlePageResponsive.jsx', import.meta.url), 'utf8')
 const mobileViewportSource = readFileSync(new URL('../src/app/mobileViewport.js', import.meta.url), 'utf8')
+const mobileHomeSource = readFileSync(new URL('../src/features/home/MobileHomePage.jsx', import.meta.url), 'utf8')
+const mobileHomeCss = readFileSync(new URL('../src/features/home/mobileHome.css', import.meta.url), 'utf8')
 const mobileAppChromeCss = readFileSync(new URL('../src/app/mobileAppChrome.css', import.meta.url), 'utf8')
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
 
 // Sole visual conformance authority for mobile roots already migrated to the
 // new PO-approved design. Functional mobile contracts remain separate.
-const MIGRATED_MOBILE_UI = Object.freeze(['voorraad', 'voorraad-detail'])
-assert.deepEqual(MIGRATED_MOBILE_UI, ['voorraad', 'voorraad-detail'])
+const MIGRATED_MOBILE_UI = Object.freeze(['voorraad', 'voorraad-detail', 'startpagina'])
+assert.deepEqual(MIGRATED_MOBILE_UI, ['voorraad', 'voorraad-detail', 'startpagina'])
+
+assert.match(mobileHomeSource, /data-testid="mobile-home-page"/)
+assert.match(mobileHomeSource, /mobile-home-customize/)
+assert.match(mobileHomeSource, /inhuis-mobile-home-order:/)
+assert.match(mobileHomeSource, /listHouseholdThreads\('Open'\)/)
+assert.match(mobileHomeSource, /rz-inhuis-wordmark-in/)
+assert.match(mobileHomeCss, /#28a99e/i)
+assert.match(mobileHomeCss, /Segoe Script/)
+assert.match(mobileHomeCss, /url\('\/inhuis-green-wallpaper\.svg'\)/)
 
 assert.match(mobileInventorySource, /data-testid="mobile-inventory-page"/)
 assert.match(mobileInventorySource, /<MobileModuleHeader title="Voorraad" testId="mobile-inventory-header" \/>/)
