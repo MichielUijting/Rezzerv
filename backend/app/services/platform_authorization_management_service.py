@@ -400,7 +400,7 @@ def grant_special_role(
         object_id=target_user_id,
         old_value=None,
         new_value={"role_key": normalized_role_key},
-        reason=PLATFORM_SPECIAL_ROLES_MANAGE,
+        reason=(PLATFORM_FRONTTEAM_ROLES_MANAGE if normalized_role_key == FRONTTEAM_ROLE_KEY else PLATFORM_SPECIAL_ROLES_MANAGE),
     )
     return _safe_item_for_user(conn, row, current_user_id=str(actor_user_id))
 
