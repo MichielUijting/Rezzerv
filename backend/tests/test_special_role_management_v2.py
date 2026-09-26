@@ -50,6 +50,14 @@ def connection():
             )
         """))
         conn.execute(text("""
+            CREATE TABLE frontteam_memberships (
+                user_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("""
             CREATE TABLE household_memberships (
                 user_id TEXT NOT NULL,
                 household_id TEXT NOT NULL,
@@ -349,6 +357,7 @@ def test_frontteam_grant_preserves_existing_regular_household_membership(connect
         actor_user_id="owner",
     )
     assert active_roles(connection, "regular") == {FRONTTEAM_ROLE_KEY}
+    assert connection.execute(text("SELECT status FROM frontteam_memberships WHERE user_id = 'regular'")).scalar_one() == "active"
     membership = connection.execute(text("""
         SELECT role, status FROM household_memberships
         WHERE user_id = 'regular' AND household_id = '1'
@@ -364,6 +373,7 @@ def test_frontteam_grant_preserves_existing_regular_household_membership(connect
         actor_user_id="owner",
     )
     assert active_roles(connection, "regular") == set()
+    assert connection.execute(text("SELECT status FROM frontteam_memberships WHERE user_id = 'regular'")).scalar_one() == "inactive"
     membership_after = connection.execute(text("""
         SELECT role, status FROM household_memberships
         WHERE user_id = 'regular' AND household_id = '1'
