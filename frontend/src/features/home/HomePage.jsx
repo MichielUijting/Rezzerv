@@ -157,7 +157,7 @@ export default function HomePage() {
   }
 
   if (isMobileViewport) {
-    return <MobileHomePage context={context} navigation={navigation} visibility={visibility} onOpenTile={openTile} />
+    return <MobileHomePage context={context} navigation={navigation} visibility={visibility} welcomeText={actionAvailability.welcomeText} onOpenTile={openTile} />
   }
 
   return (
