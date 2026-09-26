@@ -10,7 +10,7 @@ revision = "20260926_03"
 down_revision = "20260926_02"
 branch_labels = None
 depends_on = None
-CI_IMPACT_DOMAINS = ["authorization", "shared"]
+CI_IMPACT_DOMAINS = ["auth", "shared"]
 
 
 def upgrade() -> None:
