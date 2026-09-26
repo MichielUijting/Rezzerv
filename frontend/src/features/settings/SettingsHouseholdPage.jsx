@@ -135,6 +135,8 @@ export default function SettingsHouseholdPage() {
   const authorizationByEmail = useMemo(() => new Map(
     authorization.members.map((member) => [String(member.email || '').toLowerCase(), member]),
   ), [authorization.members])
+  const currentAuthorizationMember = authorization.members.find((member) => member.is_current_user)
+  const canManageFrontteam = currentAuthorizationMember?.role_key === 'household.owner'
 
   function syncHouseholdName(payload) {
     const nextName = String(payload?.household_name || '').trim()
@@ -323,7 +325,10 @@ export default function SettingsHouseholdPage() {
                     {(data?.members || []).map((member) => {
                       const linkedAuthorization = authorizationByEmail.get(String(member.email || '').toLowerCase())
                       const currentRoleKey = linkedAuthorization?.role_key || ''
-                      const assignableRoles = authorization.roles.filter((role) => ASSIGNABLE_ROLE_KEYS.has(role.role_key))
+                      const assignableRoleKeys = canManageFrontteam
+                        ? new Set([...ASSIGNABLE_ROLE_KEYS, 'household.frontteam'])
+                        : ASSIGNABLE_ROLE_KEYS
+                      const assignableRoles = authorization.roles.filter((role) => assignableRoleKeys.has(role.role_key))
                       const currentRole = authorization.roles.find((role) => role.role_key === currentRoleKey)
                         || (currentRoleKey ? { role_key: currentRoleKey, name: currentRoleKey } : null)
                       const roleOptions = currentRole && !ASSIGNABLE_ROLE_KEYS.has(currentRole.role_key)
@@ -342,7 +347,7 @@ export default function SettingsHouseholdPage() {
                                 className="rz-input rz-household-select"
                                 value={currentRoleKey}
                                 onChange={(event) => handleRoleChange(member, event.target.value)}
-                                disabled={!isAdmin || isSaving || !linkedAuthorization}
+                                disabled={!isAdmin || isSaving || !linkedAuthorization || (currentRoleKey === 'household.frontteam' && !canManageFrontteam)}
                                 data-testid={`household-role-select-${member.email}`}
                                 aria-label={`Rol ${member.email}`}
                               >
