@@ -5,10 +5,10 @@ import './mobileHome.css'
 
 const DEFAULT_ORDER = ['kassa', 'kassabonnen', 'winkelen', 'voorraad', 'bijna-op', 'catalogus', 'locaties', 'meldingen']
 const META = {
-  kassa: { label: 'Kassa', detail: 'Kassabon scannen', icon: '▤' },
-  kassabonnen: { label: 'Uitpakken', detail: 'Artikelen opruimen', icon: '□' },
-  winkelen: { label: 'Boodschappen', detail: 'Bekijk je boodschappenlijst', icon: '🛒' },
-  voorraad: { label: 'Voorraad', detail: 'Bekijk je voorraad', icon: '▣' },
+  kassa: { label: 'Kassa', detail: 'Kassabon scannen', icon: '▤', tone: 'coral' },
+  kassabonnen: { label: 'Uitpakken', detail: 'Artikelen opruimen', icon: '□', tone: 'blue' },
+  winkelen: { label: 'Boodschappen', detail: 'Bekijk je boodschappenlijst', icon: '🛒', tone: 'purple' },
+  voorraad: { label: 'Voorraad', detail: 'Bekijk je voorraad', icon: '▣', tone: 'green' },
   'bijna-op': { label: 'Bijna op', detail: 'Bekijk wat bijna op is', icon: '!' },
   catalogus: { label: 'Catalogus', detail: 'Bekijk de productcatalogus', icon: '≡' },
   locaties: { label: 'Waar InHuis', detail: 'Beheer locaties in huis', icon: '⌖' },
@@ -23,7 +23,7 @@ function firstName(context) {
   const explicit = String(context?.first_name || '').trim()
   if (explicit) return explicit
   const candidate = String(context?.email || '').split('@')[0].trim().split(/[._-]+/)[0]
-  if (!candidate || ['admin', 'user', 'gebruiker'].includes(candidate.toLowerCase())) return ''
+  if (!candidate) return ''
   return candidate.charAt(0).toUpperCase() + candidate.slice(1)
 }
 function InHuisWordmark() {
@@ -57,7 +57,7 @@ export default function MobileHomePage({ context, navigation, visibility, onOpen
   }, [availableTiles, availableKeys, order])
   function persist(nextKeys) { setOrder(nextKeys); try { window.localStorage.setItem(storageKey(context), JSON.stringify(nextKeys)) } catch {} }
   function move(key, direction) { persist(reorder(orderedTiles.map((tile) => tile.key), key, direction)) }
-  const name = firstName(context), primary = orderedTiles.slice(0, 4), more = orderedTiles.slice(4)
+  const name = firstName(context) || 'gebruiker', primary = orderedTiles.slice(0, 4), more = orderedTiles.slice(4)
   if (editing) return <main className="rz-mobile-home" data-testid="mobile-home-reorder">
     <header className="rz-mobile-home-edit-header"><button type="button" onClick={() => setEditing(false)}>Terug</button><strong>Volgorde aanpassen</strong><button type="button" onClick={() => setEditing(false)}>Gereed</button></header>
     <section className="rz-mobile-home-inner"><p className="rz-mobile-home-intro">Bepaal zelf de volgorde van de acties op je startscherm. Deze volgorde wordt voor jou bewaard voor een volgende sessie op dit apparaat.</p>
@@ -68,11 +68,10 @@ export default function MobileHomePage({ context, navigation, visibility, onOpen
     </section>
   </main>
   return <main className="rz-mobile-home" data-testid="mobile-home-page"><MobileModuleHeader title="Startpagina" testId="mobile-home-header" /><section className="rz-mobile-home-inner">
-    <div className="rz-mobile-home-household">{context?.active_household_name || 'Mijn huishouden'}</div>
-    <h1 className="rz-mobile-home-welcome">Welkom{name ? ' ' + name : ''} <InHuisWordmark /></h1><p className="rz-mobile-home-subtitle">Fijn dat je er weer bent.</p>
+    <h1 className="rz-mobile-home-welcome">Welkom {name} <InHuisWordmark /></h1><p className="rz-mobile-home-subtitle">Fijn dat je er weer bent.</p>
     <button type="button" className="rz-mobile-home-notifications" onClick={() => onOpenTile({ key: 'meldingen', clickable: true })}><span className="rz-mobile-home-notification-icon" aria-hidden="true">●</span><span><strong>{openNotifications === null ? 'Openstaande meldingen' : openNotifications + ' openstaande melding' + (openNotifications === 1 ? '' : 'en')}</strong><small>Bekijk wat aandacht vraagt</small></span><span aria-hidden="true">›</span></button>
     <div className="rz-mobile-home-section-title"><h2>Wat wil je doen?</h2><button type="button" onClick={() => setEditing(true)} data-testid="mobile-home-customize">⚙ Aanpassen</button></div>
-    <div className="rz-mobile-home-primary-actions">{primary.map((tile) => { const meta = META[tile.key] || { label: tile.label, detail: '', icon: '•' }; return <button type="button" className="rz-mobile-home-action-card" key={tile.key} onClick={() => onOpenTile(tile)} data-testid={'mobile-home-action-' + tile.key}><span className="rz-mobile-home-icon" aria-hidden="true">{meta.icon}</span><span><strong>{meta.label}</strong><small>{meta.detail}</small></span><span aria-hidden="true">›</span></button> })}</div>
+    <div className="rz-mobile-home-primary-actions">{primary.map((tile) => { const meta = META[tile.key] || { label: tile.label, detail: '', icon: '•' }; return <button type="button" className="rz-mobile-home-action-card" key={tile.key} onClick={() => onOpenTile(tile)} data-testid={'mobile-home-action-' + tile.key}><span className={`rz-mobile-home-icon rz-mobile-home-icon--${meta.tone || 'green'}`} aria-hidden="true">{meta.icon}</span><span><strong>{meta.label}</strong><small>{meta.detail}</small></span><span aria-hidden="true">›</span></button> })}</div>
     {more.length ? <section className="rz-mobile-home-more"><h2>Meer acties</h2>{more.map((tile) => { const meta = META[tile.key] || { label: tile.label }; return <button type="button" key={tile.key} onClick={() => onOpenTile(tile)}><span>{meta.label}</span><span aria-hidden="true">›</span></button> })}</section> : null}
   </section></main>
 }
