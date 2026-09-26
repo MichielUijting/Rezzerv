@@ -75,6 +75,7 @@ V2_PLATFORM_PERMISSIONS = (
     "platform.functional_features.manage",
     "platform.system_household.access",
     "platform.special_roles.manage",
+    "platform.frontteam_roles.manage",
     "platform.frontteam_messages.create",
     "platform.frontteam_messages.read",
     "platform.frontteam_messages.reply",
@@ -167,6 +168,7 @@ V2_SUPERUSER_TARGET_PERMISSIONS = {
     "platform.gpc.manage",
     "platform.external_sources.view",
     "platform.external_sources.manage",
+    "platform.frontteam_roles.manage",
 }
 
 # Canonical runtime grantset from 9.1.8a onward. The v2 target is no longer
