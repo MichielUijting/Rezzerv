@@ -16,12 +16,9 @@ Meldingen ondersteunt communicatie tussen Rezzerv-gebruikers en de centrale supe
 
 ### Gewone gebruiker
 
-- ziet de tegel **Meldingen**;
-- opent `/meldingen`;
-- maakt een melding aan de superuser;
-- ziet uitsluitend eigen meldingen;
-- leest en beantwoordt het eigen gesprek;
-- kan een eigen melding verwijderen;
+- ziet de tegel **Meldingen** en opent `/meldingen`;
+- ontvangt en leest Inhuis-meldingen waarvoor de gebruiker ontvanger is;
+- kan geen gesprek met de superuser starten of beantwoorden;
 - kan geen platformbreed bericht versturen.
 
 ### Superuser
@@ -33,17 +30,20 @@ Meldingen ondersteunt communicatie tussen Rezzerv-gebruikers en de centrale supe
 - filtert op status en huishouden;
 - exporteert meldingen als CSV;
 - verwijdert meldingen;
-- stuurt als enige een melding aan alle actieve Rezzerv-leden.
+- stuurt als enige een melding aan alle actieve Rezzerv-leden;
+- kent als enige de huishoudrol **Frontteamlid** toe en trekt die als enige weer in.
 
 ### Beheerder, Lid en Frontteam
 
 Deze rollen hebben geen platformbreed broadcastrecht. Een huishoudrol op zichzelf geeft geen toegang tot `/superuser/meldingen`.
 
+Alleen een gebruiker met de canonieke huishoudrol `household.frontteam` mag vanuit het huishouden een gesprek met de superuser starten en daarop antwoorden. Beheerders en gewone leden mogen dit niet. Het toekennen of intrekken van `household.frontteam` is exclusief voorbehouden aan de Superuser en wordt server-side afgedwongen en geaudit.
+
 ## Functioneel gedrag
 
-### Gebruikersmelding naar superuser
+### Frontteammelding naar superuser
 
-1. De gebruiker vult onderwerp en bericht in.
+1. Het Frontteamlid vult onderwerp en bericht in.
 2. De melding wordt centraal opgeslagen.
 3. De gebruiker ziet de melding in **Mijn meldingen**.
 4. De superuser ziet dezelfde conversatie in **Alle meldingen**.
