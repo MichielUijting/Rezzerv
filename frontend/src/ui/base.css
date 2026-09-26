@@ -981,7 +981,7 @@ button.rz-tab.rz-tab-active {
   color: var(--color-ui-primary);
   font-weight: 400;
   padding: 8px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
