@@ -762,7 +762,10 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
                 ) : null}
               </div>
             </div>
-            <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+            {error ? <div role="alert" data-testid="kassa-camera-error" style={{ color: '#B42318', fontWeight: 700 }}>{error}</div> : null}
+        {duplicateNotice ? <div role="status" data-testid="kassa-camera-duplicate" style={{ fontWeight: 700 }}>{duplicateNotice}</div> : null}
+
+        <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
               <button
                 type="button"
                 onClick={onToggleCollapse}
@@ -2991,10 +2994,11 @@ export default function KassaPage() {
       const message = normalizeErrorMessage(err?.message) || 'Foto van kassabon kon niet worden verwerkt.'
       setCameraError(message)
       setError('')
+      setStatus('')
     } finally {
       setIsUploading(false)
       resetUploadProgress()
-      setUploadMode('manual')
+      if (!cameraDraft?.file) setUploadMode('manual')
     }
   }
 
