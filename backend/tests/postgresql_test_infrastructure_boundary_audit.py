@@ -149,6 +149,10 @@ ALLOWED_COMPATIBILITY_FILES: dict[str, str] = {
     "backend/tests/test_authorization_membership_service.py": (
         "Builds historical household_memberships layouts to prove legacy role migration semantics."
     ),
+    "backend/tests/test_roles_v2_acceptance_closure.py": (
+        "Exercises the existing isolated SQLite authorization/session compatibility harness for "
+        "roles-v2 acceptance; normal authorization and full-stack regression authority remain PostgreSQL."
+    ),
 }
 
 
