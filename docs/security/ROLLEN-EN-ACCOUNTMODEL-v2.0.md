@@ -92,6 +92,7 @@ Superuser is een speciaal functioneel platformaccount.
   Dit geeft geen technische `platform.feature_flags.manage`-bevoegdheid.
 - Ontvangt en beantwoordt Frontteammeldingen.
 - Stuurt meldingen en peilingen naar Frontteamleden.
+- Kan Frontteamlidmaatschap bij bestaande reguliere gebruikers toekennen en intrekken; dit is een aanvullende platformrol en wijzigt hun eigen huishouden of huishoudrol niet.
 - Beheert de centrale catalogus en universele artikelen.
 - Kan universele artikelen toevoegen of corrigeren en waar nodig gecontroleerd
   koppelingen herstellen.
@@ -182,7 +183,7 @@ Bescherming van de IP-eigenaar:
 | Normale nieuwe registratie | Maakt een nieuw regulier huishouden; de gebruiker wordt automatisch Beheerder. |
 | Uitnodiging vanuit een huishouden | De gebruiker wordt standaard Lid; voor een normale uitnodiging is geen rolkeuze nodig. |
 | Uitnodigingsflow | Gebruikt een beveiligde uitnodigingslink; distributie via app-/storekanalen kan later verder worden uitgebreid. |
-| Frontteamlid | Heeft of krijgt een eigen regulier huishouden en is daarvan automatisch Beheerder; de Frontteamrol komt daar bovenop. |
+| Frontteamlid | Heeft of krijgt een eigen regulier huishouden; bij een bestaande gebruiker blijven huishouden en huishoudrol behouden. De Frontteamrol is een aanvullende platformrol bovenop de reguliere huishoudcontext. |
 | Superuser | Heeft geen regulier huishouden en wel toegang tot gedeeld systeemhuishouden 0. |
 | Platformbeheerder | Heeft geen regulier huishouden en geen automatische toegang tot huishouden 0. |
 | IP-eigenaar | Heeft geen regulier huishouden en wel toegang tot huishouden 0. |
@@ -196,8 +197,8 @@ Bescherming van de IP-eigenaar:
 | Lid uitnodigen | Beheerder van dat huishouden |
 | Lid → Beheerder | Beheerder van dat huishouden, met behoud van minimaal één Beheerder |
 | Beheerder → Lid | Beheerder van dat huishouden, niet wanneer daardoor geen Beheerder overblijft |
-| Frontteamlid aanstellen | Uitsluitend IP-eigenaar |
-| Frontteamrol intrekken | Uitsluitend IP-eigenaar |
+| Frontteamlid aanstellen | Superuser of IP-eigenaar |
+| Frontteamrol intrekken | Superuser of IP-eigenaar |
 | Superuser aanstellen | Uitsluitend IP-eigenaar |
 | Superuser verwijderen of intrekken | Uitsluitend IP-eigenaar |
 | Platformbeheerder aanstellen | Uitsluitend IP-eigenaar |
@@ -224,7 +225,7 @@ Bescherming van de IP-eigenaar:
 |---|---|
 | Lid | Regulier huishouden |
 | Beheerder | Regulier huishouden plus huishoudbeheer |
-| Frontteamlid | Eigen regulier huishouden als Beheerder plus beperkte Frontteamfuncties |
+| Frontteamlid | Eigen regulier huishouden plus aanvullende beperkte Frontteam-platformfuncties; de bestaande huishoudrol blijft behouden |
 | Superuser | Functioneel platformbeheer plus systeemhuishouden 0 |
 | Platformbeheerder | Technisch platformbeheer |
 | Superuser + Platformbeheerder | Systeemhuishouden 0 plus de exacte union van functionele en technische platformrechten |
