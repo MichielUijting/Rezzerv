@@ -106,8 +106,9 @@ def get_action_button_availability() -> dict:
     resolve_current_server_session()
     with engine.connect() as conn:
         items = list_home_action_flags(conn)
+        welcome_text = get_home_welcome_text(conn)
     return {
-        "welcome_text": get_home_welcome_text(conn),
+        "welcome_text": welcome_text,
         "items": [
             {
                 "key": item["key"],
@@ -125,7 +126,8 @@ def get_action_buttons() -> dict:
     context = require_platform_permission_from_session(ACTION_BUTTONS_MANAGE_PERMISSION)
     with engine.connect() as conn:
         items = list_home_action_flags(conn)
-    return {"items": items, "count": len(items), "welcome_text": get_home_welcome_text(conn), "household_context_used": False, "context_type": context.context_type}
+        welcome_text = get_home_welcome_text(conn)
+    return {"items": items, "count": len(items), "welcome_text": welcome_text, "household_context_used": False, "context_type": context.context_type}
 
 
 @router.put("/api/platform/action-buttons/welcome-text")
