@@ -250,4 +250,107 @@ test.describe('Autorisaties frontend-regressie', () => {
     const unexpectedConsoleErrors = consoleErrors.filter((message) => !expectedResendConsoleErrors.includes(message))
     await expectNoConsoleErrors(unexpectedConsoleErrors)
   })
+
+  test('Superuser kan Frontteamlidmaatschap expliciet toekennen en intrekken', async ({ page }) => {
+    const permissions = {
+      'household_settings.manage': true,
+      'members.manage': true,
+      'permissions.view': true,
+    }
+    await page.route('**/api/session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: { id: 'settings-owner', email: 'superuser@rezzerv.local' },
+          user_id: 'settings-owner',
+          email: 'superuser@rezzerv.local',
+          active_household_id: '1',
+          active_household_name: 'Testhuishouden',
+          context_type: 'regular',
+          role: 'owner',
+          display_role: 'owner',
+          permissions,
+          supported_permissions: Object.keys(permissions),
+          can_manage_member_permissions: true,
+          can_manage_members: true,
+          is_viewer: false,
+          is_platform_superuser: true,
+          is_frontteam: false,
+        }),
+      })
+    })
+    await page.route('**/api/onboarding', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) })
+    })
+
+    let roleKey = 'household.member'
+    const authorization = () => ({
+      household_id: '1',
+      members: [
+        { membership_id: 'member-owner', email: 'superuser@rezzerv.local', role_key: 'household.owner', role_name: 'Superuser', permission_overrides: [], is_current_user: true },
+        { membership_id: 'member-lid', email: 'lid@rezzerv.local', role_key: roleKey, role_name: roleKey === 'household.frontteam' ? 'Frontteamlid' : 'Lid', permission_overrides: [], is_current_user: false },
+      ],
+      roles: [
+        { role_key: 'household.member', name: 'Lid', permission_keys: [] },
+        { role_key: 'household.admin', name: 'Beheerder', permission_keys: [] },
+        { role_key: 'household.owner', name: 'Superuser', permission_keys: [] },
+        { role_key: 'household.frontteam', name: 'Frontteamlid', permission_keys: [] },
+      ],
+    })
+
+    await page.route('**/api/household/members', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          household_name: 'Testhuishouden',
+          member_count: 2,
+          is_household_admin: true,
+          permissions: { 'members.manage': true },
+          members: [
+            { email: 'superuser@rezzerv.local', is_current_user: true, can_remove: false },
+            { email: 'lid@rezzerv.local', is_current_user: false, can_remove: true },
+          ],
+        }),
+      })
+    })
+    await page.route('**/api/household/invitations**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household_id: '1', items: [], total: 0 }) })
+    })
+    await page.route('**/api/households/1/authorization/members', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household_id: '1', total: 2, items: authorization().members }) })
+    })
+    await page.route('**/api/households/1/authorization/roles', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household_id: '1', items: authorization().roles }) })
+    })
+    await page.route('**/api/households/1/authorization/permissions', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household_id: '1', items: [] }) })
+    })
+    await page.route('**/api/households/1/authorization/members/member-lid/role', async (route) => {
+      const payload = JSON.parse(route.request().postData() || '{}')
+      roleKey = payload.role_key
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, role_key: roleKey }) })
+    })
+
+    await page.goto('/instellingen/huishouden')
+    await expect(page.getByTestId('frontteam-management-help')).toContainText('Alleen de Superuser')
+    const frontteamButton = page.getByTestId('household-frontteam-lid@rezzerv.local')
+    await expect(frontteamButton).toHaveText('Frontteamlid maken')
+    await frontteamButton.click()
+    let feedback = page.getByTestId('app-feedback-success')
+    await expect(feedback).toContainText('lid@rezzerv.local is nu Frontteamlid.')
+    await feedback.getByRole('button', { name: 'OK' }).click()
+    await expect(frontteamButton).toHaveText('Frontteamlidmaatschap intrekken')
+    await expect(page.getByLabel('Rol lid@rezzerv.local')).toHaveValue('household.frontteam')
+    await expect(page.getByLabel('Rol lid@rezzerv.local')).toBeDisabled()
+
+    await frontteamButton.click()
+    feedback = page.getByTestId('app-feedback-success')
+    await expect(feedback).toContainText('lid@rezzerv.local is geen Frontteamlid meer.')
+    await feedback.getByRole('button', { name: 'OK' }).click()
+    await expect(frontteamButton).toHaveText('Frontteamlid maken')
+    await expect(page.getByLabel('Rol lid@rezzerv.local')).toHaveValue('household.member')
+  })
+
 })
