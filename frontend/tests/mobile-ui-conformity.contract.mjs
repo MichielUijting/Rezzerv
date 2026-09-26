@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
+const mobileAlmostOutSource = readFileSync(new URL('../src/features/almostOut/MobileAlmostOut.jsx', import.meta.url), 'utf8')
+const mobileShoppingSource = readFileSync(new URL('../src/features/shopping/MobileShopping.jsx', import.meta.url), 'utf8')
+const mobileShoppingCss = readFileSync(new URL('../src/features/shopping/mobileShopping.css', import.meta.url), 'utf8')
+const mobileKassaSource = readFileSync(new URL('../src/features/kassa/MobileKassa.jsx', import.meta.url), 'utf8')
+const mobileKassaCss = readFileSync(new URL('../src/features/kassa/mobileKassa.css', import.meta.url), 'utf8')
 const mobileInventorySource = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
 const mobileInventoryCss = readFileSync(new URL('../src/pages/mobileVoorraad.css', import.meta.url), 'utf8')
 const mobileArticleSource = readFileSync(new URL('../src/features/articles/MobileArticlePage.jsx', import.meta.url), 'utf8')
@@ -21,8 +26,22 @@ const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), '
 
 // Sole visual conformance authority for mobile roots already migrated to the
 // new PO-approved design. Functional mobile contracts remain separate.
-const MIGRATED_MOBILE_UI = Object.freeze(['voorraad', 'voorraad-detail', 'startpagina'])
-assert.deepEqual(MIGRATED_MOBILE_UI, ['voorraad', 'voorraad-detail', 'startpagina'])
+const MOBILE_UI_MANIFEST = Object.freeze([
+  { key: 'startpagina', source: mobileHomeSource, css: mobileHomeCss, header: /<MobileModuleHeader title="Startpagina"/ },
+  { key: 'voorraad', source: mobileInventorySource, css: mobileInventoryCss, header: /<MobileModuleHeader title="Voorraad"/ },
+  { key: 'voorraad-detail', source: mobileArticleSource, css: mobileArticleCss, header: /<MobileModuleHeader title="Artikel in Voorraad"/ },
+  { key: 'bijna-op', source: mobileAlmostOutSource, css: mobileInventoryCss, header: /<MobileModuleHeader title="Bijna op"/ },
+  { key: 'boodschappen', source: mobileShoppingSource, css: mobileShoppingCss, header: /<MobileModuleHeader title="Boodschappen"/ },
+  { key: 'kassa', source: mobileKassaSource, css: mobileKassaCss, header: /<MobileModuleHeader[^>]*mobile-kassa-header/ },
+])
+assert.deepEqual(MOBILE_UI_MANIFEST.map(({ key }) => key), ['startpagina', 'voorraad', 'voorraad-detail', 'bijna-op', 'boodschappen', 'kassa'])
+for (const screen of MOBILE_UI_MANIFEST) {
+  assert.match(screen.source, screen.header, screen.key + ' moet de gedeelde MobileModuleHeader gebruiken')
+  for (const declaration of screen.css.matchAll(/font-size\s*:\s*([^;}]+)/gi)) {
+    assert.match(declaration[1].trim(), /var\(--font-size-ui-(?:body|title)\)/, screen.key + ' gebruikt een niet-toegestane lettergrootte: ' + declaration[1].trim())
+  }
+  assert.doesNotMatch(screen.css, /#006b3c|#005630/i, screen.key + ' gebruikt een alternatieve primaire groentint')
+}
 
 assert.match(mobileHomeSource, /data-testid="mobile-home-page"/)
 assert.match(mobileHomeSource, /<MobileModuleHeader title="Startpagina" testId="mobile-home-header" \/>/)
@@ -33,7 +52,6 @@ assert.match(mobileHomeSource, /rz-inhuis-wordmark-in/)
 assert.match(mobileHomeCss, /color:\s*rgb\(40 169 158\)/i)
 assert.match(mobileHomeCss, /Segoe Script/)
 assert.match(mobileHomeCss, /url\('\/inhuis-green-wallpaper\.svg'\)/)
-assert.doesNotMatch(mobileHomeCss, /font-size:\s*(?!var\(--font-size-ui-(?:body|title)\))[^;}]+/i)
 
 assert.match(mobileInventorySource, /data-testid="mobile-inventory-page"/)
 assert.match(mobileInventorySource, /<MobileModuleHeader title="Voorraad" testId="mobile-inventory-header" \/>/)
