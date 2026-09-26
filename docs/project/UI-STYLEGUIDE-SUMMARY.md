@@ -620,3 +620,10 @@ Vaste regels:
 - Ongelezen applicatiemeldingen krijgen een zichtbare stip en een persistente server-side gelezenstatus.
 - Reguliere mobiele typografie blijft beperkt tot `--font-size-ui-body` en `--font-size-ui-title`.
 - Een lege inbox toont **Geen nieuwe meldingen** en **Alles is op dit moment bijgewerkt.**
+
+
+## App-brede knopvorm
+
+- Gewone interactieve knoppen hebben op desktop en mobiel één centrale geometrie: `border-radius: var(--radius-md)` (momenteel 6px).
+- Schermen en features mogen geen eigen pilvormige of volledig ronde knopgeometrie afdwingen.
+- `frontend/tests/button-shape-global.contract.mjs` bewaakt deze authority bronbreed en draait als onderdeel van de volledige frontendregressie.
