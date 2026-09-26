@@ -762,7 +762,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
                 ) : null}
               </div>
             </div>
-            <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+        <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
               <button
                 type="button"
                 onClick={onToggleCollapse}
@@ -946,7 +946,7 @@ function ReceiptProcessingInfoCard({ transientPreview }) {
   )
 }
 
-function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onFeedback }) {
+function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onFeedback, onDeleteReceipt }) {
   const [selectedLineIds, setSelectedLineIds] = useState([])
   const [lineSort, setLineSort] = useState({ key: 'lineIndex', direction: 'asc' })
   const [lineFilters, setLineFilters] = useState({ article: '', quantity: '', unit: '', unitPrice: '', lineTotal: '', discount: '' })
@@ -1261,9 +1261,18 @@ async function saveLine(lineId, overrides = null) {
     try {
       let updated = null
       for (const lineId of selectedLineIds) {
+        const draft = lineDrafts[lineId] || {}
         updated = await fetchJson(`/api/receipts/${encodeURIComponent(receipt.id)}/lines/${encodeURIComponent(lineId)}`, {
           method: 'PATCH',
-          body: JSON.stringify({ ...(lineDrafts[lineId] || {}), is_deleted: true }),
+          body: JSON.stringify({
+            article_name: draft.article_name,
+            quantity: draft.quantity === '' || !Number.isFinite(Number(draft.quantity)) ? null : Number(draft.quantity),
+            unit: draft.unit,
+            unit_price: draft.unit_price === '' || !Number.isFinite(Number(draft.unit_price)) ? null : Number(draft.unit_price),
+            line_total: draft.line_total === '' || !Number.isFinite(Number(draft.line_total)) ? null : Number(draft.line_total),
+            is_validated: Boolean(draft.is_validated),
+            is_deleted: true,
+          }),
         })
       }
       if (updated) onReceiptUpdated?.(updated)
@@ -1548,6 +1557,7 @@ async function saveLine(lineId, overrides = null) {
                   <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
                 </div>
               <div className="rz-kassa-secondary-actions">
+                {canEdit ? <Button type="button" variant="secondary" onClick={() => onDeleteReceipt?.(receipt?.id)} data-testid="receipt-delete-whole-button">Bon verwijderen</Button> : null}
                 <Button type="button" onClick={approveReceipt} disabled={isApproving}>{isApproving ? 'Goedkeuren...' : 'Goedkeuren'}</Button>
                 <Button type="button" variant="secondary" onClick={downloadParsingDebug} data-testid="receipt-debug-download-button">JSON</Button>
               </div>
@@ -1560,7 +1570,7 @@ async function saveLine(lineId, overrides = null) {
   )
 }
 
-function ReceiptDetailView({ receipt = null, transientPreview = null, canEdit = false, onReceiptUpdated, onFeedback }) {
+function ReceiptDetailView({ receipt = null, transientPreview = null, canEdit = false, onReceiptUpdated, onFeedback, onDeleteReceipt }) {
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 
   useEffect(() => {
@@ -1591,7 +1601,7 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, canEdit = 
       </div>
       <div style={{ minWidth: 0, width: '100%', overflow: 'visible', minHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
         {receipt ? (
-          <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
+          <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} onDeleteReceipt={onDeleteReceipt} />
         ) : (
           <ReceiptProcessingInfoCard transientPreview={transientPreview} />
         )}
@@ -1878,6 +1888,9 @@ function CameraCaptureModal({
         </div>
 
 
+        {error ? <div role="alert" data-testid="kassa-camera-error">{error}</div> : null}
+        {duplicateNotice ? <div role="status" data-testid="kassa-camera-duplicate">{duplicateNotice}</div> : null}
+
         <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
           <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading} data-testid="kassa-camera-retake">Opnieuw</Button>
           <Button type="button" variant="primary" onClick={onConfirm} disabled={isUploading} data-testid="kassa-camera-confirm">{isUploading ? 'Opslaan...' : 'Bevestigen'}</Button>
@@ -1953,6 +1966,8 @@ export default function KassaPage() {
   const [isTechnicalUploadErrorOpen, setIsTechnicalUploadErrorOpen] = useState(false)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
+  const desktopCameraVideoRef = useRef(null)
+  const desktopCameraStreamRef = useRef(null)
   const uploadBatchPollerRef = useRef(null)
   const uploadBatchLastProcessedRef = useRef(-1)
   const uploadProgressTimersRef = useRef([])
@@ -2105,9 +2120,9 @@ export default function KassaPage() {
     ensureEmailRouteLoaded().catch(() => {})
   }, [isAddReceiptRoute])
 
-  async function deleteSelectedReceipts() {
-    if (selectedReceiptIds.length === 0) return
-    const deletedIds = selectedReceiptIds.map((value) => String(value))
+  async function deleteReceiptsByIds(receiptIds = []) {
+    const deletedIds = receiptIds.map((value) => String(value)).filter(Boolean)
+    if (deletedIds.length === 0) return
     setError('')
     setDuplicateNotice('')
     try {
@@ -2136,6 +2151,14 @@ export default function KassaPage() {
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De geselecteerde bonnen konden niet worden verwijderd.')
     }
+  }
+
+  async function deleteSelectedReceipts() {
+    await deleteReceiptsByIds(selectedReceiptIds)
+  }
+
+  async function deleteOpenedReceipt(receiptId) {
+    await deleteReceiptsByIds([receiptId])
   }
 
 
@@ -2829,14 +2852,53 @@ export default function KassaPage() {
     })
   }
 
-  function handleChooseCameraFromHub() {
-    setUploadMode('camera_capture')
+  async function handleChooseCameraFromHub() {
+    setUploadMode('camera_live')
     setStatus('')
     setError('')
     setDuplicateNotice('')
     setCameraError('')
     setReceiptInboxFocusId('')
-    setTimeout(() => cameraInputRef.current?.click(), 0)
+    desktopCameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+    desktopCameraStreamRef.current = null
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera is niet beschikbaar in deze browser.')
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      desktopCameraStreamRef.current = stream
+      if (desktopCameraVideoRef.current) {
+        desktopCameraVideoRef.current.srcObject = stream
+        await desktopCameraVideoRef.current.play().catch(() => {})
+      }
+    } catch {
+      setUploadMode('manual')
+      setCameraError('De camera kon niet worden geopend. Controleer de cameratoestemming van de browser en Windows.')
+    }
+  }
+
+  async function captureDesktopCameraPhoto() {
+    const video = desktopCameraVideoRef.current
+    if (!video?.videoWidth || !video?.videoHeight) {
+      setCameraError('De camera is nog niet gereed. Probeer opnieuw zodra het camerabeeld zichtbaar is.')
+      return
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d')?.drawImage(video, 0, 0)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+    if (!blob) return
+    desktopCameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+    desktopCameraStreamRef.current = null
+    const file = new File([blob], `kassabon-${Date.now()}.jpg`, { type: 'image/jpeg' })
+    clearCameraDraft()
+    setCameraDraft({ file, previewUrl: window.URL.createObjectURL(file) })
+    setUploadMode('camera_capture')
+  }
+
+  function cancelDesktopLiveCamera() {
+    desktopCameraStreamRef.current?.getTracks?.().forEach((track) => track.stop())
+    desktopCameraStreamRef.current = null
+    setUploadMode('manual')
   }
 
 
@@ -2941,10 +3003,11 @@ export default function KassaPage() {
       const message = normalizeErrorMessage(err?.message) || 'Foto van kassabon kon niet worden verwerkt.'
       setCameraError(message)
       setError('')
+      setStatus('')
     } finally {
       setIsUploading(false)
       resetUploadProgress()
-      setUploadMode('manual')
+      if (!cameraDraft?.file) setUploadMode('manual')
     }
   }
 
@@ -3469,7 +3532,7 @@ export default function KassaPage() {
             </div>
           </ScreenCard>
 
-          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} /> : null}
+          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} onDeleteReceipt={deleteOpenedReceipt} /> : null}
         </div>
       )}
 
@@ -3510,6 +3573,19 @@ export default function KassaPage() {
       ) : null}
 
       <ReceiptUploadProgressOverlay uploadProgress={uploadProgress} />
+
+      {uploadMode === 'camera_live' ? (
+        <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', padding: '16px 20px 20px' }}>
+          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-label="Camera kassabon" data-testid="kassa-live-camera-modal" style={{ width: 'min(900px, 100%)', padding: '24px', gap: '16px' }}>
+            <h2 className="rz-modal-title">Kassabon fotograferen</h2>
+            <video ref={desktopCameraVideoRef} playsInline muted autoPlay data-testid="kassa-live-camera-video" style={{ width: '100%', maxHeight: '65vh', objectFit: 'contain', background: '#111', borderRadius: '12px' }} />
+            <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+              <Button type="button" variant="secondary" onClick={cancelDesktopLiveCamera}>Annuleren</Button>
+              <Button type="button" variant="primary" onClick={captureDesktopCameraPhoto} data-testid="kassa-live-camera-shutter">Foto maken</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <CameraCaptureModal
         isOpen={Boolean(cameraDraft)}

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Button from '../../ui/Button'
-import { fetchJson } from '../stores/storeImportShared'
+import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import './mobileKassa.css'
 
 function money(value, currency = 'EUR') {
@@ -18,8 +17,15 @@ function dateLabel(value) {
 function receiptId(receipt) { return String(receipt?.receipt_table_id || receipt?.id || '') }
 function receiptLines(receipt) { return Array.isArray(receipt?.lines) ? receipt.lines : Array.isArray(receipt?.receipt_lines) ? receipt.receipt_lines : [] }
 
+function mobileScanErrorMessage(detail) {
+  const raw = typeof detail === 'string' ? detail : JSON.stringify(detail || '')
+  if (/ReceiptBodyV1|receipt\.lines|at least one visible receipt line/i.test(raw)) {
+    return 'Geen kassabon herkend. Zorg dat de volledige bon duidelijk binnen het kader staat en probeer opnieuw.'
+  }
+  return normalizeErrorMessage(raw) || 'Bon kon niet worden verwerkt. Probeer opnieuw.'
+}
+
 export default function MobileKassa() {
-  const navigate = useNavigate()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const fileRef = useRef(null)
@@ -86,7 +92,7 @@ export default function MobileKassa() {
       form.append('source_label', 'Foto gemaakt in Inhuis')
       const response = await fetch('/api/receipts/share-import', { method: 'POST', credentials: 'include', body: form })
       const result = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(result?.detail || 'Bon kon niet worden verwerkt.')
+      if (!response.ok) throw new Error(mobileScanErrorMessage(result?.detail))
       const id = String(result?.receipt_table_id || result?.existing_receipt?.receipt_table_id || '')
       if (!id) throw new Error('Inhuis herkent geen bruikbare kassabon.')
       const detail = await fetchJson(`/api/receipts/${encodeURIComponent(id)}`)
@@ -96,7 +102,7 @@ export default function MobileKassa() {
       setMode('review')
       setMessage('')
     } catch (error) {
-      setMessage(String(error?.message || 'Bon kon niet worden verwerkt.'))
+      setMessage(mobileScanErrorMessage(error?.message))
     } finally {
       setBusy(false)
     }
@@ -104,7 +110,10 @@ export default function MobileKassa() {
 
   async function takePhoto() {
     const video = videoRef.current
-    if (!video?.videoWidth || !video?.videoHeight) return fileRef.current?.click()
+    if (!video?.videoWidth || !video?.videoHeight) {
+      setCameraError('De camera is nog niet gereed. Controleer de cameratoestemming en probeer opnieuw.')
+      return
+    }
     const canvas = document.createElement('canvas')
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
@@ -190,7 +199,7 @@ export default function MobileKassa() {
           <div className="rz-mobile-kassa-camera-actions">
             <Button type="button" variant="secondary" onClick={() => { streamRef.current?.getTracks?.().forEach((track) => track.stop()); setMode('list'); loadReceipts() }}>Bonnen</Button>
             <button type="button" className="rz-mobile-kassa-shutter" aria-label="Maak foto van kassabon" onClick={takePhoto} disabled={busy} />
-            <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()}>Camera openen</Button>
+            <Button type="button" variant="secondary" onClick={startCamera}>Camera starten</Button>
           </div>
         </main>
       ) : null}
