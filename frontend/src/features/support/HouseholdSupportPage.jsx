@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
+import MobileSupportInbox from './MobileSupportInbox.jsx'
 import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -21,6 +23,7 @@ const AUTO_REFRESH_MS = 3000
 
 export default function HouseholdSupportPage() {
   const location = useLocation()
+  const isMobileViewport = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
   const query = useMemo(() => new URLSearchParams(location.search), [location.search])
   const originRoute = query.get('from') || '/meldingen'
@@ -142,6 +145,10 @@ export default function HouseholdSupportPage() {
       setFeedback('Reactie verzonden.')
     } catch (error) { setFeedback(error.message) }
     finally { setBusy(false) }
+  }
+
+  if (isMobileViewport && !selected) {
+    return <MobileSupportInbox onOpenThread={openThread} onNewMessage={() => setSelected(null)} />
   }
 
   const refreshLabel = lastRefreshedAt

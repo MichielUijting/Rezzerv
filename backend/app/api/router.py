@@ -22,6 +22,7 @@ from app.api.day_article_routes import router as day_article_router
 from app.api.household_capability_expansion_routes import router as household_capability_expansion_router
 from app.api.household_invitation_acceptance_routes import create_household_invitation_acceptance_router
 from app.api.household_invitation_routes import create_household_invitation_router
+from app.api.household_notification_routes import router as household_notification_router
 from app.api.legacy_household_member_creation_closure import (
     create_legacy_household_member_creation_closure_router,
     retire_legacy_household_member_create_route_from_loaded_main,
@@ -96,6 +97,7 @@ api_router.include_router(consumer_account_router)
 api_router.include_router(day_article_router)
 api_router.include_router(household_capability_expansion_router)
 api_router.include_router(household_invitation_router)
+api_router.include_router(household_notification_router)
 api_router.include_router(household_invitation_acceptance_router)
 api_router.include_router(legacy_household_member_creation_closure_router)
 api_router.include_router(picnic_email_import_source_closure_router)
