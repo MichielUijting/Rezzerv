@@ -762,9 +762,6 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
                 ) : null}
               </div>
             </div>
-            {error ? <div role="alert" data-testid="kassa-camera-error" style={{ color: '#B42318', fontWeight: 700 }}>{error}</div> : null}
-        {duplicateNotice ? <div role="status" data-testid="kassa-camera-duplicate" style={{ fontWeight: 700 }}>{duplicateNotice}</div> : null}
-
         <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
               <button
                 type="button"
@@ -1889,6 +1886,9 @@ function CameraCaptureModal({
           )}
         </div>
 
+
+        {error ? <div role="alert" data-testid="kassa-camera-error">{error}</div> : null}
+        {duplicateNotice ? <div role="status" data-testid="kassa-camera-duplicate">{duplicateNotice}</div> : null}
 
         <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
           <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading} data-testid="kassa-camera-retake">Opnieuw</Button>
