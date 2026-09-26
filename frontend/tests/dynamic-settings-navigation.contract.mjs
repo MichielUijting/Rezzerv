@@ -20,7 +20,7 @@ assert.deepEqual(
   SETTINGS_SECTIONS.map((section) => section.key),
   ['account', 'household', 'usage', 'help'],
 )
-assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
+assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
 assert.equal(SETTINGS_TILES.length, 12)
 for (const tile of SETTINGS_TILES) {
