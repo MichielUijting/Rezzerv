@@ -165,6 +165,33 @@ def _active_regular_household_ids(conn: Connection, user_id: str) -> list[str]:
     return [str(value) for value in rows]
 
 
+def _frontteam_membership_table_available(conn: Connection) -> bool:
+    return bool(_table_columns(conn, "frontteam_memberships"))
+
+
+def _frontteam_membership_rows(conn: Connection) -> dict[str, dict[str, Any]]:
+    if not _frontteam_membership_table_available(conn):
+        return {}
+    rows = conn.execute(text("""
+        SELECT user_id, status, created_at, updated_at
+        FROM frontteam_memberships
+        ORDER BY user_id
+    """)).mappings().all()
+    return {str(row["user_id"]): dict(row) for row in rows}
+
+
+def _ensure_frontteam_membership_registry(conn: Connection, user_id: str, *, status: str = "active") -> None:
+    if not _frontteam_membership_table_available(conn):
+        return
+    conn.execute(text("""
+        INSERT INTO frontteam_memberships(user_id, status)
+        VALUES (:user_id, :status)
+        ON CONFLICT(user_id) DO UPDATE SET
+            status = :status,
+            updated_at = CURRENT_TIMESTAMP
+    """), {"user_id": str(user_id), "status": str(status)})
+
+
 def _role_assignment_active(conn: Connection, user_id: str, role_key: str) -> bool:
     row = conn.execute(text("""
         SELECT 1
@@ -300,6 +327,7 @@ def list_platform_authorizations(
         FROM app_users
         ORDER BY lower(trim(email)) ASC, id ASC
     """)).mappings().all()
+    frontteam_memberships = _frontteam_membership_rows(conn)
     return {
         "users": [
             _safe_user_item(
@@ -312,6 +340,22 @@ def list_platform_authorizations(
                 can_manage_frontteam_roles=can_manage_frontteam_roles,
             )
             for row in users
+        ],
+        "frontteam_memberships": [
+            {
+                **_safe_user_item(
+                    conn,
+                    row,
+                    current_user_id=current_user_id,
+                    role_keys=role_keys_by_user.get(str(row.get("id") or ""), []),
+                    effective_permissions=permissions_by_user.get(str(row.get("id") or ""), []),
+                    can_manage_special_roles=can_manage_special_roles,
+                    can_manage_frontteam_roles=can_manage_frontteam_roles,
+                ),
+                "frontteam_status": frontteam_memberships[str(row.get("id") or "")]["status"],
+            }
+            for row in users
+            if str(row.get("id") or "") in frontteam_memberships
         ],
         "roles": role_matrix,
         "inventory_permission": PLATFORM_PERMISSIONS_MANAGE,
@@ -383,6 +427,7 @@ def grant_special_role(
     """), {"user_id": target_user_id, "role_key": normalized_role_key})
 
     if normalized_role_key == FRONTTEAM_ROLE_KEY:
+        _ensure_frontteam_membership_registry(conn, target_user_id, status="active")
         regular_households = _active_regular_household_ids(conn, target_user_id)
         if not regular_households:
             ensure_frontteam_personal_household_for_user(
@@ -429,6 +474,7 @@ def revoke_special_role(
     """), {"user_id": target_user_id, "role_key": normalized_role_key})
 
     if normalized_role_key == FRONTTEAM_ROLE_KEY:
+        _ensure_frontteam_membership_registry(conn, target_user_id, status="inactive")
         mapped_household_id = resolve_frontteam_personal_household_id(
             conn,
             target_user_id,
@@ -497,3 +543,58 @@ def user_has_platform_permission(
         user_id=str(user_id),
         permission_key=str(permission_key),
     ).allowed
+
+def find_platform_user_by_email(conn: Connection, email: str) -> Mapping[str, Any]:
+    normalized_email = str(email or "").strip().lower()
+    if not normalized_email:
+        raise PlatformAuthorizationNotFoundError("Vul een e-mailadres in")
+    row = conn.execute(text("""
+        SELECT id, email, account_status
+        FROM app_users
+        WHERE lower(trim(email)) = :email
+        LIMIT 1
+    """), {"email": normalized_email}).mappings().first()
+    if not row:
+        raise PlatformAuthorizationNotFoundError("Geen bestaande Inhuis-gebruiker met dit e-mailadres gevonden")
+    return row
+
+
+def add_frontteam_member_by_email(conn: Connection, email: str, *, actor_user_id: str) -> dict[str, Any]:
+    row = find_platform_user_by_email(conn, email)
+    return grant_special_role(
+        conn,
+        str(row["id"]),
+        role_key=FRONTTEAM_ROLE_KEY,
+        actor_user_id=actor_user_id,
+    )
+
+
+def remove_frontteam_membership(conn: Connection, user_id: str, *, actor_user_id: str) -> None:
+    row = _load_user(conn, user_id)
+    target_user_id = str(row["id"])
+    if _role_assignment_active(conn, target_user_id, FRONTTEAM_ROLE_KEY):
+        revoke_special_role(
+            conn,
+            target_user_id,
+            role_key=FRONTTEAM_ROLE_KEY,
+            actor_user_id=actor_user_id,
+        )
+    if not _frontteam_membership_table_available(conn):
+        raise PlatformAuthorizationConflictError("Frontteamregistratie is niet beschikbaar")
+    deleted = conn.execute(text("""
+        DELETE FROM frontteam_memberships
+        WHERE user_id = :user_id
+    """), {"user_id": target_user_id})
+    if not deleted.rowcount:
+        raise PlatformAuthorizationNotFoundError("Frontteamlid niet gevonden")
+    write_authorization_audit(
+        conn,
+        actor_user_id=str(actor_user_id),
+        actor_type="platform_user",
+        action="platform.frontteam.removed",
+        object_type="frontteam_membership",
+        object_id=target_user_id,
+        old_value={"status": "inactive"},
+        new_value=None,
+        reason=PLATFORM_FRONTTEAM_ROLES_MANAGE,
+    )
