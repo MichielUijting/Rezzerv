@@ -216,3 +216,10 @@ body:has([data-testid="mobile-app-chrome"]) :where([data-testid^="app-feedback-"
   padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important;
 }
 
+
+/* App-wide button geometry authority.
+   Ordinary interactive buttons use one shared shape on every screen. */
+button,
+a[role="button"] {
+  border-radius: var(--radius-md) !important;
+}
