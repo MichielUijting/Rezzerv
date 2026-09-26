@@ -87,6 +87,7 @@ export default function HomePage() {
     navigate('/login', { replace: true })
   }
 
+
   if (context?.context_type === 'none') {
     return (
       <div className="rz-screen" data-testid="none-session-home">
@@ -157,7 +158,7 @@ export default function HomePage() {
   }
 
   if (isMobileViewport) {
-    return <MobileHomePage context={context} navigation={navigation} visibility={visibility} onOpenTile={openTile} />
+    return <MobileHomePage context={context} navigation={navigation} visibility={visibility} welcomeText={actionAvailability.welcomeText} onOpenTile={openTile} />
   }
 
   return (

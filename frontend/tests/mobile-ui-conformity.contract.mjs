@@ -71,10 +71,9 @@ assert.match(
   mobileComponentsCss,
   /\.rz-mobile-module-header\s*\{[\s\S]*background:\s*var\(--color-mobile-ui-primary\);/,
 )
-assert.match(
-  mobileComponentsCss,
-  /\.rz-mobile-module-header-logo\s*\{[\s\S]*height:\s*46px;/,
-)
+assert.match(mobileModuleHeaderSource, /rz-mobile-module-header-wordmark/)
+assert.match(mobileComponentsCss, /\.rz-mobile-module-header-wordmark-huis\s*\{[\s\S]*color:\s*#fff;/i)
+assert.match(mobileComponentsCss, /\.rz-mobile-module-header-wordmark-in\s*\{[\s\S]*color:\s*rgb\(40 169 158\);/i)
 assert.match(
   mobileInventoryCss,
   /\.rz-mobile-inventory-list\s*\{[\s\S]*background:\s*#ffffff;/i,
@@ -116,7 +115,8 @@ for (const responsiveSource of [inventoryResponsiveSource, almostOutResponsiveSo
   assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin|display_role|context_type\s*===\s*['"]system['"]/)
 }
 assert.match(mobileAppChromeSource, /MobileRecentActionsBar/)
-assert.match(mobileAppChromeSource, /location\.pathname !== '\/home'[\s\S]*<MobileBackControl testId="mobile-global-back" \/>/)
+assert.match(mobileAppChromeSource, /<MobileBackControl testId="mobile-global-back" \/>/)
+assert.doesNotMatch(mobileAppChromeSource, /location\.pathname !== '\/home'/)
 assert.match(mobileAppChromeSource, /testId="mobile-global-bottom-nav"/)
 assert.match(mobileAppChromeSource, /activeActionKey\(pathname\)/)
 assert.match(mobileAppChromeSource, /excludeKeys:\s*activeKey \? \[activeKey\] : \[\]/)
