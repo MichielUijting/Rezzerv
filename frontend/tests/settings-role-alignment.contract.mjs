@@ -67,7 +67,9 @@ assert.doesNotMatch(authorizationSource, /'household\.advanced_member'/)
 const assignableRolesBlock = membershipServiceSource.match(/allowed_roles = \{([\s\S]*?)\n    \}/)?.[1] || ''
 assert.match(assignableRolesBlock, /"household\.member"/)
 assert.match(assignableRolesBlock, /"household\.admin"/)
-assert.doesNotMatch(assignableRolesBlock, /household\.(viewer|advanced_member|owner|frontteam)/)
+assert.match(assignableRolesBlock, /"household\.frontteam"/)
+assert.doesNotMatch(assignableRolesBlock, /household\.(viewer|advanced_member|owner)/)
+assert.match(membershipServiceSource, /superuser_required_for_frontteam_membership/)
 
 const canonicalRoleQuery = membershipRoutesSource.match(/SELECT role_key,([\s\S]*?)\n        """\)\)\.mappings\(\)\.all\(\)/)?.[1] || ''
 for (const roleKey of [
