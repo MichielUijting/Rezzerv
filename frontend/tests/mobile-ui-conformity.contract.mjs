@@ -25,6 +25,7 @@ const MIGRATED_MOBILE_UI = Object.freeze(['voorraad', 'voorraad-detail', 'startp
 assert.deepEqual(MIGRATED_MOBILE_UI, ['voorraad', 'voorraad-detail', 'startpagina'])
 
 assert.match(mobileHomeSource, /data-testid="mobile-home-page"/)
+assert.match(mobileHomeSource, /<MobileModuleHeader title="Startpagina" testId="mobile-home-header" \/>/)
 assert.match(mobileHomeSource, /mobile-home-customize/)
 assert.match(mobileHomeSource, /inhuis-mobile-home-order:/)
 assert.match(mobileHomeSource, /listHouseholdThreads\('Open'\)/)
@@ -32,6 +33,7 @@ assert.match(mobileHomeSource, /rz-inhuis-wordmark-in/)
 assert.match(mobileHomeCss, /color:\s*rgb\(40 169 158\)/i)
 assert.match(mobileHomeCss, /Segoe Script/)
 assert.match(mobileHomeCss, /url\('\/inhuis-green-wallpaper\.svg'\)/)
+assert.doesNotMatch(mobileHomeCss, /font-size:\s*(?!var\(--font-size-ui-(?:body|title)\))[^;}]+/i)
 
 assert.match(mobileInventorySource, /data-testid="mobile-inventory-page"/)
 assert.match(mobileInventorySource, /<MobileModuleHeader title="Voorraad" testId="mobile-inventory-header" \/>/)

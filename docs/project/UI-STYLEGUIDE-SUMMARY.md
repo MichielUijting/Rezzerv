@@ -590,6 +590,8 @@ Presentatieregels:
 De mobiele **Startpagina** is vanaf 26 september 2026 een persoonlijke snelstart en gebruikt op `<=720px` een eigen mobiele presentatie; desktop blijft de bestaande Startpagina gebruiken.
 
 Vaste regels:
+- de gedeelde donkergroene `MobileModuleHeader` met titel **Startpagina** staat altijd bovenaan; alleen de globale **Terug**-knop ontbreekt op deze navigatieroot;
+- alle reguliere tekst op de mobiele Startpagina gebruikt uitsluitend de twee centrale groottes `--font-size-ui-body` en `--font-size-ui-title`; het InHuis-woordmerk mag qua lettervorm afwijken, niet qua grootte;
 - bovenaan staat één begroeting **Welkom <voornaam> InHuis**; er staat geen tweede InHuis-logo of huis-icoon op de Startpagina;
 - het woordmerk is tekstueel **InHuis**: **In** in een schuin geschreven accentvorm in `#28a99e`, **Huis** direct aansluitend in de centrale donkergroene kleur; dak-, blad- en losse decoratieve streepjes zijn niet toegestaan;
 - het woordmerk is de enige expliciete typografische uitzondering op Arial; overige gebruikerszichtbare tekst blijft de centrale 14/16px-typografie volgen;

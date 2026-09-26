@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listHouseholdThreads } from '../support/supportApi.js'
+import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import './mobileHome.css'
 
 const DEFAULT_ORDER = ['kassa', 'kassabonnen', 'winkelen', 'voorraad', 'bijna-op', 'catalogus', 'locaties', 'meldingen']
@@ -66,7 +67,7 @@ export default function MobileHomePage({ context, navigation, visibility, onOpen
       })}</div>
     </section>
   </main>
-  return <main className="rz-mobile-home" data-testid="mobile-home-page"><section className="rz-mobile-home-inner">
+  return <main className="rz-mobile-home" data-testid="mobile-home-page"><MobileModuleHeader title="Startpagina" testId="mobile-home-header" /><section className="rz-mobile-home-inner">
     <div className="rz-mobile-home-household">{context?.active_household_name || 'Mijn huishouden'}</div>
     <h1 className="rz-mobile-home-welcome">Welkom{name ? ' ' + name : ''} <InHuisWordmark /></h1><p className="rz-mobile-home-subtitle">Fijn dat je er weer bent.</p>
     <button type="button" className="rz-mobile-home-notifications" onClick={() => onOpenTile({ key: 'meldingen', clickable: true })}><span className="rz-mobile-home-notification-icon" aria-hidden="true">●</span><span><strong>{openNotifications === null ? 'Openstaande meldingen' : openNotifications + ' openstaande melding' + (openNotifications === 1 ? '' : 'en')}</strong><small>Bekijk wat aandacht vraagt</small></span><span aria-hidden="true">›</span></button>
