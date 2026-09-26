@@ -110,7 +110,10 @@ export default function MobileKassa() {
 
   async function takePhoto() {
     const video = videoRef.current
-    if (!video?.videoWidth || !video?.videoHeight) return fileRef.current?.click()
+    if (!video?.videoWidth || !video?.videoHeight) {
+      setCameraError('De camera is nog niet gereed. Controleer de cameratoestemming en probeer opnieuw.')
+      return
+    }
     const canvas = document.createElement('canvas')
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
@@ -196,7 +199,7 @@ export default function MobileKassa() {
           <div className="rz-mobile-kassa-camera-actions">
             <Button type="button" variant="secondary" onClick={() => { streamRef.current?.getTracks?.().forEach((track) => track.stop()); setMode('list'); loadReceipts() }}>Bonnen</Button>
             <button type="button" className="rz-mobile-kassa-shutter" aria-label="Maak foto van kassabon" onClick={takePhoto} disabled={busy} />
-            <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()}>Camera openen</Button>
+            <Button type="button" variant="secondary" onClick={startCamera}>Camera starten</Button>
           </div>
         </main>
       ) : null}
