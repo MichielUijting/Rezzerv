@@ -16,6 +16,8 @@ from app.services.authorization_foundation_service import write_authorization_au
 
 FEATURE_FLAG_EXTERNAL_PRODUCT_SEARCH = "external_product_search"
 FEATURE_GERECHTEN = "feature.gerechten"
+HOME_WELCOME_TEXT_KEY = "welcome_text"
+DEFAULT_HOME_WELCOME_TEXT = "Fijn dat je er weer bent."
 
 ACTION_HOME_MELDINGEN = "action.home.meldingen"
 ACTION_HOME_BIJNA_OP = "action.home.bijna_op"
@@ -365,3 +367,34 @@ def set_platform_feature_flag(conn: Connection, flag_key: str, *, enabled: bool,
             new_value={"enabled": bool(enabled)},
         )
     return get_platform_feature_flag(conn, normalized_key)
+
+
+def get_home_welcome_text(conn: Connection) -> str:
+    row = conn.execute(text("""
+        SELECT setting_value FROM platform_home_settings
+        WHERE setting_key = :key LIMIT 1
+    """), {"key": HOME_WELCOME_TEXT_KEY}).mappings().first()
+    return str(row["setting_value"]).strip() if row and str(row["setting_value"]).strip() else DEFAULT_HOME_WELCOME_TEXT
+
+
+def set_home_welcome_text(conn: Connection, value: str, *, updated_by: str) -> str:
+    normalized = " ".join(str(value or "").split()).strip()
+    if not normalized or len(normalized) > 160:
+        raise ValueError("Welkomsttekst moet tussen 1 en 160 tekens bevatten")
+    actor_id = str(updated_by or "").strip()
+    if not actor_id:
+        raise ValueError("updated_by is verplicht")
+    previous = get_home_welcome_text(conn)
+    result = conn.execute(text("""
+        UPDATE platform_home_settings
+        SET setting_value=:value, updated_by=:updated_by, updated_at=CURRENT_TIMESTAMP
+        WHERE setting_key=:key
+    """), {"key": HOME_WELCOME_TEXT_KEY, "value": normalized, "updated_by": actor_id})
+    if result.rowcount == 0:
+        conn.execute(text("""
+            INSERT INTO platform_home_settings (setting_key, setting_value, updated_by, updated_at)
+            VALUES (:key, :value, :updated_by, CURRENT_TIMESTAMP)
+        """), {"key": HOME_WELCOME_TEXT_KEY, "value": normalized, "updated_by": actor_id})
+    if previous != normalized:
+        write_authorization_audit(conn, actor_user_id=actor_id, actor_type="platform", action="platform.home.welcome_text.updated", object_type="platform_home_setting", object_id=HOME_WELCOME_TEXT_KEY, old_value={"value": previous}, new_value={"value": normalized})
+    return normalized
