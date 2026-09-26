@@ -29,7 +29,7 @@ assert.match(mobileHomeSource, /mobile-home-customize/)
 assert.match(mobileHomeSource, /inhuis-mobile-home-order:/)
 assert.match(mobileHomeSource, /listHouseholdThreads\('Open'\)/)
 assert.match(mobileHomeSource, /rz-inhuis-wordmark-in/)
-assert.match(mobileHomeCss, /#28a99e/i)
+assert.match(mobileHomeCss, /color:\s*rgb\(40 169 158\)/i)
 assert.match(mobileHomeCss, /Segoe Script/)
 assert.match(mobileHomeCss, /url\('\/inhuis-green-wallpaper\.svg'\)/)
 
@@ -96,7 +96,7 @@ for (const responsiveSource of [inventoryResponsiveSource, almostOutResponsiveSo
   assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin|display_role|context_type\s*===\s*['"]system['"]/)
 }
 assert.match(mobileAppChromeSource, /MobileRecentActionsBar/)
-assert.match(mobileAppChromeSource, /<MobileBackControl testId="mobile-global-back" \/>/)
+assert.match(mobileAppChromeSource, /location\.pathname !== '\/home'[\s\S]*<MobileBackControl testId="mobile-global-back" \/>/)
 assert.match(mobileAppChromeSource, /testId="mobile-global-bottom-nav"/)
 assert.match(mobileAppChromeSource, /activeActionKey\(pathname\)/)
 assert.match(mobileAppChromeSource, /excludeKeys:\s*activeKey \? \[activeKey\] : \[\]/)
