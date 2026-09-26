@@ -5,6 +5,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.platform_authorizations_routes import (
     PLATFORM_AUTHORIZATIONS_PERMISSION,
     PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION,
+    PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION,
 )
 from app.services.authorization_foundation_service import (
     ROLE_PERMISSIONS,
@@ -17,6 +18,7 @@ from app.services.platform_authorization_management_service import (
     MANAGED_SPECIAL_ROLE_KEYS,
     PLATFORM_ADMIN_ROLE_KEY,
     PLATFORM_SPECIAL_ROLES_MANAGE,
+    PLATFORM_FRONTTEAM_ROLES_MANAGE,
     SUPERUSER_ROLE_KEY,
     PlatformAuthorizationConflictError,
     grant_special_role,
@@ -83,12 +85,17 @@ def test_inventory_and_mutation_use_separate_canonical_permissions():
     assert PLATFORM_AUTHORIZATIONS_PERMISSION == "platform.permissions.manage"
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION == PLATFORM_SPECIAL_ROLES_MANAGE
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION == "platform.special_roles.manage"
+    assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION == PLATFORM_FRONTTEAM_ROLES_MANAGE
+    assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION == "platform.frontteam_roles.manage"
 
     assert PLATFORM_AUTHORIZATIONS_PERMISSION in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_AUTHORIZATIONS_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.superuser"]
+    assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION in ROLE_PERMISSIONS["platform.superuser"]
+    assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
+    assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.frontteam"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["household.admin"]
 
