@@ -381,6 +381,7 @@ def test_new_membership_gets_canonical_role_without_overwriting_existing_role():
     'household.viewer',
     'household.advanced_member',
     'household.owner',
+    'household.frontteam',
 ))
 def test_household_management_cannot_assign_legacy_or_special_roles(role_key):
     conn = _connection()
@@ -401,82 +402,6 @@ def test_household_management_cannot_assign_legacy_or_special_roles(role_key):
         SELECT role_key FROM auth_membership_roles
         WHERE household_id = 'h1' AND membership_id = 'target'
     """)).scalar() == 'household.viewer'
-
-
-def test_only_superuser_can_assign_and_revoke_frontteam_role():
-    conn = _connection()
-    _assign(conn, 'h1', 'owner', 'household.owner')
-    _assign(conn, 'h1', 'admin', 'household.admin')
-    _assign(conn, 'h1', 'target', 'household.member')
-
-    with pytest.raises(AuthorizationDeniedError) as denied:
-        set_household_membership_role(
-            conn,
-            household_id='h1',
-            actor_membership_id='admin',
-            actor_user_id='u-admin',
-            target_membership_id='target',
-            role_key='household.frontteam',
-        )
-    assert denied.value.decision.reason == 'superuser_required_for_frontteam_membership'
-
-    set_household_membership_role(
-        conn,
-        household_id='h1',
-        actor_membership_id='owner',
-        actor_user_id='u-owner',
-        target_membership_id='target',
-        role_key='household.frontteam',
-        reason='Frontteamlid benoemd door Superuser',
-    )
-    assert conn.execute(text("""
-        SELECT role_key FROM auth_membership_roles
-        WHERE household_id = 'h1' AND membership_id = 'target'
-    """)).scalar_one() == 'household.frontteam'
-
-    with pytest.raises(AuthorizationDeniedError):
-        set_household_membership_role(
-            conn,
-            household_id='h1',
-            actor_membership_id='admin',
-            actor_user_id='u-admin',
-            target_membership_id='target',
-            role_key='household.member',
-        )
-
-    set_household_membership_role(
-        conn,
-        household_id='h1',
-        actor_membership_id='owner',
-        actor_user_id='u-owner',
-        target_membership_id='target',
-        role_key='household.member',
-        reason='Frontteamlidmaatschap ingetrokken door Superuser',
-    )
-    assert conn.execute(text("""
-        SELECT role_key FROM auth_membership_roles
-        WHERE household_id = 'h1' AND membership_id = 'target'
-    """)).scalar_one() == 'household.member'
-    audit_rows = conn.execute(text("""
-        SELECT old_value, new_value FROM auth_audit_log
-        WHERE object_id = 'target' ORDER BY created_at
-    """)).mappings().all()
-    assert len(audit_rows) == 2
-
-
-def test_member_cannot_assign_frontteam_role():
-    conn = _connection()
-    _assign(conn, 'h1', 'member', 'household.member')
-    _assign(conn, 'h1', 'target', 'household.member')
-    with pytest.raises(AuthorizationDeniedError):
-        set_household_membership_role(
-            conn,
-            household_id='h1',
-            actor_membership_id='member',
-            actor_user_id='u-member',
-            target_membership_id='target',
-            role_key='household.frontteam',
-        )
 
 
 def test_last_admin_cannot_be_demoted():
