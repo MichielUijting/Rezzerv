@@ -263,6 +263,13 @@ export function isPlatformSuperuserFromContext(context = null) {
   )
 }
 
+export function isHouseholdFrontteamFromContext(context = null) {
+  const source = context || readStoredAuthContext()
+  return ['frontteam', 'frontteamlid', 'household.frontteam'].includes(
+    String(source?.role || source?.display_role || '').trim().toLowerCase(),
+  )
+}
+
 export function isFrontteamMemberFromContext(context = null) {
   const source = context || readStoredAuthContext()
   return Boolean(
