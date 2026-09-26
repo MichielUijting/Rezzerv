@@ -268,21 +268,6 @@ export default function SettingsHouseholdPage() {
     }
   }
 
-  async function handleFrontteamMembership(member, makeFrontteam) {
-    const linkedAuthorization = authorizationByEmail.get(String(member.email || '').toLowerCase())
-    if (!canManageFrontteam || !linkedAuthorization?.membership_id) {
-      showFeedback({ variant: 'error', title: 'Frontteamlidmaatschap niet gewijzigd', message: 'Alleen de Superuser kan het Frontteamlidmaatschap wijzigen.' })
-      return
-    }
-    const nextRoleKey = makeFrontteam ? 'household.frontteam' : 'household.member'
-    await runMutation(
-      () => updateAuthorizationRole(linkedAuthorization.membership_id, nextRoleKey),
-      makeFrontteam
-        ? `${member.email} is nu Frontteamlid.`
-        : `${member.email} is geen Frontteamlid meer. De rol is teruggezet naar Lid.`,
-    )
-  }
-
   async function handleRoleChange(member, roleKey) {
     const linkedAuthorization = authorizationByEmail.get(String(member.email || '').toLowerCase())
     if (!linkedAuthorization?.membership_id) {
@@ -335,13 +320,15 @@ export default function SettingsHouseholdPage() {
                   <div>
                     <h3 className="rz-household-section-title">Gekoppelde huishoudleden</h3>
                     <p className="rz-household-section-copy">Kies hier de rol van ieder lid. Bekijk de betekenis van de rollen via Autorisaties.</p>
-                    {canManageFrontteam ? <p className="rz-household-section-copy" data-testid="frontteam-management-help">Alleen de Superuser kan een gebruiker Frontteamlid maken of het Frontteamlidmaatschap intrekken.</p> : null}
                   </div>
                   <div className="rz-household-members-list">
                     {(data?.members || []).map((member) => {
                       const linkedAuthorization = authorizationByEmail.get(String(member.email || '').toLowerCase())
                       const currentRoleKey = linkedAuthorization?.role_key || ''
-                      const assignableRoles = authorization.roles.filter((role) => ASSIGNABLE_ROLE_KEYS.has(role.role_key))
+                      const assignableRoleKeys = canManageFrontteam
+                        ? new Set([...ASSIGNABLE_ROLE_KEYS, 'household.frontteam'])
+                        : ASSIGNABLE_ROLE_KEYS
+                      const assignableRoles = authorization.roles.filter((role) => assignableRoleKeys.has(role.role_key))
                       const currentRole = authorization.roles.find((role) => role.role_key === currentRoleKey)
                         || (currentRoleKey ? { role_key: currentRoleKey, name: currentRoleKey } : null)
                       const roleOptions = currentRole && !ASSIGNABLE_ROLE_KEYS.has(currentRole.role_key)
@@ -360,23 +347,13 @@ export default function SettingsHouseholdPage() {
                                 className="rz-input rz-household-select"
                                 value={currentRoleKey}
                                 onChange={(event) => handleRoleChange(member, event.target.value)}
-                                disabled={!isAdmin || isSaving || !linkedAuthorization || currentRoleKey === 'household.frontteam'}
+                                disabled={!isAdmin || isSaving || !linkedAuthorization || (currentRoleKey === 'household.frontteam' && !canManageFrontteam)}
                                 data-testid={`household-role-select-${member.email}`}
                                 aria-label={`Rol ${member.email}`}
                               >
                                 {roleOptions.map((role) => <option key={role.role_key} value={role.role_key}>{ROLE_LABELS[role.role_key] || role.name}</option>)}
                               </select>
                             </label>
-                            {canManageFrontteam && currentRoleKey !== 'household.owner' ? (
-                              <Button
-                                variant="secondary"
-                                onClick={() => handleFrontteamMembership(member, currentRoleKey !== 'household.frontteam')}
-                                disabled={isSaving || !linkedAuthorization}
-                                data-testid={`household-frontteam-${member.email}`}
-                              >
-                                {currentRoleKey === 'household.frontteam' ? 'Frontteamlidmaatschap intrekken' : 'Frontteamlid maken'}
-                              </Button>
-                            ) : null}
                             {isAdmin ? <Button variant="secondary" onClick={() => setMemberToRemove(member)} disabled={isSaving || !member.can_remove} data-testid={`household-remove-${member.email}`}>Ontkoppelen</Button> : null}
                           </div>
                         </div>
