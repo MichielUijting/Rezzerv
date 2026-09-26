@@ -87,11 +87,6 @@ export default function HomePage() {
     navigate('/login', { replace: true })
   }
 
-  async function exitMobileStart() {
-    const shouldLogout = window.confirm('Wil je uitloggen? Kies OK om uit te loggen of Annuleren om op de Startpagina te blijven.')
-    if (!shouldLogout) return
-    await logout()
-  }
 
   if (context?.context_type === 'none') {
     return (
@@ -163,7 +158,7 @@ export default function HomePage() {
   }
 
   if (isMobileViewport) {
-    return <MobileHomePage context={context} navigation={navigation} visibility={visibility} welcomeText={actionAvailability.welcomeText} onOpenTile={openTile} onExit={exitMobileStart} />
+    return <MobileHomePage context={context} navigation={navigation} visibility={visibility} welcomeText={actionAvailability.welcomeText} onOpenTile={openTile} />
   }
 
   return (
