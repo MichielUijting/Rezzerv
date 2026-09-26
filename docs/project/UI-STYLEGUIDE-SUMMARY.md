@@ -590,7 +590,7 @@ Presentatieregels:
 De mobiele **Startpagina** is vanaf 26 september 2026 een persoonlijke snelstart en gebruikt op `<=720px` een eigen mobiele presentatie; desktop blijft de bestaande Startpagina gebruiken.
 
 Vaste regels:
-- de gedeelde donkergroene `MobileModuleHeader` met titel **Startpagina** staat altijd bovenaan; alleen de globale **Terug**-knop ontbreekt op deze navigatieroot;
+- de gedeelde donkergroene `MobileModuleHeader` met titel **Startpagina** staat altijd bovenaan; de globale **Terug**-knop uit `MobileAppChrome` staat op exact dezelfde vaste positie als op alle andere beveiligde mobiele schermen en de titel sluit daarop aan met de reguliere gedeelde headerafstand;
 - alle reguliere tekst op de mobiele Startpagina gebruikt uitsluitend de twee centrale groottes `--font-size-ui-body` en `--font-size-ui-title`; het InHuis-woordmerk mag qua lettervorm afwijken, niet qua grootte;
 - bovenaan staat één begroeting **Welkom <voornaam> InHuis**; er staat geen tweede InHuis-logo of huis-icoon op de Startpagina;
 - het woordmerk is tekstueel **InHuis**: **In** in een schuin geschreven accentvorm in `#28a99e`, **Huis** direct aansluitend in de centrale donkergroene kleur; dak-, blad- en losse decoratieve streepjes zijn niet toegestaan;
@@ -600,7 +600,7 @@ Vaste regels:
 - **Aanpassen** opent een mobiele ordeningsweergave waarin de gebruiker acties omhoog/omlaag kan plaatsen; de persoonlijke volgorde wordt per gebruiker op het apparaat bewaard en bij een volgende lokale sessie opnieuw toegepast;
 - globale platformbeschikbaarheid, autorisatie en featureflags blijven leidend: persoonlijk ordenen kan een niet-beschikbare actie nooit zichtbaar maken;
 - de vaste globale mobiele bottom navigation blijft onderdeel van `MobileAppChrome` en staat los van de persoonlijke snelstartvolgorde;
-- de Startpagina zelf toont geen globale **Terug**-knop, omdat zij het navigatiebeginpunt van de mobiele sessie is.
+- de Startpagina toont dezelfde globale **Terug**-knop uit `MobileAppChrome` als alle andere beveiligde mobiele schermen; er is geen lokale Startpagina-variant van deze knop.
 
 
 ### Mobiele InHuis-header en persoonlijke Startpagina
