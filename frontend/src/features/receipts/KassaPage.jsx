@@ -946,7 +946,7 @@ function ReceiptProcessingInfoCard({ transientPreview }) {
   )
 }
 
-function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onFeedback }) {
+function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onFeedback, onDeleteReceipt }) {
   const [selectedLineIds, setSelectedLineIds] = useState([])
   const [lineSort, setLineSort] = useState({ key: 'lineIndex', direction: 'asc' })
   const [lineFilters, setLineFilters] = useState({ article: '', quantity: '', unit: '', unitPrice: '', lineTotal: '', discount: '' })
@@ -1557,6 +1557,7 @@ async function saveLine(lineId, overrides = null) {
                   <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
                 </div>
               <div className="rz-kassa-secondary-actions">
+                {canEdit ? <Button type="button" variant="secondary" onClick={() => onDeleteReceipt?.(receipt?.id)} data-testid="receipt-delete-whole-button">Bon verwijderen</Button> : null}
                 <Button type="button" onClick={approveReceipt} disabled={isApproving}>{isApproving ? 'Goedkeuren...' : 'Goedkeuren'}</Button>
                 <Button type="button" variant="secondary" onClick={downloadParsingDebug} data-testid="receipt-debug-download-button">JSON</Button>
               </div>
@@ -1569,7 +1570,7 @@ async function saveLine(lineId, overrides = null) {
   )
 }
 
-function ReceiptDetailView({ receipt = null, transientPreview = null, canEdit = false, onReceiptUpdated, onFeedback }) {
+function ReceiptDetailView({ receipt = null, transientPreview = null, canEdit = false, onReceiptUpdated, onFeedback, onDeleteReceipt }) {
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 
   useEffect(() => {
@@ -1600,7 +1601,7 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, canEdit = 
       </div>
       <div style={{ minWidth: 0, width: '100%', overflow: 'visible', minHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
         {receipt ? (
-          <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
+          <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} onDeleteReceipt={onDeleteReceipt} />
         ) : (
           <ReceiptProcessingInfoCard transientPreview={transientPreview} />
         )}
@@ -2119,9 +2120,9 @@ export default function KassaPage() {
     ensureEmailRouteLoaded().catch(() => {})
   }, [isAddReceiptRoute])
 
-  async function deleteSelectedReceipts() {
-    if (selectedReceiptIds.length === 0) return
-    const deletedIds = selectedReceiptIds.map((value) => String(value))
+  async function deleteReceiptsByIds(receiptIds = []) {
+    const deletedIds = receiptIds.map((value) => String(value)).filter(Boolean)
+    if (deletedIds.length === 0) return
     setError('')
     setDuplicateNotice('')
     try {
@@ -2150,6 +2151,14 @@ export default function KassaPage() {
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De geselecteerde bonnen konden niet worden verwijderd.')
     }
+  }
+
+  async function deleteSelectedReceipts() {
+    await deleteReceiptsByIds(selectedReceiptIds)
+  }
+
+  async function deleteOpenedReceipt(receiptId) {
+    await deleteReceiptsByIds([receiptId])
   }
 
 
@@ -3523,7 +3532,7 @@ export default function KassaPage() {
             </div>
           </ScreenCard>
 
-          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} /> : null}
+          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} onDeleteReceipt={deleteOpenedReceipt} /> : null}
         </div>
       )}
 
