@@ -116,7 +116,7 @@ export default function MobileAppChrome({ children }) {
 
   return (
     <div className="rz-mobile-app-chrome" data-testid="mobile-app-chrome">
-      <MobileBackControl testId="mobile-global-back" />
+      {location.pathname !== '/home' ? <MobileBackControl testId="mobile-global-back" /> : null}
       {children}
       <div className="rz-mobile-app-bottom-space" aria-hidden="true" />
       <MobileBottomNavigationRuntime context={context} pathname={location.pathname} />
