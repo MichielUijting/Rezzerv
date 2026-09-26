@@ -46,14 +46,15 @@ async function dismissFeedback(page) {
   await expect(ok).toHaveCount(0)
 }
 
-test('system context cannot enter consumer Settings', async ({ page }) => {
+test('system context can enter Settings for Superuser platform administration', async ({ page }) => {
   const session = await page.request.get('/api/session')
   expect(session.ok()).toBeTruthy()
   expect((await session.json()).context_type).toBe('system')
 
   await page.goto('/instellingen')
-  await expect(page).toHaveURL(/\/home$/)
-  await expect(page.getByTestId('settings-page')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/instellingen$/)
+  await expect(page.getByTestId('settings-page')).toBeVisible()
+  await expect(page.getByTestId('settings-tile-frontteam')).toBeVisible()
 })
 
 test('Inhuis halen shows grouped product-relevant settings while keeping general household settings', async ({ page }) => {

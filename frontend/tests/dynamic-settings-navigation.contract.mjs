@@ -22,11 +22,11 @@ assert.deepEqual(
 )
 assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
-assert.equal(SETTINGS_TILES.length, 12)
+assert.equal(SETTINGS_TILES.length, 13)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
-  assert.ok(['personal', 'household'].includes(tile.scope))
-  assert.deepEqual(tile.allowedContexts, ['regular', 'system'])
+  assert.ok(['personal', 'household', 'platform'].includes(tile.scope))
+  assert.deepEqual(tile.allowedContexts, tile.key === 'frontteam' ? ['system'] : ['regular', 'system'])
   assert.equal(typeof tile.allowViewer, 'boolean')
 }
 
@@ -47,6 +47,7 @@ for (const tile of SETTINGS_TILES) {
     'privacy-data-sharing',
     'locations',
     'store-import',
+    'frontteam',
     'household',
     'authorizations',
     'household-automation',
@@ -55,7 +56,7 @@ for (const tile of SETTINGS_TILES) {
   ])
   assert.deepEqual(sectionKeys(navigation), {
     account: ['account', 'article-details', 'privacy-data-sharing'],
-    household: ['household', 'authorizations'],
+    household: ['frontteam', 'household', 'authorizations'],
     usage: [
       'capabilities',
       'article-groups',
@@ -89,6 +90,7 @@ for (const tile of SETTINGS_TILES) {
     'article-groups',
     'privacy-data-sharing',
     'store-import',
+    'frontteam',
     'household',
     'authorizations',
     'household-automation',
@@ -147,6 +149,7 @@ for (const tile of SETTINGS_TILES) {
     'article-groups',
     'privacy-data-sharing',
     'locations',
+    'frontteam',
     'household',
     'authorizations',
     'household-automation',

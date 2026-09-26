@@ -132,7 +132,7 @@ def test_legacy_household_roles_are_preserved_but_not_normally_assignable():
                         if isinstance(element, ast.Constant)
                     }
                     break
-    assert allowed_roles == {"household.member", "household.admin", "household.frontteam"}
+    assert allowed_roles == {"household.member", "household.admin"}
     assert "household.viewer" not in allowed_roles
     assert "household.advanced_member" not in allowed_roles
     assert "household.owner" not in allowed_roles

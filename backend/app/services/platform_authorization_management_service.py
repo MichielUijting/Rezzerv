@@ -428,8 +428,9 @@ def grant_special_role(
 
     if normalized_role_key == FRONTTEAM_ROLE_KEY:
         _ensure_frontteam_membership_registry(conn, target_user_id, status="active")
+        mapped_household_id = resolve_frontteam_personal_household_id(conn, target_user_id)
         regular_households = _active_regular_household_ids(conn, target_user_id)
-        if not regular_households:
+        if mapped_household_id or not regular_households:
             ensure_frontteam_personal_household_for_user(
                 conn,
                 user_id=target_user_id,

@@ -47,6 +47,7 @@ const expectedTiles = {
   'household-automation': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
   'almost-out': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
   'help-about': { section: 'help', scope: 'personal', permission: null, allowViewer: true },
+  frontteam: { section: 'household', scope: 'platform', permission: 'platform.frontteam_roles.manage', allowViewer: false },
 }
 
 assert.equal(SETTINGS_TILES.length, Object.keys(expectedTiles).length)
@@ -57,7 +58,7 @@ for (const [key, expected] of Object.entries(expectedTiles)) {
   assert.equal(tile.scope, expected.scope)
   assert.equal(tile.permission ?? null, expected.permission)
   assert.equal(tile.allowViewer, expected.allowViewer)
-  assert.deepEqual(tile.allowedContexts, ['regular', 'system'])
+  assert.deepEqual(tile.allowedContexts, key === 'frontteam' ? ['system'] : ['regular', 'system'])
 }
 
 for (const deferredKey of ['notifications', 'recipes']) {
@@ -98,6 +99,7 @@ for (const [path, key] of [
   ['/instellingen/huishouden', 'household'],
   ['/instellingen/huishouden/autorisaties', 'authorizations'],
   ['/instellingen/locaties', 'locations'],
+  ['/instellingen/frontteam', 'frontteam'],
 ]) {
   assert.ok(
     appRouterSource.includes(`{ path: '${path}', element: <ProtectedSettingsRoute settingKey="${key}">`),
