@@ -262,7 +262,7 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
         assert report["source_unversioned_tables"] > 0, report
         assert report["source_rows"] > 0, report
         assert report["target_revision"] == HEAD_REVISION, report
-        assert report["application_tables"] == 90, report
+        assert report["application_tables"] == 91, report
         assert len(report["source_data_proofs"]) == report["source_unversioned_tables"], report
         assert report["manual_sources_added"] >= 1, report
         assert report["canonical_only_seeded_tables"].get("external_product_index", 0) > 0, report
