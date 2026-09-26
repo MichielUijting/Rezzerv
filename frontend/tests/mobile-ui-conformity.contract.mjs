@@ -20,6 +20,8 @@ const articleResponsiveSource = readFileSync(new URL('../src/features/articles/A
 const mobileViewportSource = readFileSync(new URL('../src/app/mobileViewport.js', import.meta.url), 'utf8')
 const mobileHomeSource = readFileSync(new URL('../src/features/home/MobileHomePage.jsx', import.meta.url), 'utf8')
 const mobileHomeCss = readFileSync(new URL('../src/features/home/mobileHome.css', import.meta.url), 'utf8')
+const mobileSupportSource = readFileSync(new URL('../src/features/support/MobileSupportInbox.jsx', import.meta.url), 'utf8')
+const mobileSupportCss = readFileSync(new URL('../src/features/support/mobileSupportInbox.css', import.meta.url), 'utf8')
 const mobileAppChromeCss = readFileSync(new URL('../src/app/mobileAppChrome.css', import.meta.url), 'utf8')
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
@@ -33,8 +35,9 @@ const MOBILE_UI_MANIFEST = Object.freeze([
   { key: 'bijna-op', source: mobileAlmostOutSource, css: mobileInventoryCss, header: /<MobileModuleHeader title="Bijna op"/ },
   { key: 'boodschappen', source: mobileShoppingSource, css: mobileShoppingCss, header: /<MobileModuleHeader title="Boodschappen"/ },
   { key: 'kassa', source: mobileKassaSource, css: mobileKassaCss, header: /<MobileModuleHeader[^>]*mobile-kassa-header/ },
+  { key: 'meldingen', source: mobileSupportSource, css: mobileSupportCss, header: /<MobileModuleHeader title="Meldingen"/ },
 ])
-assert.deepEqual(MOBILE_UI_MANIFEST.map(({ key }) => key), ['startpagina', 'voorraad', 'voorraad-detail', 'bijna-op', 'boodschappen', 'kassa'])
+assert.deepEqual(MOBILE_UI_MANIFEST.map(({ key }) => key), ['startpagina', 'voorraad', 'voorraad-detail', 'bijna-op', 'boodschappen', 'kassa', 'meldingen'])
 for (const screen of MOBILE_UI_MANIFEST) {
   assert.match(screen.source, screen.header, screen.key + ' moet de gedeelde MobileModuleHeader gebruiken')
   for (const declaration of screen.css.matchAll(/font-size\s*:\s*([^;}]+)/gi)) {
