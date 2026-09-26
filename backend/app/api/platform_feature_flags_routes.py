@@ -11,6 +11,8 @@ from app.services.platform_feature_flag_service import (
     set_home_action_order,
     require_feature_category,
     require_home_action,
+    get_home_welcome_text,
+    set_home_welcome_text,
 )
 from app.services.session_request_context import (
     require_platform_permission_from_session,
@@ -31,6 +33,10 @@ class PlatformFeatureFlagUpdateRequest(BaseModel):
 
 class PlatformHomeActionOrderUpdateRequest(BaseModel):
     keys: list[str]
+
+
+class PlatformHomeWelcomeTextUpdateRequest(BaseModel):
+    value: str
 
 
 def _technical_flag_contract(item: dict) -> dict:
@@ -101,6 +107,7 @@ def get_action_button_availability() -> dict:
     with engine.connect() as conn:
         items = list_home_action_flags(conn)
     return {
+        "welcome_text": get_home_welcome_text(conn),
         "items": [
             {
                 "key": item["key"],
@@ -118,7 +125,18 @@ def get_action_buttons() -> dict:
     context = require_platform_permission_from_session(ACTION_BUTTONS_MANAGE_PERMISSION)
     with engine.connect() as conn:
         items = list_home_action_flags(conn)
-    return {"items": items, "count": len(items), "household_context_used": False, "context_type": context.context_type}
+    return {"items": items, "count": len(items), "welcome_text": get_home_welcome_text(conn), "household_context_used": False, "context_type": context.context_type}
+
+
+@router.put("/api/platform/action-buttons/welcome-text")
+def update_home_welcome_text(payload: PlatformHomeWelcomeTextUpdateRequest) -> dict:
+    context = require_platform_permission_from_session(ACTION_BUTTONS_MANAGE_PERMISSION)
+    try:
+        with engine.begin() as conn:
+            value = set_home_welcome_text(conn, payload.value, updated_by=context.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"welcome_text": value, "household_context_used": False, "context_type": context.context_type}
 
 
 # Keep this concrete route before /{flag_key}; otherwise "order" would be
