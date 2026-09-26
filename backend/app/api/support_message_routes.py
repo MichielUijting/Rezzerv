@@ -81,7 +81,7 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
         "name": str(runtime.get("name") or runtime.get("display_name") or runtime.get("email") or "Inhuis-gebruiker"),
         "role": role or "household.member",
         "household_id": str(context.active_household_id),
-        "is_frontteam": bool(runtime.get("is_frontteam") or runtime.get("is_frontteam_member") or role in {"frontteam", "frontteamlid", "household.frontteam"}),
+        "is_frontteam": role in {"frontteam", "frontteamlid", "household.frontteam"},
     }
 
 
