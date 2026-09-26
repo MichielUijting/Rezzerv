@@ -286,8 +286,9 @@ def test_canonical_rebuild_preserves_source_and_migration_owned_data() -> None:
                 if not str(row[0]).startswith("sqlite_")
                 and str(row[0]) != "alembic_version"
             }
-            assert len(tables) == 89, len(tables)
+            assert len(tables) == 90, len(tables)
             assert "platform_home_action_order" in tables
+            assert "platform_home_settings" in tables
             manual = connection.execute(
                 """
                 SELECT household_id, type
