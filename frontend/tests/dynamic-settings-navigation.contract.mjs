@@ -26,7 +26,7 @@ assert.equal(SETTINGS_TILES.length, 12)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
   assert.ok(['personal', 'household'].includes(tile.scope))
-  assert.deepEqual(tile.allowedContexts, ['regular'])
+  assert.deepEqual(tile.allowedContexts, ['regular', 'system'])
   assert.equal(typeof tile.allowViewer, 'boolean')
 }
 
