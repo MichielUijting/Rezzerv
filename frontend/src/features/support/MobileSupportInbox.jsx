@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Button from '../../ui/Button.jsx'
-import { listHouseholdThreads, listHouseholdNotifications, markHouseholdNotificationRead } from './supportApi.js'
+import Input from '../../ui/Input.jsx'
+import { createHouseholdThread, listHouseholdThreads, listHouseholdNotifications, markHouseholdNotificationRead } from './supportApi.js'
+import { getRezzervVersionTag } from '../../ui/version.js'
 import './mobileSupportInbox.css'
 
 const FILTERS = [['all','Alles'],['messages','Berichten'],['inhuis','Inhuis']]
@@ -13,12 +15,15 @@ function stamp(value) {
   return date.toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function MobileSupportInbox({ onOpenThread, onNewMessage }) {
+export default function MobileSupportInbox({ onOpenThread }) {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
   const [threads, setThreads] = useState([])
   const [notifications, setNotifications] = useState([])
   const [error, setError] = useState('')
+  const [composing, setComposing] = useState(false)
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
 
   async function refresh() {
     try {
@@ -53,6 +58,18 @@ export default function MobileSupportInbox({ onOpenThread, onNewMessage }) {
 
   const unreadCount = notifications.filter((item) => !item.read_at).length
 
+  async function submitNew(event) {
+    event.preventDefault()
+    try {
+      const created = await createHouseholdThread({ subject, message, screen_name: 'Meldingen', route: '/meldingen', app_version: getRezzervVersionTag() })
+      setSubject('')
+      setMessage('')
+      setComposing(false)
+      await refresh()
+      onOpenThread(created.thread_id)
+    } catch (exc) { setError(exc.message) }
+  }
+
   async function openItem(item) {
     if (item.kind === 'messages') return onOpenThread(item.sourceId)
     await markHouseholdNotificationRead(item.sourceId)
@@ -66,8 +83,16 @@ export default function MobileSupportInbox({ onOpenThread, onNewMessage }) {
       <main className="rz-mobile-support-content">
         <div className="rz-mobile-support-summary">
           <strong>{unreadCount} ongelezen</strong>
-          <Button type="button" variant="primary" onClick={onNewMessage}>+ Nieuw bericht</Button>
+          <Button type="button" variant="primary" onClick={() => setComposing(true)}>+ Nieuw bericht</Button>
         </div>
+        {composing ? (
+          <form className="rz-mobile-support-compose" onSubmit={submitNew}>
+            <strong>Nieuw bericht aan Superuser</strong>
+            <label>Onderwerp<Input value={subject} onChange={(event) => setSubject(event.target.value)} required maxLength={250} /></label>
+            <label>Bericht<textarea value={message} onChange={(event) => setMessage(event.target.value)} required maxLength={10000} /></label>
+            <div><Button type="submit" variant="primary" disabled={!subject.trim() || !message.trim()}>Versturen</Button> <Button type="button" variant="secondary" onClick={() => setComposing(false)}>Annuleren</Button></div>
+          </form>
+        ) : null}
         <div className="rz-mobile-support-filters" role="tablist" aria-label="Meldingen filteren">
           {FILTERS.map(([key,label]) => <button key={key} type="button" className={filter === key ? 'is-active' : ''} onClick={() => setFilter(key)}>{label}</button>)}
         </div>
