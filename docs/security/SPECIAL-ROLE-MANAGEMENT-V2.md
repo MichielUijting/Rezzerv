@@ -75,3 +75,14 @@ De gemergde 9.1.8b-kandidaat bewees:
 10. production frontend build;
 11. volledige canonical frontend regression;
 12. canonical release package.
+
+
+## Frontteamledenadministratie
+
+De Frontteambeheerfunctie werkt op bestaande Inhuis-accounts. Een Superuser of IP-eigenaar voegt een gebruiker toe op exact e-mailadres. Alleen geregistreerde Frontteamleden worden in de beheerweergave getoond.
+
+Een Frontteamregistratie kent twee toestanden:
+- `active`: de aanvullende platformrol `platform.frontteam` is actief;
+- `inactive`: de gebruiker blijft als Frontteamlid geregistreerd, maar de aanvullende Frontteambevoegdheden zijn uitgeschakeld.
+
+Activeren en deactiveren wijzigen uitsluitend de Frontteambevoegdheid. Verwijderen verwijdert de Frontteamregistratie. Geen van deze acties verwijdert het Inhuis-account, het reguliere huishouden of de bestaande huishoudrol.
