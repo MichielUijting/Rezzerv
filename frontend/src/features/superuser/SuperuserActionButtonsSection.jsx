@@ -7,7 +7,14 @@ async function loadActionButtons() {
   const response = await fetchJsonWithAuth('/api/platform/action-buttons')
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload?.detail || 'Acties op de Startpagina konden niet worden geladen.')
-  return Array.isArray(payload?.items) ? payload.items : []
+  return { items: Array.isArray(payload?.items) ? payload.items : [], welcomeText: String(payload?.welcome_text || 'Fijn dat je er weer bent.') }
+}
+
+async function saveWelcomeText(value) {
+  const response = await fetchJsonWithAuth('/api/platform/action-buttons/welcome-text', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload?.detail || 'Welkomsttekst kon niet worden opgeslagen.')
+  return String(payload?.welcome_text || value)
 }
 
 async function saveActionButton(key, enabled) {
@@ -45,6 +52,8 @@ function moveBefore(items, sourceKey, targetKey) {
 
 export default function SuperuserActionButtonsSection() {
   const [items, setItems] = useState([])
+  const [welcomeText, setWelcomeText] = useState('Fijn dat je er weer bent.')
+  const [savingWelcomeText, setSavingWelcomeText] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(null)
@@ -58,11 +67,19 @@ export default function SuperuserActionButtonsSection() {
     let active = true
     setLoading(true)
     loadActionButtons()
-      .then((nextItems) => { if (active) { setItems(nextItems); setError('') } })
+      .then((payload) => { if (active) { setItems(payload.items); setWelcomeText(payload.welcomeText); setError('') } })
       .catch((requestError) => { if (active) setError(requestError?.message || 'Acties op de Startpagina konden niet worden geladen.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [])
+
+  async function persistWelcomeText() {
+    if (savingWelcomeText) return
+    setSavingWelcomeText(true); setError('')
+    try { const saved = await saveWelcomeText(welcomeText); setWelcomeText(saved); window.dispatchEvent(new Event('rezzerv-action-buttons-changed')) }
+    catch (requestError) { setError(requestError?.message || 'Welkomsttekst kon niet worden opgeslagen.') }
+    finally { setSavingWelcomeText(false) }
+  }
 
   function propose(item) {
     if (saving || savingOrder) return
@@ -128,6 +145,11 @@ export default function SuperuserActionButtonsSection() {
       <p>
         Dit wijzigt alleen de beschikbaarheid en volgorde van tegels op de Startpagina. Bestaande rollen, permissies, onboarding en backend-autorisatie blijven ongewijzigd en leidend.
       </p>
+      <div style={{ display: 'grid', gap: 8, maxWidth: 720, margin: '18px 0' }}>
+        <label htmlFor="startpagina-welcome-text"><strong>Persoonlijke welkomsttekst</strong></label>
+        <input id="startpagina-welcome-text" value={welcomeText} maxLength={160} onChange={(event) => setWelcomeText(event.target.value)} />
+        <div><Button type="button" disabled={savingWelcomeText || !welcomeText.trim()} onClick={persistWelcomeText}>{savingWelcomeText ? 'Opslaan…' : 'Welkomsttekst opslaan'}</Button></div>
+      </div>
 
       <div role="status" aria-live="polite" data-testid="superuser-action-order-status">
         {savingOrder ? 'Nieuwe volgorde opslaan…' : announcement}
