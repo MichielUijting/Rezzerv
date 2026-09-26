@@ -601,3 +601,10 @@ Vaste regels:
 - globale platformbeschikbaarheid, autorisatie en featureflags blijven leidend: persoonlijk ordenen kan een niet-beschikbare actie nooit zichtbaar maken;
 - de vaste globale mobiele bottom navigation blijft onderdeel van `MobileAppChrome` en staat los van de persoonlijke snelstartvolgorde;
 - de Startpagina zelf toont geen globale **Terug**-knop, omdat zij het navigatiebeginpunt van de mobiele sessie is.
+
+
+### Mobiele InHuis-header en persoonlijke Startpagina
+- Iedere mobiele moduleheader gebruikt het gedeelde InHuis-woordmerk: turquoise `In` en wit `Huis` op de centrale donkergroene header.
+- De mobiele Startpagina toont geen huishoudnaam boven de begroeting; de persoonlijke begroeting is `Welkom <voornaam> InHuis`.
+- Primaire actie-iconen zijn groter dan de standaard body-iconen en mogen per actie een eigen zachte accentkleur hebben; dit verandert de centrale primaire UI-kleur niet.
+- De regel onder de begroeting is platformbreed configureerbare content en wordt beheerd bij Superuser > Actieknoppen; de standaardtekst is `Fijn dat je er weer bent.`.
