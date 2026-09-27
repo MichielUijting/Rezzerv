@@ -8,6 +8,7 @@ import { apiPost } from '../../lib/apiClient.js'
 import { fetchAuthContext, getLoginMessage } from '../../lib/authSession.js'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import { formatInhuisVersionLabel, getRezzervVersionTag } from '../../ui/version.js'
+import './loginPage.css'
 
 export default function LoginPage({ onLoggedIn }) {
   const [email, setEmail] = useState('')
@@ -44,10 +45,21 @@ export default function LoginPage({ onLoggedIn }) {
   }
 
   return (
-    <div className="rz-screen" data-testid="login-page">
-      <Header title="Inloggen" />
-      <div className="rz-content">
-        <div className="rz-content-inner">
+    <div className="rz-screen rz-login-screen" data-testid="login-page">
+      <div className="rz-login-desktop-header">
+        <Header title="Inloggen" />
+      </div>
+
+      <main className="rz-login-mobile-shell">
+        <div className="rz-login-wordmark" aria-label="InHuis" data-testid="login-wordmark">
+          <span className="rz-login-wordmark-in">In</span>
+          <span className="rz-login-wordmark-huis">Huis</span>
+        </div>
+        <h1 className="rz-login-welcome" data-rz-text-size="title">Welkom</h1>
+      </main>
+
+      <div className="rz-content rz-login-content">
+        <div className="rz-content-inner rz-login-content-inner">
           <Card className="rz-card-login">
             <form className="rz-form" onSubmit={onSubmit}>
               <Input
@@ -68,7 +80,7 @@ export default function LoginPage({ onLoggedIn }) {
                 data-testid="login-password"
               />
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <label className="rz-login-show-password">
                 <input
                   type="checkbox"
                   checked={showPassword}
@@ -78,7 +90,7 @@ export default function LoginPage({ onLoggedIn }) {
                 <span>Wachtwoord tonen</span>
               </label>
 
-              <div style={{ textAlign: 'center' }}>
+              <div className="rz-login-link">
                 <Link to="/wachtwoord-vergeten" data-testid="forgot-password-link">Wachtwoord vergeten?</Link>
               </div>
 
@@ -86,7 +98,7 @@ export default function LoginPage({ onLoggedIn }) {
                 {loading ? 'Bezig...' : 'Inloggen'}
               </Button>
 
-              <div style={{ textAlign: 'center' }}>
+              <div className="rz-login-link">
                 <Link to="/registreren" data-testid="register-link">Nog geen account? Account maken</Link>
               </div>
 
