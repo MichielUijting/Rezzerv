@@ -153,6 +153,10 @@ ALLOWED_COMPATIBILITY_FILES: dict[str, str] = {
         "Exercises the existing isolated SQLite authorization/session compatibility harness for "
         "roles-v2 acceptance; normal authorization and full-stack regression authority remain PostgreSQL."
     ),
+    "backend/tests/test_roles_v2_foundation_contract.py": (
+        "Exercises the existing isolated in-memory SQLite authorization foundation compatibility "
+        "harness; canonical PostgreSQL authorization and session integration remain the runtime authority."
+    ),
     "backend/tests/test_platform_authorizations_route_authorization.py": (
         "Exercises isolated special-role authorization service contracts on an in-memory compatibility "
         "schema; normal API and full-stack authorization authority remain PostgreSQL."
