@@ -69,8 +69,6 @@ assert.doesNotMatch(externalReceiptOverview, /showSearchComplete|rz-search-compl
 // User-visible branding guardrails. Technical REZZERV_* keys, events, storage keys,
 // provider/class names and test credentials may intentionally remain Rezzerv internally.
 const appSource = readFrontend('src/App.jsx')
-const loginPage = readFrontend('src/features/auth/LoginPage.jsx')
-const loginCss = readFrontend('src/features/auth/loginPage.css')
 const helpAboutPage = readFrontend('src/features/settings/SettingsHelpAboutPage.jsx')
 const kassaPage = readFrontend('src/features/receipts/KassaPage.jsx')
 const shareIcon = readFrontend('public/rezzerv-share-icon.svg')
