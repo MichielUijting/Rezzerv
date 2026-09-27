@@ -174,8 +174,8 @@ def test_legacy_and_regular_household_role_mappings_are_preserved():
         "household.advanced_member",
         "household.admin",
         "household.owner",
-        "household.frontteam",
     } <= ROLE_PERMISSIONS.keys()
+    assert "household.frontteam" not in ROLE_PERMISSIONS
     assert ROLE_PERMISSIONS["household.admin"] == ADMIN_PERMISSIONS
     assert ROLE_PERMISSIONS["household.member"] <= set(HOUSEHOLD_PERMISSIONS)
 
