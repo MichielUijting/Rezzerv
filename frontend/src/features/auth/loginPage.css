@@ -1,9 +1,3 @@
-.rz-login-background,
-.rz-login-layout {
-  display: none;
-}
-
-@media (max-width: 720px) {
   .rz-login-screen {
     position: relative;
     min-height: 100dvh;
@@ -126,14 +120,14 @@
   }
 
   .rz-login-wordmark-huis {
-    color: #0a4f3d;
+    color: var(--color-ui-primary);
     margin-left: 12px;
     letter-spacing: -4px;
   }
 
   .rz-login-welcome {
     margin: 0 0 26px;
-    color: #0a4f3d;
+    color: var(--color-ui-primary);
     font-weight: 800;
     text-align: left;
   }
@@ -176,7 +170,7 @@
   }
 
   .rz-login-input-shell:focus-within {
-    border-color: #0a4f3d;
+    border-color: var(--color-ui-primary);
     box-shadow: 0 0 0 3px rgba(10, 79, 61, 0.10);
   }
 
@@ -233,7 +227,7 @@
 
   .rz-login-forgot a,
   .rz-login-register a {
-    color: #0a4f3d;
+    color: var(--color-ui-primary);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -246,8 +240,8 @@
     justify-content: center;
     align-items: center;
     gap: 18px;
-    border-radius: 14px;
-    background: #0a5f49;
+    border-radius: var(--radius-md);
+    background: var(--color-ui-primary);
     box-shadow: 0 6px 14px rgba(10, 79, 61, 0.16);
   }
 
@@ -268,6 +262,21 @@
   .rz-login-screen .rz-buildtag {
     z-index: 2;
     background: rgba(255, 255, 255, 0.68);
+  }
+}
+
+@media (min-width: 721px) {
+  .rz-login-desktop-header {
+    display: block;
+  }
+
+  .rz-login-layout {
+    padding-top: 48px;
+    padding-bottom: 96px;
+  }
+
+  .rz-login-brand {
+    margin-bottom: 28px;
   }
 }
 
