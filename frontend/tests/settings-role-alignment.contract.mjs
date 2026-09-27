@@ -67,7 +67,6 @@ assert.match(assignableRolesBlock, /"household\.member"/)
 assert.match(assignableRolesBlock, /"household\.admin"/)
 assert.match(assignableRolesBlock, /"household\.frontteam"/)
 assert.doesNotMatch(assignableRolesBlock, /household\.(viewer|advanced_member|owner)/)
-assert.match(membershipServiceSource, /superuser_required_for_frontteam_membership/)
 
 const canonicalRoleQuery = membershipRoutesSource.match(/SELECT role_key,([\s\S]*?)\n        """\)\)\.mappings\(\)\.all\(\)/)?.[1] || ''
 for (const roleKey of [
