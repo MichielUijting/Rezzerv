@@ -1,6 +1,7 @@
 import { FEATURE_GERECHTEN, isFeatureEnabled } from '../platform/featureAvailability.js'
 
 const LEGACY_TILES = [
+  { key: 'berichten', label: 'Berichten', icon: '✉️', clickable: true },
   { key: 'meldingen', label: 'Meldingen', icon: '✉️', clickable: true },
   { key: 'bijna-op', label: 'Bijna op', icon: '📉', clickable: true },
   { key: 'winkelen', label: 'Boodschappen', icon: '🛒', clickable: true },
@@ -32,7 +33,8 @@ function isGloballyAvailable(tile, actionButtons) {
 function isVisible(tile, visibility) {
   if (tile.feature && !isFeatureEnabled(visibility.features, tile.feature)) return false
   if (!tile.feature && !isGloballyAvailable(tile, visibility.actionButtons)) return false
-  if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser
+  if (tile.key === 'berichten') return visibility.canOpenMessages
+  if (tile.key === 'meldingen') return true
   if (tile.key === 'admin') return visibility.canOpenAdmin
   if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
   if (tile.key === 'superuser') return visibility.isPlatformSuperuser
@@ -95,6 +97,7 @@ export function buildHomeNavigation({ onboarding, visibility, features = {}, act
     canOpenAdmin: Boolean(visibility?.canOpenAdmin),
     canOpenExternalDatabases: Boolean(visibility?.canOpenExternalDatabases),
     isPlatformSuperuser: Boolean(visibility?.isPlatformSuperuser),
+    canOpenMessages: Boolean(visibility?.canOpenMessages),
   }
   const configuration = onboarding?.product_configuration
   const primaryUseCase = String(onboarding?.primary_use_case || '').trim().toLowerCase()
