@@ -104,11 +104,43 @@ export default function LoginPage({ onLoggedIn }) {
         style={loginBackground ? { backgroundImage: `url("/api/platform/login-background/image?v=${encodeURIComponent(loginBackground.revision)}")` } : undefined}
         aria-hidden="true"
       >
-        <span className="rz-login-wave rz-login-wave-one" />
-        <span className="rz-login-wave rz-login-wave-two" />
-        <span className="rz-login-leaves">
-          <i /><i /><i /><i /><i />
-        </span>
+        <svg className="rz-login-interior-sketch" viewBox="0 0 900 1200" preserveAspectRatio="xMidYMid slice" focusable="false">
+          <defs>
+            <filter id="inhuis-sketch-rough">
+              <feTurbulence type="fractalNoise" baseFrequency="0.012 0.028" numOctaves="3" seed="17" result="noise" />
+              <feDisplacementMap in="SourceGraphic" in2="noise" scale="18" />
+            </filter>
+            <filter id="inhuis-sketch-wash">
+              <feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="4" seed="9" result="wash" />
+              <feBlend in="SourceGraphic" in2="wash" mode="soft-light" />
+              <feGaussianBlur stdDeviation="1.4" />
+            </filter>
+          </defs>
+          <g className="rz-login-sketch-wash" filter="url(#inhuis-sketch-wash)">
+            <path d="M0 690 C170 610 315 650 450 710 S735 795 900 705 L900 1200 L0 1200 Z" />
+            <path d="M0 880 C190 760 355 820 515 875 S760 960 900 905 L900 1200 L0 1200 Z" />
+          </g>
+          <g className="rz-login-sketch-room" filter="url(#inhuis-sketch-rough)">
+            <path d="M78 850 L78 470 L330 355 L610 470 L610 850" />
+            <path d="M330 355 L330 850" />
+            <path d="M610 470 L808 390 L808 850" />
+            <path d="M128 812 L128 612 L280 612 L280 812" />
+            <path d="M390 812 L390 570 L548 570 L548 812" />
+            <path d="M650 812 L650 560 L760 520 L760 812" />
+            <path d="M90 850 L805 850" />
+          </g>
+          <g className="rz-login-sketch-furniture" filter="url(#inhuis-sketch-rough)">
+            <path d="M120 792 L185 720 L330 720 L370 790" />
+            <path d="M150 790 L150 842 M340 790 L340 842" />
+            <path d="M420 770 L485 710 L610 738 L650 800" />
+            <path d="M470 810 L470 855 M625 805 L625 855" />
+            <path d="M685 790 C710 710 755 675 805 670 M735 735 C710 690 695 655 700 610 M765 710 C805 665 825 625 830 585" />
+          </g>
+          <g className="rz-login-sketch-scribbles">
+            <path d="M40 1010 C180 920 270 960 395 1015 S665 1100 880 985" />
+            <path d="M25 1060 C210 965 350 1020 480 1065 S735 1140 900 1040" />
+          </g>
+        </svg>
       </div>
 
       <main className="rz-login-layout">
