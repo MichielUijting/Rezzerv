@@ -332,16 +332,6 @@ def create_server_session(
             detail="Geen geldige accountcontext beschikbaar.",
         )
     is_frontteam = FRONTTEAM_PLATFORM_ROLE in platform_roles
-    is_personal_frontteam_household = is_frontteam_personal_household(
-        conn,
-        user_id=user_id,
-        household_id=household_id,
-    )
-    if is_frontteam != is_personal_frontteam_household:
-        raise HTTPException(
-            status_code=403,
-            detail="Geen geldige accountcontext beschikbaar.",
-        )
 
     effective_role_key = resolve_effective_household_role(
         conn,
@@ -359,16 +349,6 @@ def create_server_session(
     ):
         raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
     context_type = resolve_session_context_type(conn, household_id)
-    if is_frontteam and (
-        context_type != "regular"
-        or not is_personal_frontteam_household
-        or membership_role != "admin"
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Geen geldige accountcontext beschikbaar.",
-        )
-
     return _insert_server_session(
         conn,
         user_id=user_id,
@@ -666,11 +646,6 @@ def resolve_server_session(
             detail="Geen geldige accountcontext beschikbaar.",
         )
     is_frontteam = FRONTTEAM_PLATFORM_ROLE in platform_roles
-    is_personal_frontteam_household = is_frontteam_personal_household(
-        conn,
-        user_id=user_id,
-        household_id=household_id,
-    )
     if is_frontteam != is_personal_frontteam_household:
         raise HTTPException(
             status_code=403,
@@ -711,16 +686,6 @@ def resolve_server_session(
     if not _household_zero_allowed(household_id=household_id, email=email, role=role):
         raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
     context_type = resolve_session_context_type(conn, household_id)
-    if is_frontteam and (
-        context_type != "regular"
-        or not is_personal_frontteam_household
-        or role != "admin"
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Geen geldige accountcontext beschikbaar.",
-        )
-
     return ServerSessionContext(
         session_id=str(row.get("session_id")),
         user_id=user_id,
