@@ -22,7 +22,7 @@ import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import MobileHomePage from './MobileHomePage.jsx'
 
 const TILE_ROUTES = {
-  meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
+  berichten: '/meldingen', meldingen: '/meldingen', 'bijna-op': '/bijna-op', winkelen: '/winkelen', voorraad: '/voorraad',
   productgroepen: '/productgroepen', kassabonnen: '/kassabonnen', kassa: '/kassa',
   spaartegoeden: '/spaartegoeden', 'externe-databases': '/externe-databases', catalogus: '/catalogus',
   instellingen: '/instellingen', locaties: '/instellingen/locaties', admin: '/admin', superuser: '/superuser',
@@ -33,6 +33,7 @@ function visibilityFromContext(context) {
     canOpenAdmin: isHouseholdAdminFromContext(context),
     canOpenExternalDatabases: isFrontteamMemberFromContext(context),
     isPlatformSuperuser: isPlatformSuperuserFromContext(context),
+    canOpenMessages: isPlatformSuperuserFromContext(context) || canCurrentUserPerform('platform.frontteam_messages.create', context),
     canManageLocations: canCurrentUserPerform('locations.manage', context),
   }
 }
