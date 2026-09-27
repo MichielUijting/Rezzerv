@@ -26,6 +26,19 @@ De keuze tussen desktop-/tabelpresentatie en een beschikbare mobiele presentatie
 - locatieconfiguratie bepaalt alleen welke locatiegegevens, filters en sorteringen binnen een scherm beschikbaar zijn, niet de keuze van de schermvariant;
 - toekomstige responsive schermwrappers gebruiken dezelfde centrale `MOBILE_APP_MEDIA_QUERY`/viewport-hook en introduceren geen eigen rol- of permissiegate voor presentatiekeuze.
 
+## Mobiele Instellingenbaseline vanaf 27 september 2026
+
+Voor **Instellingen** geldt op viewports van maximaal 720px dezelfde centrale mobiele app-chrome als voor de overige beveiligde mobiele schermen:
+
+- de gedeelde **Terug**-knop en bottom-navigation komen uitsluitend uit `MobileAppChrome`; Settings-schermen bouwen geen eigen concurrerende mobiele navigatie;
+- het hoofdscherm gebruikt compacte, touchvriendelijke instellingstegels per functionele sectie;
+- invoervelden, selecties en primaire acties benutten de beschikbare mobiele breedte en hebben voldoende touchhoogte;
+- modals blijven binnen de mobiele viewport en scrollen intern wanneer de inhoud hoger is dan het scherm;
+- desktop-tabellen blijven boven 720px ongewijzigd; binnen Instellingen worden tabelrijen op mobiel als verticale kaarten gepresenteerd;
+- iedere mobiele tabelcel toont het bijbehorende kolomlabel naast de waarde, zodat informatie niet betekenisloos wordt wanneer de desktopkop verdwijnt;
+- kolom-resizebediening is op mobiel niet zichtbaar;
+- autorisatie, routes, beschikbare velden en acties zijn identiek aan desktop; responsiviteit mag geen functionele rechten of gegevens verwijderen.
+
 ## Mobiele ontwerpbaseline vanaf 22 september 2026
 
 Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele grammatica uit het door de PO aangeleverde ontwerpvoorstel:
