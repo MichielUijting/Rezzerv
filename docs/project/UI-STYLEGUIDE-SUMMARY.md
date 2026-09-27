@@ -636,3 +636,27 @@ Vaste regels:
 - Op de mobiele Startpagina vraagt Terug expliciet om **Uitloggen** of **Annuleren**; er vindt geen stille browsernavigatie plaats.
 - Native `select`-velden gebruiken app-breed `var(--font-family-base)` en `var(--font-size-ui-body)`; schermen mogen geen browserafhankelijke grotere select-typografie introduceren.
 - Een bericht aan de Superuser is een Frontteamfunctie: niet-Frontteamgebruikers krijgen geen verzendactie in de UI en de backend weigert directe verzend- of antwoordaanroepen.
+
+
+## Inlogscherm — gedeelde desktop- en mobiele login
+
+De loginroute gebruikt op desktop en mobiel dezelfde functionele loginform en dezelfde Inhuis-identiteit; viewportwissels mogen de invoervelden of primaire loginactie nooit verbergen.
+
+Vaste regels:
+- het vrijstaande woordmerk toont een lichtgroene `In` en `Huis` in de centrale primaire Inhuis-kleur; achter het woordmerk staat geen afzonderlijk groen logoblok;
+- de paginakop is **Welkom**;
+- e-mailadres en wachtwoord blijven op iedere viewport zichtbaar, bruikbaar en gekoppeld aan dezelfde authenticatielogica;
+- het wachtwoordveld gebruikt een oogbediening in het veld voor tonen/verbergen;
+- de primaire **Inloggen**-knop gebruikt de centrale primaire UI-kleur en de app-brede knopradius `var(--radius-md)`;
+- de zachte crème/groene achtergrond, decoratieve golven en bladaccenten zijn presentatielaag en veranderen geen login-, sessie- of autorisatiegedrag;
+- desktop behoudt de reguliere applicatieheader; mobiel gebruikt de compacte loginpresentatie zonder die desktopheader.
+
+
+### Platformbrede achtergrond van het inlogscherm
+
+- De Superuser kan onder **Inlogscherm** één JPG/JPEG als platformbrede loginachtergrond instellen.
+- De ingestelde afbeelding geldt voor alle gebruikers en voor zowel desktop als mobiel; loginstate en authenticatie blijven één gedeelde flow.
+- Alleen de platform-Superuser mag de afbeelding vervangen of de standaardachtergrond herstellen; het uitlezen van de actieve achtergrond is vóór authenticatie beschikbaar omdat het inlogscherm publiek is.
+- Uploads zijn beperkt tot geldige JPG/JPEG-bestanden van maximaal 8 MB en worden ook server-side gevalideerd.
+- De afbeelding wordt gecentreerd en beeldvullend weergegeven met `background-size: cover`; de functionele login-card en het InHuis-woordmerk blijven daar bovenop leesbaar.
+- Zonder aangepaste JPG blijft de ingebouwde standaardachtergrond actief.

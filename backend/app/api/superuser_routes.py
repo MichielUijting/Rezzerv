@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import base64
+import hashlib
 
-from fastapi import APIRouter, HTTPException, Request
+
+from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
@@ -19,6 +22,44 @@ from app.services.support_message_service import ensure_support_message_foundati
 SUPERUSER_ROLE_KEY = "platform.superuser"
 SUPERUSER_TABS = ("Overzicht", "Huishoudens", "Gebruik", "Kassabonnen", "Systeem")
 TREND_DAYS = 7
+LOGIN_BACKGROUND_KEY = "login_background_jpeg_base64"
+LOGIN_BACKGROUND_MAX_BYTES = 8 * 1024 * 1024
+
+
+def _read_platform_setting(conn, key: str) -> str | None:
+    return conn.execute(
+        text("SELECT setting_value FROM platform_home_settings WHERE setting_key = :key"),
+        {"key": key},
+    ).scalar()
+
+
+def _write_platform_setting(conn, key: str, value: str, actor_user_id: str) -> None:
+    conn.execute(text("""
+        INSERT INTO platform_home_settings (setting_key, setting_value, updated_by, updated_at)
+        VALUES (:key, :value, :updated_by, CURRENT_TIMESTAMP)
+        ON CONFLICT (setting_key) DO UPDATE SET
+            setting_value = EXCLUDED.setting_value,
+            updated_by = EXCLUDED.updated_by,
+            updated_at = CURRENT_TIMESTAMP
+    """), {"key": key, "value": value, "updated_by": actor_user_id})
+
+
+def _login_background_payload(conn) -> dict:
+    encoded = _read_platform_setting(conn, LOGIN_BACKGROUND_KEY)
+    if not encoded:
+        return {"configured": False, "revision": None}
+    digest = hashlib.sha256(encoded.encode("ascii")).hexdigest()[:16]
+    return {"configured": True, "revision": digest}
+
+
+def _validate_jpeg(content: bytes) -> None:
+    if not content:
+        raise HTTPException(status_code=400, detail="Selecteer een JPG-afbeelding.")
+    if len(content) > LOGIN_BACKGROUND_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="De JPG mag maximaal 8 MB groot zijn.")
+    if len(content) < 4 or not content.startswith(b"\xff\xd8\xff") or not content.endswith(b"\xff\xd9"):
+        raise HTTPException(status_code=415, detail="Alleen een geldig JPG/JPEG-bestand is toegestaan.")
+
 
 
 def _require_platform_superuser(conn, raw_session_id: str | None):
@@ -377,6 +418,62 @@ def _platform_usage(conn) -> dict:
 
 def create_superuser_router(engine: Engine) -> APIRouter:
     router = APIRouter()
+
+    @router.get("/api/platform/login-background")
+    def login_background_status():
+        with engine.begin() as conn:
+            return _login_background_payload(conn)
+
+    @router.get("/api/platform/login-background/image")
+    def login_background_image():
+        with engine.begin() as conn:
+            encoded = _read_platform_setting(conn, LOGIN_BACKGROUND_KEY)
+        if not encoded:
+            raise HTTPException(status_code=404, detail="Geen aangepaste inlogachtergrond ingesteld.")
+        try:
+            content = base64.b64decode(encoded, validate=True)
+        except (ValueError, base64.binascii.Error):
+            raise HTTPException(status_code=500, detail="De opgeslagen inlogachtergrond is ongeldig.")
+        return Response(content=content, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
+
+    @router.put("/api/superuser/login-background")
+    async def update_login_background(request: Request):
+        with engine.begin() as conn:
+            context = _require_platform_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
+            content_type = str(request.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+            if content_type not in {"image/jpeg", "image/jpg"}:
+                raise HTTPException(status_code=415, detail="Alleen JPG/JPEG is toegestaan.")
+            content = await request.body()
+            _validate_jpeg(content)
+            encoded = base64.b64encode(content).decode("ascii")
+            _write_platform_setting(conn, LOGIN_BACKGROUND_KEY, encoded, context.user_id)
+            payload = _login_background_payload(conn)
+            write_authorization_audit(
+                conn,
+                actor_user_id=context.user_id,
+                actor_type="platform_superuser",
+                action="superuser.login_background.updated",
+                object_type="platform_home_settings",
+                new_value={"configured": True, "bytes": len(content), "revision": payload["revision"]},
+                reason="Superuser wijzigde de platformbrede achtergrond van het inlogscherm",
+            )
+        return payload
+
+    @router.delete("/api/superuser/login-background")
+    def delete_login_background(request: Request):
+        with engine.begin() as conn:
+            context = _require_platform_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
+            conn.execute(text("DELETE FROM platform_home_settings WHERE setting_key = :key"), {"key": LOGIN_BACKGROUND_KEY})
+            write_authorization_audit(
+                conn,
+                actor_user_id=context.user_id,
+                actor_type="platform_superuser",
+                action="superuser.login_background.reset",
+                object_type="platform_home_settings",
+                new_value={"configured": False},
+                reason="Superuser herstelde de standaardachtergrond van het inlogscherm",
+            )
+        return {"configured": False, "revision": None}
 
     @router.get("/api/superuser/bootstrap")
     def bootstrap(request: Request):
