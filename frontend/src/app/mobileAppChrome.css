@@ -20,6 +20,31 @@
     z-index: 100;
   }
 
+  /* Settings detail pages have no module header of their own. Keep the global
+     back action anchored to a sticky top rail so it never scrolls with content. */
+  .rz-mobile-app-chrome:has(.rz-settings-shell) {
+    padding-top: calc(58px + env(safe-area-inset-top));
+  }
+
+  .rz-mobile-app-chrome:has(.rz-settings-shell)::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: calc(58px + env(safe-area-inset-top));
+    z-index: 90;
+    background: var(--color-ui-primary);
+    box-shadow: 0 2px 8px rgba(17, 24, 39, 0.12);
+  }
+
+  .rz-mobile-app-chrome:has(.rz-settings-shell) > .rz-mobile-back-control {
+    position: fixed !important;
+    top: calc(7px + env(safe-area-inset-top)) !important;
+    left: 10px !important;
+    z-index: 101 !important;
+  }
+
   .rz-mobile-app-chrome:has(.rz-header) .rz-header,
   .rz-mobile-app-chrome:has(.rz-mobile-module-header) .rz-mobile-module-header {
     padding-left: 88px;
