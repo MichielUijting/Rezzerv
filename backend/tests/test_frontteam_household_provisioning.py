@@ -115,7 +115,7 @@ def _seed_frontteam_fixture():
     return engine
 
 
-def test_frontteam_provisioning_creates_one_distinct_regular_household_per_active_user():
+def test_frontteam_provisioning_preserves_existing_household_and_only_creates_fallback_when_needed():
     engine = _seed_frontteam_fixture()
     try:
         with engine.begin() as conn:
@@ -124,50 +124,31 @@ def test_frontteam_provisioning_creates_one_distinct_regular_household_per_activ
             household_b = resolve_frontteam_personal_household_id(conn, "front-b")
 
             assert result.active_frontteam_users == 2
-            assert result.households_created == 2
-            assert result.memberships_created == 2
+            assert result.households_created == 1
+            assert result.memberships_created == 1
             assert result.legacy_memberships_removed == 2
-            assert household_a and household_b and household_a != household_b
-            assert set(result.personal_household_ids) == {household_a, household_b}
+            assert household_a is None
+            assert household_b
+            assert result.personal_household_ids == (household_b,)
             assert resolve_frontteam_personal_household_id(conn, "front-inactive") is None
 
             households = conn.execute(text("""
                 SELECT id, naam, context_type
                 FROM household_registry
-                WHERE id IN (:a, :b)
-                ORDER BY id
-            """), {"a": household_a, "b": household_b}).mappings().all()
-            assert len(households) == 2
-            assert {row["naam"] for row in households} == {FRONTTEAM_PERSONAL_HOUSEHOLD_NAME}
-            assert {row["context_type"] for row in households} == {"regular"}
+                WHERE id = :household_id
+            """), {"household_id": household_b}).mappings().all()
+            assert len(households) == 1
+            assert households[0]["naam"] == FRONTTEAM_PERSONAL_HOUSEHOLD_NAME
+            assert households[0]["context_type"] == "regular"
 
-            rows_a = _membership_rows(
-                conn,
-                user_id="front-a",
-                email="front-a@example.test",
-            )
-            rows_b = _membership_rows(
-                conn,
-                user_id="front-b",
-                email="front-b@example.test",
-            )
-            assert household_a in {row["household_id"] for row in rows_a}
+            rows_a = _membership_rows(conn, user_id="front-a", email="front-a@example.test")
+            rows_b = _membership_rows(conn, user_id="front-b", email="front-b@example.test")
+            assert "1" in {row["household_id"] for row in rows_a}
             assert household_b in {row["household_id"] for row in rows_b}
             assert FRONTTEAM_HOUSEHOLD_ID not in {row["household_id"] for row in rows_a}
             assert FRONTTEAM_HOUSEHOLD_ID not in {row["household_id"] for row in rows_b}
-            assert "1" in {row["household_id"] for row in rows_a}
-
-            regular_rows = _membership_rows(
-                conn,
-                user_id="regular-admin",
-                email="regular-admin@example.test",
-            )
-            assert FRONTTEAM_HOUSEHOLD_ID in {
-                row["household_id"] for row in regular_rows
-            }
     finally:
         engine.dispose()
-
 
 def test_frontteam_personal_provisioning_is_idempotent():
     engine = _seed_frontteam_fixture()
@@ -184,29 +165,27 @@ def test_frontteam_personal_provisioning_is_idempotent():
         engine.dispose()
 
 
-def test_frontteam_personal_household_supports_regular_server_session():
+def test_frontteam_existing_household_supports_regular_server_session():
     engine = _seed_frontteam_fixture()
     try:
         with engine.begin() as conn:
             ensure_frontteam_household_for_session_runtime(conn)
-            household_id = resolve_frontteam_personal_household_id(conn, "front-a")
-            assert household_id
+            assert resolve_frontteam_personal_household_id(conn, "front-a") is None
             raw_session, created = create_server_session(
                 conn,
                 user_id="front-a",
-                active_household_id=household_id,
+                active_household_id="1",
             )
             resolved = resolve_server_session(conn, raw_session)
             payload = public_session_payload(resolved)
 
             assert created.context_type == resolved.context_type == "regular"
-            assert created.active_household_id == resolved.active_household_id == household_id
+            assert created.active_household_id == resolved.active_household_id == "1"
             assert created.role == resolved.role == "admin"
             assert resolved.is_frontteam is True
             assert payload["is_frontteam"] is True
     finally:
         engine.dispose()
-
 
 def test_inactive_frontteam_user_cannot_gain_personal_household_or_frontteam_session():
     engine = _seed_frontteam_fixture()
