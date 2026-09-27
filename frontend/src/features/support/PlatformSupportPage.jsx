@@ -34,7 +34,15 @@ export default function PlatformSupportPage() {
   const [broadcastMessage, setBroadcastMessage] = useState('')
   const [broadcastReplyAllowed, setBroadcastReplyAllowed] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [feedback, setFeedback] = useState('')
+  const setFeedback = (message) => {
+    if (!message) return
+    showFeedback({
+      variant: /mislukt|fout|geen toegang|niet toegestaan/i.test(String(message)) ? 'error' : 'success',
+      title: 'Superuser / Meldingen',
+      message: String(message),
+      testId: 'platform-support-feedback',
+    })
+  }
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
   const [refreshCount, setRefreshCount] = useState(0)
   const [readThreadIds, setReadThreadIds] = useState(() => new Set())
@@ -260,7 +268,6 @@ export default function PlatformSupportPage() {
               <Button variant="primary" type="submit" disabled={busy || !broadcastSubject.trim() || !broadcastMessage.trim()}>Naar alle leden versturen</Button>
             </form>
           )}
-          {feedback ? <p className="rz-support-feedback" role="status">{feedback}</p> : null}
         </Card>
       </div>
     </AppShell>
