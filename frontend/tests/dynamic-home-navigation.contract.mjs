@@ -6,6 +6,7 @@ const baseVisibility = {
   canOpenExternalDatabases: false,
   isPlatformSuperuser: false,
   canManageLocations: true,
+  canOpenMessages: false,
 }
 
 function keys(tiles) {
@@ -209,6 +210,28 @@ function assertNoLocationsHomeTile(navigation) {
   assert.ok(!keys(navigation.moreTiles).includes('voorraad'))
   assert.ok(!keys(navigation.moreTiles).includes('kassa'))
   assert.ok(keys(navigation.moreTiles).includes('instellingen'))
+}
+
+
+{
+  const frontteamNavigation = buildHomeNavigation({
+    onboarding: { onboarding_status: 'completed', primary_use_case: null, product_configuration: null },
+    visibility: { ...baseVisibility, canOpenMessages: true },
+  })
+  assert.ok(keys(frontteamNavigation.primaryTiles).includes('berichten'))
+
+  const superuserNavigation = buildHomeNavigation({
+    onboarding: { onboarding_status: 'completed', primary_use_case: null, product_configuration: null },
+    visibility: { ...baseVisibility, isPlatformSuperuser: true, canOpenMessages: true },
+  })
+  assert.ok(keys(superuserNavigation.primaryTiles).includes('berichten'))
+  assert.ok(keys(superuserNavigation.primaryTiles).includes('meldingen'))
+
+  const regularNavigation = buildHomeNavigation({
+    onboarding: { onboarding_status: 'completed', primary_use_case: null, product_configuration: null },
+    visibility: baseVisibility,
+  })
+  assert.ok(!keys(regularNavigation.primaryTiles).includes('berichten'))
 }
 
 console.log('DYNAMIC_HOME_NAVIGATION_CONTRACT_GREEN')

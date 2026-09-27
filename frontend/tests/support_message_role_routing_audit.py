@@ -21,11 +21,15 @@ def main() -> None:
         HOME,
         "isPlatformSuperuserFromContext",
         "meldingen: '/meldingen'",
+        "tile.key === 'berichten' && visibility.isPlatformSuperuser",
+        "'/superuser/meldingen'",
     )
     require(
         HOME_NAVIGATION,
         "key: 'meldingen'",
-        "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser",
+        "key: 'berichten'",
+        "if (tile.key === 'meldingen') return true",
+        "if (tile.key === 'berichten') return visibility.canOpenMessages",
     )
     require(
         SUPERUSER_OVERVIEW,

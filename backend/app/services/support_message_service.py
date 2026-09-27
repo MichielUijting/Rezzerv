@@ -364,7 +364,8 @@ def list_support_threads(conn, *, household_id: str | None = None, status: str |
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
     return conn.execute(text(f"""
         SELECT
-            t.id, t.thread_number, t.household_id, t.created_by_user_id,
+            t.id, t.thread_number, t.household_id,
+            COALESCE(h.naam, '') AS household_name, t.created_by_user_id,
             t.created_by_name, t.subject, t.origin_screen_name, t.origin_route,
             t.origin_app_version, t.status, t.reply_allowed, t.recipient_type,
             t.created_at, t.updated_at, t.closed_at,
@@ -372,8 +373,9 @@ def list_support_threads(conn, *, household_id: str | None = None, status: str |
             MAX(m.created_at) AS last_message_at
         FROM support_threads t
         LEFT JOIN support_messages m ON m.thread_id = t.id
+        LEFT JOIN households h ON h.id = t.household_id
         {where}
-        GROUP BY t.id
+        GROUP BY t.id, h.naam
         ORDER BY t.updated_at DESC, t.thread_number DESC
     """), params).mappings().all()
 

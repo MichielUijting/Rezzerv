@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import MobileSupportInbox from './MobileSupportInbox.jsx'
 import AppShell from '../../app/AppShell.jsx'
@@ -7,7 +7,7 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { isHouseholdFrontteamFromContext, readStoredAuthContext } from '../../lib/authSession.js'
+import { canCurrentUserPerform, fetchAuthContext, isPlatformSuperuserFromContext, readStoredAuthContext } from '../../lib/authSession.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
 import {
   createHouseholdThread,
@@ -28,9 +28,9 @@ export default function HouseholdSupportPage() {
   const query = useMemo(() => new URLSearchParams(location.search), [location.search])
   const originRoute = query.get('from') || '/meldingen'
   const originScreen = query.get('screen') || 'Inhuis'
-  const authContext = readStoredAuthContext()
+  const [authContext, setAuthContext] = useState(() => readStoredAuthContext())
   const currentUserId = String(authContext?.user_id || authContext?.email || '').trim().toLowerCase()
-  const canMessageSuperuser = isHouseholdFrontteamFromContext(authContext)
+  const canMessageSuperuser = canCurrentUserPerform('platform.frontteam_messages.create', authContext)
 
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
@@ -39,7 +39,15 @@ export default function HouseholdSupportPage() {
   const [message, setMessage] = useState('')
   const [reply, setReply] = useState('')
   const [busy, setBusy] = useState(false)
-  const [feedback, setFeedback] = useState('')
+  const setFeedback = (message) => {
+    if (!message) return
+    showFeedback({
+      variant: /mislukt|fout|geen toegang|niet toegestaan/i.test(String(message)) ? 'error' : 'success',
+      title: 'Meldingen',
+      message: String(message),
+      testId: 'support-feedback',
+    })
+  }
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
   const [refreshCount, setRefreshCount] = useState(0)
   const [readThreadIds, setReadThreadIds] = useState(() => new Set())
@@ -68,6 +76,12 @@ export default function HouseholdSupportPage() {
       if (showBusy) setBusy(false)
     }
   }
+
+  useEffect(() => {
+    let active = true
+    fetchAuthContext().then((nextContext) => { if (active) setAuthContext(nextContext) }).catch(() => {})
+    return () => { active = false }
+  }, [])
 
   useEffect(() => { refresh({ showBusy: true }) }, [status])
 
@@ -155,6 +169,10 @@ export default function HouseholdSupportPage() {
     return <MobileSupportInbox onOpenThread={openThread} onNewMessage={() => setSelected(null)} />
   }
 
+  if (isPlatformSuperuserFromContext(authContext)) {
+    return <Navigate to="/superuser/meldingen" replace />
+  }
+
   const refreshLabel = lastRefreshedAt
     ? `Laatst ververst: ${lastRefreshedAt.toLocaleTimeString('nl-NL')} · cyclus ${refreshCount}`
     : 'Nog niet ververst'
@@ -217,7 +235,6 @@ export default function HouseholdSupportPage() {
               <Button variant="primary" type="submit" disabled={busy || !subject.trim() || !message.trim()}>Melding versturen</Button>
             </form>
           ) : <p>Alleen leden van het Frontteam kunnen een bericht naar de Superuser sturen.</p>}
-          {feedback ? <p className="rz-support-feedback" role="status">{feedback}</p> : null}
         </Card>
       </div>
     </AppShell>

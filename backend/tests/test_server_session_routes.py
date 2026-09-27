@@ -178,6 +178,39 @@ def test_invalid_credentials_return_401_without_cookie(email, password):
         engine.dispose()
 
 
+def test_existing_admin_frontteam_grant_preserves_household_and_role():
+    client, engine = build_client()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES ('u1', 'platform.frontteam', TRUE)
+            """))
+
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
+        )
+        assert response.status_code == 200
+        raw_session_id = response.cookies.get("rezzerv_session")
+        with engine.begin() as conn:
+            context = resolve_server_session(conn, raw_session_id)
+            personal_household_id = resolve_frontteam_personal_household_id(conn, "u1")
+
+        payload = response.json()
+        assert context.context_type == "regular"
+        assert context.active_household_id == "1"
+        assert context.role == "admin"
+        assert context.is_frontteam is True
+        assert personal_household_id is None
+        assert payload["active_household_id"] == "1"
+        assert payload["role"] == "admin"
+        assert payload["is_frontteam"] is True
+        assert payload["permissions"]["platform.frontteam_messages.create"] is True
+    finally:
+        engine.dispose()
+
+
 def test_member_login_keeps_regular_household_context():
     client, engine = build_client()
     try:
@@ -326,25 +359,37 @@ def test_conflicting_platform_roles_fail_closed_without_creating_new_session():
         engine.dispose()
 
 
-def test_platform_role_revocation_invalidates_existing_session():
+def test_frontteam_role_revocation_keeps_existing_household_session_but_removes_frontteam_authority():
     client, engine = build_client()
     try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES ('u1', 'platform.frontteam', TRUE)
+            """))
         login = client.post(
             "/api/auth/login",
-            json={"email": "frontteam@example.test", "password": "Rezzerv123"},
+            json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
         )
         assert login.status_code == 200
+        assert login.json()["active_household_id"] == "1"
+        assert login.json()["is_frontteam"] is True
+
         with engine.begin() as conn:
             conn.execute(text("""
                 UPDATE auth_platform_user_roles SET active = FALSE
-                WHERE user_id = 'u-frontteam' AND role_key = 'platform.frontteam'
+                WHERE user_id = 'u1' AND role_key = 'platform.frontteam'
             """))
+
         response = client.get("/api/session")
-        assert response.status_code == 403
-        assert response.json()["detail"] == "Geen geldige accountcontext beschikbaar."
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["active_household_id"] == "1"
+        assert payload["role"] == "admin"
+        assert payload["is_frontteam"] is False
+        assert payload["permissions"].get("platform.frontteam_messages.create", False) is False
     finally:
         engine.dispose()
-
 
 def test_session_endpoint_ignores_stale_legacy_role_and_reflects_canonical_role_update():
     client, engine = build_client()

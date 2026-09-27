@@ -249,57 +249,6 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
     active_condition = membership_active_condition(conn)
     membership_id_sql = membership_id_expression(conn)
 
-    if is_frontteam:
-        personal_household_id = resolve_frontteam_personal_household_id(conn, user_id)
-        if not personal_household_id:
-            raise HTTPException(
-                status_code=403,
-                detail="Geen geldige accountcontext beschikbaar.",
-            )
-        frontteam_membership = conn.execute(
-            text(
-                f"""
-                SELECT
-                    u.id AS user_id,
-                    u.email,
-                    {membership_id_sql} AS membership_id,
-                    hm.household_id,
-                    hm.role
-                FROM app_users u
-                JOIN household_memberships hm ON {join_condition}
-                WHERE u.id = :user_id
-                  AND hm.household_id = :household_id
-                  AND {active_condition}
-                LIMIT 1
-                """
-            ),
-            {"user_id": user_id, "household_id": personal_household_id},
-        ).mappings().first()
-        if not frontteam_membership:
-            raise HTTPException(
-                status_code=403,
-                detail="Geen geldige accountcontext beschikbaar.",
-            )
-        role_key = resolve_effective_household_role(
-            conn,
-            household_id=personal_household_id,
-            membership_id=str(frontteam_membership.get("membership_id") or ""),
-            legacy_role=frontteam_membership.get("role"),
-        )
-        runtime_role = canonical_role_to_runtime_role(role_key or "")
-        if runtime_role != "admin":
-            raise HTTPException(
-                status_code=403,
-                detail="Geen geldige accountcontext beschikbaar.",
-            )
-        return {
-            "user_id": user_id,
-            "email": str(account.get("email") or ""),
-            "active_household_id": personal_household_id,
-            "role": "admin",
-            "platform_system_context": False,
-        }
-
     if is_platform_admin:
         return {
             "user_id": user_id,
@@ -347,8 +296,14 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    personal_frontteam_household_id = (
+        resolve_frontteam_personal_household_id(conn, user_id)
+        if is_frontteam
+        else None
+    )
     resolved_rows.sort(
         key=lambda row: (
+            1 if personal_frontteam_household_id and str(row.get("household_id") or "") == personal_frontteam_household_id else 0,
             0 if row["effective_role"] in {"admin", "owner"} else 1,
             str(row.get("household_id") or ""),
         )
