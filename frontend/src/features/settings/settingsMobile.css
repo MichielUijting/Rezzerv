@@ -19,6 +19,52 @@
   text-align: left;
 }
 
+/* Desktop Settings uses one stable left-aligned content axis. */
+@media (min-width: 721px) {
+  .rz-settings-page,
+  .rz-settings-section,
+  .rz-settings-section-heading,
+  .rz-settings-tile-list,
+  .rz-settings-tile,
+  .rz-settings-tile-copy,
+  .rz-settings-tile-title,
+  .rz-settings-tile-description {
+    text-align: left !important;
+  }
+
+  .rz-settings-section-heading {
+    display: block;
+  }
+
+  .rz-settings-section-icon {
+    display: none;
+  }
+
+  .rz-settings-tile {
+    display: grid !important;
+    grid-template-columns: 32px minmax(0, 1fr) 18px !important;
+    align-items: center !important;
+    justify-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .rz-settings-tile-icon {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .rz-settings-tile-copy {
+    grid-column: 2;
+    justify-self: stretch;
+    min-width: 0;
+  }
+
+  .rz-settings-tile-chevron {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+
 @media (max-width: 720px) {
   .rz-settings-shell {
     min-height: 100vh;
