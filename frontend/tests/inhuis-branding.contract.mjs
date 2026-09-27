@@ -135,3 +135,11 @@ if (fullRepoBrandingAvailable) {
 }
 
 console.log('INHUIS_BRANDING_CONTRACT_GREEN')
+
+assert.match(loginPage, /\/api\/platform\/login-background/)
+assert.match(loginPage, /login-background\/image/)
+assert.match(loginCss, /\.rz-login-background--custom[\s\S]*background-size:\s*cover/)
+assert.match(superuserControl, /Inlogscherm/)
+assert.match(superuserLoginBackground, /accept="\.jpg,\.jpeg,image\/jpeg"/)
+assert.match(superuserLoginBackground, /\/api\/superuser\/login-background/)
+assert.match(superuserLoginBackground, /Standaardachtergrond herstellen/)
