@@ -29,7 +29,6 @@ from app.services.authorization_membership_service import (
 )
 from app.services.frontteam_household_provisioning import (
     FRONTTEAM_PLATFORM_ROLE,
-    is_frontteam_personal_household,
     is_legacy_frontteam_household,
 )
 from app.services.system_superuser_session_provisioning import (
