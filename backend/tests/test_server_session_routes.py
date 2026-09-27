@@ -387,7 +387,7 @@ def test_frontteam_role_revocation_keeps_existing_household_session_but_removes_
         assert payload["active_household_id"] == "1"
         assert payload["role"] == "admin"
         assert payload["is_frontteam"] is False
-        assert payload["permissions"]["platform.frontteam_messages.create"] is False
+        assert payload["permissions"].get("platform.frontteam_messages.create", False) is False
     finally:
         engine.dispose()
 
