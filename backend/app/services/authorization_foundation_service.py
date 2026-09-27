@@ -331,6 +331,17 @@ def ensure_authorization_foundation(conn) -> None:
     _seed_registry(conn)
 
 def _seed_registry(conn) -> None:
+    # Frontteam is exclusively a platform role. Keep a legacy household role row
+    # as historical data only, but make it incapable of granting authority.
+    conn.execute(text("""
+        UPDATE auth_roles
+        SET active = FALSE
+        WHERE role_key = 'household.frontteam'
+    """))
+    conn.execute(text("""
+        DELETE FROM auth_role_permissions
+        WHERE role_key = 'household.frontteam'
+    """))
     for key in HOUSEHOLD_PERMISSIONS:
         conn.execute(text("""
             INSERT INTO auth_permissions(permission_key, scope, description)
