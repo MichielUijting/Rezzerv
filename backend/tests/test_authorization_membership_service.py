@@ -98,7 +98,6 @@ def test_context_aware_backfill_preserves_legacy_semantics_and_fails_closed():
           ('owner', 'h1', 'owner', 'active'),
           ('viewer', 'h1', 'viewer', 'active'),
           ('advanced', 'h1', 'advanced_member', 'active'),
-          ('frontteam', 'h1', 'frontteam', 'active'),
           ('system-owner', '0', 'owner', 'active'),
           ('invalid', 'h1', 'unexpected-role', 'active')
     """))
@@ -116,13 +115,12 @@ def test_context_aware_backfill_preserves_legacy_semantics_and_fails_closed():
         'owner': 'household.admin',
         'viewer': 'household.viewer',
         'advanced': 'household.advanced_member',
-        'frontteam': 'household.frontteam',
         'system-owner': 'household.owner',
     }
-    assert first.created == 7
+    assert first.created == 6
     assert first.invalid == 1
     assert second.created == 0
-    assert second.preserved == 7
+    assert second.preserved == 6
     assert second.invalid == 1
 
 
@@ -187,7 +185,7 @@ def test_household_zero_keeps_temporary_owner_compatibility_without_rewrites():
 
 def test_legacy_mapping_is_explicit_and_unknown_values_are_invalid():
     assert legacy_role_key('owner') == 'household.admin'
-    assert legacy_role_key('frontteam') == 'household.frontteam'
+    assert legacy_role_key('frontteam') is None
     assert legacy_role_key('owner', system_household=True) == 'household.owner'
     assert legacy_role_key('unexpected-role') is None
 
