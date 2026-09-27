@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button.jsx'
 import Card from '../../ui/Card.jsx'
 import DataTable from '../../ui/DataTable.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import './settingsHousehold.css'
 
 const FRONTTEAM_ROLE_KEY = 'platform.frontteam'
@@ -23,13 +24,13 @@ function isActiveMember(member) {
 }
 
 export default function SettingsFrontteamPage() {
+  const { showFeedback } = useAppFeedback()
   const [members, setMembers] = React.useState([])
   const [email, setEmail] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
   const [selectedIds, setSelectedIds] = React.useState([])
   const [error, setError] = React.useState('')
-  const [result, setResult] = React.useState('')
 
   const load = React.useCallback(async () => {
     setLoading(true); setError('')
@@ -47,13 +48,13 @@ export default function SettingsFrontteamPage() {
     event.preventDefault()
     const normalized = email.trim()
     if (!normalized) { setError('Vul een e-mailadres in.'); return }
-    setBusy(true); setError(''); setResult('')
+    setBusy(true); setError(''); 
     try {
       await api('/api/platform/frontteam-management/members', {
         method: 'POST', body: JSON.stringify({ email: normalized }),
       })
       setEmail('')
-      setResult(`${normalized} is toegevoegd aan het Frontteam.`)
+      showFeedback({ variant: 'success', title: 'Frontteam bijgewerkt', message: `${normalized} is toegevoegd aan het Frontteam.`, testId: 'frontteam-feedback' })
       await load()
     } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
@@ -71,12 +72,12 @@ export default function SettingsFrontteamPage() {
   async function setSelectedActive(active) {
     const selected = members.filter((member) => selectedIds.includes(member.user_id))
     if (selected.length === 0) return
-    setBusy(true); setError(''); setResult('')
+    setBusy(true); setError(''); 
     try {
       for (const member of selected) {
         await api(`/api/platform/authorizations/users/${encodeURIComponent(member.user_id)}/frontteam/${active ? 'grant' : 'revoke'}`, { method: 'POST' })
       }
-      setResult(`${selected.length} Frontteam${selected.length === 1 ? 'lid is' : 'leden zijn'} ${active ? 'geactiveerd' : 'gedeactiveerd'}.`)
+      showFeedback({ variant: 'success', title: 'Frontteam bijgewerkt', message: `${selected.length} Frontteam${selected.length === 1 ? 'lid is' : 'leden zijn'} ${active ? 'geactiveerd' : 'gedeactiveerd'}.`, testId: 'frontteam-feedback' })
       await load()
     } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
@@ -85,13 +86,13 @@ export default function SettingsFrontteamPage() {
     const selected = members.filter((member) => selectedIds.includes(member.user_id))
     if (selected.length === 0) return
     if (!window.confirm(`${selected.length} geselecteerde Frontteam${selected.length === 1 ? 'lid' : 'leden'} verwijderen? De Inhuis-accounts en eigen huishoudens blijven bestaan.`)) return
-    setBusy(true); setError(''); setResult('')
+    setBusy(true); setError(''); 
     try {
       for (const member of selected) {
         await api(`/api/platform/frontteam-management/members/${encodeURIComponent(member.user_id)}`, { method: 'DELETE' })
       }
       setSelectedIds([])
-      setResult(`${selected.length} Frontteam${selected.length === 1 ? 'lid is' : 'leden zijn'} verwijderd. De Inhuis-accounts en eigen huishoudens zijn behouden.`)
+      showFeedback({ variant: 'success', title: 'Frontteam bijgewerkt', message: `${selected.length} Frontteam${selected.length === 1 ? 'lid is' : 'leden zijn'} verwijderd.`, detail: 'De Inhuis-accounts en eigen huishoudens zijn behouden.', testId: 'frontteam-feedback' })
       await load()
     } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
@@ -178,7 +179,6 @@ export default function SettingsFrontteamPage() {
                 <p className="rz-frontteam-help">Het eigen huishouden en de huishoudrol blijven ongewijzigd.</p>
               </form>
               {error ? <div role="alert" className="rz-frontteam-error">{error}</div> : null}
-              {result ? <div role="status" className="rz-frontteam-result">{result}</div> : null}
               <DataTable
                 columns={columns} data={members} getRowKey={(member) => member.user_id}
                 emptyMessage={loading ? 'Frontteamleden laden…' : 'Er zijn nog geen Frontteamleden.'}
