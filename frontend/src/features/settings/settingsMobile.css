@@ -68,7 +68,10 @@
 @media (max-width: 720px) {
   .rz-settings-shell {
     min-height: 100vh;
-    background: var(--color-mobile-wallpaper, #eef6f0);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(240, 249, 242, 0.08) 100%),
+      url('/inhuis-green-wallpaper.svg') center top / cover fixed no-repeat;
+    background-color: #EEF7F0;
   }
 
   .rz-settings-shell .rz-content {
@@ -93,6 +96,20 @@
   .rz-settings-page {
     gap: 16px !important;
   }
+
+  /* Mobile Settings is intentionally label-led: explanatory muted copy is
+     desktop-only. Labels, values, status/error feedback and actions remain. */
+  .rz-settings-page > p,
+  .rz-settings-section-heading p,
+  .rz-settings-tile-description,
+  .rz-settings-shell .rz-card > div > p,
+  .rz-settings-shell section > p,
+  .rz-settings-shell h2 + p,
+  .rz-settings-shell h3 + p,
+  .rz-settings-shell legend + p {
+    display: none !important;
+  }
+
 
   .rz-settings-section {
     --rz-settings-section-accent: #1669b2;
