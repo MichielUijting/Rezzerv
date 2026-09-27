@@ -178,6 +178,39 @@ def test_invalid_credentials_return_401_without_cookie(email, password):
         engine.dispose()
 
 
+def test_existing_admin_frontteam_grant_preserves_household_and_role():
+    client, engine = build_client()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES ('u1', 'platform.frontteam', TRUE)
+            """))
+
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
+        )
+        assert response.status_code == 200
+        raw_session_id = response.cookies.get("rezzerv_session")
+        with engine.begin() as conn:
+            context = resolve_server_session(conn, raw_session_id)
+            personal_household_id = resolve_frontteam_personal_household_id(conn, "u1")
+
+        payload = response.json()
+        assert context.context_type == "regular"
+        assert context.active_household_id == "1"
+        assert context.role == "admin"
+        assert context.is_frontteam is True
+        assert personal_household_id is None
+        assert payload["active_household_id"] == "1"
+        assert payload["role"] == "admin"
+        assert payload["is_frontteam"] is True
+        assert payload["permissions"]["platform.frontteam_messages.create"] is True
+    finally:
+        engine.dispose()
+
+
 def test_member_login_keeps_regular_household_context():
     client, engine = build_client()
     try:
