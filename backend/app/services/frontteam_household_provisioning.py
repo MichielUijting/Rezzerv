@@ -452,6 +452,64 @@ def ensure_frontteam_personal_household_for_user(
     return household_id, household_created, membership_created, removed
 
 
+def _has_existing_regular_household_outside_frontteam_projection(
+    conn: Connection,
+    *,
+    user_id: str,
+    email: str,
+) -> bool:
+    """Return whether the user already has an ordinary regular household.
+
+    Frontteam is additive authority. An existing consumer/admin household must
+    remain the login context and must never be replaced by a Frontteam-created
+    household projection.
+    """
+    columns = _columns(conn, "household_memberships")
+    household_column = _pick(columns, "household_id", "huishouden_id")
+    email_column = _pick(columns, "user_email", "email")
+    user_column = _pick(columns, "user_id")
+    if not household_column or (not email_column and not user_column):
+        return False
+
+    identity_predicates: list[str] = []
+    params: dict[str, object] = {"user_id": user_id, "email": email}
+    if user_column:
+        identity_predicates.append(f"CAST(hm.{user_column} AS TEXT) = :user_id")
+    if email_column:
+        identity_predicates.append(f"lower(trim(hm.{email_column})) = lower(trim(:email))")
+
+    mapped_household_id = resolve_frontteam_personal_household_id(conn, user_id)
+    params["mapped_household_id"] = mapped_household_id or ""
+    registry_columns = _columns(conn, "household_registry")
+    registry_id_column = _pick(registry_columns, "id", "household_id")
+    if not registry_id_column:
+        return False
+
+    predicates = [
+        f"({' OR '.join(identity_predicates)})",
+        "lower(trim(COALESCE(hr.context_type, 'regular'))) = 'regular'",
+        f"CAST(hm.{household_column} AS TEXT) <> :mapped_household_id",
+        f"CAST(hm.{household_column} AS TEXT) <> :legacy_frontteam_household_id",
+    ]
+    params["legacy_frontteam_household_id"] = LEGACY_FRONTTEAM_HOUSEHOLD_ID
+    status_column = _pick(columns, "status", "membership_status")
+    active_column = _pick(columns, "active", "is_active")
+    if status_column:
+        predicates.append(f"lower(trim(COALESCE(hm.{status_column}, 'active'))) IN ('active', 'actief', 'accepted', 'geaccepteerd')")
+    if active_column:
+        predicates.append(f"COALESCE(hm.{active_column}, 1) = 1")
+
+    row = conn.execute(text(f"""
+        SELECT 1
+        FROM household_memberships hm
+        JOIN household_registry hr
+          ON CAST(hr.{registry_id_column} AS TEXT) = CAST(hm.{household_column} AS TEXT)
+        WHERE {' AND '.join(predicates)}
+        LIMIT 1
+    """), params).first()
+    return bool(row)
+
+
 def ensure_frontteam_household_for_session_runtime(
     conn: Connection,
 ) -> FrontteamHouseholdProvisioningResult:
@@ -465,6 +523,12 @@ def ensure_frontteam_household_for_session_runtime(
     households_created = memberships_created = memberships_updated = 0
     legacy_memberships_removed = 0
     for user in users:
+        if _has_existing_regular_household_outside_frontteam_projection(
+            conn,
+            user_id=user["user_id"],
+            email=user["email"],
+        ):
+            continue
         household_id, household_created, membership_created, removed = (
             ensure_frontteam_personal_household_for_user(
                 conn,
