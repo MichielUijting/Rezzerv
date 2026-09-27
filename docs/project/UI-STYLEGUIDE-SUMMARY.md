@@ -650,3 +650,13 @@ Vaste regels:
 - de primaire **Inloggen**-knop gebruikt de centrale primaire UI-kleur en de app-brede knopradius `var(--radius-md)`;
 - de zachte crème/groene achtergrond, decoratieve golven en bladaccenten zijn presentatielaag en veranderen geen login-, sessie- of autorisatiegedrag;
 - desktop behoudt de reguliere applicatieheader; mobiel gebruikt de compacte loginpresentatie zonder die desktopheader.
+
+
+### Platformbrede achtergrond van het inlogscherm
+
+- De Superuser kan onder **Inlogscherm** één JPG/JPEG als platformbrede loginachtergrond instellen.
+- De ingestelde afbeelding geldt voor alle gebruikers en voor zowel desktop als mobiel; loginstate en authenticatie blijven één gedeelde flow.
+- Alleen de platform-Superuser mag de afbeelding vervangen of de standaardachtergrond herstellen; het uitlezen van de actieve achtergrond is vóór authenticatie beschikbaar omdat het inlogscherm publiek is.
+- Uploads zijn beperkt tot geldige JPG/JPEG-bestanden van maximaal 8 MB en worden ook server-side gevalideerd.
+- De afbeelding wordt gecentreerd en beeldvullend weergegeven met `background-size: cover`; de functionele login-card en het InHuis-woordmerk blijven daar bovenop leesbaar.
+- Zonder aangepaste JPG blijft de ingebouwde standaardachtergrond actief.
