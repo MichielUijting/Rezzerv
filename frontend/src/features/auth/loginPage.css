@@ -1,0 +1,97 @@
+.rz-login-mobile-shell {
+  display: none;
+}
+
+.rz-login-show-password {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.rz-login-link {
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .rz-login-screen {
+    min-height: 100dvh;
+    background:
+      radial-gradient(circle at 92% 92%, rgba(0, 95, 106, 0.10), transparent 30%),
+      linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
+  }
+
+  .rz-login-desktop-header {
+    display: none;
+  }
+
+  .rz-login-mobile-shell {
+    display: block;
+    padding: 56px 24px 18px;
+    text-align: center;
+  }
+
+  .rz-login-wordmark {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    color: #ffffff;
+    background: var(--color-ui-primary);
+    padding: 14px 22px 12px;
+    border-radius: var(--radius-sm, 4px);
+    line-height: 1;
+    box-shadow: 0 8px 24px rgba(0, 95, 106, 0.16);
+  }
+
+  .rz-login-wordmark-in,
+  .rz-login-wordmark-huis {
+    font-size: 42px !important;
+    font-weight: 800;
+  }
+
+  .rz-login-wordmark-in {
+    color: #19d2d0;
+    font-style: italic;
+    transform: skew(-9deg) rotate(-4deg);
+    transform-origin: center;
+    letter-spacing: -3px;
+  }
+
+  .rz-login-wordmark-huis {
+    color: #ffffff;
+    margin-left: 8px;
+    letter-spacing: -1px;
+  }
+
+  .rz-login-welcome {
+    margin: 28px 0 0;
+    color: var(--color-ui-primary);
+    text-align: left;
+    max-width: 440px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .rz-login-content {
+    padding-top: 0;
+  }
+
+  .rz-login-content-inner {
+    max-width: 488px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .rz-login-content .rz-card-login {
+    border: 0;
+    box-shadow: 0 12px 34px rgba(8, 41, 29, 0.10);
+  }
+
+  .rz-login-content .rz-form {
+    gap: 16px;
+  }
+
+  .rz-login-content .rz-button-primary {
+    min-height: 48px;
+  }
+}
