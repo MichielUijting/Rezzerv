@@ -126,6 +126,23 @@ export default function SettingsAuthorizationPage() {
               <p className="rz-authorization-explanation">
                 De rollen zijn vaste profielen. Wijs een rol aan een huishoudlid toe in het scherm Huishouden.
               </p>
+              <div className="rz-authorization-mobile" data-testid="authorization-role-cards">
+                {roleColumns.map((role) => (
+                  <section className="rz-authorization-role-card" key={role.role_key}>
+                    <h3>{role.label}</h3>
+                    <div className="rz-authorization-permission-list">
+                      {rows.map(([permissionKey, label]) => (
+                        <div className="rz-authorization-permission-row" key={permissionKey}>
+                          <span>{label}</span>
+                          <strong aria-label={role.granted.has(permissionKey) ? 'Toegestaan' : 'Niet toegestaan'}>
+                            {role.granted.has(permissionKey) ? '✓' : '—'}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
               <div className="rz-authorization-matrix-wrap">
                 <table className="rz-authorization-matrix" data-testid="authorization-role-matrix">
                   <thead>
