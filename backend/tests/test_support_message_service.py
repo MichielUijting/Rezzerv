@@ -240,6 +240,29 @@ def test_list_filters_by_household_and_status():
         assert rows[0]["subject"] == "Eerste"
 
 
+def test_list_exposes_household_name_for_superuser_ui():
+    engine = make_engine()
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO households(id, naam) VALUES (:id, :naam)"), {
+            "id": "household-1",
+            "naam": "Mijn huishouden1",
+        })
+        create_support_thread(
+            conn,
+            created_by_user_id="admin-1",
+            created_by_name="Admin Een",
+            sender_role="Frontteam",
+            subject="Functionele communicatie",
+            message_text="Bericht aan Superuser",
+            origin_screen_name="Meldingen",
+            household_id="household-1",
+        )
+
+        rows = list_support_threads(conn, household_id="household-1")
+        assert len(rows) == 1
+        assert rows[0]["household_name"] == "Mijn huishouden1"
+
+
 def test_csv_export_uses_one_row_per_thread_and_respects_status_filter():
     engine = make_engine()
     with engine.begin() as conn:
