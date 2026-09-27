@@ -15,11 +15,14 @@ def test_home_exposes_superuser_tile_only_through_superuser_visibility():
     assert "superuser: '/superuser'" in home
 
 
-def test_home_keeps_meldingen_for_regular_users_but_not_platform_superuser():
+def test_home_keeps_meldingen_and_routes_superuser_berichten_to_platform_inbox():
     home = _read("frontend/src/features/home/HomePage.jsx")
     navigation = _read("frontend/src/features/home/homeNavigation.js")
     assert "{ key: 'meldingen', label: 'Meldingen'" in navigation
-    assert "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser" in navigation
+    assert "if (tile.key === 'meldingen') return true" in navigation
+    assert "if (tile.key === 'berichten') return visibility.canOpenMessages" in navigation
+    assert "tile.key === 'berichten' && visibility.isPlatformSuperuser" in home
+    assert "'/superuser/meldingen'" in home
     assert "meldingen: '/meldingen'" in home
     assert "visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen'" not in home
     assert "visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen'" not in navigation
