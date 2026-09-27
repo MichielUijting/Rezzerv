@@ -65,6 +65,11 @@
   }
 }
 
+.rz-authorization-mobile,
+.rz-store-import-mobile {
+  display: none;
+}
+
 @media (max-width: 720px) {
   .rz-settings-shell {
     min-height: 100vh;
@@ -414,6 +419,87 @@
   .rz-settings-shell [style*='grid-template-columns'],
   .rz-settings-shell [style*='gridTemplateColumns'] {
     grid-template-columns: 1fr !important;
+  }
+
+  /* Native mobile detail patterns: do not squeeze desktop matrices/forms. */
+  .rz-authorization-matrix-wrap,
+  .rz-store-import-desktop {
+    display: none !important;
+  }
+
+  .rz-authorization-mobile,
+  .rz-store-import-mobile {
+    display: grid;
+    gap: 10px;
+  }
+
+  .rz-authorization-role-card {
+    overflow: hidden;
+    border: 1px solid #dfe4ea;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .rz-authorization-role-card h3 {
+    margin: 0;
+    padding: 11px 12px;
+    background: #dff4eb;
+    color: #111827;
+  }
+
+  .rz-authorization-permission-list {
+    display: grid;
+    padding: 0 12px;
+  }
+
+  .rz-authorization-permission-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 10px;
+    align-items: center;
+    min-height: 46px;
+    border-bottom: 1px solid #e7e9ed;
+  }
+
+  .rz-authorization-permission-row:last-child {
+    border-bottom: 0;
+  }
+
+  .rz-authorization-permission-row strong {
+    justify-self: center;
+    color: var(--color-ui-primary);
+  }
+
+  .rz-store-import-mobile {
+    grid-template-columns: 1fr;
+  }
+
+  .rz-store-import-choice {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 58px;
+    padding: 10px 12px;
+    border: 1px solid #dfe4ea;
+    border-radius: 12px;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .rz-store-import-choice--selected {
+    border: 2px solid var(--color-ui-primary);
+    background: #dff4eb;
+  }
+
+  .rz-store-import-choice-mark {
+    justify-self: end;
+    color: var(--color-ui-primary);
+    font-weight: 700;
   }
 
 }
