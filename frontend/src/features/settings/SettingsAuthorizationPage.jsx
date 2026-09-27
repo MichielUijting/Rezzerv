@@ -9,14 +9,12 @@ const ROLE_LABELS = {
   'household.member': 'Lid',
   'household.admin': 'Beheerder',
   'household.owner': 'Superuser',
-  'household.frontteam': 'Frontteamlid',
 }
 
 const AUTHORIZATION_ROLE_KEYS = new Set([
   'household.member',
   'household.admin',
   'household.owner',
-  'household.frontteam',
 ])
 
 const AUTHORIZATION_ROWS = [
