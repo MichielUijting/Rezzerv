@@ -29,7 +29,6 @@ const ROLE_LABELS = {
   'household.advanced_member': 'Geavanceerd lid (bestaande rol)',
   'household.admin': 'Beheerder',
   'household.owner': 'Superuser',
-  'household.frontteam': 'Frontteamlid',
 }
 
 const INVITATION_STATUS_LABELS = {
