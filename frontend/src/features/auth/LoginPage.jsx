@@ -46,8 +46,29 @@ export default function LoginPage({ onLoggedIn }) {
   const [error, setError] = useState('')
   const [loginMessage] = useState(() => getLoginMessage())
   const [version, setVersion] = useState(getRezzervVersionTag())
+  const [loginBackground, setLoginBackground] = useState(null)
 
   useDismissOnComponentClick([() => setError('')], Boolean(error))
+
+  useEffect(() => {
+    let active = true
+    const refreshBackground = async () => {
+      try {
+        const response = await fetch('/api/platform/login-background', { credentials: 'same-origin' })
+        const payload = await response.json().catch(() => ({}))
+        if (active) setLoginBackground(payload?.configured && payload?.revision ? payload : null)
+      } catch {
+        if (active) setLoginBackground(null)
+      }
+    }
+    void refreshBackground()
+    const backgroundChanged = (event) => {
+      const payload = event?.detail
+      setLoginBackground(payload?.configured && payload?.revision ? payload : null)
+    }
+    window.addEventListener('inhuis-login-background-changed', backgroundChanged)
+    return () => { active = false; window.removeEventListener('inhuis-login-background-changed', backgroundChanged) }
+  }, [])
 
   useEffect(() => {
     const refreshVersion = () => setVersion(getRezzervVersionTag())
@@ -78,7 +99,11 @@ export default function LoginPage({ onLoggedIn }) {
         <Header title="Inloggen" />
       </div>
 
-      <div className="rz-login-background" aria-hidden="true">
+      <div
+        className={loginBackground ? 'rz-login-background rz-login-background--custom' : 'rz-login-background'}
+        style={loginBackground ? { backgroundImage: `url("/api/platform/login-background/image?v=${encodeURIComponent(loginBackground.revision)}")` } : undefined}
+        aria-hidden="true"
+      >
         <span className="rz-login-wave rz-login-wave-one" />
         <span className="rz-login-wave rz-login-wave-two" />
         <span className="rz-login-leaves">
