@@ -2,6 +2,23 @@
  * Mobile Settings presentation.
  * Functional routes, permissions and desktop tables remain unchanged.
  */
+.rz-settings-shell,
+.rz-settings-shell .rz-content,
+.rz-settings-shell .rz-content-inner,
+.rz-settings-shell .rz-card,
+.rz-settings-shell form,
+.rz-settings-shell section,
+.rz-settings-shell label,
+.rz-settings-shell input,
+.rz-settings-shell select,
+.rz-settings-shell textarea,
+.rz-settings-shell button,
+.rz-settings-shell .rz-table,
+.rz-settings-shell .rz-table th,
+.rz-settings-shell .rz-table td {
+  text-align: left;
+}
+
 @media (max-width: 720px) {
   .rz-settings-shell {
     min-height: 100vh;
@@ -252,4 +269,88 @@
   .rz-settings-shell [data-resize-handle] {
     display: none !important;
   }
+  /* Detail pages use a deliberate mobile document flow instead of inheriting
+     desktop flex/grid widths. The route shell is shared by every Settings detail. */
+  .rz-settings-shell .rz-content-inner > .rz-card > div,
+  .rz-settings-shell .rz-content-inner > [data-testid^='settings-'] > .rz-card > div {
+    gap: 14px !important;
+  }
+
+  .rz-settings-shell .rz-content-inner h2 {
+    margin-bottom: 4px !important;
+  }
+
+  .rz-settings-shell .rz-content-inner section,
+  .rz-settings-shell .rz-automation-setting-card,
+  .rz-settings-shell .rz-field-visibility-section {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rz-settings-shell .rz-automation-setting-card {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+    padding: 12px !important;
+  }
+
+  .rz-settings-shell .rz-article-automation-field {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .rz-settings-shell .rz-save-cluster {
+    width: 100%;
+    display: grid;
+    justify-items: stretch;
+  }
+
+  .rz-settings-shell .rz-save-cluster > .rz-btn,
+  .rz-settings-shell .rz-save-cluster > button {
+    width: 100%;
+  }
+
+  .rz-settings-shell .rz-modal-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .rz-settings-shell .rz-modal-actions .rz-btn,
+  .rz-settings-shell .rz-modal-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .rz-settings-shell fieldset {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rz-settings-shell [style*='min-width: 340px'],
+  .rz-settings-shell [style*='min-width: 320px'],
+  .rz-settings-shell [style*='min-width: 300px'],
+  .rz-settings-shell [style*='min-width: 280px'],
+  .rz-settings-shell [style*='min-width: 260px'] {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .rz-settings-shell [style*='justify-content: flex-end'] {
+    justify-content: stretch !important;
+  }
+
+  .rz-settings-shell [style*='justify-content: flex-end'] > .rz-btn,
+  .rz-settings-shell [style*='justify-content: flex-end'] > button {
+    width: 100%;
+  }
+
+  .rz-settings-shell [style*='grid-template-columns'],
+  .rz-settings-shell [style*='gridTemplateColumns'] {
+    grid-template-columns: 1fr !important;
+  }
+
 }
