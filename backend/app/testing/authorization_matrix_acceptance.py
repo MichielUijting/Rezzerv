@@ -4,7 +4,9 @@ Run locally from the repository root with:
     docker compose exec -T backend python -m app.testing.authorization_matrix_acceptance
 
 The program compares the household role permissions from matrix v1.1 plus the
-active Superuser-v2 platform boundary with the runtime. It exits with code 0
+active Superuser-v2 platform boundary with the runtime. Frontteam is deliberately
+not a household-matrix role: it is an additive platform role on top of a user's
+own regular household role. It exits with code 0
 for GO and code 1 for NO-GO.
 """
 
@@ -19,7 +21,7 @@ from app.services.authorization_foundation_service import (
 )
 
 
-ROLES = ("lid", "beheerder", "superuser", "frontteamlid")
+ROLES = ("lid", "beheerder", "superuser")
 
 
 @dataclass(frozen=True)
@@ -90,7 +92,6 @@ def permission_sets() -> dict[str, set[str]]:
         "lid": permissions_for_session_role("member"),
         "beheerder": permissions_for_session_role("admin"),
         "superuser": permissions_for_session_role("owner", platform_superuser=True),
-        "frontteamlid": permissions_for_session_role("frontteam"),
     }
 
 
@@ -137,7 +138,6 @@ def run() -> int:
         ("lid heeft geen Admin-toegang", "admin.access" not in actual["lid"]),
         ("beheerder heeft geen Externe-databases-toegang", "frontteam.external_databases.access" not in actual["beheerder"]),
         ("superuser heeft volledige Externe-databases-toegang", "frontteam.external_databases.access" in actual["superuser"]),
-        ("frontteamlid heeft Externe-databases-toegang", "frontteam.external_databases.access" in actual["frontteamlid"]),
         ("beheerder mag GPC wijzigen", "gpc.update" in actual["beheerder"]),
         ("beheerder mag Catalogus niet wijzigen", "catalog.update" not in actual["beheerder"]),
     )
