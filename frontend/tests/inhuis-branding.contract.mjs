@@ -21,6 +21,10 @@ const tableLoadingOverlay = readFrontend('src/ui/DelayedTableLoadingOverlay.jsx'
 const tableLoadingCss = readFrontend('src/ui/tableLoadingOverlay.css')
 const loadingMark = readFrontend('public/inhuis-loading-mark.svg')
 const externalReceiptOverview = readFrontend('src/features/externalDatabases/ReceiptItemsOverview.jsx')
+const loginPage = readFrontend('src/features/auth/LoginPage.jsx')
+const loginCss = readFrontend('src/features/auth/loginPage.css')
+const superuserControl = readFrontend('src/features/superuser/SuperuserControlPage.jsx')
+const superuserLoginBackground = readFrontend('src/features/superuser/SuperuserLoginBackgroundSection.jsx')
 
 assert.match(brandLogo, /\/inhuis-logo-header\.png/)
 assert.match(brandLogo, /\/inhuis-logo-white\.png/)
