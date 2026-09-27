@@ -1,0 +1,505 @@
+/*
+ * Mobile Settings presentation.
+ * Functional routes, permissions and desktop tables remain unchanged.
+ */
+.rz-settings-shell,
+.rz-settings-shell .rz-content,
+.rz-settings-shell .rz-content-inner,
+.rz-settings-shell .rz-card,
+.rz-settings-shell form,
+.rz-settings-shell section,
+.rz-settings-shell label,
+.rz-settings-shell input,
+.rz-settings-shell select,
+.rz-settings-shell textarea,
+.rz-settings-shell button,
+.rz-settings-shell .rz-table,
+.rz-settings-shell .rz-table th,
+.rz-settings-shell .rz-table td {
+  text-align: left;
+}
+
+/* Desktop Settings uses one stable left-aligned content axis. */
+@media (min-width: 721px) {
+  .rz-settings-page,
+  .rz-settings-section,
+  .rz-settings-section-heading,
+  .rz-settings-tile-list,
+  .rz-settings-tile,
+  .rz-settings-tile-copy,
+  .rz-settings-tile-title,
+  .rz-settings-tile-description {
+    text-align: left !important;
+  }
+
+  .rz-settings-section-heading {
+    display: block;
+  }
+
+  .rz-settings-section-icon {
+    display: none;
+  }
+
+  .rz-settings-tile {
+    display: grid !important;
+    grid-template-columns: 32px minmax(0, 1fr) 18px !important;
+    align-items: center !important;
+    justify-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .rz-settings-tile-icon {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .rz-settings-tile-copy {
+    grid-column: 2;
+    justify-self: stretch;
+    min-width: 0;
+  }
+
+  .rz-settings-tile-chevron {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+
+.rz-authorization-mobile,
+.rz-store-import-mobile {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .rz-settings-shell {
+    min-height: 100vh;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(240, 249, 242, 0.08) 100%),
+      url('/inhuis-green-wallpaper.svg') center top / cover fixed no-repeat;
+    background-color: #EEF7F0;
+  }
+
+  .rz-settings-shell .rz-content {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .rz-settings-shell .rz-content-inner {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .rz-settings-shell .rz-card {
+    width: 100%;
+    max-width: none;
+    padding: 12px;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .rz-settings-page {
+    gap: 16px !important;
+  }
+
+  /* Mobile Settings is intentionally label-led: explanatory muted copy is
+     desktop-only. Labels, values, status/error feedback and actions remain. */
+  .rz-settings-page > p,
+  .rz-settings-section-heading p,
+  .rz-settings-tile-description,
+  .rz-settings-shell .rz-card > div > p,
+  .rz-settings-shell section > p,
+  .rz-settings-shell h2 + p,
+  .rz-settings-shell h3 + p,
+  .rz-settings-shell legend + p {
+    display: none !important;
+  }
+
+
+  .rz-settings-section {
+    --rz-settings-section-accent: #1669b2;
+    --rz-settings-section-tint: #eaf4ff;
+    gap: 0 !important;
+    overflow: hidden;
+    border: 1px solid #dfe4ea;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(17, 24, 39, 0.06);
+  }
+
+  .rz-settings-section[data-testid="settings-section-household"] {
+    --rz-settings-section-accent: #9a6700;
+    --rz-settings-section-tint: #fff2d6;
+  }
+
+  .rz-settings-section[data-testid="settings-section-usage"] {
+    --rz-settings-section-accent: var(--color-ui-primary);
+    --rz-settings-section-tint: #dff4eb;
+  }
+
+  .rz-settings-section[data-testid="settings-section-help"] {
+    --rz-settings-section-accent: #a11b3b;
+    --rz-settings-section-tint: #ffe3e8;
+  }
+
+  .rz-settings-section-heading {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 2px 8px;
+    align-items: center;
+    padding: 9px 12px;
+    background: var(--rz-settings-section-tint);
+    color: #111827;
+  }
+
+  .rz-settings-section-heading p {
+    grid-column: 2;
+  }
+
+  .rz-settings-section-icon {
+    grid-row: 1 / span 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    color: var(--rz-settings-section-accent);
+    font-weight: 700;
+  }
+
+  .rz-settings-tile-list {
+    gap: 0 !important;
+    padding: 0 12px;
+  }
+
+  .rz-settings-tile-list > div + div,
+  .rz-settings-tile-list > .rz-authorized-control--tile + .rz-authorized-control--tile {
+    border-top: 1px solid #e7e9ed;
+  }
+
+  .rz-settings-tile {
+    display: grid !important;
+    grid-template-columns: 42px minmax(0, 1fr) 18px;
+    min-height: 62px;
+    padding: 8px 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    gap: 10px;
+    background: #fff !important;
+    box-shadow: none !important;
+    touch-action: manipulation;
+  }
+
+  .rz-settings-tile-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: var(--rz-settings-section-tint);
+    color: var(--rz-settings-section-accent);
+    font-weight: 700;
+  }
+
+  .rz-settings-tile-copy {
+    min-width: 0;
+  }
+
+  .rz-settings-tile-title {
+    color: #111827;
+  }
+
+  .rz-settings-tile-description {
+    margin-top: 2px;
+    line-height: 1.25;
+  }
+
+  .rz-settings-tile-chevron {
+    color: #344054;
+    font-weight: 700;
+    justify-self: end;
+  }
+
+  .rz-settings-display-controls {
+    align-items: stretch !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .rz-settings-display-controls label {
+    min-width: 0 !important;
+  }
+
+  .rz-settings-display-controls .rz-btn,
+  .rz-settings-shell form .rz-btn {
+    min-height: 44px;
+  }
+
+  .rz-settings-shell input:not([type='checkbox']):not([type='radio']):not([type='color']),
+  .rz-settings-shell select,
+  .rz-settings-shell textarea {
+    width: 100%;
+    max-width: 100%;
+    min-height: 44px;
+  }
+
+  .rz-settings-shell form {
+    max-width: 100% !important;
+  }
+
+  .rz-settings-shell .rz-modal-card {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+
+  /* Settings tables become vertical cards on mobile. Header labels are copied
+     to data-mobile-label by the shared Table component. */
+  .rz-settings-shell .rz-table-component {
+    overflow: visible;
+    max-height: none;
+    border: 0;
+  }
+
+  .rz-settings-shell .rz-table {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .rz-settings-shell .rz-table colgroup,
+  .rz-settings-shell .rz-table thead {
+    display: none;
+  }
+
+  .rz-settings-shell .rz-table tbody {
+    display: grid;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .rz-settings-shell .rz-table tbody tr {
+    display: grid;
+    width: 100%;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 10px 12px;
+    border: 1px solid #dfe4ea;
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .rz-settings-shell .rz-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(92px, 34%) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 36px !important;
+    padding: 6px 0 !important;
+    border: 0;
+    text-align: left !important;
+    white-space: normal !important;
+  }
+
+  .rz-settings-shell .rz-table tbody td[data-mobile-label]::before {
+    content: attr(data-mobile-label);
+    font-weight: 600;
+    color: #667085;
+  }
+
+  .rz-settings-shell .rz-table tbody td:not([data-mobile-label]) {
+    grid-template-columns: 1fr;
+  }
+
+  .rz-settings-shell .rz-table tbody td > * {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .rz-settings-shell .rz-table tbody td .rz-btn,
+  .rz-settings-shell .rz-table tbody td button {
+    min-height: 40px;
+    width: auto;
+    justify-self: start;
+  }
+
+  .rz-settings-shell .rz-table--resizable-columns {
+    width: 100% !important;
+  }
+
+  .rz-settings-shell .rz-table-resize-handle,
+  .rz-settings-shell [data-resize-handle] {
+    display: none !important;
+  }
+  /* Detail pages use a deliberate mobile document flow instead of inheriting
+     desktop flex/grid widths. The route shell is shared by every Settings detail. */
+  .rz-settings-shell .rz-content-inner > .rz-card > div,
+  .rz-settings-shell .rz-content-inner > [data-testid^='settings-'] > .rz-card > div {
+    gap: 14px !important;
+  }
+
+  .rz-settings-shell .rz-content-inner h2 {
+    margin-bottom: 4px !important;
+  }
+
+  .rz-settings-shell .rz-content-inner section,
+  .rz-settings-shell .rz-automation-setting-card,
+  .rz-settings-shell .rz-field-visibility-section {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rz-settings-shell .rz-automation-setting-card {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+    padding: 12px !important;
+  }
+
+  .rz-settings-shell .rz-article-automation-field {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .rz-settings-shell .rz-save-cluster {
+    width: 100%;
+    display: grid;
+    justify-items: stretch;
+  }
+
+  .rz-settings-shell .rz-save-cluster > .rz-btn,
+  .rz-settings-shell .rz-save-cluster > button {
+    width: 100%;
+  }
+
+  .rz-settings-shell .rz-modal-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .rz-settings-shell .rz-modal-actions .rz-btn,
+  .rz-settings-shell .rz-modal-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .rz-settings-shell fieldset {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .rz-settings-shell [style*='min-width: 340px'],
+  .rz-settings-shell [style*='min-width: 320px'],
+  .rz-settings-shell [style*='min-width: 300px'],
+  .rz-settings-shell [style*='min-width: 280px'],
+  .rz-settings-shell [style*='min-width: 260px'] {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .rz-settings-shell [style*='justify-content: flex-end'] {
+    justify-content: stretch !important;
+  }
+
+  .rz-settings-shell [style*='justify-content: flex-end'] > .rz-btn,
+  .rz-settings-shell [style*='justify-content: flex-end'] > button {
+    width: 100%;
+  }
+
+  .rz-settings-shell [style*='grid-template-columns'],
+  .rz-settings-shell [style*='gridTemplateColumns'] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Native mobile detail patterns: do not squeeze desktop matrices/forms. */
+  .rz-authorization-matrix-wrap,
+  .rz-store-import-desktop {
+    display: none !important;
+  }
+
+  .rz-authorization-mobile,
+  .rz-store-import-mobile {
+    display: grid;
+    gap: 10px;
+  }
+
+  .rz-authorization-role-card {
+    overflow: hidden;
+    border: 1px solid #dfe4ea;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .rz-authorization-role-card h3 {
+    margin: 0;
+    padding: 11px 12px;
+    background: #dff4eb;
+    color: #111827;
+  }
+
+  .rz-authorization-permission-list {
+    display: grid;
+    padding: 0 12px;
+  }
+
+  .rz-authorization-permission-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 10px;
+    align-items: center;
+    min-height: 46px;
+    border-bottom: 1px solid #e7e9ed;
+  }
+
+  .rz-authorization-permission-row:last-child {
+    border-bottom: 0;
+  }
+
+  .rz-authorization-permission-row strong {
+    justify-self: center;
+    color: var(--color-ui-primary);
+  }
+
+  .rz-store-import-mobile {
+    grid-template-columns: 1fr;
+  }
+
+  .rz-store-import-choice {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 58px;
+    padding: 10px 12px;
+    border: 1px solid #dfe4ea;
+    border-radius: 12px;
+    background: #fff;
+    color: #111827;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .rz-store-import-choice--selected {
+    border: 2px solid var(--color-ui-primary);
+    background: #dff4eb;
+  }
+
+  .rz-store-import-choice-mark {
+    justify-self: end;
+    color: var(--color-ui-primary);
+    font-weight: 700;
+  }
+
+}

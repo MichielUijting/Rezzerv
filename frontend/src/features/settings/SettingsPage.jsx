@@ -18,6 +18,29 @@ import {
   writePrimaryColorPreference,
 } from '../../ui/primaryColorPreference.js'
 
+const SETTINGS_SECTION_ICONS = {
+  account: '●',
+  household: '◆',
+  usage: '✦',
+  help: '●',
+}
+
+const SETTINGS_TILE_ICONS = {
+  account: '✉',
+  'article-details': '☷',
+  'privacy-data-sharing': '◇',
+  frontteam: '♟',
+  household: '⌂',
+  authorizations: '⚿',
+  capabilities: '＋',
+  'article-groups': '☷',
+  locations: '⌖',
+  'store-import': '▣',
+  'household-automation': '↻',
+  'almost-out': '▥',
+  'help-about': 'ⓘ',
+}
+
 const PRIMARY_USE_CASE_LABELS = {
   inhuis_halen: 'Inhuis halen',
   wat_inhuis: 'Wat Inhuis',
@@ -113,15 +136,17 @@ export default function SettingsPage() {
     return (
       <Link
         to={tile.to}
+        className="rz-settings-tile"
         style={getTileStyle(false)}
         data-testid={`settings-tile-${tile.key}`}
         data-settings-scope={tile.scope}
       >
-        <div>
-          <div style={{ fontWeight: 600 }}>{tile.title}</div>
-          <div style={{ color: '#667085', fontSize: '14px' }}>{tile.description}</div>
+        <span className="rz-settings-tile-icon" aria-hidden="true">{SETTINGS_TILE_ICONS[tile.key] || '•'}</span>
+        <div className="rz-settings-tile-copy">
+          <div className="rz-settings-tile-title" style={{ fontWeight: 600 }}>{tile.title}</div>
+          <div className="rz-settings-tile-description" style={{ color: '#667085', fontSize: '14px' }}>{tile.description}</div>
         </div>
-        <div aria-hidden="true">→</div>
+        <div className="rz-settings-tile-chevron" aria-hidden="true">›</div>
       </Link>
     )
   }
@@ -145,19 +170,11 @@ export default function SettingsPage() {
     <AppShell title="Instellingen" showExit={false}>
       <Card>
         <div
+          className="rz-settings-page"
           style={{ display: 'grid', gap: '24px' }}
           data-testid="settings-page"
           data-settings-mode={navigation.mode}
         >
-          <div>
-            <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Instellingen</h2>
-            <p style={{ margin: 0, color: '#667085' }}>
-              {navigation.mode === 'dynamic'
-                ? 'Je ziet instellingen die passen bij de mogelijkheden die voor dit huishouden actief zijn.'
-                : 'Beheer hier je persoonlijke voorkeuren en de inrichting van je huishouden.'}
-            </p>
-          </div>
-
           <section
             data-testid="settings-primary-color"
             style={{
@@ -176,7 +193,7 @@ export default function SettingsPage() {
                 De standaardkleur is {DEFAULT_PRIMARY_COLOR}; deze voorkeur geldt op dit apparaat.
               </p>
             </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+            <div className="rz-settings-display-controls" style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
               <label style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontSize: 14, fontWeight: 600 }}>Kleur kiezen</span>
                 <input
@@ -285,13 +302,15 @@ export default function SettingsPage() {
             <section
               key={section.key}
               data-testid={`settings-section-${section.key}`}
+              className="rz-settings-section"
               style={{ display: 'grid', gap: '12px' }}
             >
-              <div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '17px' }}>{section.title}</h3>
+              <div className="rz-settings-section-heading">
+                <span className="rz-settings-section-icon" aria-hidden="true">{SETTINGS_SECTION_ICONS[section.key] || '•'}</span>
+                <h3 style={{ margin: 0, fontSize: '17px' }}>{section.title}</h3>
                 <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>{section.description}</p>
               </div>
-              <div style={{ display: 'grid', gap: '12px' }}>
+              <div className="rz-settings-tile-list" style={{ display: 'grid', gap: '12px' }}>
                 {section.tiles.map(renderTile)}
               </div>
             </section>

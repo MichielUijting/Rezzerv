@@ -51,6 +51,24 @@ export default function Table({
   useEffect(() => {
     const wrapper = wrapperRef.current
     const table = wrapper?.querySelector('table')
+    if (!table) return
+
+    const headers = Array.from(table.querySelectorAll('thead tr:first-child th')).map((cell) =>
+      String(cell.textContent || '').trim()
+    )
+    table.querySelectorAll('tbody tr').forEach((row) => {
+      Array.from(row.children).forEach((cell, index) => {
+        if (cell.tagName !== 'TD') return
+        const label = headers[index] || ''
+        if (label) cell.dataset.mobileLabel = label
+        else delete cell.dataset.mobileLabel
+      })
+    })
+  }, [children])
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    const table = wrapper?.querySelector('table')
     const headerRow = table?.querySelector('thead tr.rz-table-header')
     if (!table || !headerRow || !table.classList.contains('rz-data-table--sticky-filters')) return undefined
 

@@ -20,6 +20,27 @@
     z-index: 100;
   }
 
+  /* Settings uses the same single sticky application header as other mobile
+     screens: Back left, page title beside it and the Inhuis mark on the right. */
+  .rz-mobile-app-chrome:has(.rz-settings-shell) > .rz-mobile-back-control {
+    position: fixed !important;
+    top: calc(12px + env(safe-area-inset-top)) !important;
+    left: 10px !important;
+    z-index: 101 !important;
+  }
+
+  .rz-mobile-app-chrome:has(.rz-settings-shell) .rz-header {
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    min-height: 64px;
+    padding-left: 88px;
+  }
+
+  .rz-mobile-app-chrome:has(.rz-settings-shell) .rz-header-titleblock {
+    justify-content: center;
+  }
+
   .rz-mobile-app-chrome:has(.rz-header) .rz-header,
   .rz-mobile-app-chrome:has(.rz-mobile-module-header) .rz-mobile-module-header {
     padding-left: 88px;
