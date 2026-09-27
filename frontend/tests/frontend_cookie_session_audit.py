@@ -69,7 +69,6 @@ def run() -> int:
         "header does not read legacy localStorage": "localStorage.getItem" not in header_text,
         "household admin helper accepts admin": "'admin'" in auth_text,
         "household admin helper accepts owner": "'owner'" in auth_text,
-        "household admin helper accepts frontteam": "'frontteam'" in auth_text,
         "home admin tile uses household admin authority": "canOpenAdmin: isHouseholdAdminFromContext" in home_text,
         "admin route uses household admin authority": "isHouseholdAdminFromContext" in admin_guard_text,
         "frontteam helper exists": "isFrontteamMemberFromContext" in auth_text,
@@ -98,7 +97,7 @@ def run() -> int:
     print("PASS /api/session is the sole frontend authority for identity, role and household")
     print("PASS frontend requests use the HttpOnly session cookie")
     print("PASS header renders identity and active household from server session context")
-    print("PASS admin is available to beheerder, owner and frontteam roles")
+    print("PASS household admin authority is derived from the active household role")
     print("PASS external databases is available to frontteam and platform superuser")
     print("PASS catalog view and GPC mutation controls follow the PO matrix")
     print("FRONTEND_COOKIE_SESSION_AUDIT_GREEN")
