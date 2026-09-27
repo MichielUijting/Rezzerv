@@ -7,7 +7,7 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { isHouseholdFrontteamFromContext, readStoredAuthContext } from '../../lib/authSession.js'
+import { canCurrentUserPerform, fetchAuthContext, readStoredAuthContext } from '../../lib/authSession.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
 import {
   createHouseholdThread,
@@ -28,9 +28,9 @@ export default function HouseholdSupportPage() {
   const query = useMemo(() => new URLSearchParams(location.search), [location.search])
   const originRoute = query.get('from') || '/meldingen'
   const originScreen = query.get('screen') || 'Inhuis'
-  const authContext = readStoredAuthContext()
+  const [authContext, setAuthContext] = useState(() => readStoredAuthContext())
   const currentUserId = String(authContext?.user_id || authContext?.email || '').trim().toLowerCase()
-  const canMessageSuperuser = isHouseholdFrontteamFromContext(authContext)
+  const canMessageSuperuser = canCurrentUserPerform('platform.frontteam_messages.create', authContext)
 
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
@@ -68,6 +68,12 @@ export default function HouseholdSupportPage() {
       if (showBusy) setBusy(false)
     }
   }
+
+  useEffect(() => {
+    let active = true
+    fetchAuthContext().then((nextContext) => { if (active) setAuthContext(nextContext) }).catch(() => {})
+    return () => { active = false }
+  }, [])
 
   useEffect(() => { refresh({ showBusy: true }) }, [status])
 
