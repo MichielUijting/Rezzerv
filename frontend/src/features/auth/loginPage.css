@@ -83,7 +83,18 @@
   .rz-login-leaves i:nth-child(4) { left: 110px; top: 148px; transform: rotate(64deg); }
   .rz-login-leaves i:nth-child(5) { left: 48px; top: 190px; transform: rotate(10deg); }
 
-  .rz-login-layout {
+  .rz-login-background--custom {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.rz-login-background--custom .rz-login-wave,
+.rz-login-background--custom .rz-login-leaves {
+  display: none;
+}
+
+.rz-login-layout {
     display: flex;
     flex-direction: column;
     width: min(100%, 520px);
