@@ -194,7 +194,6 @@ def list_authorization_roles(
                        WHEN 'household.member' THEN 'Lid'
                        WHEN 'household.admin' THEN 'Beheerder'
                        WHEN 'household.owner' THEN 'Superuser'
-                       WHEN 'household.frontteam' THEN 'Frontteamlid'
                    END AS name
             FROM auth_roles
             WHERE scope = 'household'
@@ -202,14 +201,12 @@ def list_authorization_roles(
               AND role_key IN (
                   'household.member',
                   'household.admin',
-                  'household.owner',
-                  'household.frontteam'
+                  'household.owner'
               )
             ORDER BY CASE role_key
                 WHEN 'household.member' THEN 1
                 WHEN 'household.admin' THEN 2
                 WHEN 'household.owner' THEN 3
-                WHEN 'household.frontteam' THEN 4
                 ELSE 99 END
         """)).mappings().all()
         items = []

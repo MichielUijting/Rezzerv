@@ -77,6 +77,6 @@ for (const roleKey of [
 ]) {
   assert.ok(canonicalRoleQuery.includes(`'${roleKey}'`))
 }
-assert.doesNotMatch(canonicalRoleQuery, /household\.(viewer|advanced_member)/)
+assert.doesNotMatch(canonicalRoleQuery, /household\.(viewer|advanced_member|frontteam)/)
 
 console.log('SETTINGS_ROLE_ALIGNMENT_CONTRACT_GREEN')
