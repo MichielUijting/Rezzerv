@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../../lib/apiClient.js'
 import Button from '../../ui/Button.jsx'
 import Card from '../../ui/Card.jsx'
 import Header from '../../ui/Header.jsx'
+import './settingsHousehold.css'
 
 const FRONTTEAM_ROLE_KEY = 'platform.frontteam'
 
