@@ -141,6 +141,7 @@ export default function SettingsStoreImportPage() {
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
               {loadError ? <div className="rz-inline-feedback rz-inline-feedback--error">{loadError}</div> : null}
+              <div className="rz-store-import-desktop">
               <div className="rz-automation-setting-card" style={{ alignItems: 'stretch' }}>
                 <div className="rz-automation-setting-copy">
                   <div className="rz-automation-setting-title">Vereenvoudigingsniveau winkelimport</div>
@@ -187,6 +188,34 @@ export default function SettingsStoreImportPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              </div>
+
+              <div className="rz-store-import-mobile" role="radiogroup" aria-label="Vereenvoudigingsniveau winkelimport">
+                {sortedLevels.map((option) => {
+                  const selected = option.value === level
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      className={`rz-store-import-choice${selected ? ' rz-store-import-choice--selected' : ''}`}
+                      onClick={() => {
+                        if (!canEdit || isSaving) return
+                        setSaveError('')
+                        setSaveMessage('')
+                        setLevel(option.value)
+                      }}
+                      disabled={!canEdit || isSaving}
+                    >
+                      <span>{option.label}</span>
+                      <span className="rz-store-import-choice-mark" aria-hidden="true">{selected ? '✓' : '›'}</span>
+                    </button>
+                  )
+                })}
+                {!canEdit ? <div className="rz-inline-feedback rz-inline-feedback--warning">Alleen de beheerder kan dit wijzigen.</div> : null}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
