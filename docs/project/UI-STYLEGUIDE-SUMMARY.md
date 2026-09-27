@@ -356,6 +356,7 @@ Voor **Voorraad desktop** geldt hetzelfde zichtbare maximum van **10 inhoudelijk
 - actieve kolom/focus op lichte surfaces gebruikt de donkere brand-ink;
 - horizontale scroll is toegestaan wanneer responsive reductie anders inhoud verbergt;
 - hergebruik `Table`/`DataTable` en bestaande resize-/filterpatronen;
+- beheer-/ledenlijsten, waaronder **Frontteam beheren**, plaatsen de invoer-/toevoegactie in een afzonderlijk blok boven de tabel en gebruiken daaronder de canonieke `DataTable` met selectiekolom, filterregel, sortering en standaardpaginering; bulkacties staan bij de tabelpaginering en individuele rijactieknoppen worden vermeden wanneer dezelfde actie veilig op een selectie kan worden uitgevoerd;
 - wanneer een tabel intern verticaal scrolt, blijven de kolomtitelrij en de zoek-/filterrij samen als één sticky kopblok zichtbaar; de titelrij staat op `top: 0` en de zoek-/filterrij blijft direct onder de titelrij op de gemeten of centrale headerhoogte, zonder schermspecifieke sticky-hack.
 - dit sticky kopblok is het generieke tabelpatroon voor alle schermen die titel- én zoek/filterrij tonen; schermen activeren het patroon via de centrale tabelklassen in plaats van lokale positionerings-CSS.
 
