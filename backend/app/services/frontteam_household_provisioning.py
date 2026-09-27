@@ -513,7 +513,7 @@ def _has_existing_regular_household_outside_frontteam_projection(
 def ensure_frontteam_household_for_session_runtime(
     conn: Connection,
 ) -> FrontteamHouseholdProvisioningResult:
-    """Idempotently project every active Frontteam user into one personal household."""
+    """Provision a fallback household only for Frontteam users without a regular household."""
 
     ensure_authorization_foundation(conn)
     ensure_roles_v2_account_and_household_foundation(conn)
@@ -528,6 +528,11 @@ def ensure_frontteam_household_for_session_runtime(
             user_id=user["user_id"],
             email=user["email"],
         ):
+            legacy_memberships_removed += _remove_legacy_shared_membership(
+                conn,
+                user_id=user["user_id"],
+                email=user["email"],
+            )
             continue
         household_id, household_created, membership_created, removed = (
             ensure_frontteam_personal_household_for_user(
