@@ -636,3 +636,17 @@ Vaste regels:
 - Op de mobiele Startpagina vraagt Terug expliciet om **Uitloggen** of **Annuleren**; er vindt geen stille browsernavigatie plaats.
 - Native `select`-velden gebruiken app-breed `var(--font-family-base)` en `var(--font-size-ui-body)`; schermen mogen geen browserafhankelijke grotere select-typografie introduceren.
 - Een bericht aan de Superuser is een Frontteamfunctie: niet-Frontteamgebruikers krijgen geen verzendactie in de UI en de backend weigert directe verzend- of antwoordaanroepen.
+
+
+## Inlogscherm — gedeelde desktop- en mobiele login
+
+De loginroute gebruikt op desktop en mobiel dezelfde functionele loginform en dezelfde Inhuis-identiteit; viewportwissels mogen de invoervelden of primaire loginactie nooit verbergen.
+
+Vaste regels:
+- het vrijstaande woordmerk toont een lichtgroene `In` en `Huis` in de centrale primaire Inhuis-kleur; achter het woordmerk staat geen afzonderlijk groen logoblok;
+- de paginakop is **Welkom**;
+- e-mailadres en wachtwoord blijven op iedere viewport zichtbaar, bruikbaar en gekoppeld aan dezelfde authenticatielogica;
+- het wachtwoordveld gebruikt een oogbediening in het veld voor tonen/verbergen;
+- de primaire **Inloggen**-knop gebruikt de centrale primaire UI-kleur en de app-brede knopradius `var(--radius-md)`;
+- de zachte crème/groene achtergrond, decoratieve golven en bladaccenten zijn presentatielaag en veranderen geen login-, sessie- of autorisatiegedrag;
+- desktop behoudt de reguliere applicatieheader; mobiel gebruikt de compacte loginpresentatie zonder die desktopheader.
