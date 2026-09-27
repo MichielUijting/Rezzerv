@@ -373,8 +373,9 @@ def list_support_threads(conn, *, household_id: str | None = None, status: str |
             MAX(m.created_at) AS last_message_at
         FROM support_threads t
         LEFT JOIN support_messages m ON m.thread_id = t.id
+        LEFT JOIN households h ON h.id = t.household_id
         {where}
-        GROUP BY t.id
+        GROUP BY t.id, h.naam
         ORDER BY t.updated_at DESC, t.thread_number DESC
     """), params).mappings().all()
 
