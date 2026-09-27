@@ -3,8 +3,9 @@ import { listHouseholdThreads } from '../support/supportApi.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import './mobileHome.css'
 
-const DEFAULT_ORDER = ['kassa', 'kassabonnen', 'winkelen', 'voorraad', 'bijna-op', 'catalogus', 'meldingen']
+const DEFAULT_ORDER = ['berichten', 'kassa', 'kassabonnen', 'winkelen', 'voorraad', 'bijna-op', 'catalogus', 'meldingen']
 const ACTION_ICONS = {
+  berichten: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="13" width="50" height="38" rx="6" fill="#ffffff" stroke="currentColor" strokeWidth="3"/><path d="M10 18l22 18 22-18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/></svg>,
   kassa: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><path fill="#455a64" d="M10 31h44l5 25H5z"/><rect x="16" y="10" width="32" height="20" rx="5" fill="#90a4ae"/><rect x="21" y="14" width="22" height="9" rx="2" fill="#b2f2e9"/><rect x="26" y="34" width="24" height="14" rx="3" fill="#cfd8dc"/><g fill="#ff9f43"><circle cx="31" cy="39" r="2.5"/><circle cx="38" cy="39" r="2.5"/><circle cx="45" cy="39" r="2.5"/><circle cx="31" cy="45" r="2.5"/><circle cx="38" cy="45" r="2.5"/><circle cx="45" cy="45" r="2.5"/></g><rect x="14" y="50" width="36" height="4" rx="2" fill="#263238"/></svg>,
   kassabonnen: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><defs><clipPath id="rz-bag-body"><path d="M13 22h38l-4 36H17z"/></clipPath></defs><path fill="#f5c46f" d="M13 22h38l-4 36H17z"/><g clipPath="url(#rz-bag-body)"><rect x="11" y="29" width="42" height="7" fill="#ef5350"/><rect x="11" y="36" width="42" height="7" fill="#42a5f5"/><rect x="11" y="43" width="42" height="7" fill="#f6c344"/></g><path d="M23 24v-5c0-12 18-12 18 0v5" fill="none" stroke="#9c5d16" strokeWidth="5" strokeLinecap="round"/><path d="M13 22h38l-4 36H17z" fill="none" stroke="#d69738" strokeWidth="2"/></svg>,
   winkelen: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><path fill="#ef3e3e" d="M9 27h46l-5 28H14z"/><path d="M18 29L28 12m18 17L36 12" stroke="#37474f" strokeWidth="6" strokeLinecap="round"/><path d="M21 36v11m11-11v11m11-11v11" stroke="#ffd4d4" strokeWidth="4" strokeLinecap="round"/></svg>,
@@ -14,6 +15,7 @@ const ACTION_ICONS = {
   meldingen: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="19" width="56" height="26" rx="8" fill="#ef3e3e"/><text x="32" y="36" textAnchor="middle" fontSize="13" fontWeight="900" fill="#fff">NIEUWS</text></svg>,
 }
 const META = {
+  berichten: { label: 'Berichten', detail: 'Berichten aan de Superuser', icon: ACTION_ICONS.berichten, tone: 'green' },
   kassa: { label: 'Kassa', detail: 'Kassabon scannen', icon: ACTION_ICONS.kassa, tone: 'mint' },
   kassabonnen: { label: 'Uitpakken', detail: 'Artikelen opruimen', icon: ACTION_ICONS.kassabonnen, tone: 'orange' },
   winkelen: { label: 'Boodschappen', detail: 'Bekijk je boodschappenlijst', icon: ACTION_ICONS.winkelen, tone: 'red' },
