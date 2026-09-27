@@ -135,6 +135,7 @@ def test_legacy_household_roles_are_preserved_but_not_normally_assignable():
     assert allowed_roles == {"household.member", "household.admin"}
     assert "household.viewer" not in allowed_roles
     assert "household.advanced_member" not in allowed_roles
+    assert "household.owner" not in allowed_roles
 
 
 def test_ip_owner_only_system_session_projects_exact_platform_union_without_role_list():

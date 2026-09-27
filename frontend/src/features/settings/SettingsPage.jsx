@@ -58,7 +58,7 @@ export default function SettingsPage() {
   const [primaryColor, setPrimaryColor] = useState(() => readPrimaryColorPreference())
   const [primaryColorDraft, setPrimaryColorDraft] = useState(() => readPrimaryColorPreference())
   const [primaryColorError, setPrimaryColorError] = useState('')
-  const navigation = buildSettingsNavigation({ onboarding })
+  const navigation = buildSettingsNavigation({ onboarding, contextType: context?.context_type })
   const activeProfileItems = buildActiveProfileItems(onboarding)
 
   useEffect(() => {

@@ -65,12 +65,12 @@ test.describe('Hulp & Over frontend-regressie', () => {
     await expect(page.getByTestId('settings-help-about-page')).toBeVisible()
   })
 
-  test('system context kan Hulp & Over niet rechtstreeks openen', async ({ page }) => {
+  test('system context kan Hulp & Over rechtstreeks openen', async ({ page }) => {
     await seedSession(page, { contextType: 'system' })
 
     await page.goto('/instellingen/hulp-over')
 
-    await expect(page).toHaveURL(/\/home$/)
-    await expect(page.getByTestId('settings-help-about-page')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/instellingen\/hulp-over$/)
+    await expect(page.getByTestId('settings-help-about-page')).toBeVisible()
   })
 })

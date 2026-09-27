@@ -627,3 +627,11 @@ Vaste regels:
 - Gewone interactieve knoppen hebben op desktop en mobiel één centrale geometrie: `border-radius: var(--radius-md)` (momenteel 6px).
 - Schermen en features mogen geen eigen pilvormige of volledig ronde knopgeometrie afdwingen.
 - `frontend/tests/button-shape-global.contract.mjs` bewaakt deze authority bronbreed en draait als onderdeel van de volledige frontendregressie.
+
+
+## Mobiele Terug-knop en select-typografie
+
+- De globale mobiele Terug-knop blijft visueel binnen de sticky headerbalk en gebruikt overal dezelfde positie en geometrie.
+- Op de mobiele Startpagina vraagt Terug expliciet om **Uitloggen** of **Annuleren**; er vindt geen stille browsernavigatie plaats.
+- Native `select`-velden gebruiken app-breed `var(--font-family-base)` en `var(--font-size-ui-body)`; schermen mogen geen browserafhankelijke grotere select-typografie introduceren.
+- Een bericht aan de Superuser is een Frontteamfunctie: niet-Frontteamgebruikers krijgen geen verzendactie in de UI en de backend weigert directe verzend- of antwoordaanroepen.

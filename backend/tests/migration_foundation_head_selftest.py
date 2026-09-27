@@ -16,11 +16,12 @@ from app.alembic_head_authority import repository_head_revision
 
 
 HEAD_REVISION = repository_head_revision()
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 91
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 92
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
 HOME_SETTINGS_TABLE = "platform_home_settings"
 HOUSEHOLD_NOTIFICATIONS_TABLE = "household_notifications"
+FRONTTEAM_MEMBERSHIP_TABLE = "frontteam_memberships"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
 QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
@@ -32,6 +33,7 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     HOME_ACTION_ORDER_TABLE,
     HOME_SETTINGS_TABLE,
     HOUSEHOLD_NOTIFICATIONS_TABLE,
+    FRONTTEAM_MEMBERSHIP_TABLE,
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }

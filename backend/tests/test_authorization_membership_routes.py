@@ -151,13 +151,11 @@ def test_admin_can_list_members_roles_and_permissions():
             'household.member',
             'household.admin',
             'household.owner',
-            'household.frontteam',
         ]
         assert [item['name'] for item in role_items] == [
             'Lid',
             'Beheerder',
             'Superuser',
-            'Frontteamlid',
         ]
         admin_role = next(item for item in role_items if item['role_key'] == 'household.admin')
         assert 'permissions.manage' in admin_role['permission_keys']

@@ -50,13 +50,9 @@ def test_superuser_system_role_combines_h0_household_and_functional_v2_platform_
     assert "platform.special_roles.manage" not in platform_permissions
 
 
-def test_legacy_frontteam_household_role_is_not_platform_authority():
+def test_legacy_frontteam_household_role_is_not_runtime_authority():
     permissions = permissions_for_session_role("frontteam")
-    assert "inventory.view" in permissions
-    assert "articles.manage" in permissions
-    assert "catalog.manage" in permissions
-    assert "admin.access" in permissions
-    assert not any(key.startswith("platform.") for key in permissions)
+    assert permissions == set()
 
 
 def test_active_frontteam_platform_role_is_separate_from_household_role():

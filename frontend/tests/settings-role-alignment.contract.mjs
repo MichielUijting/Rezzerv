@@ -43,7 +43,6 @@ for (const [roleKey, label] of [
   ['household.viewer', 'Kijker (bestaande rol)'],
   ['household.advanced_member', 'Geavanceerd lid (bestaande rol)'],
   ['household.owner', 'Superuser'],
-  ['household.frontteam', 'Frontteamlid'],
 ]) {
   assert.ok(householdSource.includes(`'${roleKey}': '${label}'`))
 }
@@ -52,7 +51,6 @@ for (const [roleKey, label] of [
   ['household.member', 'Lid'],
   ['household.admin', 'Beheerder'],
   ['household.owner', 'Superuser'],
-  ['household.frontteam', 'Frontteamlid'],
 ]) {
   assert.ok(authorizationSource.includes(`'${roleKey}': '${label}'`))
 }
@@ -67,6 +65,7 @@ assert.doesNotMatch(authorizationSource, /'household\.advanced_member'/)
 const assignableRolesBlock = membershipServiceSource.match(/allowed_roles = \{([\s\S]*?)\n    \}/)?.[1] || ''
 assert.match(assignableRolesBlock, /"household\.member"/)
 assert.match(assignableRolesBlock, /"household\.admin"/)
+assert.doesNotMatch(assignableRolesBlock, /"household\.frontteam"/)
 assert.doesNotMatch(assignableRolesBlock, /household\.(viewer|advanced_member|owner|frontteam)/)
 
 const canonicalRoleQuery = membershipRoutesSource.match(/SELECT role_key,([\s\S]*?)\n        """\)\)\.mappings\(\)\.all\(\)/)?.[1] || ''
@@ -74,10 +73,9 @@ for (const roleKey of [
   'household.member',
   'household.admin',
   'household.owner',
-  'household.frontteam',
 ]) {
   assert.ok(canonicalRoleQuery.includes(`'${roleKey}'`))
 }
-assert.doesNotMatch(canonicalRoleQuery, /household\.(viewer|advanced_member)/)
+assert.doesNotMatch(canonicalRoleQuery, /household\.(viewer|advanced_member|frontteam)/)
 
 console.log('SETTINGS_ROLE_ALIGNMENT_CONTRACT_GREEN')

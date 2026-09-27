@@ -36,13 +36,10 @@ const NON_VIEWER_HOUSEHOLD_ROLES = new Set([
   'member',
   'advanced_member',
   'geavanceerd lid',
-  'frontteam',
-  'frontteamlid',
   'household.admin',
   'household.owner',
   'household.member',
   'household.advanced_member',
-  'household.frontteam',
 ])
 
 export function normalizeHouseholdAccessContext(context) {
@@ -247,8 +244,8 @@ export async function fetchJsonWithAuth(url, options = {}) {
 export function isHouseholdAdminFromContext(context = null) {
   const source = context || readStoredAuthContext()
   return Boolean(source?.permissions?.['admin.access']) || [
-    'admin', 'owner', 'frontteam', 'frontteamlid',
-    'household.admin', 'household.owner', 'household.frontteam',
+    'admin', 'owner',
+    'household.admin', 'household.owner',
   ].includes(String(source?.display_role || source?.role || '').trim().toLowerCase())
 }
 
@@ -260,6 +257,15 @@ export function isPlatformSuperuserFromContext(context = null) {
       source?.context_type === 'system'
       && source?.permissions?.[SYSTEM_HOUSEHOLD_ACCESS_PERMISSION]
     )
+  )
+}
+
+export function isHouseholdFrontteamFromContext(context = null) {
+  const source = context || readStoredAuthContext()
+  return Boolean(
+    source?.is_frontteam
+    || source?.permissions?.['platform.frontteam_messages.create']
+    || source?.permissions?.[FRONTTEAM_EXTERNAL_DATABASES_PERMISSION]
   )
 }
 

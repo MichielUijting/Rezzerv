@@ -84,6 +84,10 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
     }
 
 
+def _require_frontteam_actor(authorization: str | None, permission_key: str) -> None:
+    require_platform_permission_from_session(permission_key, authorization)
+
+
 def _platform_actor(authorization: str | None, permission_key: str) -> dict[str, Any]:
     context = require_platform_permission_from_session(permission_key, authorization)
     return {
@@ -141,6 +145,7 @@ def _support_error(exc: SupportMessageError):
 @router.post("/api/support/threads", status_code=201)
 def create_household_support_thread(payload: HouseholdThreadCreateRequest, authorization: str | None = Header(None)):
     actor = _household_actor(authorization)
+    _require_frontteam_actor(authorization, "platform.frontteam_messages.create")
     try:
         with _main_module().engine.begin() as conn:
             result = create_support_thread(
@@ -191,6 +196,7 @@ def get_household_support_thread(thread_id: str, authorization: str | None = Hea
 @router.post("/api/support/threads/{thread_id}/messages", status_code=201)
 def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest, authorization: str | None = Header(None)):
     actor = _household_actor(authorization)
+    _require_frontteam_actor(authorization, "platform.frontteam_messages.reply")
     try:
         with _main_module().engine.begin() as conn:
             header = _thread_header(conn, thread_id, household_id=actor["household_id"])

@@ -21,10 +21,10 @@ export const SETTINGS_SECTIONS = [
   },
 ]
 
-const REGULAR_SETTINGS_CONTEXTS = ['regular']
+const SETTINGS_CONTEXTS = ['regular', 'system']
 
 export const SETTINGS_ROOT_POLICY = {
-  allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+  allowedContexts: SETTINGS_CONTEXTS,
   allowViewer: true,
 }
 
@@ -37,7 +37,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'account',
     scope: 'personal',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
   {
@@ -49,7 +49,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -60,7 +60,7 @@ const SETTINGS_TILES = [
     relevance: 'inventory',
     section: 'account',
     scope: 'personal',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
   {
@@ -72,7 +72,7 @@ const SETTINGS_TILES = [
     relevance: 'inventory',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -83,7 +83,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'account',
     scope: 'personal',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
   {
@@ -95,7 +95,7 @@ const SETTINGS_TILES = [
     relevance: 'locations',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -107,7 +107,19 @@ const SETTINGS_TILES = [
     relevance: 'shopping-or-receipts',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
+    allowViewer: false,
+  },
+  {
+    key: 'frontteam',
+    title: 'Frontteam beheren',
+    description: 'Ken aanvullende Frontteambevoegdheden toe aan bestaande gebruikers',
+    to: '/instellingen/frontteam',
+    permission: 'platform.frontteam_roles.manage',
+    relevance: 'always',
+    section: 'household',
+    scope: 'platform',
+    allowedContexts: ['system'],
     allowViewer: false,
   },
   {
@@ -119,7 +131,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'household',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -130,7 +142,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'household',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
   {
@@ -142,7 +154,7 @@ const SETTINGS_TILES = [
     relevance: 'quantity-inventory',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -154,7 +166,7 @@ const SETTINGS_TILES = [
     relevance: 'almost-out',
     section: 'usage',
     scope: 'household',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
@@ -165,7 +177,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'help',
     scope: 'personal',
-    allowedContexts: REGULAR_SETTINGS_CONTEXTS,
+    allowedContexts: SETTINGS_CONTEXTS,
     allowViewer: true,
   },
 ]
@@ -201,12 +213,14 @@ function buildSections(tiles) {
     .filter((section) => section.tiles.length > 0)
 }
 
-export function buildSettingsNavigation({ onboarding } = {}) {
+export function buildSettingsNavigation({ onboarding, contextType = 'regular' } = {}) {
   const configuration = normalizedConfiguration(onboarding)
   const mode = configuration ? 'dynamic' : 'legacy'
+  const normalizedContextType = String(contextType || 'regular').trim().toLowerCase()
+  const contextTiles = SETTINGS_TILES.filter((tile) => tile.allowedContexts.includes(normalizedContextType))
   const tiles = configuration
-    ? SETTINGS_TILES.filter((tile) => isRelevant(tile, configuration))
-    : SETTINGS_TILES
+    ? contextTiles.filter((tile) => isRelevant(tile, configuration))
+    : contextTiles
 
   return {
     mode,

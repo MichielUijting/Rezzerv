@@ -20,13 +20,13 @@ assert.deepEqual(
   SETTINGS_SECTIONS.map((section) => section.key),
   ['account', 'household', 'usage', 'help'],
 )
-assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
+assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
-assert.equal(SETTINGS_TILES.length, 12)
+assert.equal(SETTINGS_TILES.length, 13)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
-  assert.ok(['personal', 'household'].includes(tile.scope))
-  assert.deepEqual(tile.allowedContexts, ['regular'])
+  assert.ok(['personal', 'household', 'platform'].includes(tile.scope))
+  assert.deepEqual(tile.allowedContexts, tile.key === 'frontteam' ? ['system'] : ['regular', 'system'])
   assert.equal(typeof tile.allowViewer, 'boolean')
 }
 
@@ -190,6 +190,15 @@ for (const tile of SETTINGS_TILES) {
     },
   })
   assert.deepEqual(keys(sameCapabilitiesDifferentStart), keys(navigation))
+}
+
+{
+  const systemNavigation = buildSettingsNavigation({
+    contextType: 'system',
+    onboarding: null,
+  })
+  assert.ok(keys(systemNavigation).includes('frontteam'))
+  assert.equal(systemNavigation.tiles.find((tile) => tile.key === 'frontteam')?.permission, 'platform.frontteam_roles.manage')
 }
 
 console.log('DYNAMIC_SETTINGS_NAVIGATION_CONTRACT_GREEN')

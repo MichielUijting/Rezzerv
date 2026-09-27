@@ -75,6 +75,7 @@ V2_PLATFORM_PERMISSIONS = (
     "platform.functional_features.manage",
     "platform.system_household.access",
     "platform.special_roles.manage",
+    "platform.frontteam_roles.manage",
     "platform.frontteam_messages.create",
     "platform.frontteam_messages.read",
     "platform.frontteam_messages.reply",
@@ -129,7 +130,6 @@ ADMIN_PERMISSIONS = MEMBER_PERMISSIONS | {
     "admin.access",
 }
 
-FRONTTEAM_PERMISSIONS = set(HOUSEHOLD_PERMISSIONS)
 SUPERUSER_HOUSEHOLD_PERMISSIONS = set(HOUSEHOLD_PERMISSIONS)
 
 FRONTTEAM_PLATFORM_PERMISSIONS = {
@@ -167,6 +167,7 @@ V2_SUPERUSER_TARGET_PERMISSIONS = {
     "platform.gpc.manage",
     "platform.external_sources.view",
     "platform.external_sources.manage",
+    "platform.frontteam_roles.manage",
 }
 
 # Canonical runtime grantset from 9.1.8a onward. The v2 target is no longer
@@ -204,7 +205,6 @@ ROLE_PERMISSIONS = {
     "household.advanced_member": set(ADMIN_PERMISSIONS),
     "household.admin": set(ADMIN_PERMISSIONS),
     "household.owner": set(SUPERUSER_HOUSEHOLD_PERMISSIONS),
-    "household.frontteam": set(FRONTTEAM_PERMISSIONS),
     "platform.support_read": {
         "platform.households.search", "platform.households.view_metadata",
         "platform.support_access.request", "platform.support_access.activate",
@@ -238,8 +238,6 @@ def permissions_for_session_role(role: str, *, platform_superuser: bool = False)
         "beheerder": "household.admin",
         "admin": "household.admin",
         "owner": "household.owner",
-        "frontteam": "household.frontteam",
-        "frontteamlid": "household.frontteam",
     }.get(normalized, "")
     permissions = set(ROLE_PERMISSIONS.get(role_key, set()))
     if platform_superuser:
@@ -333,6 +331,17 @@ def ensure_authorization_foundation(conn) -> None:
     _seed_registry(conn)
 
 def _seed_registry(conn) -> None:
+    # Frontteam is exclusively a platform role. Keep a legacy household role row
+    # as historical data only, but make it incapable of granting authority.
+    conn.execute(text("""
+        UPDATE auth_roles
+        SET active = FALSE
+        WHERE role_key = 'household.frontteam'
+    """))
+    conn.execute(text("""
+        DELETE FROM auth_role_permissions
+        WHERE role_key = 'household.frontteam'
+    """))
     for key in HOUSEHOLD_PERMISSIONS:
         conn.execute(text("""
             INSERT INTO auth_permissions(permission_key, scope, description)
@@ -351,7 +360,6 @@ def _seed_registry(conn) -> None:
         "household.advanced_member": "Gevorderd lid",
         "household.admin": "Huishoudbeheerder",
         "household.owner": "Superuser-huishoudrol",
-        "household.frontteam": "Frontteamlid",
         "platform.support_read": "Supportmedewerker lezen",
         "platform.frontteam": "Frontteamlid",
         "platform.superuser": "Platform-superuser",
@@ -440,12 +448,12 @@ def assert_last_household_admin_remains(conn, *, household_id: str, membership_i
         SELECT role_key FROM auth_membership_roles
         WHERE household_id = :household_id AND membership_id = :membership_id AND active IS TRUE LIMIT 1
     """), {"household_id": str(household_id), "membership_id": str(membership_id_to_remove)}).scalar()
-    if current_role not in {"household.admin", "household.owner", "household.frontteam"}:
+    if current_role not in {"household.admin", "household.owner"}:
         return
     remaining = conn.execute(text("""
         SELECT COUNT(*) FROM auth_membership_roles
         WHERE household_id = :household_id AND membership_id <> :membership_id
-          AND role_key IN ('household.admin', 'household.owner', 'household.frontteam') AND active IS TRUE
+          AND role_key IN ('household.admin', 'household.owner') AND active IS TRUE
     """), {"household_id": str(household_id), "membership_id": str(membership_id_to_remove)}).scalar_one()
     if int(remaining or 0) < 1:
         raise ValueError("Een huishouden moet minimaal één actieve beheerder behouden.")

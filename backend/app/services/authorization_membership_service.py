@@ -48,9 +48,6 @@ REGULAR_LEGACY_ROLE_KEYS = {
     "advanced_member": "household.advanced_member",
     "gevorderd": "household.advanced_member",
     "household.advanced_member": "household.advanced_member",
-    "frontteam": "household.frontteam",
-    "frontteamlid": "household.frontteam",
-    "household.frontteam": "household.frontteam",
 }
 
 CANONICAL_ROLE_COMPATIBILITY_MIRROR = {
@@ -59,7 +56,6 @@ CANONICAL_ROLE_COMPATIBILITY_MIRROR = {
     "household.viewer": "viewer",
     "household.advanced_member": "advanced_member",
     "household.owner": "owner",
-    "household.frontteam": "frontteam",
 }
 
 
@@ -128,7 +124,6 @@ def canonical_role_to_runtime_role(role_key: str) -> str | None:
         "household.viewer": "viewer",
         "household.advanced_member": "advanced_member",
         "household.owner": "owner",
-        "household.frontteam": "frontteam",
     }.get(normalized)
 
 

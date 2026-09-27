@@ -10,6 +10,7 @@ from app.services.platform_authorization_management_service import (
     IP_OWNER_ROLE_KEY,
     PLATFORM_ADMIN_ROLE_KEY,
     PLATFORM_SPECIAL_ROLES_MANAGE,
+    PLATFORM_FRONTTEAM_ROLES_MANAGE,
     SUPERUSER_ROLE_KEY,
     PlatformAuthorizationConflictError,
     grant_special_role,
@@ -49,6 +50,14 @@ def connection():
             )
         """))
         conn.execute(text("""
+            CREATE TABLE frontteam_memberships (
+                user_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("""
             CREATE TABLE household_memberships (
                 user_id TEXT NOT NULL,
                 household_id TEXT NOT NULL,
@@ -69,13 +78,15 @@ def connection():
               ('front', 'front@example.test', 'active'),
               ('regular', 'regular@example.test', 'active'),
               ('suspended', 'suspended@example.test', 'suspended'),
-              ('platform-admin', 'platform-admin@example.test', 'active')
+              ('platform-admin', 'platform-admin@example.test', 'active'),
+              ('superuser', 'superuser@example.test', 'active')
         """))
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key, active)
             VALUES
               ('owner', 'platform.ip_owner', 1),
-              ('platform-admin', 'platform.platform_admin', 1)
+              ('platform-admin', 'platform.platform_admin', 1),
+              ('superuser', 'platform.superuser', 1)
         """))
         conn.execute(text("""
             INSERT INTO household_memberships(user_id, household_id, role, status)
@@ -95,16 +106,20 @@ def active_roles(conn, user_id: str) -> set[str]:
     """), {"user_id": user_id}).scalars().all())
 
 
-def test_inventory_exposes_special_role_actions_only_to_ip_owner(connection):
+def test_inventory_exposes_special_role_actions_to_ip_owner_and_frontteam_action_to_superuser(connection):
     owner_inventory = list_platform_authorizations(connection, current_user_id="owner")
     admin_inventory = list_platform_authorizations(connection, current_user_id="platform-admin")
+    superuser_inventory = list_platform_authorizations(connection, current_user_id="superuser")
 
     assert owner_inventory["special_roles_permission"] == PLATFORM_SPECIAL_ROLES_MANAGE
     assert owner_inventory["can_manage_special_roles"] is True
     assert admin_inventory["can_manage_special_roles"] is False
+    assert superuser_inventory["can_manage_special_roles"] is False
+    assert superuser_inventory["can_manage_frontteam_roles"] is True
 
     owner_target = next(item for item in owner_inventory["users"] if item["user_id"] == "target")
     admin_target = next(item for item in admin_inventory["users"] if item["user_id"] == "target")
+    superuser_target = next(item for item in superuser_inventory["users"] if item["user_id"] == "target")
     assert owner_target["role_actions"][SUPERUSER_ROLE_KEY]["can_grant"] is True
     assert owner_target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is True
     assert owner_target["role_actions"][FRONTTEAM_ROLE_KEY]["can_grant"] is True
@@ -112,6 +127,9 @@ def test_inventory_exposes_special_role_actions_only_to_ip_owner(connection):
         action["can_grant"] is False and action["can_revoke"] is False
         for action in admin_target["role_actions"].values()
     )
+    assert superuser_target["role_actions"][FRONTTEAM_ROLE_KEY]["can_grant"] is True
+    assert superuser_target["role_actions"][SUPERUSER_ROLE_KEY]["can_grant"] is False
+    assert superuser_target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is False
 
 
 def test_ip_owner_is_protected_from_ordinary_special_role_management(connection):
@@ -331,14 +349,37 @@ def test_frontteam_cannot_stack_with_system_or_platform_admin_roles(connection):
         )
 
 
-def test_first_frontteam_grant_rejects_unrelated_regular_membership(connection):
-    with pytest.raises(PlatformAuthorizationConflictError, match="persoonlijk huishouden"):
-        grant_special_role(
-            connection,
-            "regular",
-            role_key=FRONTTEAM_ROLE_KEY,
-            actor_user_id="owner",
-        )
+def test_frontteam_grant_preserves_existing_regular_household_membership(connection):
+    grant_special_role(
+        connection,
+        "regular",
+        role_key=FRONTTEAM_ROLE_KEY,
+        actor_user_id="owner",
+    )
+    assert active_roles(connection, "regular") == {FRONTTEAM_ROLE_KEY}
+    assert connection.execute(text("SELECT status FROM frontteam_memberships WHERE user_id = 'regular'")).scalar_one() == "active"
+    membership = connection.execute(text("""
+        SELECT role, status FROM household_memberships
+        WHERE user_id = 'regular' AND household_id = '1'
+    """)).mappings().one()
+    assert membership["role"] == "admin"
+    assert membership["status"] == "active"
+    assert resolve_frontteam_personal_household_id(connection, "regular") is None
+
+    revoke_special_role(
+        connection,
+        "regular",
+        role_key=FRONTTEAM_ROLE_KEY,
+        actor_user_id="owner",
+    )
+    assert active_roles(connection, "regular") == set()
+    assert connection.execute(text("SELECT status FROM frontteam_memberships WHERE user_id = 'regular'")).scalar_one() == "inactive"
+    membership_after = connection.execute(text("""
+        SELECT role, status FROM household_memberships
+        WHERE user_id = 'regular' AND household_id = '1'
+    """)).mappings().one()
+    assert membership_after["role"] == "admin"
+    assert membership_after["status"] == "active"
 
 
 def test_system_roles_reject_regular_household_membership(connection):

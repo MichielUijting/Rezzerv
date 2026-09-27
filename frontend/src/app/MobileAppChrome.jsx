@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import MobileRecentActionsBar from '../ui/MobileRecentActionsBar.jsx'
 import { MobileBackControl } from '../ui/MobileModuleHeader.jsx'
 import {
@@ -9,6 +9,7 @@ import {
   isHouseholdAdminFromContext,
   isPlatformSuperuserFromContext,
   readStoredAuthContext,
+  logoutServerSession,
 } from '../lib/authSession.js'
 import { readHouseholdOnboarding } from '../features/onboarding/onboardingState.js'
 import { buildHomeNavigation } from '../features/home/homeNavigation.js'
@@ -21,6 +22,7 @@ import {
 import useFeatureAvailability from '../features/platform/useFeatureAvailability.js'
 import { useActionButtonAvailability } from '../features/platform/actionButtonAvailability.js'
 import { useMobileAppViewport } from './mobileViewport.js'
+import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import './mobileAppChrome.css'
 
 const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' }
@@ -103,6 +105,8 @@ function MobileBottomNavigationRuntime({ context, pathname }) {
 
 export default function MobileAppChrome({ children }) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { showFeedback } = useAppFeedback()
   const [context, setContext] = useState(() => readStoredAuthContext())
   const isMobileViewport = useMobileAppViewport()
 
@@ -114,9 +118,26 @@ export default function MobileAppChrome({ children }) {
 
   if (!isMobileViewport) return children
 
+  function handleHomeBack() {
+    showFeedback({
+      variant: 'warning',
+      title: 'Inhuis verlaten',
+      message: 'Wil je uitloggen?',
+      dismissMode: 'action-only',
+      primaryActionLabel: 'Uitloggen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        await logoutServerSession()
+        navigate('/login', { replace: true })
+      },
+      key: 'mobile-home-exit-confirmation',
+      testId: 'mobile-home-exit-confirmation',
+    })
+  }
+
   return (
     <div className="rz-mobile-app-chrome" data-testid="mobile-app-chrome">
-      <MobileBackControl testId="mobile-global-back" />
+      <MobileBackControl testId="mobile-global-back" onBack={location.pathname === '/home' ? handleHomeBack : null} />
       {children}
       <div className="rz-mobile-app-bottom-space" aria-hidden="true" />
       <MobileBottomNavigationRuntime context={context} pathname={location.pathname} />

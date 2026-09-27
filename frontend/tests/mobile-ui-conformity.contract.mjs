@@ -118,7 +118,10 @@ for (const responsiveSource of [inventoryResponsiveSource, almostOutResponsiveSo
   assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin|display_role|context_type\s*===\s*['"]system['"]/)
 }
 assert.match(mobileAppChromeSource, /MobileRecentActionsBar/)
-assert.match(mobileAppChromeSource, /<MobileBackControl testId="mobile-global-back" \/>/)
+assert.match(mobileAppChromeSource, /<MobileBackControl[\s\S]*testId="mobile-global-back"[\s\S]*onBack=\{location\.pathname === '\/home' \? handleHomeBack : null\}[\s\S]*\/>/)
+assert.match(mobileAppChromeSource, /title: 'Inhuis verlaten'/)
+assert.match(mobileAppChromeSource, /primaryActionLabel: 'Uitloggen'/)
+assert.match(mobileAppChromeSource, /secondaryActionLabel: 'Annuleren'/)
 assert.doesNotMatch(mobileAppChromeSource, /location\.pathname !== '\/home'/)
 assert.match(mobileAppChromeSource, /testId="mobile-global-bottom-nav"/)
 assert.match(mobileAppChromeSource, /activeActionKey\(pathname\)/)

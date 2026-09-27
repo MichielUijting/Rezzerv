@@ -223,3 +223,11 @@ button,
 a[role="button"] {
   border-radius: var(--radius-md) !important;
 }
+
+
+/* Form controls inherit the central Inhuis typography on every screen. */
+select {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body);
+  font-weight: 400;
+}

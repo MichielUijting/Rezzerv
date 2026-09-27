@@ -4,15 +4,12 @@ Status: afgeronde v2 special-role management authority; 9.1.8c voert de eerder g
 
 ## Doel
 
-Alleen de beschermde IP-eigenaar mag de gewone speciale platformrollen aanstellen of intrekken:
+De beschermde IP-eigenaar beheert `platform.superuser` en `platform.platform_admin`. De aanvullende rol `platform.frontteam` mag daarnaast ook door een Superuser worden toegekend of ingetrokken.
 
-- `platform.superuser`;
-- `platform.frontteam`;
-- `platform.platform_admin`.
+De canonical mutatiepermissions zijn:
 
-De canonical mutatiepermission is exact:
-
-`platform.special_roles.manage`
+- `platform.special_roles.manage` voor IP-owner-only beheer van Superuser en Platformbeheerder;
+- `platform.frontteam_roles.manage` voor Frontteambeheer door Superuser en IP-eigenaar.
 
 De bestaande inventarisatiepermission blijft afzonderlijk:
 
@@ -33,9 +30,9 @@ De backend blijft de enige bron van waarheid. Speciale rollen worden uitsluitend
 
 ## Frontteam lifecycle
 
-Een Frontteam-grant gebruikt de bestaande canonical Frontteam-provisioning en creëert of hergebruikt het deterministische persoonlijke reguliere huishouden met `household.admin`.
+Frontteam is een aanvullende platformrol bovenop een reguliere gebruikerscontext. Heeft de gebruiker al een eigen regulier huishouden, dan blijven dat huishouden en de bestaande huishoudrol ongewijzigd. Alleen wanneer nog geen regulier huishouden bestaat, mag de bestaande canonical Frontteam-provisioning een persoonlijk regulier huishouden aanmaken.
 
-Frontteam is onverenigbaar met systeem- en Platformbeheerderrollen. Een eerste Frontteam-grant wordt geweigerd wanneer het doelaccount al unrelated reguliere huishoudlidmaatschappen heeft.
+Frontteam blijft onverenigbaar met systeem- en Platformbeheerderrollen.
 
 De revoke/regrant-lifecycle wordt in 9.1.8b volledig gesloten:
 
@@ -78,3 +75,14 @@ De gemergde 9.1.8b-kandidaat bewees:
 10. production frontend build;
 11. volledige canonical frontend regression;
 12. canonical release package.
+
+
+## Frontteamledenadministratie
+
+De Frontteambeheerfunctie werkt op bestaande Inhuis-accounts. Een Superuser of IP-eigenaar voegt een gebruiker toe op exact e-mailadres. Alleen geregistreerde Frontteamleden worden in de beheerweergave getoond.
+
+Een Frontteamregistratie kent twee toestanden:
+- `active`: de aanvullende platformrol `platform.frontteam` is actief;
+- `inactive`: de gebruiker blijft als Frontteamlid geregistreerd, maar de aanvullende Frontteambevoegdheden zijn uitgeschakeld.
+
+Activeren en deactiveren wijzigen uitsluitend de Frontteambevoegdheid. Verwijderen verwijdert de Frontteamregistratie. Geen van deze acties verwijdert het Inhuis-account, het reguliere huishouden of de bestaande huishoudrol.

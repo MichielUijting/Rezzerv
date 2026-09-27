@@ -22,7 +22,7 @@ if not failed:
     regression = REGRESSION.read_text(encoding="utf-8")
     checks = {
         "PO-GO is vastgelegd": "PO-GO" in functional and "2026-08-01" in functional,
-        "gebruikersketen is vastgelegd": "Gebruikersmelding naar superuser" in functional,
+        "frontteamketen is vastgelegd": "Frontteammelding naar superuser" in functional and "platform.frontteam" in functional,
         "superuserbroadcast is vastgelegd": "Platformbericht aan alle leden" in functional,
         "centrale feedback is verplicht": "AppFeedbackProvider" in functional and "window.confirm" in functional,
         "standaardfilter Open is vastgelegd": "standaardfilter is **Open**" in functional,
