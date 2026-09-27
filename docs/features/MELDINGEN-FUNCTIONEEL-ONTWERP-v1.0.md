@@ -37,7 +37,7 @@ Meldingen ondersteunt communicatie tussen Rezzerv-gebruikers en de centrale supe
 
 Deze rollen hebben geen platformbreed broadcastrecht. Een huishoudrol op zichzelf geeft geen toegang tot `/superuser/meldingen`.
 
-Alleen een gebruiker met de canonieke huishoudrol `household.frontteam` mag vanuit het huishouden een gesprek met de superuser starten en daarop antwoorden. Beheerders en gewone leden mogen dit niet. Het toekennen of intrekken van `household.frontteam` is exclusief voorbehouden aan de Superuser en wordt server-side afgedwongen en geaudit.
+Alleen een gebruiker met de aanvullende platformrol `platform.frontteam` en de bijbehorende Frontteam-berichtpermissies mag vanuit het eigen huishouden een gesprek met de Superuser starten en daarop antwoorden. De bestaande huishoudrol blijft daarbij ongewijzigd. Het toekennen of intrekken van `platform.frontteam` is voorbehouden aan de Superuser of IP-eigenaar en wordt server-side afgedwongen en geaudit.
 
 ## Functioneel gedrag
 
