@@ -7,6 +7,7 @@ import "./ui/components/header.css";
 import "./ui/components/table.css";
 import "./styles.css";
 import "./features/articles/articleDetailMutationPolicy.css";
+import "./features/settings/settingsMobile.css";
 import "./ui/typography.css";
 import "./ui/theme.css";
 
