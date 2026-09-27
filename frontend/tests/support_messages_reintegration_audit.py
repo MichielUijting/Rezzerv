@@ -22,7 +22,9 @@ def run() -> int:
 
     checks = {
         "Meldingen-tegel bestaat voor gewone gebruiker": "key: 'meldingen'" in navigation,
-        "Meldingen-tegel verborgen voor platform-superuser": "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser" in navigation,
+        "Meldingen-tegel blijft onafhankelijk beschikbaar": "if (tile.key === 'meldingen') return true" in navigation,
+        "Berichten-tegel is autorisatiegestuurd": "if (tile.key === 'berichten') return visibility.canOpenMessages" in navigation,
+        "Superuser Berichten opent platform-inbox": "tile.key === 'berichten' && visibility.isPlatformSuperuser" in home and "'/superuser/meldingen'" in home,
         "gewone Meldingen-tegel opent huishoudroute": "meldingen: '/meldingen'" in home,
         "Superuser Meldingen-ingang staat in Beheercentrum": "navigate(notificationRoute)" in overview and "Meldingen (" in overview,
         "Meldingen-route is beveiligd": "path: '/meldingen'" in router and "<Protected><HouseholdSupportPage" in router,
@@ -43,7 +45,7 @@ def run() -> int:
             print(f"FAIL {failure}")
         return 1
 
-    print("PASS Meldingen blijft beschikbaar voor gewone gebruikers en verhuist voor Superuser naar het Beheercentrum")
+    print("PASS Meldingen blijft onafhankelijk beschikbaar; Berichten routeert Superuser naar de platform-inbox")
     print("PASS gebruikers kunnen melden en antwoorden via server-side sessie")
     print("SUPPORT_MESSAGES_REINTEGRATION_GREEN")
     return 0
