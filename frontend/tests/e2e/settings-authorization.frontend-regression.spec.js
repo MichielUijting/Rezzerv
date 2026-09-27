@@ -50,7 +50,6 @@ function authorizationPayload(roleKey = 'household.member') {
       { role_key: 'household.member', name: 'Lid', permission_keys: ['inventory.view', 'inventory.update', 'members.view'] },
       { role_key: 'household.admin', name: 'Beheerder', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
       { role_key: 'household.owner', name: 'Superuser', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
-      { role_key: 'household.frontteam', name: 'Frontteamlid', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
     ],
     permissions: [
       { permission_key: 'inventory.view', description: 'inventory.view' },
@@ -97,7 +96,6 @@ test.describe('Autorisaties frontend-regressie', () => {
     await expect(page.getByRole('columnheader', { name: 'Lid', exact: true })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Beheerder', exact: true })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Superuser', exact: true })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Frontteamlid', exact: true })).toBeVisible()
     await expect(page.getByRole('rowheader', { name: 'Voorraad bekijken', exact: true })).toBeVisible()
     await expect(page.getByLabel('Voorraad wijzigen voor Lid: toegestaan')).toBeChecked()
     await expect(authorizationPage.getByText('admin@rezzerv.local')).toHaveCount(0)
