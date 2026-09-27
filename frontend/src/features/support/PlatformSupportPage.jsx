@@ -210,7 +210,7 @@ export default function PlatformSupportPage() {
             <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter op status">
               {STATUSES.map((value) => <option key={value || 'all'} value={value}>{value || 'Alle statussen'}</option>)}
             </select>
-            <Input value={householdId} onChange={(event) => setHouseholdId(event.target.value)} placeholder="Huishoud-ID" aria-label="Filter op huishouden" />
+            <Input value={householdId} onChange={(event) => setHouseholdId(event.target.value)} placeholder="Huishouden zoeken" aria-label="Filter op huishouden" />
             <Button variant="secondary" onClick={() => loadThreads({ showBusy: true })}>Zoeken</Button>
           </div>
           {busy && !threads.length ? <p>Bezig met laden…</p> : null}
@@ -221,7 +221,7 @@ export default function PlatformSupportPage() {
                 <button type="button" className="rz-support-thread" onClick={() => openThread(thread.id)}>
                   <strong>{thread.subject}</strong>
                   <span>{thread.thread_number} · {thread.status}</span>
-                  <span>Huishouden {thread.household_id || '-'} · {thread.created_by_name} · {thread.message_count} bericht(en)</span>
+                  <span>Huishouden {thread.household_name || 'Onbekend huishouden'} · {thread.created_by_name} · {thread.message_count} bericht(en)</span>
                 </button>
                 <button type="button" className="rz-support-delete" aria-label={`Melding ${thread.subject} verwijderen`} onClick={() => removeThread(thread.id, thread.subject)}>🗑</button>
               </div>
@@ -235,7 +235,7 @@ export default function PlatformSupportPage() {
               <div className="rz-support-detail-head">
                 <div>
                   <h2>{selected.thread.subject}</h2>
-                  <p>{selected.thread.thread_number} · huishouden {selected.thread.household_id} · {selected.thread.status}</p>
+                  <p>{selected.thread.thread_number} · huishouden {selected.thread.household_name || 'Onbekend huishouden'} · {selected.thread.status}</p>
                 </div>
                 <Button variant="secondary" onClick={() => setSelected(null)}>Nieuwe melding aan alle leden</Button>
               </div>
