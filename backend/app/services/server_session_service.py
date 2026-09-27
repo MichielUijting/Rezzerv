@@ -645,11 +645,6 @@ def resolve_server_session(
             detail="Geen geldige accountcontext beschikbaar.",
         )
     is_frontteam = FRONTTEAM_PLATFORM_ROLE in platform_roles
-    if is_frontteam != is_personal_frontteam_household:
-        raise HTTPException(
-            status_code=403,
-            detail="Geen geldige accountcontext beschikbaar.",
-        )
 
     join_condition = membership_user_join_condition(conn)
     active_condition = membership_active_condition(conn)
