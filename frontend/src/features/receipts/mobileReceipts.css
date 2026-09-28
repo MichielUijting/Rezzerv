@@ -26,3 +26,19 @@
 .rz-mobile-unpack-detail-content > .rz-screen-card { margin:0; border-radius:12px; box-shadow:none; }
 .rz-mobile-unpack-detail-content .rz-store-batch-table-wrapper { max-width:100%; overflow-x:auto; }
 .rz-mobile-unpack-detail-content .rz-stock-table-actions { flex-wrap:wrap; }
+
+.rz-mobile-unpack-screen,
+.rz-mobile-unpack-screen input,
+.rz-mobile-unpack-screen select,
+.rz-mobile-unpack-screen button,
+.rz-mobile-unpack-screen option {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body);
+}
+.rz-mobile-unpack-screen .rz-mobile-module-header h1 {
+  font-size: var(--font-size-ui-title);
+}
+.rz-mobile-unpack-detail-content select,
+.rz-mobile-unpack-detail-content select option {
+  font-size: var(--font-size-ui-body) !important;
+}
