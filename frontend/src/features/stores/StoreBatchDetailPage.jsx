@@ -1548,7 +1548,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
       }
 
-      await refreshBatch(batch.batch_id)
+      const refreshedBatch = await refreshBatch(batch.batch_id)
       await refreshLocationOptions()
       setLastProcessResult(result)
       setBatchDiagnostics(result?.diagnostics || null)
