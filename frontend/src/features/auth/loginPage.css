@@ -357,17 +357,49 @@
 
 @media (max-width: 430px) {
   .rz-login-layout {
-    padding-left: 20px;
-    padding-right: 20px;
+    width: min(88vw, 360px);
+    padding: 28px 0 72px;
+  }
+
+  .rz-login-brand {
+    min-height: 64px;
+    margin-bottom: 4px;
   }
 
   .rz-login-layout .rz-card-login {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding: 16px 16px 14px;
+    border-radius: 22px;
+  }
+
+  .rz-login-field {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .rz-login-input-shell {
+    min-height: 48px;
+    padding: 0 12px;
+  }
+
+  .rz-login-input {
+    height: 46px;
+  }
+
+  .rz-login-forgot {
+    margin: -2px 0 14px;
+  }
+
+  button.rz-login-submit {
+    min-height: 50px;
+  }
+
+  .rz-login-register {
+    margin-top: 14px;
+    padding-top: 12px;
   }
 
   .rz-login-wordmark-in,
   .rz-login-wordmark-huis {
-    font-size: 60px !important;
+    font-size: 54px !important;
   }
 }
