@@ -138,8 +138,12 @@
 
 @media (max-width: 720px) {
   .rz-login-background--custom {
-    background-size: 100% auto;
-    background-position: center top;
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    background-size: auto 100%;
+    background-position: center center;
   }
 }
 
