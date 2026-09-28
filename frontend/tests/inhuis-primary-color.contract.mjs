@@ -117,6 +117,9 @@ const allowedDefaultLiteralFiles = new Set([
   'src/features/admin/lib/browserRegressionRunner.js',
   'public/inhuis-loading-mark.svg',
   'public/rezzerv-share-icon.svg',
+  // Legacy PWA icon assets are immutable/cache-facing static brand artwork.
+  'public/inhuis-app-icon-192.svg',
+  'public/inhuis-app-icon-512.svg',
   'public/inhuis-app-icon-brand-192.svg',
   'public/inhuis-app-icon-brand-512.svg',
 ])
