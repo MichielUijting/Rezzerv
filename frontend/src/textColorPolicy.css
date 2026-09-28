@@ -69,7 +69,7 @@ button[style*='color:'] {
   color: var(--color-ui-primary) !important;
 }
 
-/* Required contrast exceptions on the approved canonical dark-green chrome. */
+/* Required contrast exceptions on every approved canonical dark-green surface. */
 .rz-header,
 .rz-header *,
 .rz-mobile-module-header,
@@ -78,6 +78,12 @@ button[style*='color:'] {
 .rz-mobile-edit-header *,
 .rz-mobile-home-edit-header,
 .rz-mobile-home-edit-header *,
+.rz-table thead tr.rz-table-header th,
+.rz-table thead tr:first-child th,
+.rz-table thead tr.rz-table-header th *,
+.rz-table thead tr:first-child th *,
+.rz-sort-button,
+.rz-sort-button *,
 .rz-btn--primary,
 .rz-btn--primary *,
 .btn-primary,
