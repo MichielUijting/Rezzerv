@@ -15,3 +15,14 @@
 .rz-mobile-unpack-dialog-actions { display:grid; gap:8px; }
 .rz-mobile-unpack-dialog-actions button { width:100%; min-height:44px; }
 @media (max-width:430px) { .rz-mobile-unpack-filter-strip { grid-template-columns:1fr; } }
+
+.rz-mobile-unpack-detail-header { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:10px; }
+.rz-mobile-unpack-back { min-height:44px; padding:8px 10px; border:0; background:transparent; color:#fff !important; font:inherit; cursor:pointer; }
+.rz-mobile-unpack-detail-header h1 { margin:0; }
+.rz-mobile-unpack-receipt-summary { display:grid; gap:4px; margin-bottom:12px; padding:12px 14px; border:1px solid #e1e6e2; border-radius:12px; background:#fff; }
+.rz-mobile-unpack-receipt-summary strong { color:#171a18; }
+.rz-mobile-unpack-receipt-summary span { color:#69716c; }
+.rz-mobile-unpack-detail-content > .rz-card,
+.rz-mobile-unpack-detail-content > .rz-screen-card { margin:0; border-radius:12px; box-shadow:none; }
+.rz-mobile-unpack-detail-content .rz-store-batch-table-wrapper { max-width:100%; overflow-x:auto; }
+.rz-mobile-unpack-detail-content .rz-stock-table-actions { flex-wrap:wrap; }
