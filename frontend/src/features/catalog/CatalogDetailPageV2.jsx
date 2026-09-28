@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
+import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
@@ -49,6 +51,8 @@ function identityTypeLabel(value) {
 
 export default function CatalogDetailPageV2() {
   const { globalProductId = '' } = useParams()
+  const navigate = useNavigate()
+  const isMobileViewport = useMobileAppViewport()
   const { showFeedback } = useAppFeedback()
   const authContext = readStoredAuthContext()
   const canUpdateCatalogImage = canCurrentUserPerform('platform.catalog.update', authContext)
@@ -253,6 +257,115 @@ export default function CatalogDetailPageV2() {
         message: captureError?.message || 'De foto kon niet worden gemaakt.',
       })
     }
+  }
+
+  if (isMobileViewport) {
+    return (
+      <div className="rz-screen rz-mobile-catalog-detail-screen" data-testid="mobile-catalog-detail-page">
+        <MobileModuleHeader
+          title="Catalogusdetail"
+          testId="mobile-catalog-detail-header"
+          showBack
+          onBack={() => navigate('/catalogus')}
+        />
+        <main className="rz-mobile-catalog-detail-content">
+          {isLoading ? <section className="rz-mobile-catalog-state">Catalogusartikel laden…</section> : null}
+          {error ? <section className="rz-mobile-catalog-state" role="alert">{error}</section> : null}
+
+          {!isLoading && !error ? (
+            <>
+              <section className="rz-mobile-catalog-detail-card rz-mobile-catalog-detail-summary">
+                <div className="rz-catalog-product-image-editor">
+                  {canUpdateCatalogImage ? (
+                    <>
+                      <button
+                        type="button"
+                        className="rz-catalog-product-image-action"
+                        onClick={openImageChoice}
+                        disabled={isImageSaving}
+                        aria-label={product.image_url ? 'Productfoto wijzigen' : 'Productfoto toevoegen'}
+                        aria-busy={isImageSaving ? 'true' : undefined}
+                        data-testid="mobile-catalog-product-image-action"
+                      >
+                        <CatalogProductImage imageUrl={product.image_url} productName={product.name} />
+                        <span className="rz-catalog-product-image-action-label">
+                          {isImageSaving ? 'Foto verwerken…' : product.image_url ? 'Foto wijzigen' : 'Foto toevoegen'}
+                        </span>
+                      </button>
+                      <input
+                        ref={uploadInputRef}
+                        className="rz-catalog-product-image-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageFile}
+                        aria-label="Productfoto uploaden"
+                      />
+                    </>
+                  ) : <CatalogProductImage imageUrl={product.image_url} productName={product.name} />}
+                </div>
+                <div className="rz-mobile-catalog-detail-summary-copy">
+                  <h2>{text(product.name, 'Universeel artikel')}</h2>
+                  <dl>
+                    <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
+                    <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
+                    <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
+                    <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
+                  </dl>
+                </div>
+              </section>
+
+              <section className="rz-mobile-catalog-detail-card rz-mobile-catalog-gpc">
+                <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
+              </section>
+
+              <section className="rz-mobile-catalog-detail-card">
+                <h3>Identiteiten</h3>
+                <div className="rz-mobile-catalog-detail-list">
+                  {identities.length ? identities.map((identity, index) => (
+                    <div className="rz-mobile-catalog-detail-item" key={identity.id || `${identity.identity_type}-${identity.identity_value}-${index}`}>
+                      <strong>{identityTypeLabel(identity.identity_type)} · {text(identity.identity_value)}</strong>
+                      <span>{identity.is_primary ? 'Primair' : 'Niet primair'} · {sourceLabel(identity.source)}</span>
+                    </div>
+                  )) : <span>Geen aanvullende identiteiten gevonden.</span>}
+                </div>
+              </section>
+
+              <section className="rz-mobile-catalog-detail-card">
+                <h3>Gekoppelde huishoudartikelen</h3>
+                <div className="rz-mobile-catalog-detail-list">
+                  {householdArticles.length ? householdArticles.map((article, index) => (
+                    <div className="rz-mobile-catalog-detail-item" key={article.id || index}>
+                      <strong>{text(article.name || article.article_name)}</strong>
+                      <span>Minimum {text(article.minimum_stock)} · Ideaal {text(article.ideal_stock)}</span>
+                    </div>
+                  )) : <span>Geen gekoppelde huishoudartikelen gevonden.</span>}
+                </div>
+              </section>
+
+              <section className="rz-mobile-catalog-detail-card">
+                <h3>Gekoppelde kassabonregels</h3>
+                <div className="rz-mobile-catalog-detail-list">
+                  {receiptLines.length ? receiptLines.map((line, index) => (
+                    <div className="rz-mobile-catalog-detail-item" key={line.id || index}>
+                      <strong>{text(line.article_name_raw)}</strong>
+                      <span>{text(line.household_article_name)} · GTIN {text(line.gtin)}</span>
+                    </div>
+                  )) : <span>Geen gekoppelde kassabonregels gevonden.</span>}
+                </div>
+              </section>
+            </>
+          ) : null}
+        </main>
+        <CatalogCameraModal
+          open={isCameraOpen}
+          videoRef={cameraVideoRef}
+          cameraState={cameraState}
+          onVideoReady={handleCameraReady}
+          onCapture={handleCameraCapture}
+          onClose={closeCamera}
+        />
+      </div>
+    )
   }
 
   return (
