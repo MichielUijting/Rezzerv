@@ -12,6 +12,7 @@ import CatalogGpcFrame from './CatalogGpcFrame'
 import CatalogProductImage from './CatalogProductImage'
 import { captureCatalogImageFromVideo, compressCatalogImage } from './catalogImageCompression'
 import './catalog.css'
+import './mobileCatalog.css'
 
 function text(value, fallback = '-') {
   const normalized = String(value ?? '').trim()
