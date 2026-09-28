@@ -89,11 +89,17 @@ function listSourceFiles(directory) {
     return sourceExtensions.has(path.extname(entry.name).toLowerCase()) ? [entryPath] : []
   })
 }
+const allowedBrandAccentFiles = new Set([
+  'public/inhuis-app-icon-192.svg',
+  'public/inhuis-app-icon-512.svg',
+])
 const primaryColorViolations = []
 for (const root of ['src', 'public']) {
   for (const filePath of listSourceFiles(path.join(frontendRoot, root))) {
+    const relativePath = path.relative(frontendRoot, filePath).replaceAll('\\\\', '/')
     const content = fs.readFileSync(filePath, 'utf8').toUpperCase()
     for (const forbiddenColor of forbiddenPrimaryColors) {
+      if (forbiddenColor === '#28A99E' && allowedBrandAccentFiles.has(relativePath)) continue
       if (content.includes(forbiddenColor)) {
         primaryColorViolations.push(`${path.relative(frontendRoot, filePath)} bevat oude primaire kleur ${forbiddenColor}`)
       }
@@ -108,6 +114,8 @@ const allowedDefaultLiteralFiles = new Set([
   'src/features/admin/lib/browserRegressionRunner.js',
   'public/inhuis-loading-mark.svg',
   'public/rezzerv-share-icon.svg',
+  'public/inhuis-app-icon-192.svg',
+  'public/inhuis-app-icon-512.svg',
 ])
 const hardcodedDefaultViolations = []
 for (const root of ['src', 'public']) {
