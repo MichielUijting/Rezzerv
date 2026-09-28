@@ -127,13 +127,36 @@
 }
 
 .rz-login-background--custom {
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 0;
+  background: #fbfaf5;
 }
 
 .rz-login-background--custom .rz-login-interior-sketch {
   display: none;
+}
+
+.rz-login-background-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  object-position: center;
+  transform: translate(-50%, -50%);
+  display: block;
+}
+
+.rz-login-desktop-header,
+.rz-login-layout {
+  position: relative;
+  z-index: 1;
 }
 
 .rz-login-layout {
@@ -150,7 +173,7 @@
     align-items: baseline;
     min-height: 88px;
     line-height: 0.9;
-    margin-bottom: 38px;
+    margin-bottom: 8px;
     white-space: nowrap;
   }
 
@@ -328,23 +351,55 @@
   }
 
   .rz-login-brand {
-    margin-bottom: 28px;
+    margin-bottom: 8px;
   }
 }
 
 @media (max-width: 430px) {
   .rz-login-layout {
-    padding-left: 20px;
-    padding-right: 20px;
+    width: min(88vw, 360px);
+    padding: 28px 0 72px;
+  }
+
+  .rz-login-brand {
+    min-height: 64px;
+    margin-bottom: 4px;
   }
 
   .rz-login-layout .rz-card-login {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding: 16px 16px 14px;
+    border-radius: 22px;
+  }
+
+  .rz-login-field {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .rz-login-input-shell {
+    min-height: 48px;
+    padding: 0 12px;
+  }
+
+  .rz-login-input {
+    height: 46px;
+  }
+
+  .rz-login-forgot {
+    margin: -2px 0 14px;
+  }
+
+  button.rz-login-submit {
+    min-height: 50px;
+  }
+
+  .rz-login-register {
+    margin-top: 14px;
+    padding-top: 12px;
   }
 
   .rz-login-wordmark-in,
   .rz-login-wordmark-huis {
-    font-size: 60px !important;
+    font-size: 54px !important;
   }
 }
