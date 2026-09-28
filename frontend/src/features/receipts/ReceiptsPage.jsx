@@ -10,6 +10,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
+import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import './mobileReceipts.css'
 
 export default function ReceiptsPage() {
@@ -211,9 +212,7 @@ export default function ReceiptsPage() {
   if (isMobileViewport) {
     return (
       <div className="rz-mobile-inventory-screen rz-mobile-unpack-screen" data-testid="mobile-unpack-page">
-        <header className="rz-mobile-module-header">
-          <h1>Uitpakken</h1>
-        </header>
+        <MobileModuleHeader title="Uitpakken" testId="mobile-unpack-header" />
         <main className="rz-mobile-inventory-content rz-mobile-unpack-content">
           <div className="rz-mobile-inventory-toolbar">
             <div className="rz-mobile-inventory-search">
