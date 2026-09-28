@@ -17,6 +17,12 @@ import {
   resetPrimaryColorPreference,
   writePrimaryColorPreference,
 } from '../../ui/primaryColorPreference.js'
+import {
+  FONT_SCALE_OPTIONS,
+  readFontScalePreference,
+  resetFontScalePreference,
+  writeFontScalePreference,
+} from '../../ui/fontScalePreference.js'
 
 const SETTINGS_SECTION_ICONS = {
   account: '●',
@@ -81,6 +87,7 @@ export default function SettingsPage() {
   const [primaryColor, setPrimaryColor] = useState(() => readPrimaryColorPreference())
   const [primaryColorDraft, setPrimaryColorDraft] = useState(() => readPrimaryColorPreference())
   const [primaryColorError, setPrimaryColorError] = useState('')
+  const [fontScale, setFontScale] = useState(() => readFontScalePreference())
   const navigation = buildSettingsNavigation({ onboarding, contextType: context?.context_type })
   const activeProfileItems = buildActiveProfileItems(onboarding)
 
@@ -120,6 +127,14 @@ export default function SettingsPage() {
     setPrimaryColor(applied)
     setPrimaryColorDraft(applied)
     setPrimaryColorError('')
+  }
+
+  function applyFontScale(value) {
+    setFontScale(writeFontScalePreference(value))
+  }
+
+  function restoreFontScale() {
+    setFontScale(resetFontScalePreference())
   }
 
   function getTileStyle(disabled = false) {
@@ -259,6 +274,31 @@ export default function SettingsPage() {
                 {primaryColorError}
               </div>
             ) : null}
+            <div style={{ display: 'grid', gap: 8, paddingTop: 12, borderTop: '1px solid #dfe4ea' }} data-testid="settings-font-scale">
+              <div>
+                <strong>Tekstgrootte</strong>
+                <p style={{ margin: '4px 0 0', color: '#667085' }}>
+                  Vergroot de tekst in heel InHuis. Browser- en systeemzoom blijven daarnaast beschikbaar.
+                </p>
+              </div>
+              <div className="rz-settings-display-controls" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {Object.entries(FONT_SCALE_OPTIONS).map(([key, option]) => (
+                  <Button
+                    key={key}
+                    type="button"
+                    variant={fontScale === key ? 'primary' : 'secondary'}
+                    onClick={() => applyFontScale(key)}
+                    aria-pressed={fontScale === key}
+                    data-testid={`settings-font-scale-${key}`}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+                <Button type="button" variant="secondary" onClick={restoreFontScale} data-testid="settings-font-scale-reset">
+                  Standaard herstellen
+                </Button>
+              </div>
+            </div>
           </section>
 
           {context?.context_type === 'regular' && activeProfileItems.length ? (
