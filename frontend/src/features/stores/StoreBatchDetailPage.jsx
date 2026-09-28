@@ -64,6 +64,38 @@ const LOCATION_FILTERS = sortOptionObjects([
   { key: 'missing', label: 'Locatie ontbreekt' },
 ])
 
+function MobileArticleGroupSelect({ value, options, disabled, canCreate, onChange, ariaLabel }) {
+  const detailsRef = useRef(null)
+  const selectedLabel = options.find((group) => String(group.id) === String(value || ''))?.name || 'Niet ingedeeld'
+
+  function choose(nextValue) {
+    onChange(nextValue)
+    if (detailsRef.current) detailsRef.current.open = false
+  }
+
+  return (
+    <details ref={detailsRef} className="rz-mobile-token-dropdown">
+      <summary
+        className={`rz-input rz-inline-input${disabled ? ' is-disabled' : ''}`}
+        aria-label={ariaLabel}
+        aria-disabled={disabled ? 'true' : 'false'}
+        onClick={(event) => { if (disabled) event.preventDefault() }}
+      >
+        {selectedLabel}
+      </summary>
+      <div className="rz-mobile-token-dropdown__menu" role="listbox" aria-label={ariaLabel}>
+        <button type="button" role="option" aria-selected={!value} onClick={() => choose('')}>Niet ingedeeld</button>
+        {options.map((group) => (
+          <button key={group.id} type="button" role="option" aria-selected={String(group.id) === String(value || '')} onClick={() => choose(String(group.id))}>
+            {group.name}
+          </button>
+        ))}
+        {canCreate ? <button type="button" onClick={() => choose('__add_article_group__')}>Artikelgroep toevoegen...</button> : null}
+      </div>
+    </details>
+  )
+}
+
 function countUniqueNewMappings(lines) {
   const ids = new Set()
   lines.forEach((line) => {
@@ -1963,25 +1995,44 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         </button>
                       </td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-              <select
-                className="rz-input rz-inline-input"
-                value={entry.draft.articleGroupId || ''}
-                disabled={busyLineId === line.id || isProcessingBatch || isViewer}
-                aria-label={`Artikelgroep voor ${line.article_name_raw}`}
-                data-testid={`receipt-line-article-group-select-${line.id}`}
-                onChange={(event) => {
-                  const nextValue = event.target.value
-                  if (nextValue === '__add_article_group__') {
-                    openCreateArticleGroup(line.id)
-                    return
-                  }
-                  persistLineDraft(line, { articleGroupId: nextValue })
-                }}
-              >
-                <option value="">Niet ingedeeld</option>
-                {articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}
-              </select>
+              {isMobileViewport ? (
+                <div data-testid={`receipt-line-article-group-select-${line.id}`}>
+                  <MobileArticleGroupSelect
+                    value={entry.draft.articleGroupId || ''}
+                    options={articleGroupOptions}
+                    disabled={busyLineId === line.id || isProcessingBatch || isViewer}
+                    canCreate={canCreateArticleGroup}
+                    ariaLabel={`Artikelgroep voor ${line.article_name_raw}`}
+                    onChange={(nextValue) => {
+                      if (nextValue === '__add_article_group__') {
+                        openCreateArticleGroup(line.id)
+                        return
+                      }
+                      persistLineDraft(line, { articleGroupId: nextValue })
+                    }}
+                  />
+                </div>
+              ) : (
+                <select
+                  className="rz-input rz-inline-input"
+                  value={entry.draft.articleGroupId || ''}
+                  disabled={busyLineId === line.id || isProcessingBatch || isViewer}
+                  aria-label={`Artikelgroep voor ${line.article_name_raw}`}
+                  data-testid={`receipt-line-article-group-select-${line.id}`}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
+                    if (nextValue === '__add_article_group__') {
+                      openCreateArticleGroup(line.id)
+                      return
+                    }
+                    persistLineDraft(line, { articleGroupId: nextValue })
+                  }}
+                >
+                  <option value="">Niet ingedeeld</option>
+                  {articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                  {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}
+                </select>
+              )}
             </td>
                     </tr>
                   )
