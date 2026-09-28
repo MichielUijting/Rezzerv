@@ -7,6 +7,7 @@ import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
+import Select from '../../ui/Select'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
 import {
@@ -63,61 +64,6 @@ const LOCATION_FILTERS = sortOptionObjects([
   { key: 'filled', label: 'Locatie ingevuld' },
   { key: 'missing', label: 'Locatie ontbreekt' },
 ])
-
-function MobileArticleGroupSelect({ value, options, disabled, canCreate, onChange, ariaLabel }) {
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef(null)
-  const selectedLabel = options.find((group) => String(group.id) === String(value || ''))?.name || 'Niet ingedeeld'
-
-  useEffect(() => {
-    if (!open) return undefined
-    function closeOnOutsidePointer(event) {
-      if (!rootRef.current?.contains(event.target)) setOpen(false)
-    }
-    function closeOnEscape(event) {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', closeOnOutsidePointer)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [open])
-
-  function choose(nextValue) {
-    setOpen(false)
-    onChange(nextValue)
-  }
-
-  return (
-    <div ref={rootRef} className="rz-mobile-token-dropdown">
-      <button
-        type="button"
-        className="rz-input rz-inline-input rz-mobile-token-dropdown__trigger"
-        aria-label={ariaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span>{selectedLabel}</span>
-        <span aria-hidden="true">⌄</span>
-      </button>
-      {open ? (
-        <div className="rz-mobile-token-dropdown__menu" role="listbox" aria-label={ariaLabel}>
-          <button type="button" role="option" aria-selected={!value} onClick={() => choose('')}>Niet ingedeeld</button>
-          {options.map((group) => (
-            <button key={group.id} type="button" role="option" aria-selected={String(group.id) === String(value || '')} onClick={() => choose(String(group.id))}>
-              {group.name}
-            </button>
-          ))}
-          {canCreate ? <button type="button" onClick={() => choose('__add_article_group__')}>Artikelgroep toevoegen...</button> : null}
-        </div>
-      ) : null}
-    </div>
-  )
-}
 
 function countUniqueNewMappings(lines) {
   const ids = new Set()
@@ -2025,22 +1971,24 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       </td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
               {isMobileViewport ? (
-                <div data-testid={`receipt-line-article-group-select-${line.id}`}>
-                  <MobileArticleGroupSelect
-                    value={entry.draft.articleGroupId || ''}
-                    options={articleGroupOptions}
-                    disabled={busyLineId === line.id || isProcessingBatch || isViewer}
-                    canCreate={canCreateArticleGroup}
-                    ariaLabel={`Artikelgroep voor ${line.article_name_raw}`}
-                    onChange={(nextValue) => {
-                      if (nextValue === '__add_article_group__') {
-                        openCreateArticleGroup(line.id)
-                        return
-                      }
-                      persistLineDraft(line, { articleGroupId: nextValue })
-                    }}
-                  />
-                </div>
+                <Select
+                  value={entry.draft.articleGroupId || ''}
+                  options={[
+                    { value: '', label: 'Niet ingedeeld' },
+                    ...articleGroupOptions.map((group) => ({ value: String(group.id), label: group.name })),
+                    ...(canCreateArticleGroup ? [{ value: '__add_article_group__', label: 'Artikelgroep toevoegen...' }] : []),
+                  ]}
+                  disabled={busyLineId === line.id || isProcessingBatch || isViewer}
+                  ariaLabel={`Artikelgroep voor ${line.article_name_raw}`}
+                  dataTestId={`receipt-line-article-group-select-${line.id}`}
+                  onChange={(nextValue) => {
+                    if (nextValue === '__add_article_group__') {
+                      openCreateArticleGroup(line.id)
+                      return
+                    }
+                    persistLineDraft(line, { articleGroupId: nextValue })
+                  }}
+                />
               ) : (
                 <select
                   className="rz-input rz-inline-input"
