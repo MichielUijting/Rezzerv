@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
@@ -26,6 +26,7 @@ export default function ReceiptsPage() {
   const [isApplyingDeleteChoice, setIsApplyingDeleteChoice] = useState(false)
   const [tableSort, setTableSort] = useState({ key: 'datum', direction: 'desc' })
   const location = useLocation()
+  const navigate = useNavigate()
   const isMobileViewport = useMobileAppViewport()
 
   useEffect(() => {
@@ -243,11 +244,11 @@ export default function ReceiptsPage() {
                     <label className="rz-mobile-article-row-leading" onClick={(event) => event.stopPropagation()}>
                       <input type="checkbox" checked={selected} onChange={() => toggleSelectedBatch(item.batch_id)} aria-label={`Selecteer ${item.providerName} van ${item.dateLabel}`} />
                     </label>
-                    <button type="button" className="rz-mobile-unpack-main" onClick={() => setOpenedBatchId(item.batch_id)} data-testid={`mobile-receipt-open-${item.batch_id}`}>
+                    <button type="button" className="rz-mobile-unpack-main" onClick={() => navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`)} data-testid={`mobile-receipt-open-${item.batch_id}`}>
                       <span className="rz-mobile-inventory-card-title">{item.providerName}</span>
                       <span className="rz-mobile-inventory-card-meta"><span>{item.dateLabel}</span><span>{item.totalLines} artikelen</span><span>{item.statusLabel}</span></span>
                     </button>
-                    <button type="button" className="rz-mobile-inventory-chevron rz-mobile-unpack-open" onClick={() => setOpenedBatchId(item.batch_id)} aria-label={`Open ${item.providerName}`}>›</button>
+                    <button type="button" className="rz-mobile-inventory-chevron rz-mobile-unpack-open" onClick={() => navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`)} aria-label={`Open ${item.providerName}`}>›</button>
                   </div>
                 )
               })}
@@ -261,12 +262,6 @@ export default function ReceiptsPage() {
             </div>
           ) : null}
 
-          {openedBatchId ? (
-            <section className="rz-mobile-unpack-detail" data-testid="mobile-unpack-detail">
-              <Button type="button" variant="secondary" onClick={() => setOpenedBatchId('')}>Terug naar overzicht</Button>
-              <StoreBatchDetailContent batchIdOverride={openedBatchId} embedded />
-            </section>
-          ) : null}
         </main>
 
         {deleteChoiceOpen ? (
