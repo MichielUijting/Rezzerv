@@ -17,7 +17,6 @@ import {
   resetPrimaryColorPreference,
   writePrimaryColorPreference,
 } from '../../ui/primaryColorPreference.js'
-import {
 
 const SETTINGS_SECTION_ICONS = {
   account: '●',
