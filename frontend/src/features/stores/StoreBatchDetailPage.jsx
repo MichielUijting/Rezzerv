@@ -65,34 +65,57 @@ const LOCATION_FILTERS = sortOptionObjects([
 ])
 
 function MobileArticleGroupSelect({ value, options, disabled, canCreate, onChange, ariaLabel }) {
-  const detailsRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
   const selectedLabel = options.find((group) => String(group.id) === String(value || ''))?.name || 'Niet ingedeeld'
 
+  useEffect(() => {
+    if (!open) return undefined
+    function closeOnOutsidePointer(event) {
+      if (!rootRef.current?.contains(event.target)) setOpen(false)
+    }
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
   function choose(nextValue) {
+    setOpen(false)
     onChange(nextValue)
-    if (detailsRef.current) detailsRef.current.open = false
   }
 
   return (
-    <details ref={detailsRef} className="rz-mobile-token-dropdown">
-      <summary
-        className={`rz-input rz-inline-input${disabled ? ' is-disabled' : ''}`}
+    <div ref={rootRef} className="rz-mobile-token-dropdown">
+      <button
+        type="button"
+        className="rz-input rz-inline-input rz-mobile-token-dropdown__trigger"
         aria-label={ariaLabel}
-        aria-disabled={disabled ? 'true' : 'false'}
-        onClick={(event) => { if (disabled) event.preventDefault() }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
       >
-        {selectedLabel}
-      </summary>
-      <div className="rz-mobile-token-dropdown__menu" role="listbox" aria-label={ariaLabel}>
-        <button type="button" role="option" aria-selected={!value} onClick={() => choose('')}>Niet ingedeeld</button>
-        {options.map((group) => (
-          <button key={group.id} type="button" role="option" aria-selected={String(group.id) === String(value || '')} onClick={() => choose(String(group.id))}>
-            {group.name}
-          </button>
-        ))}
-        {canCreate ? <button type="button" onClick={() => choose('__add_article_group__')}>Artikelgroep toevoegen...</button> : null}
-      </div>
-    </details>
+        <span>{selectedLabel}</span>
+        <span aria-hidden="true">⌄</span>
+      </button>
+      {open ? (
+        <div className="rz-mobile-token-dropdown__menu" role="listbox" aria-label={ariaLabel}>
+          <button type="button" role="option" aria-selected={!value} onClick={() => choose('')}>Niet ingedeeld</button>
+          {options.map((group) => (
+            <button key={group.id} type="button" role="option" aria-selected={String(group.id) === String(value || '')} onClick={() => choose(String(group.id))}>
+              {group.name}
+            </button>
+          ))}
+          {canCreate ? <button type="button" onClick={() => choose('__add_article_group__')}>Artikelgroep toevoegen...</button> : null}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
