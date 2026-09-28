@@ -673,3 +673,12 @@ Vaste regels:
 - Uploads zijn beperkt tot geldige JPG/JPEG-bestanden van maximaal 8 MB en worden ook server-side gevalideerd.
 - De afbeelding wordt gecentreerd en beeldvullend weergegeven met `background-size: cover`; de functionele login-card en het InHuis-woordmerk blijven daar bovenop leesbaar.
 - Zonder aangepaste JPG blijft de ingebouwde standaardachtergrond actief.
+
+## App-brede letterkleurnorm vanaf 28 september 2026
+
+Voor gebruikerszichtbare tekst gebruikt Inhuis uitsluitend:
+
+- **zwart (`#000000`)** voor gewone tekst, labels, toelichtingen en waarden;
+- **Inhuis-donkergroen (`#005F6A`)** voor links, acties en semantische status-/waarschuwings-/fouttekst.
+
+Rode, oranje, blauwe, paarse of grijze letterkleuren zijn niet toegestaan. Achtergrond-, rand-, grafiek- en decoratieve iconenkleuren vallen niet onder deze letterkleurnorm. **Wit** blijft uitsluitend toegestaan als noodzakelijke contrastkleur op de canonieke donkergroene header en primaire donkergroene acties.
