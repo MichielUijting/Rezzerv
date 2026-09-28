@@ -28,5 +28,7 @@ assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-tabpanel-shell,[\s\
 assert.match(receiptsSource, /filter\(\(batch\) => String\(batch\.import_status \|\| ''\)\.toLowerCase\(\) !== 'processed'\)/, 'volledig verwerkte kassabonnen mogen niet in Uitpakken blijven staan')
 assert.match(detailSource, /refreshedBatch\?\.import_status[\s\S]*=== 'processed'[\s\S]*navigate\('\/kassabonnen', \{ replace: true \}\)/, 'na volledige mobiele verwerking moet de bon Uitpakken verlaten')
 assert.match(detailSource, /function MobileArticleGroupSelect/, 'mobiele artikelgroepkeuze moet de InHuis dropdown gebruiken')
+assert.match(detailSource, /aria-haspopup="listbox"[\s\S]*aria-expanded=\{open\}[\s\S]*onClick=\{\(\) => setOpen\(\(current\) => !current\)\}/, 'mobiele artikelgroep-dropdown moet aantoonbaar open en dicht kunnen')
+assert.match(detailSource, /document\.addEventListener\('pointerdown', closeOnOutsidePointer\)[\s\S]*document\.addEventListener\('keydown', closeOnEscape\)/, 'mobiele dropdown moet buitenklik en Escape correct afhandelen')
 assert.match(detailSource, /isMobileViewport \? \([\s\S]*<MobileArticleGroupSelect/, 'mobiel mag voor artikelgroep niet afhankelijk zijn van de native select-popup')
-assert.match(mobileCss, /\.rz-mobile-token-dropdown__menu button[\s\S]*font-size:\s*var\(--font-size-ui-body\)\s*!important;/, 'geopende mobiele dropdown moet exact de centrale body-lettergrootte gebruiken')
+assert.match(mobileCss, /\\.rz-mobile-token-dropdown__menu button[\\s\\S]*font-size:\\s*var\\(--font-size-ui-body\\)\\s*!important;/, 'geopende mobiele dropdown moet exact de centrale body-lettergrootte gebruiken')
