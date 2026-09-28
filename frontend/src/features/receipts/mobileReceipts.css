@@ -42,3 +42,140 @@
 .rz-mobile-unpack-detail-content select option {
   font-size: var(--font-size-ui-body) !important;
 }
+
+
+/* Kassabondetail volgt op mobiel dezelfde kaart- en lijsttaal als het Uitpakken-overzicht. */
+.rz-mobile-unpack-detail-page .rz-mobile-unpack-detail-content > .rz-screen-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rz-mobile-unpack-detail-page .rz-tabs {
+  display: grid;
+  gap: 10px;
+}
+
+.rz-mobile-unpack-detail-page .rz-tabs__list,
+.rz-mobile-unpack-detail-page [role="tablist"] {
+  display: flex;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+}
+
+.rz-mobile-unpack-detail-page .rz-tabs button[role="tab"] {
+  min-height: 44px;
+}
+
+.rz-mobile-unpack-detail-page [data-testid="receipt-detail-page"] {
+  gap: 12px !important;
+}
+
+.rz-mobile-unpack-detail-page [data-testid="receipt-detail-page"] > div:first-child {
+  display: grid !important;
+  gap: 10px !important;
+  padding: 12px 14px;
+  border: 1px solid #e1e6e2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.rz-mobile-unpack-detail-page [data-testid="receipt-detail-page"] > div:first-child > div:last-child {
+  gap: 8px !important;
+}
+
+.rz-mobile-unpack-detail-page [data-testid="receipt-detail-page"] > div:first-child button {
+  min-height: 44px;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-batch-table-wrapper {
+  overflow: visible;
+  max-width: 100%;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  border: 0;
+  background: transparent;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table colgroup,
+.rz-mobile-unpack-detail-page .rz-store-workbench-table thead {
+  display: none;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody {
+  display: grid;
+  gap: 8px;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: center;
+  min-height: 62px;
+  padding: 8px 10px;
+  border: 1px solid #e1e6e2;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 10%);
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody td {
+  display: block;
+  width: auto !important;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody td:first-child {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody td:nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+  font-weight: 600;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody td:nth-child(3) {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody td:nth-child(4),
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody td:nth-child(5) {
+  grid-column: 2 / 4;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table .rz-input,
+.rz-mobile-unpack-detail-page .rz-store-workbench-table .rz-store-select {
+  width: 100% !important;
+  min-height: 44px;
+  font-size: var(--font-size-ui-body) !important;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr:has(td[colspan]) {
+  display: block;
+  min-height: 0;
+  padding: 14px;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody td[colspan] {
+  text-align: center;
+}
+
+.rz-mobile-unpack-detail-page .rz-receipt-line-detail-modal {
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+}
