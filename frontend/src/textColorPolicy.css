@@ -1,0 +1,86 @@
+/*
+ * Inhuis user-visible text color policy.
+ * Typography is black by default and canonical Inhuis dark green for semantic
+ * accents/actions. White remains allowed only where required for contrast on
+ * canonical dark-green surfaces (headers and primary actions).
+ */
+:root {
+  --rz-text: #000000;
+  --rz-muted: #000000;
+  --rz-danger: var(--color-ui-primary);
+  --color-text-primary: #000000;
+}
+
+body,
+p,
+small,
+label,
+legend,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+td,
+th,
+li,
+dd,
+dt,
+.rz-text,
+.rz-muted,
+.rz-helper-text,
+.rz-inline-feedback,
+.rz-alert,
+.rz-status,
+.rz-error,
+.rz-warning {
+  color: #000000 !important;
+}
+
+a,
+.rz-link,
+.rz-store-processing,
+.rz-store-processing--processed,
+.rz-store-processing--failed,
+.rz-store-processing--pending,
+.rz-store-processing-error,
+.rz-store-suggestion,
+.rz-store-suggestion--auto,
+.rz-store-suggestion--check,
+.rz-inline-feedback--error,
+.rz-inline-feedback--warning,
+.rz-inline-feedback--success,
+.rz-feedback--error,
+.rz-feedback--warning,
+.rz-feedback--success {
+  color: var(--color-ui-primary) !important;
+}
+
+/* Inline text colors from older screens are normalized without recoloring
+   decorative SVG/icon fills or background/border palettes. */
+span[style*='color:'],
+div[style*='color:'] {
+  color: #000000 !important;
+}
+
+a[style*='color:'],
+button[style*='color:'] {
+  color: var(--color-ui-primary) !important;
+}
+
+/* Required contrast exceptions on the approved canonical dark-green chrome. */
+.rz-header,
+.rz-header *,
+.rz-mobile-module-header,
+.rz-mobile-module-header *,
+.rz-mobile-edit-header,
+.rz-mobile-edit-header *,
+.rz-mobile-home-edit-header,
+.rz-mobile-home-edit-header *,
+.rz-btn--primary,
+.rz-btn--primary *,
+.btn-primary,
+.btn-primary * {
+  color: #ffffff !important;
+}
