@@ -32,3 +32,6 @@ assert.match(detailSource, /aria-haspopup="listbox"[\s\S]*aria-expanded=\{open\}
 assert.match(detailSource, /document\.addEventListener\('pointerdown', closeOnOutsidePointer\)[\s\S]*document\.addEventListener\('keydown', closeOnEscape\)/, 'mobiele dropdown moet buitenklik en Escape correct afhandelen')
 assert.match(detailSource, /isMobileViewport \? \([\s\S]*<MobileArticleGroupSelect/, 'mobiel mag voor artikelgroep niet afhankelijk zijn van de native select-popup')
 assert.match(mobileCss, /\\.rz-mobile-token-dropdown__menu button[\\s\\S]*font-size:\\s*var\\(--font-size-ui-body\\)\\s*!important;/, 'geopende mobiele dropdown moet exact de centrale body-lettergrootte gebruiken')
+
+assert.match(mobileCss, /tbody tr:focus-within[\s\S]*z-index:\s*60/, 'geopende mobiele dropdown moet zijn bonkaart boven volgende kaarten tillen')
+assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-mobile-token-dropdown__menu[\s\S]*z-index:\s*80;[\s\S]*pointer-events:\s*auto/, 'mobiele dropdownopties moeten zichtbaar en aanklikbaar boven bonkaarten blijven')
