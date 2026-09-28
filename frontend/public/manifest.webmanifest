@@ -11,13 +11,13 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/inhuis-app-icon-192.svg",
+      "src": "/inhuis-app-icon-brand-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/inhuis-app-icon-512.svg",
+      "src": "/inhuis-app-icon-brand-512.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
