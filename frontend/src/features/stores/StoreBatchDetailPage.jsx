@@ -1786,7 +1786,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }, [lineUiStates, selectedLineIds])
 
   const visibleLineUiStates = useMemo(() => {
-    const visible = filteredLineUiStates.filter((entry) => entry.processingStatus !== 'processed')
+    // Mobiel is dit het kassabondetail: toon daar de volledige kassabon, dus ook
+    // reeds verwerkte regels. Desktop behoudt de bestaande werkvoorraad-filter.
+    const visible = isMobileViewport
+      ? filteredLineUiStates
+      : filteredLineUiStates.filter((entry) => entry.processingStatus !== 'processed')
     return sortItems(visible, tableSort, {
       bonartikel: (entry) => entry.line.article_name_raw || '',
       aantal: (entry) => Number(entry.line.quantity_raw ?? 0),
@@ -1798,7 +1802,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),
       status: (entry) => entry.statusLabel || '',
     })
-  }, [filteredLineUiStates, tableSort, locationOptions, articleGroupOptions])
+  }, [filteredLineUiStates, tableSort, locationOptions, articleGroupOptions, isMobileViewport])
 
   const activeDetailEntry = useMemo(() => (
     lineUiStates.find((entry) => String(entry.line.id) === String(receiptLineId || activeDetailLineId))
