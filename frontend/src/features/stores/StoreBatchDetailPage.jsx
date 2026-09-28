@@ -1218,7 +1218,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           }),
         })
       }
-      await refreshBatch(batch.batch_id)
+      const refreshedBatch = await refreshBatch(batch.batch_id)
       await refreshLocationOptions()
       setLineSaveState((current) => ({
         ...current,
@@ -1618,6 +1618,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       }
       setProcessResultOverlay(parts.join(' · '))
       setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
+
+      // Uitpakken is alleen voor nog te verwerken bonnen. Na volledige
+      // verwerking gaat mobiel direct terug naar het Uitpakken-overzicht.
+      if (isMobileViewport && String(refreshedBatch?.import_status || '').toLowerCase() === 'processed') {
+        navigate('/kassabonnen', { replace: true })
+      }
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.'
       setError(message)
@@ -1941,7 +1947,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             </div>
           </div>
 
-          <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
+          <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Al naar voorraad: {summaryCounts.processed}</div>
 
           <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths), '--rz-sticky-header-offset': '36px' }}>
               <colgroup>
