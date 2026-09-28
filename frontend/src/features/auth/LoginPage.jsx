@@ -104,6 +104,14 @@ export default function LoginPage({ onLoggedIn }) {
         style={loginBackground ? { backgroundImage: `url("/api/platform/login-background/image?v=${encodeURIComponent(loginBackground.revision)}")` } : undefined}
         aria-hidden="true"
       >
+        {loginBackground ? (
+          <img
+            className="rz-login-background-image"
+            src={`/api/platform/login-background/image?v=${encodeURIComponent(loginBackground.revision)}`}
+            alt=""
+            aria-hidden="true"
+          />
+        ) : null}
         <svg className="rz-login-interior-sketch" viewBox="0 0 900 1200" preserveAspectRatio="xMidYMid slice" focusable="false">
           <defs>
             <filter id="inhuis-sketch-rough">
