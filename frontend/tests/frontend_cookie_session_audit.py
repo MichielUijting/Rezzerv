@@ -77,7 +77,7 @@ def run() -> int:
         "frontteam route guard exists": "isFrontteamMemberFromContext" in frontteam_guard_text,
         "external databases route uses frontteam guard": "<ProtectedFrontteam><ExternalDatabasesPage" in router_text,
         "generic permission guard exists": "canCurrentUserPerform" in permission_guard_text,
-        "catalog overview is available to members": "path: '/catalogus', element: <Protected><CatalogPage" in router_text,
+        "catalog overview is available to members": "path: '/catalogus', element: <Protected><CatalogResponsive" in router_text,
         "catalog detail is available to members": "path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2" in router_text,
         "gpc mutation requires gpc update": "permission=\"gpc.update\"" in router_text,
         "catalog page reads gpc update permission": "canCurrentUserPerform('gpc.update'" in catalog_text,
