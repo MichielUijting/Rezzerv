@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
+import '../receipts/mobileReceipts.css'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
@@ -191,6 +193,7 @@ function buildBatchDetailPath(batchId) {
 
 export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false }) {
   const navigate = useNavigate()
+  const isMobileViewport = useMobileAppViewport()
   const params = useParams()
   const batchId = batchIdOverride || params.batchId || ''
   const receiptLineId = String(params.receiptLineId || '').trim()
@@ -2516,6 +2519,24 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   )
 
   if (embedded) return content
+
+  if (isMobileViewport && !isReceiptLineDetail) {
+    return (
+      <div className="rz-mobile-inventory-screen rz-mobile-unpack-screen rz-mobile-unpack-detail-page" data-testid="mobile-unpack-detail-page">
+        <header className="rz-mobile-module-header rz-mobile-unpack-detail-header">
+          <button type="button" className="rz-mobile-unpack-back" onClick={() => navigate('/kassabonnen')} aria-label="Terug naar Uitpakken">Terug</button>
+          <h1>Kassabon</h1>
+        </header>
+        <main className="rz-mobile-inventory-content rz-mobile-unpack-content">
+          <section className="rz-mobile-unpack-receipt-summary">
+            <strong>{batch?.store_label || batch?.store_name || providerLabel(activeProvider) || 'Kassabon'}</strong>
+            <span>{batch?.purchase_date || 'Onbekende datum'} · {batch ? batchStatusLabel(batch.import_status) : 'Laden'}</span>
+          </section>
+          <div className="rz-mobile-unpack-detail-content">{content}</div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <AppShell title={batch ? buildBatchTitle(batch) : 'Kassabon'} showExit={false}>
