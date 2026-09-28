@@ -10,6 +10,7 @@ import "./features/articles/articleDetailMutationPolicy.css";
 import "./features/settings/settingsMobile.css";
 import "./ui/typography.css";
 import "./ui/theme.css";
+import "./textColorPolicy.css";
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
