@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="Inhuis">
+  <rect width="192" height="192" rx="34" fill="#005F6A"/>
+  <path d="M42 88 96 42l54 46v58a10 10 0 0 1-10 10H52a10 10 0 0 1-10-10V88Z" fill="#fff"/>
+  <path d="M84 112h24v44H84z" fill="#28A99E"/>
+</svg>
