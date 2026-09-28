@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+const router = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
+const responsive = readFileSync(new URL('../src/features/catalog/CatalogResponsive.jsx', import.meta.url), 'utf8')
+const mobile = readFileSync(new URL('../src/features/catalog/MobileCatalogPage.jsx', import.meta.url), 'utf8')
+const css = readFileSync(new URL('../src/features/catalog/mobileCatalog.css', import.meta.url), 'utf8')
+
+assert.match(router, /import CatalogResponsive from '..\/..\/features\/catalog\/CatalogResponsive\.jsx'/)
+assert.match(router, /path: '\/catalogus'.*<CatalogResponsive \/>/)
+assert.match(responsive, /useMobileAppViewport/)
+assert.match(responsive, /isMobileViewport \? <MobileCatalogPage \/> : <CatalogPage \/>/)
+assert.match(mobile, /data-testid="mobile-catalog-page"/)
+assert.match(mobile, /<MobileModuleHeader title="Catalogus"/)
+assert.match(mobile, /placeholder="Zoek artikel"/)
+assert.match(mobile, /label: 'Naam A–Z'/)
+assert.match(mobile, /label: 'Naam Z–A'/)
+assert.match(mobile, /label: 'Generiek'/)
+assert.match(mobile, /label: 'Exact product'/)
+assert.match(mobile, /CatalogProductImage/)
+assert.match(mobile, /navigate\(\`\/catalogus\/\$\{encodeURIComponent\(item\.id\)\}\`\)/)
+assert.match(css, /inhuis-green-wallpaper\.svg/)
+assert.match(css, /var\(--color-mobile-ui-primary\)/)
+assert.doesNotMatch(mobile, /<Table/)
+assert.doesNotMatch(mobile, /ScreenCard/)
+console.log('MOBILE_CATALOGUS_CONTRACT_GREEN')
