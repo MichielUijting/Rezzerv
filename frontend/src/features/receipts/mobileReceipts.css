@@ -179,3 +179,29 @@
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
 }
+
+
+/* Het kassabondetail is één doorlopende mobiele lijst; tabs/shells mogen regels niet afkappen. */
+.rz-mobile-unpack-detail-page .rz-tabs,
+.rz-mobile-unpack-detail-page .rz-tabcontent,
+.rz-mobile-unpack-detail-page .rz-tabpanel-shell,
+.rz-mobile-unpack-detail-page [data-testid="receipt-detail-page"],
+.rz-mobile-unpack-detail-page .rz-store-batch-table-wrapper,
+.rz-mobile-unpack-detail-page .rz-store-workbench-table,
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody {
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.rz-mobile-unpack-detail-page .rz-mobile-unpack-detail-content {
+  overflow: visible;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr {
+  cursor: default;
+}
+
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr[data-processed="true"] {
+  opacity: .78;
+}
