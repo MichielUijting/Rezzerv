@@ -173,7 +173,7 @@
     align-items: baseline;
     min-height: 88px;
     line-height: 0.9;
-    margin-bottom: 38px;
+    margin-bottom: 8px;
     white-space: nowrap;
   }
 
@@ -351,7 +351,7 @@
   }
 
   .rz-login-brand {
-    margin-bottom: 28px;
+    margin-bottom: 8px;
   }
 }
 
