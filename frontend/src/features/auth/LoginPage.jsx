@@ -101,7 +101,6 @@ export default function LoginPage({ onLoggedIn }) {
 
       <div
         className={loginBackground ? 'rz-login-background rz-login-background--custom' : 'rz-login-background'}
-        style={loginBackground ? { backgroundImage: `url("/api/platform/login-background/image?v=${encodeURIComponent(loginBackground.revision)}")` } : undefined}
         aria-hidden="true"
       >
         {loginBackground ? (
