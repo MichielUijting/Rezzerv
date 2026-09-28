@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="InHuis">
+  <rect width="512" height="512" rx="92" fill="#005F6A"/>
+  <path d="M132 210 256 104l124 106v112c0 12-10 22-22 22h-28v-112L256 168l-74 64v112h-28c-12 0-22-10-22-22V210Z" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M191 229h130M211 230l14 72c2 10 10 16 20 16h22c10 0 18-6 20-16l14-72M225 270c9 18 21 27 31 27s22-9 31-27M228 229c5-29 14-45 28-45s23 16 28 45" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <g font-family="Arial, sans-serif" font-weight="700">
+    <text x="102" y="425" font-size="92" font-style="italic" fill="#28A99E">In</text>
+    <text x="201" y="425" font-size="92" fill="#FFFFFF">Huis</text>
+  </g>
+</svg>
