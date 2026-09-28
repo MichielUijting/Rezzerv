@@ -686,7 +686,7 @@ Rode, oranje, blauwe, paarse of grijze letterkleuren zijn niet toegestaan. Achte
 
 ## Mobiele Catalogus — overzicht en detail
 
-De mobiele **Catalogus** gebruikt op `<=720px` een eigen Inhuis-presentatie; de bestaande desktop-tabel en desktop-detailweergave blijven ongewijzigd.
+De mobiele **Catalogus** gebruikt op `<=720px` een eigen Inhuis-presentatie; de bestaande desktop-tabel en desktop-detailweergave blijven ongewijzigd. Overzicht en detail vormen daarbij één mobiele Catalogus-flow met dezelfde gedeelde presentatie-authority.
 
 Vaste regels:
 - overzicht en detail gebruiken de gedeelde `MobileModuleHeader`, de globale mobiele navigatie en de groene Inhuis-achtergrond;
