@@ -371,3 +371,22 @@
     font-size: 60px !important;
   }
 }
+
+
+/* Temporary PR #532 mobile diagnostics; remove after root-cause capture. */
+.rz-login-background-diagnostics {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 10000;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 2px solid #000;
+  color: #000;
+  font-size: 12px;
+  line-height: 1.25;
+  pointer-events: none;
+}
