@@ -1945,7 +1945,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   const selected = entry.isSelected
                   const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : ''].filter(Boolean).join(' ')
                   return (
-                    <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title="Dubbelklik om bonartikeldetails te openen" onDoubleClick={() => openReceiptLineDetail(line.id)}>
+                    <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
                       <td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} /></td>
                       <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
