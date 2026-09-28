@@ -20,3 +20,7 @@ assert.match(detailSource, /<header className="rz-mobile-module-header">\s*<h1>K
 assert.doesNotMatch(detailSource, /rz-mobile-unpack-back/, 'kassabondetail mag geen tweede Terug-knop in de moduleheader toevoegen')
 assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-table tbody tr[\s\S]*grid-template-columns:\s*44px minmax\(0, 1fr\) auto/, 'bonregels moeten op mobiel als compacte kaartregels worden gepresenteerd')
 assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-table colgroup,[\s\S]*thead[\s\S]*display:\s*none/, 'desktop tabelkop mag het mobiele kassabondetail niet domineren')
+
+assert.match(detailSource, /const visible = isMobileViewport[\s\S]*\? filteredLineUiStates[\s\S]*: filteredLineUiStates\.filter\(\(entry\) => entry\.processingStatus !== 'processed'\)/, 'mobiel kassabondetail moet ook verwerkte bonregels tonen')
+assert.match(detailSource, /onDoubleClick=\{isMobileViewport \? undefined : \(\) => openReceiptLineDetail\(line\.id\)\}/, 'mobiele bonregel mag de desktop detail-popup niet openen')
+assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-tabpanel-shell,[\s\S]*max-height:\s*none !important;[\s\S]*overflow:\s*visible !important;/, 'mobiele kassabonlijst mag niet door desktop tab-shells worden afgekapt')
