@@ -90,6 +90,9 @@ function listSourceFiles(directory) {
   })
 }
 const allowedBrandAccentFiles = new Set([
+  // Legacy PWA icon assets remain public for existing installed clients/cache compatibility.
+  'public/inhuis-app-icon-192.svg',
+  'public/inhuis-app-icon-512.svg',
   'public/inhuis-app-icon-brand-192.svg',
   'public/inhuis-app-icon-brand-512.svg',
 ])
