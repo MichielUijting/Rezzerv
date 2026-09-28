@@ -156,8 +156,6 @@ export default function LoginPage({ onLoggedIn }) {
           <span className="rz-login-wordmark-huis" aria-hidden="true">Huis</span>
         </div>
 
-        <h1 className="rz-login-welcome" data-rz-text-size="title">Welkom</h1>
-
         <Card className="rz-card-login">
           <form className="rz-form rz-login-form" onSubmit={onSubmit}>
             <label className="rz-login-field">
