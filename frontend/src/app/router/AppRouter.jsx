@@ -12,6 +12,7 @@ import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
 import PlatformCapabilityPage from '../../features/platform/PlatformCapabilityPage.jsx'
 import { PLATFORM_NAVIGATION_ITEMS } from '../../features/platform/platformNavigation.js'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
+import StoreBatchDetailPage from '../../features/purchaseImport/StoreBatchDetailPage.jsx'
 import KassaPage from '../../features/kassa/KassaPage.jsx'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsCapabilitiesPage from '../../features/settings/SettingsCapabilitiesPage.jsx'
@@ -193,7 +194,7 @@ const router = createBrowserRouter([
   { path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2 /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
-  { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
+  { path: '/kassabonnen/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
   { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePageResponsive /></Protected> },
   { path: '/instellingen', element: <ProtectedSettingsRoute><SettingsPage /></ProtectedSettingsRoute> },
