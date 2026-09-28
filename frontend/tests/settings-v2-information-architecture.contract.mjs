@@ -35,6 +35,7 @@ assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
 
 const expectedTiles = {
+  accessibility: { section: 'account', scope: 'personal', permission: null, allowViewer: true },
   account: { section: 'account', scope: 'personal', permission: null, allowViewer: true },
   'article-details': { section: 'account', scope: 'personal', permission: null, allowViewer: true },
   'privacy-data-sharing': { section: 'account', scope: 'personal', permission: null, allowViewer: true },
@@ -106,6 +107,15 @@ for (const [path, key] of [
     `${path} moet zijn directe routegrens uit canonical Settings metadata halen`,
   )
 }
+
+assert.ok(
+  appRouterSource.includes("{ path: '/instellingen/toegankelijkheid', element: <Protected><SettingsAccessibilityPage /></Protected> }"),
+  'Toegankelijkheid moet voor iedere ingelogde gebruiker buiten SettingsGuard bereikbaar zijn',
+)
+assert.doesNotMatch(
+  appRouterSource,
+  /path: '\/instellingen\/toegankelijkheid'[\s\S]{0,120}ProtectedSettingsRoute/,
+)
 
 for (const legacyPath of ['/instellingen/ruimtes', '/instellingen/sublocaties']) {
   assert.ok(appRouterSource.includes(`{ path: '${legacyPath}', element: <ProtectedSettingsRoute settingKey="locations">`))
