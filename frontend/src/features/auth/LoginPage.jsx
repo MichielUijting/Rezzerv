@@ -101,9 +101,16 @@ export default function LoginPage({ onLoggedIn }) {
 
       <div
         className={loginBackground ? 'rz-login-background rz-login-background--custom' : 'rz-login-background'}
-        style={loginBackground ? { backgroundImage: `url("/api/platform/login-background/image?v=${encodeURIComponent(loginBackground.revision)}")` } : undefined}
         aria-hidden="true"
       >
+        {loginBackground ? (
+          <img
+            className="rz-login-background-image"
+            src={`/api/platform/login-background/image?v=${encodeURIComponent(loginBackground.revision)}`}
+            alt=""
+            aria-hidden="true"
+          />
+        ) : null}
         <svg className="rz-login-interior-sketch" viewBox="0 0 900 1200" preserveAspectRatio="xMidYMid slice" focusable="false">
           <defs>
             <filter id="inhuis-sketch-rough">
@@ -148,8 +155,6 @@ export default function LoginPage({ onLoggedIn }) {
           <span className="rz-login-wordmark-in" aria-hidden="true">In</span>
           <span className="rz-login-wordmark-huis" aria-hidden="true">Huis</span>
         </div>
-
-        <h1 className="rz-login-welcome" data-rz-text-size="title">Welkom</h1>
 
         <Card className="rz-card-login">
           <form className="rz-form rz-login-form" onSubmit={onSubmit}>
@@ -213,6 +218,7 @@ export default function LoginPage({ onLoggedIn }) {
           </form>
         </Card>
       </main>
+
 
       <div className="rz-buildtag" aria-hidden="true" data-testid="build-tag">{formatInhuisVersionLabel(version)}</div>
     </div>
