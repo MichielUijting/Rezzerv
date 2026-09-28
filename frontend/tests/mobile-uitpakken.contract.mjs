@@ -15,3 +15,8 @@ assert.match(detail,/Terug naar Uitpakken/)
 assert.match(css,/--size-app-bar-mobile/)
 assert.match(css,/min-height:44px/)
 console.log('mobile Uitpakken contract: OK')
+
+assert.match(detailSource, /<header className="rz-mobile-module-header">\s*<h1>Kassabon<\/h1>/, 'kassabondetail moet dezelfde enkele mobiele moduleheader als Uitpakken gebruiken')
+assert.doesNotMatch(detailSource, /rz-mobile-unpack-back/, 'kassabondetail mag geen tweede Terug-knop in de moduleheader toevoegen')
+assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-table tbody tr[\s\S]*grid-template-columns:\s*44px minmax\(0, 1fr\) auto/, 'bonregels moeten op mobiel als compacte kaartregels worden gepresenteerd')
+assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-table colgroup,[\s\S]*thead[\s\S]*display:\s*none/, 'desktop tabelkop mag het mobiele kassabondetail niet domineren')
