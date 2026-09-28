@@ -682,7 +682,7 @@ Voor gebruikerszichtbare tekst gebruikt Inhuis uitsluitend:
 - **zwart (`#000000`)** voor gewone tekst, labels, toelichtingen en waarden;
 - **Inhuis-donkergroen (`#005F6A`)** voor links, acties en semantische status-/waarschuwings-/fouttekst.
 
-Rode, oranje, blauwe, paarse of grijze letterkleuren zijn niet toegestaan. Achtergrond-, rand-, grafiek- en decoratieve iconenkleuren vallen niet onder deze letterkleurnorm. **Wit** blijft uitsluitend toegestaan als noodzakelijke contrastkleur op de canonieke donkergroene header en primaire donkergroene acties.
+Rode, oranje, blauwe, paarse of grijze letterkleuren zijn niet toegestaan. Achtergrond-, rand-, grafiek- en decoratieve iconenkleuren vallen niet onder deze letterkleurnorm. **Wit (`#FFFFFF`)** is verplicht als contrastkleur op ieder canoniek donkergroen UI-vlak (`#005F6A`), waaronder headers, primaire acties, groene tabelheaders en de sorteerbediening daarin. Zwarte of donkergroene letters op zulke donkergroene vlakken zijn niet toegestaan.
 
 
 ## Mobiele Catalogus — overzicht en detail
