@@ -37,6 +37,9 @@ assert.match(themeCss, /button\.rz-button-primary,[\s\S]*background:\s*var\(--co
 assert.match(themeCss, /\.rz-table thead tr\.rz-table-header th,[\s\S]*background:\s*var\(--color-ui-primary\);[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-table-header \.rz-sort-button,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 
+const textColorPolicyCss = readFrontend('src/textColorPolicy.css')
+assert.match(textColorPolicyCss, /\.rz-table thead tr\.rz-table-header th,[\s\S]*\.rz-table thead tr:first-child th,[\s\S]*\.rz-sort-button,[\s\S]*color:\s*#ffffff\s*!important/i)
+
 assert.match(mainSource, /import "\.\/ui\/theme\.css";/)
 assert.match(mainSource, /initializePrimaryColorPreference\(\)/)
 assert.match(preferenceSource, /DEFAULT_PRIMARY_COLOR\s*=\s*['"]#005F6A['"]/i)
