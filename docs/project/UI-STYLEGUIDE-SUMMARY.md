@@ -657,7 +657,7 @@ De loginroute gebruikt op desktop en mobiel dezelfde functionele loginform en de
 
 Vaste regels:
 - het vrijstaande woordmerk toont een lichtgroene `In` en `Huis` in de centrale primaire Inhuis-kleur; achter het woordmerk staat geen afzonderlijk groen logoblok;
-- de paginakop is **Welkom**;
+- er staat geen afzonderlijke paginakop **Welkom**; het loginformulier sluit direct onder het vrijstaande InHuis-woordmerk aan;
 - e-mailadres en wachtwoord blijven op iedere viewport zichtbaar, bruikbaar en gekoppeld aan dezelfde authenticatielogica;
 - het wachtwoordveld gebruikt een oogbediening in het veld voor tonen/verbergen;
 - de primaire **Inloggen**-knop gebruikt de centrale primaire UI-kleur en de app-brede knopradius `var(--radius-md)`;
@@ -671,7 +671,8 @@ Vaste regels:
 - De ingestelde afbeelding geldt voor alle gebruikers en voor zowel desktop als mobiel; loginstate en authenticatie blijven één gedeelde flow.
 - Alleen de platform-Superuser mag de afbeelding vervangen of de standaardachtergrond herstellen; het uitlezen van de actieve achtergrond is vóór authenticatie beschikbaar omdat het inlogscherm publiek is.
 - Uploads zijn beperkt tot geldige JPG/JPEG-bestanden van maximaal 8 MB en worden ook server-side gevalideerd.
-- De afbeelding wordt gecentreerd en beeldvullend weergegeven met `background-size: cover`; de functionele login-card en het InHuis-woordmerk blijven daar bovenop leesbaar.
+- De afbeelding wordt gecentreerd over de volledige beschikbare schermhoogte weergegeven met behoud van de oorspronkelijke beeldverhouding; de breedte schaalt automatisch mee en mag bij een smalle viewport buiten beeld vallen.
+- Op mobiel is de login-card bewust compacter en smaller, met verkleinde verticale tussenruimtes en bediening, zodat meer van de ingestelde achtergrond zichtbaar blijft zonder loginfunctionaliteit te verwijderen.
 - Zonder aangepaste JPG blijft de ingebouwde standaardachtergrond actief.
 
 ## App-brede letterkleurnorm vanaf 28 september 2026
