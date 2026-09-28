@@ -682,3 +682,16 @@ Voor gebruikerszichtbare tekst gebruikt Inhuis uitsluitend:
 - **Inhuis-donkergroen (`#005F6A`)** voor links, acties en semantische status-/waarschuwings-/fouttekst.
 
 Rode, oranje, blauwe, paarse of grijze letterkleuren zijn niet toegestaan. Achtergrond-, rand-, grafiek- en decoratieve iconenkleuren vallen niet onder deze letterkleurnorm. **Wit** blijft uitsluitend toegestaan als noodzakelijke contrastkleur op de canonieke donkergroene header en primaire donkergroene acties.
+
+
+## Mobiele Catalogus — overzicht en detail
+
+De mobiele **Catalogus** gebruikt op `<=720px` een eigen Inhuis-presentatie; de bestaande desktop-tabel en desktop-detailweergave blijven ongewijzigd.
+
+Vaste regels:
+- overzicht en detail gebruiken de gedeelde `MobileModuleHeader`, de globale mobiele navigatie en de groene Inhuis-achtergrond;
+- het overzicht toont zoeken, soortfilter, A–Z/Z–A-sortering en compacte productregels met foto; een productregel opent het catalogusdetail;
+- het mobiele detail toont productsamenvatting, GPC-classificatie, identiteiten, gekoppelde huishoudartikelen en kassabonregels als leesbare mobiele secties in plaats van brede tabellen;
+- productfoto uploaden/camera en bestaande GPC-bevoegdheden blijven functioneel gelijk aan desktop;
+- reguliere tekst gebruikt uitsluitend de centrale body-/titelgroottes en de app-brede zwart/donkergroen-letterkleurnorm;
+- mobiel verandert uitsluitend presentatie en bediening; catalogus-, autorisatie- en classificatie-authority blijven gedeeld met desktop.
