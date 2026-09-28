@@ -8,6 +8,7 @@ import Table from '../../ui/Table'
 import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
 import Select from '../../ui/Select'
+import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
 import {
@@ -2555,9 +2556,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   if (isMobileViewport && !isReceiptLineDetail) {
     return (
       <div className="rz-mobile-inventory-screen rz-mobile-unpack-screen rz-mobile-unpack-detail-page" data-testid="mobile-unpack-detail-page">
-        <header className="rz-mobile-module-header">
-          <h1>Kassabon</h1>
-        </header>
+        <MobileModuleHeader title="Kassabon" testId="mobile-unpack-detail-header" />
         <main className="rz-mobile-inventory-content rz-mobile-unpack-content">
           <div className="rz-mobile-unpack-detail-content">{content}</div>
         </main>
