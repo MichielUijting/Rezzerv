@@ -24,3 +24,9 @@ assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-tab
 assert.match(detailSource, /const visible = isMobileViewport[\s\S]*\? filteredLineUiStates[\s\S]*: filteredLineUiStates\.filter\(\(entry\) => entry\.processingStatus !== 'processed'\)/, 'mobiel kassabondetail moet ook verwerkte bonregels tonen')
 assert.match(detailSource, /onDoubleClick=\{isMobileViewport \? undefined : \(\) => openReceiptLineDetail\(line\.id\)\}/, 'mobiele bonregel mag de desktop detail-popup niet openen')
 assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-tabpanel-shell,[\s\S]*max-height:\s*none !important;[\s\S]*overflow:\s*visible !important;/, 'mobiele kassabonlijst mag niet door desktop tab-shells worden afgekapt')
+
+assert.match(receiptsSource, /filter\(\(batch\) => String\(batch\.import_status \|\| ''\)\.toLowerCase\(\) !== 'processed'\)/, 'volledig verwerkte kassabonnen mogen niet in Uitpakken blijven staan')
+assert.match(detailSource, /refreshedBatch\?\.import_status[\s\S]*=== 'processed'[\s\S]*navigate\('\/kassabonnen', \{ replace: true \}\)/, 'na volledige mobiele verwerking moet de bon Uitpakken verlaten')
+assert.match(detailSource, /function MobileArticleGroupSelect/, 'mobiele artikelgroepkeuze moet de InHuis dropdown gebruiken')
+assert.match(detailSource, /isMobileViewport \? \([\s\S]*<MobileArticleGroupSelect/, 'mobiel mag voor artikelgroep niet afhankelijk zijn van de native select-popup')
+assert.match(mobileCss, /\.rz-mobile-token-dropdown__menu button[\s\S]*font-size:\s*var\(--font-size-ui-body\)\s*!important;/, 'geopende mobiele dropdown moet exact de centrale body-lettergrootte gebruiken')
