@@ -271,3 +271,20 @@
   font-weight: 600;
   background: #eef8f1;
 }
+
+
+/* Een geopende dropdown moet boven de volgende bonkaarten liggen. Zonder deze
+   stacking-context werd het menu wel geopend maar door de volgende rij afgedekt. */
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr:focus-within {
+  position: relative;
+  z-index: 60;
+}
+
+.rz-mobile-unpack-detail-page .rz-mobile-token-dropdown:focus-within {
+  z-index: 70;
+}
+
+.rz-mobile-unpack-detail-page .rz-mobile-token-dropdown__menu {
+  z-index: 80;
+  pointer-events: auto;
+}
