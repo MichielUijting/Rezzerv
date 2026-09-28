@@ -36,7 +36,7 @@ import AlmostOutResponsive from '../../features/almostOut/AlmostOutResponsive.js
 import ExternalDatabasesPage from '../../features/externalDatabases/ExternalDatabasesPage.jsx'
 import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.jsx'
 import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
-import CatalogPage from '../../features/catalog/CatalogPage.jsx'
+import CatalogResponsive from '../../features/catalog/CatalogResponsive.jsx'
 import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
 import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.jsx'
 import HouseholdSupportPage from '../../features/support/HouseholdSupportPage.jsx'
@@ -188,7 +188,7 @@ const router = createBrowserRouter([
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <ProtectedFrontteam><ExternalDatabasesPage /></ProtectedFrontteam> },
-  { path: '/catalogus', element: <Protected><CatalogPage /></Protected> },
+  { path: '/catalogus', element: <Protected><CatalogResponsive /></Protected> },
   { path: '/catalogus/gpc-classificeren', element: <ProtectedPermission permission="gpc.update" message="Je rol mag GPC bekijken, maar niet wijzigen."><CatalogGpcActionPage /></ProtectedPermission> },
   { path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2 /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
