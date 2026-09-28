@@ -707,3 +707,9 @@ Vaste regels:
 - het app-icoon gebruikt de centrale Inhuis-donkergroene achtergrond `#005F6A`, het witte huis/winkelmand-beeldmerk en het woordmerk **InHuis** met turquoise `In` (`#28A99E`) en witte `Huis`;
 - de PWA-themakleur volgt de centrale primaire Inhuis-kleur `#005F6A`;
 - installatie verandert geen authenticatie-, autorisatie-, data- of backendcontract; de geïnstalleerde app gebruikt dezelfde beveiligde webapp en API-routes.
+
+
+### Mobiel Uitpakken vanaf 28 september 2026
+- Uitpakken gebruikt op mobiel dezelfde compacte lijsttaal als Voorraad en Boodschappen: canonieke groene moduleheader, zoek/filterstrook, witte kaartregels en minimaal 44 px touchdoelen.
+- Een kassabonregel toont selectie, winkel, datum, aantal artikelen en status; openen gebeurt via de regel/chevron.
+- Bulkacties blijven beschikbaar zonder de lijstbreedte op mobiel te vergroten; detailinhoud blijft functioneel bereikbaar onder het overzicht.
