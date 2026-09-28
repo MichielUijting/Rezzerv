@@ -696,3 +696,14 @@ Vaste regels:
 - productfoto uploaden/camera en bestaande GPC-bevoegdheden blijven functioneel gelijk aan desktop;
 - reguliere tekst gebruikt uitsluitend de centrale body-/titelgroottes en de app-brede zwart/donkergroen-letterkleurnorm;
 - mobiel verandert uitsluitend presentatie en bediening; catalogus-, autorisatie- en classificatie-authority blijven gedeeld met desktop.
+
+## Installeerbare mobiele Inhuis-app (PWA)
+
+Inhuis kan vanuit een ondersteunde mobiele browser als standalone web-app worden geïnstalleerd wanneer de runtime via HTTPS wordt aangeboden.
+
+Vaste regels:
+- het web-appmanifest gebruikt de gebruikerszichtbare naam **Inhuis**, start op `/` en gebruikt `display: standalone`;
+- de installatieset bevat expliciete app-iconen voor minimaal **192x192** en **512x512**;
+- het app-icoon gebruikt de centrale Inhuis-donkergroene kleur `#005F6A`, wit voor het huis en het turquoise accent `#28A99E`;
+- de PWA-themakleur volgt de centrale primaire Inhuis-kleur `#005F6A`;
+- installatie verandert geen authenticatie-, autorisatie-, data- of backendcontract; de geïnstalleerde app gebruikt dezelfde beveiligde webapp en API-routes.
