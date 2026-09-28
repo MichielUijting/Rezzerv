@@ -2523,15 +2523,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   if (isMobileViewport && !isReceiptLineDetail) {
     return (
       <div className="rz-mobile-inventory-screen rz-mobile-unpack-screen rz-mobile-unpack-detail-page" data-testid="mobile-unpack-detail-page">
-        <header className="rz-mobile-module-header rz-mobile-unpack-detail-header">
-          <button type="button" className="rz-mobile-unpack-back" onClick={() => navigate('/kassabonnen')} aria-label="Terug naar Uitpakken">Terug</button>
+        <header className="rz-mobile-module-header">
           <h1>Kassabon</h1>
         </header>
         <main className="rz-mobile-inventory-content rz-mobile-unpack-content">
-          <section className="rz-mobile-unpack-receipt-summary">
-            <strong>{batch?.store_label || batch?.store_name || providerLabel(activeProvider) || 'Kassabon'}</strong>
-            <span>{batch?.purchase_date || 'Onbekende datum'} · {batch ? batchStatusLabel(batch.import_status) : 'Laden'}</span>
-          </section>
           <div className="rz-mobile-unpack-detail-content">{content}</div>
         </main>
       </div>
