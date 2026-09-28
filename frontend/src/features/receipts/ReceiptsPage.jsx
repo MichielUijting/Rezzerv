@@ -75,13 +75,17 @@ export default function ReceiptsPage() {
   }, [location.search, showFeedback])
 
   const listItems = useMemo(() => {
-    const enriched = (batches || []).map((batch) => ({
-      ...batch,
-      providerName: providerLabel(batch),
-      dateLabel: batch.purchase_date || batch.created_at?.slice(0, 10) || '-',
-      totalLines: Number(batch.summary?.total || batch.lines?.length || 0),
-      statusLabel: batch.inbox_status || 'Nieuw',
-    }))
+    // Uitpakken is een werkvoorraad, geen bonarchief. Zodra de volledige bon
+    // naar Voorraad is verwerkt, verdwijnt hij uit dit overzicht.
+    const enriched = (batches || [])
+      .filter((batch) => String(batch.import_status || '').toLowerCase() !== 'processed')
+      .map((batch) => ({
+        ...batch,
+        providerName: providerLabel(batch),
+        dateLabel: batch.purchase_date || batch.created_at?.slice(0, 10) || '-',
+        totalLines: Number(batch.summary?.total || batch.lines?.length || 0),
+        statusLabel: batch.inbox_status || 'Nieuw',
+      }))
 
     const filtered = enriched
       .filter((item) => String(item.providerName || '').toLowerCase().includes(filters.winkel.trim().toLowerCase()))
