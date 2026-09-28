@@ -47,6 +47,7 @@ export default function LoginPage({ onLoggedIn }) {
   const [loginMessage] = useState(() => getLoginMessage())
   const [version, setVersion] = useState(getRezzervVersionTag())
   const [loginBackground, setLoginBackground] = useState(null)
+  const [backgroundDiagnostics, setBackgroundDiagnostics] = useState(null)
 
   useDismissOnComponentClick([() => setError('')], Boolean(error))
 
@@ -109,6 +110,17 @@ export default function LoginPage({ onLoggedIn }) {
             src={`/api/platform/login-background/image?v=${encodeURIComponent(loginBackground.revision)}`}
             alt=""
             aria-hidden="true"
+            onLoad={(event) => {
+              const image = event.currentTarget
+              const rect = image.getBoundingClientRect()
+              setBackgroundDiagnostics({
+                viewport: `${window.innerWidth} × ${window.innerHeight}`,
+                visualViewport: window.visualViewport ? `${Math.round(window.visualViewport.width)} × ${Math.round(window.visualViewport.height)}` : 'n.v.t.',
+                natural: `${image.naturalWidth} × ${image.naturalHeight}`,
+                rendered: `${Math.round(rect.width)} × ${Math.round(rect.height)}`,
+                dpr: window.devicePixelRatio || 1,
+              })
+            }}
           />
         ) : null}
         <svg className="rz-login-interior-sketch" viewBox="0 0 900 1200" preserveAspectRatio="xMidYMid slice" focusable="false">
@@ -220,6 +232,17 @@ export default function LoginPage({ onLoggedIn }) {
           </form>
         </Card>
       </main>
+
+      {loginBackground && backgroundDiagnostics ? (
+        <aside className="rz-login-background-diagnostics" data-testid="login-background-diagnostics">
+          <strong>ACHTERGROND-DIAGNOSE</strong>
+          <span>Viewport: {backgroundDiagnostics.viewport}</span>
+          <span>Visual viewport: {backgroundDiagnostics.visualViewport}</span>
+          <span>Foto origineel: {backgroundDiagnostics.natural}</span>
+          <span>Foto gerenderd: {backgroundDiagnostics.rendered}</span>
+          <span>Pixel ratio: {backgroundDiagnostics.dpr}</span>
+        </aside>
+      ) : null}
 
       <div className="rz-buildtag" aria-hidden="true" data-testid="build-tag">{formatInhuisVersionLabel(version)}</div>
     </div>
