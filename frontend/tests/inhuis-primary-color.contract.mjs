@@ -15,6 +15,7 @@ const legacyStylesCss = readFrontend('src/styles.css')
 const mainSource = readFrontend('src/main.jsx')
 const preferenceSource = readFrontend('src/ui/primaryColorPreference.js')
 const settingsSource = readFrontend('src/features/settings/SettingsPage.jsx')
+const loginCss = readFrontend('src/features/auth/loginPage.css')
 
 assert.match(tokensCss, /--color-ui-primary:\s*#005F6A/i)
 assert.match(tokensCss, /--color-ui-primary-text:\s*#FFFFFF/i)
@@ -51,6 +52,10 @@ assert.match(settingsSource, /data-testid="settings-primary-color-hex"/)
 assert.match(settingsSource, /Standaard herstellen/)
 assert.ok(mainSource.indexOf('./ui/theme.css') > mainSource.indexOf('./styles.css'))
 assert.ok(mainSource.indexOf('./ui/theme.css') > mainSource.indexOf('./ui/typography.css'))
+
+// Custom login backgrounds must preserve the full image vertically instead of cropping it.
+assert.match(loginCss, /\\.rz-login-background-image[\\s\\S]*height:\\s*100%/)
+assert.match(loginCss, /\\.rz-login-background-image[\\s\\S]*object-fit:\\s*contain/)
 
 // Global color contract only. Migrated mobile screen visuals are governed by
 // mobile-ui-conformity.contract.mjs so legacy mobile baselines cannot block redesigns.
