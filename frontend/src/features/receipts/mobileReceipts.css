@@ -209,9 +209,9 @@
 /* Mobile in-flow options use the same live accessibility tokens as all other InHuis text. */
 .rz-mobile-unpack-detail-page .rz-mobile-inline-select { width: 100%; min-width: 0; }
 .rz-mobile-unpack-detail-page .rz-mobile-inline-select-trigger { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 44px; font-family: var(--font-family-base); font-size: var(--font-size-ui-body) !important; text-align: left; cursor: pointer; }
-.rz-mobile-unpack-detail-page .rz-mobile-inline-select-options { display: grid; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #aab6af; border-radius: 8px; background: white; }
-.rz-mobile-unpack-detail-page .rz-mobile-inline-select-option { display: block; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-bottom: 1px solid #e1e6e2; background: white; color: var(--color-text-primary); font-family: var(--font-family-base); font-size: var(--font-size-ui-body) !important; font-weight: 400; text-align: left; cursor: pointer; }
-.rz-mobile-unpack-detail-page .rz-mobile-inline-select-option[aria-selected="true"] { background: #EEF7F0; font-weight: 600; }
+.rz-mobile-unpack-detail-page .rz-mobile-inline-select-options { display: block; width: 100%; min-height: 88px; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; margin-top: 4px; border: 1px solid #aab6af; border-radius: 8px; background: white; color: var(--color-text-primary); font-family: var(--font-family-base); font-size: var(--font-size-ui-body) !important; }
+.rz-mobile-unpack-detail-page .rz-mobile-inline-select-options option { padding: 9px 10px; min-height: 40px; font-family: var(--font-family-base); font-size: var(--font-size-ui-body) !important; font-weight: 400; }
+.rz-mobile-unpack-detail-page .rz-mobile-inline-select-options option:checked { background: #EEF7F0; font-weight: 600; }
 .rz-mobile-unpack-line-status {
   display: inline-block;
   margin-top: 4px;
