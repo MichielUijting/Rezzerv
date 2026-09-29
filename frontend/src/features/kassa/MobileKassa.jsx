@@ -32,6 +32,7 @@ export default function MobileKassa() {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const fileRef = useRef(null)
+  const uploadRef = useRef(null)
   const [mode, setMode] = useState('camera')
   const [householdId, setHouseholdId] = useState('')
   const [receipts, setReceipts] = useState([])
@@ -157,16 +158,19 @@ export default function MobileKassa() {
     }
   }, [])
 
-  async function uploadImage(file) {
-    if (!file || !householdId) return
+  async function uploadImage(file, source = 'camera') {
+    if (!file || !householdId) {
+      showFeedback({ variant: 'warning', message: 'Er is nog geen actief huishouden geladen.' })
+      return
+    }
     setBusy(true)
     setMessage('Bon wordt herkend en gestructureerd…')
     try {
       const form = new FormData()
       form.append('household_id', householdId)
       form.append('file', file)
-      form.append('source_context', 'camera_capture')
-      form.append('source_label', 'Foto gemaakt in Inhuis')
+      form.append('source_context', source === 'upload' ? 'manual_upload' : 'camera_capture')
+      form.append('source_label', source === 'upload' ? 'Bestand gekozen in Inhuis' : 'Foto gemaakt in Inhuis')
       const response = await fetch('/api/receipts/share-import', { method: 'POST', credentials: 'include', body: form })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(mobileScanErrorMessage(result?.detail))
@@ -273,8 +277,8 @@ export default function MobileKassa() {
       })
       setReceipt(updated)
       setNewLine({ article_name: '', quantity: 1, unit: '', unit_price: '', line_total: '' })
-      setAddingLine(false)
-      showFeedback({ variant: 'success', message: 'Bonregel toegevoegd.' })
+      setAddingLine(true)
+      showFeedback({ variant: 'success', message: 'Artikel toegevoegd. Je kunt nog een artikel toevoegen.' })
     } catch (error) { feedbackError(error, 'Bonregel kon niet worden toegevoegd.') }
     finally { setBusy(false) }
   }
@@ -349,18 +353,34 @@ export default function MobileKassa() {
   }
 
   async function approve() {
-    const id = receiptId(receipt)
+    if (!receiptId(receipt) || busy) return
+    if (!String(receipt.store_name || '').trim()) {
+      showFeedback({ variant: 'warning', message: 'Vul eerst de winkel in bij Bonkop.' })
+      return
+    }
+    if (!String(receipt.purchase_at || '').trim()) {
+      showFeedback({ variant: 'warning', message: 'Vul eerst de aankoopdatum in bij Bonkop.' })
+      return
+    }
     setBusy(true)
     try {
-      await fetchJson(`/api/receipts/${encodeURIComponent(id)}/approve`, { method: 'POST' })
+      await fetchJson(`/api/receipts/${encodeURIComponent(receiptId(receipt))}/approve`, { method: 'POST' })
       showReceiptList()
-      setMessage('Bon bevestigd en doorgezet volgens de ingestelde Inhuis-route.')
+      showFeedback({ variant: 'success', message: 'Bon is goedgekeurd voor Uitpakken.' })
     } catch (error) {
-      setMessage(String(error?.message || 'Bon kon niet worden bevestigd.'))
+      feedbackError(error, 'Bon kon niet worden goedgekeurd.')
     } finally { setBusy(false) }
   }
 
   const lines = receiptLines(receipt)
+  const activeLines = lines.filter((line) => !line.is_deleted)
+  const lineSum = activeLines.reduce((sum, line) => sum + (Number(line.display_line_total ?? line.line_total) || 0), 0)
+  const lineDiscount = activeLines.reduce((sum, line) => sum + (Number(line.discount_amount) || 0), 0)
+  const receiptDiscount = Number(receipt?.discount_total_effective ?? receipt?.discount_total ?? 0) || 0
+  const netTotal = lineSum + lineDiscount + receiptDiscount
+  const headerTotal = receipt?.total_amount === null || receipt?.total_amount === undefined || receipt?.total_amount === '' ? null : Number(receipt.total_amount)
+  const totalsMatch = headerTotal !== null && Number.isFinite(headerTotal) && activeLines.length > 0 && Math.abs(headerTotal - netTotal) < 0.01
+  const alreadyControlled = String(receipt?.po_norm_status_label || '').trim().toLowerCase() === 'gecontroleerd'
 
   return (
     <div className="rz-mobile-kassa" data-testid="mobile-kassa-page">
@@ -371,10 +391,12 @@ export default function MobileKassa() {
           <video ref={videoRef} playsInline muted className="rz-mobile-kassa-video" />
           <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value=''; if (file) uploadImage(file) }} />
+          <input ref={uploadRef} type="file" accept="image/*,application/pdf" hidden aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} />
           <div className="rz-mobile-kassa-camera-actions">
             <Button type="button" onClick={showReceiptList}>Bonnen</Button>
             <Button type="button" onClick={takePhoto} disabled={busy} aria-label="Maak foto van kassabon">Foto nemen</Button>
           </div>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => uploadRef.current?.click()}>Bonbestand uploaden</Button>
         </main>
       ) : null}
 
@@ -390,7 +412,7 @@ export default function MobileKassa() {
 
       {mode === 'list' ? (
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-list">
-          <div className="rz-mobile-kassa-list-actions"><Button type="button" onClick={startCamera}>Nieuwe scan</Button></div>
+          <div className="rz-mobile-kassa-list-actions"><input type="file" accept="image/*,application/pdf" hidden ref={uploadRef} aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} /><Button type="button" variant="secondary" disabled={busy} onClick={() => uploadRef.current?.click()}>Bonbestand uploaden</Button><Button type="button" onClick={startCamera}>Nieuwe scan</Button></div>
           <input className="rz-mobile-kassa-search" aria-label="Zoek kassabonnen" placeholder="Zoek winkel of status" value={receiptFilter} onChange={(event) => setReceiptFilter(event.target.value)} />
           <div className="rz-mobile-kassa-bulk">
             <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receipts.length > 0 && receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())).every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds(event.target.checked ? receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())).map(receiptId) : [])} /> Alles</label>
@@ -413,6 +435,12 @@ export default function MobileKassa() {
 
       {mode === 'detail' && receipt ? (
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-detail">
+          <div className={totalsMatch || alreadyControlled ? 'rz-mobile-kassa-totals rz-mobile-kassa-totals--ok' : 'rz-mobile-kassa-totals rz-mobile-kassa-totals--warning'} data-testid="mobile-kassa-totals">
+            <strong>{totalsMatch || alreadyControlled ? 'Bonbedragen sluiten aan' : 'Totaalbedrag wijkt af van de bonregels'}</strong>
+            <div>Bonregels: {money(lineSum, receipt.currency)} · Regelkortingen: {money(lineDiscount, receipt.currency)} · Boncorrectie: {money(receiptDiscount, receipt.currency)}</div>
+            <div>Netto bonregels: {money(netTotal, receipt.currency)} · Bonkop: {money(headerTotal, receipt.currency)}</div>
+            {!totalsMatch && !alreadyControlled ? <div>Controleer de bedragen. Je kunt de afwijking bij Goedkeuren overrulen.</div> : null}
+          </div>
           <Tabs tabs={['Bonregels', 'Bonkop']} defaultTab="Bonregels" ariaLabel="Kassabondetails" rootTestId="mobile-kassa-detail-tabs">
             {(tab) => tab === 'Bonkop' ? (
               <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
@@ -431,14 +459,14 @@ export default function MobileKassa() {
               <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
                 <div className="rz-mobile-kassa-bulk">
                   <label><input type="checkbox" checked={lines.length > 0 && lines.filter((line) => !line.is_deleted).every((line) => selectedLineIds.includes(String(line.id || line.receipt_line_id)))} onChange={(event) => setSelectedLineIds(event.target.checked ? lines.filter((line) => !line.is_deleted).map((line) => String(line.id || line.receipt_line_id)) : [])} /> Alles</label>
-                  <Button type="button" variant="secondary" onClick={() => setAddingLine((value) => !value)}>Toevoegen</Button>
+                  <Button type="button" variant="secondary" onClick={() => setAddingLine((value) => !value)}>Artikel toevoegen</Button>
                 </div>
                 {addingLine ? (
                   <div className="rz-mobile-kassa-fields">
                     {['article_name', 'quantity', 'unit', 'unit_price', 'line_total'].map((field) => (
                       <label key={field}>{({ article_name: 'Artikel', quantity: 'Aantal', unit: 'Eenheid', unit_price: 'Stukprijs', line_total: 'Bedrag' })[field]}<input type={['quantity', 'unit_price', 'line_total'].includes(field) ? 'number' : 'text'} step="any" value={newLine[field]} onChange={(event) => setNewLine((current) => ({ ...current, [field]: event.target.value }))} /></label>
                     ))}
-                    <Button type="button" disabled={busy} onClick={addReceiptLine}>Nieuwe regel opslaan</Button>
+                    <Button type="button" disabled={busy} onClick={addReceiptLine}>Artikel opslaan</Button>
                   </div>
                 ) : null}
                 {lines.filter((line) => !line.is_deleted).map((line, index) => (
@@ -465,7 +493,7 @@ export default function MobileKassa() {
           </Tabs>
           <div className="rz-mobile-kassa-primary-actions">
             <Button type="button" variant="secondary" onClick={showReceiptList}>Bonnen</Button>
-            <Button type="button" onClick={approve} disabled={busy}>{busy ? 'Bevestigen…' : 'Bon bevestigen'}</Button>
+            <Button type="button" onClick={approve} disabled={busy}>{busy ? 'Goedkeuren…' : 'Bon goedkeuren'}</Button>
           </div>
         </main>
       ) : null}
