@@ -84,7 +84,7 @@ export default function ReceiptsPage() {
         ...batch,
         providerName: providerLabel(batch),
         dateLabel: batch.purchase_date || batch.created_at?.slice(0, 10) || '-',
-        totalLines: Number(batch.summary?.total || batch.lines?.length || 0),
+        totalLines: Number(batch.summary?.total ?? batch.lines?.length ?? 0),
         statusLabel: batch.inbox_status || 'Nieuw',
       }))
 
