@@ -39,8 +39,8 @@ const MOBILE_UI_MANIFEST = Object.freeze([
   { key: 'boodschappen', source: mobileShoppingSource, css: mobileShoppingCss, header: /<MobileModuleHeader title="Boodschappen"/ },
   { key: 'kassa', source: mobileKassaSource, css: mobileKassaCss, header: /<MobileModuleHeader[^>]*mobile-kassa-header/ },
   { key: 'meldingen', source: mobileSupportSource, css: mobileSupportCss, header: /<MobileModuleHeader title="Meldingen"/ },
-  { key: 'uitpakken', source: mobileUnpackSource, css: mobileUnpackCss, header: /className="rz-mobile-module-header"/ },
-  { key: 'uitpakken-detail', source: mobileUnpackDetailSource, css: mobileUnpackCss, header: /className="rz-mobile-module-header rz-mobile-unpack-detail-header"/ },
+  { key: 'uitpakken', source: mobileUnpackSource, css: mobileUnpackCss, header: /<MobileModuleHeader title="Uitpakken" testId="mobile-unpack-header"/ },
+  { key: 'uitpakken-detail', source: mobileUnpackDetailSource, css: mobileUnpackCss, header: /<MobileModuleHeader title="Kassabon" testId="mobile-unpack-detail-header"/ },
 ])
 assert.deepEqual(MOBILE_UI_MANIFEST.map(({ key }) => key), ['startpagina', 'voorraad', 'voorraad-detail', 'bijna-op', 'boodschappen', 'kassa', 'meldingen', 'uitpakken', 'uitpakken-detail'])
 for (const screen of MOBILE_UI_MANIFEST) {
