@@ -201,3 +201,36 @@
   cursor: default;
   opacity: 0.6;
 }
+
+/* Voorraad and Boodschappen: ~30% narrower - / amount / + group on mobile.
+   Keep the existing 44px control height and central typography for usability. */
+.rz-mobile-inventory-list .rz-quantity-stepper,
+.rz-mobile-shopping-list .rz-quantity-stepper {
+  gap: 3px;
+  flex-wrap: nowrap;
+}
+
+.rz-mobile-inventory-list .rz-quantity-stepper-button,
+.rz-mobile-shopping-list .rz-quantity-stepper-button {
+  box-sizing: border-box;
+  flex: 0 0 31px;
+  width: 31px;
+  min-width: 31px;
+  height: 44px;
+}
+
+.rz-mobile-inventory-list .rz-quantity-stepper-value,
+.rz-mobile-shopping-list .rz-quantity-stepper-value {
+  box-sizing: border-box;
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  min-height: 44px;
+  padding: 4px 2px;
+}
+
+.rz-mobile-inventory-list .rz-quantity-stepper-value--editable {
+  flex-basis: 36px;
+  width: 36px;
+  min-width: 36px;
+}
