@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useBlocker } from 'react-router-dom'
+import './settingsLocationsMobile.css'
 import AppShell from '../../app/AppShell'
 import Button from '../../ui/Button'
 import Card from '../../ui/Card'
@@ -437,6 +438,12 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
             ) : null}
           </div>
 
+          <form className="rz-mobile-location-add" data-testid="mobile-location-add" onSubmit={(event) => { event.preventDefault(); if (!isSaving) addLocation() }}>
+            <label htmlFor="mobile-new-main-location">Nieuwe hoofdlocatie</label>
+            <input id="mobile-new-main-location" className="rz-input" value={newLocationName} onChange={(event) => setNewLocationName(event.target.value)} placeholder="Bijvoorbeeld: Woning" autoComplete="off" />
+            <Button type="submit" disabled={isSaving || isLoading}>{isSaving ? 'Toevoegen…' : 'Locatie toevoegen'}</Button>
+          </form>
+
           <section style={{ display: 'grid', gap: 14 }} data-testid="main-locations-section">
             <DataTable
               dataTestId="settings-locations-table"
@@ -476,7 +483,7 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
                 <Button type="button" variant="secondary" disabled={selectedLocationIds.length === 0} onClick={() => downloadCsv('inhuis-locaties.csv', ['Locatie,Actief', ...locations.filter((item) => selectedLocationIds.includes(String(item.id))).map((item) => { const draft = locationDrafts[String(item.id)] || item; return [draft.naam, draft.active ? 'Ja' : 'Nee'].map(csvEscape).join(',') })])}>Exporteren</Button>
                 <Button type="button" variant="secondary" disabled={selectedLocationIds.length === 0 || isSaving} onClick={deleteLocations}>Verwijderen</Button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-testid="new-main-location-row">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-testid="new-main-location-row" className="rz-desktop-location-add">
                 <label htmlFor="new-main-location" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Nieuwe hoofdlocatie</label>
                 <input id="new-main-location" className="rz-input" style={{ width: 300 }} value={newLocationName} onChange={(event) => setNewLocationName(event.target.value)} placeholder="Bijvoorbeeld: Woning" />
                 <Button type="button" disabled={isSaving} onClick={addLocation}>Toevoegen</Button>
