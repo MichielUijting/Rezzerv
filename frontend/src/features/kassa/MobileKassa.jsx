@@ -413,7 +413,7 @@ export default function MobileKassa() {
 
       {mode === 'detail' && receipt ? (
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-detail">
-          <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" ariaLabel="Kassabondetails" rootTestId="mobile-kassa-detail-tabs">
+          <Tabs tabs={['Bonregels', 'Bonkop']} defaultTab="Bonregels" ariaLabel="Kassabondetails" rootTestId="mobile-kassa-detail-tabs">
             {(tab) => tab === 'Bonkop' ? (
               <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
                 {[
@@ -426,15 +426,6 @@ export default function MobileKassa() {
                   <label key={field}>{label}<input key={`${receiptId(receipt)}-${field}-${String(receipt[field])}`} type={type} step={type === 'number' ? '0.01' : undefined} defaultValue={field === 'purchase_at' ? String(receipt[field] || '').slice(0, 10) : receipt[field] ?? ''} onBlur={(event) => { if (String(event.target.value) !== String(field === 'purchase_at' ? String(receipt[field] || '').slice(0, 10) : receipt[field] ?? '')) updateHeader(field, type === 'number' ? Number(event.target.value) : event.target.value).catch((error) => feedbackError(error, 'Bonkop kon niet worden opgeslagen.')) }} /></label>
                 ))}
                 <div>Valuta: {receipt.currency || 'EUR'} · {lines.length} regels</div>
-              </section>
-            ) : tab === 'Bron' ? (
-              <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
-                <div>Bron: {receipt.source_label || 'Handmatige upload'}</div>
-                <div>Oorspronkelijk bestand: {receipt.original_filename || 'Onbekend'}</div>
-                <div>Bestandstype: {receipt.mime_type || 'Onbekend'}</div>
-                <div>Geïmporteerd: {dateLabel(receipt.imported_at || receipt.created_at)}</div>
-                <div>Bijgewerkt: {dateLabel(receipt.updated_at)}</div>
-                <div>Goedgekeurd: {dateLabel(receipt.approved_at)}</div>
               </section>
             ) : (
               <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
