@@ -1953,7 +1953,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   const selected = entry.isSelected
                   const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : ''].filter(Boolean).join(' ')
                   return (
-                    <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
+                    <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onClickCapture={isMobileViewport && entry.processingStatus === 'processed' ? () => showUitpakkenFeedback('info', 'Artikel al naar voorraad overgezet.', { key: `already-in-stock-${line.id}` }) : undefined} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
                       <td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} /></td>
                       <td className="rz-store-batch-col-item">
                         <div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div>
@@ -1988,7 +1988,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                               }
                               handleLocationChoice(entry, nextValue)
                             }}
-                          />                        ) : (
+                          />
+                        ) : (
                           <button
                             type="button"
                             className="rz-input rz-store-select"
