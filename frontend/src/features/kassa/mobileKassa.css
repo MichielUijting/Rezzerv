@@ -5,7 +5,7 @@
 .rz-mobile-kassa-fields input,.rz-mobile-kassa-search{width:100%;min-width:0;box-sizing:border-box;font:inherit;padding:10px;border:1px solid #b9cac3;border-radius:6px;background:#fff}
 .rz-mobile-kassa-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
 .rz-mobile-kassa-bulk label,.rz-mobile-kassa-select{display:flex!important;flex-direction:row;align-items:center;gap:8px}
-.rz-mobile-kassa-bulk input[type=checkbox],.rz-mobile-kassa-select input[type=checkbox]{width:20px;height:20px;accent-color:#005F6A}
+.rz-mobile-kassa-bulk input[type=checkbox],.rz-mobile-kassa-select input[type=checkbox]{width:20px;height:20px;accent-color:var(--color-mobile-ui-primary)}
 .rz-mobile-kassa-edit-line{display:grid;gap:8px;border-top:1px solid #e2e8e5;padding:12px 0}
 .rz-mobile-kassa-open{display:grid;gap:5px;text-align:left;border:0;background:transparent;padding:0;color:inherit;font:inherit}
 .rz-mobile-kassa .rz-tabbar{display:flex;overflow-x:auto;gap:4px}
