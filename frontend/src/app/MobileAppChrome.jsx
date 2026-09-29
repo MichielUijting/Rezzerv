@@ -118,6 +118,15 @@ export default function MobileAppChrome({ children }) {
 
   if (!isMobileViewport) return children
 
+  function handleKassaBack() {
+    const event = new Event('inhuis:mobile-kassa-back', { cancelable: true })
+    window.dispatchEvent(event)
+    if (!event.defaultPrevented) {
+      const historyIndex = Number(window.history.state?.idx ?? 0)
+      navigate(historyIndex > 0 ? -1 : '/home')
+    }
+  }
+
   function handleHomeBack() {
     showFeedback({
       variant: 'warning',
@@ -137,7 +146,7 @@ export default function MobileAppChrome({ children }) {
 
   return (
     <div className="rz-mobile-app-chrome" data-testid="mobile-app-chrome">
-      <MobileBackControl testId="mobile-global-back" onBack={location.pathname === '/home' ? handleHomeBack : null} />
+      <MobileBackControl testId="mobile-global-back" onBack={location.pathname === '/home' ? handleHomeBack : location.pathname === '/kassa' || location.pathname === '/kassa/nieuw' ? handleKassaBack : null} />
       {children}
       <div className="rz-mobile-app-bottom-space" aria-hidden="true" />
       <MobileBottomNavigationRuntime context={context} pathname={location.pathname} />

@@ -720,3 +720,17 @@ Vaste regels:
 - De gebruiker kan onder Instellingen > Weergave kiezen uit Standaard, Groot en Extra groot; de keuze geldt op het huidige apparaat en wordt direct app-breed toegepast.
 - Schermen en componenten gebruiken uitsluitend de centrale `--font-size-ui-body` en `--font-size-ui-title` tokens voor de genormeerde UI-typografie, zodat toegankelijk vergroten de onderlinge hiërarchie behoudt.
 - Browser- en systeemzoom mogen niet worden geblokkeerd en blijven aanvullend beschikbaar.
+
+
+### Mobiele Kassa — gedeelde accentkleur en kassabondetail (29 september 2026)
+
+- Selectievakjes bij bonregels en bulkselectie gebruiken `accent-color: var(--color-mobile-ui-primary)`; een hard gecodeerde primaire hexkleur is niet toegestaan, zodat de persoonlijke Weergave-instelling ook hier doorwerkt.
+- De mobiele kassabon toont uitsluitend de tabs **Bonregels** en **Bonkop**. De bestaande desktop-Kassa behoudt daarnaast **Bron**.
+- De mobiele camera-, bestandsupload-, boncorrectie- en goedkeuracties gebruiken de bestaande centrale knop- en overlaycomponenten. De mobiele totalencontrole blijft onderdeel van het kassabondetail.
+
+
+### Mobiel hoofdlocaties toevoegen in Instellingen (29 september 2026)
+
+- Op viewports van maximaal 720 px staat boven de hoofdlocatietabel een compact invoerformulier met het label **Nieuwe hoofdlocatie**, een volledig breed naamveld en de centrale knop **Locatie toevoegen**.
+- Boven 720 px blijft de bestaande desktopinvoerrij onder de hoofdlocatietabel zichtbaar; het mobiele formulier is daar verborgen. Beide varianten gebruiken dezelfde bestaande validatie, autorisatie, API en centrale overlaymeldingen.
+- De mobiele formulierbreedte volgt de beschikbare viewport zonder horizontale verschuiving; de tabel blijft indien nodig binnen de eigen container horizontaal scrollbaar.
