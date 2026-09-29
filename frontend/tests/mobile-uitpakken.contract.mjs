@@ -5,8 +5,7 @@ const receiptsSource = fs.readFileSync(new URL('../src/features/receipts/Receipt
 const mobileCss = fs.readFileSync(new URL('../src/features/receipts/mobileReceipts.css', import.meta.url), 'utf8')
 const routerSource = fs.readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const detailSource = fs.readFileSync(new URL('../src/features/stores/StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
-const selectSource = fs.readFileSync(new URL('../src/ui/Select.jsx', import.meta.url), 'utf8')
-const selectCss = fs.readFileSync(new URL('../src/ui/components/select.css', import.meta.url), 'utf8')
+const inlineSelectSource = fs.readFileSync(new URL('../src/ui/MobileInlineSelect.jsx', import.meta.url), 'utf8')
 
 assert.match(receiptsSource, /useMobileAppViewport/)
 assert.match(receiptsSource, /data-testid="mobile-unpack-page"/)
@@ -28,11 +27,15 @@ assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-tabpanel-shell,[\s\
 assert.match(receiptsSource, /filter\(\(batch\) => !isMobileViewport \|\| String\(batch\.import_status \|\| ''\)\.toLowerCase\(\) !== 'processed'\)/)
 assert.match(detailSource, /navigate\('\/kassabonnen', \{ replace: true \}\)/)
 
-assert.match(detailSource, /rz-mobile-unpack-native-select/, 'mobile receipt dropdowns must use OS-native selects')
+assert.match(detailSource, /<MobileInlineSelect/, 'mobile receipt dropdowns must use font-aware in-flow lists')
 assert.match(detailSource, /receipt-line-location-select-/, 'mobile location selector must remain available')
 assert.match(detailSource, /receipt-line-article-group-select-/, 'mobile article group selector must remain available')
 assert.match(detailSource, /✓ Naar voorraad/, 'processed mobile receipt lines must show their status')
-assert.match(mobileCss, /\.rz-mobile-unpack-native-select[\s\S]*appearance:\s*auto;/, 'native mobile select appearance must remain enabled')
+assert.match(detailSource, /○ Nog te verwerken/, 'pending mobile receipt lines must show their status')
+assert.match(detailSource, /⚠ Actie nodig/, 'action-needed mobile receipt lines must show their status')
+assert.match(mobileCss, /\.rz-mobile-inline-select-option[^}]*font-size:\s*var\(--font-size-ui-body\)\s*!important;/, 'opened options must use accessibility font token')
+assert.match(inlineSelectSource, /aria-expanded=\{open\}/, 'mobile dropdown must expose its open state')
+assert.match(inlineSelectSource, /max-height|role="listbox"/, 'mobile dropdown must expose an accessible option list')
 assert.doesNotMatch(detailSource, /function MobileArticleGroupSelect/, 'do not recreate a local custom dropdown')
 
 console.log('mobile Uitpakken contract: OK')
