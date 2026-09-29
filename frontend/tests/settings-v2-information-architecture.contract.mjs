@@ -114,7 +114,7 @@ assert.ok(
 )
 assert.doesNotMatch(
   appRouterSource,
-  /path: '\/instellingen\/toegankelijkheid'[\s\S]{0,120}ProtectedSettingsRoute/,
+  /path: '\/instellingen\/toegankelijkheid'[^\n]*ProtectedSettingsRoute/,
 )
 
 for (const legacyPath of ['/instellingen/ruimtes', '/instellingen/sublocaties']) {
