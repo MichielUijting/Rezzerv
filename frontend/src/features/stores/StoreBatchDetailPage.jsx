@@ -7,7 +7,6 @@ import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
-import Select from '../../ui/Select'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
@@ -1955,41 +1954,66 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   return (
                     <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
                       <td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} /></td>
-                      <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
+                      <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div>{isMobileViewport && entry.processingStatus === 'processed' ? <span className="rz-mobile-unpack-line-status rz-mobile-unpack-line-status--processed" aria-label="Al naar voorraad">✓ Naar voorraad</span> : null}{isMobileViewport && entry.processingStatus === 'failed' ? <span className="rz-mobile-unpack-line-status rz-mobile-unpack-line-status--failed">Actie nodig</span> : null}<span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-                        <button
-                          type="button"
-                          className="rz-input rz-store-select"
-                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}
-                          aria-label={`Locatie voor ${line.article_name_raw}`}
-                          data-testid={`receipt-line-location-select-${line.id}`}
-                          onClick={() => openLocationPicker(line.id, 'handling')}
-                          style={{ width: '100%', textAlign: 'left', cursor: busyLineId === line.id || isProcessingBatch || isViewer ? 'not-allowed' : 'pointer' }}
-                        >
-                          {locationLabelForDraft(entry.draft) || 'Kies locatie'}
-                        </button>
+                        {isMobileViewport ? (
+                          <select
+                            className="rz-input rz-inline-input rz-mobile-unpack-native-select"
+                            value={entry.draft.locationId || ''}
+                            disabled={busyLineId === line.id || isProcessingBatch || isViewer}
+                            aria-label={`Locatie voor ${line.article_name_raw}`}
+                            data-testid={`receipt-line-location-select-${line.id}`}
+                            onChange={(event) => {
+                              const nextValue = event.target.value
+                              if (nextValue === '__choose_location__') {
+                                openLocationPicker(line.id, 'handling')
+                                return
+                              }
+                              handleLocationChoice(entry, nextValue)
+                            }}
+                          >
+                            <option value="">Kies locatie</option>
+                            {locationOptions.filter((location) => location.type === 'sublocation').map((location) => (
+                              <option key={location.id} value={location.id}>{location.label}</option>
+                            ))}
+                            <option value="__choose_location__">Locatie kiezen of toevoegen...</option>
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            className="rz-input rz-store-select"
+                            disabled={busyLineId === line.id || isProcessingBatch || isViewer}
+                            aria-label={`Locatie voor ${line.article_name_raw}`}
+                            data-testid={`receipt-line-location-select-${line.id}`}
+                            onClick={() => openLocationPicker(line.id, 'handling')}
+                            style={{ width: '100%', textAlign: 'left', cursor: busyLineId === line.id || isProcessingBatch || isViewer ? 'not-allowed' : 'pointer' }}
+                          >
+                            {locationLabelForDraft(entry.draft) || 'Kies locatie'}
+                          </button>
+                        )}
                       </td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
               {isMobileViewport ? (
-                <Select
+                <select
+                  className="rz-input rz-inline-input rz-mobile-unpack-native-select"
                   value={entry.draft.articleGroupId || ''}
-                  options={[
-                    { value: '', label: 'Niet ingedeeld' },
-                    ...articleGroupOptions.map((group) => ({ value: String(group.id), label: group.name })),
-                    ...(canCreateArticleGroup ? [{ value: '__add_article_group__', label: 'Artikelgroep toevoegen...' }] : []),
-                  ]}
                   disabled={busyLineId === line.id || isProcessingBatch || isViewer}
-                  ariaLabel={`Artikelgroep voor ${line.article_name_raw}`}
-                  dataTestId={`receipt-line-article-group-select-${line.id}`}
-                  onChange={(nextValue) => {
+                  aria-label={`Artikelgroep voor ${line.article_name_raw}`}
+                  data-testid={`receipt-line-article-group-select-${line.id}`}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
                     if (nextValue === '__add_article_group__') {
                       openCreateArticleGroup(line.id)
                       return
                     }
                     persistLineDraft(line, { articleGroupId: nextValue })
                   }}
-                />
+                >
+                  <option value="">Niet ingedeeld</option>
+                  {articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                  {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}
+                </select>
               ) : (
                 <select
                   className="rz-input rz-inline-input"
