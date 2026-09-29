@@ -221,3 +221,8 @@
 .rz-mobile-unpack-line-status--failed { color: #a12525; }
 
 .rz-mobile-unpack-line-status--pending { color: var(--color-text-primary); }
+
+/* Mobile receipt rows expose the same location-management route as desktop. */
+.rz-mobile-unpack-location-field { display: grid; gap: 5px; min-width: 0; }
+.rz-mobile-unpack-add-location { border: 0; background: transparent; color: var(--color-ui-primary); text-align: left; font: inherit; font-size: var(--font-size-ui-body); padding: 5px 2px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.rz-mobile-unpack-add-location:focus-visible { outline: 2px solid var(--color-ui-primary); outline-offset: 2px; }

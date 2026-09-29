@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate, useBlocker } from 'react-router-dom'
+import { Navigate, useBlocker, useLocation, useNavigate } from 'react-router-dom'
+import './settingsLocationsMobile.css'
 import AppShell from '../../app/AppShell'
 import Button from '../../ui/Button'
 import Card from '../../ui/Card'
@@ -41,6 +42,16 @@ function normalizeName(value) {
 
 export default function SettingsLocationsManagementPage({ sublocationsEnabled = true }) {
   const isAdmin = isHouseholdAdminFromContext(readStoredAuthContext())
+  const navigate = useNavigate()
+  const routeLocation = useLocation()
+  const returnParams = new URLSearchParams(routeLocation.search)
+  const returnTo = returnParams.get('returnTo')
+  const returningToUnpack = Boolean(returnTo && /^\/kassabonnen\/batch\/[a-zA-Z0-9_-]+$/.test(returnTo))
+  function returnWithLocation(id) {
+    if (!returningToUnpack || !id) return
+    const params = new URLSearchParams({ createdLocationId: String(id), lineId: returnParams.get('lineId') || '', saveMode: returnParams.get('saveMode') || 'legacy' })
+    navigate(`${returnTo}?${params.toString()}`)
+  }
   const { showFeedback } = useAppFeedback()
   const [locations, setLocations] = useState([])
   const [sublocations, setSublocations] = useState([])
@@ -257,7 +268,13 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
       if (!response.ok) throw new Error(data?.detail || 'Hoofdlocatie toevoegen mislukt.')
       setNewLocationName('')
       await loadData({ preserveDrafts: true })
-      showFeedback({ variant: 'success', message: 'Hoofdlocatie toegevoegd.' })
+      const createdId = String(data?.id || data?.item?.id || '')
+      if (returningToUnpack && sublocationsEnabled && createdId) {
+        setSelectedLocationId(createdId)
+        setNewSublocationParentId(createdId)
+        showFeedback({ variant: 'success', message: 'Hoofdlocatie toegevoegd. Voeg nu een sublocatie toe.' })
+      } else if (returningToUnpack && createdId) returnWithLocation(createdId)
+      else showFeedback({ variant: 'success', message: 'Hoofdlocatie toegevoegd.' })
     } catch (error) {
       showFeedback({ variant: 'error', message: error?.message || 'Hoofdlocatie toevoegen mislukt.' })
     } finally {
@@ -284,7 +301,9 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
       setNewSublocationParentId(spaceId)
       setSelectedLocationId(spaceId)
       await loadData({ preserveDrafts: true })
-      showFeedback({ variant: 'success', message: 'Sublocatie toegevoegd.' })
+      const createdId = String(data?.id || data?.item?.id || '')
+      if (returningToUnpack && createdId) returnWithLocation(createdId)
+      else showFeedback({ variant: 'success', message: 'Sublocatie toegevoegd.' })
     } catch (error) {
       showFeedback({ variant: 'error', message: error?.message || 'Sublocatie toevoegen mislukt.' })
     } finally {
@@ -437,6 +456,13 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
             ) : null}
           </div>
 
+          {returningToUnpack ? <Button type="button" variant="secondary" onClick={() => navigate(returnTo)} data-testid="locations-return-to-unpack">Naar Uitpakken</Button> : null}
+          <form className="rz-mobile-location-add" data-testid="mobile-location-add" onSubmit={(event) => { event.preventDefault(); if (!isSaving) addLocation() }}>
+            <label htmlFor="mobile-new-main-location">Nieuwe hoofdlocatie</label>
+            <input id="mobile-new-main-location" className="rz-input" value={newLocationName} onChange={(event) => setNewLocationName(event.target.value)} placeholder="Bijvoorbeeld: Woning" autoComplete="off" />
+            <Button type="submit" disabled={isSaving || isLoading}>{isSaving ? 'Toevoegen…' : 'Locatie toevoegen'}</Button>
+          </form>
+
           <section style={{ display: 'grid', gap: 14 }} data-testid="main-locations-section">
             <DataTable
               dataTestId="settings-locations-table"
@@ -476,7 +502,7 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
                 <Button type="button" variant="secondary" disabled={selectedLocationIds.length === 0} onClick={() => downloadCsv('inhuis-locaties.csv', ['Locatie,Actief', ...locations.filter((item) => selectedLocationIds.includes(String(item.id))).map((item) => { const draft = locationDrafts[String(item.id)] || item; return [draft.naam, draft.active ? 'Ja' : 'Nee'].map(csvEscape).join(',') })])}>Exporteren</Button>
                 <Button type="button" variant="secondary" disabled={selectedLocationIds.length === 0 || isSaving} onClick={deleteLocations}>Verwijderen</Button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-testid="new-main-location-row">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-testid="new-main-location-row" className="rz-desktop-location-add">
                 <label htmlFor="new-main-location" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Nieuwe hoofdlocatie</label>
                 <input id="new-main-location" className="rz-input" style={{ width: 300 }} value={newLocationName} onChange={(event) => setNewLocationName(event.target.value)} placeholder="Bijvoorbeeld: Woning" />
                 <Button type="button" disabled={isSaving} onClick={addLocation}>Toevoegen</Button>
