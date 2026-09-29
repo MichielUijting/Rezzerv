@@ -62,21 +62,17 @@ def _authorized_household_id(authorization: str | None) -> str:
 def list_retailer_receipt_providers(
     authorization: Optional[str] = Header(None),
 ):
-    household_id = _authorized_household_id(authorization)
+    _authorized_household_id(authorization)
     return {
         "providers": [
             {
                 "code": code,
                 "supports_structured_import": True,
-                "account_connection": (
-                    ah_session_status(household_id)
-                    if code == "ah"
-                    else {"provider": code, "connected": False, "persistence": "not_configured"}
-                ),
+                "account_connection": "runtime_only" if code == "ah" else "not_configured",
             }
             for code in SUPPORTED_RETAILER_PROVIDERS
         ],
-        "credential_storage": "runtime_only",
+        "credential_storage": False,
     }
 
 
