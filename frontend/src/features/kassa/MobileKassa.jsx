@@ -391,21 +391,87 @@ export default function MobileKassa() {
       {mode === 'list' ? (
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-list">
           <div className="rz-mobile-kassa-list-actions"><Button type="button" onClick={startCamera}>Nieuwe scan</Button></div>
+          <input className="rz-mobile-kassa-search" aria-label="Zoek kassabonnen" placeholder="Zoek winkel of status" value={receiptFilter} onChange={(event) => setReceiptFilter(event.target.value)} />
+          <div className="rz-mobile-kassa-bulk">
+            <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receipts.length > 0 && receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())).every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds(event.target.checked ? receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())).map(receiptId) : [])} /> Alles</label>
+            <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
+          </div>
           {receiptsLoading ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
           {receiptsLoadError ? <div className="rz-mobile-kassa-empty" role="alert">Kassabonnen konden niet worden geladen. <Button type="button" onClick={() => loadReceipts().catch(() => {})}>Opnieuw proberen</Button></div> : null}
-          {!receiptsLoading && !receiptsLoadError && receipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div> : receipts.map((item) => (
-            <button key={receiptId(item)} type="button" className="rz-mobile-kassa-receipt-card" onClick={() => openReceipt(receiptId(item))}>
-              <strong>{item.store_name || 'Onbekende winkel'}</strong>
-              <span>{dateLabel(item.purchase_at)} · {money(item.total_amount, item.currency)} · {item.line_count ?? 0} regels</span>
-              <span>{item.po_norm_status_label || item.inbox_status || 'Controle nodig'} ›</span>
-            </button>
+          {!receiptsLoading && !receiptsLoadError && receipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div> : receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())).map((item) => (
+            <div key={receiptId(item)} className="rz-mobile-kassa-receipt-card">
+              <label className="rz-mobile-kassa-select"><input type="checkbox" checked={selectedReceiptIds.includes(receiptId(item))} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...current, receiptId(item)] : current.filter((id) => id !== receiptId(item)))} /> Selecteer bon</label>
+              <button type="button" className="rz-mobile-kassa-open" onClick={() => openReceipt(receiptId(item))}>
+                <strong>{item.store_name || 'Onbekende winkel'}</strong>
+                <span>{dateLabel(item.purchase_at)} · {money(item.total_amount, item.currency)} · {item.line_count ?? 0} regels</span>
+                <span>{item.po_norm_status_label || item.inbox_status || 'Controle nodig'} ›</span>
+              </button>
+            </div>
           ))}
         </main>
       ) : null}
 
       {mode === 'detail' && receipt ? (
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-detail">
-          <ReceiptSummary receipt={receipt} lines={lines} editable onHeaderChange={updateHeader} onLineChange={updateLine} />
+          <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" ariaLabel="Kassabondetails" rootTestId="mobile-kassa-detail-tabs">
+            {(tab) => tab === 'Bonkop' ? (
+              <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
+                {[
+                  ['Winkel', 'store_name', 'text'],
+                  ['Aankoopdatum', 'purchase_at', 'date'],
+                  ['Totaalbedrag', 'total_amount', 'number'],
+                  ['Referentie / bonnummer', 'reference', 'text'],
+                  ['Notitie', 'notes', 'text'],
+                ].map(([label, field, type]) => (
+                  <label key={field}>{label}<input key={`${receiptId(receipt)}-${field}-${String(receipt[field])}`} type={type} step={type === 'number' ? '0.01' : undefined} defaultValue={field === 'purchase_at' ? String(receipt[field] || '').slice(0, 10) : receipt[field] ?? ''} onBlur={(event) => { if (String(event.target.value) !== String(field === 'purchase_at' ? String(receipt[field] || '').slice(0, 10) : receipt[field] ?? '')) updateHeader(field, type === 'number' ? Number(event.target.value) : event.target.value).catch((error) => feedbackError(error, 'Bonkop kon niet worden opgeslagen.')) }} /></label>
+                ))}
+                <div>Valuta: {receipt.currency || 'EUR'} · {lines.length} regels</div>
+              </section>
+            ) : tab === 'Bron' ? (
+              <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
+                <div>Bron: {receipt.source_label || 'Handmatige upload'}</div>
+                <div>Oorspronkelijk bestand: {receipt.original_filename || 'Onbekend'}</div>
+                <div>Bestandstype: {receipt.mime_type || 'Onbekend'}</div>
+                <div>Geïmporteerd: {dateLabel(receipt.imported_at || receipt.created_at)}</div>
+                <div>Bijgewerkt: {dateLabel(receipt.updated_at)}</div>
+                <div>Goedgekeurd: {dateLabel(receipt.approved_at)}</div>
+              </section>
+            ) : (
+              <section className="rz-mobile-kassa-summary rz-mobile-kassa-fields">
+                <div className="rz-mobile-kassa-bulk">
+                  <label><input type="checkbox" checked={lines.length > 0 && lines.filter((line) => !line.is_deleted).every((line) => selectedLineIds.includes(String(line.id || line.receipt_line_id)))} onChange={(event) => setSelectedLineIds(event.target.checked ? lines.filter((line) => !line.is_deleted).map((line) => String(line.id || line.receipt_line_id)) : [])} /> Alles</label>
+                  <Button type="button" variant="secondary" onClick={() => setAddingLine((value) => !value)}>Toevoegen</Button>
+                </div>
+                {addingLine ? (
+                  <div className="rz-mobile-kassa-fields">
+                    {['article_name', 'quantity', 'unit', 'unit_price', 'line_total'].map((field) => (
+                      <label key={field}>{({ article_name: 'Artikel', quantity: 'Aantal', unit: 'Eenheid', unit_price: 'Stukprijs', line_total: 'Bedrag' })[field]}<input type={['quantity', 'unit_price', 'line_total'].includes(field) ? 'number' : 'text'} step="any" value={newLine[field]} onChange={(event) => setNewLine((current) => ({ ...current, [field]: event.target.value }))} /></label>
+                    ))}
+                    <Button type="button" disabled={busy} onClick={addReceiptLine}>Nieuwe regel opslaan</Button>
+                  </div>
+                ) : null}
+                {lines.filter((line) => !line.is_deleted).map((line, index) => (
+                  <div key={String(line.id || line.receipt_line_id || index)} className="rz-mobile-kassa-edit-line">
+                    <label className="rz-mobile-kassa-select"><input type="checkbox" checked={selectedLineIds.includes(String(line.id || line.receipt_line_id))} onChange={(event) => setSelectedLineIds((current) => event.target.checked ? [...current, String(line.id || line.receipt_line_id)] : current.filter((id) => id !== String(line.id || line.receipt_line_id)))} /> Regel {index + 1}</label>
+                    {[
+                      ['Artikel', 'article_name', line.normalized_label || line.display_label || line.article_name || line.raw_label || ''],
+                      ['Aantal', 'quantity', line.quantity ?? 1],
+                      ['Eenheid', 'unit', line.unit ?? ''],
+                      ['Stukprijs', 'unit_price', line.unit_price ?? ''],
+                      ['Bedrag', 'line_total', line.line_total ?? ''],
+                    ].map(([label, field, value]) => (
+                      <label key={field}>{label}<input key={`${line.id}-${field}-${value}`} type={['quantity', 'unit_price', 'line_total'].includes(field) ? 'number' : 'text'} step="any" defaultValue={value} onBlur={(event) => { if (String(event.target.value) !== String(value)) updateLine(line, field, event.target.value).catch((error) => feedbackError(error, 'Bonregel kon niet worden opgeslagen.')) }} /></label>
+                    ))}
+                  </div>
+                ))}
+                <div className="rz-mobile-kassa-bulk">
+                  <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={() => changeSelectedLines(false)}>Alles goed</Button>
+                  <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={exportLines}>Exporteren</Button>
+                  <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={confirmDeleteLines}>Verwijderen</Button>
+                </div>
+              </section>
+            )}
+          </Tabs>
           <div className="rz-mobile-kassa-primary-actions">
             <Button type="button" variant="secondary" onClick={showReceiptList}>Bonnen</Button>
             <Button type="button" onClick={approve} disabled={busy}>{busy ? 'Bevestigen…' : 'Bon bevestigen'}</Button>
