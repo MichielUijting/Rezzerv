@@ -39,7 +39,8 @@ _PROVIDER_NAMES = {
 }
 
 _LINE_KEYS = ("items", "products", "lines", "entries", "receiptLines", "basketItems")
-_WRAPPER_KEYS = ("receipt", "data", "ticket", "transaction", "order")
+_WRAPPER_KEYS = ("receipt", "data", "ticket", "order")
+_CONTEXT_KEYS = _WRAPPER_KEYS + ("transaction",)
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -54,13 +55,17 @@ def _first(mapping: dict[str, Any], *keys: str) -> Any:
 
 
 def _nested_first(root: dict[str, Any], *keys: str) -> Any:
-    current = root
     candidates = [root]
-    for wrapper in _WRAPPER_KEYS:
-        nested = current.get(wrapper)
-        if isinstance(nested, dict):
-            candidates.append(nested)
-            current = nested
+    seen = {id(root)}
+    cursor = 0
+    while cursor < len(candidates):
+        candidate = candidates[cursor]
+        cursor += 1
+        for wrapper in _CONTEXT_KEYS:
+            nested = candidate.get(wrapper)
+            if isinstance(nested, dict) and id(nested) not in seen:
+                seen.add(id(nested))
+                candidates.append(nested)
     for candidate in candidates:
         value = _first(candidate, *keys)
         if value not in (None, ""):
