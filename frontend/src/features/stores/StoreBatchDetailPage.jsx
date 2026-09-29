@@ -1988,7 +1988,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                               }
                               handleLocationChoice(entry, nextValue)
                             }}
-                          />/select>                        ) : (
+                          />                        ) : (
                           <button
                             type="button"
                             className="rz-input rz-store-select"
