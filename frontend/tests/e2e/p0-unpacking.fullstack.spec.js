@@ -84,3 +84,50 @@ test('P0 Uitpakken processes canonical day article through Direct without changi
   console.log('P0_UNPACKING_DAY_ARTICLE_BROWSER_GREEN')
   console.log('P0_UNPACKING_DIRECT_CONSUMPTION_BROWSER_GREEN')
 })
+
+test('Mobile Uitpakken dropdowns are keyboard reachable and open with mouse', async ({ page }) => {
+  test.setTimeout(90_000)
+  const accountEmail = required('PLAYWRIGHT_P0_UNPACKING_EMAIL', email).toLowerCase()
+  const accountPassword = required('PLAYWRIGHT_P0_UNPACKING_PASSWORD', password)
+  const expectedBatchId = required('PLAYWRIGHT_P0_UNPACKING_BATCH_ID', batchId)
+  const expectedLineId = required('PLAYWRIGHT_P0_UNPACKING_LINE_ID', lineId)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await login(page, accountEmail, accountPassword)
+  await page.goto(`/kassabonnen/batch/${encodeURIComponent(expectedBatchId)}`)
+  await expect(page.getByTestId('mobile-unpack-detail-page')).toBeVisible({ timeout: 30_000 })
+
+  const row = page.getByTestId(`receipt-line-${expectedLineId}`)
+  await expect(row).toBeVisible({ timeout: 30_000 })
+  const selectors = [
+    page.getByTestId(`receipt-line-location-select-${expectedLineId}`),
+    page.getByTestId(`receipt-line-article-group-select-${expectedLineId}`),
+  ]
+
+  for (const trigger of selectors) {
+    const diagnostics = await trigger.evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      const centerX = bounds.left + bounds.width / 2
+      const centerY = bounds.top + bounds.height / 2
+      const topElement = document.elementFromPoint(centerX, centerY)
+      return {
+        disabled: element.disabled,
+        ariaDisabled: element.getAttribute('aria-disabled'),
+        tabIndex: element.tabIndex,
+        rect: bounds.toJSON(),
+        topElement: topElement?.outerHTML?.slice(0, 300) || null,
+      }
+    })
+    console.log('MOBILE_UNPACK_DROPDOWN_DIAGNOSTICS', JSON.stringify(diagnostics))
+    await expect(trigger, JSON.stringify(diagnostics)).toBeEnabled()
+    await trigger.focus()
+    await expect(trigger).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Escape')
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await trigger.click()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Escape')
+  }
+})
