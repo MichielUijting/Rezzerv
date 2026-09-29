@@ -751,3 +751,8 @@ Vaste regels:
 - In de mobiele kassabon is de route naar Locatiebeheer ook **direct onder de locatiekeuze van elke open bonregel** zichtbaar; niet verborgen in een dropdownoptie. De bestaande desktop-locatiekiezer blijft intact.
 
 - In de locatiekiezer heet de afsluitknop **Overnemen** in plaats van **Sluiten**; de bestaande directe selectie van locatie/sublocatie blijft behouden.
+
+### Uitpakken — locatiekiezer: zoeken en actierij (29 september 2026)
+
+- Het gedeelde zoekveld doorzoekt op mobiel en desktop zowel de naam van de hoofdlocatie als de namen van haar sublocaties. Een sublocatiematch toont de bijbehorende hoofdlocatie en de overeenkomende sublocaties; een hoofdlocatiematch toont haar sublocaties.
+- De onderste acties **Standaard gebruiken**, **Verwijderen** en **Overnemen** vullen, wanneer alle drie zichtbaar zijn, elk een gelijk derde van de beschikbare overlaybreedte. De bestaande twee kolommen voor locatie en sublocatie blijven intact.
