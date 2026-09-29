@@ -66,6 +66,7 @@ export default function MobileKassa() {
       const denied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'
       setCameraError(denied ? 'Cameratoegang is geweigerd.' : 'De camera kon niet worden geopend.')
       showFeedback({ variant: 'warning', title: 'Cameratoegang', message: denied ? 'Geef Inhuis cameratoegang in de browserinstellingen en probeer opnieuw.' : 'Controleer of je camera beschikbaar is en probeer opnieuw.', primaryActionLabel: 'Opnieuw proberen', onPrimaryAction: () => openCamera(), secondaryActionLabel: 'Sluiten', testId: 'mobile-kassa-camera-permission' })
+      return false
     }
   }
 
