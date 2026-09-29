@@ -49,3 +49,7 @@ assert.match(receiptsSource, /batch\.summary\?\.total \?\? batch\.lines\?\.lengt
 assert.match(detailSource, /const lines = batch\?\.lines \|\| \[\]/, 'detail must count all canonical batch lines, including processed ones')
 
 console.log('mobile Uitpakken contract: OK')
+
+assert.match(detailSource, /locationOptions\.filter\(\(location\) => location\.type === 'sublocation'\)/, 'mobile location dropdown must only offer location/sublocation combinations')
+assert.doesNotMatch(detailSource, /location\.type === 'sublocation' \|\| location\.type === 'space'/, 'standalone locations must not appear in the mobile unpack dropdown')
+assert.match(detailSource, /Artikel al naar voorraad overgezet\./, 'processed receipt rows must explain why dropdowns are disabled')
