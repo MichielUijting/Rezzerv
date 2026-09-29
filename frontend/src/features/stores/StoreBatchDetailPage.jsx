@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import '../receipts/mobileReceipts.css'
 import AppShell from '../../app/AppShell'
@@ -195,6 +195,7 @@ function buildBatchDetailPath(batchId) {
 
 export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false }) {
   const navigate = useNavigate()
+  const routeLocation = useLocation()
   const isMobileViewport = useMobileAppViewport()
   const params = useParams()
   const batchId = batchIdOverride || params.batchId || ''
@@ -955,18 +956,26 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     const spaces = spaceLocationOptions(locationOptions)
     if (!needle) return spaces.slice(0, 12)
     return spaces
-      .filter((location) => String(location.label || '').toLowerCase().includes(needle))
+      .filter((location) => String(location.label || '').toLowerCase().includes(needle)
+        || sublocationOptionsForSpace(locationOptions, location.space_id || location.id)
+          .some((sublocation) => String(sublocation.sublocation_label || sublocation.label || '').toLowerCase().includes(needle)))
       .slice(0, 12)
   }
 
-  function activeSublocationOptions() {
-    return sublocationOptionsForSpace(locationOptions, activeLocationSpaceId)
+  function activeSublocationOptions(spaceId = activeLocationSpaceId) {
+    const options = sublocationOptionsForSpace(locationOptions, spaceId)
+    const needle = locationPickerSearch.trim().toLowerCase()
+    if (!needle) return options
+    const space = spaceLocationOptions(locationOptions).find((location) => String(location.space_id || location.id) === String(spaceId || ''))
+    if (String(space?.label || '').toLowerCase().includes(needle)) return options
+    return options.filter((location) => String(location.sublocation_label || location.label || '').toLowerCase().includes(needle))
   }
 
   const canManageLocations = isHouseholdAdminFromContext()
 
-  function openLocationManagement() {
-    window.location.href = '/instellingen/locaties'
+  function openLocationManagement(lineId = locationPickerLineId, saveMode = locationPickerSaveMode) {
+    const params = new URLSearchParams({ returnTo: buildBatchDetailPath(batchId), lineId: String(lineId || ''), saveMode })
+    navigate(`/instellingen/locaties?${params.toString()}`)
   }
 
   function startInlineLocationCreate(mode) {
@@ -1024,15 +1033,18 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         throw new Error('De nieuwe locatie is opgeslagen, maar kon niet opnieuw worden geladen.')
       }
 
-      setLocationCreateMode('')
       setNewLocationName('')
-      if (mode === 'space') setActiveLocationSpaceId(String(created.space_id || created.id))
+      if (mode === 'space') {
+        setActiveLocationSpaceId(String(created.space_id || created.id))
+        if (household?.location_tracking_level === 'exact') {
+          setLocationCreateMode('sublocation')
+          showUitpakkenFeedback('success', `Locatie ${name} toegevoegd. Voeg nu een sublocatie toe.`, { key: `uitpakken-location-created-space-${created.id}` })
+          return
+        }
+      }
+      setLocationCreateMode('')
       await applyPickedLocation(String(created.id), nextOptions)
-      showUitpakkenFeedback(
-        'success',
-        mode === 'space' ? `Locatie ${name} is toegevoegd en geselecteerd.` : `Sublocatie ${name} is toegevoegd en geselecteerd.`,
-        { key: `uitpakken-location-created-${mode}-${created.id}` },
-      )
+      showUitpakkenFeedback('success', `${mode === 'space' ? 'Locatie' : 'Sublocatie'} ${name} is toegevoegd en geselecteerd.`, { key: `uitpakken-location-created-${mode}-${created.id}` })
     } catch (createError) {
       const message = normalizeErrorMessage(createError?.message || createError)
         || (mode === 'space' ? 'Locatie toevoegen mislukt.' : 'Sublocatie toevoegen mislukt.')
@@ -1773,6 +1785,24 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return counts
   }, [lineUiStates])
 
+  const returnedLocationRef = useRef('')
+  useEffect(() => {
+    const params = new URLSearchParams(routeLocation.search)
+    const selectedId = params.get('createdLocationId')
+    const lineId = params.get('lineId')
+    if (!selectedId || !lineId || isLoading || !batch || !locationOptions.some((option) => String(option.id) === selectedId)) return
+    const key = `${batchId}:${lineId}:${selectedId}`
+    if (returnedLocationRef.current === key) return
+    const entry = lineUiStates.find((item) => String(item.line.id) === lineId)
+    if (!entry || entry.processingStatus === 'processed') return
+    returnedLocationRef.current = key
+    navigate(buildBatchDetailPath(batchId), { replace: true })
+    if (params.get('saveMode') === 'handling') handleLocationChoice(entry, selectedId, locationOptions)
+    else if (String(entry.draft?.articleId || entry.line?.matched_household_article_id || '').trim()) setPendingDefaultLocationChoice({ lineId, locationId: selectedId })
+    else persistLineDraft(entry.line, { locationId: selectedId }, { defaultLocationPolicy: 'line_only' })
+  }, [routeLocation.search, batch, isLoading, locationOptions, lineUiStates, batchId])
+
+
   const filteredLineUiStates = useMemo(() => {
     const searchNeedle = searchValue.trim().toLowerCase()
     return lineUiStates.filter((entry) => {
@@ -1970,6 +2000,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
                         {isMobileViewport ? (
+                          <div className="rz-mobile-unpack-location-field">
                           <Select
                             className="rz-mobile-unpack-shared-select"
                             value={entry.draft.locationId || ''}
@@ -1989,6 +2020,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                               handleLocationChoice(entry, nextValue)
                             }}
                           />
+                          {canManageLocations && !isViewer && entry.processingStatus !== 'processed' ? (
+                            <button type="button" className="rz-mobile-unpack-add-location" data-testid={`mobile-unpack-add-location-${line.id}`} onClick={() => openLocationManagement(line.id, 'handling')}>+ Locatie / sublocatie toevoegen</button>
+                          ) : null}
+                          </div>
                         ) : (
                           <button
                             type="button"
@@ -2269,6 +2304,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             if (!pickerIsBulk && !pickerEntry) return null
 
             const pickerOptions = filteredLocationOptions()
+            const activeSpaceMatches = pickerOptions.some((location) => String(location.space_id || location.id) === String(activeLocationSpaceId || ''))
+            const visibleSpaceId = locationPickerSearch.trim() && !activeSpaceMatches
+              ? String(pickerOptions[0]?.space_id || pickerOptions[0]?.id || '')
+              : activeLocationSpaceId
+            const visibleSublocations = activeSublocationOptions(visibleSpaceId)
             const selectedSet = new Set(selectedLineIds)
             const pickerTargetCount = pickerIsBulk
               ? lineUiStates.filter((entry) => selectedSet.has(entry.line.id) && entry.processingStatus !== 'processed').length
@@ -2297,19 +2337,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     className="rz-input"
                     type="text"
                     autoFocus
-                    placeholder="Zoek locatie..."
+                    placeholder="Zoek locatie of sublocatie..."
                     value={locationPickerSearch}
                     onChange={(event) => setLocationPickerSearch(event.target.value)}
                     data-testid={pickerIsBulk ? 'receipt-bulk-location-search' : `receipt-line-location-search-${pickerEntry.line.id}`}
                   />
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '14px', overflow: 'hidden', marginTop: '12px' }}>
+                  <div className="rz-unpack-location-picker-columns" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '14px', overflow: 'hidden', marginTop: '12px' }}>
                     <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
                       <div style={{ color: 'var(--color-ui-primary)', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 1: locatie</div>
                       <div style={{ display: 'grid', gap: '6px', height: '246px', overflowY: 'auto', padding: '6px', border: '1px solid #d8e8de', borderRadius: '12px', background: '#f8fbf9', alignContent: 'start', gridAutoRows: '42px' }}>
                         {pickerOptions.length ? pickerOptions.map((location) => {
                           const sublocations = sublocationOptionsForSpace(locationOptions, location.space_id || location.id)
                           const hasSublocations = sublocations.length > 0
-                          const active = String(activeLocationSpaceId || '') === String(location.space_id || location.id)
+                          const active = String(visibleSpaceId || '') === String(location.space_id || location.id)
                           return (
                             <button
                               key={location.id}
@@ -2372,7 +2412,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
                       <div style={{ color: 'var(--color-ui-primary)', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 2: sublocatie</div>
                       <div style={{ display: 'grid', gap: '6px', height: '246px', overflowY: 'auto', padding: '6px', border: '1px solid #d8e8de', borderRadius: '12px', background: '#f8fbf9', alignContent: 'start', gridAutoRows: '42px' }}>
-                        {activeSublocationOptions().length ? activeSublocationOptions().map((location) => (
+                        {visibleSublocations.length ? visibleSublocations.map((location) => (
                           <button
                             key={location.id}
                             type="button"
@@ -2459,7 +2499,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       </div>
                     </div>
                   ) : null}
-                  <div className="rz-modal-actions">
+                  <div
+                    className="rz-modal-actions rz-unpack-location-picker-footer"
+                    style={{ display: 'grid', gridTemplateColumns: locationPickerMode === 'single' && locationPickerSaveMode === 'handling' ? 'repeat(3, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))', gap: '10px' }}
+                  >
                     {locationPickerMode === 'single' && locationPickerSaveMode === 'handling' ? (
                       <Button
                         variant="secondary"
@@ -2473,12 +2516,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         }}
                         data-testid="receipt-location-use-standard"
                       >
-                        Standaard gebruiken
-                      </Button>
-                    ) : null}
-                    {canManageLocations ? (
-                      <Button variant="secondary" type="button" disabled={pickerLineBusy} onClick={openLocationManagement}>
-                        Beheer locaties
+                        Standaard locatie
                       </Button>
                     ) : null}
                     <Button
@@ -2490,7 +2528,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       Verwijderen
                     </Button>
                     <Button variant="secondary" type="button" onClick={closeLocationPicker}>
-                      Sluiten
+                      Overnemen
                     </Button>
                   </div>
                 </div>

@@ -728,6 +728,35 @@ Vaste regels:
 - De mobiele kassabon toont uitsluitend de tabs **Bonregels** en **Bonkop**. De bestaande desktop-Kassa behoudt daarnaast **Bron**.
 - De mobiele camera-, bestandsupload-, boncorrectie- en goedkeuracties gebruiken de bestaande centrale knop- en overlaycomponenten. De mobiele totalencontrole blijft onderdeel van het kassabondetail.
 
+
+### Mobiel hoofdlocaties toevoegen in Instellingen (29 september 2026)
+
+- Op viewports van maximaal 720 px staat boven de hoofdlocatietabel een compact invoerformulier met het label **Nieuwe hoofdlocatie**, een volledig breed naamveld en de centrale knop **Locatie toevoegen**.
+- Boven 720 px blijft de bestaande desktopinvoerrij onder de hoofdlocatietabel zichtbaar; het mobiele formulier is daar verborgen. Beide varianten gebruiken dezelfde bestaande validatie, autorisatie, API en centrale overlaymeldingen.
+- De mobiele formulierbreedte volgt de beschikbare viewport zonder horizontale verschuiving; de tabel blijft indien nodig binnen de eigen container horizontaal scrollbaar.
+
+
+### Mobiel Uitpakken — locatie direct vanuit een bonartikel aanmaken (29 september 2026)
+
+- De locatiekiezer behoudt ook op mobiel de twee kolommen **Locatie** en **Sublocatie** naast elkaar, met de acties **+ Nieuwe locatie** en **+ Nieuwe sublocatie** direct onder de bijbehorende keuzelijsten voor een bevoegde huishoudadmin. Er komt geen extra knop boven de lijsten.
+- Het bestaande inline aanmaakformulier gebruikt de bestaande autorisatie en API. Bij exacte locatie-inrichting leidt een nieuw aangemaakte hoofdlocatie direct door naar het aanmaken van een sublocatie; alleen een complete locatie/sublocatie wordt als artikelbestemming geselecteerd.
+
+
+### Uitpakken → Locatiebeheer → Uitpakken (29 september 2026)
+
+- Vanuit de bonregel kan een bevoegde huishoudadmin naar **Instellingen → Locaties** navigeren, met behoud van de bonartikelcontext. De locatiekiezer zelf bevat geen knop **Beheer locaties**.
+- Bij exacte locatie-inrichting volgt na het toevoegen van een hoofdlocatie de sublocatie. Na opslaan keert Inhuis terug naar het bonartikel en neemt de volledige locatie/sublocatie over, met behoud van bestaande keuzes rond artikelstandaardlocaties.
+- De actie **Terug naar Uitpakken** keert terug zonder nieuwe bestemming.
+
+- In de mobiele kassabon is de route naar Locatiebeheer ook **direct onder de locatiekeuze van elke open bonregel** zichtbaar; niet verborgen in een dropdownoptie. De bestaande desktop-locatiekiezer blijft intact.
+
+- In de locatiekiezer heet de afsluitknop **Overnemen** in plaats van **Sluiten**; de bestaande directe selectie van locatie/sublocatie blijft behouden.
+
+### Uitpakken — locatiekiezer: zoeken en actierij (29 september 2026)
+
+- Het gedeelde zoekveld doorzoekt op mobiel en desktop zowel de naam van de hoofdlocatie als de namen van haar sublocaties. Een sublocatiematch toont de bijbehorende hoofdlocatie en de overeenkomende sublocaties; een hoofdlocatiematch toont haar sublocaties.
+- De onderste acties **Standaard locatie**, **Verwijderen** en **Overnemen** vullen, wanneer alle drie zichtbaar zijn, elk een gelijk derde van de beschikbare overlaybreedte. De bestaande twee kolommen voor locatie en sublocatie blijven intact.
+
 ### Compacte aantalknoppen Voorraad en Boodschappen (29 september 2026)
 
 - Uitsluitend op de mobiele overzichtsregels van Voorraad en Boodschappen is de combinatie **− / aantal / +** circa 30% smaller; de gedeelde QuantityStepper behoudt elders zijn bestaande afmetingen.

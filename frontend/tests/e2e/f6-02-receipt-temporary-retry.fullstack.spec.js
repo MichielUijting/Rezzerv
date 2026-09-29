@@ -162,10 +162,20 @@ test('F6-02 Receipt temporary failure rolls back and visible retry succeeds exac
   await page.getByTestId('receipt-location-create-space').click()
   await page.getByTestId('receipt-location-create-name').fill(expectedLocationName)
   await page.getByTestId('receipt-location-create-save').click()
-  await expect(locationButton).toContainText(expectedLocationName, { timeout: 20_000 })
   const createdDialog = page.getByRole('dialog', { name: 'Gelukt' })
-  await expect(createdDialog).toContainText(`Locatie ${expectedLocationName} is toegevoegd en geselecteerd.`)
+  const sublocationName = 'Voorraadkast'
+  if (await page.getByTestId('receipt-location-create-name').isVisible()) {
+    // Exacte locatiebewaking: een hoofdlocatie is pas selecteerbaar met sublocatie.
+    await expect(createdDialog).toContainText(`Locatie ${expectedLocationName} toegevoegd. Voeg nu een sublocatie toe.`)
+    await createdDialog.getByRole('button', { name: 'OK', exact: true }).click()
+    await page.getByTestId('receipt-location-create-name').fill(sublocationName)
+    await page.getByTestId('receipt-location-create-save').click()
+    await expect(createdDialog).toContainText(`Sublocatie ${sublocationName} is toegevoegd en geselecteerd.`)
+  } else {
+    await expect(createdDialog).toContainText(`Locatie ${expectedLocationName} is toegevoegd en geselecteerd.`)
+  }
   await createdDialog.getByRole('button', { name: 'OK', exact: true }).click()
+  await expect(locationButton).toContainText(expectedLocationName, { timeout: 20_000 })
 
   const firstResponse = await selectLineAndProcess(page, batchId, lineId)
   expect(firstResponse.status()).toBe(500)
