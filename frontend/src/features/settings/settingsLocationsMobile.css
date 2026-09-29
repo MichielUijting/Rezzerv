@@ -1,0 +1,19 @@
+.rz-mobile-location-add { display: none; }
+
+@media (max-width: 720px) {
+  .rz-mobile-location-add {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 16px;
+    box-sizing: border-box;
+    border: 1px solid #dfe4ea;
+    border-radius: 8px;
+  }
+  .rz-mobile-location-add label { font-weight: 600; }
+  .rz-mobile-location-add .rz-input { width: 100%; min-width: 0; box-sizing: border-box; }
+  .rz-mobile-location-add button { width: 100%; }
+  .rz-desktop-location-add { display: none !important; }
+  [data-testid="main-locations-section"] .rz-stock-table-wrapper { overflow-x: auto; max-width: 100%; }
+}
