@@ -450,7 +450,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                           {formatQuantity(row.quantity)}
                         </span>
                       )}
-                      <span className="rz-mobile-inventory-chevron" aria-hidden="true">›</span>
+                      
                     </>
                   )}
                 />

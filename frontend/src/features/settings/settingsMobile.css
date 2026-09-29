@@ -503,3 +503,9 @@
   }
 
 }
+
+/* Mobiele detailrijen zijn zelf klikbaar: geen aparte doorklikchevron. */
+@media (max-width: 720px) {
+  .rz-settings-tile-chevron { display: none !important; }
+  .rz-settings-tile { grid-template-columns: auto minmax(0, 1fr) !important; }
+}

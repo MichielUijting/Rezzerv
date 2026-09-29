@@ -149,7 +149,7 @@ export default function MobileCatalogPage() {
                   <span>{[kindLabel(item.catalog_kind), text(item.brand, '')].filter(Boolean).join(' • ')}</span>
                   <span>{text(item.product_type, 'Geen producttype')}</span>
                 </span>
-                <span className="rz-mobile-catalog-chevron" aria-hidden="true">›</span>
+                
               </button>
             ))}
           </section>
