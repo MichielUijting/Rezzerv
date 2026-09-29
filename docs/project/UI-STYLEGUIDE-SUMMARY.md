@@ -727,3 +727,8 @@ Vaste regels:
 - Selectievakjes bij bonregels en bulkselectie gebruiken `accent-color: var(--color-mobile-ui-primary)`; een hard gecodeerde primaire hexkleur is niet toegestaan, zodat de persoonlijke Weergave-instelling ook hier doorwerkt.
 - De mobiele kassabon toont uitsluitend de tabs **Bonregels** en **Bonkop**. De bestaande desktop-Kassa behoudt daarnaast **Bron**.
 - De mobiele camera-, bestandsupload-, boncorrectie- en goedkeuracties gebruiken de bestaande centrale knop- en overlaycomponenten. De mobiele totalencontrole blijft onderdeel van het kassabondetail.
+
+### Compacte aantalknoppen Voorraad en Boodschappen (29 september 2026)
+
+- Uitsluitend op de mobiele overzichtsregels van Voorraad en Boodschappen is de combinatie **− / aantal / +** circa 30% smaller; de gedeelde QuantityStepper behoudt elders zijn bestaande afmetingen.
+- De knophoogte en veldhoogte blijven 44 px, de app-brede lettergroottes blijven ongewijzigd. Het bewerkbare aantal in Voorraad blijft rechtstreeks via het numerieke toetsenbord aanpasbaar.
