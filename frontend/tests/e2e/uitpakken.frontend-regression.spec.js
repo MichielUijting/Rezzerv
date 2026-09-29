@@ -65,7 +65,7 @@ test.describe('Uitpakken frontend-regressie', () => {
     }
 
     await page.goto(`/kassabonnen/batch/${batchId}`);
-    await expect(page).toHaveURL(new RegExp(`/kassabonnen\\?batch=${batchId}$`));
+    await expect(page).toHaveURL(new RegExp(`/kassabonnen/batch/${batchId}$`));
 
     await expect(page.locator('body')).toBeVisible();
     await expect(page.getByText('Kassabon Kassabon')).toHaveCount(0);
