@@ -79,7 +79,7 @@ export default function ReceiptsPage() {
     // Uitpakken is een werkvoorraad, geen bonarchief. Zodra de volledige bon
     // naar Voorraad is verwerkt, verdwijnt hij uit dit overzicht.
     const enriched = (batches || [])
-      .filter((batch) => String(batch.import_status || '').toLowerCase() !== 'processed')
+      .filter((batch) => !isMobileViewport || String(batch.import_status || '').toLowerCase() !== 'processed')
       .map((batch) => ({
         ...batch,
         providerName: providerLabel(batch),
@@ -100,7 +100,7 @@ export default function ReceiptsPage() {
       regels: (item) => Number(item.totalLines ?? 0),
       status: (item) => item.statusLabel || '',
     })
-  }, [batches, filters, tableSort])
+  }, [batches, filters, tableSort, isMobileViewport])
 
   useEffect(() => {
     if (isLoading || hasLoadError) return
