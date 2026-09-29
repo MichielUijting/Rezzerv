@@ -5,6 +5,7 @@ const receiptsSource = fs.readFileSync(new URL('../src/features/receipts/Receipt
 const mobileCss = fs.readFileSync(new URL('../src/features/receipts/mobileReceipts.css', import.meta.url), 'utf8')
 const routerSource = fs.readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const detailSource = fs.readFileSync(new URL('../src/features/stores/StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
+const unpackBackendSource = fs.readFileSync(new URL('../../backend/app/main.py', import.meta.url), 'utf8')
 const inlineSelectSource = fs.readFileSync(new URL('../src/ui/MobileInlineSelect.jsx', import.meta.url), 'utf8')
 
 assert.match(receiptsSource, /useMobileAppViewport/)
@@ -37,5 +38,14 @@ assert.match(mobileCss, /\.rz-mobile-inline-select-option[^}]*font-size:\s*var\(
 assert.match(inlineSelectSource, /aria-expanded=\{open\}/, 'mobile dropdown must expose its open state')
 assert.match(inlineSelectSource, /max-height|role="listbox"/, 'mobile dropdown must expose an accessible option list')
 assert.doesNotMatch(detailSource, /function MobileArticleGroupSelect/, 'do not recreate a local custom dropdown')
+
+// The overview and detail must count the same canonical purchase_import_lines.
+const unpackListRoute = unpackBackendSource.split('@app.get("/api/unpack-start-batches")')[1]?.split('@app.get("/api/receipts")')[0] || ''
+assert.match(unpackListRoute, /ensure_unpack_batch_for_receipt\(conn, serialized\)/, 'overview must synchronize receipt lines before counting')
+assert.match(unpackListRoute, /SELECT COUNT\(\*\) FROM purchase_import_lines WHERE batch_id = :batch_id/, 'overview must count actual unpack lines, not all parsed receipt rows')
+assert.match(unpackListRoute, /'summary': \{'total': int\(unpack_line_count\)\}/, 'overview must publish canonical unpack count')
+assert.doesNotMatch(unpackListRoute, /'summary': \{'total': int\(serialized\.get\('line_count'\)/, 'raw receipt line count includes discounts and other non-inventory lines')
+assert.match(receiptsSource, /batch\.summary\?\.total \?\? batch\.lines\?\.length \?\? 0/, 'zero canonical lines must not fall back to raw counts')
+assert.match(detailSource, /const lines = batch\?\.lines \|\| \[\]/, 'detail must count all canonical batch lines, including processed ones')
 
 console.log('mobile Uitpakken contract: OK')
