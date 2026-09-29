@@ -2509,11 +2509,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         Standaard gebruiken
                       </Button>
                     ) : null}
-                    {canManageLocations ? (
-                      <Button variant="secondary" type="button" disabled={pickerLineBusy} onClick={openLocationManagement}>
-                        Beheer locaties
-                      </Button>
-                    ) : null}
                     <Button
                       variant="secondary"
                       type="button"
@@ -2523,7 +2518,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       Verwijderen
                     </Button>
                     <Button variant="secondary" type="button" onClick={closeLocationPicker}>
-                      Sluiten
+                      Overnemen
                     </Button>
                   </div>
                 </div>
