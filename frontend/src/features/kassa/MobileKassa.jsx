@@ -39,6 +39,16 @@ export default function MobileKassa() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
+  useEffect(() => {
+    if (!message || message === 'Bon wordt herkend en gestructureerd…') return
+    showFeedback({
+      variant: /bevestigd|doorgezet/i.test(message) ? 'success' : 'warning',
+      title: /bevestigd|doorgezet/i.test(message) ? 'Gelukt' : 'Melding',
+      message,
+      testId: 'mobile-kassa-feedback',
+    })
+  }, [message, showFeedback])
+
   async function loadReceipts(id = householdId) {
     if (!id) return []
     const result = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(id)}`)
@@ -142,7 +152,7 @@ export default function MobileKassa() {
       return
     }
     if (!video?.videoWidth || !video?.videoHeight) {
-      setCameraError('De camera is nog niet gereed. Controleer de cameratoestemming en probeer opnieuw.')
+      showFeedback({ variant: 'warning', title: 'Camera nog niet gereed', message: 'Wacht tot de camera beeld geeft en probeer opnieuw.', testId: 'mobile-kassa-camera-not-ready' })
       return
     }
     const canvas = document.createElement('canvas')
@@ -219,7 +229,6 @@ export default function MobileKassa() {
   return (
     <div className="rz-mobile-kassa" data-testid="mobile-kassa-page">
       <MobileModuleHeader title={mode === 'list' ? 'Bonnen' : mode === 'detail' ? 'Kassabon' : mode === 'review' ? 'Bon controleren' : 'Kassa'} testId="mobile-kassa-header" />
-      {message ? <div className="rz-mobile-kassa-message" role="status">{message}</div> : null}
 
       {mode === 'camera' ? (
         <main className="rz-mobile-kassa-camera" data-testid="mobile-kassa-camera">
