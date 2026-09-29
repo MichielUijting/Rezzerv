@@ -11596,7 +11596,6 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
             dedupe_key = sha_key or '|'.join(fingerprint_key)
             if dedupe_key in seen_keys:
                 continue
-            seen_keys.add(dedupe_key)
 
             inbox_status = derive_unpack_receipt_status(serialized)
             if inbox_status not in {'Gecontroleerd', 'Controle nodig'}:
@@ -11624,6 +11623,7 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
             ).scalar_one()
             if int(remaining_line_count) == 0:
                 continue
+            seen_keys.add(dedupe_key)
 
             purchase_at_value = serialized.get('purchase_at') or serialized.get('created_at') or ''
             purchase_label = str(purchase_at_value)[:10] if purchase_at_value else '-'
