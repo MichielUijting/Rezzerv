@@ -7,6 +7,8 @@ from functools import lru_cache
 from app.receipt_ingestion.service_parts.receipt_result_helpers import ReceiptParseResult
 
 from .adapters.rezzerv_legacy import RezzervLegacyScannerAdapter
+from .adapters.retailer_structured import StructuredRetailerReceiptScannerAdapter
+from app.integrations.retailer_receipts import RETAILER_RECEIPT_MIME
 from .errors import ProviderConfigurationError
 from .gateway import ReceiptScannerGateway
 from .normalizer import canonical_to_receipt_parse_result
@@ -72,8 +74,20 @@ def reset_receipt_scanner_runtime_cache() -> None:
     get_receipt_scanner_gateway.cache_clear()
 
 
+def _structured_retailer_gateway() -> ReceiptScannerGateway:
+    provider = StructuredRetailerReceiptScannerAdapter(max_file_bytes=2_000_000)
+    registry = ProviderRegistry([provider], active_provider_code=provider.provider_code)
+    return ReceiptScannerGateway(registry, timeout_seconds=_configured_timeout_seconds())
+
+
 def scan_receipt_content_via_gateway(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
     scan_id = f"rscan_{uuid.uuid4().hex}"
-    request = ScanRequestV1.from_bytes(scan_id=scan_id, file_bytes=file_bytes, filename=filename, mime_type=mime_type)
-    canonical = get_receipt_scanner_gateway().scan(request)
+    request = ScanRequestV1.from_bytes(
+        scan_id=scan_id,
+        file_bytes=file_bytes,
+        filename=filename,
+        mime_type=mime_type,
+    )
+    gateway = _structured_retailer_gateway() if mime_type == RETAILER_RECEIPT_MIME else get_receipt_scanner_gateway()
+    canonical = gateway.scan(request)
     return canonical_to_receipt_parse_result(canonical)
