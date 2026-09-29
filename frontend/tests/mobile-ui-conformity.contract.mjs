@@ -126,7 +126,9 @@ for (const responsiveSource of [inventoryResponsiveSource, almostOutResponsiveSo
   assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin|display_role|context_type\s*===\s*['"]system['"]/)
 }
 assert.match(mobileAppChromeSource, /MobileRecentActionsBar/)
-assert.match(mobileAppChromeSource, /<MobileBackControl[\s\S]*testId="mobile-global-back"[\s\S]*onBack=\{location\.pathname === '\/home' \? handleHomeBack : null\}[\s\S]*\/>/)
+assert.match(mobileAppChromeSource, /<MobileBackControl[^>]*testId="mobile-global-back"[^>]*onBack=\{location\.pathname === '\/home' \? handleHomeBack : location\.pathname === '\/kassa' \|\| location\.pathname === '\/kassa\/nieuw' \? handleKassaBack : null\}[^>]*\/>/)
+assert.match(mobileAppChromeSource, /function handleKassaBack\(\)/)
+assert.match(mobileAppChromeSource, /new Event\('inhuis:mobile-kassa-back', \{ cancelable: true \}\)/)
 assert.match(mobileAppChromeSource, /title: 'Inhuis verlaten'/)
 assert.match(mobileAppChromeSource, /primaryActionLabel: 'Uitloggen'/)
 assert.match(mobileAppChromeSource, /secondaryActionLabel: 'Annuleren'/)
