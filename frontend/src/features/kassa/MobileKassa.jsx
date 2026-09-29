@@ -40,6 +40,18 @@ export default function MobileKassa() {
   const [message, setMessage] = useState('')
 
   useEffect(() => {
+    if (mode !== 'detail') return undefined
+    const handleBack = (event) => {
+      event.preventDefault()
+      setReceipt(null)
+      setMode('list')
+      loadReceipts().catch(() => {})
+    }
+    window.addEventListener('inhuis:mobile-kassa-back', handleBack)
+    return () => window.removeEventListener('inhuis:mobile-kassa-back', handleBack)
+  }, [mode, householdId])
+
+  useEffect(() => {
     if (!message || message === 'Bon wordt herkend en gestructureerd…') return
     showFeedback({
       variant: /bevestigd|doorgezet/i.test(message) ? 'success' : 'warning',
