@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Button from '../../ui/Button'
+import Tabs from '../../ui/Tabs'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import './mobileKassa.css'
@@ -38,6 +39,11 @@ export default function MobileKassa() {
   const [receiptsLoadError, setReceiptsLoadError] = useState('')
   const receiptRequestRef = useRef(0)
   const [receipt, setReceipt] = useState(null)
+  const [selectedLineIds, setSelectedLineIds] = useState([])
+  const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
+  const [addingLine, setAddingLine] = useState(false)
+  const [newLine, setNewLine] = useState({ article_name: '', quantity: 1, unit: '', unit_price: '', line_total: '' })
+  const [receiptFilter, setReceiptFilter] = useState('')
   const [cameraError, setCameraError] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -86,6 +92,7 @@ export default function MobileKassa() {
     streamRef.current?.getTracks?.().forEach((track) => track.stop())
     streamRef.current = null
     setReceipt(null)
+    setSelectedLineIds([])
     setMode('list')
     loadReceipts().catch(() => {})
   }
@@ -218,6 +225,7 @@ export default function MobileKassa() {
     setBusy(true)
     try {
       setReceipt(await fetchJson(`/api/receipts/${encodeURIComponent(id)}`))
+      setSelectedLineIds([])
       setMode('detail')
     } finally { setBusy(false) }
   }
@@ -239,6 +247,105 @@ export default function MobileKassa() {
       method: 'PATCH', body: JSON.stringify(payload),
     })
     setReceipt(updated)
+  }
+
+  function feedbackError(error, fallback) {
+    showFeedback({ variant: 'error', title: 'Kassa', message: normalizeErrorMessage(error?.message) || fallback })
+  }
+
+  async function addReceiptLine() {
+    if (!String(newLine.article_name || '').trim()) {
+      showFeedback({ variant: 'warning', message: 'Vul eerst een artikelnaam in.' })
+      return
+    }
+    setBusy(true)
+    try {
+      const updated = await fetchJson(`/api/receipts/${encodeURIComponent(receiptId(receipt))}/lines`, {
+        method: 'POST',
+        body: JSON.stringify({
+          article_name: newLine.article_name,
+          quantity: Number(newLine.quantity || 1),
+          unit: newLine.unit,
+          unit_price: newLine.unit_price === '' ? null : Number(newLine.unit_price),
+          line_total: newLine.line_total === '' ? null : Number(newLine.line_total),
+          is_validated: true,
+        }),
+      })
+      setReceipt(updated)
+      setNewLine({ article_name: '', quantity: 1, unit: '', unit_price: '', line_total: '' })
+      setAddingLine(false)
+      showFeedback({ variant: 'success', message: 'Bonregel toegevoegd.' })
+    } catch (error) { feedbackError(error, 'Bonregel kon niet worden toegevoegd.') }
+    finally { setBusy(false) }
+  }
+
+  async function changeSelectedLines(deleteLines = false) {
+    if (!selectedLineIds.length) return
+    setBusy(true)
+    try {
+      let updated = receipt
+      for (const id of selectedLineIds) {
+        const line = receiptLines(updated).find((item) => String(item.id || item.receipt_line_id) === id)
+        updated = await fetchJson(`/api/receipts/${encodeURIComponent(receiptId(updated))}/lines/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            article_name: line?.normalized_label || line?.display_label || line?.article_name || line?.raw_label || '',
+            quantity: Number(line?.quantity ?? 1),
+            unit: line?.unit || '',
+            unit_price: line?.unit_price ?? null,
+            line_total: line?.line_total ?? null,
+            is_validated: true,
+            is_deleted: deleteLines,
+          }),
+        })
+      }
+      setReceipt(updated)
+      setSelectedLineIds([])
+      showFeedback({ variant: 'success', message: deleteLines ? 'Bonregels verwijderd.' : 'Bonregels gecontroleerd.' })
+    } catch (error) { feedbackError(error, 'Bonregels konden niet worden bijgewerkt.') }
+    finally { setBusy(false) }
+  }
+
+  function confirmDeleteLines() {
+    showFeedback({
+      variant: 'warning', title: 'Bonregels verwijderen?',
+      message: `Wil je ${selectedLineIds.length} geselecteerde bonregels verwijderen?`,
+      dismissMode: 'action-only', primaryActionLabel: 'Verwijderen', secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: () => changeSelectedLines(true),
+    })
+  }
+
+  function confirmDeleteReceipts(ids) {
+    if (!ids.length) return
+    showFeedback({
+      variant: 'warning', title: 'Kassabonnen verwijderen?',
+      message: `Wil je ${ids.length} geselecteerde kassabonnen definitief verwijderen?`,
+      dismissMode: 'action-only', primaryActionLabel: 'Verwijderen', secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        setBusy(true)
+        try {
+          await fetchJson('/api/receipts/delete', { method: 'POST', body: JSON.stringify({ receipt_table_ids: ids }) })
+          setSelectedReceiptIds([])
+          showReceiptList()
+          showFeedback({ variant: 'success', message: 'Kassabonnen verwijderd.' })
+        } catch (error) { feedbackError(error, 'Kassabonnen konden niet worden verwijderd.') }
+        finally { setBusy(false) }
+      },
+    })
+  }
+
+  function exportLines() {
+    const rows = receiptLines(receipt).filter((line) => selectedLineIds.includes(String(line.id || line.receipt_line_id)))
+    const csv = [['Artikel', 'Aantal', 'Eenheid', 'Stukprijs', 'Bedrag'], ...rows.map((line) => [
+      line.normalized_label || line.display_label || line.article_name || line.raw_label || '',
+      line.quantity ?? '', line.unit ?? '', line.unit_price ?? '', line.line_total ?? '',
+    ])].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `inhuis-kassa-${receiptId(receipt)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   async function approve() {
