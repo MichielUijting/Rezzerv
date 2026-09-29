@@ -2516,7 +2516,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         }}
                         data-testid="receipt-location-use-standard"
                       >
-                        Standaard gebruiken
+                        Standaard locatie
                       </Button>
                     ) : null}
                     <Button

@@ -8,6 +8,8 @@ assert.doesNotMatch(picker, /Beheer locaties/)
 assert.match(picker, /onClick=\{closeLocationPicker\}>\s*Overnemen/)
 assert.match(page, /data-testid="receipt-location-create-space"/)
 assert.match(page, /data-testid="receipt-location-create-sublocation"/)
+assert.match(picker, /Standaard locatie/)
+assert.doesNotMatch(picker, /Standaard gebruiken/)
 console.log('MOBILE_UNPACK_PICKER_ACTIONS_GREEN')
 
 // De gedeelde locatiekiezer werkt in mobiel en desktop hetzelfde.
