@@ -1436,7 +1436,7 @@ async function saveLine(lineId, overrides = null) {
           ) : null}
         </div>
 
-        <Tabs tabs={['Bonregels', 'Bonkop']} defaultTab="Bonregels" activeColor={detailAmountsAccepted ? 'var(--color-ui-primary)' : '#B54708'}>
+        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={detailAmountsAccepted ? 'var(--color-ui-primary)' : '#B54708'}>
           {(activeTab) => {
             if (activeTab === 'Bonkop') {
               return (
@@ -1479,6 +1479,23 @@ async function saveLine(lineId, overrides = null) {
                   <DetailInfoRow label="Netto bonregels" value={formatMoney(visibleNetTotalSum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
                   <DetailInfoRow label="Regels" value={String(lines.length)} />
+                </div>
+              )
+            }
+            if (activeTab === 'Bron') {
+              return (
+                <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                  <DetailInfoRow label="Bron" value={normalizeReceiptSourceLabel(receipt?.source_label)} />
+                  <DetailInfoRow label="Adres" value={branchParts.address} />
+                  <DetailInfoRow label="Plaats" value={branchParts.city} />
+                  <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
+                  <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
+                  <DetailInfoRow label="Geïmporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="Aangemaakt op" value={formatDateTime(receipt?.created_at)} />
+                  <DetailInfoRow label="Bijgewerkt op" value={formatDateTime(receipt?.updated_at)} />
+                  <DetailInfoRow label="Goedgekeurd op" value={formatDateTime(receipt?.approved_at)} />
+                  <DetailInfoRow label="Goedgekeurd door" value={receipt?.approved_by_user_email} />
+                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` · ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` · ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
                 </div>
               )
             }
