@@ -11,8 +11,8 @@ assert.match(page, /data-testid="receipt-location-create-sublocation"/)
 console.log('MOBILE_UNPACK_PICKER_ACTIONS_GREEN')
 
 // De gedeelde locatiekiezer werkt in mobiel en desktop hetzelfde.
-assert.match(page, /placeholder="Zoek locatie of sublocatie\\.\\.\\."/)
-assert.match(page, /sublocationOptionsForSpace\\(locationOptions, location\\.space_id \\|\\| location\\.id\\)/)
-assert.match(page, /visibleSublocations\\.map/)
+assert.match(page, /placeholder="Zoek locatie of sublocatie\.\.\."/)
+assert.match(page, /sublocationOptionsForSpace\(locationOptions, location\.space_id \|\| location\.id\)/)
+assert.match(page, /visibleSublocations\.map/)
 assert.match(page, /rz-unpack-location-picker-footer/)
-assert.match(page, /repeat\\(3, minmax\\(0, 1fr\\)\\)/)
+assert.match(page, /repeat\(3, minmax\(0, 1fr\)\)/)
