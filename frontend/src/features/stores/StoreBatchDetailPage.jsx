@@ -1975,7 +1975,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             value={entry.draft.locationId || ''}
                             options={[
                               { value: '', label: 'Kies locatie' },
-                              ...locationOptions.filter((location) => location.type === 'sublocation' || location.type === 'space').map((location) => ({ value: String(location.id), label: location.label })),
+                              ...locationOptions.filter((location) => location.type === 'sublocation').map((location) => ({ value: String(location.id), label: location.label })),
                               { value: '__choose_location__', label: 'Locatie kiezen of toevoegen...' },
                             ]}
                             disabled={isViewer || entry.processingStatus === 'processed'}
