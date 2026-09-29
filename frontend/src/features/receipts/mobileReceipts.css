@@ -206,19 +206,12 @@
   opacity: .78;
 }
 
-/* Mobile receipt fields use the same OS-native picker interaction as other form selects. */
-.rz-mobile-unpack-detail-page .rz-mobile-unpack-native-select {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  font-family: var(--font-family-base);
-  font-size: var(--font-size-ui-body) !important;
-  appearance: auto;
-  pointer-events: auto;
-}
-.rz-mobile-unpack-detail-page .rz-mobile-unpack-native-select option {
-  font-size: var(--font-size-ui-body) !important;
-}
+/* Mobile in-flow options use the same live accessibility tokens as all other InHuis text. */
+.rz-mobile-unpack-detail-page .rz-mobile-inline-select { width: 100%; min-width: 0; }
+.rz-mobile-unpack-detail-page .rz-mobile-inline-select-trigger { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 44px; font-family: var(--font-family-base); font-size: var(--font-size-ui-body) !important; text-align: left; cursor: pointer; }
+.rz-mobile-unpack-detail-page .rz-mobile-inline-select-options { display: grid; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #aab6af; border-radius: 8px; background: white; }
+.rz-mobile-unpack-detail-page .rz-mobile-inline-select-option { display: block; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-bottom: 1px solid #e1e6e2; background: white; color: var(--color-text-primary); font-family: var(--font-family-base); font-size: var(--font-size-ui-body) !important; font-weight: 400; text-align: left; cursor: pointer; }
+.rz-mobile-unpack-detail-page .rz-mobile-inline-select-option[aria-selected="true"] { background: #EEF7F0; font-weight: 600; }
 .rz-mobile-unpack-line-status {
   display: inline-block;
   margin-top: 4px;
@@ -226,3 +219,5 @@
 }
 .rz-mobile-unpack-line-status--processed { color: var(--color-ui-primary); }
 .rz-mobile-unpack-line-status--failed { color: #a12525; }
+
+.rz-mobile-unpack-line-status--pending { color: var(--color-text-primary); }
