@@ -1916,7 +1916,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             </div>
           </div>
 
-          <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Al naar voorraad: {summaryCounts.processed}</div>
+          <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · {isMobileViewport ? 'Al naar voorraad' : 'Verwerkt'}: {summaryCounts.processed}</div>
 
           <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths), '--rz-sticky-header-offset': '36px' }}>
               <colgroup>
@@ -1974,7 +1974,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             }}
                           >
                             <option value="">Kies locatie</option>
-                            {locationOptions.filter((location) => location.type === 'sublocation').map((location) => (
+                            {locationOptions.filter((location) => location.type === 'sublocation' || location.type === 'space').map((location) => (
                               <option key={location.id} value={location.id}>{location.label}</option>
                             ))}
                             <option value="__choose_location__">Locatie kiezen of toevoegen...</option>
