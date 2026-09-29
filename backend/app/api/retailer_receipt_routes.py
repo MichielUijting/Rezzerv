@@ -13,6 +13,7 @@ Technical Design Reference:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -28,12 +29,7 @@ from app.services.retailer_receipt_import_service import import_retailer_receipt
 
 router = APIRouter(prefix="/api/receipts/retailers", tags=["receipts-retailers"])
 
-_receipt_storage_root: Path | None = None
-
-
-def configure_retailer_receipt_routes(*, receipt_storage_root: Path) -> None:
-    global _receipt_storage_root
-    _receipt_storage_root = Path(receipt_storage_root)
+RECEIPT_STORAGE_ROOT = Path(os.getenv("RECEIPT_STORAGE_ROOT", "/app/data/receipts/raw"))
 
 
 def _authorized_household_id(authorization: str | None) -> str:
@@ -68,13 +64,11 @@ def import_structured_retailer_receipt(
     payload: RetailerReceiptEnvelope,
     authorization: Optional[str] = Header(None),
 ):
-    if _receipt_storage_root is None:
-        raise HTTPException(status_code=503, detail="Digitale kassabonimport is niet geconfigureerd")
     household_id = _authorized_household_id(authorization)
     try:
         return import_retailer_receipt(
             engine,
-            _receipt_storage_root,
+            RECEIPT_STORAGE_ROOT,
             household_id=household_id,
             envelope=payload,
         )
