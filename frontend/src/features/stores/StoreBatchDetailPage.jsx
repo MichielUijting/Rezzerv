@@ -2000,22 +2000,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             options={[
                               { value: '', label: 'Kies locatie' },
                               ...locationOptions.filter((location) => location.type === 'sublocation').map((location) => ({ value: String(location.id), label: location.label })),
-                              { value: '__choose_location__', label: 'Locatie kiezen of toevoegen...' },
+                              ...(canManageLocations ? [{ value: '__add_location__', label: '+ Locatie toevoegen' }] : []),
                             ]}
                             disabled={isViewer || entry.processingStatus === 'processed'}
                             ariaLabel={`Locatie voor ${line.article_name_raw}`}
                             dataTestId={`receipt-line-location-select-${line.id}`}
                             onChange={(nextValue) => {
-                              if (nextValue === '__choose_location__') {
-                                openLocationPicker(line.id, 'handling')
+                              if (nextValue === '__add_location__') {
+                                openLocationManagement(line.id, 'handling')
                                 return
                               }
                               handleLocationChoice(entry, nextValue)
                             }}
                           />
-                          {canManageLocations && !isViewer && entry.processingStatus !== 'processed' ? (
-                            <button type="button" className="rz-mobile-unpack-add-location" data-testid={`mobile-unpack-add-location-${line.id}`} onClick={() => openLocationManagement(line.id, 'handling')}>+ Locatie / sublocatie toevoegen</button>
-                          ) : null}
                           </div>
                         ) : (
                           <button

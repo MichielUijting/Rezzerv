@@ -749,3 +749,5 @@ Vaste regels:
 - De actie **Terug naar Uitpakken** keert terug zonder nieuwe bestemming.
 
 - In de mobiele kassabon is de route naar Locatiebeheer ook **direct onder de locatiekeuze van elke open bonregel** zichtbaar; niet verborgen in een dropdownoptie. De bestaande desktop-locatiekiezer blijft intact.
+
+- Mobiele Uitpakken-dropdown: **+ Locatie toevoegen** staat als expliciete optie naast de bestaande sublocaties en navigeert naar Instellingen → Locatiebeheer. Geen aparte toevoegknop onder de dropdown; de retourcontext blijft behouden.
