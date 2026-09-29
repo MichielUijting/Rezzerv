@@ -456,7 +456,7 @@ export default function SettingsLocationsManagementPage({ sublocationsEnabled = 
             ) : null}
           </div>
 
-          {returningToUnpack ? <Button type="button" variant="secondary" onClick={() => navigate(returnTo)} data-testid="locations-return-to-unpack">Terug naar Uitpakken</Button> : null}
+          {returningToUnpack ? <Button type="button" variant="secondary" onClick={() => navigate(returnTo)} data-testid="locations-return-to-unpack">Naar Uitpakken</Button> : null}
           <form className="rz-mobile-location-add" data-testid="mobile-location-add" onSubmit={(event) => { event.preventDefault(); if (!isSaving) addLocation() }}>
             <label htmlFor="mobile-new-main-location">Nieuwe hoofdlocatie</label>
             <input id="mobile-new-main-location" className="rz-input" value={newLocationName} onChange={(event) => setNewLocationName(event.target.value)} placeholder="Bijvoorbeeld: Woning" autoComplete="off" />
