@@ -27,8 +27,10 @@ assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-tabpanel-shell,[\s\
 assert.match(receiptsSource, /filter\(\(batch\) => !isMobileViewport \|\| String\(batch\.import_status \|\| ''\)\.toLowerCase\(\) !== 'processed'\)/)
 assert.match(detailSource, /navigate\('\/kassabonnen', \{ replace: true \}\)/)
 
-assert.match(detailSource, /rz-mobile-unpack-native-select/, 'mobile receipt dropdowns must be native keyboard-focusable selects')
-assert.doesNotMatch(detailSource, /<MobileInlineSelect/, 'do not replace native selectors with an inaccessible custom trigger')
+assert.match(detailSource, /import Select from '\.\.\/\.\.\/ui\/Select\.jsx'/, 'receipt dropdowns must use the same shared Select as the rest of the app')
+assert.match(detailSource, /<Select[\s\S]*receipt-line-location-select-/, 'mobile location must use shared Select')
+assert.match(detailSource, /<Select[\s\S]*receipt-line-article-group-select-/, 'mobile article group must use shared Select')
+assert.doesNotMatch(detailSource, /rz-mobile-unpack-native-select|<MobileInlineSelect/, 'do not introduce a third dropdown implementation')
 assert.match(detailSource, /disabled=\{isViewer \|\| entry\.processingStatus === 'processed'\}/, 'pending lines must remain keyboard-focusable even while another line is busy')
 assert.match(detailSource, /receipt-line-location-select-/, 'mobile location selector must remain available')
 assert.match(detailSource, /receipt-line-article-group-select-/, 'mobile article group selector must remain available')
