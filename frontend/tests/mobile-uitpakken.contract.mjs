@@ -32,7 +32,7 @@ assert.match(detailSource, /rz-mobile-unpack-native-select/, 'mobile receipt dro
 assert.match(detailSource, /receipt-line-location-select-/, 'mobile location selector must remain available')
 assert.match(detailSource, /receipt-line-article-group-select-/, 'mobile article group selector must remain available')
 assert.match(detailSource, /✓ Naar voorraad/, 'processed mobile receipt lines must show their status')
-assert.match(mobileCss, /\.rz-mobile-unpack-native-select[\\s\\S]*appearance:\\s*auto;/, 'native mobile select appearance must remain enabled')
+assert.match(mobileCss, /\.rz-mobile-unpack-native-select[\s\S]*appearance:\s*auto;/, 'native mobile select appearance must remain enabled')
 assert.doesNotMatch(detailSource, /function MobileArticleGroupSelect/, 'do not recreate a local custom dropdown')
 
 console.log('mobile Uitpakken contract: OK')
