@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 /**
- * In-flow listbox: unlike a native <select> popup, its options inherit the
- * application's accessibility font tokens and remain inside the mobile card.
+ * Expand a real HTML select into an in-page list. Browser popup menus do not
+ * reliably inherit the application's font-size preference; size > 1 does.
+ * Keeping the list in document flow also avoids clipping by mobile receipt
+ * cards, table wrappers and overlay stacking contexts.
  */
 export default function MobileInlineSelect({
   value = '',
@@ -13,56 +15,54 @@ export default function MobileInlineSelect({
   dataTestId,
 }) {
   const [open, setOpen] = useState(false)
-  const rootRef = useRef(null)
+  const selectRef = useRef(null)
   const selected = options.find((option) => String(option.value) === String(value))
-  useEffect(() => {
-    if (!open) return undefined
-    function closeOutside(event) {
-      if (!rootRef.current?.contains(event.target)) setOpen(false)
-    }
-    function closeEscape(event) {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', closeOutside)
-    document.addEventListener('keydown', closeEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOutside)
-      document.removeEventListener('keydown', closeEscape)
-    }
-  }, [open])
+  const selectedLabel = selected?.label || options[0]?.label || 'Kies...'
+
   return (
-    <div className="rz-mobile-inline-select" ref={rootRef}>
+    <div className="rz-mobile-inline-select">
       <button
         type="button"
         className="rz-input rz-mobile-inline-select-trigger"
         disabled={disabled}
         aria-label={ariaLabel}
         aria-expanded={open}
-        aria-haspopup="listbox"
+        aria-controls={`${dataTestId}-options`}
         data-testid={dataTestId}
-        onClick={() => setOpen((previous) => !previous)}
+        onClick={() => {
+          if (disabled) return
+          setOpen((previous) => !previous)
+        }}
       >
-        <span>{selected?.label || options[0]?.label || 'Kies...'}</span>
+        <span>{selectedLabel}</span>
         <span aria-hidden="true">{open ? '▴' : '▾'}</span>
       </button>
       {open && !disabled ? (
-        <div className="rz-mobile-inline-select-options" role="listbox" aria-label={ariaLabel}>
+        <select
+          ref={selectRef}
+          id={`${dataTestId}-options`}
+          className="rz-mobile-inline-select-options"
+          aria-label={ariaLabel}
+          size={Math.min(Math.max(options.length, 2), 5)}
+          value={String(value)}
+          onChange={(event) => {
+            const nextValue = event.target.value
+            setOpen(false)
+            onChange(nextValue)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              setOpen(false)
+            }
+          }}
+        >
           {options.map((option) => (
-            <button
-              type="button"
-              role="option"
-              aria-selected={String(option.value) === String(value)}
-              className="rz-mobile-inline-select-option"
-              key={String(option.value)}
-              onClick={() => {
-                setOpen(false)
-                onChange(option.value)
-              }}
-            >
+            <option key={String(option.value)} value={String(option.value)}>
               {option.label}
-            </button>
+            </option>
           ))}
-        </div>
+        </select>
       ) : null}
     </div>
   )
