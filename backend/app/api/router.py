@@ -32,6 +32,7 @@ from app.api.picnic_email_import_source_closure import (
     retire_legacy_picnic_email_import_route_from_loaded_main,
 )
 from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
+from app.api.retailer_receipt_routes import router as retailer_receipt_router
 from app.api.platform_audit_routes import router as platform_audit_router
 from app.api.platform_authorizations_routes import router as platform_authorizations_router
 from app.api.platform_feature_flags_routes import router as platform_feature_flags_router
@@ -103,6 +104,7 @@ api_router.include_router(legacy_household_member_creation_closure_router)
 api_router.include_router(picnic_email_import_source_closure_router)
 api_router.include_router(session_household_router)
 api_router.include_router(loyalty_stamp_router)
+api_router.include_router(retailer_receipt_router)
 api_router.include_router(support_message_router)
 api_router.include_router(platform_audit_router)
 api_router.include_router(platform_authorizations_router)
