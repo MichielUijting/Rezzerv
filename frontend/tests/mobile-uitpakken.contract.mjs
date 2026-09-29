@@ -24,7 +24,7 @@ assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-tab
 assert.match(detailSource, /const visible = isMobileViewport[\s\S]*\? filteredLineUiStates[\s\S]*: filteredLineUiStates\.filter\(\(entry\) => entry\.processingStatus !== 'processed'\)/)
 assert.match(detailSource, /onDoubleClick=\{isMobileViewport \? undefined : \(\) => openReceiptLineDetail\(line\.id\)\}/)
 assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-tabpanel-shell,[\s\S]*max-height:\s*none !important;[\s\S]*overflow:\s*visible !important;/)
-assert.match(receiptsSource, /filter\(\(batch\) => !isMobileViewport \|\| String\(batch\.import_status \|\| ''\)\.toLowerCase\(\) !== 'processed'\)/)
+assert.doesNotMatch(receiptsSource, /batch\.import_status/, 'the canonical API filters completed receipts for both viewports')
 assert.match(detailSource, /navigate\('\/kassabonnen', \{ replace: true \}\)/)
 
 assert.match(detailSource, /import Select from '\.\.\/\.\.\/ui\/Select\.jsx'/, 'receipt dropdowns must use the same shared Select as the rest of the app')
@@ -40,6 +40,7 @@ assert.match(detailSource, /⚠ Actie nodig/, 'action-needed mobile receipt line
 
 // The overview and detail must count the same canonical purchase_import_lines.
 const unpackListRoute = unpackBackendSource.split('@app.get("/api/unpack-start-batches")')[1]?.split('@app.get("/api/receipts")')[0] || ''
+assert.match(unpackListRoute, /remaining_line_count[\s\S]*processing_status[\s\S]*processed/, 'overview excludes completed canonical batches')
 assert.match(unpackListRoute, /ensure_unpack_batch_for_receipt\(conn, serialized\)/, 'overview must synchronize receipt lines before counting')
 assert.match(unpackListRoute, /SELECT COUNT\(\*\) FROM purchase_import_lines WHERE batch_id = :batch_id/, 'overview must count actual unpack lines, not all parsed receipt rows')
 assert.match(unpackListRoute, /'summary': \{'total': int\(unpack_line_count\)\}/, 'overview must publish canonical unpack count')
