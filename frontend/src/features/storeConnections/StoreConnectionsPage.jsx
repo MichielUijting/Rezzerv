@@ -3,6 +3,7 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared.jsx'
 
 function formatLastSync(value) {
@@ -37,6 +38,7 @@ function deriveRows(providers, connections) {
 }
 
 export default function StoreConnectionsPage() {
+  const { showFeedback } = useAppFeedback()
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
@@ -46,9 +48,19 @@ export default function StoreConnectionsPage() {
   const [status, setStatus] = useState('')
   const [editingCode, setEditingCode] = useState('')
   const [cardNumber, setCardNumber] = useState('')
+  const [ahConnection, setAhConnection] = useState({ connected: false, persistence: 'runtime_only' })
+  const [ahLoginUrl, setAhLoginUrl] = useState('')
+  const [ahCode, setAhCode] = useState('')
+  const [ahBusy, setAhBusy] = useState(false)
 
   const rows = useMemo(() => deriveRows(providers, connections), [providers, connections])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
+
+  async function loadAhStatus() {
+    const data = await fetchJson('/api/receipts/retailers/ah/status')
+    setAhConnection(data || { connected: false, persistence: 'runtime_only' })
+    return data
+  }
 
   async function loadPageData() {
     setIsLoading(true)
@@ -62,6 +74,7 @@ export default function StoreConnectionsPage() {
       setHousehold(householdData)
       setProviders(providerData)
       setConnections(connectionData)
+      await loadAhStatus()
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelkoppelingen konden niet worden geladen.')
     } finally {
@@ -72,6 +85,103 @@ export default function StoreConnectionsPage() {
   useEffect(() => {
     loadPageData()
   }, [])
+
+  async function startAhLogin() {
+    setAhBusy(true)
+    try {
+      const data = await fetchJson('/api/receipts/retailers/ah/connect')
+      setAhLoginUrl(data?.login_url || '')
+      if (!data?.login_url) throw new Error('AH-loginadres ontbreekt.')
+      window.open(data.login_url, '_blank', 'noopener,noreferrer')
+      showFeedback({
+        variant: 'info',
+        title: 'Albert Heijn koppelen',
+        message: 'Rond de AH-login af in het geopende venster.',
+        detail: 'Kopieer daarna de appie://login-exit?code=... link of alleen de code en plak die hieronder.',
+      })
+    } catch (err) {
+      showFeedback({
+        variant: 'error',
+        title: 'Albert Heijn koppelen',
+        message: normalizeErrorMessage(err?.message) || 'De AH-login kon niet worden gestart.',
+      })
+    } finally {
+      setAhBusy(false)
+    }
+  }
+
+  async function completeAhLogin() {
+    const value = String(ahCode || '').trim()
+    if (!value) {
+      showFeedback({ variant: 'warning', message: 'Plak eerst de AH-redirect of autorisatiecode.' })
+      return
+    }
+    setAhBusy(true)
+    try {
+      const result = await fetchJson('/api/receipts/retailers/ah/connect', {
+        method: 'POST',
+        body: JSON.stringify({ code_or_redirect: value }),
+      })
+      setAhConnection(result)
+      setAhCode('')
+      showFeedback({
+        variant: 'success',
+        title: 'Albert Heijn gekoppeld',
+        message: 'De koppeling is actief. Je kunt nu digitale AH-bonnen ophalen.',
+      })
+    } catch (err) {
+      showFeedback({
+        variant: 'error',
+        title: 'Albert Heijn koppelen',
+        message: normalizeErrorMessage(err?.message) || 'De AH-koppeling kon niet worden voltooid.',
+      })
+    } finally {
+      setAhBusy(false)
+    }
+  }
+
+  async function syncAhReceipts() {
+    setAhBusy(true)
+    try {
+      const result = await fetchJson('/api/receipts/retailers/ah/sync', {
+        method: 'POST',
+        body: JSON.stringify({ limit: 20 }),
+      })
+      showFeedback({
+        variant: result?.receipts_failed ? 'warning' : 'success',
+        title: 'AH-bonnen opgehaald',
+        message: String(Number(result?.receipts_processed || 0)) + ' van ' + String(Number(result?.receipts_found || 0)) + ' bonnen verwerkt.',
+        detail: result?.receipts_failed ? String(result.receipts_failed) + ' bon(nen) konden niet worden verwerkt.' : 'De bonnen staan nu in Kassa.',
+      })
+      await loadAhStatus()
+    } catch (err) {
+      showFeedback({
+        variant: 'error',
+        title: 'AH-bonnen ophalen',
+        message: normalizeErrorMessage(err?.message) || 'De AH-bonnen konden niet worden opgehaald.',
+      })
+    } finally {
+      setAhBusy(false)
+    }
+  }
+
+  async function disconnectAh() {
+    setAhBusy(true)
+    try {
+      const result = await fetchJson('/api/receipts/retailers/ah/connect', { method: 'DELETE' })
+      setAhConnection(result)
+      setAhCode('')
+      setAhLoginUrl('')
+      showFeedback({ variant: 'success', message: 'Albert Heijn is ontkoppeld.' })
+    } catch (err) {
+      showFeedback({
+        variant: 'error',
+        message: normalizeErrorMessage(err?.message) || 'Albert Heijn kon niet worden ontkoppeld.',
+      })
+    } finally {
+      setAhBusy(false)
+    }
+  }
 
   function openEditor(row) {
     setStatus('')
@@ -132,6 +242,55 @@ export default function StoreConnectionsPage() {
             <p style={{ margin: 0, color: '#667085' }}>
               Koppel hier een winkel éénmalig. Daarna kun je via Kassabonnen automatisch bonnen ophalen zonder opnieuw te koppelen.
             </p>
+          </div>
+        </Card>
+
+        <Card>
+          <div data-testid="ah-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '680px' }}>
+            <div>
+              <h3 style={{ margin: 0 }}>Albert Heijn digitale bonnen</h3>
+              <p style={{ margin: '6px 0 0', color: '#667085' }}>
+                Status: <strong>{ahConnection?.connected ? 'gekoppeld' : 'niet gekoppeld'}</strong>.
+                De koppeling is in deze versie actief zolang Inhuis draait.
+              </p>
+            </div>
+
+            {!ahConnection?.connected ? (
+              <>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <Button type="button" onClick={startAhLogin} disabled={ahBusy || isLoading} data-testid="ah-connect-start">
+                    Open AH-login
+                  </Button>
+                  {ahLoginUrl ? (
+                    <Button type="button" variant="secondary" onClick={() => window.open(ahLoginUrl, '_blank', 'noopener,noreferrer')} disabled={ahBusy}>
+                      AH-login opnieuw openen
+                    </Button>
+                  ) : null}
+                </div>
+                <Input
+                  label="AH-redirect of autorisatiecode"
+                  value={ahCode}
+                  onChange={(event) => setAhCode(event.target.value)}
+                  disabled={ahBusy}
+                  data-testid="ah-connect-code"
+                  placeholder="appie://login-exit?code=..."
+                />
+                <div>
+                  <Button type="button" onClick={completeAhLogin} disabled={ahBusy || !String(ahCode || '').trim()} data-testid="ah-connect-complete">
+                    Koppeling afronden
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <Button type="button" onClick={syncAhReceipts} disabled={ahBusy} data-testid="ah-sync-receipts">
+                  AH-bonnen ophalen
+                </Button>
+                <Button type="button" variant="secondary" onClick={disconnectAh} disabled={ahBusy} data-testid="ah-disconnect">
+                  Ontkoppelen
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
 
