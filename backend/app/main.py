@@ -11610,6 +11610,21 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                 text("SELECT COUNT(*) FROM purchase_import_lines WHERE batch_id = :batch_id"),
                 {'batch_id': batch_id},
             ).scalar_one()
+            # Uitpakken is a work queue: only receipts with canonical lines still
+            # awaiting inventory processing belong in the overview. This is
+            # household-scoped through the authorized receipt/batch above.
+            remaining_line_count = conn.execute(
+                text("""
+                    SELECT COUNT(*)
+                    FROM purchase_import_lines
+                    WHERE batch_id = :batch_id
+                      AND COALESCE(processing_status, 'pending') <> 'processed'
+                """),
+                {'batch_id': batch_id},
+            ).scalar_one()
+            if int(remaining_line_count) == 0:
+                continue
+
             purchase_at_value = serialized.get('purchase_at') or serialized.get('created_at') or ''
             purchase_label = str(purchase_at_value)[:10] if purchase_at_value else '-'
             store_label = serialized.get('store_name') or serialized.get('store_branch') or serialized.get('source_label') or 'Kassabon'
