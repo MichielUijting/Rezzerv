@@ -36,7 +36,8 @@ assert.match(detailSource, /○ Nog te verwerken/, 'pending mobile receipt lines
 assert.match(detailSource, /⚠ Actie nodig/, 'action-needed mobile receipt lines must show their status')
 assert.match(mobileCss, /\.rz-mobile-inline-select-option[^}]*font-size:\s*var\(--font-size-ui-body\)\s*!important;/, 'opened options must use accessibility font token')
 assert.match(inlineSelectSource, /aria-expanded=\{open\}/, 'mobile dropdown must expose its open state')
-assert.match(inlineSelectSource, /max-height|role="listbox"/, 'mobile dropdown must expose an accessible option list')
+assert.match(inlineSelectSource, /size=\\{Math\\.min\\(Math\\.max\\(options\\.length, 2\\), 5\\)\\}/, 'mobile dropdown must expand as an in-page scrollable listbox')
+assert.match(inlineSelectSource, /onClick=\\{\\(\\) => \\{[\\s\\S]*setOpen\\(\\(previous\\) => !previous\\)/, 'trigger must toggle listbox open on click')
 assert.doesNotMatch(detailSource, /function MobileArticleGroupSelect/, 'do not recreate a local custom dropdown')
 
 // The overview and detail must count the same canonical purchase_import_lines.
