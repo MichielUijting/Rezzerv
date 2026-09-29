@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import json
+
 import pytest
 
+from app.integrations.receipt_scanners.adapters.retailer_structured import StructuredRetailerReceiptScannerAdapter
+from app.integrations.receipt_scanners.gateway import ReceiptScannerGateway
 from app.integrations.receipt_scanners.normalizer import canonical_to_receipt_parse_result
+from app.integrations.receipt_scanners.registry import ProviderRegistry
+from app.integrations.receipt_scanners.schemas.scan_request_v1 import ScanRequestV1
 from app.integrations.retailer_receipts import RetailerReceiptEnvelope, normalize_retailer_receipt
 
 
@@ -126,3 +132,46 @@ def test_retailer_receipt_requires_total_or_line_totals():
             scan_id="rscan_missing_total",
             document_sha256="c" * 64,
         )
+
+
+def test_structured_retailer_adapter_uses_receipt_scanner_gateway():
+    envelope = RetailerReceiptEnvelope(
+        provider="ah",
+        external_receipt_id="gateway-test",
+        receipt={
+            "purchaseAt": "2026-09-29T19:00:00",
+            "totalAmount": "2.49",
+            "items": [
+                {
+                    "name": "Testartikel",
+                    "quantity": 1,
+                    "unitPrice": "2.49",
+                    "totalPrice": "2.49",
+                    "ean": "8712345678906",
+                }
+            ],
+        },
+    )
+    raw = json.dumps(envelope.model_dump(mode="json"), sort_keys=True).encode("utf-8")
+    request = ScanRequestV1.from_bytes(
+        scan_id="rscan_retailer_gateway",
+        file_bytes=raw,
+        filename="ah-gateway-test.inhuis-receipt.json",
+        mime_type="application/vnd.inhuis.retailer-receipt+json",
+    )
+    provider = StructuredRetailerReceiptScannerAdapter()
+    gateway = ReceiptScannerGateway(
+        ProviderRegistry([provider], active_provider_code=provider.provider_code),
+        timeout_seconds=1,
+        poll_interval_seconds=0,
+    )
+
+    canonical = gateway.scan(request)
+    normalized = canonical_to_receipt_parse_result(canonical)
+
+    assert canonical.provider is not None
+    assert canonical.provider.code == "retailer-ah"
+    assert canonical.document is not None
+    assert canonical.document.sha256 == request.document.sha256
+    assert normalized.store_name == "Albert Heijn"
+    assert normalized.lines[0]["barcode"] == "8712345678906"
