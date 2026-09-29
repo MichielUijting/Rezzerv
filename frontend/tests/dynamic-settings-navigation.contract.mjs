@@ -22,7 +22,7 @@ assert.deepEqual(
 )
 assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
-assert.equal(SETTINGS_TILES.length, 13)
+assert.equal(SETTINGS_TILES.length, 14)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
   assert.ok(['personal', 'household', 'platform'].includes(tile.scope))
@@ -40,6 +40,7 @@ for (const tile of SETTINGS_TILES) {
   })
   assert.equal(navigation.mode, 'legacy')
   assert.deepEqual(keys(navigation), [
+    'accessibility',
     'account',
     'capabilities',
     'article-details',
@@ -54,7 +55,7 @@ for (const tile of SETTINGS_TILES) {
     'help-about',
   ])
   assert.deepEqual(sectionKeys(navigation), {
-    account: ['account', 'article-details', 'privacy-data-sharing'],
+    account: ['accessibility', 'account', 'article-details', 'privacy-data-sharing'],
     household: ['household', 'authorizations'],
     usage: [
       'capabilities',
@@ -83,6 +84,7 @@ for (const tile of SETTINGS_TILES) {
   })
   assert.equal(navigation.mode, 'dynamic')
   assert.deepEqual(keys(navigation), [
+    'accessibility',
     'account',
     'capabilities',
     'article-details',
@@ -96,7 +98,7 @@ for (const tile of SETTINGS_TILES) {
     'help-about',
   ])
   assert.deepEqual(sectionKeys(navigation), {
-    account: ['account', 'article-details', 'privacy-data-sharing'],
+    account: ['accessibility', 'account', 'article-details', 'privacy-data-sharing'],
     household: ['household', 'authorizations'],
     usage: ['capabilities', 'article-groups', 'store-import', 'household-automation', 'almost-out'],
     help: ['help-about'],
@@ -117,6 +119,7 @@ for (const tile of SETTINGS_TILES) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'accessibility',
     'account',
     'capabilities',
     'privacy-data-sharing',
@@ -141,6 +144,7 @@ for (const tile of SETTINGS_TILES) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'accessibility',
     'account',
     'capabilities',
     'article-details',
@@ -170,6 +174,7 @@ for (const tile of SETTINGS_TILES) {
     },
   })
   assert.deepEqual(keys(navigation), [
+    'accessibility',
     'account',
     'capabilities',
     'article-details',
