@@ -222,15 +222,6 @@
 
 .rz-mobile-unpack-line-status--pending { color: var(--color-text-primary); }
 
-/* Uitpakken: create actions remain visible above the scrollable location lists on mobile. */
-.rz-mobile-unpack-create-actions { display: none; }
-@media (max-width: 720px) {
-  .rz-mobile-unpack-create-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 12px 0; }
-  .rz-mobile-unpack-create-actions button { width: 100%; min-height: 44px; }
-  .rz-unpack-location-picker-columns { grid-template-columns: minmax(0, 1fr) !important; overflow: visible !important; }
-  .rz-unpack-location-picker-columns > div > button[data-testid^="receipt-location-create-"] { display: none; }
-}
-
 /* Mobile receipt rows expose the same location-management route as desktop. */
 .rz-mobile-unpack-location-field { display: grid; gap: 5px; min-width: 0; }
 .rz-mobile-unpack-add-location { border: 0; background: transparent; color: var(--color-brand-primary, #005f6a); text-align: left; font: inherit; font-size: 12px; padding: 5px 2px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }

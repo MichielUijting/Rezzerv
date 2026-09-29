@@ -738,14 +738,16 @@ Vaste regels:
 
 ### Mobiel Uitpakken — locatie direct vanuit een bonartikel aanmaken (29 september 2026)
 
-- De locatiekiezer toont op mobiel boven de scrollbare keuzelijsten direct de acties **Nieuwe locatie** en **Nieuwe sublocatie** voor een bevoegde huishoudadmin. De twee lijsten staan op smalle schermen onder elkaar in plaats van in twee smalle kolommen.
+- De locatiekiezer behoudt ook op mobiel de twee kolommen **Locatie** en **Sublocatie** naast elkaar, met de acties **+ Nieuwe locatie** en **+ Nieuwe sublocatie** direct onder de bijbehorende keuzelijsten voor een bevoegde huishoudadmin. Er komt geen extra knop boven de lijsten.
 - Het bestaande inline aanmaakformulier gebruikt de bestaande autorisatie en API. Bij exacte locatie-inrichting leidt een nieuw aangemaakte hoofdlocatie direct door naar het aanmaken van een sublocatie; alleen een complete locatie/sublocatie wordt als artikelbestemming geselecteerd.
 
 
 ### Uitpakken → Locatiebeheer → Uitpakken (29 september 2026)
 
-- De mobiele locatiekiezer biedt een bevoegde huishoudadmin een directe route naar **Instellingen → Locaties**, met behoud van de bonartikelcontext.
+- Vanuit de bonregel kan een bevoegde huishoudadmin naar **Instellingen → Locaties** navigeren, met behoud van de bonartikelcontext. De locatiekiezer zelf bevat geen knop **Beheer locaties**.
 - Bij exacte locatie-inrichting volgt na het toevoegen van een hoofdlocatie de sublocatie. Na opslaan keert Inhuis terug naar het bonartikel en neemt de volledige locatie/sublocatie over, met behoud van bestaande keuzes rond artikelstandaardlocaties.
 - De actie **Terug naar Uitpakken** keert terug zonder nieuwe bestemming.
 
 - In de mobiele kassabon is de route naar Locatiebeheer ook **direct onder de locatiekeuze van elke open bonregel** zichtbaar; niet verborgen in een dropdownoptie. De bestaande desktop-locatiekiezer blijft intact.
+
+- In de locatiekiezer heet de afsluitknop **Overnemen** in plaats van **Sluiten**; de bestaande directe selectie van locatie/sublocatie blijft behouden.

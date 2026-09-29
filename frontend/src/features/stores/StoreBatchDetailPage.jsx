@@ -2321,11 +2321,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       ? `${pickerTargetCount} geselecteerde open regel(s)`
                       : formatReceiptLineLabel(pickerEntry.line.article_name_raw)}
                   </p>
-                  {canManageLocations ? (
-                    <div className="rz-mobile-unpack-create-actions" data-testid="mobile-unpack-location-create-actions">
-                      <Button type="button" variant="secondary" disabled={pickerLineBusy || isCreatingLocation} onClick={openLocationManagement} data-testid="mobile-unpack-manage-location">+ Locatie / sublocatie toevoegen</Button>
-                    </div>
-                  ) : null}
                   <input
                     className="rz-input"
                     type="text"
