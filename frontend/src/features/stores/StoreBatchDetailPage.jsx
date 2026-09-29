@@ -1024,15 +1024,18 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         throw new Error('De nieuwe locatie is opgeslagen, maar kon niet opnieuw worden geladen.')
       }
 
-      setLocationCreateMode('')
       setNewLocationName('')
-      if (mode === 'space') setActiveLocationSpaceId(String(created.space_id || created.id))
+      if (mode === 'space') {
+        setActiveLocationSpaceId(String(created.space_id || created.id))
+        if (household?.location_tracking_level === 'exact') {
+          setLocationCreateMode('sublocation')
+          showUitpakkenFeedback('success', `Locatie ${name} toegevoegd. Voeg nu een sublocatie toe.`, { key: `uitpakken-location-created-space-${created.id}` })
+          return
+        }
+      }
+      setLocationCreateMode('')
       await applyPickedLocation(String(created.id), nextOptions)
-      showUitpakkenFeedback(
-        'success',
-        mode === 'space' ? `Locatie ${name} is toegevoegd en geselecteerd.` : `Sublocatie ${name} is toegevoegd en geselecteerd.`,
-        { key: `uitpakken-location-created-${mode}-${created.id}` },
-      )
+      showUitpakkenFeedback('success', `${mode === 'space' ? 'Locatie' : 'Sublocatie'} ${name} is toegevoegd en geselecteerd.`, { key: `uitpakken-location-created-${mode}-${created.id}` })
     } catch (createError) {
       const message = normalizeErrorMessage(createError?.message || createError)
         || (mode === 'space' ? 'Locatie toevoegen mislukt.' : 'Sublocatie toevoegen mislukt.')
@@ -2293,6 +2296,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       ? `${pickerTargetCount} geselecteerde open regel(s)`
                       : formatReceiptLineLabel(pickerEntry.line.article_name_raw)}
                   </p>
+                  {canManageLocations ? (
+                    <div className="rz-mobile-unpack-create-actions" data-testid="mobile-unpack-location-create-actions">
+                      <Button type="button" variant="secondary" disabled={pickerLineBusy || isCreatingLocation} onClick={() => startInlineLocationCreate('space')}>+ Nieuwe locatie</Button>
+                      <Button type="button" variant="secondary" disabled={pickerLineBusy || isCreatingLocation} onClick={() => startInlineLocationCreate('sublocation')}>+ Nieuwe sublocatie</Button>
+                    </div>
+                  ) : null}
                   <input
                     className="rz-input"
                     type="text"
@@ -2302,7 +2311,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     onChange={(event) => setLocationPickerSearch(event.target.value)}
                     data-testid={pickerIsBulk ? 'receipt-bulk-location-search' : `receipt-line-location-search-${pickerEntry.line.id}`}
                   />
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '14px', overflow: 'hidden', marginTop: '12px' }}>
+                  <div className="rz-unpack-location-picker-columns" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '14px', overflow: 'hidden', marginTop: '12px' }}>
                     <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
                       <div style={{ color: 'var(--color-ui-primary)', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 1: locatie</div>
                       <div style={{ display: 'grid', gap: '6px', height: '246px', overflowY: 'auto', padding: '6px', border: '1px solid #d8e8de', borderRadius: '12px', background: '#f8fbf9', alignContent: 'start', gridAutoRows: '42px' }}>

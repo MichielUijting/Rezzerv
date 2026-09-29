@@ -734,3 +734,9 @@ Vaste regels:
 - Op viewports van maximaal 720 px staat boven de hoofdlocatietabel een compact invoerformulier met het label **Nieuwe hoofdlocatie**, een volledig breed naamveld en de centrale knop **Locatie toevoegen**.
 - Boven 720 px blijft de bestaande desktopinvoerrij onder de hoofdlocatietabel zichtbaar; het mobiele formulier is daar verborgen. Beide varianten gebruiken dezelfde bestaande validatie, autorisatie, API en centrale overlaymeldingen.
 - De mobiele formulierbreedte volgt de beschikbare viewport zonder horizontale verschuiving; de tabel blijft indien nodig binnen de eigen container horizontaal scrollbaar.
+
+
+### Mobiel Uitpakken — locatie direct vanuit een bonartikel aanmaken (29 september 2026)
+
+- De locatiekiezer toont op mobiel boven de scrollbare keuzelijsten direct de acties **Nieuwe locatie** en **Nieuwe sublocatie** voor een bevoegde huishoudadmin. De twee lijsten staan op smalle schermen onder elkaar in plaats van in twee smalle kolommen.
+- Het bestaande inline aanmaakformulier gebruikt de bestaande autorisatie en API. Bij exacte locatie-inrichting leidt een nieuw aangemaakte hoofdlocatie direct door naar het aanmaken van een sublocatie; alleen een complete locatie/sublocatie wordt als artikelbestemming geselecteerd.
