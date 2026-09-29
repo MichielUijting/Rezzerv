@@ -761,3 +761,7 @@ Vaste regels:
 
 - Uitsluitend op de mobiele overzichtsregels van Voorraad en Boodschappen is de combinatie **− / aantal / +** circa 30% smaller; de gedeelde QuantityStepper behoudt elders zijn bestaande afmetingen.
 - De knophoogte en veldhoogte blijven 44 px, de app-brede lettergroottes blijven ongewijzigd. Het bewerkbare aantal in Voorraad blijft rechtstreeks via het numerieke toetsenbord aanpasbaar.
+
+## Mobiele detailnavigatie vanaf 29 september 2026
+
+Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de volledige detailrij zelf gebruikt om het detail te openen. Een losse `>`/`›`-chevron of aparte detailknop aan het einde van de rij is overbodig en wordt niet getoond. Bestaande bediening in de rij (checkbox, aantalknoppen en invoervelden) blijft onafhankelijk werken; desktopweergave blijft ongewijzigd.
