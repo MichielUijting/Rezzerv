@@ -34,6 +34,9 @@ export default function MobileKassa() {
   const [mode, setMode] = useState('camera')
   const [householdId, setHouseholdId] = useState('')
   const [receipts, setReceipts] = useState([])
+  const [receiptsLoading, setReceiptsLoading] = useState(false)
+  const [receiptsLoadError, setReceiptsLoadError] = useState('')
+  const receiptRequestRef = useRef(0)
   const [receipt, setReceipt] = useState(null)
   const [cameraError, setCameraError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -43,9 +46,7 @@ export default function MobileKassa() {
     if (mode !== 'detail') return undefined
     const handleBack = (event) => {
       event.preventDefault()
-      setReceipt(null)
-      setMode('list')
-      loadReceipts().catch(() => {})
+      showReceiptList()
     }
     window.addEventListener('inhuis:mobile-kassa-back', handleBack)
     return () => window.removeEventListener('inhuis:mobile-kassa-back', handleBack)
@@ -62,11 +63,31 @@ export default function MobileKassa() {
   }, [message, showFeedback])
 
   async function loadReceipts(id = householdId) {
-    if (!id) return []
-    const result = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(id)}`)
-    const items = Array.isArray(result?.items) ? result.items : []
-    setReceipts(items)
-    return items
+    const requestId = ++receiptRequestRef.current
+    setReceiptsLoading(true)
+    setReceiptsLoadError('')
+    try {
+      if (!id) throw new Error('Het actieve huishouden is nog niet geladen.')
+      const result = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(id)}`)
+      if (!Array.isArray(result?.items)) throw new Error('De kassabonlijst heeft een onverwacht antwoord ontvangen.')
+      if (requestId === receiptRequestRef.current) setReceipts(result.items)
+      return result.items
+    } catch (error) {
+      if (requestId === receiptRequestRef.current) {
+        setReceiptsLoadError(normalizeErrorMessage(error?.message) || 'Kassabonnen konden niet worden geladen.')
+      }
+      throw error
+    } finally {
+      if (requestId === receiptRequestRef.current) setReceiptsLoading(false)
+    }
+  }
+
+  function showReceiptList() {
+    streamRef.current?.getTracks?.().forEach((track) => track.stop())
+    streamRef.current = null
+    setReceipt(null)
+    setMode('list')
+    loadReceipts().catch(() => {})
   }
 
   async function openCamera() {
@@ -122,7 +143,7 @@ export default function MobileKassa() {
       setHouseholdId(id)
       await loadReceipts(id)
       if (!cancelled) await startCamera()
-    }).catch(() => setCameraError('Kassa kon niet worden gestart.'))
+    }).catch(() => { if (!cancelled) setCameraError('Kassa kon niet worden gestart.') })
     return () => {
       cancelled = true
       streamRef.current?.getTracks?.().forEach((track) => track.stop())
@@ -190,9 +211,7 @@ export default function MobileKassa() {
   }
 
   async function saveReview() {
-    await loadReceipts()
-    setReceipt(null)
-    setMode('list')
+    showReceiptList()
   }
 
   async function openReceipt(id) {
@@ -227,9 +246,7 @@ export default function MobileKassa() {
     setBusy(true)
     try {
       await fetchJson(`/api/receipts/${encodeURIComponent(id)}/approve`, { method: 'POST' })
-      await loadReceipts()
-      setReceipt(null)
-      setMode('list')
+      showReceiptList()
       setMessage('Bon bevestigd en doorgezet volgens de ingestelde Inhuis-route.')
     } catch (error) {
       setMessage(String(error?.message || 'Bon kon niet worden bevestigd.'))
@@ -248,7 +265,7 @@ export default function MobileKassa() {
           <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value=''; if (file) uploadImage(file) }} />
           <div className="rz-mobile-kassa-camera-actions">
-            <Button type="button" onClick={() => { streamRef.current?.getTracks?.().forEach((track) => track.stop()); streamRef.current = null; setMode('list'); loadReceipts() }}>Bonnen</Button>
+            <Button type="button" onClick={showReceiptList}>Bonnen</Button>
             <Button type="button" onClick={takePhoto} disabled={busy} aria-label="Maak foto van kassabon">Foto nemen</Button>
           </div>
         </main>
@@ -267,7 +284,9 @@ export default function MobileKassa() {
       {mode === 'list' ? (
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-list">
           <div className="rz-mobile-kassa-list-actions"><Button type="button" onClick={startCamera}>Nieuwe scan</Button></div>
-          {receipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen.</div> : receipts.map((item) => (
+          {receiptsLoading ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
+          {receiptsLoadError ? <div className="rz-mobile-kassa-empty" role="alert">Kassabonnen konden niet worden geladen. <Button type="button" onClick={() => loadReceipts().catch(() => {})}>Opnieuw proberen</Button></div> : null}
+          {!receiptsLoading && !receiptsLoadError && receipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div> : receipts.map((item) => (
             <button key={receiptId(item)} type="button" className="rz-mobile-kassa-receipt-card" onClick={() => openReceipt(receiptId(item))}>
               <strong>{item.store_name || 'Onbekende winkel'}</strong>
               <span>{dateLabel(item.purchase_at)} · {money(item.total_amount, item.currency)} · {item.line_count ?? 0} regels</span>
@@ -281,7 +300,7 @@ export default function MobileKassa() {
         <main className="rz-mobile-kassa-content" data-testid="mobile-kassa-detail">
           <ReceiptSummary receipt={receipt} lines={lines} editable onHeaderChange={updateHeader} onLineChange={updateLine} />
           <div className="rz-mobile-kassa-primary-actions">
-            <Button type="button" variant="secondary" onClick={() => { setReceipt(null); setMode('list') }}>Bonnen</Button>
+            <Button type="button" variant="secondary" onClick={showReceiptList}>Bonnen</Button>
             <Button type="button" onClick={approve} disabled={busy}>{busy ? 'Bevestigen…' : 'Bon bevestigen'}</Button>
           </div>
         </main>
