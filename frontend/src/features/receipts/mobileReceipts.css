@@ -205,3 +205,24 @@
 .rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr[data-processed="true"] {
   opacity: .78;
 }
+
+/* Mobile receipt fields use the same OS-native picker interaction as other form selects. */
+.rz-mobile-unpack-detail-page .rz-mobile-unpack-native-select {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-ui-body) !important;
+  appearance: auto;
+  pointer-events: auto;
+}
+.rz-mobile-unpack-detail-page .rz-mobile-unpack-native-select option {
+  font-size: var(--font-size-ui-body) !important;
+}
+.rz-mobile-unpack-line-status {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: var(--font-size-ui-body);
+}
+.rz-mobile-unpack-line-status--processed { color: var(--color-ui-primary); }
+.rz-mobile-unpack-line-status--failed { color: #a12525; }
