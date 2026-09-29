@@ -135,3 +135,16 @@ test('P0 Uitpakken processes canonical day article through Direct without changi
   console.log('P0_UNPACKING_DIRECT_CONSUMPTION_BROWSER_GREEN')
 })
 
+test('Processed mobile receipt row explains disabled dropdowns in an overlay', async ({ page }) => {
+  test.setTimeout(90_000)
+  const accountEmail = required('PLAYWRIGHT_P0_UNPACKING_EMAIL', email).toLowerCase()
+  const accountPassword = required('PLAYWRIGHT_P0_UNPACKING_PASSWORD', password)
+  const expectedBatchId = required('PLAYWRIGHT_P0_UNPACKING_BATCH_ID', batchId)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await login(page, accountEmail, accountPassword)
+  await page.goto(`/kassabonnen/batch/${encodeURIComponent(expectedBatchId)}`)
+  const processedRow = page.locator('[data-testid^="receipt-line-"]').filter({ has: page.getByText('Naar voorraad', { exact: false }) }).first()
+  test.skip(await processedRow.count() === 0, 'Fixture has no processed receipt row')
+  await processedRow.click()
+  await expect(page.getByText('Artikel al naar voorraad overgezet.')).toBeVisible()
+})
