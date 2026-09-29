@@ -250,7 +250,7 @@ export default function ReceiptsPage() {
                       <span className="rz-mobile-inventory-card-title">{item.providerName}</span>
                       <span className="rz-mobile-inventory-card-meta"><span>{item.dateLabel}</span><span>{item.totalLines} artikelen</span><span>{item.statusLabel}</span></span>
                     </button>
-                    
+
                   </div>
                 )
               })}

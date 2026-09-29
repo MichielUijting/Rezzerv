@@ -450,7 +450,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                           {formatQuantity(row.quantity)}
                         </span>
                       )}
-                      
+
                     </>
                   )}
                 />

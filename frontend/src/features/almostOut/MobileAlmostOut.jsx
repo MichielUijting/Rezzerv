@@ -225,7 +225,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
                     >
                       Te kopen {formatAlmostOutQuantity(row.amountToBuy)}
                     </span>
-                    
+
                   </div>
                 </>
               )
