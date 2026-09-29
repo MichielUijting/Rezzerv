@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import '../receipts/mobileReceipts.css'
 import AppShell from '../../app/AppShell'
@@ -195,6 +195,7 @@ function buildBatchDetailPath(batchId) {
 
 export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false }) {
   const navigate = useNavigate()
+  const routeLocation = useLocation()
   const isMobileViewport = useMobileAppViewport()
   const params = useParams()
   const batchId = batchIdOverride || params.batchId || ''
@@ -964,9 +965,26 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }
 
   const canManageLocations = isHouseholdAdminFromContext()
+  const returnedLocationRef = useRef('')
+  useEffect(() => {
+    const params = new URLSearchParams(routeLocation.search)
+    const selectedId = params.get('createdLocationId')
+    const lineId = params.get('lineId')
+    if (!selectedId || !lineId || isLoading || !batch || !locationOptions.some((option) => String(option.id) === selectedId)) return
+    const key = `${batchId}:${lineId}:${selectedId}`
+    if (returnedLocationRef.current === key) return
+    const entry = lineUiStates.find((item) => String(item.line.id) === lineId)
+    if (!entry || entry.processingStatus === 'processed') return
+    returnedLocationRef.current = key
+    navigate(buildBatchDetailPath(batchId), { replace: true })
+    if (params.get('saveMode') === 'handling') handleLocationChoice(entry, selectedId, locationOptions)
+    else if (String(entry.draft?.articleId || entry.line?.matched_household_article_id || '').trim()) setPendingDefaultLocationChoice({ lineId, locationId: selectedId })
+    else persistLineDraft(entry.line, { locationId: selectedId }, { defaultLocationPolicy: 'line_only' })
+  }, [routeLocation.search, batch, isLoading, locationOptions, lineUiStates, batchId])
 
   function openLocationManagement() {
-    window.location.href = '/instellingen/locaties'
+    const params = new URLSearchParams({ returnTo: buildBatchDetailPath(batchId), lineId: String(locationPickerLineId || ''), saveMode: locationPickerSaveMode })
+    navigate(`/instellingen/locaties?${params.toString()}`)
   }
 
   function startInlineLocationCreate(mode) {
@@ -2298,8 +2316,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   </p>
                   {canManageLocations ? (
                     <div className="rz-mobile-unpack-create-actions" data-testid="mobile-unpack-location-create-actions">
-                      <Button type="button" variant="secondary" disabled={pickerLineBusy || isCreatingLocation} onClick={() => startInlineLocationCreate('space')}>+ Nieuwe locatie</Button>
-                      <Button type="button" variant="secondary" disabled={pickerLineBusy || isCreatingLocation} onClick={() => startInlineLocationCreate('sublocation')}>+ Nieuwe sublocatie</Button>
+                      <Button type="button" variant="secondary" disabled={pickerLineBusy || isCreatingLocation} onClick={openLocationManagement} data-testid="mobile-unpack-manage-location">+ Locatie / sublocatie toevoegen</Button>
                     </div>
                   ) : null}
                   <input

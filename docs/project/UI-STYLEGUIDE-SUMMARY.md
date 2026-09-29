@@ -740,3 +740,10 @@ Vaste regels:
 
 - De locatiekiezer toont op mobiel boven de scrollbare keuzelijsten direct de acties **Nieuwe locatie** en **Nieuwe sublocatie** voor een bevoegde huishoudadmin. De twee lijsten staan op smalle schermen onder elkaar in plaats van in twee smalle kolommen.
 - Het bestaande inline aanmaakformulier gebruikt de bestaande autorisatie en API. Bij exacte locatie-inrichting leidt een nieuw aangemaakte hoofdlocatie direct door naar het aanmaken van een sublocatie; alleen een complete locatie/sublocatie wordt als artikelbestemming geselecteerd.
+
+
+### Uitpakken → Locatiebeheer → Uitpakken (29 september 2026)
+
+- De mobiele locatiekiezer biedt een bevoegde huishoudadmin een directe route naar **Instellingen → Locaties**, met behoud van de bonartikelcontext.
+- Bij exacte locatie-inrichting volgt na het toevoegen van een hoofdlocatie de sublocatie. Na opslaan keert Inhuis terug naar het bonartikel en neemt de volledige locatie/sublocatie over, met behoud van bestaande keuzes rond artikelstandaardlocaties.
+- De actie **Terug naar Uitpakken** keert terug zonder nieuwe bestemming.
