@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Button from '../../ui/Button'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import './mobileKassa.css'
 
@@ -26,6 +27,7 @@ function mobileScanErrorMessage(detail) {
 }
 
 export default function MobileKassa() {
+  const { showFeedback } = useAppFeedback()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const fileRef = useRef(null)
@@ -45,7 +47,7 @@ export default function MobileKassa() {
     return items
   }
 
-  async function startCamera() {
+  async function openCamera() {
     setMode('camera')
     setReceipt(null)
     setMessage('')
@@ -60,9 +62,33 @@ export default function MobileKassa() {
         videoRef.current.srcObject = stream
         await videoRef.current.play().catch(() => {})
       }
-    } catch {
-      setCameraError('De camera kon niet automatisch worden geopend. Gebruik Camera openen.')
+    } catch (error) {
+      const denied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'
+      setCameraError(denied ? 'Cameratoegang is geweigerd.' : 'De camera kon niet worden geopend.')
+      showFeedback({ variant: 'warning', title: 'Cameratoegang', message: denied ? 'Geef Inhuis cameratoegang in de browserinstellingen en probeer opnieuw.' : 'Controleer of je camera beschikbaar is en probeer opnieuw.', primaryActionLabel: 'Opnieuw proberen', onPrimaryAction: () => openCamera(), secondaryActionLabel: 'Sluiten', testId: 'mobile-kassa-camera-permission' })
     }
+  }
+
+  async function startCamera() {
+    setMode('camera')
+    setReceipt(null)
+    setCameraError('')
+    let granted = false
+    try {
+      const permission = await navigator.permissions?.query?.({ name: 'camera' })
+      granted = permission?.state === 'granted'
+    } catch { /* Niet iedere browser ondersteunt de camera-permissionquery. */ }
+    if (granted) return openCamera()
+    showFeedback({
+      variant: 'info',
+      title: 'Cameratoegang',
+      message: 'Inhuis heeft toegang tot je camera nodig om een kassabon te fotograferen.',
+      detail: 'Kies Toestaan en bevestig daarna de eventuele toestemmingsvraag van je browser.',
+      primaryActionLabel: 'Toestaan',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: () => openCamera(),
+      testId: 'mobile-kassa-camera-permission',
+    })
   }
 
   useEffect(() => {
@@ -110,6 +136,10 @@ export default function MobileKassa() {
 
   async function takePhoto() {
     const video = videoRef.current
+    if (!streamRef.current?.active) {
+      await startCamera()
+      return
+    }
     if (!video?.videoWidth || !video?.videoHeight) {
       setCameraError('De camera is nog niet gereed. Controleer de cameratoestemming en probeer opnieuw.')
       return
@@ -194,12 +224,10 @@ export default function MobileKassa() {
         <main className="rz-mobile-kassa-camera" data-testid="mobile-kassa-camera">
           <video ref={videoRef} playsInline muted className="rz-mobile-kassa-video" />
           <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
-          {cameraError ? <div className="rz-mobile-kassa-camera-error">{cameraError}</div> : null}
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value=''; if (file) uploadImage(file) }} />
           <div className="rz-mobile-kassa-camera-actions">
-            <Button type="button" variant="secondary" onClick={() => { streamRef.current?.getTracks?.().forEach((track) => track.stop()); setMode('list'); loadReceipts() }}>Bonnen</Button>
-            <button type="button" className="rz-mobile-kassa-shutter" aria-label="Maak foto van kassabon" onClick={takePhoto} disabled={busy} />
-            <Button type="button" variant="secondary" onClick={startCamera}>Camera starten</Button>
+            <Button type="button" onClick={() => { streamRef.current?.getTracks?.().forEach((track) => track.stop()); streamRef.current = null; setMode('list'); loadReceipts() }}>Bonnen</Button>
+            <Button type="button" onClick={takePhoto} disabled={busy} aria-label="Maak foto van kassabon">Foto nemen</Button>
           </div>
         </main>
       ) : null}
