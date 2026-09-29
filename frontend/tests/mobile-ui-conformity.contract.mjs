@@ -22,6 +22,9 @@ const mobileHomeSource = readFileSync(new URL('../src/features/home/MobileHomePa
 const mobileHomeCss = readFileSync(new URL('../src/features/home/mobileHome.css', import.meta.url), 'utf8')
 const mobileSupportSource = readFileSync(new URL('../src/features/support/MobileSupportInbox.jsx', import.meta.url), 'utf8')
 const mobileSupportCss = readFileSync(new URL('../src/features/support/mobileSupportInbox.css', import.meta.url), 'utf8')
+const mobileUnpackSource = readFileSync(new URL('../src/features/receipts/ReceiptsPage.jsx', import.meta.url), 'utf8')
+const mobileUnpackDetailSource = readFileSync(new URL('../src/features/stores/StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
+const mobileUnpackCss = readFileSync(new URL('../src/features/receipts/mobileReceipts.css', import.meta.url), 'utf8')
 const mobileAppChromeCss = readFileSync(new URL('../src/app/mobileAppChrome.css', import.meta.url), 'utf8')
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
@@ -36,14 +39,19 @@ const MOBILE_UI_MANIFEST = Object.freeze([
   { key: 'boodschappen', source: mobileShoppingSource, css: mobileShoppingCss, header: /<MobileModuleHeader title="Boodschappen"/ },
   { key: 'kassa', source: mobileKassaSource, css: mobileKassaCss, header: /<MobileModuleHeader[^>]*mobile-kassa-header/ },
   { key: 'meldingen', source: mobileSupportSource, css: mobileSupportCss, header: /<MobileModuleHeader title="Meldingen"/ },
+  { key: 'uitpakken', source: mobileUnpackSource, css: mobileUnpackCss, header: /<MobileModuleHeader title="Uitpakken" testId="mobile-unpack-header"/ },
+  { key: 'uitpakken-detail', source: mobileUnpackDetailSource, css: mobileUnpackCss, header: /<MobileModuleHeader title="Kassabon" testId="mobile-unpack-detail-header"/ },
 ])
-assert.deepEqual(MOBILE_UI_MANIFEST.map(({ key }) => key), ['startpagina', 'voorraad', 'voorraad-detail', 'bijna-op', 'boodschappen', 'kassa', 'meldingen'])
+assert.deepEqual(MOBILE_UI_MANIFEST.map(({ key }) => key), ['startpagina', 'voorraad', 'voorraad-detail', 'bijna-op', 'boodschappen', 'kassa', 'meldingen', 'uitpakken', 'uitpakken-detail'])
 for (const screen of MOBILE_UI_MANIFEST) {
   assert.match(screen.source, screen.header, screen.key + ' moet de gedeelde MobileModuleHeader gebruiken')
   for (const declaration of screen.css.matchAll(/font-size\s*:\s*([^;}]+)/gi)) {
     assert.match(declaration[1].trim(), /var\(--font-size-ui-(?:body|title)\)/, screen.key + ' gebruikt een niet-toegestane lettergrootte: ' + declaration[1].trim())
   }
   assert.doesNotMatch(screen.css, /#006b3c|#005630/i, screen.key + ' gebruikt een alternatieve primaire groentint')
+  if (screen.key.startsWith('uitpakken')) {
+    assert.match(screen.css, /\.rz-mobile-unpack-detail-content select,[\s\S]*font-size:\s*var\(--font-size-ui-body\)\s*!important;/, screen.key + ' moet dropdowns op de mobiele body-lettergrootte houden')
+  }
 }
 
 assert.match(mobileHomeSource, /data-testid="mobile-home-page"/)

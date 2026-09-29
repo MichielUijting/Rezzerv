@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const receiptsSource = fs.readFileSync(new URL('../src/features/receipts/ReceiptsPage.jsx', import.meta.url), 'utf8')
+const mobileCss = fs.readFileSync(new URL('../src/features/receipts/mobileReceipts.css', import.meta.url), 'utf8')
+const routerSource = fs.readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
+const detailSource = fs.readFileSync(new URL('../src/features/stores/StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
+const unpackBackendSource = fs.readFileSync(new URL('../../backend/app/main.py', import.meta.url), 'utf8')
+
+assert.match(receiptsSource, /useMobileAppViewport/)
+assert.match(receiptsSource, /data-testid="mobile-unpack-page"/)
+assert.match(receiptsSource, /rz-mobile-inventory-screen rz-mobile-unpack-screen/)
+assert.match(receiptsSource, /<MobileModuleHeader title="Uitpakken" testId="mobile-unpack-header" \/>/, 'Uitpakken moet de gedeelde mobiele InHuis-header met woordmerk gebruiken')
+assert.match(detailSource, /<MobileModuleHeader title="Kassabon" testId="mobile-unpack-detail-header" \/>/, 'kassabondetail moet de gedeelde mobiele InHuis-header met woordmerk gebruiken')
+assert.match(receiptsSource, /mobile-receipt-open-/)
+assert.match(receiptsSource, /navigate\(\`\/kassabonnen\/batch\/\$\{encodeURIComponent\(item\.batch_id\)\}\`\)/)
+assert.match(routerSource, /path: '\/kassabonnen\/batch\/:batchId'[\s\S]*StoreBatchDetailPage/)
+assert.match(detailSource, /data-testid="mobile-unpack-detail-page"/)
+assert.doesNotMatch(detailSource, /rz-mobile-unpack-back/)
+assert.match(mobileCss, /--size-app-bar-mobile/)
+assert.match(mobileCss, /min-height:\s*44px/)
+assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-table tbody tr[\s\S]*grid-template-columns:\s*44px minmax\(0, 1fr\) auto/)
+assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-store-workbench-table colgroup,[\s\S]*thead[\s\S]*display:\s*none/)
+assert.match(detailSource, /const visible = isMobileViewport[\s\S]*\? filteredLineUiStates[\s\S]*: filteredLineUiStates\.filter\(\(entry\) => entry\.processingStatus !== 'processed'\)/)
+assert.match(detailSource, /onDoubleClick=\{isMobileViewport \? undefined : \(\) => openReceiptLineDetail\(line\.id\)\}/)
+assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-tabpanel-shell,[\s\S]*max-height:\s*none !important;[\s\S]*overflow:\s*visible !important;/)
+assert.doesNotMatch(receiptsSource, /batch\.import_status/, 'the canonical API filters completed receipts for both viewports')
+assert.match(detailSource, /navigate\('\/kassabonnen', \{ replace: true \}\)/)
+
+assert.match(detailSource, /import Select from '\.\.\/\.\.\/ui\/Select\.jsx'/, 'receipt dropdowns must use the same shared Select as the rest of the app')
+assert.match(detailSource, /<Select[\s\S]*receipt-line-location-select-/, 'mobile location must use shared Select')
+assert.match(detailSource, /<Select[\s\S]*receipt-line-article-group-select-/, 'mobile article group must use shared Select')
+assert.doesNotMatch(detailSource, /rz-mobile-unpack-native-select|<MobileInlineSelect/, 'do not introduce a third dropdown implementation')
+assert.match(detailSource, /disabled=\{isViewer \|\| entry\.processingStatus === 'processed'\}/, 'pending lines must remain keyboard-focusable even while another line is busy')
+assert.match(detailSource, /receipt-line-location-select-/, 'mobile location selector must remain available')
+assert.match(detailSource, /receipt-line-article-group-select-/, 'mobile article group selector must remain available')
+assert.match(detailSource, /✓ Naar voorraad/, 'processed mobile receipt lines must show their status')
+assert.match(detailSource, /○ Nog te verwerken/, 'pending mobile receipt lines must show their status')
+assert.match(detailSource, /⚠ Actie nodig/, 'action-needed mobile receipt lines must show their status')
+
+// The overview and detail must count the same canonical purchase_import_lines.
+const unpackListRoute = unpackBackendSource.split('@app.get("/api/unpack-start-batches")')[1]?.split('@app.get("/api/receipts")')[0] || ''
+assert.match(unpackListRoute, /remaining_line_count[\s\S]*processing_status[\s\S]*processed/, 'overview excludes completed canonical batches')
+assert.match(unpackListRoute, /ensure_unpack_batch_for_receipt\(conn, serialized\)/, 'overview must synchronize receipt lines before counting')
+assert.match(unpackListRoute, /SELECT COUNT\(\*\) FROM purchase_import_lines WHERE batch_id = :batch_id/, 'overview must count actual unpack lines, not all parsed receipt rows')
+assert.match(unpackListRoute, /'summary': \{'total': int\(unpack_line_count\)\}/, 'overview must publish canonical unpack count')
+assert.doesNotMatch(unpackListRoute, /'summary': \{'total': int\(serialized\.get\('line_count'\)/, 'raw receipt line count includes discounts and other non-inventory lines')
+assert.match(receiptsSource, /batch\.summary\?\.total \?\? batch\.lines\?\.length \?\? 0/, 'zero canonical lines must not fall back to raw counts')
+assert.match(detailSource, /const lines = batch\?\.lines \|\| \[\]/, 'detail must count all canonical batch lines, including processed ones')
+
+console.log('mobile Uitpakken contract: OK')
+
+assert.match(detailSource, /locationOptions\.filter\(\(location\) => location\.type === 'sublocation'\)/, 'mobile location dropdown must only offer location/sublocation combinations')
+assert.doesNotMatch(detailSource, /location\.type === 'sublocation' \|\| location\.type === 'space'/, 'standalone locations must not appear in the mobile unpack dropdown')
+assert.match(detailSource, /Artikel al naar voorraad overgezet\./, 'processed receipt rows must explain why dropdowns are disabled')

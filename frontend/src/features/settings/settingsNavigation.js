@@ -30,6 +30,17 @@ export const SETTINGS_ROOT_POLICY = {
 
 const SETTINGS_TILES = [
   {
+    key: 'accessibility',
+    title: 'Toegankelijkheid',
+    description: 'Persoonlijke tekstgrootte voor InHuis',
+    to: '/instellingen/toegankelijkheid',
+    relevance: 'always',
+    section: 'account',
+    scope: 'personal',
+    allowedContexts: SETTINGS_CONTEXTS,
+    allowViewer: true,
+  },
+  {
     key: 'account',
     title: 'Mijn account',
     description: 'E-mailadres en wachtwoord',

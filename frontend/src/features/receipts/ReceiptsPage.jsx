@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
@@ -9,6 +9,9 @@ import { fetchJson, normalizeErrorMessage, providerLabel } from '../stores/store
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
+import { useMobileAppViewport } from '../../app/mobileViewport.js'
+import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import './mobileReceipts.css'
 
 export default function ReceiptsPage() {
   const [batches, setBatches] = useState([])
@@ -24,6 +27,8 @@ export default function ReceiptsPage() {
   const [isApplyingDeleteChoice, setIsApplyingDeleteChoice] = useState(false)
   const [tableSort, setTableSort] = useState({ key: 'datum', direction: 'desc' })
   const location = useLocation()
+  const navigate = useNavigate()
+  const isMobileViewport = useMobileAppViewport()
 
   useEffect(() => {
     const requestedBatchId = new URLSearchParams(location.search).get('batch') || ''
@@ -71,13 +76,16 @@ export default function ReceiptsPage() {
   }, [location.search, showFeedback])
 
   const listItems = useMemo(() => {
-    const enriched = (batches || []).map((batch) => ({
-      ...batch,
-      providerName: providerLabel(batch),
-      dateLabel: batch.purchase_date || batch.created_at?.slice(0, 10) || '-',
-      totalLines: Number(batch.summary?.total || batch.lines?.length || 0),
-      statusLabel: batch.inbox_status || 'Nieuw',
-    }))
+    // Uitpakken is een werkvoorraad, geen bonarchief. Zodra de volledige bon
+    // naar Voorraad is verwerkt, verdwijnt hij uit dit overzicht.
+    const enriched = (batches || [])
+      .map((batch) => ({
+        ...batch,
+        providerName: providerLabel(batch),
+        dateLabel: batch.purchase_date || batch.created_at?.slice(0, 10) || '-',
+        totalLines: Number(batch.summary?.total ?? batch.lines?.length ?? 0),
+        statusLabel: batch.inbox_status || 'Nieuw',
+      }))
 
     const filtered = enriched
       .filter((item) => String(item.providerName || '').toLowerCase().includes(filters.winkel.trim().toLowerCase()))
@@ -91,7 +99,7 @@ export default function ReceiptsPage() {
       regels: (item) => Number(item.totalLines ?? 0),
       status: (item) => item.statusLabel || '',
     })
-  }, [batches, filters, tableSort])
+  }, [batches, filters, tableSort, isMobileViewport])
 
   useEffect(() => {
     if (isLoading || hasLoadError) return
@@ -199,6 +207,82 @@ export default function ReceiptsPage() {
   }
 
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedBatchIds.includes(item.batch_id))
+
+  if (isMobileViewport) {
+    return (
+      <div className="rz-mobile-inventory-screen rz-mobile-unpack-screen" data-testid="mobile-unpack-page">
+        <MobileModuleHeader title="Uitpakken" testId="mobile-unpack-header" />
+        <main className="rz-mobile-inventory-content rz-mobile-unpack-content">
+          <div className="rz-mobile-inventory-toolbar">
+            <div className="rz-mobile-inventory-search">
+              <input className="rz-input" value={filters.winkel} onChange={(event) => handleFilterChange('winkel', event.target.value)} placeholder="Zoek winkel" aria-label="Zoek winkel" />
+            </div>
+            <div className="rz-mobile-unpack-filter-strip">
+              <input className="rz-input" value={filters.datum} onChange={(event) => handleFilterChange('datum', event.target.value)} placeholder="Datum" aria-label="Filter op datum" />
+              <input className="rz-input" value={filters.status} onChange={(event) => handleFilterChange('status', event.target.value)} placeholder="Status" aria-label="Filter op status" />
+            </div>
+          </div>
+
+          <div className="rz-mobile-inventory-summary-row">
+            <span className="rz-mobile-inventory-summary">{listItems.length} kassabon{listItems.length === 1 ? '' : 'nen'}</span>
+            {listItems.length > 0 ? (
+              <label className="rz-mobile-unpack-select-all">
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
+                <span>Alles</span>
+              </label>
+            ) : null}
+          </div>
+
+          {isLoading ? <div className="rz-mobile-inventory-state">Bonnen laden…</div> : null}
+          {!isLoading && hasLoadError ? <div className="rz-mobile-inventory-state rz-mobile-inventory-state--error">Kassabonnen konden niet worden geladen.</div> : null}
+          {!isLoading && !hasLoadError && listItems.length === 0 ? <div className="rz-mobile-inventory-state">Er zijn nog geen kassabonnen.</div> : null}
+
+          {!isLoading && !hasLoadError && listItems.length > 0 ? (
+            <div className="rz-mobile-inventory-list rz-mobile-unpack-list">
+              {listItems.map((item) => {
+                const selected = selectedBatchIds.includes(item.batch_id)
+                return (
+                  <div key={item.batch_id} className={`rz-mobile-inventory-card rz-mobile-unpack-card${selected ? ' rz-mobile-unpack-card--selected' : ''}`} data-testid={`mobile-receipt-batch-${item.batch_id}`}>
+                    <label className="rz-mobile-article-row-leading" onClick={(event) => event.stopPropagation()}>
+                      <input type="checkbox" checked={selected} onChange={() => toggleSelectedBatch(item.batch_id)} aria-label={`Selecteer ${item.providerName} van ${item.dateLabel}`} />
+                    </label>
+                    <button type="button" className="rz-mobile-unpack-main" onClick={() => navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`)} data-testid={`mobile-receipt-open-${item.batch_id}`}>
+                      <span className="rz-mobile-inventory-card-title">{item.providerName}</span>
+                      <span className="rz-mobile-inventory-card-meta"><span>{item.dateLabel}</span><span>{item.totalLines} artikelen</span><span>{item.statusLabel}</span></span>
+                    </button>
+                    <button type="button" className="rz-mobile-inventory-chevron rz-mobile-unpack-open" onClick={() => navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`)} aria-label={`Open ${item.providerName}`}>›</button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
+
+          {selectedBatchIds.length > 0 ? (
+            <div className="rz-mobile-unpack-actions">
+              <Button type="button" variant="secondary" onClick={handleExport}>Exporteren</Button>
+              <Button type="button" variant="secondary" onClick={handleDeleteSelected}>Verwijderen</Button>
+            </div>
+          ) : null}
+
+        </main>
+
+        {deleteChoiceOpen ? (
+          <div className="rz-modal-backdrop" role="presentation">
+            <div className="rz-modal-card rz-mobile-unpack-dialog" role="dialog" aria-modal="true" aria-labelledby="unpack-delete-choice-title" data-testid="unpack-delete-choice-dialog">
+              <h2 id="unpack-delete-choice-title" className="rz-modal-title">Wat wil je met de kassabon doen?</h2>
+              <p className="rz-modal-text">Reeds naar Voorraad verwerkte artikelen blijven ongewijzigd. Kies wat er met de kassabon en de resterende artikelen moet gebeuren.</p>
+              <div className="rz-mobile-unpack-dialog-actions">
+                <Button type="button" onClick={() => applyDeleteChoice('return_to_kassa')} disabled={isApplyingDeleteChoice}>Terugzetten naar Kassa</Button>
+                <Button type="button" variant="secondary" onClick={() => applyDeleteChoice('archive')} disabled={isApplyingDeleteChoice}>Archiveren</Button>
+                <Button type="button" variant="secondary" onClick={() => applyDeleteChoice('remove')} disabled={isApplyingDeleteChoice}>Volledig verwijderen</Button>
+                <Button type="button" variant="secondary" onClick={() => setDeleteChoiceOpen(false)} disabled={isApplyingDeleteChoice}>Annuleren</Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <AppShell title="Uitpakken" showExit={false}>
