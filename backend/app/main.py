@@ -11603,6 +11603,13 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                 continue
 
             batch_id = ensure_unpack_batch_for_receipt(conn, serialized)
+            # Use the same canonical unpacking lines as the batch detail screen.
+            # Receipt-table line_count also includes discounts, payment and other
+            # non-inventory lines filtered by sync_unpack_batch_lines_for_receipt.
+            unpack_line_count = conn.execute(
+                text("SELECT COUNT(*) FROM purchase_import_lines WHERE batch_id = :batch_id"),
+                {'batch_id': batch_id},
+            ).scalar_one()
             purchase_at_value = serialized.get('purchase_at') or serialized.get('created_at') or ''
             purchase_label = str(purchase_at_value)[:10] if purchase_at_value else '-'
             store_label = serialized.get('store_name') or serialized.get('store_branch') or serialized.get('source_label') or 'Kassabon'
@@ -11613,7 +11620,7 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                 'store_provider_name': store_label,
                 'purchase_date': purchase_label,
                 'created_at': serialized.get('created_at'),
-                'summary': {'total': int(serialized.get('line_count') or 0)},
+                'summary': {'total': int(unpack_line_count)},
                 'inbox_status': inbox_status,
             })
 
