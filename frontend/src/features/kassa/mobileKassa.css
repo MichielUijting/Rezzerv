@@ -10,3 +10,9 @@
 .rz-mobile-kassa-open{display:grid;gap:5px;text-align:left;border:0;background:transparent;padding:0;color:inherit;font:inherit}
 .rz-mobile-kassa .rz-tabbar{display:flex;overflow-x:auto;gap:4px}
 .rz-mobile-kassa .rz-tab{flex:1;min-width:0;font-size:var(--font-size-ui-body)}
+
+.rz-mobile-kassa-totals{display:grid;gap:8px;padding:12px;border-radius:10px;border:1px solid #e2e8e5;background:#fff;font-size:var(--font-size-ui-body)}
+.rz-mobile-kassa-totals--ok{border-color:#80baa1}
+.rz-mobile-kassa-totals--warning{border-color:#d5a44e}
+.rz-mobile-kassa-camera>.rz-button-secondary{display:block;margin:8px 12px 12px;width:calc(100% - 24px)}
+.rz-mobile-kassa-list-actions{display:flex;flex-wrap:wrap;gap:8px}
