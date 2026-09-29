@@ -747,3 +747,5 @@ Vaste regels:
 - De mobiele locatiekiezer biedt een bevoegde huishoudadmin een directe route naar **Instellingen → Locaties**, met behoud van de bonartikelcontext.
 - Bij exacte locatie-inrichting volgt na het toevoegen van een hoofdlocatie de sublocatie. Na opslaan keert Inhuis terug naar het bonartikel en neemt de volledige locatie/sublocatie over, met behoud van bestaande keuzes rond artikelstandaardlocaties.
 - De actie **Terug naar Uitpakken** keert terug zonder nieuwe bestemming.
+
+- In de mobiele kassabon is de route naar Locatiebeheer ook **direct onder de locatiekeuze van elke open bonregel** zichtbaar; niet verborgen in een dropdownoptie. De bestaande desktop-locatiekiezer blijft intact.

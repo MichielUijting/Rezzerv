@@ -966,8 +966,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const canManageLocations = isHouseholdAdminFromContext()
 
-  function openLocationManagement() {
-    const params = new URLSearchParams({ returnTo: buildBatchDetailPath(batchId), lineId: String(locationPickerLineId || ''), saveMode: locationPickerSaveMode })
+  function openLocationManagement(lineId = locationPickerLineId, saveMode = locationPickerSaveMode) {
+    const params = new URLSearchParams({ returnTo: buildBatchDetailPath(batchId), lineId: String(lineId || ''), saveMode })
     navigate(`/instellingen/locaties?${params.toString()}`)
   }
 
@@ -1993,6 +1993,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
                         {isMobileViewport ? (
+                          <div className="rz-mobile-unpack-location-field">
                           <Select
                             className="rz-mobile-unpack-shared-select"
                             value={entry.draft.locationId || ''}
@@ -2012,6 +2013,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                               handleLocationChoice(entry, nextValue)
                             }}
                           />
+                          {canManageLocations && !isViewer && entry.processingStatus !== 'processed' ? (
+                            <button type="button" className="rz-mobile-unpack-add-location" data-testid={`mobile-unpack-add-location-${line.id}`} onClick={() => openLocationManagement(line.id, 'handling')}>+ Locatie / sublocatie toevoegen</button>
+                          ) : null}
+                          </div>
                         ) : (
                           <button
                             type="button"
