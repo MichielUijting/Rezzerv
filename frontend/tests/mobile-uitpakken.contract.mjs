@@ -6,7 +6,6 @@ const mobileCss = fs.readFileSync(new URL('../src/features/receipts/mobileReceip
 const routerSource = fs.readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const detailSource = fs.readFileSync(new URL('../src/features/stores/StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
 const unpackBackendSource = fs.readFileSync(new URL('../../backend/app/main.py', import.meta.url), 'utf8')
-const inlineSelectSource = fs.readFileSync(new URL('../src/ui/MobileInlineSelect.jsx', import.meta.url), 'utf8')
 
 assert.match(receiptsSource, /useMobileAppViewport/)
 assert.match(receiptsSource, /data-testid="mobile-unpack-page"/)
@@ -28,17 +27,14 @@ assert.match(mobileCss, /\.rz-mobile-unpack-detail-page \.rz-tabpanel-shell,[\s\
 assert.match(receiptsSource, /filter\(\(batch\) => !isMobileViewport \|\| String\(batch\.import_status \|\| ''\)\.toLowerCase\(\) !== 'processed'\)/)
 assert.match(detailSource, /navigate\('\/kassabonnen', \{ replace: true \}\)/)
 
-assert.match(detailSource, /<MobileInlineSelect/, 'mobile receipt dropdowns must use font-aware in-flow lists')
+assert.match(detailSource, /rz-mobile-unpack-native-select/, 'mobile receipt dropdowns must be native keyboard-focusable selects')
+assert.doesNotMatch(detailSource, /<MobileInlineSelect/, 'do not replace native selectors with an inaccessible custom trigger')
+assert.match(detailSource, /disabled=\{isViewer \|\| entry\.processingStatus === 'processed'\}/, 'pending lines must remain keyboard-focusable even while another line is busy')
 assert.match(detailSource, /receipt-line-location-select-/, 'mobile location selector must remain available')
 assert.match(detailSource, /receipt-line-article-group-select-/, 'mobile article group selector must remain available')
 assert.match(detailSource, /✓ Naar voorraad/, 'processed mobile receipt lines must show their status')
 assert.match(detailSource, /○ Nog te verwerken/, 'pending mobile receipt lines must show their status')
 assert.match(detailSource, /⚠ Actie nodig/, 'action-needed mobile receipt lines must show their status')
-assert.match(mobileCss, /\.rz-mobile-inline-select-options option[^}]*font-size:\s*var\(--font-size-ui-body\)\s*!important;/, 'expanded options must use accessibility font token')
-assert.match(inlineSelectSource, /aria-expanded=\{open\}/, 'mobile dropdown must expose its open state')
-assert.ok(inlineSelectSource.includes('size={Math.min(Math.max(options.length, 2), 5)}'), 'mobile dropdown must expand as an in-page listbox')
-assert.ok(inlineSelectSource.includes('setOpen((previous) => !previous)'), 'trigger must toggle listbox on click')
-assert.doesNotMatch(detailSource, /function MobileArticleGroupSelect/, 'do not recreate a local custom dropdown')
 
 // The overview and detail must count the same canonical purchase_import_lines.
 const unpackListRoute = unpackBackendSource.split('@app.get("/api/unpack-start-batches")')[1]?.split('@app.get("/api/receipts")')[0] || ''
