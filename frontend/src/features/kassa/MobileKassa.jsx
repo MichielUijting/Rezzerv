@@ -484,7 +484,6 @@ export default function MobileKassa() {
                   </div>
                 ))}
                 <div className="rz-mobile-kassa-bulk">
-                  <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={() => changeSelectedLines(false)}>Alles goed</Button>
                   <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={exportLines}>Exporteren</Button>
                   <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={confirmDeleteLines}>Verwijderen</Button>
                 </div>
@@ -492,7 +491,6 @@ export default function MobileKassa() {
             )}
           </Tabs>
           <div className="rz-mobile-kassa-primary-actions">
-            <Button type="button" variant="secondary" onClick={showReceiptList}>Bonnen</Button>
             <Button type="button" onClick={approve} disabled={busy}>{busy ? 'Goedkeuren…' : 'Bon goedkeuren'}</Button>
           </div>
         </main>
