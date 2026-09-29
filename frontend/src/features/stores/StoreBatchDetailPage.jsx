@@ -965,22 +965,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }
 
   const canManageLocations = isHouseholdAdminFromContext()
-  const returnedLocationRef = useRef('')
-  useEffect(() => {
-    const params = new URLSearchParams(routeLocation.search)
-    const selectedId = params.get('createdLocationId')
-    const lineId = params.get('lineId')
-    if (!selectedId || !lineId || isLoading || !batch || !locationOptions.some((option) => String(option.id) === selectedId)) return
-    const key = `${batchId}:${lineId}:${selectedId}`
-    if (returnedLocationRef.current === key) return
-    const entry = lineUiStates.find((item) => String(item.line.id) === lineId)
-    if (!entry || entry.processingStatus === 'processed') return
-    returnedLocationRef.current = key
-    navigate(buildBatchDetailPath(batchId), { replace: true })
-    if (params.get('saveMode') === 'handling') handleLocationChoice(entry, selectedId, locationOptions)
-    else if (String(entry.draft?.articleId || entry.line?.matched_household_article_id || '').trim()) setPendingDefaultLocationChoice({ lineId, locationId: selectedId })
-    else persistLineDraft(entry.line, { locationId: selectedId }, { defaultLocationPolicy: 'line_only' })
-  }, [routeLocation.search, batch, isLoading, locationOptions, lineUiStates, batchId])
 
   function openLocationManagement() {
     const params = new URLSearchParams({ returnTo: buildBatchDetailPath(batchId), lineId: String(locationPickerLineId || ''), saveMode: locationPickerSaveMode })
@@ -1793,6 +1777,24 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
     return counts
   }, [lineUiStates])
+
+  const returnedLocationRef = useRef('')
+  useEffect(() => {
+    const params = new URLSearchParams(routeLocation.search)
+    const selectedId = params.get('createdLocationId')
+    const lineId = params.get('lineId')
+    if (!selectedId || !lineId || isLoading || !batch || !locationOptions.some((option) => String(option.id) === selectedId)) return
+    const key = `${batchId}:${lineId}:${selectedId}`
+    if (returnedLocationRef.current === key) return
+    const entry = lineUiStates.find((item) => String(item.line.id) === lineId)
+    if (!entry || entry.processingStatus === 'processed') return
+    returnedLocationRef.current = key
+    navigate(buildBatchDetailPath(batchId), { replace: true })
+    if (params.get('saveMode') === 'handling') handleLocationChoice(entry, selectedId, locationOptions)
+    else if (String(entry.draft?.articleId || entry.line?.matched_household_article_id || '').trim()) setPendingDefaultLocationChoice({ lineId, locationId: selectedId })
+    else persistLineDraft(entry.line, { locationId: selectedId }, { defaultLocationPolicy: 'line_only' })
+  }, [routeLocation.search, batch, isLoading, locationOptions, lineUiStates, batchId])
+
 
   const filteredLineUiStates = useMemo(() => {
     const searchNeedle = searchValue.trim().toLowerCase()
