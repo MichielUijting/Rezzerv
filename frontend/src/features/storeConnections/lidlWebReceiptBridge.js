@@ -178,10 +178,10 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
 
       if (current && isArticle && !clean(data.artQuantity)) {
         const qtyMatch = text.match(/^\s*(\d+(?:[,.]\d+)?)\s*(?:Stk\.?|stuk|stuks?)?\s*x\b/i)
-        if (qtyMatch) current.quantity = qtyMatch[1].replace(',', '.')
         const packageSize = inferPackageSize('', text)
+        if (qtyMatch) current.quantity = qtyMatch[1].replace(',', '.')
         if (packageSize) current.packageSize = packageSize
-        continue
+        if (qtyMatch || packageSize) continue
       }
 
       const lower = clean(text).toLowerCase()
