@@ -395,16 +395,19 @@ export function buildLidlWebBookmarklet(inhuisOrigin) {
   if (!/^https?:\/\/(localhost|127\.0\.0\.1|\[[^\]]+\]|[^/]+)(:\d+)?$/i.test(origin)) {
     throw new Error('Ongeldige Inhuis-origin voor Lidl-import')
   }
-  const target = origin + '/instellingen/winkelkoppelingen?lidlImport=1'
   return (
     'javascript:(()=>{' +
     'const O=' + JSON.stringify(origin) + ';' +
-    'const W=window.open(' + JSON.stringify(target) + ',"inhuis-lidl-import");' +
-    'if(!W){alert("Sta pop-ups toe om Lidl-bonnen naar Inhuis te sturen.");return;}' +
+    'const W=window.opener;' +
+    'if(!W){alert("Open Mijn Lidl-kassabonnen eerst vanuit Inhuis > Winkelkoppelingen. Laat dat Inhuis-tabblad open en gebruik daarna deze favoriet.");return;}' +
+    'let done=false;' +
     'window.addEventListener("message",e=>{' +
-    'if(e.origin!==O||e.source!==W||!e.data||e.data.type!=="inhuis:lidl-script")return;' +
+    'if(done||e.origin!==O||e.source!==W||!e.data||e.data.type!=="inhuis:lidl-script")return;' +
+    'done=true;' +
     'try{new Function(e.data.script)();}catch(err){alert("Lidl-import kon niet starten: "+String(err&&err.message||err));}' +
-    '},{once:true});' +
+    '},{once:false});' +
+    'W.postMessage({type:"inhuis:lidl-handshake"},O);' +
+    'setTimeout(()=>{if(!done)alert("De bestaande Inhuis-sessie reageert niet. Open Lidl opnieuw via Inhuis > Winkelkoppelingen.");},4000);' +
     '})()'
   )
 }

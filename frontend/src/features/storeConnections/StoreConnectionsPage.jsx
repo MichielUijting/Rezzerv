@@ -95,22 +95,26 @@ export default function StoreConnectionsPage() {
   }, [])
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('lidlImport') !== '1') return undefined
-
-    const opener = window.opener
-    if (!opener) {
-      setLidlWebProgress('Open deze import vanuit de Lidl-importknop in je browser.')
-      return undefined
-    }
-
     let importedCount = 0
     let cancelled = false
+    let lidlSourceWindow = null
 
     async function handleMessage(event) {
-      if (cancelled || event.origin !== LIDL_WEB_ORIGIN || event.source !== opener) return
+      if (cancelled || event.origin !== LIDL_WEB_ORIGIN) return
       const data = event.data
       if (!data || typeof data !== 'object') return
+
+      if (data.type === 'inhuis:lidl-handshake') {
+        lidlSourceWindow = event.source
+        setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
+        event.source?.postMessage({
+          type: 'inhuis:lidl-script',
+          script: buildLidlWebPageScript(window.location.origin),
+        }, LIDL_WEB_ORIGIN)
+        return
+      }
+
+      if (!lidlSourceWindow || event.source !== lidlSourceWindow) return
 
       if (data.type === 'inhuis:lidl-progress') {
         setLidlWebProgress(String(data.message || 'Lidl-bonnen verwerken…'))
@@ -122,7 +126,7 @@ export default function StoreConnectionsPage() {
         const receiptId = String(receipt?.id || '').trim()
         const products = Array.isArray(receipt?.products) ? receipt.products : []
         if (!/^\d{8,40}$/.test(receiptId) || !products.length) {
-          opener.postMessage({
+          event.source?.postMessage({
             type: 'inhuis:lidl-ack',
             receipt_id: receiptId,
             ok: false,
@@ -143,14 +147,14 @@ export default function StoreConnectionsPage() {
           })
           importedCount += 1
           setLidlWebProgress(importedCount + ' Lidl-bon(nen) naar Kassa verwerkt.')
-          opener.postMessage({
+          event.source?.postMessage({
             type: 'inhuis:lidl-ack',
             receipt_id: receiptId,
             ok: true,
           }, LIDL_WEB_ORIGIN)
         } catch (err) {
           const message = normalizeErrorMessage(err?.message) || 'De Lidl-bon kon niet worden geïmporteerd.'
-          opener.postMessage({
+          event.source?.postMessage({
             type: 'inhuis:lidl-ack',
             receipt_id: receiptId,
             ok: false,
@@ -168,7 +172,7 @@ export default function StoreConnectionsPage() {
           variant: 'success',
           title: 'Lidl-bonnen geïmporteerd',
           message: count + ' bon(nen) via je bestaande Lidl-websessie verwerkt.',
-          detail: 'Je Lidl-wachtwoord en browsercookies zijn niet naar Inhuis gekopieerd.',
+          detail: 'De import is teruggekomen in dezelfde Inhuis-sessie. Je Lidl-wachtwoord en browsercookies zijn niet naar Inhuis gekopieerd.',
         })
         return
       }
@@ -181,16 +185,12 @@ export default function StoreConnectionsPage() {
     }
 
     window.addEventListener('message', handleMessage)
-    opener.postMessage({
-      type: 'inhuis:lidl-script',
-      script: buildLidlWebPageScript(window.location.origin),
-    }, LIDL_WEB_ORIGIN)
-
     return () => {
       cancelled = true
       window.removeEventListener('message', handleMessage)
     }
   }, [showFeedback])
+
 
   async function startAhLogin() {
     setAhBusy(true)
@@ -431,12 +431,16 @@ export default function StoreConnectionsPage() {
                 Lidl-bonnen naar Inhuis
               </a>
               <div style={{ color: '#667085' }}>
-                Open daarna je Lidl-kassabonnen en klik daar op deze favoriet. Inhuis ontvangt alleen de bongegevens.
+                Gebruik daarna de knop hieronder. Laat dit Inhuis-tabblad open en klik in de geopende Lidl-tab op deze favoriet. De bonnen komen terug in deze bestaande Inhuis-sessie.
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button type="button" onClick={() => window.open(LIDL_HISTORY_URL, '_blank')} data-testid="lidl-web-open-history">
+              <Button
+                type="button"
+                onClick={() => window.open(LIDL_HISTORY_URL, 'inhuis-lidl-receipts')}
+                data-testid="lidl-web-open-history"
+              >
                 Open mijn Lidl-kassabonnen
               </Button>
             </div>

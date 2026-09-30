@@ -12,8 +12,11 @@ assert.match(LIDL_HISTORY_URL, /client_id=NetherlandsEcommerceClient/)
 
 const bookmarklet = buildLidlWebBookmarklet('http://localhost:5174')
 assert.match(bookmarklet, /^javascript:/)
-assert.match(bookmarklet, /lidlImport=1/)
 assert.match(bookmarklet, /http:\/\/localhost:5174/)
+assert.match(bookmarklet, /window\.opener/)
+assert.match(bookmarklet, /inhuis:lidl-handshake/)
+assert.doesNotMatch(bookmarklet, /lidlImport=1/)
+assert.doesNotMatch(bookmarklet, /window\.open/)
 
 const script = buildLidlWebPageScript('http://localhost:5174')
 assert.match(script, /\/mre\/purchase-history/)
