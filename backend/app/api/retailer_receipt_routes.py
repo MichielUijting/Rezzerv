@@ -151,4 +151,3 @@ def sync_ah_account_receipts(
         raise HTTPException(status_code=502, detail="Albert Heijn-bonnen konden niet worden opgehaald") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-

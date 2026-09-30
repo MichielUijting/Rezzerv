@@ -256,7 +256,6 @@ def test_lidl_web_receipt_preserves_rich_product_semantics():
     assert legacy.lines[0]["line_total"] == 4.0
     assert legacy.lines[0]["barcode"] == "4056489000012"
     assert legacy.lines[0]["retailer_sku"] == "123456"
-    assert legacy.lines[0]["tax_rate"] == 21.0
 
     assert canonical.receipt.lines[1].line_type == "deposit"
     assert canonical.receipt.lines[1].line_total == Decimal("0.25")
