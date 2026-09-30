@@ -53,6 +53,7 @@ export default function MobileShopping() {
   const [error, setError] = useState('')
   const checkedSaveChainsRef = useRef(new Map())
   const checkedMutationVersionsRef = useRef(new Map())
+  const catalogSearchRequestRef = useRef(0)
 
   async function loadList() {
     setLoading(true)
@@ -69,33 +70,50 @@ export default function MobileShopping() {
   useEffect(() => { loadList() }, [])
 
 
+  function updateCatalogQuery(value) {
+    catalogSearchRequestRef.current += 1
+    setCatalogQuery(value)
+    setCatalogResults([])
+    setSelectedResultId('')
+    setSearching(false)
+  }
+
   useEffect(() => {
     const query = catalogQuery.trim()
+    const requestId = catalogSearchRequestRef.current
+    let cancelled = false
     setSelectedResultId('')
     if (query.length < 2) {
       setCatalogResults([])
-      return undefined
+      return () => { cancelled = true }
     }
     const timer = window.setTimeout(async () => {
+      if (cancelled || catalogSearchRequestRef.current !== requestId) return
       setSearching(true)
       setError('')
       try {
         const payloads = await Promise.all(shoppingSearchScopes(searchMode).map((scope) => requestJson(
           `/api/shopping-list/catalog-search?scope=${scope}&query=${encodeURIComponent(query)}&limit=5`,
         )))
+        if (cancelled || catalogSearchRequestRef.current !== requestId) return
         setCatalogResults(combineShoppingSearchResults(payloads, 5))
       } catch (searchError) {
+        if (cancelled || catalogSearchRequestRef.current !== requestId) return
         setCatalogResults([])
         setError(searchError?.message || 'Artikelen konden niet worden doorzocht.')
       } finally {
-        setSearching(false)
+        if (!cancelled && catalogSearchRequestRef.current === requestId) setSearching(false)
       }
     }, 250)
-    return () => window.clearTimeout(timer)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
   }, [catalogQuery, searchMode])
 
   function updateSearchMode(value) {
     const nextMode = writeShoppingSearchModePreference(value, readStoredAuthContext())
+    catalogSearchRequestRef.current += 1
     setSearchMode(nextMode)
     setCatalogResults([])
     setSelectedResultId('')
@@ -250,7 +268,7 @@ export default function MobileShopping() {
               type="search"
               value={catalogQuery}
               disabled={saving}
-              onChange={(event) => setCatalogQuery(event.target.value)}
+              onChange={(event) => updateCatalogQuery(event.target.value)}
               placeholder="Zoek in de catalogus of voer zelf een naam in"
               aria-label="Artikel toevoegen"
               aria-controls="mobile-shopping-candidate-list"
