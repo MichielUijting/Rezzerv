@@ -5,7 +5,14 @@ import MobileArticleRow from '../../ui/MobileArticleRow.jsx'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { fetchJsonWithAuth } from '../../lib/authSession.js'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
+import {
+  SHOPPING_SEARCH_MODE_OPTIONS,
+  combineShoppingSearchResults,
+  readShoppingSearchModePreference,
+  shoppingSearchScopes,
+  writeShoppingSearchModePreference,
+} from './shoppingSearchMode.js'
 import '../../pages/mobileVoorraad.css'
 import './mobileShopping.css'
 
@@ -38,6 +45,7 @@ export default function MobileShopping() {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
   const [selectedResultId, setSelectedResultId] = useState('')
+  const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
   const [checkedFilter, setCheckedFilter] = useState('unchecked')
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
@@ -72,8 +80,10 @@ export default function MobileShopping() {
       setSearching(true)
       setError('')
       try {
-        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}&limit=5`)
-        setCatalogResults(Array.isArray(payload?.items) ? payload.items : [])
+        const payloads = await Promise.all(shoppingSearchScopes(searchMode).map((scope) => requestJson(
+          `/api/shopping-list/catalog-search?scope=${scope}&query=${encodeURIComponent(query)}&limit=5`,
+        )))
+        setCatalogResults(combineShoppingSearchResults(payloads, 5))
       } catch (searchError) {
         setCatalogResults([])
         setError(searchError?.message || 'Artikelen konden niet worden doorzocht.')
@@ -82,7 +92,14 @@ export default function MobileShopping() {
       }
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [catalogQuery])
+  }, [catalogQuery, searchMode])
+
+  function updateSearchMode(value) {
+    const nextMode = writeShoppingSearchModePreference(value, readStoredAuthContext())
+    setSearchMode(nextMode)
+    setCatalogResults([])
+    setSelectedResultId('')
+  }
 
   const selectedResult = useMemo(
     () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
@@ -211,6 +228,21 @@ export default function MobileShopping() {
       <main className="rz-mobile-inventory-content rz-mobile-shopping-content">
         <section className="rz-mobile-inventory-toolbar rz-mobile-shopping-toolbar" aria-label="Artikel toevoegen">
           <div className="rz-mobile-shopping-toolbar-title">Artikel toevoegen</div>
+          <label className="rz-mobile-inventory-field">
+            <span className="rz-mobile-inventory-label">Zoekwijze</span>
+            <select
+              className="rz-input"
+              value={searchMode}
+              disabled={saving}
+              onChange={(event) => updateSearchMode(event.target.value)}
+              aria-label="Zoekwijze specifiek of generiek"
+              data-testid="mobile-shopping-search-mode"
+            >
+              {SHOPPING_SEARCH_MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
           <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
             <span className="rz-mobile-inventory-label">Zoek of typ een artikel</span>
             <input
