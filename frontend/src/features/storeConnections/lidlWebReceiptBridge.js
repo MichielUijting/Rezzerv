@@ -4,9 +4,9 @@ export const LIDL_HISTORY_URL =
   'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1'
 
 function lidlWebPageRunner(INHUIS_ORIGIN) {
-  const target = window.open('', 'inhuis-lidl-import')
+  const target = window.opener
   if (!target) {
-    alert('Het Inhuis-importvenster is niet beschikbaar.')
+    alert('De bestaande Inhuis-sessie is niet meer beschikbaar. Open Lidl opnieuw via Inhuis > Winkelkoppelingen.')
     return
   }
 

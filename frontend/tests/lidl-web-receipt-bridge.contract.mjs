@@ -20,6 +20,8 @@ assert.doesNotMatch(bookmarklet, /window\.open/)
 
 const script = buildLidlWebPageScript('http://localhost:5174')
 assert.match(script, /\/mre\/purchase-history/)
+assert.match(script, /window\.opener/)
+assert.doesNotMatch(script, /window\.open/)
 assert.match(script, /\/mre\/purchase-detail/)
 assert.match(script, /NetherlandsEcommerceClient/)
 assert.match(script, /data-art-description/)
