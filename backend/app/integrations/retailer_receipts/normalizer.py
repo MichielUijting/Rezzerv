@@ -132,6 +132,83 @@ def _line_candidates(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
+def _line_identity(item: dict[str, Any]) -> str | None:
+    product = _mapping(_first(item, "product", "article", "item"))
+    value = _first(item, "retailer_sku", "retailerSku", "sku", "articleNumber", "articleId")
+    if value in (None, ""):
+        value = _first(product, "sku", "articleNumber", "id")
+    if value in (None, ""):
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _merge_lidl_weight_continuations(raw_lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse Lidl weight-detail rows into their preceding product line.
+
+    Lidl's structured web receipt can expose one weighed purchase twice: first
+    the priced article row and then a weight x unit-price detail row with the
+    same article id.  The latter is metadata, not a second purchase component.
+    Discounts rendered directly after that detail row also belong to the priced
+    article.  Use structured fields only so ordinary repeated products remain
+    separate lines.
+    """
+    merged_lines: list[dict[str, Any]] = []
+    for raw_item in raw_lines:
+        item = dict(raw_item)
+        if not merged_lines:
+            merged_lines.append(item)
+            continue
+
+        previous = merged_lines[-1]
+        identity = _line_identity(item)
+        previous_identity = _line_identity(previous)
+        package_size = _first(item, "package_size", "packageSize")
+        gross_amount = _decimal(_first(item, "gross_amount", "grossAmount", "originalAmount"))
+        line_total = _decimal(_first(item, "line_total", "lineTotal", "totalPrice", "total", "amount", "finalPrice"))
+        quantity = _decimal(_first(item, "quantity", "count", "qty", "units"))
+        unit_price = _decimal(_first(item, "unit_price", "unitPrice", "currentUnitPrice", "pricePerUnit"))
+
+        is_weight_detail = (
+            bool(identity)
+            and identity == previous_identity
+            and package_size not in (None, "")
+            and gross_amount is None
+            and (line_total is None or line_total == Decimal("0"))
+            and quantity is not None
+            and unit_price is not None
+        )
+        if not is_weight_detail:
+            merged_lines.append(item)
+            continue
+
+        merged = dict(previous)
+        for key in (
+            "quantity", "count", "qty", "units",
+            "unit", "unitOfMeasure", "uom",
+            "unit_price", "unitPrice", "currentUnitPrice", "pricePerUnit",
+            "package_size", "packageSize",
+        ):
+            if item.get(key) not in (None, ""):
+                merged[key] = item[key]
+
+        previous_discount = _decimal(_first(previous, "discount_amount", "discountAmount", "discount", "priceDiscount")) or Decimal("0")
+        detail_discount = _decimal(_first(item, "discount_amount", "discountAmount", "discount", "priceDiscount")) or Decimal("0")
+        total_discount = previous_discount + detail_discount
+        if total_discount:
+            priced_gross = _decimal(_first(previous, "gross_amount", "grossAmount", "originalAmount"))
+            if priced_gross is None:
+                priced_gross = _decimal(_first(previous, "line_total", "lineTotal", "totalPrice", "total", "amount", "finalPrice"))
+            merged["discountAmount"] = format(total_discount, "f")
+            if priced_gross is not None:
+                merged["grossAmount"] = format(priced_gross, "f")
+                merged["lineTotal"] = format(max(Decimal("0"), priced_gross - total_discount), "f")
+
+        merged_lines[-1] = merged
+
+    return merged_lines
+
+
 def _line_type(item: dict[str, Any]) -> str:
     raw = str(_first(item, "line_type", "lineType", "type", "kind") or "").strip().lower()
     if raw in {"discount", "korting", "promotion", "promo"}:
@@ -257,6 +334,8 @@ def normalize_retailer_receipt(
     raw_lines = _line_candidates(payload)
     if not raw_lines:
         raise ValueError("Digitale kassabon bevat geen artikelregels")
+    if envelope.provider == "lidl":
+        raw_lines = _merge_lidl_weight_continuations(raw_lines)
     lines = [_normalize_line(item, index) for index, item in enumerate(raw_lines, start=1)]
     grand_total = _total(payload, lines)
 
