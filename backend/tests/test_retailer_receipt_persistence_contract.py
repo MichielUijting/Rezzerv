@@ -11,3 +11,11 @@ def test_retailer_sku_is_persisted_as_external_article_code() -> None:
     assert "external_article_code" in source
     assert "'external_article_code': line.get('retailer_sku')" in source
     assert ":external_article_code" in source
+
+
+
+def test_reparse_preserves_retailer_sku_as_external_article_code() -> None:
+    source = inspect.getsource(receipt_service.reparse_receipt)
+
+    assert "external_article_code" in source
+    assert "'external_article_code': line.get('retailer_sku')" in source

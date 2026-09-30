@@ -2381,9 +2381,9 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                     text(
                         '''
                         INSERT INTO receipt_table_lines (
-                            id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, line_role, inventory_eligible
+                            id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, external_article_code, article_match_status, matched_article_id, confidence_score, line_role, inventory_eligible
                         ) VALUES (
-                            :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :line_role, :inventory_eligible
+                            :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :external_article_code, :article_match_status, :matched_article_id, :confidence_score, :line_role, :inventory_eligible
                         )
                         '''
                     ),
@@ -2399,6 +2399,7 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                         'line_total': line.get('line_total'),
                         'discount_amount': line.get('discount_amount'),
                         'barcode': line.get('barcode'),
+                        'external_article_code': line.get('retailer_sku'),
                         'article_match_status': 'unmatched',
                         'matched_article_id': None,
                         'confidence_score': line.get('confidence_score'),

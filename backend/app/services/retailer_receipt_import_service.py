@@ -28,7 +28,7 @@ from app.integrations.retailer_receipts import (
     RETAILER_RECEIPT_MIME,
     RetailerReceiptEnvelope,
 )
-from app.services.receipt_service import ingest_receipt
+from app.services.receipt_service import ingest_receipt, reparse_receipt
 
 _PROVIDER_LABELS = {
     "ah": "Albert Heijn digitaal",
@@ -177,6 +177,151 @@ def _safe_external_id(value: str) -> str:
     return normalized.strip(".-_")[:96] or hashlib.sha256(str(value).encode("utf-8")).hexdigest()[:24]
 
 
+
+def _refresh_existing_retailer_receipt_if_safe(
+    engine: Engine,
+    receipt_storage_root: Path,
+    *,
+    household_id: str,
+    source_id: str | None,
+    filename: str,
+    file_bytes: bytes,
+    duplicate_result: dict[str, Any],
+) -> dict[str, Any] | None:
+    raw_receipt_id = str(duplicate_result.get("raw_receipt_id") or "").strip()
+    receipt_table_id = str(duplicate_result.get("receipt_table_id") or "").strip()
+    if not raw_receipt_id or not receipt_table_id:
+        return None
+
+    digest = hashlib.sha256(file_bytes).hexdigest()
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    rr.id AS raw_receipt_id,
+                    rr.source_id,
+                    rr.original_filename,
+                    rr.storage_path,
+                    rr.deleted_at AS raw_deleted_at,
+                    rt.id AS receipt_table_id,
+                    rt.approved_at,
+                    rt.workflow_state,
+                    rt.deleted_at AS receipt_deleted_at,
+                    EXISTS (
+                        SELECT 1
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                          AND (
+                              COALESCE(rtl.is_validated, FALSE) = TRUE
+                              OR rtl.corrected_raw_label IS NOT NULL
+                              OR rtl.corrected_line_total IS NOT NULL
+                          )
+                    ) AS has_user_line_edits
+                FROM raw_receipts rr
+                JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
+                WHERE rr.id = :raw_receipt_id
+                  AND rt.id = :receipt_table_id
+                  AND rr.household_id = :household_id
+                  AND rt.household_id = :household_id
+                LIMIT 1
+                """
+            ),
+            {
+                "raw_receipt_id": raw_receipt_id,
+                "receipt_table_id": receipt_table_id,
+                "household_id": str(household_id),
+            },
+        ).mappings().first()
+        if not row:
+            return None
+
+        workflow_state = str(row.get("workflow_state") or "active").strip().lower()
+        if (
+            row.get("raw_deleted_at") is not None
+            or row.get("receipt_deleted_at") is not None
+            or row.get("approved_at") is not None
+            or bool(row.get("has_user_line_edits"))
+            or workflow_state not in {"active", "returned_to_kassa"}
+            or str(row.get("source_id") or "") != str(source_id or "")
+            or str(row.get("original_filename") or "") != filename
+        ):
+            return None
+
+        hash_conflict = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM raw_receipts
+                WHERE household_id = :household_id
+                  AND sha256_hash = :sha256_hash
+                  AND id <> :raw_receipt_id
+                  AND deleted_at IS NULL
+                LIMIT 1
+                """
+            ),
+            {
+                "household_id": str(household_id),
+                "sha256_hash": digest,
+                "raw_receipt_id": raw_receipt_id,
+            },
+        ).first()
+        if hash_conflict:
+            return None
+
+    storage_path = Path(str(row.get("storage_path") or ""))
+    try:
+        storage_path.resolve().relative_to(receipt_storage_root.resolve())
+    except Exception:
+        return None
+    if not storage_path.exists() or not storage_path.is_file():
+        return None
+
+    old_bytes = storage_path.read_bytes()
+    temp_path = storage_path.with_suffix(storage_path.suffix + ".refresh.tmp")
+    temp_path.write_bytes(file_bytes)
+    temp_path.replace(storage_path)
+
+    try:
+        reparsed = reparse_receipt(
+            engine,
+            receipt_storage_root,
+            receipt_table_id,
+        )
+        if not reparsed or reparsed.get("deleted"):
+            raise RuntimeError("Bestaande retailerbon kon niet veilig worden herparsed")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    UPDATE raw_receipts
+                    SET sha256_hash = :sha256_hash,
+                        mime_type = :mime_type,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :raw_receipt_id
+                      AND household_id = :household_id
+                    """
+                ),
+                {
+                    "sha256_hash": digest,
+                    "mime_type": RETAILER_RECEIPT_MIME,
+                    "raw_receipt_id": raw_receipt_id,
+                    "household_id": str(household_id),
+                },
+            )
+    except Exception:
+        restore_path = storage_path.with_suffix(storage_path.suffix + ".restore.tmp")
+        restore_path.write_bytes(old_bytes)
+        restore_path.replace(storage_path)
+        raise
+
+    return {
+        **duplicate_result,
+        "refreshed_existing_receipt": True,
+        "parse_status": reparsed.get("parse_status"),
+        "line_count": reparsed.get("line_count"),
+    }
+
 def import_retailer_receipt(
     engine: Engine,
     receipt_storage_root: Path,
@@ -202,6 +347,18 @@ def import_retailer_receipt(
         mime_type=RETAILER_RECEIPT_MIME,
         reject_non_receipt=True,
     )
+    if result.get("duplicate"):
+        refreshed = _refresh_existing_retailer_receipt_if_safe(
+            engine,
+            receipt_storage_root,
+            household_id=household_id,
+            source_id=source.get("id"),
+            filename=filename,
+            file_bytes=file_bytes,
+            duplicate_result=result,
+        )
+        if refreshed is not None:
+            result = refreshed
     preview_stored = _store_source_preview(
         engine,
         receipt_storage_root,
