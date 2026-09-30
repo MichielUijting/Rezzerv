@@ -2158,9 +2158,9 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                         text(
                             '''
                             INSERT INTO receipt_table_lines (
-                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, logical_line_key, is_validated, line_role, inventory_eligible
+                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, external_article_code, article_match_status, matched_article_id, confidence_score, logical_line_key, is_validated, line_role, inventory_eligible
                             ) VALUES (
-                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key, :is_validated, :line_role, :inventory_eligible
+                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :external_article_code, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key, :is_validated, :line_role, :inventory_eligible
                             )
                             '''
                         ),
@@ -2176,6 +2176,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                             'line_total': line.get('line_total'),
                             'discount_amount': line.get('discount_amount'),
                             'barcode': line.get('barcode'),
+                            'external_article_code': line.get('retailer_sku'),
                             'article_match_status': 'unmatched',
                             'matched_article_id': None,
                             'confidence_score': line.get('confidence_score'),
