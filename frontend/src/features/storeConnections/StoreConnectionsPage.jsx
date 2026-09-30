@@ -5,6 +5,12 @@ import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared.jsx'
+import {
+  LIDL_HISTORY_URL,
+  LIDL_WEB_ORIGIN,
+  buildLidlWebBookmarklet,
+  buildLidlWebPageScript,
+} from './lidlWebReceiptBridge.js'
 
 function formatLastSync(value) {
   if (!value) return '—'
@@ -56,9 +62,11 @@ export default function StoreConnectionsPage() {
   const [lidlLoginUrl, setLidlLoginUrl] = useState('')
   const [lidlCallback, setLidlCallback] = useState('')
   const [lidlBusy, setLidlBusy] = useState(false)
+  const [lidlWebProgress, setLidlWebProgress] = useState('')
 
   const rows = useMemo(() => deriveRows(providers, connections), [providers, connections])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
+  const lidlBookmarklet = useMemo(() => buildLidlWebBookmarklet(window.location.origin), [])
 
   async function loadAhStatus() {
     const data = await fetchJson('/api/receipts/retailers/ah/status')
@@ -84,7 +92,7 @@ export default function StoreConnectionsPage() {
       setHousehold(householdData)
       setProviders(providerData)
       setConnections(connectionData)
-      await Promise.all([loadAhStatus(), loadLidlStatus()])
+      await loadAhStatus()
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelkoppelingen konden niet worden geladen.')
     } finally {
@@ -95,6 +103,104 @@ export default function StoreConnectionsPage() {
   useEffect(() => {
     loadPageData()
   }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('lidlImport') !== '1') return undefined
+
+    const opener = window.opener
+    if (!opener) {
+      setLidlWebProgress('Open deze import vanuit de Lidl-importknop in je browser.')
+      return undefined
+    }
+
+    let importedCount = 0
+    let cancelled = false
+
+    async function handleMessage(event) {
+      if (cancelled || event.origin !== LIDL_WEB_ORIGIN || event.source !== opener) return
+      const data = event.data
+      if (!data || typeof data !== 'object') return
+
+      if (data.type === 'inhuis:lidl-progress') {
+        setLidlWebProgress(String(data.message || 'Lidl-bonnen verwerken…'))
+        return
+      }
+
+      if (data.type === 'inhuis:lidl-receipt') {
+        const receipt = data.receipt
+        const receiptId = String(receipt?.id || '').trim()
+        const products = Array.isArray(receipt?.products) ? receipt.products : []
+        if (!/^\d{8,40}$/.test(receiptId) || !products.length) {
+          opener.postMessage({
+            type: 'inhuis:lidl-ack',
+            receipt_id: receiptId,
+            ok: false,
+            error: 'Lidl-bon bevat geen geldig bonnummer of artikelregels.',
+          }, LIDL_WEB_ORIGIN)
+          return
+        }
+
+        try {
+          await fetchJson('/api/receipts/retailers/import', {
+            method: 'POST',
+            body: JSON.stringify({
+              schema_version: '1.0',
+              provider: 'lidl',
+              external_receipt_id: receiptId,
+              receipt,
+            }),
+          })
+          importedCount += 1
+          setLidlWebProgress(importedCount + ' Lidl-bon(nen) naar Kassa verwerkt.')
+          opener.postMessage({
+            type: 'inhuis:lidl-ack',
+            receipt_id: receiptId,
+            ok: true,
+          }, LIDL_WEB_ORIGIN)
+        } catch (err) {
+          const message = normalizeErrorMessage(err?.message) || 'De Lidl-bon kon niet worden geïmporteerd.'
+          opener.postMessage({
+            type: 'inhuis:lidl-ack',
+            receipt_id: receiptId,
+            ok: false,
+            error: message,
+          }, LIDL_WEB_ORIGIN)
+          showFeedback({ variant: 'error', title: 'Lidl-bon importeren', message })
+        }
+        return
+      }
+
+      if (data.type === 'inhuis:lidl-complete') {
+        const count = Number(data.count || importedCount || 0)
+        setLidlWebProgress(count + ' Lidl-bon(nen) verwerkt. Open Kassa om ze te controleren.')
+        showFeedback({
+          variant: 'success',
+          title: 'Lidl-bonnen geïmporteerd',
+          message: count + ' bon(nen) via je bestaande Lidl-websessie verwerkt.',
+          detail: 'Je Lidl-wachtwoord en browsercookies zijn niet naar Inhuis gekopieerd.',
+        })
+        return
+      }
+
+      if (data.type === 'inhuis:lidl-error') {
+        const message = String(data.message || 'De Lidl-webimport is mislukt.')
+        setLidlWebProgress(message)
+        showFeedback({ variant: 'error', title: 'Lidl-webimport', message })
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    opener.postMessage({
+      type: 'inhuis:lidl-script',
+      script: buildLidlWebPageScript(window.location.origin),
+    }, LIDL_WEB_ORIGIN)
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('message', handleMessage)
+    }
+  }, [showFeedback])
 
   async function startAhLogin() {
     setAhBusy(true)
@@ -402,51 +508,49 @@ export default function StoreConnectionsPage() {
         </Card>
 
         <Card>
-          <div data-testid="lidl-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '680px' }}>
+          <div data-testid="lidl-digital-receipts" style={{ display: 'grid', gap: '12px', maxWidth: '760px' }}>
             <div>
-              <h3 style={{ margin: 0 }}>Lidl Plus digitale bonnen</h3>
+              <h3 style={{ margin: 0 }}>Lidl digitale bonnen</h3>
               <p style={{ margin: '6px 0 0', color: '#667085' }}>
-                Status: <strong>{lidlConnection?.connected ? 'gekoppeld' : 'niet gekoppeld'}</strong>.
-                De koppeling is in deze versie actief zolang Inhuis draait.
+                Gebruik je normale Lidl.nl-login. Inhuis neemt alleen de bongegevens over; je wachtwoord, cookies en Lidl-sessie blijven in je browser.
               </p>
             </div>
 
-            {!lidlConnection?.connected ? (
-              <>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <Button type="button" onClick={startLidlLogin} disabled={lidlBusy || isLoading} data-testid="lidl-connect-start">
-                    Open Lidl-login
-                  </Button>
-                  {lidlLoginUrl ? (
-                    <Button type="button" variant="secondary" onClick={() => window.open(lidlLoginUrl, '_blank', 'noopener,noreferrer')} disabled={lidlBusy}>
-                      Lidl-login opnieuw openen
-                    </Button>
-                  ) : null}
-                </div>
-                <Input
-                  label="Lidl callback"
-                  value={lidlCallback}
-                  onChange={(event) => setLidlCallback(event.target.value)}
-                  disabled={lidlBusy}
-                  data-testid="lidl-connect-callback"
-                  placeholder="com.lidlplus.app://callback?code=...&state=..."
-                />
-                <div>
-                  <Button type="button" onClick={completeLidlLogin} disabled={lidlBusy || !String(lidlCallback || '').trim()} data-testid="lidl-connect-complete">
-                    Koppeling afronden
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Button type="button" onClick={syncLidlReceipts} disabled={lidlBusy} data-testid="lidl-sync-receipts">
-                  Lidl-bonnen ophalen
-                </Button>
-                <Button type="button" variant="secondary" onClick={disconnectLidl} disabled={lidlBusy} data-testid="lidl-disconnect">
-                  Ontkoppelen
-                </Button>
+            <div style={{ display: 'grid', gap: '10px' }}>
+              <div><strong>Eenmalig:</strong> sleep de knop hieronder naar de favorietenbalk van deze browser.</div>
+              <a
+                href={lidlBookmarklet}
+                data-testid="lidl-web-bookmarklet"
+                style={{
+                  display: 'inline-flex',
+                  width: 'fit-content',
+                  minHeight: '40px',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--color-ui-primary)',
+                  color: 'var(--color-ui-primary)',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+                onClick={(event) => event.preventDefault()}
+              >
+                Lidl-bonnen naar Inhuis
+              </a>
+              <div style={{ color: '#667085' }}>
+                Open daarna je Lidl-kassabonnen en klik daar op deze favoriet. Inhuis ontvangt alleen de bongegevens.
               </div>
-            )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <Button type="button" onClick={() => window.open(LIDL_HISTORY_URL, '_blank')} data-testid="lidl-web-open-history">
+                Open mijn Lidl-kassabonnen
+              </Button>
+            </div>
+
+            {lidlWebProgress ? (
+              <div className="rz-inline-feedback" data-testid="lidl-web-progress">{lidlWebProgress}</div>
+            ) : null}
           </div>
         </Card>
 

@@ -271,7 +271,9 @@ test('Winkelkoppelingen renders Albert Heijn and Lidl Plus in desktop and mobile
   await expect(page).toHaveURL(/\/instellingen\/winkelkoppelingen$/)
   await expect(page.getByTestId('store-connections-page')).toBeVisible()
   await expect(page.getByTestId('ah-digital-receipts')).toContainText('Albert Heijn digitale bonnen')
-  await expect(page.getByTestId('lidl-digital-receipts')).toContainText('Lidl Plus digitale bonnen')
+  await expect(page.getByTestId('lidl-digital-receipts')).toContainText('Lidl digitale bonnen')
+  await expect(page.getByTestId('lidl-web-open-history')).toBeVisible()
+  await expect(page.getByTestId('lidl-web-bookmarklet')).toHaveAttribute('href', /^javascript:/)
 
   await page.goto('/instellingen/winkelimport')
   await expect(page.getByTestId('store-import-digital-receipts')).toBeVisible()
