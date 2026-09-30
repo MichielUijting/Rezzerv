@@ -266,33 +266,97 @@ def _fingerprint_from_stored_receipt(row: dict[str, Any], lines: list[dict[str, 
     return _build_receipt_fingerprint(row.get('store_name'), purchase_at, total_amount, lines)
 
 
-def find_existing_receipt_by_fingerprint(conn, household_id: str, fingerprint: str) -> dict[str, Any] | None:
-    if not fingerprint:
+_REIMPORT_ALLOWED_WORKFLOW_STATES = {'removed_reimport_allowed', 'legacy_deleted'}
+
+
+def _blocks_receipt_reimport(workflow_state: str | None) -> bool:
+    normalized = str(workflow_state or 'active').strip().lower() or 'active'
+    return normalized not in _REIMPORT_ALLOWED_WORKFLOW_STATES
+
+
+def find_existing_receipt_by_content_hash(
+    conn,
+    household_id: str,
+    sha256_hash: str,
+) -> dict[str, Any] | None:
+    if not sha256_hash:
         return None
-    has_rt_deleted = _column_exists(conn, 'receipt_tables', 'deleted_at')
-    has_rr_deleted = _column_exists(conn, 'raw_receipts', 'deleted_at')
-    where_parts = ['rt.household_id = :household_id']
-    if has_rt_deleted:
-        where_parts.append('rt.deleted_at IS NULL')
-    if has_rr_deleted:
-        where_parts.append('rr.deleted_at IS NULL')
     rows = conn.execute(
         text(
-            f"""
+            """
             SELECT
-                rt.id AS receipt_table_id,
                 rr.id AS raw_receipt_id,
+                rr.raw_status,
                 rr.original_filename,
                 rr.sha256_hash,
+                rr.deleted_at AS raw_deleted_at,
+                rt.id AS receipt_table_id,
                 rt.store_name,
                 rt.store_branch,
                 rt.purchase_at,
                 rt.total_amount,
                 rt.parse_status,
-                rt.line_count
+                rt.line_count,
+                rt.workflow_state,
+                rt.approved_at,
+                rt.deleted_at AS receipt_deleted_at
+            FROM raw_receipts rr
+            LEFT JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
+            WHERE rr.household_id = :household_id
+              AND rr.sha256_hash = :sha256_hash
+            ORDER BY
+                CASE
+                    WHEN rt.id IS NOT NULL
+                     AND COALESCE(NULLIF(TRIM(rt.workflow_state), ''), 'active')
+                         NOT IN ('removed_reimport_allowed', 'legacy_deleted')
+                    THEN 0
+                    WHEN rt.id IS NULL AND rr.deleted_at IS NULL
+                    THEN 1
+                    ELSE 2
+                END,
+                COALESCE(rt.updated_at, rr.created_at) DESC,
+                rr.id DESC
+            """
+        ),
+        {'household_id': household_id, 'sha256_hash': sha256_hash},
+    ).mappings().all()
+    for row in rows:
+        row_dict = dict(row)
+        if row_dict.get('receipt_table_id'):
+            if _blocks_receipt_reimport(row_dict.get('workflow_state')):
+                return row_dict
+            continue
+        if row_dict.get('raw_deleted_at') is None:
+            return row_dict
+    return None
+
+
+def find_existing_receipt_by_fingerprint(conn, household_id: str, fingerprint: str) -> dict[str, Any] | None:
+    if not fingerprint:
+        return None
+    rows = conn.execute(
+        text(
+            """
+            SELECT
+                rt.id AS receipt_table_id,
+                rr.id AS raw_receipt_id,
+                rr.original_filename,
+                rr.sha256_hash,
+                rr.deleted_at AS raw_deleted_at,
+                rt.store_name,
+                rt.store_branch,
+                rt.purchase_at,
+                rt.total_amount,
+                rt.parse_status,
+                rt.line_count,
+                rt.workflow_state,
+                rt.approved_at,
+                rt.deleted_at AS receipt_deleted_at
             FROM receipt_tables rt
             JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-            WHERE {' AND '.join(where_parts)}
+            WHERE rt.household_id = :household_id
+              AND COALESCE(NULLIF(TRIM(rt.workflow_state), ''), 'active')
+                  NOT IN ('removed_reimport_allowed', 'legacy_deleted')
             ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
             """
         ),
@@ -302,7 +366,10 @@ def find_existing_receipt_by_fingerprint(conn, household_id: str, fingerprint: s
         return None
     line_groups = _load_line_groups(conn, [str(row['receipt_table_id']) for row in rows])
     for row in rows:
-        candidate_fingerprint = _fingerprint_from_stored_receipt(dict(row), line_groups.get(str(row['receipt_table_id']), []))
+        candidate_fingerprint = _fingerprint_from_stored_receipt(
+            dict(row),
+            line_groups.get(str(row['receipt_table_id']), []),
+        )
         if candidate_fingerprint and candidate_fingerprint == fingerprint:
             return dict(row)
     return None
@@ -1989,74 +2056,23 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
     digest = sha256_hex(file_bytes)
     reimport_lineage = None
     with engine.begin() as conn:
-        archived_duplicate = conn.execute(
-            text(
-                '''
-                SELECT
-                    rr.id AS raw_receipt_id,
-                    rr.raw_status,
-                    rr.original_filename,
-                    rt.id AS receipt_table_id,
-                    rt.store_name,
-                    rt.store_branch,
-                    rt.purchase_at,
-                    rt.total_amount,
-                    rt.parse_status,
-                    rt.line_count,
-                    rt.workflow_state
-                FROM raw_receipts rr
-                JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
-                WHERE rr.household_id = :household_id
-                  AND rr.sha256_hash = :sha256_hash
-                  AND rr.deleted_at IS NULL
-                  AND rt.workflow_state = 'archived'
-                ORDER BY rt.updated_at DESC, rt.id DESC
-                LIMIT 1
-                '''
-            ),
-            {'household_id': household_id, 'sha256_hash': digest},
-        ).mappings().first()
-
-        if archived_duplicate:
-            return {
-                **_build_duplicate_receipt_response(archived_duplicate),
-                'duplicate': True,
-                'duplicate_reason': 'archived',
-                'workflow_state': 'archived',
-                'duplicate_message': (
-                    'Deze kassabon staat in Archief en kan niet opnieuw worden ingelezen. '
-                    'Een beheerder kan de bon terugzetten naar Kassa.'
-                ),
-            }
-
-        duplicate = conn.execute(
-            text(
-                '''
-                SELECT
-                    rr.id AS raw_receipt_id,
-                    rr.raw_status,
-                    rr.original_filename,
-                    rr.sha256_hash,
-                    rt.id AS receipt_table_id,
-                    rt.store_name,
-                    rt.store_branch,
-                    rt.purchase_at,
-                    rt.total_amount,
-                    rt.parse_status,
-                    rt.line_count
-                FROM raw_receipts rr
-                LEFT JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
-                WHERE rr.household_id = :household_id
-                  AND rr.sha256_hash = :sha256_hash
-                  AND rr.deleted_at IS NULL
-                  AND (rt.id IS NULL OR rt.deleted_at IS NULL)
-                LIMIT 1
-                '''
-            ),
-            {'household_id': household_id, 'sha256_hash': digest},
-        ).mappings().first()
+        duplicate = find_existing_receipt_by_content_hash(
+            conn,
+            household_id,
+            digest,
+        )
         if duplicate:
-            return _build_duplicate_receipt_response(duplicate)
+            response = _build_duplicate_receipt_response(duplicate)
+            workflow_state = str(duplicate.get('workflow_state') or '').strip().lower()
+            response['duplicate_reason'] = 'content_hash'
+            if workflow_state:
+                response['workflow_state'] = workflow_state
+            if workflow_state == 'archived':
+                response['duplicate_message'] = (
+                    'Deze kassabon is al eerder opgenomen en staat in Archief. '
+                    'Dezelfde bon kan niet opnieuw worden ingelezen.'
+                )
+            return response
         reimport_lineage = load_deleted_reimport_lineage(conn, household_id, digest)
 
     parse_result = scan_receipt_content_via_gateway(file_bytes, filename, detected_mime)
@@ -2142,9 +2158,9 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                         text(
                             '''
                             INSERT INTO receipt_table_lines (
-                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, logical_line_key, is_validated, line_role, inventory_eligible
+                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, external_article_code, article_match_status, matched_article_id, confidence_score, logical_line_key, is_validated, line_role, inventory_eligible
                             ) VALUES (
-                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key, :is_validated, :line_role, :inventory_eligible
+                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :external_article_code, :article_match_status, :matched_article_id, :confidence_score, :logical_line_key, :is_validated, :line_role, :inventory_eligible
                             )
                             '''
                         ),
@@ -2160,6 +2176,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                             'line_total': line.get('line_total'),
                             'discount_amount': line.get('discount_amount'),
                             'barcode': line.get('barcode'),
+                            'external_article_code': line.get('retailer_sku'),
                             'article_match_status': 'unmatched',
                             'matched_article_id': None,
                             'confidence_score': line.get('confidence_score'),
@@ -2364,9 +2381,9 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                     text(
                         '''
                         INSERT INTO receipt_table_lines (
-                            id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score, line_role, inventory_eligible
+                            id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, external_article_code, article_match_status, matched_article_id, confidence_score, line_role, inventory_eligible
                         ) VALUES (
-                            :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score, :line_role, :inventory_eligible
+                            :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :external_article_code, :article_match_status, :matched_article_id, :confidence_score, :line_role, :inventory_eligible
                         )
                         '''
                     ),
@@ -2382,6 +2399,7 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                         'line_total': line.get('line_total'),
                         'discount_amount': line.get('discount_amount'),
                         'barcode': line.get('barcode'),
+                        'external_article_code': line.get('retailer_sku'),
                         'article_match_status': 'unmatched',
                         'matched_article_id': None,
                         'confidence_score': line.get('confidence_score'),

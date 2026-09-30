@@ -9,6 +9,7 @@ on:
       - 'frontend/src/features/settings/**'
       - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/tests/dynamic-settings-navigation.contract.mjs'
+      - 'frontend/tests/lidl-web-receipt-bridge.contract.mjs'
       - 'frontend/tests/e2e/dynamic-settings.frontend-regression.spec.js'
       - '.github/workflows/dynamic-settings-validation.yml'
   workflow_dispatch:
@@ -48,6 +49,8 @@ jobs:
         run: |
           node frontend/tests/dynamic-settings-navigation.contract.mjs | tee /tmp/dynamic-settings.log
           grep -F 'DYNAMIC_SETTINGS_NAVIGATION_CONTRACT_GREEN' /tmp/dynamic-settings.log
+          node frontend/tests/lidl-web-receipt-bridge.contract.mjs | tee /tmp/lidl-web-receipt-bridge.log
+          grep -F 'LIDL_WEB_RECEIPT_BRIDGE_CONTRACT_GREEN' /tmp/lidl-web-receipt-bridge.log
 
       - name: Build frontend
         working-directory: frontend

@@ -122,6 +122,18 @@ const SETTINGS_TILES = [
     allowViewer: false,
   },
   {
+    key: 'store-connections',
+    title: 'Winkelkoppelingen',
+    description: 'Koppel winkelaccounts en haal digitale kassabonnen op',
+    to: '/instellingen/winkelkoppelingen',
+    permission: 'household_settings.manage',
+    relevance: 'shopping-or-receipts',
+    section: 'usage',
+    scope: 'household',
+    allowedContexts: SETTINGS_CONTEXTS,
+    allowViewer: false,
+  },
+  {
     key: 'frontteam',
     title: 'Frontteam beheren',
     description: 'Ken aanvullende Frontteambevoegdheden toe aan bestaande gebruikers',

@@ -1,15 +1,4 @@
-"""
-Technical Design Reference:
-- TD Section: TD-02 Backend API-laag
-- Module Role: Household-scoped API for structured digital retailer receipts
-- Runtime Type: production
-- Used By: API router
-- Depends On: retailer receipt import and retailer account sync services
-- Reads Data: yes
-- Writes Data: yes
-- Status Authority: no
-- Refactor Status: keep
-"""
+"""Household-scoped API for structured digital retailer receipts."""
 
 from __future__ import annotations
 
@@ -50,7 +39,6 @@ class AHSyncRequest(BaseModel):
 
 
 def _authorized_household_id(authorization: str | None) -> str:
-    # Reuse the canonical receipt/household authorization policy.
     from app.main import require_household_context
 
     runtime_context = require_household_context(authorization)
@@ -68,7 +56,11 @@ def list_retailer_receipt_providers(
             {
                 "code": code,
                 "supports_structured_import": True,
-                "account_connection": "runtime_only" if code == "ah" else "not_configured",
+                "account_connection": (
+                    "runtime_only" if code == "ah"
+                    else "browser_assisted" if code == "lidl"
+                    else "not_configured"
+                ),
             }
             for code in SUPPORTED_RETAILER_PROVIDERS
         ],

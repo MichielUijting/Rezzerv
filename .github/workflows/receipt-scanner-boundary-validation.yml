@@ -5,8 +5,12 @@ on:
     branches: [main]
     paths:
       - 'backend/app/integrations/receipt_scanners/**'
+      - 'backend/app/integrations/retailer_receipts/**'
       - 'backend/app/services/receipt_service.py'
       - 'backend/tests/test_receipt_scanner_**'
+      - 'backend/tests/test_retailer_receipt_provider_normalization.py'
+      - 'backend/tests/test_retailer_receipt_persistence_contract.py'
+      - 'backend/tests/test_retailer_receipt_refresh_contract.py'
       - 'backend/tests/test_pr245_status_and_loyalty_contract.py'
       - '.github/workflows/receipt-scanner-boundary-validation.yml'
   workflow_dispatch:
@@ -46,6 +50,9 @@ jobs:
             backend/tests/test_receipt_scanner_release_a.py \
             backend/tests/test_receipt_scanner_persistence_compat.py \
             backend/tests/test_receipt_scanner_line_count_equivalence.py \
+            backend/tests/test_retailer_receipt_provider_normalization.py \
+            backend/tests/test_retailer_receipt_persistence_contract.py \
+            backend/tests/test_retailer_receipt_refresh_contract.py \
             backend/tests/test_pr245_status_and_loyalty_contract.py
 
       - name: Assert no scanner-specific dependency leaks into gateway

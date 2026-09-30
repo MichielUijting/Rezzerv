@@ -36,6 +36,7 @@ const SETTINGS_TILE_ICONS = {
   'article-groups': '☷',
   locations: '⌖',
   'store-import': '▣',
+  'store-connections': '⇄',
   'household-automation': '↻',
   'almost-out': '▥',
   'help-about': 'ⓘ',

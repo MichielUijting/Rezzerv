@@ -29,6 +29,7 @@ import SettingsMyAccountPage from '../../features/settings/SettingsMyAccountPage
 import SettingsAccessibilityPage from '../../features/settings/SettingsAccessibilityPage.jsx'
 import SettingsHelpAboutPage from '../../features/settings/SettingsHelpAboutPage.jsx'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
+import StoreConnectionsPage from '../../features/storeConnections/StoreConnectionsPage.jsx'
 import { SETTINGS_ROOT_POLICY, getSettingsTile } from '../../features/settings/settingsNavigation.js'
 import VoorraadResponsive from '../../pages/VoorraadResponsive.jsx'
 import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
@@ -209,6 +210,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettingsRoute settingKey="household-automation"><SettingsHouseholdAutomationPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettingsRoute settingKey="almost-out"><SettingsAlmostOutPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/winkelimport', element: <ProtectedSettingsRoute settingKey="store-import"><SettingsStoreImportPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/winkelkoppelingen', element: <ProtectedSettingsRoute settingKey="store-connections"><StoreConnectionsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/huishouden', element: <ProtectedSettingsRoute settingKey="household"><SettingsHouseholdPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/frontteam', element: <ProtectedSettingsRoute settingKey="frontteam"><SettingsFrontteamPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettingsRoute settingKey="authorizations"><SettingsAuthorizationPage /></ProtectedSettingsRoute> },
