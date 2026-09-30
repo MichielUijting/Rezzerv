@@ -314,7 +314,7 @@ def find_existing_receipt_by_content_hash(
                     THEN 1
                     ELSE 2
                 END,
-                COALESCE(rt.updated_at, rr.updated_at, rr.created_at) DESC,
+                COALESCE(rt.updated_at, rr.created_at) DESC,
                 rr.id DESC
             """
         ),
