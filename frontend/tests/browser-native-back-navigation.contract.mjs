@@ -10,6 +10,7 @@ const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx'])
 const allowedLocalStateBackLabels = new Set([
   'Terug naar overzicht',
   'Terug naar scherm',
+  'Terug naar nog te kopen',
 ])
 
 const forbiddenHistoryPatterns = [

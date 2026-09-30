@@ -61,17 +61,24 @@ test.describe('Boodschappen frontend-regressie', () => {
 
     await page.route('**/api/shopping-list/catalog-search?*', async (route) => {
       const url = new URL(route.request().url());
-      expect(url.searchParams.get('scope')).toBe('all');
+      const scope = url.searchParams.get('scope');
+      expect(['global_products', 'household_articles', 'product_types', 'article_groups']).toContain(scope);
       expect(url.searchParams.get('limit')).toBe('5');
+      const sourceByScope = {
+        global_products: 'global_product',
+        household_articles: 'household_article',
+        product_types: 'product_type',
+        article_groups: 'article_group',
+      };
+      const scopedCandidates = candidates.filter((candidate) => candidate.source_type === sourceByScope[scope]);
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          scope: 'all',
+          scope,
           query: url.searchParams.get('query'),
-          items: candidates,
-          total: candidates.length,
-          counts: { household_article: 1, global_product: 1, product_type: 1, article_group: 0 },
+          items: scopedCandidates,
+          total: scopedCandidates.length,
         }),
       });
     });
@@ -151,6 +158,7 @@ test.describe('Boodschappen frontend-regressie', () => {
     await expect(shoppingPage).toBeVisible();
     await expect(shoppingPage.getByRole('heading', { name: 'Boodschappen — 0 artikelen' })).toBeVisible();
     await expect(page.getByText('Artikel toevoegen', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('shopping-search-mode')).toContainText('Specifiek');
     await expect(page.getByText('Zoek tegelijk in Huishoudartikelen')).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: /Artikelgroep/ })).toHaveCount(0);
     await expect(table.locator('thead tr:first-child th').first()).toBeVisible();
@@ -225,12 +233,13 @@ test.describe('Boodschappen frontend-regressie', () => {
     await page.getByLabel('Artikel toevoegen', { exact: true }).fill('bananen');
     const candidateList = page.getByTestId('shopping-candidate-list');
     await expect(candidateList.getByRole('option', { name: 'Bananen — Exact Catalogusproduct', exact: true })).toBeVisible();
+    await expect(candidateList.getByRole('option', { name: 'Pasta — Producttype', exact: true })).toHaveCount(0);
     await candidateList.getByRole('option', { name: 'Bananen — Exact Catalogusproduct', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Toevoegen' })).toBeEnabled();
 
     await page.getByLabel('Artikel toevoegen', { exact: true }).fill('melk');
     await expect(candidateList).toBeVisible();
-    await expect(candidateList.getByRole('option')).toHaveCount(5);
+    await expect(candidateList.getByRole('option', { name: 'Melk — Huishoudartikel', exact: true })).toBeVisible();
     await candidateList.getByRole('option', { name: 'Melk — Huishoudartikel', exact: true }).click();
     await page.getByRole('button', { name: 'Toevoegen' }).click();
     await expect(page.getByRole('heading', { name: 'Boodschappen — 1 artikelen' })).toBeVisible();
@@ -292,7 +301,11 @@ test.describe('Boodschappen frontend-regressie', () => {
     await expect(page.getByRole('heading', { name: 'Boodschappen — 0 artikelen' })).toBeVisible();
     await expect(page.getByLabel('Selecteer Melk')).toHaveCount(0);
 
+    await page.getByTestId('shopping-search-mode').click();
+    await page.getByRole('option', { name: 'Generiek', exact: true }).click();
+    await expect(page.getByTestId('shopping-search-mode')).toContainText('Generiek');
     await page.getByLabel('Artikel toevoegen', { exact: true }).fill('pasta');
+    await expect(page.getByTestId('shopping-candidate-list').getByRole('option', { name: 'Bananen — Exact Catalogusproduct', exact: true })).toHaveCount(0);
     await page.getByTestId('shopping-candidate-list').getByRole('option', { name: 'Pasta — Producttype', exact: true }).click();
     await page.getByRole('button', { name: 'Toevoegen' }).click();
 

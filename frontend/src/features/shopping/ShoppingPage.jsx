@@ -4,9 +4,17 @@ import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import DataTable from '../../ui/DataTable.jsx'
 import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
+import Select from '../../ui/Select.jsx'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { fetchJsonWithAuth } from '../../lib/authSession.js'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
+import {
+  SHOPPING_SEARCH_MODE_OPTIONS,
+  combineShoppingSearchResults,
+  readShoppingSearchModePreference,
+  shoppingSearchScopes,
+  writeShoppingSearchModePreference,
+} from './shoppingSearchMode.js'
 
 const SOURCE_LABELS = {
   household_article: 'Huishoudartikel',
@@ -48,6 +56,7 @@ export default function ShoppingPage() {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
   const [selectedResultId, setSelectedResultId] = useState('')
+  const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
   const [selectedItemIds, setSelectedItemIds] = useState([])
   const [filters, setFilters] = useState({ checked: 'all', article: '', productType: '' })
   const [sort, setSort] = useState({ key: 'article', direction: 'asc' })
@@ -100,9 +109,11 @@ export default function ShoppingPage() {
       setSearching(true)
       setError('')
       try {
-        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}&limit=5`)
+        const payloads = await Promise.all(shoppingSearchScopes(searchMode).map((scope) => requestJson(
+          `/api/shopping-list/catalog-search?scope=${scope}&query=${encodeURIComponent(query)}&limit=5`,
+        )))
         if (cancelled || catalogSearchRequestRef.current !== requestId) return
-        setCatalogResults(Array.isArray(payload?.items) ? payload.items : [])
+        setCatalogResults(combineShoppingSearchResults(payloads, 5))
       } catch (searchError) {
         if (cancelled || catalogSearchRequestRef.current !== requestId) return
         setCatalogResults([])
@@ -116,7 +127,16 @@ export default function ShoppingPage() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [catalogQuery])
+  }, [catalogQuery, searchMode])
+
+  function updateSearchMode(value) {
+    const nextMode = writeShoppingSearchModePreference(value, readStoredAuthContext())
+    catalogSearchRequestRef.current += 1
+    setSearchMode(nextMode)
+    setCatalogResults([])
+    setSelectedResultId('')
+    setSearching(false)
+  }
 
   const selectedResult = useMemo(
     () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
@@ -507,37 +527,51 @@ export default function ShoppingPage() {
           <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="shopping-page">
             <h2 style={{ margin: 0 }}>Boodschappen — {Number(list.item_count || 0)} artikelen</h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) auto', gap: 12, alignItems: 'start' }}>
-              <div className="rz-input-field">
-                <label className="rz-label" htmlFor="shopping-catalog-query">Artikel toevoegen</label>
-                <input
-                  id="shopping-catalog-query"
-                  className="rz-input"
-                  value={catalogQuery}
-                  disabled={saving}
-                  onChange={(event) => updateCatalogQuery(event.target.value)}
-                  placeholder="Zoek artikel, producttype of artikelgroep"
-                  aria-controls="shopping-candidate-list"
-                  aria-expanded={catalogResults.length > 0}
-                  autoComplete="off"
-                />
-                <SearchCandidateList
-                  items={catalogResults}
-                  selectedKey={selectedResultId}
-                  getKey={(item) => `${item.source_type}:${item.source_id}`}
-                  getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
-                  onSelect={setSelectedResultId}
-                  loading={searching}
-                  ariaLabel="Kandidaten voor artikel toevoegen"
-                  dataTestId="shopping-candidate-list"
-                />
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) auto', gap: 12, alignItems: 'end' }}>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div className="rz-input-field">
+                  <label className="rz-label" htmlFor="shopping-catalog-query">Artikel toevoegen</label>
+                  <input
+                    id="shopping-catalog-query"
+                    className="rz-input"
+                    value={catalogQuery}
+                    disabled={saving}
+                    onChange={(event) => updateCatalogQuery(event.target.value)}
+                    placeholder="Zoek artikel, producttype of artikelgroep"
+                    aria-controls="shopping-candidate-list"
+                    aria-expanded={catalogResults.length > 0}
+                    autoComplete="off"
+                  />
+                  <SearchCandidateList
+                    items={catalogResults}
+                    selectedKey={selectedResultId}
+                    getKey={(item) => `${item.source_type}:${item.source_id}`}
+                    getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
+                    onSelect={setSelectedResultId}
+                    loading={searching}
+                    ariaLabel="Kandidaten voor artikel toevoegen"
+                    dataTestId="shopping-candidate-list"
+                  />
+                </div>
+
+                <div className="rz-input-field">
+                  <span className="rz-label" id="shopping-search-mode-label">Zoekwijze</span>
+                  <Select
+                    value={searchMode}
+                    options={SHOPPING_SEARCH_MODE_OPTIONS}
+                    disabled={saving}
+                    onChange={updateSearchMode}
+                    ariaLabelledby="shopping-search-mode-label"
+                    ariaLabel="Zoekwijze specifiek of generiek"
+                    dataTestId="shopping-search-mode"
+                  />
+                </div>
               </div>
 
               <Button
                 type="button"
                 onClick={addSelectedResult}
                 disabled={saving || !selectedResult}
-                style={{ alignSelf: 'start', marginTop: 24 }}
               >
                 Toevoegen
               </Button>

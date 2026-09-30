@@ -16,7 +16,8 @@ assert.match(list, /role="option"/)
 
 for (const source of [desktopShopping, mobileShopping]) {
   assert.match(source, /SearchCandidateList/)
-  assert.match(source, /catalog-search\?scope=all&query=.*limit=5/)
+  assert.match(source, /shoppingSearchScopes\(searchMode\)/)
+  assert.match(source, /catalog-search\?scope=\$\{scope\}&query=.*limit=5/)
   assert.match(source, /value=\{catalogQuery\}[\s\S]{0,120}disabled=\{saving\}/)
   assert.doesNotMatch(source, /Zoekresultaat/)
 }

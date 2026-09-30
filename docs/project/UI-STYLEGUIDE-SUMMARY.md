@@ -765,3 +765,21 @@ Vaste regels:
 ## Mobiele detailnavigatie vanaf 29 september 2026
 
 Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de volledige detailrij zelf gebruikt om het detail te openen. Een losse `>`/`›`-chevron of aparte detailknop aan het einde van de rij is overbodig en wordt niet getoond. Bestaande bediening in de rij (checkbox, aantalknoppen en invoervelden) blijft onafhankelijk werken; desktopweergave blijft ongewijzigd.
+
+
+## Boodschappen — persoonlijke zoekwijze
+
+- Het zoekblok **Artikel toevoegen** toont op desktop en mobiel de filter **Zoekwijze** met **Specifiek** en **Generiek**.
+- **Specifiek** is standaard en is bedoeld voor concrete artikelen met de grootste kans op productidentiteit en productfoto; **Generiek** is bedoeld voor Producttypen en Artikelgroepen.
+- De zoekwijze is een persoonlijke gebruikersvoorkeur en mag niet huishoudbreed voor andere gebruikers worden overschreven.
+- De bestaande centrale kandidaatpresentatie (`SearchCandidateList`) en maximumregel van vijf kandidaten blijven ongewijzigd van kracht.
+
+
+### Boodschappen — selectie en winkelwagen (30 september 2026)
+
+- In het blok **Artikel toevoegen** staat het zoekveld boven **Zoekwijze**.
+- **Zoekwijze** gebruikt de centrale `Select`; trigger, lijst en opties volgen `var(--font-size-ui-body)` en daarmee de app-brede instelling Standaard/Groot/Extra groot.
+- De checkbox vóór een mobiele boodschappenregel is een selectiecheckbox voor bulkacties en verandert nooit rechtstreeks de koopstatus.
+- **Nog te kopen** staat altijd boven **In winkelwagen**; beide secties blijven tegelijk zichtbaar.
+- Geselecteerde regels onder **Nog te kopen** bieden **Verwijderen** en **In winkelwagen**; geselecteerde regels onder **In winkelwagen** bieden **Verwijderen** en **Terug naar nog te kopen**.
+- De artikelregel blijft één compacte `MobileArticleRow` met foto, artikelnaam en de bestaande compacte `QuantityStepper`.
