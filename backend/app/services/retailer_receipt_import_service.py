@@ -115,7 +115,7 @@ def _sanitize_envelope_and_snapshot(
     snapshot_bytes = _decode_source_snapshot_data_url(receipt_payload.pop(_SOURCE_SNAPSHOT_KEY, None))
     sanitized = RetailerReceiptEnvelope(
         schema_version=envelope.schema_version,
-        provider=sanitized_envelope.provider,
+        provider=envelope.provider,
         external_receipt_id=envelope.external_receipt_id,
         receipt=receipt_payload,
     )
