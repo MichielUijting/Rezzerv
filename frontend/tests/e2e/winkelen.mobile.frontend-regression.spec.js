@@ -90,6 +90,15 @@ test.describe('Mobiele Boodschappen', () => {
 
     const candidates = [
       {
+        source_type: 'global_product',
+        source_id: 'global-product-bananen',
+        label: 'Bananen exact',
+        article_name: 'Bananen exact',
+        article_group_name: 'Fruit',
+        product_type_name: 'Banaan',
+        image_url: 'https://images.example.test/bananen.jpg',
+      },
+      {
         source_type: 'household_article',
         source_id: 'household-article-bananen',
         label: 'Bananen',
@@ -106,16 +115,24 @@ test.describe('Mobiele Boodschappen', () => {
 
     await page.route('**/api/shopping-list/catalog-search?*', async (route) => {
       const url = new URL(route.request().url())
+      const scope = url.searchParams.get('scope')
+      expect(['global_products', 'household_articles', 'product_types', 'article_groups']).toContain(scope)
       expect(url.searchParams.get('limit')).toBe('5')
+      const sourceByScope = {
+        global_products: 'global_product',
+        household_articles: 'household_article',
+        product_types: 'product_type',
+        article_groups: 'article_group',
+      }
+      const scopedCandidates = candidates.filter((candidate) => candidate.source_type === sourceByScope[scope])
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          scope: 'all',
-          query: 'ban',
-          items: candidates,
-          total: candidates.length,
-          counts: { household_article: 1, product_type: 0, article_group: 0 },
+          scope,
+          query: url.searchParams.get('query'),
+          items: scopedCandidates,
+          total: scopedCandidates.length,
         }),
       })
     })
@@ -204,6 +221,7 @@ test.describe('Mobiele Boodschappen', () => {
     await expect(page.getByTestId('mobile-shopping-page')).toBeVisible()
     await expect(page.getByTestId('shopping-page')).toHaveCount(0)
     await expect(page.getByText('Mijn boodschappen', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Zoekwijze specifiek of generiek')).toHaveValue('specific')
     await expect(page.getByText('2 artikelen • 2 nog te vinden', { exact: true })).toBeVisible()
     await expect(page.getByRole('region', { name: 'Boodschappen', exact: true })).toBeVisible()
     await expect(page.getByLabel('Zoek in winkellijst')).toHaveCount(0)
@@ -240,7 +258,8 @@ test.describe('Mobiele Boodschappen', () => {
     await page.getByRole('searchbox', { name: 'Artikel toevoegen', exact: true }).fill('ban')
     const candidateList = page.getByTestId('mobile-shopping-candidate-list')
     await expect(candidateList).toBeVisible()
-    await expect(candidateList.getByRole('option')).toHaveCount(5)
+    await expect(candidateList.getByRole('option', { name: 'Bananen exact — Exact Catalogusproduct', exact: true })).toBeVisible()
+    await expect(candidateList.getByRole('option', { name: 'Banaan — Producttype', exact: true })).toHaveCount(0)
     await candidateList.getByRole('option', { name: 'Bananen — Huishoudartikel', exact: true }).click()
     await page.getByTestId('mobile-shopping-add').click()
     await expect(page.getByText('3 artikelen • 3 nog te vinden', { exact: true })).toBeVisible()
