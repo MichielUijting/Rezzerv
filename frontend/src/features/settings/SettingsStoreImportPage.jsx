@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useBlocker } from 'react-router-dom'
+import { useBlocker, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -21,6 +21,7 @@ function stableStringify(value) {
 }
 
 export default function SettingsStoreImportPage() {
+  const navigate = useNavigate()
   const [level, setLevel] = useState('gebalanceerd')
   const [canEdit, setCanEdit] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -131,11 +132,21 @@ export default function SettingsStoreImportPage() {
       <div data-testid="store-import-page">
       <Card>
         <div style={{ display: 'grid', gap: '20px' }}>
-          <div>
-            <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelimport</h2>
-            <p style={{ margin: 0, color: '#667085' }}>
-              Deze instelling geldt voor het hele huishouden. Alleen de beheerder van het huishouden kan het vereenvoudigingsniveau wijzigen.
-            </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelimport</h2>
+              <p style={{ margin: 0, color: '#667085' }}>
+                Deze instelling geldt voor het hele huishouden. Alleen de beheerder van het huishouden kan het vereenvoudigingsniveau wijzigen.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              data-testid="store-import-open-connections"
+              onClick={() => navigate('/instellingen/winkelkoppelingen')}
+            >
+              Winkelkoppelingen
+            </Button>
           </div>
 
           {isLoading ? <div>Instellingen laden…</div> : (

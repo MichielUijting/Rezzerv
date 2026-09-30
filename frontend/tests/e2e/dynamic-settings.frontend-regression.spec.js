@@ -85,6 +85,7 @@ test('Inhuis halen shows grouped product-relevant settings while keeping general
   await expect(page.getByTestId('settings-tile-article-groups')).toBeVisible()
   await expect(page.getByTestId('settings-tile-privacy-data-sharing')).toBeVisible()
   await expect(page.getByTestId('settings-tile-store-import')).toBeVisible()
+  await expect(page.getByTestId('settings-tile-store-connections')).toBeVisible()
   await expect(page.getByTestId('settings-tile-household')).toBeVisible()
   await expect(page.getByTestId('settings-tile-household')).toHaveAttribute('data-settings-scope', 'household')
   await expect(page.getByTestId('settings-tile-authorizations')).toBeVisible()
