@@ -4,6 +4,7 @@ import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
 import MobileArticleRow from '../../ui/MobileArticleRow.jsx'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
+import Select from '../../ui/Select.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
 import {
@@ -46,20 +47,21 @@ export default function MobileShopping() {
   const [catalogResults, setCatalogResults] = useState([])
   const [selectedResultId, setSelectedResultId] = useState('')
   const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
-  const [checkedFilter, setCheckedFilter] = useState('unchecked')
+  const [selectedItemIds, setSelectedItemIds] = useState([])
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const checkedSaveChainsRef = useRef(new Map())
-  const checkedMutationVersionsRef = useRef(new Map())
   const catalogSearchRequestRef = useRef(0)
 
   async function loadList() {
     setLoading(true)
     setError('')
     try {
-      setList(await requestJson('/api/shopping-list'))
+      const payload = await requestJson('/api/shopping-list')
+      setList(payload)
+      const existingIds = new Set((payload.items || []).map((item) => item.id))
+      setSelectedItemIds((current) => current.filter((id) => existingIds.has(id)))
     } catch (loadError) {
       setError(loadError?.message || 'Boodschappen konden niet worden geladen.')
     } finally {
@@ -68,7 +70,6 @@ export default function MobileShopping() {
   }
 
   useEffect(() => { loadList() }, [])
-
 
   function updateCatalogQuery(value) {
     catalogSearchRequestRef.current += 1
@@ -83,10 +84,12 @@ export default function MobileShopping() {
     const requestId = catalogSearchRequestRef.current
     let cancelled = false
     setSelectedResultId('')
+
     if (query.length < 2) {
       setCatalogResults([])
       return () => { cancelled = true }
     }
+
     const timer = window.setTimeout(async () => {
       if (cancelled || catalogSearchRequestRef.current !== requestId) return
       setSearching(true)
@@ -105,6 +108,7 @@ export default function MobileShopping() {
         if (!cancelled && catalogSearchRequestRef.current === requestId) setSearching(false)
       }
     }, 250)
+
     return () => {
       cancelled = true
       window.clearTimeout(timer)
@@ -117,25 +121,47 @@ export default function MobileShopping() {
     setSearchMode(nextMode)
     setCatalogResults([])
     setSelectedResultId('')
+    setSearching(false)
   }
 
   const selectedResult = useMemo(
     () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
     [catalogResults, selectedResultId],
   )
-  const remainingCount = useMemo(
-    () => (list.items || []).filter((item) => !item.checked).length,
+
+  const toBuyItems = useMemo(
+    () => (list.items || []).filter((item) => !item.checked),
     [list.items],
   )
-  const visibleItems = useMemo(() => {
-    return (list.items || []).filter((item) => checkedFilter === 'checked' ? item.checked : !item.checked)
-  }, [checkedFilter, list.items])
+  const cartItems = useMemo(
+    () => (list.items || []).filter((item) => item.checked),
+    [list.items],
+  )
+  const selectedToBuyItems = useMemo(
+    () => toBuyItems.filter((item) => selectedItemIds.includes(item.id)),
+    [selectedItemIds, toBuyItems],
+  )
+  const selectedCartItems = useMemo(
+    () => cartItems.filter((item) => selectedItemIds.includes(item.id)),
+    [cartItems, selectedItemIds],
+  )
 
   function patchListItem(itemId, patch) {
     setList((current) => ({
       ...current,
       items: (current.items || []).map((item) => item.id === itemId ? { ...item, ...patch } : item),
     }))
+  }
+
+  function toggleSelectedItem(itemId, selected) {
+    setSelectedItemIds((current) => selected
+      ? [...new Set([...current, itemId])]
+      : current.filter((id) => id !== itemId))
+  }
+
+  function clearSectionSelection(items) {
+    const ids = new Set(items.map((item) => item.id))
+    setSelectedItemIds((current) => current.filter((id) => !ids.has(id)))
   }
 
   async function addArticle() {
@@ -158,9 +184,7 @@ export default function MobileShopping() {
     setError('')
     try {
       await requestJson('/api/shopping-list/items', { method: 'POST', body: JSON.stringify(payload) })
-      setCatalogQuery('')
-      setCatalogResults([])
-      setSelectedResultId('')
+      updateCatalogQuery('')
       await loadList()
       showFeedback({ variant: 'success', title: 'Toegevoegd', message: `${addedLabel} staat bij Boodschappen.` })
     } catch (saveError) {
@@ -187,35 +211,55 @@ export default function MobileShopping() {
     }
   }
 
-  function updateChecked(item, checked) {
-    const itemId = item.id
-    const previousChecked = Boolean(item.checked)
-    const nextVersion = (checkedMutationVersionsRef.current.get(itemId) || 0) + 1
-    checkedMutationVersionsRef.current.set(itemId, nextVersion)
-    patchListItem(itemId, { checked })
-    const previousChain = checkedSaveChainsRef.current.get(itemId) || Promise.resolve()
-    const nextChain = previousChain.catch(() => undefined).then(async () => {
-      try {
-        await requestJson(`/api/shopping-list/items/${encodeURIComponent(itemId)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ checked }),
-        })
-      } catch (saveError) {
-        if (checkedMutationVersionsRef.current.get(itemId) === nextVersion) {
-          patchListItem(itemId, { checked: previousChecked })
-          setError(saveError?.message || 'De koopstatus kon niet worden opgeslagen.')
-        }
-        throw saveError
-      } finally {
-        if (checkedMutationVersionsRef.current.get(itemId) === nextVersion) checkedSaveChainsRef.current.delete(itemId)
-      }
-    })
-    checkedSaveChainsRef.current.set(itemId, nextChain)
-    void nextChain.catch(() => undefined)
+  async function setPurchasedForItems(items, checked) {
+    if (!items.length) return
+    setSaving(true)
+    setError('')
+    try {
+      await Promise.all(items.map((item) => requestJson(
+        `/api/shopping-list/items/${encodeURIComponent(item.id)}`,
+        { method: 'PUT', body: JSON.stringify({ checked }) },
+      )))
+      clearSectionSelection(items)
+      await loadList()
+    } catch (saveError) {
+      setError(saveError?.message || 'De winkelwagenstatus kon niet worden opgeslagen.')
+      await loadList()
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function toggleCheckedFilter() {
-    setCheckedFilter((current) => current === 'checked' ? 'unchecked' : 'checked')
+  function deleteSelectedItems(items) {
+    if (!items.length) return
+    const count = items.length
+    showFeedback({
+      variant: 'warning',
+      title: count === 1 ? 'Artikel verwijderen' : 'Artikelen verwijderen',
+      message: count === 1 ? '1 geselecteerd artikel verwijderen?' : `${count} geselecteerde artikelen verwijderen?`,
+      detail: 'De geselecteerde artikelen verdwijnen uit de actuele boodschappen.',
+      testId: 'shopping-delete-confirmation',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => {
+        setSaving(true)
+        try {
+          await Promise.all(items.map((item) => requestJson(
+            `/api/shopping-list/items/${encodeURIComponent(item.id)}`,
+            { method: 'DELETE' },
+          )))
+          clearSectionSelection(items)
+          await loadList()
+          showFeedback({
+            variant: 'success',
+            title: 'Verwijderd',
+            message: count === 1 ? '1 artikel verwijderd.' : `${count} artikelen verwijderd.`,
+          })
+        } finally {
+          setSaving(false)
+        }
+      },
+    })
   }
 
   function completeShopping() {
@@ -231,6 +275,7 @@ export default function MobileShopping() {
         setSaving(true)
         try {
           await requestJson('/api/shopping-list/complete', { method: 'POST' })
+          setSelectedItemIds([])
           await loadList()
           showFeedback({ variant: 'success', title: 'Boodschappen afgerond', message: 'Boodschappen zijn leeggemaakt.' })
         } finally {
@@ -240,27 +285,50 @@ export default function MobileShopping() {
     })
   }
 
+  function renderShoppingRow(item) {
+    return (
+      <MobileArticleRow
+        key={item.id}
+        title={item.article_name}
+        subtitle=""
+        meta={[]}
+        imageUrl={item.image_url}
+        imageProductName={item.article_name}
+        checked={Boolean(item.checked)}
+        testId={`mobile-shopping-item-${item.id}`}
+        leading={(
+          <input
+            type="checkbox"
+            checked={selectedItemIds.includes(item.id)}
+            onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
+            aria-label={`Selecteer ${item.article_name}`}
+          />
+        )}
+        side={(
+          <QuantityStepper
+            value={String(quantityValue(item))}
+            decreaseDisabled={saving || quantityValue(item) <= 1}
+            increaseDisabled={saving}
+            decreaseLabel={`Verlaag aantal van ${item.article_name}`}
+            increaseLabel={`Verhoog aantal van ${item.article_name}`}
+            valueLabel={`Aantal ${quantityValue(item)}`}
+            valueEditable={false}
+            testIdPrefix={`mobile-shopping-quantity-${item.id}`}
+            onDecrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) - 1 }) }}
+            onIncrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) + 1 }) }}
+          />
+        )}
+      />
+    )
+  }
+
   return (
     <div className="rz-screen rz-mobile-inventory-screen rz-mobile-shopping-screen" data-testid="mobile-shopping-page">
       <MobileModuleHeader title="Boodschappen" testId="mobile-shopping-header" />
       <main className="rz-mobile-inventory-content rz-mobile-shopping-content">
         <section className="rz-mobile-inventory-toolbar rz-mobile-shopping-toolbar" aria-label="Artikel toevoegen">
           <div className="rz-mobile-shopping-toolbar-title">Artikel toevoegen</div>
-          <label className="rz-mobile-inventory-field">
-            <span className="rz-mobile-inventory-label">Zoekwijze</span>
-            <select
-              className="rz-input"
-              value={searchMode}
-              disabled={saving}
-              onChange={(event) => updateSearchMode(event.target.value)}
-              aria-label="Zoekwijze specifiek of generiek"
-              data-testid="mobile-shopping-search-mode"
-            >
-              {SHOPPING_SEARCH_MODE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+
           <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
             <span className="rz-mobile-inventory-label">Zoek of typ een artikel</span>
             <input
@@ -286,6 +354,20 @@ export default function MobileShopping() {
             ariaLabel="Kandidaten voor artikel toevoegen"
             dataTestId="mobile-shopping-candidate-list"
           />
+
+          <div className="rz-mobile-inventory-field">
+            <span className="rz-mobile-inventory-label" id="mobile-shopping-search-mode-label">Zoekwijze</span>
+            <Select
+              value={searchMode}
+              options={SHOPPING_SEARCH_MODE_OPTIONS}
+              disabled={saving}
+              onChange={updateSearchMode}
+              ariaLabelledby="mobile-shopping-search-mode-label"
+              ariaLabel="Zoekwijze specifiek of generiek"
+              dataTestId="mobile-shopping-search-mode"
+            />
+          </div>
+
           <Button type="button" variant="primary" onClick={addArticle} disabled={saving || (!selectedResult && !catalogQuery.trim())} data-testid="mobile-shopping-add">
             Toevoegen
           </Button>
@@ -295,67 +377,91 @@ export default function MobileShopping() {
           <div>
             <div className="rz-mobile-shopping-summary-title">Mijn boodschappen</div>
             <div className="rz-mobile-shopping-summary-meta">
-              {loading ? 'Boodschappen laden…' : `${Number(list.item_count || 0)} artikelen • ${remainingCount} nog te vinden`}
+              {loading ? 'Boodschappen laden…' : `${Number(list.item_count || 0)} artikelen • ${toBuyItems.length} nog te kopen • ${cartItems.length} in winkelwagen`}
             </div>
           </div>
-          <span className="rz-mobile-shopping-count" aria-label={`${remainingCount} nog te vinden`}>{remainingCount}</span>
+          <span className="rz-mobile-shopping-count" aria-label={`${toBuyItems.length} nog te kopen`}>{toBuyItems.length}</span>
         </section>
 
         {error ? <section className="rz-mobile-inventory-state rz-mobile-inventory-state--error" role="alert"><div>{error}</div><Button type="button" variant="secondary" onClick={loadList}>Opnieuw proberen</Button></section> : null}
         {!error && !loading && (list.items || []).length === 0 ? <section className="rz-mobile-inventory-state"><strong>Nog geen artikelen bij Boodschappen.</strong></section> : null}
 
-        {!error && (list.items || []).length > 0 ? (
-          <section className="rz-mobile-shopping-group" aria-label="Boodschappen">
-            <div className="rz-mobile-shopping-group-header rz-mobile-shopping-filter-header">
-              <label className="rz-mobile-shopping-status-filter" title={checkedFilter === 'checked' ? 'Toon artikelen die nog te vinden zijn' : 'Toon artikelen in de kar'}>
-                <input
-                  type="checkbox"
-                  checked={checkedFilter === 'checked'}
-                  onChange={toggleCheckedFilter}
-                  aria-label={`Filter koopstatus: ${checkedFilter === 'checked' ? 'in kar' : 'nog te vinden'}`}
-                  data-testid="mobile-shopping-status-filter"
-                />
-              </label>
-              <div className="rz-mobile-shopping-group-title">Boodschappen</div>
-              <span>{visibleItems.length} van {(list.items || []).length}</span>
-            </div>
-            <div className="rz-mobile-shopping-list">
-              {visibleItems.map((item) => (
-                <MobileArticleRow
-                  key={item.id}
-                  title={item.article_name}
-                  subtitle=""
-                  meta={[]}
-                  imageUrl={item.image_url}
-                  imageProductName={item.article_name}
-                  checked={Boolean(item.checked)}
-                  testId={`mobile-shopping-item-${item.id}`}
-                  leading={(
-                    <input
-                      type="checkbox"
-                      checked={Boolean(item.checked)}
-                      onChange={(event) => updateChecked(item, event.target.checked)}
-                      aria-label={`${item.article_name} ${item.checked ? 'uit kar halen' : 'in kar leggen'}`}
-                    />
-                  )}
-                  side={(
-                    <QuantityStepper
-                      value={String(quantityValue(item))}
-                      decreaseDisabled={saving || quantityValue(item) <= 1}
-                      increaseDisabled={saving}
-                      decreaseLabel={`Verlaag aantal van ${item.article_name}`}
-                      increaseLabel={`Verhoog aantal van ${item.article_name}`}
-                      valueLabel={`Aantal ${quantityValue(item)}`}
-                      valueEditable={false}
-                      testIdPrefix={`mobile-shopping-quantity-${item.id}`}
-                      onDecrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) - 1 }) }}
-                      onIncrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) + 1 }) }}
-                    />
-                  )}
-                />
-              ))}
-            </div>
-          </section>
+        {!error && !loading && (list.items || []).length > 0 ? (
+          <div className="rz-mobile-shopping-groups">
+            <section className="rz-mobile-shopping-group" aria-label="Nog te kopen" data-testid="mobile-shopping-to-buy">
+              <div className="rz-mobile-shopping-group-header">
+                <div className="rz-mobile-shopping-group-title">Nog te kopen</div>
+                <span>{toBuyItems.length}</span>
+              </div>
+              {toBuyItems.length ? (
+                <div className="rz-mobile-shopping-list">
+                  {toBuyItems.map(renderShoppingRow)}
+                </div>
+              ) : (
+                <div className="rz-mobile-shopping-empty-section">Alles uit deze lijst zit in je winkelwagen.</div>
+              )}
+              <div className="rz-mobile-shopping-selection-actions" data-testid="mobile-shopping-to-buy-actions">
+                <span>{selectedToBuyItems.length} geselecteerd</span>
+                <div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => deleteSelectedItems(selectedToBuyItems)}
+                    disabled={saving || selectedToBuyItems.length === 0}
+                    data-testid="mobile-shopping-delete-selected"
+                  >
+                    Verwijderen
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => setPurchasedForItems(selectedToBuyItems, true)}
+                    disabled={saving || selectedToBuyItems.length === 0}
+                    data-testid="mobile-shopping-move-to-cart"
+                  >
+                    In winkelwagen
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            <section className="rz-mobile-shopping-group" aria-label="In winkelwagen" data-testid="mobile-shopping-cart">
+              <div className="rz-mobile-shopping-group-header">
+                <div className="rz-mobile-shopping-group-title">In winkelwagen</div>
+                <span>{cartItems.length}</span>
+              </div>
+              {cartItems.length ? (
+                <div className="rz-mobile-shopping-list">
+                  {cartItems.map(renderShoppingRow)}
+                </div>
+              ) : (
+                <div className="rz-mobile-shopping-empty-section">Nog geen artikelen in je winkelwagen.</div>
+              )}
+              <div className="rz-mobile-shopping-selection-actions" data-testid="mobile-shopping-cart-actions">
+                <span>{selectedCartItems.length} geselecteerd</span>
+                <div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => deleteSelectedItems(selectedCartItems)}
+                    disabled={saving || selectedCartItems.length === 0}
+                    data-testid="mobile-shopping-cart-delete-selected"
+                  >
+                    Verwijderen
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setPurchasedForItems(selectedCartItems, false)}
+                    disabled={saving || selectedCartItems.length === 0}
+                    data-testid="mobile-shopping-return-to-buy"
+                  >
+                    Terug naar nog te kopen
+                  </Button>
+                </div>
+              </div>
+            </section>
+          </div>
         ) : null}
 
         <div className="rz-mobile-shopping-complete">
