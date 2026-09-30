@@ -13,6 +13,8 @@ Technical Design Reference:
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import re
@@ -83,6 +85,84 @@ def ensure_retailer_receipt_source(
     return dict(row or {})
 
 
+_SOURCE_SNAPSHOT_KEY = "_sourceSnapshotDataUrl"
+_MAX_SOURCE_SNAPSHOT_BYTES = 8 * 1024 * 1024
+
+
+def _decode_source_snapshot_data_url(value: Any) -> bytes | None:
+    text_value = str(value or "").strip()
+    prefix = "data:image/png;base64,"
+    if not text_value.startswith(prefix):
+        return None
+    encoded = text_value[len(prefix):]
+    if not encoded:
+        return None
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    if not decoded or len(decoded) > _MAX_SOURCE_SNAPSHOT_BYTES:
+        return None
+    if not decoded.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    return decoded
+
+
+def _sanitize_envelope_and_snapshot(
+    envelope: RetailerReceiptEnvelope,
+) -> tuple[RetailerReceiptEnvelope, bytes | None]:
+    receipt_payload = dict(envelope.receipt or {})
+    snapshot_bytes = _decode_source_snapshot_data_url(receipt_payload.pop(_SOURCE_SNAPSHOT_KEY, None))
+    sanitized = RetailerReceiptEnvelope(
+        schema_version=envelope.schema_version,
+        provider=sanitized_envelope.provider,
+        external_receipt_id=envelope.external_receipt_id,
+        receipt=receipt_payload,
+    )
+    return sanitized, snapshot_bytes
+
+
+def _source_preview_path(storage_path: Path) -> Path:
+    return Path(str(storage_path) + ".source-preview.png")
+
+
+def _store_source_preview(
+    engine: Engine,
+    receipt_storage_root: Path,
+    *,
+    raw_receipt_id: str | None,
+    snapshot_bytes: bytes | None,
+) -> bool:
+    if not raw_receipt_id or not snapshot_bytes:
+        return False
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT storage_path
+                FROM raw_receipts
+                WHERE id = :raw_receipt_id
+                  AND deleted_at IS NULL
+                LIMIT 1
+                """
+            ),
+            {"raw_receipt_id": str(raw_receipt_id)},
+        ).mappings().first()
+    if not row or not row.get("storage_path"):
+        return False
+    storage_path = Path(str(row["storage_path"]))
+    try:
+        storage_path.resolve().relative_to(receipt_storage_root.resolve())
+    except Exception:
+        return False
+    preview_path = _source_preview_path(storage_path)
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = preview_path.with_suffix(preview_path.suffix + ".tmp")
+    temp_path.write_bytes(snapshot_bytes)
+    temp_path.replace(preview_path)
+    return True
+
+
 def _stable_envelope_bytes(envelope: RetailerReceiptEnvelope) -> bytes:
     return json.dumps(
         envelope.model_dump(mode="json", exclude_none=True),
@@ -104,13 +184,14 @@ def import_retailer_receipt(
     household_id: str,
     envelope: RetailerReceiptEnvelope,
 ) -> dict[str, Any]:
+    sanitized_envelope, snapshot_bytes = _sanitize_envelope_and_snapshot(envelope)
     source = ensure_retailer_receipt_source(
         engine,
         household_id=household_id,
         provider=envelope.provider,
     )
-    file_bytes = _stable_envelope_bytes(envelope)
-    filename = f"{envelope.provider}-{_safe_external_id(envelope.external_receipt_id)}.inhuis-receipt.json"
+    file_bytes = _stable_envelope_bytes(sanitized_envelope)
+    filename = f"{sanitized_envelope.provider}-{_safe_external_id(sanitized_envelope.external_receipt_id)}.inhuis-receipt.json"
     result = ingest_receipt(
         engine,
         receipt_storage_root,
@@ -121,9 +202,16 @@ def import_retailer_receipt(
         mime_type=RETAILER_RECEIPT_MIME,
         reject_non_receipt=True,
     )
+    preview_stored = _store_source_preview(
+        engine,
+        receipt_storage_root,
+        raw_receipt_id=result.get("raw_receipt_id"),
+        snapshot_bytes=snapshot_bytes,
+    )
     return {
         **result,
-        "provider": envelope.provider,
-        "external_receipt_id": envelope.external_receipt_id,
+        "provider": sanitized_envelope.provider,
+        "external_receipt_id": sanitized_envelope.external_receipt_id,
         "source_id": source.get("id"),
+        "source_preview_stored": preview_stored,
     }

@@ -134,6 +134,20 @@ def get_receipt_preview(receipt_table_id: str, variant: str = Query("original"),
     filename = str(record["original_filename"] or storage_path.name)
     headers = {"Content-Disposition": f"inline; filename=\"{Path(filename).name}\""}
 
+    source_preview_path = Path(str(storage_path) + ".source-preview.png")
+    if variant_value == "original" and source_preview_path.exists() and source_preview_path.is_file():
+        try:
+            source_preview_path.resolve().relative_to(receipt_storage_root.resolve())
+        except Exception:
+            raise HTTPException(status_code=403, detail="Bonpreview ligt buiten de toegestane opslag")
+        preview_name = f"{Path(filename).stem}-source-preview.png"
+        return FileResponse(
+            path=source_preview_path,
+            media_type="image/png",
+            filename=preview_name,
+            headers={"Content-Disposition": f"inline; filename=\"{preview_name}\""},
+        )
+
     if variant_value == "processed":
         if not str(mime_type).lower().startswith("image/"):
             raise HTTPException(status_code=404, detail="Bewerkte bonpreview is niet beschikbaar voor dit bestandstype")

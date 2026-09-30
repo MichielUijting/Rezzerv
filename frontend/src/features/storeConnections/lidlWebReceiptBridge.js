@@ -52,6 +52,45 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
     return year + '-' + match[2] + '-' + match[1] + 'T' + match[4] + ':00'
   }
 
+  function snapshotReceipt(pre) {
+    const text = String(pre?.innerText || pre?.textContent || '')
+    const lines = text.replace(/\r/g, '').split('\n')
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) return ''
+
+    const fontSize = 15
+    const lineHeight = 20
+    const padding = 28
+    context.font = fontSize + 'px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+    let widest = 0
+    for (const line of lines) {
+      widest = Math.max(widest, context.measureText(line || ' ').width)
+    }
+
+    canvas.width = Math.max(420, Math.min(1400, Math.ceil(widest + padding * 2)))
+    canvas.height = Math.max(320, Math.min(16000, Math.ceil(lines.length * lineHeight + padding * 2)))
+
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    context.fillStyle = '#111111'
+    context.font = fontSize + 'px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+    context.textBaseline = 'top'
+
+    let y = padding
+    for (const line of lines) {
+      if (y + lineHeight > canvas.height - padding) break
+      context.fillText(line, padding, y)
+      y += lineHeight
+    }
+
+    try {
+      return canvas.toDataURL('image/png')
+    } catch {
+      return ''
+    }
+  }
+
   function parseReceipt(doc, receiptId, fallback = {}) {
     const pre = doc.querySelector('[data-testid="ticket-' + CSS.escape(receiptId) + '"] pre')
     if (!pre) throw new Error('Lidl-bon ' + receiptId + ' kon niet worden gelezen')
@@ -119,6 +158,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
       totalAmount: clean((totalMatch && totalMatch[1]) || fallback.amount || '').replace('€', '').trim(),
       store: { name: storeName, city: storeName },
       products,
+      _sourceSnapshotDataUrl: snapshotReceipt(pre),
       sourceUrl: location.origin + '/mre/purchase-detail?t=' + encodeURIComponent(receiptId),
     }
   }
