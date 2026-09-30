@@ -149,6 +149,36 @@ export default function SettingsStoreImportPage() {
             </Button>
           </div>
 
+          <section
+            data-testid="store-import-digital-receipts"
+            style={{ display: 'grid', gap: '10px', padding: '14px 16px', border: '1px solid #dfe4ea', borderRadius: '12px' }}
+          >
+            <div>
+              <div style={{ fontWeight: 600 }}>Digitale kassabonnen</div>
+              <div style={{ color: '#667085', marginTop: '4px' }}>
+                Koppel je winkelaccount om historische digitale kassabonnen rechtstreeks in Inhuis op te halen.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <Button
+                type="button"
+                variant="secondary"
+                data-testid="store-import-open-ah"
+                onClick={() => navigate('/instellingen/winkelkoppelingen')}
+              >
+                Albert Heijn
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                data-testid="store-import-open-lidl"
+                onClick={() => navigate('/instellingen/winkelkoppelingen')}
+              >
+                Lidl Plus
+              </Button>
+            </div>
+          </section>
+
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
               {loadError ? <div className="rz-inline-feedback rz-inline-feedback--error">{loadError}</div> : null}

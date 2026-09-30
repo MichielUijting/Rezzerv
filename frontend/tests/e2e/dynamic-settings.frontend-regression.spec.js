@@ -249,3 +249,32 @@ test('Waar Inhuis exact locations keep full main-location and sublocation manage
   await expect(page.getByLabel('Sublocatienaam Kast 1')).toBeVisible()
   await expect(page.getByTestId('settings-sublocations-table').locator('.rz-column-resize-handle')).toHaveCount(3)
 })
+
+
+test('Winkelkoppelingen renders Albert Heijn and Lidl Plus in desktop and mobile route content', async ({ page }) => {
+  await registerAndComplete(page, {
+    prefix: 'dynamic-settings-store-connections',
+    useCase: 'inhuis_halen',
+    householdName: 'Dynamische instellingen Winkelkoppelingen',
+    profile: {
+      simple_inventory_enabled: true,
+      receipt_processing_enabled: true,
+      almost_out_notifications_enabled: false,
+      recipes_enabled: false,
+    },
+  })
+
+  await page.goto('/instellingen')
+  await expect(page.getByTestId('settings-tile-store-connections')).toBeVisible()
+  await page.getByTestId('settings-tile-store-connections').click()
+
+  await expect(page).toHaveURL(/\/instellingen\/winkelkoppelingen$/)
+  await expect(page.getByTestId('store-connections-page')).toBeVisible()
+  await expect(page.getByTestId('ah-digital-receipts')).toContainText('Albert Heijn digitale bonnen')
+  await expect(page.getByTestId('lidl-digital-receipts')).toContainText('Lidl Plus digitale bonnen')
+
+  await page.goto('/instellingen/winkelimport')
+  await expect(page.getByTestId('store-import-digital-receipts')).toBeVisible()
+  await expect(page.getByTestId('store-import-open-ah')).toHaveText('Albert Heijn')
+  await expect(page.getByTestId('store-import-open-lidl')).toHaveText('Lidl Plus')
+})
