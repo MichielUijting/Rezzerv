@@ -256,3 +256,13 @@ Dit besluit vervangt strijdige eerdere mobiele UI-regels.
 - Boven de koopstatuskolom staat een tweestandenfilter: uit = nog te vinden, aan = in de kar. Standaard worden de nog te vinden artikelen getoond. Een artikel dat in de kar wordt gezet verdwijnt uit die weergave, maar blijft via de aangevinkte filterstand zichtbaar en kan daar weer uit de kar worden gehaald.
 - Mobiel heeft geen afzonderlijke Selectie-checkbox en geen actie Bewerken per regel.
 - Aantal staat direct in de artikelregel en gebruikt de centrale `QuantityStepper` met min/plus.
+
+
+## Aanvullend PO-besluit 2026-09-30 — zoekwijze specifiek of generiek
+
+- Bij **Artikel toevoegen** heeft iedere gebruiker een persoonlijke filter **Zoekwijze** met de waarden **Specifiek** en **Generiek**.
+- **Specifiek** is de standaard en zoekt in exacte Catalogusproducten en Huishoudartikelen. Exacte Catalogusproducten worden als eerste bron bevraagd, zodat een kandidaat met productfoto waar mogelijk vóór een generieke kandidaat beschikbaar is.
+- **Generiek** zoekt in Producttypen en Artikelgroepen.
+- De zoekwijze geldt voor desktop en mobiel en wordt per ingelogde gebruiker bewaard; de voorkeur van de ene gebruiker mag die van een andere gebruiker niet overschrijven.
+- De bestaande applicatiebrede regel van maximaal vijf zichtbare zoekkandidaten blijft gelden.
+- Wisselen van zoekwijze wist de actuele kandidaatsselectie en voert een volgende zoekactie uitsluitend binnen de gekozen zoekwijze uit.
