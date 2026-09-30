@@ -58,10 +58,6 @@ export default function StoreConnectionsPage() {
   const [ahLoginUrl, setAhLoginUrl] = useState('')
   const [ahCode, setAhCode] = useState('')
   const [ahBusy, setAhBusy] = useState(false)
-  const [lidlConnection, setLidlConnection] = useState({ connected: false, persistence: 'runtime_only' })
-  const [lidlLoginUrl, setLidlLoginUrl] = useState('')
-  const [lidlCallback, setLidlCallback] = useState('')
-  const [lidlBusy, setLidlBusy] = useState(false)
   const [lidlWebProgress, setLidlWebProgress] = useState('')
 
   const rows = useMemo(() => deriveRows(providers, connections), [providers, connections])
@@ -71,12 +67,6 @@ export default function StoreConnectionsPage() {
   async function loadAhStatus() {
     const data = await fetchJson('/api/receipts/retailers/ah/status')
     setAhConnection(data || { connected: false, persistence: 'runtime_only' })
-    return data
-  }
-
-  async function loadLidlStatus() {
-    const data = await fetchJson('/api/receipts/retailers/lidl/status')
-    setLidlConnection(data || { connected: false, persistence: 'runtime_only' })
     return data
   }
 
@@ -296,103 +286,6 @@ export default function StoreConnectionsPage() {
       })
     } finally {
       setAhBusy(false)
-    }
-  }
-
-  async function startLidlLogin() {
-    setLidlBusy(true)
-    try {
-      const data = await fetchJson('/api/receipts/retailers/lidl/connect')
-      setLidlLoginUrl(data?.login_url || '')
-      if (!data?.login_url) throw new Error('Lidl-loginadres ontbreekt.')
-      window.open(data.login_url, '_blank', 'noopener,noreferrer')
-      showFeedback({
-        variant: 'info',
-        title: 'Lidl Plus koppelen',
-        message: 'Rond de Lidl-login en eventuele verificatie af in het geopende venster.',
-        detail: 'Plak daarna de volledige com.lidlplus.app://callback?code=...&state=... link hieronder.',
-      })
-    } catch (err) {
-      showFeedback({
-        variant: 'error',
-        title: 'Lidl Plus koppelen',
-        message: normalizeErrorMessage(err?.message) || 'De Lidl-login kon niet worden gestart.',
-      })
-    } finally {
-      setLidlBusy(false)
-    }
-  }
-
-  async function completeLidlLogin() {
-    const value = String(lidlCallback || '').trim()
-    if (!value) {
-      showFeedback({ variant: 'warning', message: 'Plak eerst de volledige Lidl callback.' })
-      return
-    }
-    setLidlBusy(true)
-    try {
-      const result = await fetchJson('/api/receipts/retailers/lidl/connect', {
-        method: 'POST',
-        body: JSON.stringify({ callback_url: value }),
-      })
-      setLidlConnection(result)
-      setLidlCallback('')
-      showFeedback({
-        variant: 'success',
-        title: 'Lidl Plus gekoppeld',
-        message: 'De koppeling is actief. Je kunt nu digitale Lidl-bonnen ophalen.',
-      })
-    } catch (err) {
-      showFeedback({
-        variant: 'error',
-        title: 'Lidl Plus koppelen',
-        message: normalizeErrorMessage(err?.message) || 'De Lidl Plus-koppeling kon niet worden voltooid.',
-      })
-    } finally {
-      setLidlBusy(false)
-    }
-  }
-
-  async function syncLidlReceipts() {
-    setLidlBusy(true)
-    try {
-      const result = await fetchJson('/api/receipts/retailers/lidl/sync', {
-        method: 'POST',
-        body: JSON.stringify({ limit: 20 }),
-      })
-      showFeedback({
-        variant: result?.receipts_failed ? 'warning' : 'success',
-        title: 'Lidl-bonnen opgehaald',
-        message: String(Number(result?.receipts_processed || 0)) + ' van ' + String(Number(result?.receipts_found || 0)) + ' bonnen verwerkt.',
-        detail: result?.receipts_failed ? String(result.receipts_failed) + ' bon(nen) konden niet worden verwerkt.' : 'De bonnen staan nu in Kassa.',
-      })
-      await loadLidlStatus()
-    } catch (err) {
-      showFeedback({
-        variant: 'error',
-        title: 'Lidl-bonnen ophalen',
-        message: normalizeErrorMessage(err?.message) || 'De Lidl-bonnen konden niet worden opgehaald.',
-      })
-    } finally {
-      setLidlBusy(false)
-    }
-  }
-
-  async function disconnectLidl() {
-    setLidlBusy(true)
-    try {
-      const result = await fetchJson('/api/receipts/retailers/lidl/connect', { method: 'DELETE' })
-      setLidlConnection(result)
-      setLidlCallback('')
-      setLidlLoginUrl('')
-      showFeedback({ variant: 'success', message: 'Lidl Plus is ontkoppeld.' })
-    } catch (err) {
-      showFeedback({
-        variant: 'error',
-        message: normalizeErrorMessage(err?.message) || 'Lidl Plus kon niet worden ontkoppeld.',
-      })
-    } finally {
-      setLidlBusy(false)
     }
   }
 

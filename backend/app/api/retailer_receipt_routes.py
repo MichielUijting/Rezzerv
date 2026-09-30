@@ -22,16 +22,7 @@ from app.services.ah_receipt_sync_service import (
     sync_ah_receipts,
 )
 from app.services.household_context_adapter import household_context_from_runtime_context
-from app.services.lidl_receipt_sync_service import (
-    connect_lidl_account,
-    disconnect_lidl_account,
-    start_lidl_account_connection,
-    sync_lidl_receipts,
-)
-from app.services.retailer_account_runtime_store import (
-    ah_session_status,
-    lidl_session_status,
-)
+from app.services.retailer_account_runtime_store import ah_session_status
 from app.services.retailer_receipt_import_service import import_retailer_receipt
 
 router = APIRouter(prefix="/api/receipts/retailers", tags=["receipts-retailers"])
@@ -44,14 +35,6 @@ class AHConnectRequest(BaseModel):
 
 
 class AHSyncRequest(BaseModel):
-    limit: int = Field(default=20, ge=1, le=100)
-
-
-class LidlConnectRequest(BaseModel):
-    callback_url: str = Field(min_length=1, max_length=4096)
-
-
-class LidlSyncRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
 
 
@@ -73,7 +56,11 @@ def list_retailer_receipt_providers(
             {
                 "code": code,
                 "supports_structured_import": True,
-                "account_connection": "runtime_only" if code in {"ah", "lidl"} else "not_configured",
+                "account_connection": (
+                    "runtime_only" if code == "ah"
+                    else "browser_assisted" if code == "lidl"
+                    else "not_configured"
+                ),
             }
             for code in SUPPORTED_RETAILER_PROVIDERS
         ],
@@ -165,68 +152,3 @@ def sync_ah_account_receipts(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-
-@router.get("/lidl/connect")
-def start_lidl_connection(
-    authorization: Optional[str] = Header(None),
-):
-    household_id = _authorized_household_id(authorization)
-    return {
-        **start_lidl_account_connection(household_id=household_id),
-        "instructions": (
-            "Open de Lidl-login en rond de aanmelding inclusief eventuele MFA af. "
-            "Plak daarna de volledige com.lidlplus.app://callback?code=...&state=... callback in Inhuis."
-        ),
-    }
-
-
-@router.post("/lidl/connect")
-def complete_lidl_connection(
-    payload: LidlConnectRequest,
-    authorization: Optional[str] = Header(None),
-):
-    household_id = _authorized_household_id(authorization)
-    try:
-        return connect_lidl_account(
-            household_id=household_id,
-            callback_url=payload.callback_url,
-        )
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Lidl Plus-login kon niet worden voltooid") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
-@router.get("/lidl/status")
-def get_lidl_account_status(
-    authorization: Optional[str] = Header(None),
-):
-    household_id = _authorized_household_id(authorization)
-    return lidl_session_status(household_id)
-
-
-@router.delete("/lidl/connect")
-def remove_lidl_account_connection(
-    authorization: Optional[str] = Header(None),
-):
-    household_id = _authorized_household_id(authorization)
-    return disconnect_lidl_account(household_id=household_id)
-
-
-@router.post("/lidl/sync")
-def sync_lidl_account_receipts(
-    payload: LidlSyncRequest,
-    authorization: Optional[str] = Header(None),
-):
-    household_id = _authorized_household_id(authorization)
-    try:
-        return sync_lidl_receipts(
-            engine,
-            RECEIPT_STORAGE_ROOT,
-            household_id=household_id,
-            limit=payload.limit,
-        )
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Lidl Plus-bonnen konden niet worden opgehaald") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
