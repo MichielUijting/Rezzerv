@@ -119,8 +119,10 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
     if (!pre) throw new Error('Lidl-bon ' + receiptId + ' kon niet worden gelezen')
 
     const grouped = new Map()
-    for (const span of pre.querySelectorAll('.purchase_list span[id], span[id][data-art-description]')) {
-      const key = span.id || ('row-' + grouped.size)
+    let anonymousRowIndex = 0
+    for (const span of pre.querySelectorAll('.purchase_list span[id], .purchase_list span[data-art-description]')) {
+      const parentWithId = span.parentElement?.closest?.('[id]')
+      const key = span.id || parentWithId?.id || ('row-anonymous-' + anonymousRowIndex++)
       if (!grouped.has(key)) grouped.set(key, [])
       grouped.get(key).push(span)
     }
@@ -142,14 +144,18 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
     let current = null
     for (const spans of grouped.values()) {
       const first = spans[0]
+      const structuredArticleSpan =
+        spans.find((span) => clean(span.dataset?.artDescription)) ||
+        spans.find((span) => span.classList.contains('article')) ||
+        first
       const text = spans.map((span) => span.textContent || '').join('').replace(/\u00a0/g, ' ')
-      const data = first.dataset || {}
+      const data = structuredArticleSpan.dataset || {}
       const amountMatch = text.match(/(-?\d+[,.]\d{2})\s*[A-Z]?\s*$/)
       const amount = amountMatch ? amountMatch[1] : null
       const description = clean(data.artDescription)
-      const isArticle = first.classList.contains('article') || Boolean(description)
+      const isArticle = spans.some((span) => span.classList.contains('article')) || Boolean(description)
 
-      if (isArticle && description && text.trim().startsWith(description)) {
+      if (isArticle && description) {
         const identifier = datasetIdentifier(data)
         const taxInfo = vatByType.get(clean(data.taxType)) || null
         const packageSize = inferPackageSize(description, text)
@@ -177,7 +183,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
         continue
       }
 
-      if (current && isArticle && !clean(data.artQuantity)) {
+      if (current && isArticle && !description && !clean(data.artQuantity)) {
         const qtyMatch = text.match(/^\s*(\d+(?:[,.]\d+)?)\s*(?:Stk\.?|stuk|stuks?)?\s*x\b/i)
         const packageSize = inferPackageSize('', text)
         if (qtyMatch) current.quantity = qtyMatch[1].replace(',', '.')
@@ -236,6 +242,18 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
     }
 
     const receiptText = pre.textContent || ''
+    const expectedArticleCountMatch =
+      receiptText.match(/Aantal\s+artikelen\s+(\d+)/i) ||
+      receiptText.match(/Anzahl\s+Artikel\s+(\d+)/i)
+    const expectedArticleCount = expectedArticleCountMatch
+      ? Number.parseInt(expectedArticleCountMatch[1], 10)
+      : null
+    const extractedArticleQuantity = products
+      .filter((product) => product.lineType !== 'deposit')
+      .reduce((sum, product) => {
+        const value = Number(String(product.quantity || '1').replace(',', '.'))
+        return sum + (Number.isFinite(value) ? value : 1)
+      }, 0)
     const totalMatch =
       receiptText.match(/Totaal\s+(-?\d+[,.]\d{2})/i) ||
       receiptText.match(/Zu zahlen\s+(-?\d+[,.]\d{2})/i)
@@ -269,6 +287,14 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
       products,
       vat,
       coupons,
+      extractionDiagnostics: {
+        structuredRowCount: grouped.size,
+        extractedProductCount: products.filter((product) => product.lineType !== 'deposit').length,
+        extractedArticleQuantity,
+        expectedArticleCount,
+        articleCountMatches:
+          expectedArticleCount === null ? null : Math.abs(extractedArticleQuantity - expectedArticleCount) < 0.001,
+      },
       _sourceSnapshotDataUrl: snapshotReceipt(pre),
       sourceUrl: location.origin + '/mre/purchase-detail?t=' + encodeURIComponent(receiptId),
     }
