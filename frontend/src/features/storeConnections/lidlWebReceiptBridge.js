@@ -152,6 +152,7 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
       if (isArticle && description && text.trim().startsWith(description)) {
         const identifier = datasetIdentifier(data)
         const taxInfo = vatByType.get(clean(data.taxType)) || null
+        const packageSize = inferPackageSize(description, text)
         current = {
           name: description,
           quantity: clean(data.artQuantity) || '1',
@@ -163,8 +164,8 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
           taxType: clean(data.taxType) || null,
           taxRate: taxInfo?.percentage || null,
           taxAmount: null,
-          unit: clean(data.unit || data.unitOfMeasure || data.uom) || null,
-          packageSize: inferPackageSize(description, text),
+          unit: clean(data.unit || data.unitOfMeasure || data.uom) || packageSize || null,
+          packageSize,
           rawText: clean(text),
           discounts: [],
         }
@@ -180,7 +181,10 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
         const qtyMatch = text.match(/^\s*(\d+(?:[,.]\d+)?)\s*(?:Stk\.?|stuk|stuks?)?\s*x\b/i)
         const packageSize = inferPackageSize('', text)
         if (qtyMatch) current.quantity = qtyMatch[1].replace(',', '.')
-        if (packageSize) current.packageSize = packageSize
+        if (packageSize) {
+          current.packageSize = packageSize
+          if (!current.unit) current.unit = packageSize
+        }
         if (qtyMatch || packageSize) continue
       }
 
