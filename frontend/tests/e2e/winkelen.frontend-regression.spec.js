@@ -158,7 +158,7 @@ test.describe('Boodschappen frontend-regressie', () => {
     await expect(shoppingPage).toBeVisible();
     await expect(shoppingPage.getByRole('heading', { name: 'Boodschappen — 0 artikelen' })).toBeVisible();
     await expect(page.getByText('Artikel toevoegen', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Zoekwijze specifiek of generiek')).toHaveValue('specific');
+    await expect(page.getByTestId('shopping-search-mode')).toContainText('Specifiek');
     await expect(page.getByText('Zoek tegelijk in Huishoudartikelen')).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: /Artikelgroep/ })).toHaveCount(0);
     await expect(table.locator('thead tr:first-child th').first()).toBeVisible();
@@ -301,8 +301,9 @@ test.describe('Boodschappen frontend-regressie', () => {
     await expect(page.getByRole('heading', { name: 'Boodschappen — 0 artikelen' })).toBeVisible();
     await expect(page.getByLabel('Selecteer Melk')).toHaveCount(0);
 
-    await page.getByLabel('Zoekwijze specifiek of generiek').selectOption('generic');
-    await expect(page.getByLabel('Zoekwijze specifiek of generiek')).toHaveValue('generic');
+    await page.getByTestId('shopping-search-mode').click();
+    await page.getByRole('option', { name: 'Generiek', exact: true }).click();
+    await expect(page.getByTestId('shopping-search-mode')).toContainText('Generiek');
     await page.getByLabel('Artikel toevoegen', { exact: true }).fill('pasta');
     await expect(page.getByTestId('shopping-candidate-list').getByRole('option', { name: 'Bananen — Exact Catalogusproduct', exact: true })).toHaveCount(0);
     await page.getByTestId('shopping-candidate-list').getByRole('option', { name: 'Pasta — Producttype', exact: true }).click();
