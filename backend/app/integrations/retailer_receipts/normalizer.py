@@ -27,6 +27,7 @@ from app.integrations.receipt_scanners.schemas.canonical_receipt_v1 import (
     ReceiptBodyV1,
     ReceiptLineV1,
     StoreV1,
+    TaxV1,
     TotalsV1,
     TransactionV1,
 )
@@ -186,6 +187,11 @@ def _normalize_line(item: dict[str, Any], index: int) -> ReceiptLineV1:
         )
 
     raw_text = str(_first(item, "raw_text", "rawText") or label).strip()
+    tax_rate = _decimal(_first(item, "tax_rate", "taxRate", "vatRate", "taxPercentage"))
+    tax_amount = _decimal(_first(item, "tax_amount", "taxAmount", "vatAmount"))
+    tax = TaxV1(rate=tax_rate, amount=tax_amount) if tax_rate is not None or tax_amount is not None else None
+    gross_amount = _decimal(_first(item, "gross_amount", "grossAmount", "originalAmount"))
+
     return ReceiptLineV1(
         line_number=index,
         line_type=_line_type(item),
@@ -194,9 +200,11 @@ def _normalize_line(item: dict[str, Any], index: int) -> ReceiptLineV1:
         quantity=quantity,
         unit=str(_first(item, "unit", "unitOfMeasure", "uom") or "").strip() or None,
         unit_price=unit_price,
+        gross_amount=gross_amount,
         discount_amount=discount,
         line_total=line_total,
         identifiers=identifiers,
+        tax=tax,
         confidence=LineConfidenceV1(
             description=1.0,
             quantity=1.0,
@@ -270,7 +278,19 @@ def normalize_retailer_receipt(
         currency = "EUR"
 
     discount_total = _decimal(_nested_first(payload, "discountTotal", "totalDiscount", "discount"))
+    if discount_total is None:
+        discounts = [line.discount_amount for line in lines if line.discount_amount is not None]
+        discount_total = sum(discounts, Decimal("0")) if discounts else None
     subtotal = _decimal(_nested_first(payload, "subtotal", "subTotal"))
+    deposit_total = _decimal(_nested_first(payload, "depositTotal", "totalDeposit"))
+    if deposit_total is None:
+        deposits = [
+            line.line_total
+            for line in lines
+            if line.line_type == "deposit" and line.line_total is not None
+        ]
+        deposit_total = sum(deposits, Decimal("0")) if deposits else None
+    tax_total = _decimal(_nested_first(payload, "taxTotal", "vatTotal", "totalTax"))
     receipt_number = _nested_first(payload, "receiptNumber", "receiptNo", "transactionId", "id")
     store = _store(payload, envelope.provider)
 
@@ -309,6 +329,8 @@ def normalize_retailer_receipt(
             totals=TotalsV1(
                 subtotal=subtotal,
                 discount_total=discount_total,
+                deposit_total=deposit_total,
+                tax_total=tax_total,
                 grand_total=grand_total,
                 paid_total=_decimal(_nested_first(payload, "paidTotal", "amountPaid")),
                 confidence=1.0,

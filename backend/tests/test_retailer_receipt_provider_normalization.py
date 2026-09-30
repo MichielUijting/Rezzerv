@@ -175,3 +175,88 @@ def test_structured_retailer_adapter_uses_receipt_scanner_gateway():
     assert canonical.document.sha256 == request.document.sha256
     assert normalized.store_name == "Albert Heijn"
     assert normalized.lines[0]["barcode"] == "8712345678906"
+
+
+def test_lidl_web_receipt_preserves_rich_product_semantics():
+    envelope = RetailerReceiptEnvelope(
+        provider="lidl",
+        external_receipt_id="22000742902026090914942",
+        receipt={
+            "id": "22000742902026090914942",
+            "dateTime": "2026-09-09T14:42:00",
+            "totalAmount": "6.15",
+            "discountTotal": "1.00",
+            "depositTotal": "0.25",
+            "paidTotal": "6.15",
+            "products": [
+                {
+                    "name": "FRISDRANK 1,5L",
+                    "quantity": "2",
+                    "unit": "1.5 l",
+                    "unitPrice": "2.50",
+                    "grossAmount": "5.00",
+                    "discountAmount": "1.00",
+                    "lineTotal": "4.00",
+                    "articleId": "123456",
+                    "retailerSku": "123456",
+                    "barcode": "4056489000012",
+                    "codeInput": "4056489000012",
+                    "taxRate": "21",
+                    "discounts": [{"description": "Lidl Plus korting", "amount": "1.00"}],
+                },
+                {
+                    "name": "Statiegeld",
+                    "quantity": "1",
+                    "unitPrice": "0.25",
+                    "lineTotal": "0.25",
+                    "lineType": "deposit",
+                },
+                {
+                    "name": "BROOD",
+                    "quantity": "1",
+                    "unitPrice": "1.90",
+                    "lineTotal": "1.90",
+                    "articleId": "654321",
+                    "retailerSku": "654321",
+                    "taxRate": "9",
+                },
+            ],
+        },
+    )
+
+    canonical = normalize_retailer_receipt(
+        envelope,
+        scan_id="rscan_lidl_web_rich",
+        document_sha256="d" * 64,
+    )
+    assert canonical.receipt is not None
+    assert canonical.receipt.totals.discount_total == Decimal("1.00")
+    assert canonical.receipt.totals.deposit_total == Decimal("0.25")
+    assert canonical.receipt.totals.paid_total == Decimal("6.15")
+
+    first = canonical.receipt.lines[0]
+    assert first.description == "FRISDRANK 1,5L"
+    assert first.quantity == Decimal("2")
+    assert first.unit == "1.5 l"
+    assert first.unit_price == Decimal("2.50")
+    assert first.gross_amount == Decimal("5.00")
+    assert first.discount_amount == Decimal("1.00")
+    assert first.line_total == Decimal("4.00")
+    assert first.identifiers is not None
+    assert first.identifiers.gtin == "4056489000012"
+    assert first.identifiers.retailer_sku == "123456"
+    assert first.tax is not None
+    assert first.tax.rate == Decimal("21")
+
+    legacy = canonical_to_receipt_parse_result(canonical)
+    assert legacy.lines[0]["quantity"] == 2.0
+    assert legacy.lines[0]["unit"] == "1.5 l"
+    assert legacy.lines[0]["unit_price"] == 2.5
+    assert legacy.lines[0]["discount_amount"] == 1.0
+    assert legacy.lines[0]["line_total"] == 4.0
+    assert legacy.lines[0]["barcode"] == "4056489000012"
+    assert legacy.lines[0]["retailer_sku"] == "123456"
+    assert legacy.lines[0]["tax_rate"] == 21.0
+
+    assert canonical.receipt.lines[1].line_type == "deposit"
+    assert canonical.receipt.lines[1].line_total == Decimal("0.25")

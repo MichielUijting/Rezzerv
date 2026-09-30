@@ -66,8 +66,10 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
         if line.confidence is not None:
             line_confidence = line.confidence.line_total if line.confidence.line_total is not None else line.confidence.description
         barcode = None
+        retailer_sku = None
         if line.identifiers is not None:
             barcode = line.identifiers.gtin or line.identifiers.barcode
+            retailer_sku = line.identifiers.retailer_sku
         lines.append({
             "line_type": line.line_type,
             "raw_label": line.raw_text,
@@ -78,6 +80,10 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
             "line_total": _to_legacy_line_number(line.line_total),
             "discount_amount": _to_legacy_line_number(line.discount_amount),
             "barcode": barcode,
+            "retailer_sku": retailer_sku,
+            "gross_amount": _to_legacy_line_number(line.gross_amount),
+            "tax_rate": _to_legacy_line_number(line.tax.rate) if line.tax is not None else None,
+            "tax_amount": _to_legacy_line_number(line.tax.amount) if line.tax is not None else None,
             "confidence_score": line_confidence,
         })
 

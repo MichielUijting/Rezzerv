@@ -91,6 +91,29 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
     }
   }
 
+  function numericAmount(value) {
+    const cleaned = String(value || '').replace('€', '').replace(/\s+/g, '').replace(',', '.')
+    const parsed = Number(cleaned)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  function datasetIdentifier(data) {
+    for (const key of ['gtin', 'ean', 'barcode', 'codeInput', 'productCode']) {
+      const value = clean(data?.[key])
+      if (value) return value
+    }
+    return null
+  }
+
+  function inferPackageSize(description, rawText) {
+    const haystack = (String(description || '') + ' ' + String(rawText || '')).replace(',', '.')
+    const multi = haystack.match(/\b(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*(kg|g|l|ml|cl)\b/i)
+    if (multi) return multi[1] + ' x ' + multi[2] + ' ' + multi[3].toLowerCase()
+    const single = haystack.match(/\b(\d+(?:\.\d+)?)\s*(kg|g|l|ml|cl)\b/i)
+    if (single) return single[1] + ' ' + single[2].toLowerCase()
+    return null
+  }
+
   function parseReceipt(doc, receiptId, fallback = {}) {
     const pre = doc.querySelector('[data-testid="ticket-' + CSS.escape(receiptId) + '"] pre')
     if (!pre) throw new Error('Lidl-bon ' + receiptId + ' kon niet worden gelezen')
@@ -102,6 +125,19 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
       grouped.get(key).push(span)
     }
 
+    const vatByType = new Map()
+    for (const span of pre.querySelectorAll('.vat_info span[data-tax-type]')) {
+      const data = span.dataset || {}
+      const taxType = clean(data.taxType)
+      if (!taxType) continue
+      vatByType.set(taxType, {
+        type: taxType,
+        percentage: clean(data.taxPercentage) || null,
+        gross: clean(data.taxBaseAmount) || null,
+        tax: clean(data.taxAmount) || null,
+      })
+    }
+
     const products = []
     let current = null
     for (const spans of grouped.values()) {
@@ -111,19 +147,60 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
       const amountMatch = text.match(/(-?\d+[,.]\d{2})\s*[A-Z]?\s*$/)
       const amount = amountMatch ? amountMatch[1] : null
       const description = clean(data.artDescription)
+      const isArticle = first.classList.contains('article') || Boolean(description)
 
-      if (description) {
+      if (isArticle && description && text.trim().startsWith(description)) {
+        const identifier = datasetIdentifier(data)
+        const taxInfo = vatByType.get(clean(data.taxType)) || null
         current = {
           name: description,
-          quantity: data.artQuantity || '1',
-          unitPrice: data.unitPrice || null,
+          quantity: clean(data.artQuantity) || '1',
+          unitPrice: clean(data.unitPrice) || null,
+          grossAmount: amount,
           lineTotal: amount,
-          articleId: data.artId || null,
-          taxType: data.taxType || null,
+          articleId: clean(data.artId) || null,
+          retailerSku: clean(data.artId) || null,
+          taxType: clean(data.taxType) || null,
+          taxRate: taxInfo?.percentage || null,
+          taxAmount: null,
+          unit: clean(data.unit || data.unitOfMeasure || data.uom) || null,
+          packageSize: inferPackageSize(description, text),
+          rawText: clean(text),
           discounts: [],
         }
+        if (identifier) {
+          current.barcode = identifier
+          current.codeInput = identifier
+        }
         products.push(current)
-      } else if (current && amount && String(amount).startsWith('-')) {
+        continue
+      }
+
+      if (current && isArticle && !clean(data.artQuantity)) {
+        const qtyMatch = text.match(/^\s*(\d+(?:[,.]\d+)?)\s*(?:Stk\.?|stuk|stuks?)?\s*x\b/i)
+        if (qtyMatch) current.quantity = qtyMatch[1].replace(',', '.')
+        const packageSize = inferPackageSize('', text)
+        if (packageSize) current.packageSize = packageSize
+        continue
+      }
+
+      const lower = clean(text).toLowerCase()
+      if (amount && /\b(statiegeld|deposit|pfand)\b/i.test(lower)) {
+        products.push({
+          name: clean(text.replace(amount, '')) || 'Statiegeld',
+          quantity: '1',
+          unitPrice: amount,
+          grossAmount: amount,
+          lineTotal: amount,
+          lineType: 'deposit',
+          rawText: clean(text),
+          discounts: [],
+        })
+        current = null
+        continue
+      }
+
+      if (current && amount && String(amount).startsWith('-')) {
         current.discounts.push({
           description: clean(text.replace(amount, '')) || 'Korting',
           amount: String(amount).replace('-', ''),
@@ -135,29 +212,59 @@ function lidlWebPageRunner(INHUIS_ORIGIN) {
       throw new Error('Geen gestructureerde artikelregels gevonden op Lidl-bon ' + receiptId)
     }
 
+    let lineDiscountTotal = 0
+    let depositTotal = 0
     for (const product of products) {
-      if (!product.discounts.length) continue
+      const gross = numericAmount(product.grossAmount)
+      if (product.lineType === 'deposit') {
+        if (gross !== null) depositTotal += gross
+        continue
+      }
       const discountTotal = product.discounts.reduce((sum, discount) => {
-        const value = Number(String(discount.amount || '0').replace(',', '.'))
-        return sum + (Number.isFinite(value) ? value : 0)
+        const value = numericAmount(discount.amount)
+        return sum + (value === null ? 0 : Math.abs(value))
       }, 0)
-      product.discountAmount = discountTotal.toFixed(2)
+      if (discountTotal > 0) {
+        product.discountAmount = discountTotal.toFixed(2)
+        lineDiscountTotal += discountTotal
+        if (gross !== null) product.lineTotal = Math.max(0, gross - discountTotal).toFixed(2)
+      }
     }
 
     const receiptText = pre.textContent || ''
     const totalMatch =
       receiptText.match(/Totaal\s+(-?\d+[,.]\d{2})/i) ||
       receiptText.match(/Zu zahlen\s+(-?\d+[,.]\d{2})/i)
+    const receiptDiscountMatch =
+      receiptText.match(/Totaal\s+(?:korting|prijsvoordeel)\s+(-?\d+[,.]\d{2})/i) ||
+      receiptText.match(/Uw\s+voordeel\s+(-?\d+[,.]\d{2})/i)
+
+    const receiptDiscountValue = numericAmount(receiptDiscountMatch?.[1])
+    const discountTotal = receiptDiscountValue === null
+      ? lineDiscountTotal
+      : Math.abs(receiptDiscountValue)
 
     const detailStore = clean(doc.querySelector('[data-testid="store"] [class*="_title_"]')?.textContent)
     const storeName = detailStore || clean(fallback.store) || 'Lidl'
+    const payment = clean(pre.querySelector('[data-tender-description]')?.dataset?.tenderDescription)
+    const coupons = [...doc.querySelectorAll('[data-testid="coupons"] [class*="_item_"]')]
+      .map((element) => clean(element.textContent))
+      .filter(Boolean)
+
+    const vat = [...vatByType.values()]
 
     return {
       id: receiptId,
       dateTime: parseDateTime(receiptText, fallback.date || ''),
       totalAmount: clean((totalMatch && totalMatch[1]) || fallback.amount || '').replace('€', '').trim(),
+      discountTotal: discountTotal > 0 ? discountTotal.toFixed(2) : null,
+      depositTotal: depositTotal > 0 ? depositTotal.toFixed(2) : null,
+      paidTotal: clean((totalMatch && totalMatch[1]) || fallback.amount || '').replace('€', '').trim(),
+      paymentMethod: payment || null,
       store: { name: storeName, city: storeName },
       products,
+      vat,
+      coupons,
       _sourceSnapshotDataUrl: snapshotReceipt(pre),
       sourceUrl: location.origin + '/mre/purchase-detail?t=' + encodeURIComponent(receiptId),
     }
