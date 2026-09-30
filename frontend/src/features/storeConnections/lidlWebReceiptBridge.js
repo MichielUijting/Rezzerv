@@ -1,4 +1,5 @@
 export const LIDL_WEB_ORIGIN = 'https://www.lidl.nl'
+export const LIDL_BOOKMARKLET_VERSION = 2
 
 export const LIDL_HISTORY_URL =
   'https://www.lidl.nl/mre/purchase-history?client_id=NetherlandsEcommerceClient&country_code=nl&language=nl-NL&page=1'
@@ -424,6 +425,7 @@ export function buildLidlWebBookmarklet(inhuisOrigin) {
   return (
     'javascript:(()=>{' +
     'const O=' + JSON.stringify(origin) + ';' +
+    'const V=' + String(LIDL_BOOKMARKLET_VERSION) + ';' +
     'const W=window.opener;' +
     'if(!W){alert("Open Mijn Lidl-kassabonnen eerst vanuit Inhuis > Winkelkoppelingen. Laat dat Inhuis-tabblad open en gebruik daarna deze favoriet.");return;}' +
     'let done=false;' +
@@ -432,7 +434,7 @@ export function buildLidlWebBookmarklet(inhuisOrigin) {
     'done=true;' +
     'try{new Function(e.data.script)();}catch(err){alert("Lidl-import kon niet starten: "+String(err&&err.message||err));}' +
     '},{once:false});' +
-    'W.postMessage({type:"inhuis:lidl-handshake"},O);' +
+    'W.postMessage({type:"inhuis:lidl-handshake",bookmarklet_version:V},O);' +
     'setTimeout(()=>{if(!done)alert("De bestaande Inhuis-sessie reageert niet. Open Lidl opnieuw via Inhuis > Winkelkoppelingen.");},4000);' +
     '})()'
   )

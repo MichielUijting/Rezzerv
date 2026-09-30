@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  LIDL_BOOKMARKLET_VERSION,
   LIDL_HISTORY_URL,
   LIDL_WEB_ORIGIN,
   buildLidlWebBookmarklet,
@@ -7,6 +8,7 @@ import {
 } from '../src/features/storeConnections/lidlWebReceiptBridge.js'
 
 assert.equal(LIDL_WEB_ORIGIN, 'https://www.lidl.nl')
+assert.equal(LIDL_BOOKMARKLET_VERSION, 2)
 assert.match(LIDL_HISTORY_URL, /\/mre\/purchase-history/)
 assert.match(LIDL_HISTORY_URL, /client_id=NetherlandsEcommerceClient/)
 
@@ -15,6 +17,7 @@ assert.match(bookmarklet, /^javascript:/)
 assert.match(bookmarklet, /http:\/\/localhost:5174/)
 assert.match(bookmarklet, /window\.opener/)
 assert.match(bookmarklet, /inhuis:lidl-handshake/)
+assert.match(bookmarklet, /bookmarklet_version/)
 assert.doesNotMatch(bookmarklet, /lidlImport=1/)
 assert.doesNotMatch(bookmarklet, /window\.open/)
 

@@ -6,6 +6,7 @@ import Input from '../../ui/Input'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared.jsx'
 import {
+  LIDL_BOOKMARKLET_VERSION,
   LIDL_HISTORY_URL,
   LIDL_WEB_ORIGIN,
   buildLidlWebBookmarklet,
@@ -105,6 +106,16 @@ export default function StoreConnectionsPage() {
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'inhuis:lidl-handshake') {
+        if (Number(data.bookmarklet_version || 0) !== LIDL_BOOKMARKLET_VERSION) {
+          setLidlWebProgress('Je gebruikt een oude Lidl-favoriet. Verwijder die en sleep de nieuwe Lidl-bonnen naar Inhuis v2-knop opnieuw naar je favorietenbalk.')
+          showFeedback({
+            variant: 'warning',
+            title: 'Lidl-favoriet vernieuwen',
+            message: 'De opgeslagen Lidl-favoriet is verouderd.',
+            detail: 'Verwijder de oude favoriet en sleep de nieuwe v2-knop één keer opnieuw naar je favorietenbalk.',
+          })
+          return
+        }
         lidlSourceWindow = event.source
         setLidlWebProgress('Lidl is verbonden met deze Inhuis-sessie. Bonnen worden voorbereid…')
         event.source?.postMessage({
@@ -410,7 +421,7 @@ export default function StoreConnectionsPage() {
             </div>
 
             <div style={{ display: 'grid', gap: '10px' }}>
-              <div><strong>Eenmalig:</strong> sleep de knop hieronder naar de favorietenbalk van deze browser.</div>
+              <div><strong>Eenmalig na deze update:</strong> verwijder eerst je oude Lidl-favoriet en sleep daarna de nieuwe v2-knop hieronder naar de favorietenbalk.</div>
               <a
                 href={lidlBookmarklet}
                 data-testid="lidl-web-bookmarklet"
@@ -428,10 +439,10 @@ export default function StoreConnectionsPage() {
                 }}
                 onClick={(event) => event.preventDefault()}
               >
-                Lidl-bonnen naar Inhuis
+                Lidl-bonnen naar Inhuis v2
               </a>
               <div style={{ color: '#667085' }}>
-                Gebruik daarna de knop hieronder. Laat dit Inhuis-tabblad open en klik in de geopende Lidl-tab op deze favoriet. De bonnen komen terug in deze bestaande Inhuis-sessie.
+                Gebruik daarna de knop hieronder. Laat dit Inhuis-tabblad open en klik in de geopende Lidl-tab op de nieuwe v2-favoriet. Vanaf v2 blijft de favoriet zelf klein en haalt hij de actuele importcode uit je bestaande Inhuis-sessie, zodat toekomstige parserwijzigingen niet opnieuw een nieuwe favoriet vereisen.
               </div>
             </div>
 
