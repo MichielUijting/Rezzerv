@@ -6,7 +6,14 @@ import DataTable from '../../ui/DataTable.jsx'
 import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
-import { fetchJsonWithAuth } from '../../lib/authSession.js'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
+import {
+  SHOPPING_SEARCH_MODE_OPTIONS,
+  combineShoppingSearchResults,
+  readShoppingSearchModePreference,
+  shoppingSearchScopes,
+  writeShoppingSearchModePreference,
+} from './shoppingSearchMode.js'
 
 const SOURCE_LABELS = {
   household_article: 'Huishoudartikel',
@@ -48,6 +55,7 @@ export default function ShoppingPage() {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
   const [selectedResultId, setSelectedResultId] = useState('')
+  const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
   const [selectedItemIds, setSelectedItemIds] = useState([])
   const [filters, setFilters] = useState({ checked: 'all', article: '', productType: '' })
   const [sort, setSort] = useState({ key: 'article', direction: 'asc' })
@@ -100,9 +108,11 @@ export default function ShoppingPage() {
       setSearching(true)
       setError('')
       try {
-        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=all&query=${encodeURIComponent(query)}&limit=5`)
+        const payloads = await Promise.all(shoppingSearchScopes(searchMode).map((scope) => requestJson(
+          `/api/shopping-list/catalog-search?scope=${scope}&query=${encodeURIComponent(query)}&limit=5`,
+        )))
         if (cancelled || catalogSearchRequestRef.current !== requestId) return
-        setCatalogResults(Array.isArray(payload?.items) ? payload.items : [])
+        setCatalogResults(combineShoppingSearchResults(payloads, 5))
       } catch (searchError) {
         if (cancelled || catalogSearchRequestRef.current !== requestId) return
         setCatalogResults([])
@@ -116,7 +126,16 @@ export default function ShoppingPage() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [catalogQuery])
+  }, [catalogQuery, searchMode])
+
+  function updateSearchMode(value) {
+    const nextMode = writeShoppingSearchModePreference(value, readStoredAuthContext())
+    catalogSearchRequestRef.current += 1
+    setSearchMode(nextMode)
+    setCatalogResults([])
+    setSelectedResultId('')
+    setSearching(false)
+  }
 
   const selectedResult = useMemo(
     () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
@@ -507,7 +526,24 @@ export default function ShoppingPage() {
           <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="shopping-page">
             <h2 style={{ margin: 0 }}>Boodschappen — {Number(list.item_count || 0)} artikelen</h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) auto', gap: 12, alignItems: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 220px) minmax(320px, 1fr) auto', gap: 12, alignItems: 'start' }}>
+              <div className="rz-input-field">
+                <label className="rz-label" htmlFor="shopping-search-mode">Zoekwijze</label>
+                <select
+                  id="shopping-search-mode"
+                  className="rz-input"
+                  value={searchMode}
+                  disabled={saving}
+                  onChange={(event) => updateSearchMode(event.target.value)}
+                  aria-label="Zoekwijze specifiek of generiek"
+                  data-testid="shopping-search-mode"
+                >
+                  {SHOPPING_SEARCH_MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="rz-input-field">
                 <label className="rz-label" htmlFor="shopping-catalog-query">Artikel toevoegen</label>
                 <input
