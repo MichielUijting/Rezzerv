@@ -259,3 +259,121 @@ def test_lidl_web_receipt_preserves_rich_product_semantics():
 
     assert canonical.receipt.lines[1].line_type == "deposit"
     assert canonical.receipt.lines[1].line_total == Decimal("0.25")
+
+
+def test_lidl_weight_detail_row_is_metadata_not_second_purchase_component():
+    envelope = RetailerReceiptEnvelope(
+        provider="lidl",
+        external_receipt_id="lidl-weight-detail",
+        receipt={
+            "totalAmount": "4.42",
+            "products": [
+                {
+                    "name": "Gewogen artikel",
+                    "quantity": "0.122",
+                    "unitPrice": "19.90",
+                    "grossAmount": "2.43",
+                    "lineTotal": "2.43",
+                    "articleId": "6612989",
+                },
+                {
+                    "name": "Gewogen artikel",
+                    "quantity": "0.122",
+                    "unit": "0.122 kg",
+                    "unitPrice": "19.90",
+                    "grossAmount": None,
+                    "lineTotal": None,
+                    "packageSize": "0.122 kg",
+                    "articleId": "6612989",
+                },
+                {
+                    "name": "Ander artikel",
+                    "quantity": "1",
+                    "unitPrice": "1.99",
+                    "grossAmount": "1.99",
+                    "lineTotal": "1.99",
+                    "articleId": "1234567",
+                },
+            ],
+        },
+    )
+
+    canonical = normalize_retailer_receipt(
+        envelope,
+        scan_id="rscan_lidl_weight_detail",
+        document_sha256="e" * 64,
+    )
+
+    assert canonical.receipt is not None
+    assert len(canonical.receipt.lines) == 2
+    weighted = canonical.receipt.lines[0]
+    assert weighted.description == "Gewogen artikel"
+    assert weighted.quantity == Decimal("0.122")
+    assert weighted.unit_price == Decimal("19.90")
+    assert weighted.line_total == Decimal("2.43")
+    assert weighted.identifiers is not None
+    assert weighted.identifiers.retailer_sku == "6612989"
+    assert sum(
+        line.line_total or Decimal("0")
+        for line in canonical.receipt.lines
+        if line.line_type in {"product", "deposit"}
+    ) == Decimal("4.42")
+
+
+def test_lidl_weight_detail_discount_is_applied_to_priced_article():
+    envelope = RetailerReceiptEnvelope(
+        provider="lidl",
+        external_receipt_id="lidl-weight-discount",
+        receipt={
+            "totalAmount": "3.06",
+            "discountTotal": "1.17",
+            "products": [
+                {
+                    "name": "Gewogen artikel",
+                    "quantity": "1.224",
+                    "unitPrice": "2.65",
+                    "grossAmount": "3.24",
+                    "lineTotal": "3.24",
+                    "articleId": "0080755",
+                },
+                {
+                    "name": "Gewogen artikel",
+                    "quantity": "1.224",
+                    "unit": "1.224 kg",
+                    "unitPrice": "2.65",
+                    "grossAmount": None,
+                    "lineTotal": "0.00",
+                    "discountAmount": "1.17",
+                    "packageSize": "1.224 kg",
+                    "articleId": "0080755",
+                },
+                {
+                    "name": "Ander artikel",
+                    "quantity": "1",
+                    "unitPrice": "0.99",
+                    "grossAmount": "0.99",
+                    "lineTotal": "0.99",
+                    "articleId": "7654321",
+                },
+            ],
+        },
+    )
+
+    canonical = normalize_retailer_receipt(
+        envelope,
+        scan_id="rscan_lidl_weight_discount",
+        document_sha256="f" * 64,
+    )
+
+    assert canonical.receipt is not None
+    assert len(canonical.receipt.lines) == 2
+    weighted = canonical.receipt.lines[0]
+    assert weighted.gross_amount == Decimal("3.24")
+    assert weighted.discount_amount == Decimal("1.17")
+    assert weighted.line_total == Decimal("2.07")
+    assert canonical.receipt.totals.discount_total == Decimal("1.17")
+    assert sum(
+        line.line_total or Decimal("0")
+        for line in canonical.receipt.lines
+        if line.line_type in {"product", "deposit"}
+    ) == Decimal("3.06")
