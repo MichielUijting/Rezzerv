@@ -783,3 +783,16 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - **Nog te kopen** staat altijd boven **In winkelwagen**; beide secties blijven tegelijk zichtbaar.
 - Geselecteerde regels onder **Nog te kopen** bieden **Verwijderen** en **In winkelwagen**; geselecteerde regels onder **In winkelwagen** bieden **Verwijderen** en **Terug naar nog te kopen**.
 - De artikelregel blijft één compacte `MobileArticleRow` met foto, artikelnaam en de bestaande compacte `QuantityStepper`.
+
+## Mobiele Incidentele aankoop (1 oktober 2026)
+
+- De route **Incidentele aankoop toevoegen** gebruikt op viewports van maximaal 720 px een eigen mobiele presentatie; de bestaande desktopweergave blijft boven 720 px ongewijzigd.
+- De mobiele pagina gebruikt `MobileModuleHeader` met titel **Incidentele aankoop**, de globale **Terug**-bediening en de centrale mobiele bottom navigation uit `MobileAppChrome`.
+- **Barcode scannen** is de primaire mobiele ingang. Na herkenning sluit de camera-overlay en wordt het bestaande barcode-opzoekpad gebruikt om artikelgegevens waar mogelijk aan te vullen.
+- Het mobiele formulier staat in één kolom en gebruikt in deze volgorde: Barcode, Artikelnaam, Artikelnummer, Aantal, Aankoopdatum, Locatie, Sublocatie, Winkel / platform, Prijs en Notitie.
+- Voor locatiekeuze worden op mobiel uitsluitend hoofdlocaties aangeboden waarvoor ten minste één actieve sublocatie beschikbaar is; locatie en sublocatie gebruiken de centrale `Select`.
+- Wanneer geen complete locatie/sublocatiecombinatie beschikbaar is, toont de pagina de actie **Locatie toevoegen** naar **Instellingen → Locaties**.
+- Passieve barcode-, validatie- en opslagfeedback gebruikt op mobiel uitsluitend `AppFeedbackProvider/useAppFeedback` en verschuift de formulierinhoud niet.
+- Onderaan staan mobiel uitsluitend **Leegmaken** en **Opslaan**. Een aparte knop **Annuleren** wordt niet getoond omdat de globale mobiele **Terug**-bediening die navigatiefunctie vervult.
+- Na succesvol opslaan blijft het bestaande gedrag gelden: de aankoop wordt aan Voorraad toegevoegd en de gebruiker keert terug naar **Voorraad**.
+- Mobiele invoervelden en acties hebben minimaal circa 44 px touchhoogte, gebruiken uitsluitend de centrale body-/titeltypografie en volgen de app-brede primaire kleur en knopgeometrie.
