@@ -93,6 +93,8 @@ assert.doesNotMatch(storeConnectionsSource, /HANDSHAKE_OK/)
 assert.doesNotMatch(storeConnectionsSource, /sampleReceipt/)
 assert.doesNotMatch(storeConnectionsSource, /v4-knop/)
 assert.doesNotMatch(storeConnectionsSource, /JUMBO_WEB_ORIGIN/)
+assert.match(storeConnectionsSource, /window\.location\.assign\(JUMBO_ORDERS_URL\)/)
+assert.doesNotMatch(storeConnectionsSource, /window\.open\(JUMBO_ORDERS_URL/)
 assert.doesNotMatch(storeConnectionsSource, /window\.opener/)
 assert.doesNotMatch(storeConnectionsSource, /postMessage/)
 
