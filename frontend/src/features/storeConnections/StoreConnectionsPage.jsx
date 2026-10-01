@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -69,6 +69,8 @@ export default function StoreConnectionsPage() {
   const [lidlWebProgress, setLidlWebProgress] = useState('')
   const [jumboPocProgress, setJumboPocProgress] = useState('')
   const [jumboPocResult, setJumboPocResult] = useState(null)
+  const [jumboPocDiagnostics, setJumboPocDiagnostics] = useState([])
+  const jumboWindowRef = useRef(null)
 
   const rows = useMemo(() => deriveRows(providers, connections), [providers, connections])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
@@ -217,10 +219,41 @@ export default function StoreConnectionsPage() {
     let cancelled = false
     let jumboSourceWindow = null
 
+    function addDiagnostic(stage, detail = '') {
+      setJumboPocDiagnostics((current) => [...current, { stage, detail }].slice(-12))
+    }
+
+    function isJumboOrigin(origin) {
+      try {
+        const url = new URL(origin)
+        return url.protocol === 'https:' && (url.hostname === 'jumbo.com' || url.hostname.endsWith('.jumbo.com'))
+      } catch {
+        return false
+      }
+    }
+
     function handleJumboMessage(event) {
-      if (cancelled || event.origin !== JUMBO_WEB_ORIGIN) return
+      if (cancelled) return
       const data = event.data
       if (!data || typeof data !== 'object') return
+
+      if (data.type === 'inhuis:jumbo-poc-diagnostic') {
+        const expectedWindow = jumboWindowRef.current
+        if (!expectedWindow || event.source !== expectedWindow) return
+        if (!isJumboOrigin(event.origin)) {
+          addDiagnostic('DIAG', 'Bericht ontvangen van onverwachte origin: ' + String(event.origin || 'onbekend'))
+          return
+        }
+        addDiagnostic(String(data.stage || 'DIAG'), String(data.detail || event.origin || ''))
+        return
+      }
+
+      if (event.origin !== JUMBO_WEB_ORIGIN) {
+        if (String(data.type || '').startsWith('inhuis:jumbo-poc-') && event.source === jumboWindowRef.current) {
+          addDiagnostic('ORIGIN_MISMATCH', 'Verwacht ' + JUMBO_WEB_ORIGIN + ', ontvangen ' + String(event.origin || 'onbekend'))
+        }
+        return
+      }
 
       if (data.type === 'inhuis:jumbo-poc-handshake') {
         if (Number(data.bookmarklet_version || 0) !== JUMBO_BOOKMARKLET_VERSION) {
@@ -228,6 +261,7 @@ export default function StoreConnectionsPage() {
           return
         }
         jumboSourceWindow = event.source
+        addDiagnostic('HANDSHAKE_OK', event.origin)
         setJumboPocProgress('Jumbo is verbonden met deze Inhuis-sessie. Kassabonnen worden gecontroleerd…')
         event.source?.postMessage({
           type: 'inhuis:jumbo-poc-script',
@@ -239,6 +273,7 @@ export default function StoreConnectionsPage() {
       if (!jumboSourceWindow || event.source !== jumboSourceWindow) return
 
       if (data.type === 'inhuis:jumbo-poc-progress') {
+        addDiagnostic('GRAPHQL_PROGRESS', String(data.message || ''))
         setJumboPocProgress(String(data.message || 'Jumbo POC uitvoeren…'))
         return
       }
@@ -246,6 +281,7 @@ export default function StoreConnectionsPage() {
       if (data.type === 'inhuis:jumbo-poc-result') {
         const result = data.result || {}
         setJumboPocResult(result)
+        addDiagnostic('RESULT_OK', 'Bonnen: ' + String(Number(result.totalResults || result.receipts?.length || 0)))
         const found = Number(result.totalResults || result.receipts?.length || 0)
         setJumboPocProgress(
           found > 0
@@ -265,6 +301,7 @@ export default function StoreConnectionsPage() {
 
       if (data.type === 'inhuis:jumbo-poc-error') {
         const message = String(data.message || 'De Jumbo POC is mislukt.')
+        addDiagnostic('RESULT_ERROR', message)
         setJumboPocProgress(message)
         setJumboPocResult(null)
         showFeedback({ variant: 'error', title: 'Jumbo POC', message })
@@ -525,9 +562,23 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => {
+                  setJumboPocDiagnostics([{ stage: 'TAB_OPEN', detail: JUMBO_ORDERS_URL }])
                   setJumboPocProgress('Jumbo is geopend. Log zo nodig in en klik daarna in het Jumbo-tabblad op de favoriet "Jumbo POC naar Inhuis".')
                   setJumboPocResult(null)
-                  window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
+                  jumboWindowRef.current = window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
+                  window.setTimeout(() => {
+                    setJumboPocDiagnostics((current) => {
+                      const hasBookmarkletSignal = current.some((entry) =>
+                        ['BOOKMARKLET_START', 'HANDSHAKE_SENT', 'HANDSHAKE_OK', 'ORIGIN_MISMATCH'].includes(entry.stage)
+                      )
+                      return hasBookmarkletSignal
+                        ? current
+                        : [...current, {
+                            stage: 'GEEN_REACTIE',
+                            detail: 'Geen signaal van de Jumbo-favoriet ontvangen. Mogelijk is de favoriet niet gestart of is window.opener verloren gegaan.',
+                          }].slice(-12)
+                    })
+                  }, 12000)
                 }}
                 data-testid="jumbo-poc-open"
               >
@@ -537,6 +588,17 @@ export default function StoreConnectionsPage() {
 
             {jumboPocProgress ? (
               <div className="rz-inline-feedback" data-testid="jumbo-poc-progress">{jumboPocProgress}</div>
+            ) : null}
+
+            {jumboPocDiagnostics.length ? (
+              <div data-testid="jumbo-poc-diagnostics" style={{ display: 'grid', gap: '4px' }}>
+                <strong>Diagnose:</strong>
+                {jumboPocDiagnostics.map((entry, index) => (
+                  <div key={entry.stage + '-' + index}>
+                    {entry.stage}: {entry.detail || '—'}
+                  </div>
+                ))}
+              </div>
             ) : null}
 
             {jumboPocResult ? (
