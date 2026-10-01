@@ -1,6 +1,6 @@
 export const JUMBO_WEB_ORIGIN = 'https://www.jumbo.com'
 export const JUMBO_BOOKMARKLET_VERSION = 2
-export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/account/inloggen'
+export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
 
 function jumboReceiptPocRunner(INHUIS_ORIGIN) {
   const target = window.opener
