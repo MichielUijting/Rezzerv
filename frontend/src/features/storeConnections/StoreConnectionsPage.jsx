@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -13,11 +13,9 @@ import {
   buildLidlWebPageScript,
 } from './lidlWebReceiptBridge.js'
 import {
-  JUMBO_BOOKMARKLET_VERSION,
   JUMBO_ORDERS_URL,
-  JUMBO_WEB_ORIGIN,
+  JUMBO_POC_FRAGMENT_PREFIX,
   buildJumboPocBookmarklet,
-  buildJumboPocPageScript,
 } from './jumboReceiptPocBridge.js'
 
 function formatLastSync(value) {
@@ -69,13 +67,14 @@ export default function StoreConnectionsPage() {
   const [lidlWebProgress, setLidlWebProgress] = useState('')
   const [jumboPocProgress, setJumboPocProgress] = useState('')
   const [jumboPocResult, setJumboPocResult] = useState(null)
-  const [jumboPocDiagnostics, setJumboPocDiagnostics] = useState([])
-  const jumboWindowRef = useRef(null)
 
   const rows = useMemo(() => deriveRows(providers, connections), [providers, connections])
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
   const lidlBookmarklet = useMemo(() => buildLidlWebBookmarklet(window.location.origin), [])
-  const jumboPocBookmarklet = useMemo(() => buildJumboPocBookmarklet(window.location.origin), [])
+  const jumboPocBookmarklet = useMemo(
+    () => buildJumboPocBookmarklet(window.location.origin + window.location.pathname),
+    [],
+  )
 
   async function loadAhStatus() {
     const data = await fetchJson('/api/receipts/retailers/ah/status')
@@ -216,121 +215,49 @@ export default function StoreConnectionsPage() {
 
 
   useEffect(() => {
-    let cancelled = false
-    let jumboSourceWindow = null
+    const hash = String(window.location.hash || '')
+    if (!hash.startsWith(JUMBO_POC_FRAGMENT_PREFIX)) return
 
-    function addDiagnostic(stage, detail = '') {
-      const time = new Date().toLocaleTimeString()
-      setJumboPocDiagnostics((current) => [...current, { stage, detail, time }].slice(-20))
-      console.info('[Inhuis Jumbo POC]', { time, stage, detail })
-    }
-
-    function isJumboOrigin(origin) {
-      try {
-        const url = new URL(origin)
-        return url.protocol === 'https:' && (url.hostname === 'jumbo.com' || url.hostname.endsWith('.jumbo.com'))
-      } catch {
-        return false
-      }
-    }
-
-    function handleJumboMessage(event) {
-      if (cancelled) return
-      const data = event.data
-      if (!data || typeof data !== 'object') return
-      const type = String(data.type || '')
-      if (!type.startsWith('inhuis:jumbo-poc-')) return
-
-      const expectedWindow = jumboWindowRef.current
-      const sourceMatches = !!expectedWindow && event.source === expectedWindow
-      console.info('[Inhuis Jumbo POC] raw message', {
-        type,
-        origin: event.origin,
-        sourceMatches,
-        bookmarkletVersion: data.bookmarklet_version,
-      })
-
-      if (!sourceMatches) {
-        addDiagnostic('SOURCE_MISMATCH', type + ' ontvangen uit ander tabblad/venster; origin=' + String(event.origin || 'onbekend'))
-        return
+    const encoded = hash.slice(JUMBO_POC_FRAGMENT_PREFIX.length)
+    try {
+      const payload = JSON.parse(decodeURIComponent(encoded))
+      if (Number(payload?.version || 0) !== 4) {
+        throw new Error('Onverwachte Jumbo POC-versie.')
       }
 
-      if (!isJumboOrigin(event.origin)) {
-        addDiagnostic('ORIGIN_MISMATCH', 'Bericht ' + type + ' ontvangen van ' + String(event.origin || 'onbekend'))
-        return
-      }
-
-      if (data.type === 'inhuis:jumbo-poc-diagnostic') {
-        addDiagnostic(String(data.stage || 'DIAG'), String(data.detail || event.origin || ''))
-        return
-      }
-
-      if (event.origin !== JUMBO_WEB_ORIGIN) {
-        addDiagnostic('ORIGIN_MISMATCH', 'Voor handshake/POC verwacht ' + JUMBO_WEB_ORIGIN + ', ontvangen ' + String(event.origin || 'onbekend'))
-        return
-      }
-
-      if (data.type === 'inhuis:jumbo-poc-handshake') {
-        if (Number(data.bookmarklet_version || 0) !== JUMBO_BOOKMARKLET_VERSION) {
-          addDiagnostic(
-            'VERSION_MISMATCH',
-            'Verwacht v' + JUMBO_BOOKMARKLET_VERSION + ', ontvangen v' + String(Number(data.bookmarklet_version || 0)),
-          )
-          setJumboPocProgress('De Jumbo POC-favoriet is verouderd. Sleep de huidige knop opnieuw naar je favorietenbalk.')
-          return
-        }
-        jumboSourceWindow = event.source
-        addDiagnostic('HANDSHAKE_OK', event.origin)
-        setJumboPocProgress('Jumbo is verbonden met deze Inhuis-sessie. Kassabonnen worden gecontroleerd…')
-        event.source?.postMessage({
-          type: 'inhuis:jumbo-poc-script',
-          script: buildJumboPocPageScript(window.location.origin),
-        }, JUMBO_WEB_ORIGIN)
-        return
-      }
-
-      if (!jumboSourceWindow || event.source !== jumboSourceWindow) return
-
-      if (data.type === 'inhuis:jumbo-poc-progress') {
-        addDiagnostic('GRAPHQL_PROGRESS', String(data.message || ''))
-        setJumboPocProgress(String(data.message || 'Jumbo POC uitvoeren…'))
-        return
-      }
-
-      if (data.type === 'inhuis:jumbo-poc-result') {
-        const result = data.result || {}
-        setJumboPocResult(result)
-        addDiagnostic('RESULT_OK', 'Bonnen: ' + String(Number(result.totalResults || result.receipts?.length || 0)))
-        const found = Number(result.totalResults || result.receipts?.length || 0)
+      if (!payload?.ok) {
+        const message = String(payload?.error || 'De Jumbo redirect-POC is mislukt.')
+        setJumboPocProgress(message)
+        setJumboPocResult(null)
+        showFeedback({ variant: 'error', title: 'Jumbo redirect-POC', message })
+      } else {
+        const found = Number(payload?.total_results || 0)
+        setJumboPocResult({
+          totalResults: found,
+          currentPage: Number(payload?.current_page || 0),
+          sampleReceipt: payload?.sample_receipt || null,
+          sourceOrigin: payload?.source_origin || null,
+          transport: 'url-fragment',
+        })
         setJumboPocProgress(
           found > 0
-            ? found + ' Jumbo-kassabon(nen) gevonden; detail van de nieuwste bon is opgehaald.'
-            : 'Geen (nieuwe) kassabonnen gevonden.'
+            ? found + ' Jumbo-kassabon(nen) gevonden. Resultaat is zonder window.opener teruggekeerd naar Inhuis.'
+            : 'Geen (nieuwe) kassabonnen gevonden. De redirect-POC is zonder window.opener teruggekeerd naar Inhuis.',
         )
         showFeedback({
           variant: 'success',
-          title: 'Jumbo POC geslaagd',
-          message: found > 0
-            ? 'De ingelogde Jumbo-websessie geeft toegang tot je digitale kassabonnen.'
-            : 'Geen (nieuwe) kassabonnen gevonden.',
-          detail: 'Dit is alleen een POC: er is niets naar Kassa of Voorraad geïmporteerd en Inhuis heeft geen Jumbo-wachtwoord of browsercookie overgenomen.',
+          title: 'Jumbo redirect-POC geslaagd',
+          message: 'Jumbo GraphQL en de terugkeer naar Inhuis werken zonder window.opener.',
+          detail: 'Dit is alleen een POC: er is niets naar Kassa of Voorraad geschreven.',
         })
-        return
       }
-
-      if (data.type === 'inhuis:jumbo-poc-error') {
-        const message = String(data.message || 'De Jumbo POC is mislukt.')
-        addDiagnostic('RESULT_ERROR', message)
-        setJumboPocProgress(message)
-        setJumboPocResult(null)
-        showFeedback({ variant: 'error', title: 'Jumbo POC', message })
-      }
-    }
-
-    window.addEventListener('message', handleJumboMessage)
-    return () => {
-      cancelled = true
-      window.removeEventListener('message', handleJumboMessage)
+    } catch (err) {
+      const message = normalizeErrorMessage(err?.message) || 'Het Jumbo POC-resultaat kon niet worden gelezen.'
+      setJumboPocProgress(message)
+      setJumboPocResult(null)
+      showFeedback({ variant: 'error', title: 'Jumbo redirect-POC', message })
+    } finally {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
     }
   }, [showFeedback])
 
@@ -547,12 +474,12 @@ export default function StoreConnectionsPage() {
             <div>
               <h3 style={{ margin: 0 }}>Jumbo kassabonnen – POC</h3>
               <p style={{ margin: '6px 0 0' }}>
-                Deze proef controleert alleen of je eigen ingelogde Jumbo-websessie een bonnenlijst en één bon-detail kan lezen. Er wordt nog niets naar Kassa of Voorraad geschreven.
+                Deze proef bewijst of Jumbo GraphQL kan worden gelezen en het resultaat daarna zonder window.opener of postMessage kan terugkeren naar Inhuis. Er wordt niets naar Kassa of Voorraad geschreven.
               </p>
             </div>
 
             <div style={{ display: 'grid', gap: '10px' }}>
-              <div><strong>Eenmalig voor deze POC:</strong> sleep de knop hieronder naar je favorietenbalk.</div>
+              <div><strong>Eenmalig voor deze redirect-POC:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v4-knop hieronder naar je favorietenbalk.</div>
               <a
                 href={jumboPocBookmarklet}
                 data-testid="jumbo-poc-bookmarklet"
@@ -573,7 +500,7 @@ export default function StoreConnectionsPage() {
                 Jumbo POC naar Inhuis
               </a>
               <div>
-                Open daarna Jumbo met de knop hieronder. Log zo nodig normaal bij Jumbo in, laat dit Inhuis-tabblad open en klik in het Jumbo-tabblad op de opgeslagen Jumbo POC-favoriet.
+                Open daarna Jumbo. Klik op de pagina Bestellingen op de opgeslagen Jumbo POC-favoriet. De favoriet leest alleen de bonnenlijst en navigeert hetzelfde tabblad daarna terug naar Inhuis met een klein POC-resultaat in het URL-fragment.
               </div>
             </div>
 
@@ -581,38 +508,9 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => {
-                  const openedAt = new Date().toLocaleTimeString()
-                  setJumboPocDiagnostics([{ stage: 'TAB_OPEN', detail: JUMBO_ORDERS_URL, time: openedAt }])
-                  setJumboPocProgress('Jumbo is geopend. Klik in precies dit Jumbo-tabblad op de favoriet "Jumbo POC naar Inhuis".')
+                  setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v4-favoriet.')
                   setJumboPocResult(null)
-                  jumboWindowRef.current = window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
-                  if (jumboWindowRef.current) {
-                    setJumboPocDiagnostics((current) => [
-                      ...current,
-                      { stage: 'WINDOW_REF_OK', detail: 'window.open gaf een vensterreferentie terug.', time: new Date().toLocaleTimeString() },
-                    ])
-                    console.info('[Inhuis Jumbo POC] window.open reference created')
-                  } else {
-                    setJumboPocDiagnostics((current) => [
-                      ...current,
-                      { stage: 'POPUP_BLOCKED', detail: 'window.open gaf null terug; browser blokkeerde waarschijnlijk het venster.', time: new Date().toLocaleTimeString() },
-                    ])
-                    console.error('[Inhuis Jumbo POC] window.open returned null')
-                  }
-                  window.setTimeout(() => {
-                    setJumboPocDiagnostics((current) => {
-                      const hasBookmarkletSignal = current.some((entry) =>
-                        ['BOOKMARKLET_START', 'HANDSHAKE_SENT', 'HANDSHAKE_OK', 'ORIGIN_MISMATCH'].includes(entry.stage)
-                      )
-                      return hasBookmarkletSignal
-                        ? current
-                        : [...current, {
-                            stage: 'GEEN_INBOUND_MESSAGE',
-                            detail: 'Binnen 12 seconden kwam geen BOOKMARKLET_START/HANDSHAKE-bericht binnen vanuit het verwachte Jumbo-tabblad. Kijk nu in het zichtbare diagnoseblok op de Jumbo-pagina.',
-                            time: new Date().toLocaleTimeString(),
-                          }].slice(-12)
-                    })
-                  }, 12000)
+                  window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
                 }}
                 data-testid="jumbo-poc-open"
               >
@@ -624,33 +522,16 @@ export default function StoreConnectionsPage() {
               <div className="rz-inline-feedback" data-testid="jumbo-poc-progress">{jumboPocProgress}</div>
             ) : null}
 
-            {jumboPocDiagnostics.length ? (
-              <div data-testid="jumbo-poc-diagnostics" style={{ display: 'grid', gap: '4px' }}>
-                <strong>Diagnose:</strong>
-                {jumboPocDiagnostics.map((entry, index) => (
-                  <div key={entry.stage + '-' + index}>
-                    {entry.time ? entry.time + ' — ' : ''}{entry.stage}: {entry.detail || '—'}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
             {jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '8px' }}>
+                <div><strong>POC transport:</strong> URL-fragment, zonder window.opener</div>
+                <div><strong>Jumbo-origin:</strong> {jumboPocResult.sourceOrigin || '—'}</div>
                 <div><strong>Bonnen gevonden:</strong> {Number(jumboPocResult.totalResults || 0)}</div>
-                {jumboPocResult.firstDetail ? (
+                {jumboPocResult.sampleReceipt ? (
                   <>
-                    <div><strong>Nieuwste bon:</strong> {jumboPocResult.firstDetail.transactionId || '—'}</div>
-                    <div><strong>Winkel:</strong> {jumboPocResult.firstDetail.storeName || '—'}</div>
-                    <div><strong>Aankoopmoment:</strong> {jumboPocResult.firstDetail.purchaseEndOn || '—'}</div>
-                    <div><strong>Bonformaat:</strong> {jumboPocResult.firstDetail.receiptImageType || '—'}</div>
-                    <div>
-                      <strong>Bonlayout gelezen:</strong>{' '}
-                      {jumboPocResult.firstDetail.layoutProof?.hasItemsHeader && jumboPocResult.firstDetail.layoutProof?.hasTotalLine
-                        ? 'JA'
-                        : 'NEE'}
-                    </div>
-                    <div><strong>Tekstregels in detail:</strong> {Number(jumboPocResult.firstDetail.layoutProof?.textLineCount || 0)}</div>
+                    <div><strong>Voorbeeld bon-ID:</strong> {jumboPocResult.sampleReceipt.transactionId || '—'}</div>
+                    <div><strong>Winkel:</strong> {jumboPocResult.sampleReceipt.storeName || '—'}</div>
+                    <div><strong>Aankoopmoment:</strong> {jumboPocResult.sampleReceipt.purchaseEndOn || '—'}</div>
                   </>
                 ) : null}
               </div>
