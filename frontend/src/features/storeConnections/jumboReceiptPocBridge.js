@@ -186,7 +186,7 @@ export function buildJumboPocBookmarklet(inhuisCallbackUrl) {
     'const parseReceipt=' + parserSource + ';' +
     'const ID="__inhuis_jumbo_redirect_poc";' +
     'let box=document.getElementById(ID);' +
-    'if(!box){box=document.createElement("div");box.id=ID;box.style.cssText="position:fixed;z-index:2147483647;right:12px;bottom:12px;max-width:520px;padding:12px 14px;background:#fff;border:2px solid #005F6A;color:#111;font:14px/1.4 Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.25);white-space:pre-wrap";document.documentElement.appendChild(box);}' +
+    'if(!box){box=document.createElement("div");box.id=ID;box.style.cssText="position:fixed;z-index:2147483647;right:12px;bottom:12px;max-width:520px;padding:12px 14px;background:#fff;border:2px solid currentColor;color:#111;font:14px/1.4 Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.25);white-space:pre-wrap";document.documentElement.appendChild(box);}' +
     'const show=m=>{box.textContent="Inhuis Jumbo receipt-POC\\n"+m;try{console.info("[Inhuis Jumbo receipt-POC]",m);}catch{}};' +
     'const ret=o=>{show("Resultaat gereed; terug naar Inhuis…");location.href=C+P+encodeURIComponent(JSON.stringify(o));};' +
     'const gql=async(operationName,query,variables)=>{' +
