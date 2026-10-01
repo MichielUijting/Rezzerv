@@ -5839,7 +5839,7 @@ def update_household_article_barcode(conn, household_id: str, article_name: str,
         text(
             """
             UPDATE household_articles
-            SET barcode = :barcode, external_source = CASE WHEN :barcode IS NULL THEN external_source ELSE COALESCE(external_source, 'manual') END, updated_at = CURRENT_TIMESTAMP
+            SET barcode = :barcode, external_source = CASE WHEN CAST(:barcode AS TEXT) IS NULL THEN external_source ELSE COALESCE(external_source, 'manual') END, updated_at = CURRENT_TIMESTAMP
             WHERE household_id = :household_id
               AND lower(trim(naam)) = lower(trim(:naam))
             """
