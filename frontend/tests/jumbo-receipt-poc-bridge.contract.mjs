@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict'
+import {
+  JUMBO_BOOKMARKLET_VERSION,
+  JUMBO_ORDERS_URL,
+  JUMBO_WEB_ORIGIN,
+  buildJumboPocBookmarklet,
+  buildJumboPocPageScript,
+} from '../src/features/storeConnections/jumboReceiptPocBridge.js'
+
+assert.equal(JUMBO_WEB_ORIGIN, 'https://www.jumbo.com')
+assert.equal(JUMBO_BOOKMARKLET_VERSION, 1)
+assert.match(JUMBO_ORDERS_URL, /\/mijn-jumbo\/bestellingen/)
+
+const bookmarklet = buildJumboPocBookmarklet('http://localhost:5174')
+assert.match(bookmarklet, /^javascript:/)
+assert.match(bookmarklet, /window\.opener/)
+assert.match(bookmarklet, /inhuis:jumbo-poc-handshake/)
+assert.match(bookmarklet, /bookmarklet_version/)
+assert.doesNotMatch(bookmarklet, /document\.cookie/)
+assert.doesNotMatch(bookmarklet, /localStorage/)
+assert.doesNotMatch(bookmarklet, /sessionStorage/)
+assert.doesNotMatch(bookmarklet, /password/i)
+
+const script = buildJumboPocPageScript('http://localhost:5174')
+assert.match(script, /\/api\/graphql/)
+assert.match(script, /GetOnlineOrdersAndStoreReceipts/)
+assert.match(script, /GetDigitalReceipt/)
+assert.match(script, /receiptOverview/)
+assert.match(script, /receipt\(transactionId:/)
+assert.match(script, /credentials:\s*'include'/)
+assert.match(script, /JUMBO_WEB-orders/)
+assert.match(script, /inhuis:jumbo-poc-result/)
+assert.match(script, /layoutProof/)
+assert.match(script, /hasItemsHeader/)
+assert.match(script, /hasTotalLine/)
+assert.doesNotMatch(script, /document\.cookie/)
+assert.doesNotMatch(script, /localStorage/)
+assert.doesNotMatch(script, /sessionStorage/)
+assert.doesNotMatch(script, /password/i)
+
+console.log('JUMBO_RECEIPT_POC_BRIDGE_CONTRACT_GREEN')
