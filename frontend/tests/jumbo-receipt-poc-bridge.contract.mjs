@@ -9,7 +9,8 @@ import {
 
 assert.equal(JUMBO_WEB_ORIGIN, 'https://www.jumbo.com')
 assert.equal(JUMBO_BOOKMARKLET_VERSION, 1)
-assert.match(JUMBO_ORDERS_URL, /\/mijn-jumbo\/bestellingen/)
+assert.doesNotMatch(JUMBO_ORDERS_URL, /\/mijn-jumbo\/bestellingen/)
+assert.match(JUMBO_ORDERS_URL, /\/account\/inloggen/)
 
 const bookmarklet = buildJumboPocBookmarklet('http://localhost:5174')
 assert.match(bookmarklet, /^javascript:/)
