@@ -221,7 +221,7 @@ export default function StoreConnectionsPage() {
     const encoded = hash.slice(JUMBO_POC_FRAGMENT_PREFIX.length)
     try {
       const payload = JSON.parse(decodeURIComponent(encoded))
-      if (Number(payload?.version || 0) !== 4) {
+      if (Number(payload?.version || 0) !== 5) {
         throw new Error('Onverwachte Jumbo POC-versie.')
       }
 
@@ -235,19 +235,19 @@ export default function StoreConnectionsPage() {
         setJumboPocResult({
           totalResults: found,
           currentPage: Number(payload?.current_page || 0),
-          sampleReceipt: payload?.sample_receipt || null,
+          firstDetail: payload?.first_detail || null,
           sourceOrigin: payload?.source_origin || null,
           transport: 'url-fragment',
         })
         setJumboPocProgress(
           found > 0
-            ? found + ' Jumbo-kassabon(nen) gevonden. Resultaat is zonder window.opener teruggekeerd naar Inhuis.'
+            ? found + ' Jumbo-kassabon(nen) gevonden. De nieuwste bon is opgehaald en de bonlayout is ontleed.'
             : 'Geen (nieuwe) kassabonnen gevonden. De redirect-POC is zonder window.opener teruggekeerd naar Inhuis.',
         )
         showFeedback({
           variant: 'success',
           title: 'Jumbo redirect-POC geslaagd',
-          message: 'Jumbo GraphQL en de terugkeer naar Inhuis werken zonder window.opener.',
+          message: found > 0 ? 'Jumbo GraphQL, bon-detail en bonontleding werken via de redirect-POC.' : 'Jumbo GraphQL en de terugkeer naar Inhuis werken zonder window.opener.',
           detail: 'Dit is alleen een POC: er is niets naar Kassa of Voorraad geschreven.',
         })
       }
@@ -479,7 +479,7 @@ export default function StoreConnectionsPage() {
             </div>
 
             <div style={{ display: 'grid', gap: '10px' }}>
-              <div><strong>Eenmalig voor deze redirect-POC:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v4-knop hieronder naar je favorietenbalk.</div>
+              <div><strong>Eenmalig voor deze redirect-POC:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v5-knop hieronder naar je favorietenbalk.</div>
               <a
                 href={jumboPocBookmarklet}
                 data-testid="jumbo-poc-bookmarklet"
@@ -500,7 +500,7 @@ export default function StoreConnectionsPage() {
                 Jumbo POC naar Inhuis
               </a>
               <div>
-                Open daarna Jumbo. Klik op de pagina Bestellingen op de opgeslagen Jumbo POC-favoriet. De favoriet leest alleen de bonnenlijst en navigeert hetzelfde tabblad daarna terug naar Inhuis met een klein POC-resultaat in het URL-fragment.
+                Open daarna Jumbo. Klik op de pagina Bestellingen op de opgeslagen Jumbo POC-favoriet. De favoriet leest de bonnenlijst en, als er een bon is, ook het detail van de nieuwste bon. De print-layout wordt op Jumbo ontleed en alleen het gestructureerde POC-resultaat komt via het URL-fragment terug naar Inhuis.
               </div>
             </div>
 
@@ -508,7 +508,7 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => {
-                  setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v4-favoriet.')
+                  setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v5-favoriet.')
                   setJumboPocResult(null)
                   window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
                 }}
@@ -527,11 +527,20 @@ export default function StoreConnectionsPage() {
                 <div><strong>POC transport:</strong> URL-fragment, zonder window.opener</div>
                 <div><strong>Jumbo-origin:</strong> {jumboPocResult.sourceOrigin || '—'}</div>
                 <div><strong>Bonnen gevonden:</strong> {Number(jumboPocResult.totalResults || 0)}</div>
-                {jumboPocResult.sampleReceipt ? (
+                {jumboPocResult.firstDetail ? (
                   <>
-                    <div><strong>Voorbeeld bon-ID:</strong> {jumboPocResult.sampleReceipt.transactionId || '—'}</div>
-                    <div><strong>Winkel:</strong> {jumboPocResult.sampleReceipt.storeName || '—'}</div>
-                    <div><strong>Aankoopmoment:</strong> {jumboPocResult.sampleReceipt.purchaseEndOn || '—'}</div>
+                    <div><strong>Nieuwste bon-ID:</strong> {jumboPocResult.firstDetail.transactionId || '—'}</div>
+                    <div><strong>Winkel:</strong> {jumboPocResult.firstDetail.storeName || '—'}</div>
+                    <div><strong>Aankoopmoment:</strong> {jumboPocResult.firstDetail.purchaseEndOn || '—'}</div>
+                    <div><strong>Bonformaat:</strong> {jumboPocResult.firstDetail.receiptImageType || '—'}</div>
+                    <div><strong>Ontlede productregels:</strong> {Number(jumboPocResult.firstDetail.parsed?.items?.length || 0)}</div>
+                    <div><strong>Statiegeldregels:</strong> {Number(jumboPocResult.firstDetail.parsed?.deposits?.length || 0)}</div>
+                    <div><strong>Totaal:</strong> {jumboPocResult.firstDetail.parsed?.total ?? '—'}</div>
+                    <div><strong>Betaalwijze:</strong> {jumboPocResult.firstDetail.parsed?.paymentMethod || '—'}</div>
+                    <div><strong>Aantal artikelen:</strong> {jumboPocResult.firstDetail.parsed?.itemCount ?? '—'}</div>
+                    {jumboPocResult.firstDetail.parsed?.parseError ? (
+                      <div><strong>Parsermelding:</strong> {jumboPocResult.firstDetail.parsed.parseError}</div>
+                    ) : null}
                   </>
                 ) : null}
               </div>
