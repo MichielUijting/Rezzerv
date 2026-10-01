@@ -61,7 +61,7 @@ export default function StoreConnectionsPage() {
   const [status, setStatus] = useState('')
   const [editingCode, setEditingCode] = useState('')
   const [cardNumber, setCardNumber] = useState('')
-  const [ahConnection, setAhConnection] = useState({ connected: false, persistence: 'runtime_only' })
+  const [ahConnection, setAhConnection] = useState({ connected: false, persistence: 'encrypted_database' })
   const [ahLoginUrl, setAhLoginUrl] = useState('')
   const [ahCode, setAhCode] = useState('')
   const [ahBusy, setAhBusy] = useState(false)
@@ -79,7 +79,7 @@ export default function StoreConnectionsPage() {
 
   async function loadAhStatus() {
     const data = await fetchJson('/api/receipts/retailers/ah/status')
-    setAhConnection(data || { connected: false, persistence: 'runtime_only' })
+    setAhConnection(data || { connected: false, persistence: 'encrypted_database' })
     return data
   }
 
@@ -303,7 +303,7 @@ export default function StoreConnectionsPage() {
       showFeedback({
         variant: 'success',
         title: 'Albert Heijn gekoppeld',
-        message: 'De koppeling is actief. Je kunt nu digitale AH-bonnen ophalen.',
+        message: 'De koppeling is veilig opgeslagen. Inhuis haalt voortaan automatisch nieuwe AH-bonnen op wanneer je Kassa opent.',
       })
     } catch (err) {
       showFeedback({
@@ -321,7 +321,7 @@ export default function StoreConnectionsPage() {
     try {
       const result = await fetchJson('/api/receipts/retailers/ah/sync', {
         method: 'POST',
-        body: JSON.stringify({ limit: 20 }),
+        body: JSON.stringify({ limit: 100 }),
       })
       showFeedback({
         variant: result?.receipts_failed ? 'warning' : 'success',
@@ -427,7 +427,8 @@ export default function StoreConnectionsPage() {
               <h3 style={{ margin: 0 }}>Albert Heijn digitale bonnen</h3>
               <p style={{ margin: '6px 0 0', color: '#667085' }}>
                 Status: <strong>{ahConnection?.connected ? 'gekoppeld' : 'niet gekoppeld'}</strong>.
-                De koppeling is in deze versie actief zolang Inhuis draait.
+                {ahConnection?.connected ? ' De koppeling blijft bewaard na een herstart.' : ''}
+                {ahConnection?.last_sync_at ? <> Laatst gesynchroniseerd: <strong>{formatLastSync(ahConnection.last_sync_at)}</strong>.</> : null}
               </p>
             </div>
 
@@ -460,7 +461,7 @@ export default function StoreConnectionsPage() {
             ) : (
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 <Button type="button" onClick={syncAhReceipts} disabled={ahBusy} data-testid="ah-sync-receipts">
-                  AH-bonnen ophalen
+                  Nu synchroniseren
                 </Button>
                 <Button type="button" variant="secondary" onClick={disconnectAh} disabled={ahBusy} data-testid="ah-disconnect">
                   Ontkoppelen

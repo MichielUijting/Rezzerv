@@ -29,10 +29,13 @@ services:
       REZZERV_APP_BASE_URL: ${REZZERV_APP_BASE_URL:-http://localhost:5174}
       REZZERV_GS1_MPM_SHARE_BASE_URL: ${REZZERV_GS1_MPM_SHARE_BASE_URL:-}
       REZZERV_GS1_MPM_SHARE_API_KEY: ${REZZERV_GS1_MPM_SHARE_API_KEY:-}
+      REZZERV_RETAILER_ACCOUNT_KEY: ${REZZERV_RETAILER_ACCOUNT_KEY:-}
+      REZZERV_RETAILER_ACCOUNT_KEY_PATH: /app/secrets/retailer_accounts.key
     volumes:
       - ./tools:/app/tools:ro
       - rezzerv_u2net:/root/.u2net
       - rezzerv_paddlex:/root/.paddlex
+      - rezzerv_retailer_secrets:/app/secrets
 
   frontend:
     build:
@@ -49,3 +52,4 @@ services:
 volumes:
   rezzerv_u2net:
   rezzerv_paddlex:
+  rezzerv_retailer_secrets:

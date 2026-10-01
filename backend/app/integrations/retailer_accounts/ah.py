@@ -19,7 +19,7 @@ from app.integrations.retailer_receipts import RetailerReceiptEnvelope
 
 AH_API_BASE_URL = "https://api.ah.nl"
 AH_LOGIN_BASE_URL = "https://login.ah.nl"
-AH_CLIENT_ID = "appie-ios"
+AH_CLIENT_ID = "appie"
 AH_REDIRECT_URI = "appie://login-exit"
 AH_USER_AGENT = "Appie/9.28 (iPhone17,3; iPhone; CPU OS 26_1 like Mac OS X)"
 AH_CLIENT_VERSION = "9.28"
@@ -69,7 +69,7 @@ class AHReceiptSummary:
 
 
 def build_ah_login_url() -> str:
-    return f"{AH_LOGIN_BASE_URL}/login?" + urlencode(
+    return f"{AH_LOGIN_BASE_URL}/secure/oauth/authorize?" + urlencode(
         {
             "client_id": AH_CLIENT_ID,
             "response_type": "code",

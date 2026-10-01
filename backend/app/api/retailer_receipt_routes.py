@@ -22,7 +22,7 @@ from app.services.ah_receipt_sync_service import (
     sync_ah_receipts,
 )
 from app.services.household_context_adapter import household_context_from_runtime_context
-from app.services.retailer_account_runtime_store import ah_session_status
+from app.services.retailer_account_secure_store import ah_session_status
 from app.services.retailer_receipt_import_service import import_retailer_receipt
 
 router = APIRouter(prefix="/api/receipts/retailers", tags=["receipts-retailers"])
@@ -57,14 +57,14 @@ def list_retailer_receipt_providers(
                 "code": code,
                 "supports_structured_import": True,
                 "account_connection": (
-                    "runtime_only" if code == "ah"
+                    "persistent_encrypted" if code == "ah"
                     else "browser_assisted" if code == "lidl"
                     else "not_configured"
                 ),
             }
             for code in SUPPORTED_RETAILER_PROVIDERS
         ],
-        "credential_storage": False,
+        "credential_storage": True,
     }
 
 
@@ -91,7 +91,7 @@ def start_ah_account_connection(
 ):
     household_id = _authorized_household_id(authorization)
     return {
-        **ah_session_status(household_id),
+        **ah_session_status(engine, household_id),
         "login_url": build_ah_login_url(),
         "redirect_uri": "appie://login-exit",
         "instructions": (
@@ -109,6 +109,7 @@ def complete_ah_account_connection(
     household_id = _authorized_household_id(authorization)
     try:
         return connect_ah_account(
+            engine,
             household_id=household_id,
             code_or_redirect=payload.code_or_redirect,
         )
@@ -123,7 +124,7 @@ def get_ah_account_status(
     authorization: Optional[str] = Header(None),
 ):
     household_id = _authorized_household_id(authorization)
-    return ah_session_status(household_id)
+    return ah_session_status(engine, household_id)
 
 
 @router.delete("/ah/connect")
@@ -131,7 +132,7 @@ def remove_ah_account_connection(
     authorization: Optional[str] = Header(None),
 ):
     household_id = _authorized_household_id(authorization)
-    return disconnect_ah_account(household_id=household_id)
+    return disconnect_ah_account(engine, household_id=household_id)
 
 
 @router.post("/ah/sync")
