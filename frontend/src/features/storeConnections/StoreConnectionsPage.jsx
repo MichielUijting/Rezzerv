@@ -250,14 +250,14 @@ export default function StoreConnectionsPage() {
         setJumboPocProgress(
           found > 0
             ? found + ' Jumbo-kassabon(nen) gevonden; detail van de nieuwste bon is opgehaald.'
-            : 'Jumbo-koppeling werkte, maar er zijn geen digitale winkelbonnen gevonden.'
+            : 'Geen (nieuwe) kassabonnen gevonden.'
         )
         showFeedback({
           variant: 'success',
           title: 'Jumbo POC geslaagd',
           message: found > 0
             ? 'De ingelogde Jumbo-websessie geeft toegang tot je digitale kassabonnen.'
-            : 'De Jumbo GraphQL-koppeling reageert, maar leverde geen winkelbonnen op.',
+            : 'Geen (nieuwe) kassabonnen gevonden.',
           detail: 'Dit is alleen een POC: er is niets naar Kassa of Voorraad geïmporteerd en Inhuis heeft geen Jumbo-wachtwoord of browsercookie overgenomen.',
         })
         return
@@ -525,7 +525,7 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => {
-                  setJumboPocProgress('Jumbo openen…')
+                  setJumboPocProgress('Jumbo is geopend. Log zo nodig in en klik daarna in het Jumbo-tabblad op de favoriet "Jumbo POC naar Inhuis".')
                   setJumboPocResult(null)
                   window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
                 }}
