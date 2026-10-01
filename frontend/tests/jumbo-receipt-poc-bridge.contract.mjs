@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import {
   JUMBO_BOOKMARKLET_VERSION,
   JUMBO_ORDERS_URL,
@@ -30,6 +31,9 @@ assert.match(script, /receiptOverview/)
 assert.match(script, /receipt\(transactionId:/)
 assert.match(script, /credentials:\s*'include'/)
 assert.match(script, /JUMBO_WEB-orders/)
+assert.match(script, /AbortController/)
+assert.match(script, /20000/)
+assert.match(script, /reageerde niet binnen 20 seconden/)
 assert.match(script, /inhuis:jumbo-poc-result/)
 assert.match(script, /layoutProof/)
 assert.match(script, /hasItemsHeader/)
@@ -38,5 +42,13 @@ assert.doesNotMatch(script, /document\.cookie/)
 assert.doesNotMatch(script, /localStorage/)
 assert.doesNotMatch(script, /sessionStorage/)
 assert.doesNotMatch(script, /password/i)
+
+const storeConnectionsSource = fs.readFileSync(
+  new URL('../src/features/storeConnections/StoreConnectionsPage.jsx', import.meta.url),
+  'utf8',
+)
+assert.match(storeConnectionsSource, /Geen \(nieuwe\) kassabonnen gevonden\./)
+assert.match(storeConnectionsSource, /Jumbo is geopend\. Log zo nodig in/)
+assert.doesNotMatch(storeConnectionsSource, /setJumboPocProgress\('Jumbo openen…'\)/)
 
 console.log('JUMBO_RECEIPT_POC_BRIDGE_CONTRACT_GREEN')
