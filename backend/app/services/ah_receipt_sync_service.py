@@ -1,10 +1,4 @@
-"""
-Albert Heijn digital receipt account synchronization service.
-
-Account credentials remain runtime-only. Receipt observations are handed to the
-existing retailer receipt ingestion service so Kassa/Uitpakken/Voorraad keep
-their existing authority and behavior.
-"""
+"""Albert Heijn digital receipt account synchronization service."""
 
 from __future__ import annotations
 
@@ -14,16 +8,20 @@ from typing import Any
 from sqlalchemy.engine import Engine
 
 from app.integrations.retailer_accounts import AHReceiptClient
-from app.services.retailer_account_runtime_store import (
+from app.services.retailer_account_secure_store import (
     ah_session_status,
     delete_ah_session,
     get_ah_session,
-    set_ah_session,
+    get_known_ah_receipt_ids,
+    mark_ah_receipts_synced,
+    save_ah_session,
+    touch_ah_sync,
 )
 from app.services.retailer_receipt_import_service import import_retailer_receipt
 
 
 def connect_ah_account(
+    engine: Engine,
     *,
     household_id: str,
     code_or_redirect: str,
@@ -33,16 +31,16 @@ def connect_ah_account(
     active_client = client or AHReceiptClient()
     try:
         session = active_client.exchange_code(code_or_redirect)
-        set_ah_session(household_id, session)
-        return ah_session_status(household_id)
+        save_ah_session(engine, household_id, session)
+        return ah_session_status(engine, household_id)
     finally:
         if owns_client:
             active_client.close()
 
 
-def disconnect_ah_account(*, household_id: str) -> dict[str, Any]:
-    delete_ah_session(household_id)
-    return ah_session_status(household_id)
+def disconnect_ah_account(engine: Engine, *, household_id: str) -> dict[str, Any]:
+    delete_ah_session(engine, household_id)
+    return ah_session_status(engine, household_id)
 
 
 def sync_ah_receipts(
@@ -50,10 +48,10 @@ def sync_ah_receipts(
     receipt_storage_root: Path,
     *,
     household_id: str,
-    limit: int = 20,
+    limit: int = 100,
     client: AHReceiptClient | None = None,
 ) -> dict[str, Any]:
-    session = get_ah_session(household_id)
+    session = get_ah_session(engine, household_id)
     if session is None:
         raise ValueError("Albert Heijn-account is niet gekoppeld")
 
@@ -61,20 +59,26 @@ def sync_ah_receipts(
     active_client = client or AHReceiptClient()
     try:
         session, summaries = active_client.list_receipts(session, limit=limit)
-        set_ah_session(household_id, session)
+        save_ah_session(engine, household_id, session)
+
+        known_ids = get_known_ah_receipt_ids(engine, household_id)
+        pending = [summary for summary in summaries if summary.receipt_id not in known_ids]
 
         imported: list[dict[str, Any]] = []
         errors: list[dict[str, str]] = []
-        for summary in summaries:
+        completed_ids: set[str] = set()
+
+        for summary in pending:
             try:
                 session, envelope = active_client.get_receipt_envelope(session, summary)
-                set_ah_session(household_id, session)
+                save_ah_session(engine, household_id, session)
                 result = import_retailer_receipt(
                     engine,
                     receipt_storage_root,
                     household_id=household_id,
                     envelope=envelope,
                 )
+                completed_ids.add(envelope.external_receipt_id)
                 imported.append(
                     {
                         "external_receipt_id": envelope.external_receipt_id,
@@ -84,8 +88,6 @@ def sync_ah_receipts(
                     }
                 )
             except Exception as exc:
-                # Never expose token material. Receipt IDs are provider object IDs
-                # and are sufficient to identify the failed receipt.
                 errors.append(
                     {
                         "external_receipt_id": summary.receipt_id,
@@ -93,14 +95,22 @@ def sync_ah_receipts(
                     }
                 )
 
+        if completed_ids:
+            mark_ah_receipts_synced(engine, household_id, completed_ids)
+        else:
+            touch_ah_sync(engine, household_id)
+
         return {
             "provider": "ah",
             "receipts_found": len(summaries),
+            "receipts_new": len(pending),
+            "receipts_skipped_known": len(summaries) - len(pending),
             "receipts_processed": len(imported),
             "receipts_failed": len(errors),
             "receipts": imported,
             "errors": errors,
-            "persistence": "runtime_only",
+            "persistence": "encrypted_database",
+            "last_sync_at": ah_session_status(engine, household_id).get("last_sync_at"),
         }
     finally:
         if owns_client:
