@@ -1,5 +1,5 @@
 export const JUMBO_WEB_ORIGIN = 'https://www.jumbo.com'
-export const JUMBO_BOOKMARKLET_VERSION = 2
+export const JUMBO_BOOKMARKLET_VERSION = 3
 export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/bestellingen'
 
 function jumboReceiptPocRunner(INHUIS_ORIGIN) {
@@ -223,21 +223,37 @@ export function buildJumboPocBookmarklet() {
   return (
     'javascript:(()=>{' +
     'const V=' + String(JUMBO_BOOKMARKLET_VERSION) + ';' +
+    'const ID="__inhuis_jumbo_poc_diag";' +
+    'const ts=()=>new Date().toLocaleTimeString();' +
+    'let box=document.getElementById(ID);' +
+    'if(!box){box=document.createElement("div");box.id=ID;box.style.cssText="position:fixed;z-index:2147483647;right:12px;bottom:12px;max-width:520px;padding:12px 14px;background:#fff;border:2px solid #005F6A;color:#111;font:14px/1.4 Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.25);white-space:pre-wrap";document.documentElement.appendChild(box);}' +
+    'const lines=[];' +
+    'const show=(m)=>{lines.push(ts()+"  "+m);box.textContent="Inhuis Jumbo POC diagnose\\n"+lines.join("\\n");};' +
+    'const log=(level,m,o)=>{try{(console[level]||console.log).call(console,"[Inhuis Jumbo POC] "+m,o||"");}catch{}};' +
+    'show("BOOKMARKLET_START v"+V);' +
+    'show("URL: "+location.href);' +
+    'show("ORIGIN: "+location.origin);' +
+    'log("info","bookmarklet gestart",{version:V,url:location.href,origin:location.origin});' +
     'const W=window.opener;' +
-    'if(!W){alert("Jumbo POC diagnose: window.opener ontbreekt. Open Jumbo opnieuw vanuit Inhuis > Winkelkoppelingen en start daarna de favoriet opnieuw.");return;}' +
+    'show("WINDOW_OPENER: "+(W?"AANWEZIG":"ONTBREEKT"));' +
+    'if(!W){log("error","window.opener ontbreekt");show("STOP: geen opener; handshake kan niet worden verstuurd.");return;}' +
     'let done=false;' +
-    'let O="";' +
     'window.addEventListener("message",e=>{' +
+    'log("info","message ontvangen",{origin:e.origin,sourceMatches:e.source===W,type:e.data&&e.data.type});' +
     'if(done||e.source!==W||!e.data||e.data.type!=="inhuis:jumbo-poc-script")return;' +
-    'if(!/^https?:\\/\\/(localhost|127\\.0\\.0\\.1|\\[[^\\]]+\\]|[^/]+)(:\\d+)?$/i.test(e.origin)){alert("Jumbo POC diagnose: onverwachte Inhuis-origin "+String(e.origin||"onbekend"));return;}' +
-    'O=e.origin;' +
+    'if(!/^https?:\\/\\/(localhost|127\\.0\\.0\\.1|\\[[^\\]]+\\]|[^/]+)(:\\d+)?$/i.test(e.origin)){show("ANTWOORD_GEWEIGERD: onverwachte Inhuis-origin "+String(e.origin||"onbekend"));log("error","onverwachte Inhuis-origin",e.origin);return;}' +
     'done=true;' +
-    'try{new Function(e.data.script)();}catch(err){alert("Jumbo-POC kon niet starten: "+String(err&&err.message||err));}' +
+    'show("INHUIS_ANTWOORD: ontvangen van "+e.origin);' +
+    'try{new Function(e.data.script)();show("POC_SCRIPT: gestart");}catch(err){show("POC_SCRIPT_FOUT: "+String(err&&err.message||err));log("error","POC-script fout",err);}' +
     '},{once:false});' +
-    'W.postMessage({type:"inhuis:jumbo-poc-diagnostic",stage:"BOOKMARKLET_START",detail:location.origin+" "+location.pathname},"*");' +
-    'W.postMessage({type:"inhuis:jumbo-poc-diagnostic",stage:"HANDSHAKE_SENT",detail:location.origin},"*");' +
+    'try{' +
+    'W.postMessage({type:"inhuis:jumbo-poc-diagnostic",stage:"BOOKMARKLET_START",detail:location.origin+" "+location.pathname,bookmarklet_version:V},"*");' +
+    'W.postMessage({type:"inhuis:jumbo-poc-diagnostic",stage:"HANDSHAKE_SENT",detail:location.origin,bookmarklet_version:V},"*");' +
     'W.postMessage({type:"inhuis:jumbo-poc-handshake",bookmarklet_version:V},"*");' +
-    'setTimeout(()=>{if(!done)alert("De bestaande Inhuis-sessie reageert niet. Open Jumbo opnieuw via Inhuis > Winkelkoppelingen.");},4000);' +
+    'show("HANDSHAKE_SENT: ja");' +
+    'log("info","handshake verzonden",{target:"*",version:V});' +
+    '}catch(err){show("HANDSHAKE_FOUT: "+String(err&&err.message||err));log("error","handshake verzenden mislukt",err);return;}' +
+    'setTimeout(()=>{if(!done){show("INHUIS_ANTWOORD: NIET ontvangen binnen 4 seconden");log("error","geen antwoord van Inhuis binnen 4 seconden");}},4000);' +
     '})()'
   )
 }
