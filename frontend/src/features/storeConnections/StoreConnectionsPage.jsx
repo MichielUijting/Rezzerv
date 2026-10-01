@@ -501,7 +501,7 @@ export default function StoreConnectionsPage() {
                 Jumbo POC naar Inhuis
               </a>
               <div>
-                Open daarna Jumbo. Klik op de pagina Bestellingen op de opgeslagen Jumbo POC-favoriet. De favoriet leest de bonnenlijst en, als er een bon is, ook het detail van de nieuwste bon. De print-layout wordt op Jumbo ontleed en alleen het gestructureerde POC-resultaat komt via het URL-fragment terug naar Inhuis.
+                Open daarna Jumbo in ditzelfde tabblad. Klik op de pagina Bestellingen op de opgeslagen Jumbo POC-favoriet. De favoriet leest de bonnenlijst en, als er een bon is, ook het detail van de nieuwste bon. Daarna keert hetzelfde tabblad via het URL-fragment terug naar Inhuis.
               </div>
             </div>
 
@@ -511,7 +511,7 @@ export default function StoreConnectionsPage() {
                 onClick={() => {
                   setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v' + JUMBO_BOOKMARKLET_VERSION + '-favoriet.')
                   setJumboPocResult(null)
-                  window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
+                  window.location.assign(JUMBO_ORDERS_URL)
                 }}
                 data-testid="jumbo-poc-open"
               >
