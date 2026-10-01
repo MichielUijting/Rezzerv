@@ -414,9 +414,18 @@ export default function IncidentalPurchasePage() {
     purchaseLookupRequestRef.current = normalizedBarcode
     setPurchaseLookupState({ status: 'loading', message: `Barcode ${normalizedBarcode} controleren…` })
     setPurchaseSaveState({ status: 'idle', message: '' })
-    const result = await scanBarcodeArticle(normalizedBarcode)
-    applyBarcodeLookupResult(normalizedBarcode, result)
-    logEvent?.('ENRICH_TRIGGERED', { barcode: String(barcode || '').trim(), found: Boolean(result?.found || result?.external_match) })
+    try {
+      const result = await scanBarcodeArticle(normalizedBarcode)
+      applyBarcodeLookupResult(normalizedBarcode, result)
+      logEvent?.('ENRICH_TRIGGERED', { barcode: normalizedBarcode, found: Boolean(result?.found || result?.external_match) })
+    } catch (error) {
+      if (purchaseLookupRequestRef.current !== normalizedBarcode) return
+      setPurchaseLookupState({
+        status: 'error',
+        message: error?.message || 'Barcode kon niet worden gecontroleerd.',
+      })
+      logEvent?.('ENRICH_TRIGGERED', { barcode: normalizedBarcode, found: false, error: true })
+    }
   }
 
   async function handleOpenBarcodeCamera() {
