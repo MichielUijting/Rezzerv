@@ -14261,6 +14261,7 @@ def update_inventory_external_product_link(inventory_id: str, payload: ArticleEx
         return {'status': 'ok', 'details': details}
 
 
+@app.post("/api/articles/barcode-scan")
 def scan_article_barcode(payload: BarcodeLookupRequest, authorization: Optional[str] = Header(None)):
     context = require_inventory_write_context(authorization, payload.household_id)
     household_id = str(context.get("active_household_id") or "demo-household")
