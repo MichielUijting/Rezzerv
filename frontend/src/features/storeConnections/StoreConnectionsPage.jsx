@@ -13,6 +13,7 @@ import {
   buildLidlWebPageScript,
 } from './lidlWebReceiptBridge.js'
 import {
+  JUMBO_BOOKMARKLET_VERSION,
   JUMBO_ORDERS_URL,
   JUMBO_POC_FRAGMENT_PREFIX,
   buildJumboPocBookmarklet,
@@ -221,7 +222,7 @@ export default function StoreConnectionsPage() {
     const encoded = hash.slice(JUMBO_POC_FRAGMENT_PREFIX.length)
     try {
       const payload = JSON.parse(decodeURIComponent(encoded))
-      if (Number(payload?.version || 0) !== 5) {
+      if (Number(payload?.version || 0) !== JUMBO_BOOKMARKLET_VERSION) {
         throw new Error('Onverwachte Jumbo POC-versie.')
       }
 
@@ -479,7 +480,7 @@ export default function StoreConnectionsPage() {
             </div>
 
             <div style={{ display: 'grid', gap: '10px' }}>
-              <div><strong>Eenmalig voor deze redirect-POC:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v5-knop hieronder naar je favorietenbalk.</div>
+              <div><strong>Eenmalig voor deze redirect-POC:</strong> verwijder de oude Jumbo-favoriet en sleep de nieuwe v{JUMBO_BOOKMARKLET_VERSION}-knop hieronder naar je favorietenbalk.</div>
               <a
                 href={jumboPocBookmarklet}
                 data-testid="jumbo-poc-bookmarklet"
@@ -508,7 +509,7 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => {
-                  setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v5-favoriet.')
+                  setJumboPocProgress('Jumbo Bestellingen geopend. Klik daar op de nieuwe Jumbo POC v' + JUMBO_BOOKMARKLET_VERSION + '-favoriet.')
                   setJumboPocResult(null)
                   window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
                 }}
