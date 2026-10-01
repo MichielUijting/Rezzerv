@@ -242,12 +242,12 @@ export default function StoreConnectionsPage() {
         setJumboPocProgress(
           found > 0
             ? found + ' Jumbo-kassabon(nen) gevonden. De nieuwste bon is opgehaald en de bonlayout is ontleed.'
-            : 'Geen (nieuwe) kassabonnen gevonden. De redirect-POC is zonder window.opener teruggekeerd naar Inhuis.',
+            : 'Geen (nieuwe) kassabonnen gevonden. De redirect-POC is succesvol teruggekeerd naar Inhuis.',
         )
         showFeedback({
           variant: 'success',
           title: 'Jumbo redirect-POC geslaagd',
-          message: found > 0 ? 'Jumbo GraphQL, bon-detail en bonontleding werken via de redirect-POC.' : 'Jumbo GraphQL en de terugkeer naar Inhuis werken zonder window.opener.',
+          message: found > 0 ? 'Jumbo GraphQL, bon-detail en bonontleding werken via de redirect-POC.' : 'Jumbo GraphQL en de terugkeer naar Inhuis werken via de redirectmethode.',
           detail: 'Dit is alleen een POC: er is niets naar Kassa of Voorraad geschreven.',
         })
       }
@@ -474,7 +474,7 @@ export default function StoreConnectionsPage() {
             <div>
               <h3 style={{ margin: 0 }}>Jumbo kassabonnen – POC</h3>
               <p style={{ margin: '6px 0 0' }}>
-                Deze proef bewijst of Jumbo GraphQL kan worden gelezen en het resultaat daarna zonder window.opener of postMessage kan terugkeren naar Inhuis. Er wordt niets naar Kassa of Voorraad geschreven.
+                Deze proef bewijst of Jumbo GraphQL, bon-detail en bonontleding via de nieuwe redirectmethode werken. Er wordt niets naar Kassa of Voorraad geschreven.
               </p>
             </div>
 
@@ -524,7 +524,7 @@ export default function StoreConnectionsPage() {
 
             {jumboPocResult ? (
               <div data-testid="jumbo-poc-result" style={{ display: 'grid', gap: '8px' }}>
-                <div><strong>POC transport:</strong> URL-fragment, zonder window.opener</div>
+                <div><strong>POC transport:</strong> redirect via URL-fragment</div>
                 <div><strong>Jumbo-origin:</strong> {jumboPocResult.sourceOrigin || '—'}</div>
                 <div><strong>Bonnen gevonden:</strong> {Number(jumboPocResult.totalResults || 0)}</div>
                 {jumboPocResult.firstDetail ? (
