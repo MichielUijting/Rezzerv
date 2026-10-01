@@ -27,7 +27,7 @@ RETAILER_CONFIG = {
         "creates_global_product": False,
         "creates_household_article": False,
         "creates_inventory_event": False,
-        "candidate_policy": "off_index_or_explicit_off_search_only",
+        "candidate_policy": "off_index_text_search_plus_shared_exact_gtin_sources",
         "supported_examples": ["Raadpleeg OFF vanuit bonartikel"],
     }
 }
@@ -82,8 +82,9 @@ def get_external_database_summary() -> dict[str, Any]:
         "version": "external-databases-v1",
         "supported_retailers": len(RETAILER_CONFIG),
         "active_retailers": [config["retailer_name"] for config in RETAILER_CONFIG.values() if config.get("status") == "active"],
-        "candidate_policy": "off_index_or_explicit_off_search_only",
+        "candidate_policy": "off_index_text_search_plus_shared_exact_gtin_sources",
         "uses_product_taxonomy_seed_candidates": False,
+        "exact_gtin_sources": ["open_food_facts", "myrealfood"],
         "creates_global_product": False,
         "creates_household_article": False,
         "creates_inventory_event": False,
