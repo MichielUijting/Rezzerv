@@ -14,18 +14,31 @@ function jumboReceiptPocRunner(INHUIS_ORIGIN) {
   }
 
   async function graphql(operationName, query, variables) {
-    const response = await fetch('/api/graphql', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'apollographql-client-name': 'JUMBO_WEB-orders',
-        'apollographql-client-version': 'master-v29.2.0-web',
-        'x-source': 'JUMBO_WEB-orders',
-      },
-      body: JSON.stringify({ operationName, query, variables }),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 20000)
+    let response
+    try {
+      response = await fetch('/api/graphql', {
+        method: 'POST',
+        credentials: 'include',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'apollographql-client-name': 'JUMBO_WEB-orders',
+          'apollographql-client-version': 'master-v29.2.0-web',
+          'x-source': 'JUMBO_WEB-orders',
+        },
+        body: JSON.stringify({ operationName, query, variables }),
+      })
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error('Jumbo reageerde niet binnen 20 seconden. Probeer de POC opnieuw.')
+      }
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
 
     const payload = await response.json().catch(() => null)
     if (!response.ok) {
