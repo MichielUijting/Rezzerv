@@ -5,9 +5,15 @@ export const JUMBO_ORDERS_URL = 'https://www.jumbo.com/account/inloggen'
 function jumboReceiptPocRunner(INHUIS_ORIGIN) {
   const target = window.opener
   if (!target) {
-    alert('De bestaande Inhuis-sessie is niet meer beschikbaar. Open Jumbo opnieuw via Inhuis > Winkelkoppelingen.')
+    alert('Jumbo POC diagnose: window.opener ontbreekt. Open Jumbo opnieuw vanuit Inhuis > Winkelkoppelingen en start daarna de favoriet opnieuw.')
     return
   }
+
+  target.postMessage({
+    type: 'inhuis:jumbo-poc-diagnostic',
+    stage: 'RUNNER_START',
+    detail: location.origin,
+  }, INHUIS_ORIGIN)
 
   function post(data) {
     target.postMessage(data, INHUIS_ORIGIN)
@@ -130,6 +136,7 @@ function jumboReceiptPocRunner(INHUIS_ORIGIN) {
 
   ;(async () => {
     try {
+      post({ type: 'inhuis:jumbo-poc-diagnostic', stage: 'GRAPHQL_LIST_START', detail: location.href })
       post({ type: 'inhuis:jumbo-poc-progress', message: 'Jumbo-kassabonnen zoeken…' })
       const listData = await graphql(
         'GetOnlineOrdersAndStoreReceipts',
@@ -147,6 +154,7 @@ function jumboReceiptPocRunner(INHUIS_ORIGIN) {
         },
       )
 
+      post({ type: 'inhuis:jumbo-poc-diagnostic', stage: 'GRAPHQL_LIST_OK', detail: 'Antwoord ontvangen' })
       const storeReceipts = listData?.storeReceipts || {}
       const receipts = Array.isArray(storeReceipts.receipts) ? storeReceipts.receipts : []
       if (!receipts.length) {
@@ -220,13 +228,15 @@ export function buildJumboPocBookmarklet(inhuisOrigin) {
     'const O=' + JSON.stringify(origin) + ';' +
     'const V=' + String(JUMBO_BOOKMARKLET_VERSION) + ';' +
     'const W=window.opener;' +
-    'if(!W){alert("Open Jumbo eerst vanuit Inhuis > Winkelkoppelingen. Laat dat Inhuis-tabblad open en gebruik daarna deze favoriet.");return;}' +
+    'if(!W){alert("Jumbo POC diagnose: window.opener ontbreekt. Open Jumbo opnieuw vanuit Inhuis > Winkelkoppelingen en start daarna de favoriet opnieuw.");return;}' +
+    'W.postMessage({type:"inhuis:jumbo-poc-diagnostic",stage:"BOOKMARKLET_START",detail:location.origin+" "+location.pathname},O);' +
     'let done=false;' +
     'window.addEventListener("message",e=>{' +
     'if(done||e.origin!==O||e.source!==W||!e.data||e.data.type!=="inhuis:jumbo-poc-script")return;' +
     'done=true;' +
     'try{new Function(e.data.script)();}catch(err){alert("Jumbo-POC kon niet starten: "+String(err&&err.message||err));}' +
     '},{once:false});' +
+    'W.postMessage({type:"inhuis:jumbo-poc-diagnostic",stage:"HANDSHAKE_SENT",detail:location.origin},O);' +
     'W.postMessage({type:"inhuis:jumbo-poc-handshake",bookmarklet_version:V},O);' +
     'setTimeout(()=>{if(!done)alert("De bestaande Inhuis-sessie reageert niet. Open Jumbo opnieuw via Inhuis > Winkelkoppelingen.");},4000);' +
     '})()'
