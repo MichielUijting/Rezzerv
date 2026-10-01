@@ -220,7 +220,9 @@ export default function StoreConnectionsPage() {
     let jumboSourceWindow = null
 
     function addDiagnostic(stage, detail = '') {
-      setJumboPocDiagnostics((current) => [...current, { stage, detail }].slice(-12))
+      const time = new Date().toLocaleTimeString()
+      setJumboPocDiagnostics((current) => [...current, { stage, detail, time }].slice(-20))
+      console.info('[Inhuis Jumbo POC]', { time, stage, detail })
     }
 
     function isJumboOrigin(origin) {
@@ -236,27 +238,44 @@ export default function StoreConnectionsPage() {
       if (cancelled) return
       const data = event.data
       if (!data || typeof data !== 'object') return
+      const type = String(data.type || '')
+      if (!type.startsWith('inhuis:jumbo-poc-')) return
+
+      const expectedWindow = jumboWindowRef.current
+      const sourceMatches = !!expectedWindow && event.source === expectedWindow
+      console.info('[Inhuis Jumbo POC] raw message', {
+        type,
+        origin: event.origin,
+        sourceMatches,
+        bookmarkletVersion: data.bookmarklet_version,
+      })
+
+      if (!sourceMatches) {
+        addDiagnostic('SOURCE_MISMATCH', type + ' ontvangen uit ander tabblad/venster; origin=' + String(event.origin || 'onbekend'))
+        return
+      }
+
+      if (!isJumboOrigin(event.origin)) {
+        addDiagnostic('ORIGIN_MISMATCH', 'Bericht ' + type + ' ontvangen van ' + String(event.origin || 'onbekend'))
+        return
+      }
 
       if (data.type === 'inhuis:jumbo-poc-diagnostic') {
-        const expectedWindow = jumboWindowRef.current
-        if (!expectedWindow || event.source !== expectedWindow) return
-        if (!isJumboOrigin(event.origin)) {
-          addDiagnostic('DIAG', 'Bericht ontvangen van onverwachte origin: ' + String(event.origin || 'onbekend'))
-          return
-        }
         addDiagnostic(String(data.stage || 'DIAG'), String(data.detail || event.origin || ''))
         return
       }
 
       if (event.origin !== JUMBO_WEB_ORIGIN) {
-        if (String(data.type || '').startsWith('inhuis:jumbo-poc-') && event.source === jumboWindowRef.current) {
-          addDiagnostic('ORIGIN_MISMATCH', 'Verwacht ' + JUMBO_WEB_ORIGIN + ', ontvangen ' + String(event.origin || 'onbekend'))
-        }
+        addDiagnostic('ORIGIN_MISMATCH', 'Voor handshake/POC verwacht ' + JUMBO_WEB_ORIGIN + ', ontvangen ' + String(event.origin || 'onbekend'))
         return
       }
 
       if (data.type === 'inhuis:jumbo-poc-handshake') {
         if (Number(data.bookmarklet_version || 0) !== JUMBO_BOOKMARKLET_VERSION) {
+          addDiagnostic(
+            'VERSION_MISMATCH',
+            'Verwacht v' + JUMBO_BOOKMARKLET_VERSION + ', ontvangen v' + String(Number(data.bookmarklet_version || 0)),
+          )
           setJumboPocProgress('De Jumbo POC-favoriet is verouderd. Sleep de huidige knop opnieuw naar je favorietenbalk.')
           return
         }
@@ -562,10 +581,24 @@ export default function StoreConnectionsPage() {
               <Button
                 type="button"
                 onClick={() => {
-                  setJumboPocDiagnostics([{ stage: 'TAB_OPEN', detail: JUMBO_ORDERS_URL }])
-                  setJumboPocProgress('Jumbo is geopend. Log zo nodig in en klik daarna in het Jumbo-tabblad op de favoriet "Jumbo POC naar Inhuis".')
+                  const openedAt = new Date().toLocaleTimeString()
+                  setJumboPocDiagnostics([{ stage: 'TAB_OPEN', detail: JUMBO_ORDERS_URL, time: openedAt }])
+                  setJumboPocProgress('Jumbo is geopend. Klik in precies dit Jumbo-tabblad op de favoriet "Jumbo POC naar Inhuis".')
                   setJumboPocResult(null)
                   jumboWindowRef.current = window.open(JUMBO_ORDERS_URL, 'inhuis-jumbo-receipt-poc')
+                  if (jumboWindowRef.current) {
+                    setJumboPocDiagnostics((current) => [
+                      ...current,
+                      { stage: 'WINDOW_REF_OK', detail: 'window.open gaf een vensterreferentie terug.', time: new Date().toLocaleTimeString() },
+                    ])
+                    console.info('[Inhuis Jumbo POC] window.open reference created')
+                  } else {
+                    setJumboPocDiagnostics((current) => [
+                      ...current,
+                      { stage: 'POPUP_BLOCKED', detail: 'window.open gaf null terug; browser blokkeerde waarschijnlijk het venster.', time: new Date().toLocaleTimeString() },
+                    ])
+                    console.error('[Inhuis Jumbo POC] window.open returned null')
+                  }
                   window.setTimeout(() => {
                     setJumboPocDiagnostics((current) => {
                       const hasBookmarkletSignal = current.some((entry) =>
@@ -574,8 +607,9 @@ export default function StoreConnectionsPage() {
                       return hasBookmarkletSignal
                         ? current
                         : [...current, {
-                            stage: 'GEEN_REACTIE',
-                            detail: 'Geen signaal van de Jumbo-favoriet ontvangen. Mogelijk is de favoriet niet gestart of is window.opener verloren gegaan.',
+                            stage: 'GEEN_INBOUND_MESSAGE',
+                            detail: 'Binnen 12 seconden kwam geen BOOKMARKLET_START/HANDSHAKE-bericht binnen vanuit het verwachte Jumbo-tabblad. Kijk nu in het zichtbare diagnoseblok op de Jumbo-pagina.',
+                            time: new Date().toLocaleTimeString(),
                           }].slice(-12)
                     })
                   }, 12000)
@@ -595,7 +629,7 @@ export default function StoreConnectionsPage() {
                 <strong>Diagnose:</strong>
                 {jumboPocDiagnostics.map((entry, index) => (
                   <div key={entry.stage + '-' + index}>
-                    {entry.stage}: {entry.detail || '—'}
+                    {entry.time ? entry.time + ' — ' : ''}{entry.stage}: {entry.detail || '—'}
                   </div>
                 ))}
               </div>
