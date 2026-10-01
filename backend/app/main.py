@@ -86,6 +86,7 @@ from app.db import engine
 from app.startup.runtime_initialization import run_runtime_initialization
 from app.startup.runtime_observability import log_runtime_datastore_configuration_event
 from app.startup.runtime_schema_validation import validate_runtime_schema
+from app.services.product_web_lookup_service import lookup_myrealfood_product_by_gtin
 from app.services.global_product_service import (
     build_global_product_fingerprint,
     get_or_create_global_product,
@@ -205,9 +206,9 @@ SUPPORTED_RECEIPT_ARCHIVE_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp'
 ZIP_MIME_TYPES = {'application/zip', 'application/x-zip-compressed', 'multipart/x-zip', 'application/octet-stream'}
 PRODUCT_SOURCE_ORDER = tuple(
     source.strip()
-    for source in os.getenv('REZZERV_PRODUCT_SOURCE_ORDER', 'open_food_facts,public_reference_catalog,gs1_my_product_manager_share').split(',')
+    for source in os.getenv('REZZERV_PRODUCT_SOURCE_ORDER', 'open_food_facts,myrealfood,public_reference_catalog,gs1_my_product_manager_share').split(',')
     if source.strip()
-) or ('open_food_facts', 'public_reference_catalog')
+) or ('open_food_facts', 'myrealfood', 'public_reference_catalog')
 PRODUCT_SOURCE_CONTINUE_ON_FAILURE = str(os.getenv('REZZERV_PRODUCT_SOURCE_CONTINUE_ON_FAILURE', 'true') or 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
 PUBLIC_PRODUCT_CATALOG_PATH = Path(__file__).resolve().parent / 'data' / 'public_product_catalog.json'
 
@@ -2498,6 +2499,62 @@ def load_public_reference_catalog() -> dict[str, dict]:
     return normalized
 
 
+class MyRealFoodAdapter:
+    source_name = 'myrealfood'
+
+    def lookup_by_barcode(self, barcode: str) -> EnrichmentLookupResult:
+        normalized_barcode = normalize_barcode_value(barcode)
+        result = lookup_myrealfood_product_by_gtin(normalized_barcode)
+        status = str(result.get('status') or 'failed')
+        product = result.get('product') if isinstance(result.get('product'), dict) else None
+        if status != 'found' or not product or not str(product.get('product_name') or '').strip():
+            mapped_status = 'not_found' if status in {'not_found', 'invalid_gtin'} else 'failed'
+            return EnrichmentLookupResult(
+                source_name=self.source_name,
+                status=mapped_status,
+                normalized_barcode=normalized_barcode,
+                message='Geen product gevonden bij MyRealFood' if mapped_status == 'not_found' else 'MyRealFood productlookup niet beschikbaar',
+                payload=None,
+                source_url=(product or {}).get('source_url') if product else None,
+                http_status=result.get('http_status'),
+                response_excerpt=str(result.get('error') or status)[:250],
+            )
+        title = str(product.get('product_name') or '').strip()
+        brand = str(product.get('brand') or '').strip() or None
+        source_url = str(product.get('source_url') or '').strip() or None
+        enrichment_payload = {
+            'source_name': self.source_name,
+            'source_record_id': normalized_barcode,
+            'title': title,
+            'brand': brand,
+            'category': str(product.get('category') or '').strip() or None,
+            'size_value': None,
+            'size_unit': None,
+            'ingredients_json': [],
+            'allergens_json': [],
+            'nutrition_json': {},
+            'image_url': str(product.get('image_url') or '').strip() or None,
+            'source_url': source_url,
+            'quality_score': float(product.get('quality_score') or 0.88),
+            'raw_payload_json': product,
+            'normalized_barcode': normalized_barcode,
+        }
+        return EnrichmentLookupResult(
+            source_name=self.source_name,
+            status='found',
+            normalized_barcode=normalized_barcode,
+            message=None,
+            payload=enrichment_payload,
+            source_record_id=normalized_barcode,
+            source_url=source_url,
+            http_status=result.get('http_status') or 200,
+            response_excerpt=json.dumps(
+                {'gtin': normalized_barcode, 'product_name': title, 'brand': brand},
+                ensure_ascii=False,
+            )[:250],
+        )
+
+
 class PublicReferenceCatalogAdapter:
     source_name = 'public_reference_catalog'
 
@@ -2708,6 +2765,7 @@ def get_configured_product_sources() -> list[dict]:
 def choose_product_source_adapters() -> list:
     available = {
         'open_food_facts': OpenFoodFactsAdapter,
+        'myrealfood': MyRealFoodAdapter,
         'public_reference_catalog': PublicReferenceCatalogAdapter,
         'gs1_my_product_manager_share': Gs1MyProductManagerShareAdapter,
     }
