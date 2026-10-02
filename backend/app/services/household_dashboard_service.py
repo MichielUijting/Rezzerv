@@ -559,8 +559,9 @@ def _repeat_purchase_forecast(
         representative = ordered[-1]
         while next_date <= horizon_end:
             days_ahead = (next_date - now.date()).days
-            week_index = min(3, max(0, days_ahead // 7))
-            weekly_totals[week_index] += expected_amount
+            if days_ahead < 28:
+                week_index = min(3, max(0, days_ahead // 7))
+                weekly_totals[week_index] += expected_amount
             forecast_items.append({
                 "identity": identity,
                 "label": representative["label"],
