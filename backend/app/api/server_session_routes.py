@@ -296,15 +296,20 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
-    personal_frontteam_household_id = (
-        resolve_frontteam_personal_household_id(conn, user_id)
-        if is_frontteam
-        else None
-    )
+    personal_frontteam_household_id = resolve_frontteam_personal_household_id(conn, user_id)
     resolved_rows.sort(
         key=lambda row: (
-            1 if personal_frontteam_household_id and str(row.get("household_id") or "") == personal_frontteam_household_id else 0,
+            0 if (
+                not is_frontteam
+                and personal_frontteam_household_id
+                and str(row.get("household_id") or "") != personal_frontteam_household_id
+            ) else 1,
             0 if row["effective_role"] in {"admin", "owner"} else 1,
+            1 if (
+                is_frontteam
+                and personal_frontteam_household_id
+                and str(row.get("household_id") or "") == personal_frontteam_household_id
+            ) else 0,
             str(row.get("household_id") or ""),
         )
     )
