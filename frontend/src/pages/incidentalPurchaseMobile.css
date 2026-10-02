@@ -56,6 +56,34 @@
   justify-content: space-between;
 }
 
+
+.rz-mobile-incidental-purchase-recognized,
+.rz-mobile-incidental-purchase-manual,
+.rz-mobile-incidental-purchase-required,
+.rz-mobile-incidental-purchase-additional {
+  display: grid;
+  gap: 10px;
+}
+
+.rz-mobile-incidental-purchase-recognized {
+  padding: 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: #FFFFFF;
+  color: #000000;
+  font-size: var(--font-size-ui-body);
+}
+
+.rz-mobile-incidental-purchase-recognized strong {
+  font-size: var(--font-size-ui-title);
+  color: #005F6A;
+}
+
+.rz-mobile-incidental-purchase-recognized span {
+  color: #000000;
+  font-size: var(--font-size-ui-body);
+}
+
 .rz-mobile-incidental-purchase-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
