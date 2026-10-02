@@ -240,19 +240,50 @@ export async function startBarcodeDecoding({
   const nativeDetector = await createNativeBarcodeDetector()
   log?.('VIDEO_FIRST_FRAME_CONFIRMED', { readyState: video.readyState, videoWidth: video.videoWidth, videoHeight: video.videoHeight })
 
+  const startZxingFallback = async () => {
+    log?.('ZXING_FALLBACK_START')
+    const controls = await reader.decodeFromVideoElement(video, (result, error) => {
+      if (result) {
+        onResult?.(result)
+        return
+      }
+      onAttempt?.()
+      if (!error) return
+      if (isNonFatalBarcodeScanError(error)) {
+        onNonFatalError?.(error)
+        return
+      }
+      onFatalError?.(error)
+    })
+    return controls
+  }
+
   if (nativeDetector) {
     let stopped = false
+    let resolved = false
     let rafId = 0
     let timeoutId = 0
+    let fallbackTimerId = 0
+    let zxingControls = null
+
+    const stopNativeLoop = () => {
+      if (rafId) window.cancelAnimationFrame(rafId)
+      if (timeoutId) window.clearTimeout(timeoutId)
+      rafId = 0
+      timeoutId = 0
+    }
 
     const stop = () => {
       stopped = true
-      if (rafId) window.cancelAnimationFrame(rafId)
-      if (timeoutId) window.clearTimeout(timeoutId)
+      stopNativeLoop()
+      if (fallbackTimerId) window.clearTimeout(fallbackTimerId)
+      fallbackTimerId = 0
+      try { zxingControls?.stop?.() } catch {}
+      try { reader.reset?.() } catch {}
     }
 
     const loop = async () => {
-      if (stopped) return
+      if (stopped || resolved) return
       if (video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
         rafId = window.requestAnimationFrame(loop)
         return
@@ -262,12 +293,15 @@ export async function startBarcodeDecoding({
         const detections = await nativeDetector.detect(video)
         const detection = Array.isArray(detections) ? detections.find((item) => item?.rawValue) : null
         if (detection?.rawValue) {
-          stop()
+          resolved = true
+          if (fallbackTimerId) window.clearTimeout(fallbackTimerId)
+          stopNativeLoop()
+          log?.('NATIVE_DECODE_RESULT_FOUND', { text: detection.rawValue, format: detection.format })
           onResult?.({ text: detection.rawValue, rawValue: detection.rawValue, format: detection.format })
           return
         }
       } catch (error) {
-        if (!stopped) {
+        if (!stopped && !resolved) {
           console.info('Native BarcodeDetector scanpoging zonder resultaat', { error })
           onNonFatalError?.(error)
         }
@@ -277,23 +311,22 @@ export async function startBarcodeDecoding({
       }, 140)
     }
 
+    fallbackTimerId = window.setTimeout(async () => {
+      if (stopped || resolved) return
+      stopNativeLoop()
+      log?.('NATIVE_DETECTOR_FALLBACK', { reason: 'no-result-within-window' })
+      try {
+        zxingControls = await startZxingFallback()
+      } catch (error) {
+        if (!stopped && !resolved) onFatalError?.(error)
+      }
+    }, 1800)
+
     rafId = window.requestAnimationFrame(loop)
     return { stop }
   }
 
-  const controls = await reader.decodeFromVideoElement(video, (result, error) => {
-    if (result) {
-      onResult?.(result)
-      return
-    }
-    onAttempt?.()
-    if (!error) return
-    if (isNonFatalBarcodeScanError(error)) {
-      onNonFatalError?.(error)
-      return
-    }
-    onFatalError?.(error)
-  })
+  const controls = await startZxingFallback()
 
   return {
     stop: () => {
