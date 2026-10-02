@@ -82,8 +82,8 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
     setIsOpen(true)
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      logEvent('GET_USER_MEDIA_ERROR', { message: 'Deze browser kan de apparaatcamera niet openen.' })
-      setCameraState({ status: 'error', message: 'Deze browser kan de apparaatcamera niet openen.' })
+      logEvent('GET_USER_MEDIA_ERROR', { message: 'Live camera is in deze browser niet beschikbaar.' })
+      setCameraState({ status: 'error', message: 'Live camera is niet beschikbaar. Tik op Scannen om de camera/fotofunctie van je apparaat te gebruiken.' })
       setIsOpen(false)
       return
     }
@@ -179,6 +179,30 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
 
   startScannerRef.current = startScanner
 
+  const scanImageFile = useCallback(async (file) => {
+    if (!file) return false
+    sessionIdRef.current = nextScannerSessionId()
+    stopScanner(false, 'image-scan-start')
+    setCameraState({ status: 'loading', message: 'Foto op barcode controleren…' })
+    readerRef.current = readerRef.current || createBarcodeReader()
+    const objectUrl = URL.createObjectURL(file)
+    try {
+      const result = await readerRef.current.decodeFromImageUrl(objectUrl)
+      const detectedBarcode = String(result?.getText?.() || result?.text || '').trim()
+      if (!detectedBarcode) throw new Error('Geen barcode gevonden in de foto')
+      logEvent('IMAGE_DECODE_RESULT_FOUND', { text: detectedBarcode })
+      setCameraState({ status: 'found', message: 'Barcode herkend.' })
+      await onDetected?.(detectedBarcode, { logEvent, sessionId: sessionIdRef.current, screenContext })
+      return true
+    } catch (error) {
+      logEvent('IMAGE_DECODE_ERROR', { errorName: error?.name, errorMessage: error?.message })
+      setCameraState({ status: 'error', message: 'Geen barcode in de foto herkend. Tik op Scannen om opnieuw te proberen of vul de barcode handmatig in.' })
+      return false
+    } finally {
+      URL.revokeObjectURL(objectUrl)
+    }
+  }, [logEvent, onDetected, screenContext, stopScanner])
+
   const switchCamera = useCallback(async () => {
     const devices = availableCameras.length ? availableCameras : await listBarcodeVideoDevices().catch(() => [])
     setAvailableCameras(devices)
@@ -200,5 +224,6 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
     startScanner,
     stopScanner,
     switchCamera,
+    scanImageFile,
   }
 }
