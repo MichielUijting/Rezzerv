@@ -38,6 +38,12 @@ def _tables(conn: Connection) -> set[str]:
     return set(inspect(conn).get_table_names())
 
 
+def _columns(conn: Connection, table_name: str) -> set[str]:
+    if table_name not in _tables(conn):
+        return set()
+    return {str(column.get("name") or "") for column in inspect(conn).get_columns(table_name)}
+
+
 def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, Any]]:
     if "receipt_tables" not in _tables(conn):
         return []
@@ -87,20 +93,33 @@ def _shopping_count(conn: Connection, household_id: str) -> int:
     tables = _tables(conn)
     if not {"shopping_lists", "shopping_list_items"}.issubset(tables):
         return 0
-    value = conn.execute(text("""
-        SELECT COUNT(*)
+    list_columns = _columns(conn, "shopping_lists")
+    item_columns = _columns(conn, "shopping_list_items")
+    required_list = {"id", "household_id", "status"}
+    required_item = {"shopping_list_id", "household_id", "checked"}
+    if not required_list.issubset(list_columns) or not required_item.issubset(item_columns):
+        return 0
+    rows = conn.execute(text("""
+        SELECT sli.checked
         FROM shopping_list_items sli
         JOIN shopping_lists sl ON sl.id = sli.shopping_list_id
         WHERE sl.household_id = :household_id
           AND lower(trim(COALESCE(sl.status, 'active'))) = 'active'
           AND sli.household_id = :household_id
-          AND COALESCE(sli.checked, FALSE) = FALSE
-    """), {"household_id": str(household_id)}).scalar()
-    return int(value or 0)
+    """), {"household_id": str(household_id)}).mappings().all()
+    return sum(
+        1
+        for row in rows
+        if str(row.get("checked") or "").strip().lower() not in {"1", "true", "yes", "on"}
+    )
 
 
 def _notification_count(conn: Connection, household_id: str, user_id: str) -> int:
     if "household_notifications" not in _tables(conn):
+        return 0
+    columns = _columns(conn, "household_notifications")
+    required = {"household_id", "recipient_user_id", "read_at"}
+    if not required.issubset(columns):
         return 0
     value = conn.execute(text("""
         SELECT COUNT(*)
@@ -117,29 +136,48 @@ def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
     if "receipt_tables" not in tables or "receipt_table_lines" not in tables:
         return 0, 0
 
-    kassa = conn.execute(text("""
-        SELECT COUNT(*)
-        FROM receipt_table_lines rtl
-        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-        WHERE rt.household_id = :household_id
-          AND lower(trim(COALESCE(rt.workflow_state, 'active'))) = 'active'
-          AND NOT EXISTS (
-              SELECT 1
-              FROM purchase_import_batches pib
-              WHERE pib.household_id = rt.household_id
-                AND pib.source_type = 'receipt'
-                AND pib.source_reference = ('receipt:' || rt.id)
-          )
-    """), {"household_id": str(household_id)}).scalar() if "purchase_import_batches" in tables else conn.execute(text("""
-        SELECT COUNT(*)
-        FROM receipt_table_lines rtl
-        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-        WHERE rt.household_id = :household_id
-          AND lower(trim(COALESCE(rt.workflow_state, 'active'))) = 'active'
-    """), {"household_id": str(household_id)}).scalar()
+    receipt_columns = _columns(conn, "receipt_tables")
+    line_columns = _columns(conn, "receipt_table_lines")
+    if not {"id", "household_id", "workflow_state"}.issubset(receipt_columns):
+        return 0, 0
+    if not {"receipt_table_id"}.issubset(line_columns):
+        return 0, 0
+
+    batch_columns = _columns(conn, "purchase_import_batches")
+    can_link_batches = {
+        "id", "household_id", "source_type", "source_reference"
+    }.issubset(batch_columns)
+
+    if can_link_batches:
+        kassa = conn.execute(text("""
+            SELECT COUNT(*)
+            FROM receipt_table_lines rtl
+            JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+            WHERE rt.household_id = :household_id
+              AND lower(trim(COALESCE(rt.workflow_state, 'active'))) = 'active'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM purchase_import_batches pib
+                  WHERE pib.household_id = rt.household_id
+                    AND pib.source_type = 'receipt'
+                    AND pib.source_reference = ('receipt:' || rt.id)
+              )
+        """), {"household_id": str(household_id)}).scalar() or 0
+    else:
+        kassa = conn.execute(text("""
+            SELECT COUNT(*)
+            FROM receipt_table_lines rtl
+            JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+            WHERE rt.household_id = :household_id
+              AND lower(trim(COALESCE(rt.workflow_state, 'active'))) = 'active'
+        """), {"household_id": str(household_id)}).scalar() or 0
 
     unpack = 0
-    if {"purchase_import_batches", "purchase_import_lines"}.issubset(tables):
+    import_line_columns = _columns(conn, "purchase_import_lines")
+    can_count_unpack = can_link_batches and {
+        "batch_id", "processing_status"
+    }.issubset(import_line_columns)
+    if can_count_unpack:
         unpack = conn.execute(text("""
             SELECT COUNT(*)
             FROM purchase_import_lines pil
