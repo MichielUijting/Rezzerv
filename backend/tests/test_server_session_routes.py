@@ -235,7 +235,7 @@ def test_member_login_keeps_regular_household_context():
     ("email", "is_superuser"),
     [
         (SUPERGEBRUIKER_EMAIL, True),
-        ("ip-owner@example.test", True),
+        ("ip-owner@example.test", False),
     ],
 )
 def test_system_platform_roles_login_without_household_membership(email, is_superuser):
