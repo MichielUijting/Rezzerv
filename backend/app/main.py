@@ -693,6 +693,7 @@ class InventoryTransferRequest(BaseModel):
 
 class BarcodeLookupRequest(BaseModel):
     barcode: str
+    article_name: Optional[str] = None
     household_id: Optional[str] = None
 
     @field_validator("barcode")
@@ -14346,11 +14347,62 @@ def scan_article_barcode(payload: BarcodeLookupRequest, authorization: Optional[
             conn,
             household_id,
             payload.barcode,
+            product_name_hint=normalize_household_article_name(payload.article_name),
             create_global_product=True,
             create_household_article=False,
         )
         article = barcode_resolution.get('article')
         catalog_match = barcode_resolution.get('catalog_match') or {}
+        explicit_catalog_name = normalize_household_article_name(payload.article_name)
+        resolved_global_product_id = str(barcode_resolution.get('global_product_id') or '').strip()
+        if explicit_catalog_name and resolved_global_product_id and catalog_match.get('lookup_status') != 'found':
+            conn.execute(
+                text(
+                    """
+                    UPDATE global_products
+                    SET name = :name,
+                        source = CASE
+                            WHEN COALESCE(trim(source), '') IN ('', 'barcode_scan', 'user') THEN 'user'
+                            ELSE source
+                        END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :global_product_id
+                      AND (
+                        COALESCE(trim(name), '') = ''
+                        OR name = :placeholder_name
+                      )
+                    """
+                ),
+                {
+                    'global_product_id': resolved_global_product_id,
+                    'name': explicit_catalog_name,
+                    'placeholder_name': f'Product {payload.barcode}',
+                },
+            )
+            refreshed_product = conn.execute(
+                text(
+                    """
+                    SELECT id, primary_gtin, name, brand, category, size_value, size_unit, image_url, source, status
+                    FROM global_products
+                    WHERE id = :global_product_id
+                    LIMIT 1
+                    """
+                ),
+                {'global_product_id': resolved_global_product_id},
+            ).mappings().first()
+            if refreshed_product:
+                catalog_match['product'] = {
+                    **dict(catalog_match.get('product') or {}),
+                    'id': str(refreshed_product.get('id') or resolved_global_product_id),
+                    'name': refreshed_product.get('name'),
+                    'barcode': refreshed_product.get('primary_gtin') or payload.barcode,
+                    'brand': refreshed_product.get('brand'),
+                    'category': refreshed_product.get('category'),
+                    'size_value': refreshed_product.get('size_value'),
+                    'size_unit': refreshed_product.get('size_unit'),
+                    'image_url': refreshed_product.get('image_url'),
+                    'source': refreshed_product.get('source') or 'user',
+                }
         if article:
             article_name = str(article.get("naam") or "").strip()
             article_id = str(article.get("id") or "").strip()
