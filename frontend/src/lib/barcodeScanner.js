@@ -69,8 +69,8 @@ function scoreDeviceLabel(label = '') {
 
 function buildScanVideoConstraints(extra = {}) {
   return {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: 2560 },
+    height: { ideal: 1440 },
     aspectRatio: { ideal: 1.777777778 },
     frameRate: { ideal: 24, min: 10 },
     ...extra,
@@ -94,9 +94,8 @@ async function applyTrackOptimizations(videoTrack) {
   if (Array.isArray(capabilities.exposureMode) && capabilities.exposureMode.includes('continuous')) {
     advanced.push({ exposureMode: 'continuous' })
   }
-  if (typeof capabilities.zoom?.max === 'number' && capabilities.zoom.max >= 1.5) {
-    advanced.push({ zoom: Math.min(2, capabilities.zoom.max) })
-  }
+  // Forceer geen digitale zoom: op veel telefoons maakt dat barcodes juist
+  // onscherper dan de normale achtercameraweergave.
   if (!advanced.length) return capabilities
   try {
     await videoTrack.applyConstraints({ advanced })
@@ -124,16 +123,21 @@ export async function openBarcodeCameraStream(preferredDeviceId = '', log = null
     pushAttempt({ audio: false, video: buildScanVideoConstraints({ deviceId: { exact: preferredDeviceId } }) })
   }
 
+  if (mobile) {
+    // Op mobiel eerst expliciet de reguliere achtercamera proberen. Voor de
+    // eerste toestemmingsaanvraag zijn cameralabels vaak nog leeg; device-order
+    // kan dan anders ten onrechte de frontcamera kiezen.
+    pushAttempt({ audio: false, video: buildScanVideoConstraints({ facingMode: { exact: 'environment' } }) })
+    pushAttempt({ audio: false, video: buildScanVideoConstraints({ facingMode: { ideal: 'environment' } }) })
+  }
+
   prioritizedDevices.forEach((device) => {
     if (device?.deviceId) {
       pushAttempt({ audio: false, video: buildScanVideoConstraints({ deviceId: { exact: device.deviceId } }) })
     }
   })
 
-  if (mobile) {
-    pushAttempt({ audio: false, video: buildScanVideoConstraints({ facingMode: { exact: 'environment' } }) })
-    pushAttempt({ audio: false, video: buildScanVideoConstraints({ facingMode: { ideal: 'environment' } }) })
-  } else {
+  if (!mobile) {
     pushAttempt({ audio: false, video: buildScanVideoConstraints() })
   }
 
