@@ -54,7 +54,7 @@ def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, An
 
     optional = (
         "store_name", "store_branch", "purchase_at", "total_amount", "currency",
-        "parse_status", "workflow_state", "approved_at",
+        "parse_status", "workflow_state", "approved_at", "deleted_at",
     )
     projection = ["id", "created_at"] + [
         column if column in columns else f"NULL AS {column}"
@@ -70,6 +70,8 @@ def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, An
     for row in rows:
         parse_status = str(row.get("parse_status") or "").strip().lower()
         workflow_state = str(row.get("workflow_state") or "active").strip().lower()
+        if row.get("deleted_at") is not None:
+            continue
         if workflow_state in {"archived", "deleted", "removed", "legacy_deleted", "removed_reimport_allowed"}:
             continue
         if "approved_at" in columns or "parse_status" in columns:
@@ -96,11 +98,18 @@ def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]
     if not {"receipt_table_id"}.issubset(line_columns):
         return {}
     quantity_expr = "rtl.quantity" if "quantity" in line_columns else "1"
+    filters = ["rt.household_id = :household_id"]
+    if "is_deleted" in line_columns:
+        filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
+    if "inventory_eligible" in line_columns:
+        filters.append("COALESCE(rtl.inventory_eligible, FALSE) = TRUE")
+    elif "line_role" in line_columns:
+        filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
     rows = conn.execute(text(f"""
         SELECT rtl.receipt_table_id, {quantity_expr} AS quantity
         FROM receipt_table_lines rtl
         JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-        WHERE rt.household_id = :household_id
+        WHERE {" AND ".join(filters)}
     """), {"household_id": str(household_id)}).mappings().all()
     totals: dict[str, float] = defaultdict(float)
     for row in rows:
@@ -160,51 +169,65 @@ def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
     line_columns = _columns(conn, "receipt_table_lines")
     if not {"id", "household_id", "workflow_state"}.issubset(receipt_columns):
         return 0, 0
-    if not {"receipt_table_id"}.issubset(line_columns):
+    if "receipt_table_id" not in line_columns:
         return 0, 0
+
+    receipt_line_filters = [
+        "rt.household_id = :household_id",
+        "lower(trim(COALESCE(rt.workflow_state, 'active'))) = 'active'",
+    ]
+    if "deleted_at" in receipt_columns:
+        receipt_line_filters.append("rt.deleted_at IS NULL")
+    if "is_deleted" in line_columns:
+        receipt_line_filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
+    if "inventory_eligible" in line_columns:
+        receipt_line_filters.append("COALESCE(rtl.inventory_eligible, FALSE) = TRUE")
+    elif "line_role" in line_columns:
+        receipt_line_filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
 
     batch_columns = _columns(conn, "purchase_import_batches")
     can_link_batches = {
         "id", "household_id", "source_type", "source_reference"
     }.issubset(batch_columns)
 
+    # Kassa = artikelregels van een actieve bon waarvoor nog geen Uitpakken-batch bestaat.
     if can_link_batches:
-        kassa = conn.execute(text("""
-            SELECT COUNT(*)
-            FROM receipt_table_lines rtl
-            JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-            WHERE rt.household_id = :household_id
-              AND lower(trim(COALESCE(rt.workflow_state, 'active'))) = 'active'
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM purchase_import_batches pib
-                  WHERE pib.household_id = rt.household_id
-                    AND pib.source_type = 'receipt'
-                    AND pib.source_reference = ('receipt:' || rt.id)
-              )
-        """), {"household_id": str(household_id)}).scalar() or 0
-    else:
-        kassa = conn.execute(text("""
-            SELECT COUNT(*)
-            FROM receipt_table_lines rtl
-            JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-            WHERE rt.household_id = :household_id
-              AND lower(trim(COALESCE(rt.workflow_state, 'active'))) = 'active'
-        """), {"household_id": str(household_id)}).scalar() or 0
+        receipt_line_filters.append("""
+            NOT EXISTS (
+                SELECT 1
+                FROM purchase_import_batches pib
+                WHERE pib.household_id = rt.household_id
+                  AND pib.source_type = 'receipt'
+                  AND pib.source_reference = ('receipt:' || rt.id)
+            )
+        """)
+    kassa = conn.execute(text(f"""
+        SELECT COUNT(*)
+        FROM receipt_table_lines rtl
+        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+        WHERE {" AND ".join(receipt_line_filters)}
+    """), {"household_id": str(household_id)}).scalar() or 0
 
+    # Uitpakken = dezelfde artikelen nadat de batch bestaat, zolang de importregel
+    # nog niet daadwerkelijk naar voorraad is verwerkt. Hierdoor is er geen dubbeltelling.
     unpack = 0
     import_line_columns = _columns(conn, "purchase_import_lines")
     can_count_unpack = can_link_batches and {
         "batch_id", "processing_status"
     }.issubset(import_line_columns)
     if can_count_unpack:
-        unpack = conn.execute(text("""
+        unpack_filters = [
+            "pib.household_id = :household_id",
+            "pib.source_type = 'receipt'",
+            "lower(trim(COALESCE(pil.processing_status, 'pending'))) <> 'processed'",
+        ]
+        if "review_decision" in import_line_columns:
+            unpack_filters.append("lower(trim(COALESCE(pil.review_decision, 'pending'))) <> 'removed'")
+        unpack = conn.execute(text(f"""
             SELECT COUNT(*)
             FROM purchase_import_lines pil
             JOIN purchase_import_batches pib ON pib.id = pil.batch_id
-            WHERE pib.household_id = :household_id
-              AND pib.source_type = 'receipt'
-              AND lower(trim(COALESCE(pil.processing_status, 'pending'))) <> 'processed'
+            WHERE {" AND ".join(unpack_filters)}
         """), {"household_id": str(household_id)}).scalar() or 0
     return int(kassa or 0), int(unpack or 0)
 
@@ -237,10 +260,14 @@ def build_household_dashboard(conn: Connection, *, household_id: str, user_id: s
         daily_spend.append({"date": day.isoformat(), "value": spend(rows)})
 
     stores: dict[str, dict[str, Any]] = {}
+    store_visit_days: set[tuple[str, str]] = set()
     for row in current:
         key = row["_store"].strip().lower()
         item = stores.setdefault(key, {"name": row["_store"], "visits": 0, "spend": 0.0})
-        item["visits"] += 1
+        visit_key = (key, row["_purchase_at"].date().isoformat())
+        if visit_key not in store_visit_days:
+            item["visits"] += 1
+            store_visit_days.add(visit_key)
         item["spend"] = round(item["spend"] + _number(row.get("total_amount")), 2)
 
     historical_spend = spend(history)
