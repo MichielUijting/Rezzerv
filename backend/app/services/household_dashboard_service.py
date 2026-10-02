@@ -88,6 +88,78 @@ def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, An
     return approved
 
 
+def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, list[dict[str, Any]]]:
+    if "receipt_table_lines" not in _tables(conn) or "receipt_tables" not in _tables(conn):
+        return {}
+    receipt_columns = _columns(conn, "receipt_tables")
+    line_columns = _columns(conn, "receipt_table_lines")
+    if not {"id", "household_id"}.issubset(receipt_columns) or "receipt_table_id" not in line_columns:
+        return {}
+
+    label_candidates = [
+        column for column in ("corrected_raw_label", "normalized_label", "raw_label")
+        if column in line_columns
+    ]
+    label_expr = "COALESCE(" + ", ".join(f"NULLIF(TRIM(rtl.{column}), '')" for column in label_candidates) + ", 'Artikel')" if label_candidates else "'Artikel'"
+    quantity_expr = "rtl.quantity" if "quantity" in line_columns else "1"
+    unit_expr = "rtl.unit" if "unit" in line_columns else "NULL"
+    total_expr = "rtl.line_total" if "line_total" in line_columns else "NULL"
+    article_expr = "rtl.matched_article_id" if "matched_article_id" in line_columns else "NULL"
+    product_expr = "rtl.matched_global_product_id" if "matched_global_product_id" in line_columns else "NULL"
+    line_id_expr = "rtl.id" if "id" in line_columns else "NULL"
+
+    filters = ["rt.household_id = :household_id"]
+    if "is_deleted" in line_columns:
+        filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
+    if "inventory_eligible" in line_columns:
+        filters.append("COALESCE(rtl.inventory_eligible, FALSE) = TRUE")
+    elif "line_role" in line_columns:
+        filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
+
+    rows = conn.execute(text(f"""
+        SELECT rtl.receipt_table_id,
+               {line_id_expr} AS line_id,
+               {label_expr} AS label,
+               {quantity_expr} AS quantity,
+               {unit_expr} AS unit,
+               {total_expr} AS line_total,
+               {article_expr} AS household_article_id,
+               {product_expr} AS global_product_id
+        FROM receipt_table_lines rtl
+        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
+        WHERE {" AND ".join(filters)}
+        ORDER BY rtl.receipt_table_id, {label_expr}
+    """), {"household_id": str(household_id)}).mappings().all()
+
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row.get("receipt_table_id") or "")].append({
+            "line_id": row.get("line_id"),
+            "label": str(row.get("label") or "Artikel"),
+            "quantity": _number(row.get("quantity")) or 1.0,
+            "unit": row.get("unit"),
+            "line_total": round(_number(row.get("line_total")), 2) if row.get("line_total") is not None else None,
+            "household_article_id": row.get("household_article_id"),
+            "global_product_id": row.get("global_product_id"),
+        })
+    return dict(grouped)
+
+
+def _receipt_detail(row: dict[str, Any], article_details: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    receipt_id = str(row.get("id") or "")
+    articles = article_details.get(receipt_id, [])
+    return {
+        "receipt_id": receipt_id,
+        "store": row.get("_store") or "Onbekende winkel",
+        "date": row["_purchase_at"].date().isoformat(),
+        "purchase_at": row["_purchase_at"].isoformat(),
+        "total": round(_number(row.get("total_amount")), 2),
+        "currency": row.get("currency") or "EUR",
+        "article_count": round(sum(_number(item.get("quantity")) for item in articles), 2),
+        "articles": articles,
+    }
+
+
 def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]:
     if "receipt_table_lines" not in _tables(conn) or "receipt_tables" not in _tables(conn):
         return {}
@@ -240,6 +312,7 @@ def build_household_dashboard(conn: Connection, *, household_id: str, user_id: s
 
     receipts = _approved_receipts(conn, household_id)
     quantities = _receipt_quantities(conn, household_id)
+    article_details = _receipt_article_details(conn, household_id)
 
     current = [r for r in receipts if current_start <= r["_purchase_at"] <= now]
     previous = [r for r in receipts if previous_start <= r["_purchase_at"] < current_start]
@@ -283,6 +356,21 @@ def build_household_dashboard(conn: Connection, *, household_id: str, user_id: s
     current_spend = spend(current)
     previous_spend = spend(previous)
 
+    current_receipts = [
+        _receipt_detail(row, article_details)
+        for row in sorted(current, key=lambda item: item["_purchase_at"], reverse=True)
+    ]
+    history_receipts = [
+        _receipt_detail(row, article_details)
+        for row in sorted(history, key=lambda item: item["_purchase_at"], reverse=True)
+    ]
+
+    store_receipts: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for receipt in current_receipts:
+        store_receipts[str(receipt.get("store") or "").strip().lower()].append(receipt)
+    for key, item in stores.items():
+        item["receipts"] = store_receipts.get(key, [])
+
     return {
         "status": {
             "notifications": _notification_count(conn, household_id, user_id),
@@ -297,6 +385,7 @@ def build_household_dashboard(conn: Connection, *, household_id: str, user_id: s
             "previous": round(previous_articles, 2),
             "delta": round(current_articles - previous_articles, 2),
             "daily": daily_articles,
+            "receipts": current_receipts,
         },
         "spend": {
             "current": current_spend,
@@ -304,6 +393,7 @@ def build_household_dashboard(conn: Connection, *, household_id: str, user_id: s
             "delta": round(current_spend - previous_spend, 2),
             "daily": daily_spend,
             "currency": "EUR",
+            "receipts": current_receipts,
         },
         "stores": {
             "unique": len(stores),
@@ -315,6 +405,7 @@ def build_household_dashboard(conn: Connection, *, household_id: str, user_id: s
             "weeks": forecast_weeks,
             "currency": "EUR",
             "method": "Gemiddelde uitgaven van de afgelopen 8 weken",
+            "basis_receipts": history_receipts,
         },
         "generated_at": now.isoformat(),
     }
