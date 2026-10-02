@@ -299,7 +299,6 @@ export default function IncidentalPurchasePage() {
   const [purchaseForm, setPurchaseForm] = useState(createInitialPurchaseForm)
   const [purchaseLookupState, setPurchaseLookupState] = useState({ status: 'idle', message: '' })
   const [purchaseSaveState, setPurchaseSaveState] = useState({ status: 'idle', message: '' })
-  const [manualEntryOpen, setManualEntryOpen] = useState(false)
   const [additionalFieldsOpen, setAdditionalFieldsOpen] = useState(false)
   const [catalogLookupResult, setCatalogLookupResult] = useState(null)
   const [inventoryStepOpen, setInventoryStepOpen] = useState(false)
@@ -346,7 +345,6 @@ export default function IncidentalPurchasePage() {
       setCatalogLookupResult(null)
       setInventoryStepOpen(false)
       setPurchaseLookupState({ status: 'idle', message: '' })
-      setManualEntryOpen(true)
       logEvent?.('BARCODE_FIELD_AFTER_UPDATE', { value: normalized })
     },
   })
@@ -380,7 +378,6 @@ export default function IncidentalPurchasePage() {
 
   useEffect(() => {
     if (!isMobileViewport || purchaseCameraState.status !== 'error' || !purchaseCameraState.message) return
-    setManualEntryOpen(true)
     showFeedback({
       variant: 'error',
       message: purchaseCameraState.message,
@@ -391,7 +388,6 @@ export default function IncidentalPurchasePage() {
   useEffect(() => {
     if (!isMobileViewport || !isMobileScanner || autoScannerStartedRef.current) return
     autoScannerStartedRef.current = true
-    setManualEntryOpen(false)
     setCatalogLookupResult(null)
     setInventoryStepOpen(false)
     startPurchaseBarcodeScanner('')
@@ -494,7 +490,6 @@ export default function IncidentalPurchasePage() {
     }
     setPurchaseLookupState({ status: 'idle', message: '' })
     setPurchaseSaveState({ status: 'idle', message: '' })
-    setManualEntryOpen(false)
     setAdditionalFieldsOpen(false)
     setCatalogLookupResult(null)
     setInventoryStepOpen(false)
@@ -503,7 +498,6 @@ export default function IncidentalPurchasePage() {
 
   function handleCancelScanner() {
     stopPurchaseBarcodeCamera(true, 'scan-cancelled-to-manual')
-    setManualEntryOpen(true)
   }
 
   async function handlePurchaseSubmit() {
@@ -546,7 +540,6 @@ export default function IncidentalPurchasePage() {
     setPurchaseForm(createInitialPurchaseForm())
     setPurchaseLookupState({ status: 'idle', message: '' })
     setPurchaseSaveState({ status: 'idle', message: '' })
-    setManualEntryOpen(false)
     setAdditionalFieldsOpen(false)
     setCatalogLookupResult(null)
     setInventoryStepOpen(false)
