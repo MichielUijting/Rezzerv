@@ -32,7 +32,7 @@
 }
 
 .rz-catalog-table-wrapper {
-  --rz-table-body-row-height: 72px;
+  --rz-table-body-row-height: 52px;
   border: 1px solid var(--color-table-border, #6bbf7a);
   max-height: calc(
     var(--rz-table-header-row-height)
@@ -87,8 +87,8 @@
 }
 
 .rz-catalog-product-image--compact {
-  width: 67px;
-  height: 67px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-sm);
 }
 
