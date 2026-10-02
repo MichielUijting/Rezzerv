@@ -25,7 +25,7 @@ import { useMobileAppViewport } from './mobileViewport.js'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import './mobileAppChrome.css'
 
-const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/home', icon: 'menu' }
+const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/meer', icon: 'menu' }
 
 function mobileNavIconType(key) {
   if (key === 'meldingen') return 'bell'
