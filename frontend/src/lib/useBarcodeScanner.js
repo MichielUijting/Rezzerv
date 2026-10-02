@@ -21,6 +21,8 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
   const busyRef = useRef(false)
   const timeoutRef = useRef(null)
   const sessionIdRef = useRef('')
+  const autoCameraAttemptedRef = useRef(new Set())
+  const startScannerRef = useRef(null)
 
   const [isOpen, setIsOpen] = useState(false)
   const [cameraState, setCameraState] = useState({ status: 'idle', message: '' })
@@ -71,6 +73,7 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
 
   const startScanner = useCallback(async (preferredDeviceId = '') => {
     sessionIdRef.current = nextScannerSessionId()
+    if (!preferredDeviceId) autoCameraAttemptedRef.current = new Set()
     logEvent('SCAN_CLICKED', { preferredDeviceId })
     stopScanner(false, 'restart-before-start')
     busyRef.current = false
@@ -92,7 +95,9 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
       readerRef.current = readerRef.current || createBarcodeReader()
       const devices = await listBarcodeVideoDevices().catch(() => [])
       setAvailableCameras(devices)
-      setCameraMeta({ deviceId: activeDeviceId || preferredDeviceId || '', label: activeLabel || '', decodeAttempts: 0 })
+      const resolvedActiveDeviceId = activeDeviceId || preferredDeviceId || ''
+      if (resolvedActiveDeviceId) autoCameraAttemptedRef.current.add(resolvedActiveDeviceId)
+      setCameraMeta({ deviceId: resolvedActiveDeviceId, label: activeLabel || '', decodeAttempts: 0 })
       logEvent('GET_USER_MEDIA_SUCCESS', { activeDeviceId, activeLabel, trackSettings })
 
       const video = videoRef.current
@@ -104,9 +109,19 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
       await video.play()
       logEvent('VIDEO_PLAY_SUCCESS', { paused: video.paused })
 
-      timeoutRef.current = window.setTimeout(() => {
+      timeoutRef.current = window.setTimeout(async () => {
         logEvent('SCAN_TIMEOUT_REACHED', { timeoutMs })
-        setCameraState({ status: 'not_found', message: 'Camera actief, maar nog geen barcode herkend. Houd de barcode dichterbij, vlakker en scherper in beeld of probeer handmatig invullen.' })
+        const cameras = devices.length ? devices : await listBarcodeVideoDevices().catch(() => [])
+        const currentDeviceId = activeDeviceId || preferredDeviceId || ''
+        const alternative = cameras.find((device) => device?.deviceId && device.deviceId !== currentDeviceId && !autoCameraAttemptedRef.current.has(device.deviceId))
+        if (alternative?.deviceId) {
+          autoCameraAttemptedRef.current.add(alternative.deviceId)
+          logEvent('AUTO_CAMERA_SWITCH', { fromDeviceId: currentDeviceId, toDeviceId: alternative.deviceId, toLabel: alternative.label || '' })
+          setCameraState({ status: 'loading', message: 'Nog geen barcode herkend. Inhuis probeert automatisch een andere camera…' })
+          await startScannerRef.current?.(alternative.deviceId)
+          return
+        }
+        setCameraState({ status: 'not_found', message: 'Camera actief, maar nog geen barcode herkend. Houd de barcode dichterbij, vlakker en scherper in beeld of vul de barcode handmatig in.' })
       }, timeoutMs)
 
       controlsRef.current = await startBarcodeDecoding({
@@ -161,6 +176,8 @@ export default function useBarcodeScanner({ onDetected = null, timeoutMs = 7000,
       setCameraState({ status: 'error', message: mapBarcodeCameraErrorToUserMessage(error) })
     }
   }, [logEvent, onDetected, screenContext, stopScanner, timeoutMs])
+
+  startScannerRef.current = startScanner
 
   const switchCamera = useCallback(async () => {
     const devices = availableCameras.length ? availableCameras : await listBarcodeVideoDevices().catch(() => [])
