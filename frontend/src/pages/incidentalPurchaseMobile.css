@@ -85,7 +85,7 @@
 
 .rz-mobile-incidental-purchase-recognized strong {
   font-size: var(--font-size-ui-title);
-  color: #005F6A;
+  color: var(--color-mobile-ui-primary);
 }
 
 .rz-mobile-incidental-purchase-recognized span {
