@@ -56,6 +56,15 @@ export default function MobileHomePage({ context, navigation, welcomeText = 'Fij
   const [openNotifications, setOpenNotifications] = useState(null)
   useEffect(() => { setOrder(readPersonalOrder(context)) }, [context?.user_id, context?.email])
   useEffect(() => {
+    const handleHomeBack = (event) => {
+      if (!editing) return
+      event.preventDefault()
+      setEditing(false)
+    }
+    window.addEventListener('inhuis:mobile-home-back', handleHomeBack)
+    return () => window.removeEventListener('inhuis:mobile-home-back', handleHomeBack)
+  }, [editing])
+  useEffect(() => {
     let active = true
     listHouseholdThreads('Open').then((payload) => { if (active) setOpenNotifications(Array.isArray(payload?.items) ? payload.items.length : 0) }).catch(() => { if (active) setOpenNotifications(null) })
     return () => { active = false }
@@ -69,7 +78,11 @@ export default function MobileHomePage({ context, navigation, welcomeText = 'Fij
   function move(key, direction) { persist(reorder(orderedTiles.map((tile) => tile.key), key, direction)) }
   const name = firstName(context) || 'gebruiker', primary = orderedTiles.slice(0, 4), more = orderedTiles.slice(4)
   if (editing) return <main className="rz-mobile-home" data-testid="mobile-home-reorder">
-    <header className="rz-mobile-home-edit-header"><button type="button" onClick={() => setEditing(false)}>Terug</button><strong>Volgorde aanpassen</strong><button type="button" onClick={() => setEditing(false)}>Gereed</button></header>
+    <MobileModuleHeader
+      title="Volgorde aanpassen"
+      testId="mobile-home-reorder-header"
+      trailingAction={<button type="button" className="rz-mobile-home-edit-done" onClick={() => setEditing(false)}>Gereed</button>}
+    />
     <section className="rz-mobile-home-inner"><p className="rz-mobile-home-intro">Bepaal zelf de volgorde van de acties op je startscherm. Deze volgorde wordt voor jou bewaard voor een volgende sessie op dit apparaat.</p>
       <div className="rz-mobile-home-reorder-list" aria-label="Volgorde acties">{orderedTiles.map((tile, index) => {
         const meta = META[tile.key] || { label: tile.label, icon: ACTION_ICONS.catalogus, tone: 'green' }
