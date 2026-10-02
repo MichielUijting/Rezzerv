@@ -1,9 +1,9 @@
 .rz-catalog-article-thumbnail {
-  flex: 0 0 73px;
+  flex: 0 0 52px;
   display: grid;
   place-items: center;
-  width: 73px;
-  height: 73px;
+  width: 52px;
+  height: 52px;
   border: 1px solid #d7e2da;
   border-radius: 10px;
   background: #ffffff;
@@ -77,4 +77,6 @@
   border-radius: var(--radius-md);
   background: #ffffff;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  transform: scale(1.4);
+  transform-origin: center;
 }
