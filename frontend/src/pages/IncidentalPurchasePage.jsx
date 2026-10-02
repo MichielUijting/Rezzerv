@@ -653,6 +653,16 @@ export default function IncidentalPurchasePage() {
                 playsInline
                 className="rz-mobile-incidental-purchase-camera-video"
               />
+              <div
+                className="rz-mobile-incidental-purchase-camera-status"
+                data-testid="mobile-incidental-purchase-camera-status"
+              >
+                <span>{purchaseCameraState.message || 'Camera actief. Barcode zoeken…'}</span>
+                <span>
+                  Scanpogingen: {purchaseCameraMeta.decodeAttempts}
+                  {purchaseCameraMeta.label ? ` · ${purchaseCameraMeta.label}` : ''}
+                </span>
+              </div>
               <div className="rz-mobile-incidental-purchase-camera-actions">
                 <Button type="button" variant="secondary" onClick={switchPurchaseBarcodeCamera} disabled={purchaseAvailableCameras.length < 2}>Camera wisselen</Button>
                 <Button type="button" variant="secondary" onClick={() => stopPurchaseBarcodeCamera(true, 'mobile-overlay-close')}>Sluiten</Button>
