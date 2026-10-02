@@ -158,12 +158,18 @@ export default function MobileKassa() {
 
   useEffect(() => {
     let cancelled = false
+    const requestedView = new URLSearchParams(window.location.search).get('view') || ''
     fetchJson('/api/household').then(async (household) => {
       if (cancelled) return
       const id = String(household?.active_household_id ?? household?.id ?? '')
       setHouseholdId(id)
       await loadReceipts(id)
-      if (!cancelled) await startCamera()
+      if (cancelled) return
+      if (requestedView === 'bonnen') {
+        setMode('list')
+        return
+      }
+      await startCamera()
     }).catch(() => { if (!cancelled) setCameraError('Kassa kon niet worden gestart.') })
     return () => {
       cancelled = true
