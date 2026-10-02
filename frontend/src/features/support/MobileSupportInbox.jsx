@@ -5,7 +5,7 @@ import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
 import { createHouseholdThread, listHouseholdThreads, listHouseholdNotifications, markHouseholdNotificationRead } from './supportApi.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
-import { isHouseholdFrontteamFromContext, readStoredAuthContext } from '../../lib/authSession.js'
+import { canCurrentUserPerform } from '../../lib/authSession.js'
 import './mobileSupportInbox.css'
 
 const FILTERS = [['all','Alles'],['messages','Berichten'],['inhuis','Inhuis']]
@@ -16,9 +16,9 @@ function stamp(value) {
   return date.toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function MobileSupportInbox({ onOpenThread }) {
+export default function MobileSupportInbox({ onOpenThread, authContext = null }) {
   const navigate = useNavigate()
-  const canMessageSuperuser = isHouseholdFrontteamFromContext(readStoredAuthContext())
+  const canMessageSuperuser = canCurrentUserPerform('platform.frontteam_messages.create', authContext)
   const [filter, setFilter] = useState('all')
   const [threads, setThreads] = useState([])
   const [notifications, setNotifications] = useState([])
@@ -85,7 +85,7 @@ export default function MobileSupportInbox({ onOpenThread }) {
       <main className="rz-mobile-support-content">
         <div className="rz-mobile-support-summary">
           <strong>{unreadCount} ongelezen</strong>
-          {canMessageSuperuser ? <Button type="button" variant="primary" onClick={() => setComposing(true)}>+ Nieuw bericht</Button> : null}
+          {canMessageSuperuser ? <Button type="button" variant="primary" onClick={() => setComposing(true)}>Nieuw bericht</Button> : null}
         </div>
         {composing && canMessageSuperuser ? (
           <form className="rz-mobile-support-compose" onSubmit={submitNew}>
