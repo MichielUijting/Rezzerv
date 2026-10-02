@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import { fetchHouseholdDashboard } from './dashboardApi.js'
 import './mobileHome.css'
@@ -32,7 +32,6 @@ function MiniBars({ values = [], format = (value) => String(value) }) {
 
 export default function DashboardDetailPage() {
   const { metric = '' } = useParams()
-  const navigate = useNavigate()
   const definition = METRICS[metric] || METRICS.aankopen
   const [dashboard, setDashboard] = useState(null)
   const [error, setError] = useState('')
@@ -79,7 +78,6 @@ export default function DashboardDetailPage() {
     <section className="rz-mobile-home-inner">
       {error ? <div role="alert" className="rz-dashboard-error">{error}</div> : null}
       {!dashboard && !error ? <p role="status">Dashboard laden…</p> : body}
-      <button type="button" className="rz-dashboard-detail-close" onClick={() => navigate('/home')}>Terug naar dashboard</button>
     </section>
   </main>
 }
