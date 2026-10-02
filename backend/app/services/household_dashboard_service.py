@@ -262,6 +262,186 @@ def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
     return int(kassa), int(unpack)
 
 
+
+def _month_shift(year: int, month: int, offset: int) -> tuple[int, int]:
+    absolute = year * 12 + (month - 1) + offset
+    return absolute // 12, absolute % 12 + 1
+
+
+def _comparison_series(
+    receipts: list[dict[str, Any]],
+    quantities: dict[str, float],
+    *,
+    now: datetime,
+    granularity: str,
+    metric: str,
+) -> list[dict[str, Any]]:
+    def row_value(row: dict[str, Any]) -> float:
+        if metric == "purchases":
+            return quantities.get(str(row.get("id") or ""), 0.0)
+        return _number(row.get("total_amount"))
+
+    points: list[dict[str, Any]] = []
+    if granularity == "days":
+        for offset in range(6, -1, -1):
+            current_day = (now - timedelta(days=offset)).date()
+            previous_day = current_day - timedelta(days=7)
+            current_value = sum(row_value(row) for row in receipts if row["_purchase_at"].date() == current_day)
+            previous_value = sum(row_value(row) for row in receipts if row["_purchase_at"].date() == previous_day)
+            points.append({
+                "label": current_day.strftime("%d-%m"),
+                "current": round(current_value, 2),
+                "previous": round(previous_value, 2),
+            })
+        return points
+
+    if granularity == "weeks":
+        current_monday = (now - timedelta(days=now.weekday())).date()
+        for offset in range(7, -1, -1):
+            start = current_monday - timedelta(weeks=offset)
+            end = start + timedelta(days=7)
+            previous_start = start - timedelta(weeks=8)
+            previous_end = previous_start + timedelta(days=7)
+            current_value = sum(
+                row_value(row)
+                for row in receipts
+                if start <= row["_purchase_at"].date() < end
+            )
+            previous_value = sum(
+                row_value(row)
+                for row in receipts
+                if previous_start <= row["_purchase_at"].date() < previous_end
+            )
+            points.append({
+                "label": f"W{start.isocalendar().week}",
+                "current": round(current_value, 2),
+                "previous": round(previous_value, 2),
+            })
+        return points
+
+    year, month = now.year, now.month
+    for offset in range(5, -1, -1):
+        current_year, current_month = _month_shift(year, month, -offset)
+        previous_year, previous_month = _month_shift(current_year, current_month, -6)
+        current_value = sum(
+            row_value(row)
+            for row in receipts
+            if row["_purchase_at"].year == current_year and row["_purchase_at"].month == current_month
+        )
+        previous_value = sum(
+            row_value(row)
+            for row in receipts
+            if row["_purchase_at"].year == previous_year and row["_purchase_at"].month == previous_month
+        )
+        label = datetime(current_year, current_month, 1, tzinfo=timezone.utc).strftime("%b")
+        points.append({
+            "label": label,
+            "current": round(current_value, 2),
+            "previous": round(previous_value, 2),
+        })
+    return points
+
+
+def _repeat_purchase_forecast(
+    receipts: list[dict[str, Any]],
+    article_details: dict[str, list[dict[str, Any]]],
+    *,
+    now: datetime,
+) -> dict[str, Any]:
+    cutoff = now - timedelta(days=180)
+    article_events: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+    for receipt in receipts:
+        if receipt["_purchase_at"] < cutoff or receipt["_purchase_at"] > now:
+            continue
+        receipt_id = str(receipt.get("id") or "")
+        purchase_date = receipt["_purchase_at"].date()
+        for article in article_details.get(receipt_id, []):
+            identity = (
+                article.get("household_article_id")
+                or article.get("global_product_id")
+                or str(article.get("label") or "").strip().lower()
+            )
+            if not identity:
+                continue
+            article_events[str(identity)].append({
+                "date": purchase_date,
+                "label": article.get("label") or "Artikel",
+                "amount": _number(article.get("line_total")),
+                "quantity": _number(article.get("quantity")) or 1.0,
+                "household_article_id": article.get("household_article_id"),
+                "global_product_id": article.get("global_product_id"),
+            })
+
+    horizon_end = (now + timedelta(days=28)).date()
+    forecast_items: list[dict[str, Any]] = []
+    weekly_totals = [0.0, 0.0, 0.0, 0.0]
+
+    for identity, events in article_events.items():
+        by_date: dict[Any, dict[str, Any]] = {}
+        for event in events:
+            day = event["date"]
+            aggregate = by_date.setdefault(day, {
+                **event,
+                "amount": 0.0,
+                "quantity": 0.0,
+            })
+            aggregate["amount"] += event["amount"]
+            aggregate["quantity"] += event["quantity"]
+        ordered = [by_date[day] for day in sorted(by_date)]
+        if len(ordered) < 2:
+            continue
+
+        intervals = [
+            (ordered[index]["date"] - ordered[index - 1]["date"]).days
+            for index in range(1, len(ordered))
+            if (ordered[index]["date"] - ordered[index - 1]["date"]).days > 0
+        ]
+        if not intervals:
+            continue
+        intervals.sort()
+        cadence_days = intervals[len(intervals) // 2]
+        if cadence_days < 2 or cadence_days > 120:
+            continue
+
+        positive_amounts = [event["amount"] for event in ordered if event["amount"] > 0]
+        expected_amount = round(sum(positive_amounts) / len(positive_amounts), 2) if positive_amounts else 0.0
+        expected_quantity = round(sum(event["quantity"] for event in ordered) / len(ordered), 2)
+        next_date = ordered[-1]["date"] + timedelta(days=cadence_days)
+        while next_date <= now.date():
+            next_date += timedelta(days=cadence_days)
+
+        representative = ordered[-1]
+        while next_date <= horizon_end:
+            days_ahead = (next_date - now.date()).days
+            week_index = min(3, max(0, days_ahead // 7))
+            weekly_totals[week_index] += expected_amount
+            forecast_items.append({
+                "identity": identity,
+                "label": representative["label"],
+                "expected_date": next_date.isoformat(),
+                "cadence_days": cadence_days,
+                "expected_amount": expected_amount,
+                "expected_quantity": expected_quantity,
+                "household_article_id": representative.get("household_article_id"),
+                "global_product_id": representative.get("global_product_id"),
+            })
+            next_date += timedelta(days=cadence_days)
+
+    forecast_items.sort(key=lambda item: (item["expected_date"], str(item["label"]).lower()))
+    weeks = [
+        {"week": index + 1, "value": round(value, 2)}
+        for index, value in enumerate(weekly_totals)
+    ]
+    return {
+        "total": round(sum(weekly_totals), 2),
+        "weeks": weeks,
+        "currency": "EUR",
+        "method": "Herhalingskoop op basis van het historische koopritme per artikel",
+        "items": forecast_items,
+    }
+
+
 def build_household_dashboard(
     conn: Connection,
     *,
@@ -307,9 +487,17 @@ def build_household_dashboard(
             store_visit_days.add(visit_key)
         item["spend"] = round(item["spend"] + _number(row.get("total_amount")), 2)
 
-    historical_spend = spend(history)
-    weekly_average = round(historical_spend / 8.0, 2) if history else 0.0
-    forecast_weeks = [{"week": index + 1, "value": weekly_average} for index in range(4)]
+    purchase_views = {
+        "days": _comparison_series(receipts, quantities, now=now, granularity="days", metric="purchases"),
+        "weeks": _comparison_series(receipts, quantities, now=now, granularity="weeks", metric="purchases"),
+        "months": _comparison_series(receipts, quantities, now=now, granularity="months", metric="purchases"),
+    }
+    spend_views = {
+        "days": _comparison_series(receipts, quantities, now=now, granularity="days", metric="spend"),
+        "weeks": _comparison_series(receipts, quantities, now=now, granularity="weeks", metric="spend"),
+        "months": _comparison_series(receipts, quantities, now=now, granularity="months", metric="spend"),
+    }
+    repeat_forecast = _repeat_purchase_forecast(receipts, article_details, now=now)
 
     kassa_count, unpack_count = _put_away_counts(conn, household_id)
     put_away_total = kassa_count + unpack_count
@@ -349,6 +537,7 @@ def build_household_dashboard(
             "previous": round(previous_articles, 2),
             "delta": round(current_articles - previous_articles, 2),
             "daily": daily_articles,
+            "views": purchase_views,
             "receipts": current_receipts,
         },
         "spend": {
@@ -356,6 +545,7 @@ def build_household_dashboard(
             "previous": previous_spend,
             "delta": round(current_spend - previous_spend, 2),
             "daily": daily_spend,
+            "views": spend_views,
             "currency": "EUR",
             "receipts": current_receipts,
         },
@@ -365,10 +555,7 @@ def build_household_dashboard(
             "items": sorted(stores.values(), key=lambda item: (-item["visits"], item["name"].lower())),
         },
         "forecast": {
-            "total": round(weekly_average * 4, 2),
-            "weeks": forecast_weeks,
-            "currency": "EUR",
-            "method": "Gemiddelde uitgaven van de afgelopen 8 weken",
+            **repeat_forecast,
             "basis_receipts": history_receipts,
         },
         "generated_at": now.isoformat(),
