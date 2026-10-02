@@ -296,7 +296,13 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
-    personal_frontteam_household_id = resolve_frontteam_personal_household_id(conn, user_id)
+    mapped_frontteam_household_id = resolve_frontteam_personal_household_id(conn, user_id)
+    canonical_frontteam_household_id = frontteam_personal_household_id(user_id)
+    row_household_ids = {str(row.get("household_id") or "") for row in resolved_rows}
+    personal_frontteam_household_id = (
+        mapped_frontteam_household_id
+        or (canonical_frontteam_household_id if canonical_frontteam_household_id in row_household_ids else None)
+    )
     resolved_rows.sort(
         key=lambda row: (
             0 if (
