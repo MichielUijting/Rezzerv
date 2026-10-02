@@ -24,9 +24,9 @@ import './settingsHousehold.css'
 const initialInvitationForm = { email: '' }
 
 const ROLE_LABELS = {
-  'household.viewer': 'Kijker (bestaande rol)',
-  'household.member': 'Lid',
-  'household.advanced_member': 'Geavanceerd lid (bestaande rol)',
+  'household.viewer': 'Gebruiker',
+  'household.member': 'Gebruiker',
+  'household.advanced_member': 'Beheerder',
   'household.admin': 'Beheerder',
   'household.owner': 'Superuser',
 }
