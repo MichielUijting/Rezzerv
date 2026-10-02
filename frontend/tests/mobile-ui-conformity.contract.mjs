@@ -185,3 +185,10 @@ assert.match(
 assert.doesNotMatch(mobileInventoryCss, /rz-mobile-inventory-quick-feedback|rz-mobile-inventory-topbar|rz-mobile-inventory-bottom-nav/)
 
 console.log('MOBILE_UI_CONFORMITY_GREEN')
+
+assert.match(mobileAppChromeSource, /inhuis:mobile-home-back/)
+assert.match(mobileHomeSource, /mobile-home-reorder-header/)
+assert.match(mobileHomeSource, /rz-mobile-home-edit-done/)
+assert.doesNotMatch(mobileHomeSource, /rz-mobile-home-edit-header/)
+assert.match(mobileComponentsCss, /min-width:\s*56px/)
+assert.match(mobileAppChromeCss, /left:\s*8px/)
