@@ -491,10 +491,8 @@ def revoke_special_role(
                 raise PlatformAuthorizationConflictError(
                     "Frontteam-persoonlijk huishouden wijkt af van canonieke identiteit"
                 )
-            conn.execute(text(f"""
-                DELETE FROM {FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE}
-                WHERE user_id = :user_id
-            """), {"user_id": target_user_id})
+        # Bewaar de 1-op-1 mapping als provenance. Deactiveren trekt alleen
+        # Frontteam-authority in en mag de reguliere logincontext niet wijzigen.
 
     write_authorization_audit(
         conn,
