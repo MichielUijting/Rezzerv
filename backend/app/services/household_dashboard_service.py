@@ -650,7 +650,7 @@ def build_household_dashboard(
 
     kassa_count, unpack_count = _put_away_counts(conn, household_id)
     put_away_total = kassa_count + unpack_count
-    put_away_route = "/kassa" if kassa_count > 0 else "/kassabonnen"
+    put_away_route = "/kassa?view=bonnen" if put_away_total > 0 else "/kassa?view=bonnen"
 
     current_articles = article_count(current)
     previous_articles = article_count(previous)
