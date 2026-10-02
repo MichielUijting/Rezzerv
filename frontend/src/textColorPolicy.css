@@ -87,6 +87,10 @@ button[style*='color:'] {
 .rz-btn--primary,
 .rz-btn--primary *,
 .btn-primary,
-.btn-primary * {
+.btn-primary *,
+.rz-button-primary,
+.rz-button-primary *,
+.rz-button-secondary,
+.rz-button-secondary * {
   color: #ffffff !important;
 }
