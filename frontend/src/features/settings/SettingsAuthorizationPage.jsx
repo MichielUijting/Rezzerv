@@ -6,7 +6,7 @@ import { fetchAuthorizationOverview } from './services/authorizationMembershipSe
 import './settingsAuthorization.css'
 
 const ROLE_LABELS = {
-  'household.member': 'Lid',
+  'household.member': 'Gebruiker',
   'household.admin': 'Beheerder',
   'household.owner': 'Superuser',
 }
