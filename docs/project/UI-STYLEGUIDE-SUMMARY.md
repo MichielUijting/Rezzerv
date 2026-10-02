@@ -176,9 +176,9 @@ Op ieder beveiligd mobiel scherm staat de feedbackoverlay boven de vaste `Mobile
 
 Voor artikelpresentatie en mobiel scannen geldt aanvullend:
 
-- de gedeelde artikelthumbnail gebruikt circa **73 × 73 px**; compacte Catalogusbeelden circa **67 × 67 px**;
+- de artikelfoto's in lijsten behouden hun bestaande compacte afmetingen; de 40%-vergroting geldt **niet** voor de lijstweergave;
 - een beschikbare artikelfoto is overal waar de gedeelde artikelbeeldcomponent wordt gebruikt aanklikbaar en opent een schermvullende overlay; een volgende klik/tap sluit de overlay;
-- de overlay gebruikt een donkere achtergrond en toont de afbeelding passend binnen de viewport zonder vervorming;
+- de foto in die overlay wordt circa **40% groter** weergegeven dan de eerdere overlaypresentatie; de donkere overlayachtergrond en onvervormde beeldverhouding blijven behouden;
 - de centrale mobiele **Terug**-knop blijft de enige terugbediening in de app-chrome, is compact en staat links in de header; schermen bouwen geen tweede concurrerende Terug-knop;
 - wanneer live barcodecamera in een mobiele browser niet beschikbaar is of faalt, blijft de scanactie herstelbaar via de native camera-/fotokeuze van het apparaat;
 - op de mobiele startpagina wordt **Meldingen** niet als extra losse actiekaart gedupliceerd wanneer het aparte meldingenoverzicht bovenaan al doorklikbaar aanwezig is; Meldingen blijft wel beschikbaar voor de centrale onderste actiebalk.
