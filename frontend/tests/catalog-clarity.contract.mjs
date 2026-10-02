@@ -36,7 +36,7 @@ assert.match(catalogSource, /className="rz-table-filters rz-external-databases-f
 assert.match(catalogGpcSource, /DelayedTableLoadingOverlay active=\{loading \|\| checking \|\| searchingBricks \|\| saving\}/)
 assert.match(catalogCss, /\.rz-catalog-col-kind\s*\{\s*width:/)
 assert.match(catalogCss, /\.rz-catalog-filler-row\s*\{[\s\S]*pointer-events:\s*none/)
-assert.match(catalogCss, /\.rz-catalog-table-wrapper\s*\{[\s\S]*--rz-table-body-row-height:\s*72px/)
+assert.match(catalogCss, /\.rz-catalog-table-wrapper\s*\{[\s\S]*--rz-table-body-row-height:\s*52px/)
 assert.match(catalogCss, /\.rz-catalog-table-wrapper\s*\{[\s\S]*var\(--rz-table-body-row-height\) \* 10/)
 assert.match(tokensCss, /--color-ui-primary-text:\s*#FFFFFF/i)
 assert.match(themeCss, /\.rz-header \.rz-header-title,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
