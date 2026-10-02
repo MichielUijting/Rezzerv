@@ -199,6 +199,12 @@ IP_OWNER_PERMISSIONS = (
     | {"platform.special_roles.manage"}
 )
 
+# Productfase vanaf 2 oktober 2026: Superuser en IP-eigenaar zijn één
+# gebruikerszichtbare hoogste rol. De legacy platform.ip_owner key blijft
+# technisch bestaan voor compatibiliteit, maar beide grantsets zijn gelijk.
+ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS = set(IP_OWNER_PERMISSIONS)
+ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS = ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS
+
 ROLE_PERMISSIONS = {
     "household.viewer": {key for key in HOUSEHOLD_PERMISSIONS if key.endswith(".view")},
     "household.member": set(MEMBER_PERMISSIONS),
