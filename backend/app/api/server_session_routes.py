@@ -40,6 +40,7 @@ from app.services.frontteam_household_provisioning import (
     LEGACY_FRONTTEAM_HOUSEHOLD_ID,
     FRONTTEAM_PLATFORM_ROLE,
     ensure_frontteam_household_for_session_runtime,
+    frontteam_personal_household_id,
     resolve_frontteam_personal_household_id,
 )
 from app.services.system_superuser_session_provisioning import (
