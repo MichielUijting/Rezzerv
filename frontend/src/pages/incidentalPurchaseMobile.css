@@ -95,6 +95,13 @@
   background: #000000;
 }
 
+.rz-mobile-incidental-purchase-camera-status {
+  display: grid;
+  gap: 4px;
+  color: #000000;
+  font-size: var(--font-size-ui-body);
+}
+
 .rz-mobile-incidental-purchase-camera-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
