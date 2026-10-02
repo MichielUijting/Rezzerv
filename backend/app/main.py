@@ -112,6 +112,10 @@ from app.services.unpacking_household_object_guard import (
 from app.services.household_alias_policy import install_household_alias_policy
 from app.services.household_representative_image_service import (
     backfill_household_representative_images,
+    materialize_household_representative_images,
+)
+from app.services.catalog_product_image_backfill_service import (
+    backfill_catalog_product_images_from_enrichments,
 )
 from app.services.household_product_configuration_service import (
     public_household_product_configuration_payload,
@@ -1527,6 +1531,10 @@ def sync_global_product_from_enrichment(conn, global_product_id: str | None, enr
             category = COALESCE(:category, category),
             size_value = COALESCE(:size_value, size_value),
             size_unit = COALESCE(:size_unit, size_unit),
+            image_url = COALESCE(
+                NULLIF(trim(image_url), ''),
+                NULLIF(trim(CAST(:image_url AS TEXT)), '')
+            ),
             source = COALESCE(:source, source),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = :global_product_id
@@ -1538,6 +1546,7 @@ def sync_global_product_from_enrichment(conn, global_product_id: str | None, enr
         'category': (enrichment or {}).get('category'),
         'size_value': (enrichment or {}).get('size_value'),
         'size_unit': (enrichment or {}).get('size_unit'),
+        'image_url': normalize_optional_text_field((enrichment or {}).get('image_url')),
         'source': normalize_global_product_source((enrichment or {}).get('source_name')),
     })
 
@@ -5542,6 +5551,9 @@ def upsert_global_product_enrichment(conn, global_product_id: str, enrichment: d
         ), {'id': str(uuid.uuid4()), **params})
     sync_global_product_from_enrichment(conn, global_product_id, {**enrichment, 'source_name': source_name})
     apply_enrichment_defaults_to_linked_household_articles(conn, global_product_id, enrichment)
+    linked_household_article_ids = get_household_article_ids_for_global_product(conn, global_product_id)
+    if linked_household_article_ids and normalize_optional_text_field(enrichment.get('image_url')):
+        materialize_household_representative_images(conn, linked_household_article_ids)
     write_product_enrichment_audit(conn, sentinel_household_article_id, source_name, 'lookup', 'found', payload_hash=payload_hash, normalized_barcode=resolved_barcode, source_request_key=f"{source_name}:{resolved_barcode}" if resolved_barcode else source_name, http_status=(audit_result.http_status if audit_result else None), response_excerpt=(audit_result.response_excerpt if audit_result else None), global_product_id=str(global_product_id))
     return get_latest_global_product_enrichment(conn, global_product_id)
 
@@ -13271,6 +13283,12 @@ run_runtime_initialization(
     ensure_default_receipt_sources=ensure_default_receipt_sources,
     dedupe_receipts_for_household=dedupe_receipts_for_household,
     receipt_storage_root=RECEIPT_STORAGE_ROOT,
+)
+
+catalog_image_backfill_count = backfill_catalog_product_images_from_enrichments(engine)
+logger.info(
+    "Catalogusfoto's terugwerkend uit opgeslagen productverrijking gevuld: %s",
+    catalog_image_backfill_count,
 )
 
 representative_image_backfill_count = backfill_household_representative_images(engine)
