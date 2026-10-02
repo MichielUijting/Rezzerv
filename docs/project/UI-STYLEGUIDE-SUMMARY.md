@@ -48,8 +48,11 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 - daaronder staan informatiegerichte dashboardtegels voor **Gekochte artikelen**, **Uitgaven**, **Bezochte winkels** en **Begrote uitgaven**;
 - dashboardtegels tonen een kernwaarde, korte vergelijking/context en een compacte grafische weergave;
 - boven de grafieken staat één compacte schakelaar **Dagen / Weken / Maanden**; Dagen vergelijkt de laatste 7 dagen met de 7 dagen daarvoor, Weken vergelijkt 8 weken met de 8 weken daarvoor en Maanden vergelijkt 6 maanden met de 6 maanden daarvoor;
+- **alle vier dashboardtegels** reageren op die periodekeuze: aankopen, uitgaven en winkelbezoeken wisselen hun historische periode/vergelijking mee; de begroting toont de overeenkomstige toekomstige horizon (7 dagen, 4 weken of 6 maanden);
 - vergelijkingsgrafieken tonen een zichtbare verticale waarde-as; de actuele periode gebruikt de primaire donkergroene kleur en de vorige periode een lichtgroene vergelijkingskleur;
 - **Begrote uitgaven** wordt niet afgeleid van een simpel historisch weekgemiddelde, maar van verwachte **herhalingskoop** per artikel op basis van het historische koopritme en het verwachte volgende koopmoment;
+- de status **Nog opbergen** opent rechtstreeks **Kassa > Bonnen** en niet de camera;
+- de globale onderste actie **Meer** opent een apart overzicht met de overige beschikbare hoofdfuncties die niet al als recente acties onderin staan;
 - een klik op een dashboardtegel opent een consistente drill-down met meer detail;
 - de dashboardtegels gebruiken de centrale primaire kleur, witte surfaces, `--radius-md` en uitsluitend de twee centrale tekstgroottes;
 - de landingspagina toont niet daarnaast opnieuw grote actiekaarten voor Voorraad, Boodschappen, Kassa, Uitpakken, Catalogus en andere hoofdmodules;
