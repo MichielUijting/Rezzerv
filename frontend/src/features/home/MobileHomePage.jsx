@@ -3,7 +3,7 @@ import { listHouseholdThreads } from '../support/supportApi.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import './mobileHome.css'
 
-const DEFAULT_ORDER = ['berichten', 'kassa', 'kassabonnen', 'winkelen', 'voorraad', 'bijna-op', 'catalogus', 'meldingen']
+const DEFAULT_ORDER = ['berichten', 'kassa', 'kassabonnen', 'winkelen', 'voorraad', 'bijna-op', 'catalogus']
 const ACTION_ICONS = {
   berichten: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="13" width="50" height="38" rx="6" fill="#ffffff" stroke="currentColor" strokeWidth="3"/><path d="M10 18l22 18 22-18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/></svg>,
   kassa: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><path fill="#455a64" d="M10 31h44l5 25H5z"/><rect x="16" y="10" width="32" height="20" rx="5" fill="#90a4ae"/><rect x="21" y="14" width="22" height="9" rx="2" fill="#b2f2e9"/><rect x="26" y="34" width="24" height="14" rx="3" fill="#cfd8dc"/><g fill="#ff9f43"><circle cx="31" cy="39" r="2.5"/><circle cx="38" cy="39" r="2.5"/><circle cx="45" cy="39" r="2.5"/><circle cx="31" cy="45" r="2.5"/><circle cx="38" cy="45" r="2.5"/><circle cx="45" cy="45" r="2.5"/></g><rect x="14" y="50" width="36" height="4" rx="2" fill="#263238"/></svg>,
@@ -48,6 +48,7 @@ export default function MobileHomePage({ context, navigation, welcomeText = 'Fij
   const availableTiles = useMemo(() => {
     const map = new Map([...navigation.primaryTiles, ...navigation.moreTiles].filter((tile) => tile?.clickable).map((tile) => [tile.key, tile]))
     map.delete('locaties')
+    map.delete('meldingen')
     return [...map.values()]
   }, [navigation])
   const availableKeys = useMemo(() => availableTiles.map((tile) => tile.key), [availableTiles])
