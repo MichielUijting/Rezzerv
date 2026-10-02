@@ -47,9 +47,21 @@ def _columns(conn: Connection, table_name: str) -> set[str]:
 def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, Any]]:
     if "receipt_tables" not in _tables(conn):
         return []
-    rows = conn.execute(text("""
-        SELECT id, store_name, store_branch, purchase_at, total_amount, currency,
-               parse_status, workflow_state, approved_at, created_at
+    columns = _columns(conn, "receipt_tables")
+    required = {"id", "household_id", "created_at"}
+    if not required.issubset(columns):
+        return []
+
+    optional = (
+        "store_name", "store_branch", "purchase_at", "total_amount", "currency",
+        "parse_status", "workflow_state", "approved_at",
+    )
+    projection = ["id", "created_at"] + [
+        column if column in columns else f"NULL AS {column}"
+        for column in optional
+    ]
+    rows = conn.execute(text(f"""
+        SELECT {", ".join(projection)}
         FROM receipt_tables
         WHERE household_id = :household_id
     """), {"household_id": str(household_id)}).mappings().all()
@@ -58,10 +70,11 @@ def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, An
     for row in rows:
         parse_status = str(row.get("parse_status") or "").strip().lower()
         workflow_state = str(row.get("workflow_state") or "active").strip().lower()
-        if workflow_state in {"archived", "deleted", "removed"}:
+        if workflow_state in {"archived", "deleted", "removed", "legacy_deleted", "removed_reimport_allowed"}:
             continue
-        if not row.get("approved_at") and parse_status not in {"approved", "approved_override"}:
-            continue
+        if "approved_at" in columns or "parse_status" in columns:
+            if not row.get("approved_at") and parse_status not in {"approved", "approved_override"}:
+                continue
         purchase_at = _to_datetime(row.get("purchase_at")) or _to_datetime(row.get("created_at"))
         if not purchase_at:
             continue
@@ -76,8 +89,15 @@ def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, An
 def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]:
     if "receipt_table_lines" not in _tables(conn) or "receipt_tables" not in _tables(conn):
         return {}
-    rows = conn.execute(text("""
-        SELECT rtl.receipt_table_id, rtl.quantity
+    receipt_columns = _columns(conn, "receipt_tables")
+    line_columns = _columns(conn, "receipt_table_lines")
+    if not {"id", "household_id"}.issubset(receipt_columns):
+        return {}
+    if not {"receipt_table_id"}.issubset(line_columns):
+        return {}
+    quantity_expr = "rtl.quantity" if "quantity" in line_columns else "1"
+    rows = conn.execute(text(f"""
+        SELECT rtl.receipt_table_id, {quantity_expr} AS quantity
         FROM receipt_table_lines rtl
         JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
         WHERE rt.household_id = :household_id
