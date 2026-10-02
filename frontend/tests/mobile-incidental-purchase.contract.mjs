@@ -40,4 +40,22 @@ assert.match(css, /font-size:\s*var\(--font-size-ui-body\)/)
 assert.match(css, /grid-template-columns:\s*1fr 1fr/)
 assert.doesNotMatch(css, /font-size:\s*(12|13|15|17|18|20|22)px/)
 
+assert.match(source, /data-testid="mobile-incidental-purchase-recognized"/)
+
+assert.match(source, /data-testid="mobile-incidental-purchase-manual-toggle"/)
+
+assert.match(source, /data-testid="mobile-incidental-purchase-additional-toggle"/)
+
+assert.match(source, /recognizedBarcodeProduct/)
+
+assert.match(source, />Opnieuw scannen<|\? 'Opnieuw scannen'/)
+
+assert.match(scanner, /width: \{ ideal: 2560 \}/)
+
+assert.match(scanner, /height: \{ ideal: 1440 \}/)
+
+assert.match(scanner, /facingMode: \{ exact: 'environment' \}/)
+
+assert.doesNotMatch(scanner, /advanced\.push\(\{ zoom:/)
+
 console.log('MOBILE_INCIDENTAL_PURCHASE_CONTRACT_GREEN')
