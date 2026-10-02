@@ -92,7 +92,7 @@ function ComparisonChart({ points = [], currency = false }) {
 function ForecastChart({ values = [] }) {
   const max = Math.max(1, ...values.map((item) => Number(item.value || 0)))
   const middle = max / 2
-  return <div className="rz-dashboard-comparison-chart rz-dashboard-forecast-chart" aria-label="Begrote uitgaven per week">
+  return <div className="rz-dashboard-comparison-chart rz-dashboard-forecast-chart" aria-label="Begrote uitgaven">
     <div className="rz-dashboard-y-axis" aria-hidden="true">
       <span>{compactAxis(max, true)}</span>
       <span>{compactAxis(middle, true)}</span>
@@ -104,7 +104,7 @@ function ForecastChart({ values = [] }) {
       <div className="rz-dashboard-gridline rz-dashboard-gridline--base" />
       <div className="rz-dashboard-comparison-bars">
         {values.map((item, index) => (
-          <div className="rz-dashboard-comparison-group" key={item.week || index}>
+          <div className="rz-dashboard-comparison-group" key={item.label || item.week || index}>
             <div className="rz-dashboard-comparison-pair rz-dashboard-comparison-pair--single">
               <span
                 className="rz-dashboard-bar rz-dashboard-bar--current"
@@ -112,7 +112,7 @@ function ForecastChart({ values = [] }) {
                 style={{ height: Math.max(3, Math.round((Number(item.value || 0) / max) * 100)) + '%' }}
               />
             </div>
-            <small>W{item.week}</small>
+            <small>{item.label || ('W' + item.week)}</small>
           </div>
         ))}
       </div>
@@ -160,6 +160,19 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     const purchasePrevious = sumSeries(purchasePoints, 'previous')
     const spendCurrent = sumSeries(spendPoints, 'current')
     const spendPrevious = sumSeries(spendPoints, 'previous')
+    const storeView = dashboard.stores?.views?.[periodKey] || {
+      current: { unique: dashboard.stores?.unique || 0, visits: dashboard.stores?.visits || 0 },
+      previous: { unique: 0, visits: 0 },
+      points: [],
+    }
+    const forecastPoints = dashboard.forecast?.views?.[periodKey]
+      || (dashboard.forecast?.weeks || []).map((item) => ({ label: 'W' + item.week, value: item.value }))
+    const forecastTotal = forecastPoints.reduce((total, item) => total + Number(item.value || 0), 0)
+    const forecastPeriodLabel = periodKey === 'days'
+      ? 'komende 7 dagen'
+      : periodKey === 'weeks'
+        ? 'komende 4 weken'
+        : 'komende 6 maanden'
 
     return [
       {
@@ -179,16 +192,16 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
       {
         key: 'winkels',
         title: 'Bezochte winkels',
-        value: numberLabel(dashboard.stores.unique) + ' winkels',
-        detail: numberLabel(dashboard.stores.visits) + ' winkelbezoek' + (dashboard.stores.visits === 1 ? '' : 'en') + ' in 7 dagen',
-        chart: <div className="rz-dashboard-store-preview">{(dashboard.stores.items || []).slice(0, 3).map((item) => <span key={item.name}>{item.name} · {item.visits}</span>)}</div>,
+        value: numberLabel(storeView.current.unique) + ' winkels',
+        detail: numberLabel(storeView.current.visits) + ' bezoeken · ' + deltaText(storeView.current.visits, storeView.previous.visits, numberLabel, period),
+        chart: <ComparisonChart points={storeView.points || []} />,
       },
       {
         key: 'begroting',
         title: 'Begrote uitgaven',
-        value: euro(dashboard.forecast.total),
-        detail: 'herhalingskoop verwacht in de komende 4 weken',
-        chart: <ForecastChart values={dashboard.forecast.weeks} />,
+        value: euro(forecastTotal),
+        detail: 'herhalingskoop verwacht in de ' + forecastPeriodLabel,
+        chart: <ForecastChart values={forecastPoints} />,
       },
     ]
   }, [dashboard, periodKey, period])
@@ -196,8 +209,8 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
   function openStatus(key) {
     if (key === 'meldingen') return onOpenTile({ key: 'meldingen', clickable: true })
     if (key === 'winkelen') return onOpenTile({ key: 'winkelen', clickable: true })
-    const routeKey = dashboard?.status?.put_away_route === '/kassa' ? 'kassa' : 'kassabonnen'
-    return onOpenTile({ key: routeKey, clickable: true })
+    if (key === 'opbergen') return navigate('/kassa?view=bonnen')
+    return onOpenTile({ key: 'kassabonnen', clickable: true })
   }
 
   return <main className="rz-mobile-home" data-testid="mobile-home-page">
