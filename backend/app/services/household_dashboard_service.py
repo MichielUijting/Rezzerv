@@ -34,6 +34,16 @@ def _number(value: Any) -> float:
         return 0.0
 
 
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float, Decimal)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "t", "yes", "on"}
+
+
 def _tables(conn: Connection) -> set[str]:
     return set(inspect(conn).get_table_names())
 
@@ -44,104 +54,106 @@ def _columns(conn: Connection, table_name: str) -> set[str]:
     return {str(column.get("name") or "") for column in inspect(conn).get_columns(table_name)}
 
 
-def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, Any]]:
-    if "receipt_tables" not in _tables(conn):
+def _all_rows(conn: Connection, table_name: str) -> list[dict[str, Any]]:
+    if table_name not in _tables(conn):
         return []
+    return [dict(row) for row in conn.execute(text(f'SELECT * FROM "{table_name}"')).mappings().all()]
+
+
+def _household_rows(conn: Connection, table_name: str, household_id: str) -> list[dict[str, Any]]:
+    columns = _columns(conn, table_name)
+    if "household_id" not in columns:
+        return []
+    rows = conn.execute(
+        text(f'SELECT * FROM "{table_name}" WHERE CAST(household_id AS TEXT) = :household_id'),
+        {"household_id": str(household_id)},
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def _active_receipt_rows(conn: Connection, household_id: str, *, approved_only: bool) -> list[dict[str, Any]]:
+    rows = _household_rows(conn, "receipt_tables", household_id)
     columns = _columns(conn, "receipt_tables")
-    required = {"id", "household_id", "created_at"}
-    if not required.issubset(columns):
-        return []
-
-    optional = (
-        "store_name", "store_branch", "purchase_at", "total_amount", "currency",
-        "parse_status", "workflow_state", "approved_at", "deleted_at",
-    )
-    projection = ["id", "created_at"] + [
-        column if column in columns else f"NULL AS {column}"
-        for column in optional
-    ]
-    rows = conn.execute(text(f"""
-        SELECT {", ".join(projection)}
-        FROM receipt_tables
-        WHERE household_id = :household_id
-    """), {"household_id": str(household_id)}).mappings().all()
-
-    approved = []
+    result: list[dict[str, Any]] = []
     for row in rows:
-        parse_status = str(row.get("parse_status") or "").strip().lower()
-        workflow_state = str(row.get("workflow_state") or "active").strip().lower()
-        if row.get("deleted_at") is not None:
+        if "deleted_at" in columns and row.get("deleted_at") is not None:
             continue
+        workflow_state = str(row.get("workflow_state") or "active").strip().lower()
         if workflow_state in {"archived", "deleted", "removed", "legacy_deleted", "removed_reimport_allowed"}:
             continue
-        if "approved_at" in columns or "parse_status" in columns:
+        if approved_only and ("approved_at" in columns or "parse_status" in columns):
+            parse_status = str(row.get("parse_status") or "").strip().lower()
             if not row.get("approved_at") and parse_status not in {"approved", "approved_override"}:
                 continue
         purchase_at = _to_datetime(row.get("purchase_at")) or _to_datetime(row.get("created_at"))
         if not purchase_at:
             continue
-        approved.append({
-            **dict(row),
+        result.append({
+            **row,
             "_purchase_at": purchase_at,
             "_store": str(row.get("store_name") or row.get("store_branch") or "Onbekende winkel").strip() or "Onbekende winkel",
         })
-    return approved
+    return result
+
+
+def _eligible_receipt_lines(conn: Connection, household_id: str) -> list[dict[str, Any]]:
+    receipt_rows = _active_receipt_rows(conn, household_id, approved_only=False)
+    receipt_ids = {str(row.get("id") or "") for row in receipt_rows}
+    if not receipt_ids or "receipt_table_lines" not in _tables(conn):
+        return []
+
+    columns = _columns(conn, "receipt_table_lines")
+    if "receipt_table_id" not in columns:
+        return []
+
+    result: list[dict[str, Any]] = []
+    for row in _all_rows(conn, "receipt_table_lines"):
+        if str(row.get("receipt_table_id") or "") not in receipt_ids:
+            continue
+        if "is_deleted" in columns and _truthy(row.get("is_deleted")):
+            continue
+        if "inventory_eligible" in columns:
+            if not _truthy(row.get("inventory_eligible")):
+                continue
+        elif "line_role" in columns:
+            if str(row.get("line_role") or "product").strip().lower() != "product":
+                continue
+        result.append(row)
+    return result
+
+
+def _approved_receipts(conn: Connection, household_id: str) -> list[dict[str, Any]]:
+    return _active_receipt_rows(conn, household_id, approved_only=True)
+
+
+def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]:
+    totals: dict[str, float] = defaultdict(float)
+    for row in _eligible_receipt_lines(conn, household_id):
+        quantity = _number(row.get("quantity"))
+        totals[str(row.get("receipt_table_id") or "")] += quantity if quantity > 0 else 1.0
+    return dict(totals)
 
 
 def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, list[dict[str, Any]]]:
-    if "receipt_table_lines" not in _tables(conn) or "receipt_tables" not in _tables(conn):
-        return {}
-    receipt_columns = _columns(conn, "receipt_tables")
-    line_columns = _columns(conn, "receipt_table_lines")
-    if not {"id", "household_id"}.issubset(receipt_columns) or "receipt_table_id" not in line_columns:
-        return {}
-
-    label_candidates = [
-        column for column in ("corrected_raw_label", "normalized_label", "raw_label")
-        if column in line_columns
-    ]
-    label_expr = "COALESCE(" + ", ".join(f"NULLIF(TRIM(rtl.{column}), '')" for column in label_candidates) + ", 'Artikel')" if label_candidates else "'Artikel'"
-    quantity_expr = "rtl.quantity" if "quantity" in line_columns else "1"
-    unit_expr = "rtl.unit" if "unit" in line_columns else "NULL"
-    total_expr = "rtl.line_total" if "line_total" in line_columns else "NULL"
-    article_expr = "rtl.matched_article_id" if "matched_article_id" in line_columns else "NULL"
-    product_expr = "rtl.matched_global_product_id" if "matched_global_product_id" in line_columns else "NULL"
-    line_id_expr = "rtl.id" if "id" in line_columns else "NULL"
-
-    filters = ["rt.household_id = :household_id"]
-    if "is_deleted" in line_columns:
-        filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
-    if "inventory_eligible" in line_columns:
-        filters.append("lower(trim(CAST(rtl.inventory_eligible AS TEXT))) IN ('1', 'true', 't', 'yes', 'on')")
-    elif "line_role" in line_columns:
-        filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
-
-    rows = conn.execute(text(f"""
-        SELECT rtl.receipt_table_id,
-               {line_id_expr} AS line_id,
-               {label_expr} AS label,
-               {quantity_expr} AS quantity,
-               {unit_expr} AS unit,
-               {total_expr} AS line_total,
-               {article_expr} AS household_article_id,
-               {product_expr} AS global_product_id
-        FROM receipt_table_lines rtl
-        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-        WHERE {" AND ".join(filters)}
-        ORDER BY rtl.receipt_table_id, {label_expr}
-    """), {"household_id": str(household_id)}).mappings().all()
-
+    columns = _columns(conn, "receipt_table_lines")
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
+    for row in _eligible_receipt_lines(conn, household_id):
+        label = "Artikel"
+        for column in ("corrected_raw_label", "normalized_label", "raw_label", "article_name"):
+            if column in columns and str(row.get(column) or "").strip():
+                label = str(row.get(column)).strip()
+                break
         grouped[str(row.get("receipt_table_id") or "")].append({
-            "line_id": row.get("line_id"),
-            "label": str(row.get("label") or "Artikel"),
+            "line_id": row.get("id"),
+            "label": label,
             "quantity": _number(row.get("quantity")) or 1.0,
             "unit": row.get("unit"),
             "line_total": round(_number(row.get("line_total")), 2) if row.get("line_total") is not None else None,
-            "household_article_id": row.get("household_article_id"),
-            "global_product_id": row.get("global_product_id"),
+            "household_article_id": row.get("matched_article_id") or row.get("household_article_id"),
+            "global_product_id": row.get("matched_global_product_id") or row.get("global_product_id"),
         })
+    for items in grouped.values():
+        items.sort(key=lambda item: str(item.get("label") or "").lower())
     return dict(grouped)
 
 
@@ -160,151 +172,103 @@ def _receipt_detail(row: dict[str, Any], article_details: dict[str, list[dict[st
     }
 
 
-def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]:
-    if "receipt_table_lines" not in _tables(conn) or "receipt_tables" not in _tables(conn):
-        return {}
-    receipt_columns = _columns(conn, "receipt_tables")
-    line_columns = _columns(conn, "receipt_table_lines")
-    if not {"id", "household_id"}.issubset(receipt_columns):
-        return {}
-    if not {"receipt_table_id"}.issubset(line_columns):
-        return {}
-    quantity_expr = "rtl.quantity" if "quantity" in line_columns else "1"
-    filters = ["rt.household_id = :household_id"]
-    if "is_deleted" in line_columns:
-        filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
-    if "inventory_eligible" in line_columns:
-        filters.append("lower(trim(CAST(rtl.inventory_eligible AS TEXT))) IN ('1', 'true', 't', 'yes', 'on')")
-    elif "line_role" in line_columns:
-        filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
-    rows = conn.execute(text(f"""
-        SELECT rtl.receipt_table_id, {quantity_expr} AS quantity
-        FROM receipt_table_lines rtl
-        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-        WHERE {" AND ".join(filters)}
-    """), {"household_id": str(household_id)}).mappings().all()
-    totals: dict[str, float] = defaultdict(float)
-    for row in rows:
-        quantity = _number(row.get("quantity"))
-        totals[str(row.get("receipt_table_id") or "")] += quantity if quantity > 0 else 1.0
-    return dict(totals)
-
-
 def _shopping_count(conn: Connection, household_id: str) -> int:
-    tables = _tables(conn)
-    if not {"shopping_lists", "shopping_list_items"}.issubset(tables):
+    lists = _household_rows(conn, "shopping_lists", household_id)
+    active_ids = {
+        str(row.get("id") or "")
+        for row in lists
+        if str(row.get("status") or "active").strip().lower() == "active"
+    }
+    if not active_ids or "shopping_list_items" not in _tables(conn):
         return 0
-    list_columns = _columns(conn, "shopping_lists")
+
     item_columns = _columns(conn, "shopping_list_items")
-    required_list = {"id", "household_id", "status"}
-    required_item = {"shopping_list_id", "household_id", "checked"}
-    if not required_list.issubset(list_columns) or not required_item.issubset(item_columns):
-        return 0
-    rows = conn.execute(text("""
-        SELECT sli.checked
-        FROM shopping_list_items sli
-        JOIN shopping_lists sl ON sl.id = sli.shopping_list_id
-        WHERE sl.household_id = :household_id
-          AND lower(trim(COALESCE(sl.status, 'active'))) = 'active'
-          AND sli.household_id = :household_id
-    """), {"household_id": str(household_id)}).mappings().all()
-    return sum(
-        1
-        for row in rows
-        if str(row.get("checked") or "").strip().lower() not in {"1", "true", "yes", "on"}
-    )
+    count = 0
+    for row in _all_rows(conn, "shopping_list_items"):
+        if str(row.get("shopping_list_id") or "") not in active_ids:
+            continue
+        if "household_id" in item_columns and str(row.get("household_id") or "") != str(household_id):
+            continue
+        if not _truthy(row.get("checked")):
+            count += 1
+    return count
 
 
 def _notification_count(conn: Connection, household_id: str, user_id: str) -> int:
-    if "household_notifications" not in _tables(conn):
-        return 0
+    rows = _household_rows(conn, "household_notifications", household_id)
     columns = _columns(conn, "household_notifications")
-    required = {"household_id", "recipient_user_id", "read_at"}
-    if not required.issubset(columns):
+    if not rows:
         return 0
-    value = conn.execute(text("""
-        SELECT COUNT(*)
-        FROM household_notifications
-        WHERE household_id = :household_id
-          AND (recipient_user_id IS NULL OR recipient_user_id = :user_id)
-          AND read_at IS NULL
-    """), {"household_id": str(household_id), "user_id": str(user_id)}).scalar()
-    return int(value or 0)
+    count = 0
+    for row in rows:
+        if "recipient_user_id" in columns:
+            recipient = str(row.get("recipient_user_id") or "").strip()
+            if recipient and recipient != str(user_id):
+                continue
+        if "read_at" in columns and row.get("read_at") is not None:
+            continue
+        count += 1
+    return count
 
 
 def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
-    tables = _tables(conn)
-    if "receipt_tables" not in tables or "receipt_table_lines" not in tables:
+    receipt_rows = _active_receipt_rows(conn, household_id, approved_only=False)
+    receipt_ids = {str(row.get("id") or "") for row in receipt_rows}
+    if not receipt_ids:
         return 0, 0
 
-    receipt_columns = _columns(conn, "receipt_tables")
-    line_columns = _columns(conn, "receipt_table_lines")
-    if not {"id", "household_id", "workflow_state"}.issubset(receipt_columns):
-        return 0, 0
-    if "receipt_table_id" not in line_columns:
-        return 0, 0
-
-    receipt_line_filters = [
-        "rt.household_id = :household_id",
-        "lower(trim(COALESCE(rt.workflow_state, 'active'))) = 'active'",
+    eligible_lines = [
+        row
+        for row in _eligible_receipt_lines(conn, household_id)
+        if str(row.get("receipt_table_id") or "") in receipt_ids
     ]
-    if "deleted_at" in receipt_columns:
-        receipt_line_filters.append("rt.deleted_at IS NULL")
-    if "is_deleted" in line_columns:
-        receipt_line_filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
-    if "inventory_eligible" in line_columns:
-        receipt_line_filters.append("lower(trim(CAST(rtl.inventory_eligible AS TEXT))) IN ('1', 'true', 't', 'yes', 'on')")
-    elif "line_role" in line_columns:
-        receipt_line_filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
 
+    batches = _household_rows(conn, "purchase_import_batches", household_id)
     batch_columns = _columns(conn, "purchase_import_batches")
-    can_link_batches = {
-        "id", "household_id", "source_type", "source_reference"
-    }.issubset(batch_columns)
+    receipt_batch_by_receipt: dict[str, str] = {}
+    if {"id", "source_type", "source_reference"}.issubset(batch_columns):
+        for batch in batches:
+            if str(batch.get("source_type") or "").strip().lower() != "receipt":
+                continue
+            reference = str(batch.get("source_reference") or "").strip()
+            if reference.startswith("receipt:"):
+                receipt_id = reference.split(":", 1)[1]
+                if receipt_id in receipt_ids:
+                    receipt_batch_by_receipt[receipt_id] = str(batch.get("id") or "")
 
-    # Kassa = artikelregels van een actieve bon waarvoor nog geen Uitpakken-batch bestaat.
-    if can_link_batches:
-        receipt_line_filters.append("""
-            NOT EXISTS (
-                SELECT 1
-                FROM purchase_import_batches pib
-                WHERE pib.household_id = rt.household_id
-                  AND pib.source_type = 'receipt'
-                  AND pib.source_reference = ('receipt:' || rt.id)
-            )
-        """)
-    kassa = conn.execute(text(f"""
-        SELECT COUNT(*)
-        FROM receipt_table_lines rtl
-        JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-        WHERE {" AND ".join(receipt_line_filters)}
-    """), {"household_id": str(household_id)}).scalar() or 0
+    kassa = sum(
+        1
+        for row in eligible_lines
+        if str(row.get("receipt_table_id") or "") not in receipt_batch_by_receipt
+    )
 
-    # Uitpakken = dezelfde artikelen nadat de batch bestaat, zolang de importregel
-    # nog niet daadwerkelijk naar voorraad is verwerkt. Hierdoor is er geen dubbeltelling.
+    if not receipt_batch_by_receipt or "purchase_import_lines" not in _tables(conn):
+        return int(kassa), 0
+
+    import_columns = _columns(conn, "purchase_import_lines")
+    if "batch_id" not in import_columns or "processing_status" not in import_columns:
+        return int(kassa), 0
+
+    receipt_batch_ids = set(receipt_batch_by_receipt.values())
     unpack = 0
-    import_line_columns = _columns(conn, "purchase_import_lines")
-    can_count_unpack = can_link_batches and {
-        "batch_id", "processing_status"
-    }.issubset(import_line_columns)
-    if can_count_unpack:
-        unpack_filters = [
-            "pib.household_id = :household_id",
-            "pib.source_type = 'receipt'",
-            "lower(trim(COALESCE(pil.processing_status, 'pending'))) <> 'processed'",
-        ]
-        if "review_decision" in import_line_columns:
-            unpack_filters.append("lower(trim(COALESCE(pil.review_decision, 'pending'))) <> 'removed'")
-        unpack = conn.execute(text(f"""
-            SELECT COUNT(*)
-            FROM purchase_import_lines pil
-            JOIN purchase_import_batches pib ON pib.id = pil.batch_id
-            WHERE {" AND ".join(unpack_filters)}
-        """), {"household_id": str(household_id)}).scalar() or 0
-    return int(kassa or 0), int(unpack or 0)
+    for row in _all_rows(conn, "purchase_import_lines"):
+        if str(row.get("batch_id") or "") not in receipt_batch_ids:
+            continue
+        if str(row.get("processing_status") or "pending").strip().lower() == "processed":
+            continue
+        if "review_decision" in import_columns and str(row.get("review_decision") or "pending").strip().lower() == "removed":
+            continue
+        unpack += 1
+    return int(kassa), int(unpack)
 
 
-def build_household_dashboard(conn: Connection, *, household_id: str, user_id: str, now: datetime | None = None) -> dict[str, Any]:
+def build_household_dashboard(
+    conn: Connection,
+    *,
+    household_id: str,
+    user_id: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     current_start = now - timedelta(days=7)
     previous_start = now - timedelta(days=14)
@@ -314,9 +278,9 @@ def build_household_dashboard(conn: Connection, *, household_id: str, user_id: s
     quantities = _receipt_quantities(conn, household_id)
     article_details = _receipt_article_details(conn, household_id)
 
-    current = [r for r in receipts if current_start <= r["_purchase_at"] <= now]
-    previous = [r for r in receipts if previous_start <= r["_purchase_at"] < current_start]
-    history = [r for r in receipts if history_start <= r["_purchase_at"] <= now]
+    current = [row for row in receipts if current_start <= row["_purchase_at"] <= now]
+    previous = [row for row in receipts if previous_start <= row["_purchase_at"] < current_start]
+    history = [row for row in receipts if history_start <= row["_purchase_at"] <= now]
 
     def article_count(rows: list[dict[str, Any]]) -> float:
         return sum(quantities.get(str(row.get("id") or ""), 0.0) for row in rows)
@@ -328,7 +292,7 @@ def build_household_dashboard(conn: Connection, *, household_id: str, user_id: s
     daily_spend: list[dict[str, Any]] = []
     for offset in range(6, -1, -1):
         day = (now - timedelta(days=offset)).date()
-        rows = [r for r in current if r["_purchase_at"].date() == day]
+        rows = [row for row in current if row["_purchase_at"].date() == day]
         daily_articles.append({"date": day.isoformat(), "value": round(article_count(rows), 2)})
         daily_spend.append({"date": day.isoformat(), "value": spend(rows)})
 
