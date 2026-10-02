@@ -32,6 +32,10 @@ def _engine():
                 id TEXT PRIMARY KEY,
                 receipt_table_id TEXT NOT NULL,
                 quantity NUMERIC,
+                raw_label TEXT,
+                line_total NUMERIC,
+                matched_article_id TEXT,
+                matched_global_product_id TEXT,
                 is_deleted BOOLEAN,
                 inventory_eligible BOOLEAN,
                 line_role TEXT
@@ -125,10 +129,19 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
             for line in lines:
                 conn.execute(text("""
                     INSERT INTO receipt_table_lines(
-                        id, receipt_table_id, quantity, is_deleted, inventory_eligible, line_role
-                    ) VALUES (:id, :receipt, :quantity, :deleted, :eligible, :role)
+                        id, receipt_table_id, quantity, raw_label, line_total,
+                        matched_article_id, matched_global_product_id,
+                        is_deleted, inventory_eligible, line_role
+                    ) VALUES (
+                        :id, :receipt, :quantity, :label, :line_total,
+                        :article_id, :product_id, :deleted, :eligible, :role
+                    )
                 """), {
                     "id": line[0], "receipt": line[1], "quantity": line[2],
+                    "label": f"Artikel {line[0]}",
+                    "line_total": float(line[2]),
+                    "article_id": f"ha-{line[0]}" if line[4] else None,
+                    "product_id": f"gp-{line[0]}" if line[4] else None,
                     "deleted": line[3], "eligible": line[4], "role": line[5],
                 })
 
@@ -176,12 +189,19 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert dashboard["purchases"]["previous"] == 4.0
         assert dashboard["spend"]["current"] == 15.0
         assert dashboard["spend"]["previous"] == 20.0
+        assert [row["receipt_id"] for row in dashboard["purchases"]["receipts"]] == ["r2", "r1"]
+        assert dashboard["purchases"]["receipts"][0]["articles"][0]["label"] == "Artikel l5"
+        assert dashboard["purchases"]["receipts"][0]["articles"][0]["household_article_id"] == "ha-l5"
+        assert len(dashboard["purchases"]["receipts"][1]["articles"]) == 2
+        assert dashboard["spend"]["receipts"] == dashboard["purchases"]["receipts"]
 
         # Twee AH-bonnen op dezelfde kalenderdag vormen één winkelbezoek.
         assert dashboard["stores"]["unique"] == 1
         assert dashboard["stores"]["visits"] == 1
         assert dashboard["stores"]["items"][0]["name"] == "AH"
         assert dashboard["stores"]["items"][0]["spend"] == 15.0
+        assert [row["receipt_id"] for row in dashboard["stores"]["items"][0]["receipts"]] == ["r2", "r1"]
+        assert {row["receipt_id"] for row in dashboard["forecast"]["basis_receipts"]} >= {"r1", "r2", "r3"}
 
         assert dashboard["status"]["notifications"] == 1
         assert dashboard["status"]["shopping"] == 1
