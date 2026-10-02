@@ -29,7 +29,8 @@ const mobileStart = source.indexOf('if (isMobileViewport)')
 const desktopStart = source.indexOf('<AppShell title="Incidentele aankoop toevoegen"')
 assert.ok(mobileStart >= 0 && desktopStart > mobileStart)
 const mobileSource = source.slice(mobileStart, desktopStart)
-assert.doesNotMatch(mobileSource, />Annuleren<\/Button>/)
+assert.match(mobileSource, /handleCancelScanner/)
+assert.match(mobileSource, />Annuleren<\/Button>/)
 assert.doesNotMatch(mobileSource, /rz-inline-feedback/)
 assert.match(source.slice(desktopStart), />Annuleren<\/Button>/)
 
@@ -42,13 +43,11 @@ assert.doesNotMatch(css, /font-size:\s*(12|13|15|17|18|20|22)px/)
 
 assert.match(source, /data-testid="mobile-incidental-purchase-recognized"/)
 
-assert.match(source, /data-testid="mobile-incidental-purchase-manual-toggle"/)
 
 assert.match(source, /data-testid="mobile-incidental-purchase-additional-toggle"/)
 
 assert.match(source, /recognizedBarcodeProduct/)
 
-assert.match(source, />Opnieuw scannen<|\? 'Opnieuw scannen'/)
 
 assert.match(scanner, /width: \{ ideal: 2560 \}/)
 
@@ -57,5 +56,35 @@ assert.match(scanner, /height: \{ ideal: 1440 \}/)
 assert.match(scanner, /facingMode: \{ exact: 'environment' \}/)
 
 assert.doesNotMatch(scanner, /advanced\.push\(\{ zoom:/)
+
+assert.match(source, /autoScannerStartedRef/)
+
+assert.match(source, /startPurchaseBarcodeScanner\(''\)/)
+
+assert.match(source, /data-testid="mobile-incidental-purchase-catalog-step"/)
+
+assert.match(source, /data-testid="mobile-incidental-purchase-check"/)
+
+assert.match(source, />Controleren<\/Button>|'Controleren'/)
+
+assert.match(source, /data-testid="mobile-incidental-purchase-to-inventory"/)
+
+assert.match(source, />Naar voorraad<\/Button>/)
+
+assert.match(source, /data-testid="mobile-incidental-purchase-inventory-product"/)
+
+assert.match(source, /Toegevoegd \/ bijgewerkt in Catalogus\./)
+
+assert.match(source, /Catalogus is al bijgewerkt\. Vul alleen de gegevens voor Voorraad aan\./)
+
+assert.match(source, /catalogImageUrl/)
+
+assert.match(source, /className="rz-mobile-incidental-purchase-product-image"/)
+
+assert.match(source, /article_name: String\(articleName \|\| ''\)\.trim\(\) \|\| null/)
+
+assert.match(source, /handleCancelInventoryStep/)
+
+assert.match(source, /navigate\('\/voorraad'\)/)
 
 console.log('MOBILE_INCIDENTAL_PURCHASE_CONTRACT_GREEN')
