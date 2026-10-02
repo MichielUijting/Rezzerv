@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import './catalogArticleThumbnail.css'
 
 function normalizeText(value) {
@@ -12,6 +13,7 @@ export default function CatalogArticleThumbnail({
 }) {
   const src = normalizeText(imageUrl)
   const [failed, setFailed] = useState(false)
+  const [zoomed, setZoomed] = useState(false)
 
   useEffect(() => {
     setFailed(false)
@@ -37,8 +39,23 @@ export default function CatalogArticleThumbnail({
   }
 
   return (
-    <span className={classes} data-testid="catalog-article-thumbnail">
-      <img
+    <>
+      <span
+        className={classes}
+        data-testid="catalog-article-thumbnail"
+        role="button"
+        tabIndex={0}
+        aria-label={normalizeText(productName) ? `Productfoto van ${normalizeText(productName)} vergroten` : 'Productfoto vergroten'}
+        onClick={(event) => { event.stopPropagation(); setZoomed(true) }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            event.stopPropagation()
+            setZoomed(true)
+          }
+        }}
+      >
+        <img
         src={src}
         alt=""
         title={normalizeText(productName) ? `Productfoto van ${normalizeText(productName)}` : 'Productfoto'}
@@ -46,7 +63,20 @@ export default function CatalogArticleThumbnail({
         decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
-      />
-    </span>
+        />
+      </span>
+      {zoomed && typeof document !== 'undefined' ? createPortal(
+        <button
+          type="button"
+          className="rz-product-image-overlay"
+          onClick={(event) => { event.stopPropagation(); setZoomed(false) }}
+          aria-label="Vergrote productfoto sluiten"
+          data-testid="product-image-overlay"
+        >
+          <img src={src} alt={normalizeText(productName) ? `Productfoto van ${normalizeText(productName)}` : 'Productfoto'} referrerPolicy="no-referrer" />
+        </button>,
+        document.body,
+      ) : null}
+    </>
   )
 }

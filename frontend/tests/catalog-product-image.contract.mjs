@@ -82,3 +82,10 @@ assert.match(almostOut, /imageUrl=\{row\.imageUrl\}/)
 assert.match(shopping, /imageUrl=\{item\.image_url\}/)
 
 console.log('CATALOG_PRODUCT_IMAGE_CONTRACT_GREEN')
+
+assert.match(sharedThumbnail, /createPortal/)
+assert.match(sharedThumbnail, /product-image-overlay/)
+assert.match(image, /createPortal/)
+assert.match(image, /product-image-overlay/)
+assert.match(sharedThumbnailCss, /\.rz-product-image-overlay\s*\{[\s\S]*position:\s*fixed/)
+assert.match(sharedThumbnailCss, /cursor:\s*zoom-out/)
