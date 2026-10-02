@@ -208,11 +208,14 @@ function clearBarcodeLinkedFields(previousForm, nextBarcode) {
   }
 }
 
-async function scanBarcodeArticle(barcode) {
+async function scanBarcodeArticle(barcode, articleName = '') {
   const response = await fetch('/api/articles/barcode-scan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ barcode }),
+    body: JSON.stringify({
+      barcode,
+      article_name: String(articleName || '').trim() || null,
+    }),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -448,7 +451,7 @@ export default function IncidentalPurchasePage() {
     setPurchaseLookupState({ status: 'loading', message: `Barcode ${normalizedBarcode} controleren…` })
     setPurchaseSaveState({ status: 'idle', message: '' })
     try {
-      const result = await scanBarcodeArticle(normalizedBarcode)
+      const result = await scanBarcodeArticle(normalizedBarcode, purchaseFormRef.current?.articleName)
       applyBarcodeLookupResult(normalizedBarcode, result)
       logEvent?.('ENRICH_TRIGGERED', { barcode: normalizedBarcode, found: Boolean(result?.found || result?.external_match) })
     } catch (error) {
