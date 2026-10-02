@@ -539,7 +539,7 @@ def create_system_server_session(
         ttl=ttl,
         replace_existing=replace_existing,
         now=now,
-        is_platform_superuser=bool(system_roles & {"platform.superuser", "platform.ip_owner"}),
+        is_platform_superuser="platform.superuser" in system_roles,
         is_platform_admin="platform.platform_admin" in platform_roles,
         is_ip_owner="platform.ip_owner" in system_roles,
     )
@@ -629,7 +629,7 @@ def resolve_server_session(
             session_version=int(row.get("session_version") or 1),
             issued_at=_normalize_database_datetime(row.get("issued_at")),
             expires_at=expires_at,
-            is_platform_superuser=bool(system_roles & {"platform.superuser", "platform.ip_owner"}),
+            is_platform_superuser="platform.superuser" in system_roles,
             is_platform_admin="platform.platform_admin" in platform_roles,
             is_ip_owner="platform.ip_owner" in system_roles,
         )
