@@ -37,18 +37,18 @@ assert.notEqual(
 assert.match(
   householdSource,
   /const ASSIGNABLE_ROLE_KEYS = new Set\(\['household\.member', 'household\.admin'\]\)/,
-  'De huishoudrolkeuze moet uitsluitend Lid en Beheerder toewijsbaar maken',
+  'De huishoudrolkeuze moet uitsluitend Gebruiker en Beheerder toewijsbaar maken',
 )
 for (const [roleKey, label] of [
-  ['household.viewer', 'Kijker (bestaande rol)'],
-  ['household.advanced_member', 'Geavanceerd lid (bestaande rol)'],
+  ['household.viewer', 'Gebruiker'],
+  ['household.advanced_member', 'Beheerder'],
   ['household.owner', 'Superuser'],
 ]) {
   assert.ok(householdSource.includes(`'${roleKey}': '${label}'`))
 }
 
 for (const [roleKey, label] of [
-  ['household.member', 'Lid'],
+  ['household.member', 'Gebruiker'],
   ['household.admin', 'Beheerder'],
   ['household.owner', 'Superuser'],
 ]) {
