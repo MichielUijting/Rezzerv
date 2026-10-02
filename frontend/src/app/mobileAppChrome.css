@@ -16,7 +16,7 @@
     display: inline-flex;
     position: fixed;
     top: calc(7px + env(safe-area-inset-top));
-    left: 10px;
+    left: 8px;
     z-index: 100;
   }
 
@@ -34,7 +34,7 @@
     top: 0;
     z-index: 90;
     min-height: 64px;
-    padding-left: 88px;
+    padding-left: 76px;
   }
 
   .rz-mobile-app-chrome:has(.rz-settings-shell) .rz-header-titleblock {
@@ -43,7 +43,7 @@
 
   .rz-mobile-app-chrome:has(.rz-header) .rz-header,
   .rz-mobile-app-chrome:has(.rz-mobile-module-header) .rz-mobile-module-header {
-    padding-left: 88px;
+    padding-left: 76px;
   }
 
   .rz-mobile-app-chrome:not(:has(.rz-header, .rz-mobile-module-header)) {
