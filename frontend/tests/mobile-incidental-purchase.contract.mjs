@@ -52,6 +52,13 @@ assert.match(source, /recognizedBarcodeProduct/)
 assert.match(scanner, /width: \{ ideal: 2560 \}/)
 
 assert.match(scanner, /height: \{ ideal: 1440 \}/)
+assert.match(scanner, /PROCESSED_FRAME_PIPELINE_START/)
+assert.match(scanner, /center-wide-contrast/)
+assert.match(scanner, /center-tight-contrast/)
+assert.match(scanner, /HybridBinarizer/)
+assert.match(scanner, /RGBLuminanceSource/)
+assert.match(scanner, /enhanceBarcodeImageData/)
+assert.match(scanner, /PROCESSED_FRAME_DECODE_RESULT_FOUND/)
 
 assert.match(scanner, /facingMode: \{ exact: 'environment' \}/)
 
