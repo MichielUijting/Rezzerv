@@ -112,7 +112,7 @@ def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, l
     if "is_deleted" in line_columns:
         filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
     if "inventory_eligible" in line_columns:
-        filters.append("COALESCE(rtl.inventory_eligible, FALSE) = TRUE")
+        filters.append("lower(trim(CAST(rtl.inventory_eligible AS TEXT))) IN ('1', 'true', 't', 'yes', 'on')")
     elif "line_role" in line_columns:
         filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
 
@@ -174,7 +174,7 @@ def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]
     if "is_deleted" in line_columns:
         filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
     if "inventory_eligible" in line_columns:
-        filters.append("COALESCE(rtl.inventory_eligible, FALSE) = TRUE")
+        filters.append("lower(trim(CAST(rtl.inventory_eligible AS TEXT))) IN ('1', 'true', 't', 'yes', 'on')")
     elif "line_role" in line_columns:
         filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
     rows = conn.execute(text(f"""
@@ -253,7 +253,7 @@ def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
     if "is_deleted" in line_columns:
         receipt_line_filters.append("COALESCE(rtl.is_deleted, FALSE) = FALSE")
     if "inventory_eligible" in line_columns:
-        receipt_line_filters.append("COALESCE(rtl.inventory_eligible, FALSE) = TRUE")
+        receipt_line_filters.append("lower(trim(CAST(rtl.inventory_eligible AS TEXT))) IN ('1', 'true', 't', 'yes', 'on')")
     elif "line_role" in line_columns:
         receipt_line_filters.append("lower(trim(COALESCE(rtl.line_role, 'product'))) = 'product'")
 
