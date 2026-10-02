@@ -299,7 +299,6 @@ export default function IncidentalPurchasePage() {
   const [purchaseForm, setPurchaseForm] = useState(createInitialPurchaseForm)
   const [purchaseLookupState, setPurchaseLookupState] = useState({ status: 'idle', message: '' })
   const [purchaseSaveState, setPurchaseSaveState] = useState({ status: 'idle', message: '' })
-  const [cameraConsentOpen, setCameraConsentOpen] = useState(false)
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
   const [additionalFieldsOpen, setAdditionalFieldsOpen] = useState(false)
   const [catalogLookupResult, setCatalogLookupResult] = useState(null)
@@ -526,10 +525,10 @@ export default function IncidentalPurchasePage() {
     try {
       let formForSave = purchaseFormRef.current
       const normalizedBarcode = String(formForSave?.barcode || '').trim()
-      if (normalizedBarcode) {
+      if (normalizedBarcode && (!catalogLookupResult || purchaseLookupRequestRef.current !== normalizedBarcode)) {
         purchaseLookupRequestRef.current = normalizedBarcode
         setPurchaseLookupState({ status: 'loading', message: 'Barcode wordt automatisch gecontroleerd…' })
-        const lookupResult = await scanBarcodeArticle(normalizedBarcode)
+        const lookupResult = await scanBarcodeArticle(normalizedBarcode, formForSave?.articleName)
         formForSave = buildPurchaseFormFromBarcodeLookup(formForSave, normalizedBarcode, lookupResult, locationOptions)
         setPurchaseForm(formForSave)
         applyBarcodeLookupResult(normalizedBarcode, lookupResult)
@@ -547,7 +546,6 @@ export default function IncidentalPurchasePage() {
     setPurchaseForm(createInitialPurchaseForm())
     setPurchaseLookupState({ status: 'idle', message: '' })
     setPurchaseSaveState({ status: 'idle', message: '' })
-    setCameraConsentOpen(false)
     setManualEntryOpen(false)
     setAdditionalFieldsOpen(false)
     setCatalogLookupResult(null)
