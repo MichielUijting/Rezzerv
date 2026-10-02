@@ -28,6 +28,68 @@ function dateLabel(value) {
     : new Intl.DateTimeFormat('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
 }
 
+function groupReceiptsByDate(receipts = []) {
+  const groups = new Map()
+  for (const receipt of receipts) {
+    const key = String(receipt.date || receipt.purchase_at || '').slice(0, 10) || 'onbekend'
+    const group = groups.get(key) || { key, label: dateLabel(receipt.purchase_at || receipt.date), total: 0, articleCount: 0, receipts: [] }
+    group.total += Number(receipt.total || 0)
+    group.articleCount += Number(receipt.article_count || 0)
+    group.receipts.push(receipt)
+    groups.set(key, group)
+  }
+  return Array.from(groups.values()).sort((a, b) => String(b.key).localeCompare(String(a.key)))
+}
+
+function groupReceiptsByStore(receipts = []) {
+  const groups = new Map()
+  for (const receipt of receipts) {
+    const key = String(receipt.store || 'Onbekende winkel').trim().toLowerCase()
+    const group = groups.get(key) || { key, label: receipt.store || 'Onbekende winkel', total: 0, articleCount: 0, receipts: [] }
+    group.total += Number(receipt.total || 0)
+    group.articleCount += Number(receipt.article_count || 0)
+    group.receipts.push(receipt)
+    groups.set(key, group)
+  }
+  return Array.from(groups.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'nl'))
+}
+
+function aggregateArticles(receipts = []) {
+  const articles = new Map()
+  for (const receipt of receipts) {
+    for (const article of receipt.articles || []) {
+      const key = String(article.household_article_id || article.global_product_id || article.label || '').trim().toLowerCase()
+      if (!key) continue
+      const current = articles.get(key) || {
+        key,
+        label: article.label || 'Artikel',
+        quantity: 0,
+        total: 0,
+        household_article_id: article.household_article_id || null,
+        global_product_id: article.global_product_id || null,
+      }
+      current.quantity += Number(article.quantity || 0)
+      current.total += Number(article.line_total || 0)
+      if (!current.household_article_id && article.household_article_id) current.household_article_id = article.household_article_id
+      if (!current.global_product_id && article.global_product_id) current.global_product_id = article.global_product_id
+      articles.set(key, current)
+    }
+  }
+  return Array.from(articles.values()).sort((a, b) => b.quantity - a.quantity || a.label.localeCompare(b.label, 'nl'))
+}
+
+function openArticleRoute(navigate, article) {
+  if (article?.household_article_id) {
+    navigate('/voorraad/' + encodeURIComponent(article.household_article_id))
+    return true
+  }
+  if (article?.global_product_id) {
+    navigate('/catalogus/' + encodeURIComponent(article.global_product_id))
+    return true
+  }
+  return false
+}
+
 function MiniBars({ values = [], format = (value) => String(value) }) {
   const max = Math.max(1, ...values.map((item) => Number(item.value || 0)))
   return <div className="rz-dashboard-detail-bars">
@@ -57,13 +119,7 @@ function ReceiptList({ receipts = [], showArticleCount = true }) {
   }
 
   function openArticle(article) {
-    if (article?.household_article_id) {
-      navigate('/voorraad/' + encodeURIComponent(article.household_article_id))
-      return
-    }
-    if (article?.global_product_id) {
-      navigate('/catalogus/' + encodeURIComponent(article.global_product_id))
-    }
+    openArticleRoute(navigate, article)
   }
 
   if (!receipts.length) {
@@ -122,6 +178,53 @@ function ReceiptList({ receipts = [], showArticleCount = true }) {
   </div>
 }
 
+function ReceiptGroupList({ groups = [], metric = 'spend' }) {
+  if (!groups.length) {
+    return <p className="rz-dashboard-empty">Geen onderliggende gegevens in deze periode.</p>
+  }
+  return <div className="rz-dashboard-group-list">
+    {groups.map((group) => <details className="rz-dashboard-group" key={group.key}>
+      <summary>
+        <span>
+          <strong>{group.label}</strong>
+          <small>{group.receipts.length} kassabon{group.receipts.length === 1 ? '' : 'nen'}</small>
+        </span>
+        <span>
+          <strong>{metric === 'purchases' ? numberLabel(group.articleCount) + ' artikelen' : euro(group.total)}</strong>
+          {metric === 'purchases' ? <small>{euro(group.total)}</small> : <small>{numberLabel(group.articleCount)} artikelen</small>}
+        </span>
+      </summary>
+      <ReceiptList receipts={group.receipts} />
+    </details>)}
+  </div>
+}
+
+function ArticleTotals({ receipts = [] }) {
+  const navigate = useNavigate()
+  const rows = useMemo(() => aggregateArticles(receipts), [receipts])
+  if (!rows.length) {
+    return <p className="rz-dashboard-empty">Geen artikelen gevonden in deze periode.</p>
+  }
+  return <div className="rz-dashboard-article-totals">
+    {rows.map((article) => {
+      const canOpen = Boolean(article.household_article_id || article.global_product_id)
+      return <button
+        type="button"
+        key={article.key}
+        className="rz-dashboard-article-total-row"
+        disabled={!canOpen}
+        onClick={() => openArticleRoute(navigate, article)}
+      >
+        <span>
+          <strong>{article.label}</strong>
+          <small>{numberLabel(article.quantity)} gekocht</small>
+        </span>
+        <span>{euro(article.total)}</span>
+      </button>
+    })}
+  </div>
+}
+
 export default function DashboardDetailPage() {
   const { metric = '' } = useParams()
   const definition = METRICS[metric] || METRICS.aankopen
@@ -139,22 +242,32 @@ export default function DashboardDetailPage() {
   const body = useMemo(() => {
     if (!dashboard) return null
     if (definition.key === 'purchases') {
+      const receipts = dashboard.purchases.receipts || []
       return <>
         <div className="rz-dashboard-detail-summary"><strong>{numberLabel(dashboard.purchases.current)} artikelen</strong><span>Vorige 7 dagen: {numberLabel(dashboard.purchases.previous)}</span></div>
         <MiniBars values={dashboard.purchases.daily} format={numberLabel} />
         <section className="rz-dashboard-detail-section">
-          <h2>Kassabonnen en artikelen</h2>
-          <ReceiptList receipts={dashboard.purchases.receipts || []} />
+          <h2>Per dag</h2>
+          <ReceiptGroupList groups={groupReceiptsByDate(receipts)} metric="purchases" />
+        </section>
+        <section className="rz-dashboard-detail-section">
+          <h2>Artikelen in deze periode</h2>
+          <ArticleTotals receipts={receipts} />
         </section>
       </>
     }
     if (definition.key === 'spend') {
+      const receipts = dashboard.spend.receipts || []
       return <>
         <div className="rz-dashboard-detail-summary"><strong>{euro(dashboard.spend.current)}</strong><span>Vorige 7 dagen: {euro(dashboard.spend.previous)}</span></div>
         <MiniBars values={dashboard.spend.daily} format={euro} />
         <section className="rz-dashboard-detail-section">
-          <h2>Kassabonnen</h2>
-          <ReceiptList receipts={dashboard.spend.receipts || []} />
+          <h2>Per winkel</h2>
+          <ReceiptGroupList groups={groupReceiptsByStore(receipts)} metric="spend" />
+        </section>
+        <section className="rz-dashboard-detail-section">
+          <h2>Per dag</h2>
+          <ReceiptGroupList groups={groupReceiptsByDate(receipts)} metric="spend" />
         </section>
       </>
     }
