@@ -89,3 +89,9 @@ assert.match(image, /createPortal/)
 assert.match(image, /product-image-overlay/)
 assert.match(sharedThumbnailCss, /\.rz-product-image-overlay\s*\{[\s\S]*position:\s*fixed/)
 assert.match(sharedThumbnailCss, /cursor:\s*zoom-out/)
+
+// Artikelafbeeldingen zijn circa 40% groter dan de vorige 52px/48px basis.
+assert.match(sharedThumbnailCss, /flex:\s*0 0 73px/)
+assert.match(sharedThumbnailCss, /width:\s*73px/)
+assert.match(sharedThumbnailCss, /height:\s*73px/)
+assert.match(css, /\.rz-catalog-product-image--compact\s*\{[\s\S]*width:\s*67px;[\s\S]*height:\s*67px;/)
