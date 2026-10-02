@@ -498,6 +498,7 @@ export default function IncidentalPurchasePage() {
     setPurchaseForm(createInitialPurchaseForm())
     setPurchaseLookupState({ status: 'idle', message: '' })
     setPurchaseSaveState({ status: 'idle', message: '' })
+    setCameraConsentOpen(false)
     stopPurchaseBarcodeCamera(false, 'manual-reset')
   }
 
