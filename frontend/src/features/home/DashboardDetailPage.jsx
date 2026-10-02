@@ -225,6 +225,34 @@ function ArticleTotals({ receipts = [] }) {
   </div>
 }
 
+function RepeatPurchaseList({ items = [] }) {
+  const navigate = useNavigate()
+  if (!items.length) {
+    return <p className="rz-dashboard-empty">Nog onvoldoende herhalingskoop gevonden om aankopen te begroten.</p>
+  }
+  return <div className="rz-dashboard-repeat-list">
+    {items.map((item, index) => {
+      const canOpen = Boolean(item.household_article_id || item.global_product_id)
+      return <button
+        type="button"
+        className="rz-dashboard-repeat-row"
+        key={item.identity + '-' + item.expected_date + '-' + index}
+        disabled={!canOpen}
+        onClick={() => openArticleRoute(navigate, item)}
+      >
+        <span>
+          <strong>{item.label}</strong>
+          <small>Verwacht {dateLabel(item.expected_date)} · ritme circa {item.cadence_days} dagen</small>
+        </span>
+        <span>
+          <strong>{euro(item.expected_amount)}</strong>
+          <small>{numberLabel(item.expected_quantity)} verwacht</small>
+        </span>
+      </button>
+    })}
+  </div>
+}
+
 export default function DashboardDetailPage() {
   const { metric = '' } = useParams()
   const definition = METRICS[metric] || METRICS.aankopen
@@ -290,8 +318,12 @@ export default function DashboardDetailPage() {
       <MiniBars values={dashboard.forecast.weeks} format={euro} />
       <p className="rz-dashboard-method">{dashboard.forecast.method}</p>
       <section className="rz-dashboard-detail-section">
-        <h2>Basis van de begroting</h2>
-        <p className="rz-dashboard-method">De onderstaande kassabonnen uit de afgelopen 8 weken vormen de huidige basis voor de prognose.</p>
+        <h2>Verwachte herhalingskopen</h2>
+        <p className="rz-dashboard-method">Alleen artikelen met voldoende koopgeschiedenis worden meegenomen. Het verwachte koopmoment volgt het historische koopritme per artikel.</p>
+        <RepeatPurchaseList items={dashboard.forecast.items || []} />
+      </section>
+      <section className="rz-dashboard-detail-section">
+        <h2>Historische basis</h2>
         <ReceiptList receipts={dashboard.forecast.basis_receipts || []} />
       </section>
     </>
