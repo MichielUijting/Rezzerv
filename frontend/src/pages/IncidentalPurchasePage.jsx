@@ -296,6 +296,7 @@ export default function IncidentalPurchasePage() {
   const [purchaseForm, setPurchaseForm] = useState(createInitialPurchaseForm)
   const [purchaseLookupState, setPurchaseLookupState] = useState({ status: 'idle', message: '' })
   const [purchaseSaveState, setPurchaseSaveState] = useState({ status: 'idle', message: '' })
+  const [cameraConsentOpen, setCameraConsentOpen] = useState(false)
   const purchaseFormRef = useRef(createInitialPurchaseForm())
   const purchaseLookupRequestRef = useRef('')
   const [locationOptions, setLocationOptions] = useState({ locations: [], sublocationsByLocation: new Map() })
@@ -367,6 +368,16 @@ export default function IncidentalPurchasePage() {
   }, [isMobileViewport, purchaseSaveState.message, purchaseSaveState.status, showFeedback])
 
   useEffect(() => {
+    if (!isMobileViewport || purchaseCameraState.status !== 'error' || !purchaseCameraState.message) return
+    showFeedback({
+      variant: 'error',
+      message: purchaseCameraState.message,
+      testId: 'mobile-incidental-purchase-camera-feedback',
+    })
+  }, [isMobileViewport, purchaseCameraState.message, purchaseCameraState.status, showFeedback])
+
+
+  useEffect(() => {
     if (!isMobileViewport || !purchaseCameraOpen) return
     if (!['success', 'warning'].includes(purchaseLookupState.status)) return
     stopPurchaseBarcodeCamera(false, 'barcode-detected')
@@ -435,7 +446,16 @@ export default function IncidentalPurchasePage() {
     }
     setPurchaseLookupState({ status: 'idle', message: '' })
     setPurchaseSaveState({ status: 'idle', message: '' })
+    setCameraConsentOpen(true)
+  }
+
+  async function handleCameraConsentApprove() {
+    setCameraConsentOpen(false)
     await startPurchaseBarcodeScanner(purchaseCameraMeta.deviceId)
+  }
+
+  function handleCameraConsentCancel() {
+    setCameraConsentOpen(false)
   }
 
   async function handlePurchaseSubmit() {
@@ -641,6 +661,21 @@ export default function IncidentalPurchasePage() {
             </div>
           </section>
         </main>
+
+        {cameraConsentOpen ? (
+          <div className="rz-modal-backdrop rz-mobile-incidental-purchase-camera-backdrop" role="presentation" data-testid="mobile-incidental-purchase-camera-consent">
+            <div className="rz-modal-card rz-mobile-incidental-purchase-camera" role="dialog" aria-modal="true" aria-labelledby="incidental-purchase-camera-consent-title">
+              <h3 id="incidental-purchase-camera-consent-title" className="rz-modal-title">Camera gebruiken</h3>
+              <p className="rz-modal-text">
+                Inhuis heeft cameratoegang nodig om de barcode te scannen. Na je bevestiging vraagt de browser om toestemming. De camera wordt alleen voor deze scan gebruikt.
+              </p>
+              <div className="rz-mobile-incidental-purchase-camera-actions">
+                <Button type="button" variant="secondary" onClick={handleCameraConsentCancel}>Annuleren</Button>
+                <Button type="button" variant="primary" onClick={handleCameraConsentApprove} data-testid="mobile-incidental-purchase-camera-consent-approve">Camera toestaan</Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {purchaseCameraOpen ? (
           <div className="rz-modal-backdrop rz-mobile-incidental-purchase-camera-backdrop" role="presentation" data-testid="incidental-purchase-barcode-backdrop">
