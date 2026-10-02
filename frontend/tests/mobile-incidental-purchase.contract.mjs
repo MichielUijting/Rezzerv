@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('../src/pages/IncidentalPurchasePage.jsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../src/pages/incidentalPurchaseMobile.css', import.meta.url), 'utf8')
+const scanner = readFileSync(new URL('../src/lib/barcodeScanner.js', import.meta.url), 'utf8')
 
 assert.match(source, /useMobileAppViewport/)
 assert.match(source, /const isMobileViewport = useMobileAppViewport\(\)/)
