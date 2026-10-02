@@ -40,6 +40,7 @@ from app.services.frontteam_household_provisioning import (
     LEGACY_FRONTTEAM_HOUSEHOLD_ID,
     FRONTTEAM_PLATFORM_ROLE,
     ensure_frontteam_household_for_session_runtime,
+    frontteam_personal_household_id,
     resolve_frontteam_personal_household_id,
 )
 from app.services.system_superuser_session_provisioning import (
@@ -296,15 +297,26 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    mapped_frontteam_household_id = resolve_frontteam_personal_household_id(conn, user_id)
+    canonical_frontteam_household_id = frontteam_personal_household_id(user_id)
+    row_household_ids = {str(row.get("household_id") or "") for row in resolved_rows}
     personal_frontteam_household_id = (
-        resolve_frontteam_personal_household_id(conn, user_id)
-        if is_frontteam
-        else None
+        mapped_frontteam_household_id
+        or (canonical_frontteam_household_id if canonical_frontteam_household_id in row_household_ids else None)
     )
     resolved_rows.sort(
         key=lambda row: (
-            1 if personal_frontteam_household_id and str(row.get("household_id") or "") == personal_frontteam_household_id else 0,
+            0 if (
+                not is_frontteam
+                and personal_frontteam_household_id
+                and str(row.get("household_id") or "") != personal_frontteam_household_id
+            ) else 1,
             0 if row["effective_role"] in {"admin", "owner"} else 1,
+            1 if (
+                is_frontteam
+                and personal_frontteam_household_id
+                and str(row.get("household_id") or "") == personal_frontteam_household_id
+            ) else 0,
             str(row.get("household_id") or ""),
         )
     )

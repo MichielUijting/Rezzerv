@@ -42,3 +42,41 @@
 .rz-product-row-identity > :last-child {
   min-width: 0;
 }
+
+.rz-catalog-article-thumbnail[role="button"] {
+  cursor: zoom-in;
+}
+
+.rz-catalog-article-thumbnail[role="button"]:focus-visible {
+  outline: 2px solid var(--color-mobile-ui-primary);
+  outline-offset: 2px;
+}
+
+.rz-product-image-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  height: 100dvh;
+  margin: 0;
+  padding: 20px;
+  border: 0;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+}
+
+.rz-product-image-overlay img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(94vw, 1100px);
+  max-height: 92dvh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  transform: scale(1.4);
+  transform-origin: center;
+}

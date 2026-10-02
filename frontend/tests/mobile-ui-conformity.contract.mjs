@@ -157,7 +157,7 @@ assert.match(
 )
 assert.match(
   mobileAppChromeCss,
-  /\.rz-mobile-app-chrome > \.rz-mobile-back-control\s*\{[\s\S]*position:\s*fixed;[\s\S]*left:\s*10px;/,
+  /\.rz-mobile-app-chrome > \.rz-mobile-back-control\s*\{[\s\S]*position:\s*fixed;[\s\S]*left:\s*8px;/,
 )
 assert.match(
   mobileAppChromeCss,
@@ -185,3 +185,17 @@ assert.match(
 assert.doesNotMatch(mobileInventoryCss, /rz-mobile-inventory-quick-feedback|rz-mobile-inventory-topbar|rz-mobile-inventory-bottom-nav/)
 
 console.log('MOBILE_UI_CONFORMITY_GREEN')
+
+assert.match(mobileAppChromeSource, /inhuis:mobile-home-back/)
+assert.match(mobileHomeSource, /mobile-home-reorder-header/)
+assert.match(mobileHomeSource, /rz-mobile-home-edit-done/)
+assert.doesNotMatch(mobileHomeSource, /rz-mobile-home-edit-header/)
+assert.match(mobileComponentsCss, /min-width:\s*56px/)
+assert.match(mobileAppChromeCss, /left:\s*8px/)
+
+// Meldingen staat op de landingspagina alleen als teller/doorklik en blijft beschikbaar voor de globale onderbalk.
+assert.match(mobileHomeSource, /map\.delete\('meldingen'\)/)
+assert.match(mobileHomeSource, /rz-mobile-home-notifications/)
+assert.match(mobileHomeSource, /key: 'meldingen', clickable: true/)
+assert.doesNotMatch(mobileHomeSource, /DEFAULT_ORDER = \[[^\]]*'meldingen'/)
+assert.match(mobileAppChromeSource, /if \(key === 'meldingen'\) return 'bell'/)

@@ -5,6 +5,7 @@ import Card from '../ui/Card.jsx'
 import Button from '../ui/Button.jsx'
 import Select from '../ui/Select.jsx'
 import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
+import CatalogArticleThumbnail from '../ui/CatalogArticleThumbnail.jsx'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import { useMobileAppViewport } from '../app/mobileViewport.js'
 import useBarcodeScanner from '../lib/useBarcodeScanner.js'
@@ -303,6 +304,7 @@ export default function IncidentalPurchasePage() {
   const [catalogLookupResult, setCatalogLookupResult] = useState(null)
   const [inventoryStepOpen, setInventoryStepOpen] = useState(false)
   const autoScannerStartedRef = useRef(false)
+  const purchaseBarcodePhotoInputRef = useRef(null)
   const purchaseFormRef = useRef(createInitialPurchaseForm())
   const purchaseLookupRequestRef = useRef('')
   const [locationOptions, setLocationOptions] = useState({ locations: [], sublocationsByLocation: new Map() })
@@ -329,6 +331,7 @@ export default function IncidentalPurchasePage() {
     startScanner: startPurchaseBarcodeScanner,
     stopScanner: stopPurchaseBarcodeCamera,
     switchCamera: switchPurchaseBarcodeCamera,
+    scanImageFile: scanPurchaseBarcodeImage,
   } = useBarcodeScanner({
     screenContext: 'IncidenteleAankoop',
     onDetected: async (detectedBarcode, scannerContext = {}) => {
@@ -493,7 +496,19 @@ export default function IncidentalPurchasePage() {
     setAdditionalFieldsOpen(false)
     setCatalogLookupResult(null)
     setInventoryStepOpen(false)
+    const liveCameraAvailable = Boolean(navigator.mediaDevices?.getUserMedia)
+    if (!liveCameraAvailable || purchaseCameraState.status === 'error') {
+      purchaseBarcodePhotoInputRef.current?.click()
+      return
+    }
     await startPurchaseBarcodeScanner(purchaseCameraMeta.deviceId)
+  }
+
+  async function handleBarcodePhotoCapture(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    await scanPurchaseBarcodeImage(file)
   }
 
   function handleCancelScanner() {
@@ -561,6 +576,15 @@ export default function IncidentalPurchasePage() {
     return (
       <div className="rz-screen rz-mobile-incidental-purchase-screen" data-testid="mobile-incidental-purchase-page">
         <MobileModuleHeader title="Incidentele aankoop" testId="mobile-incidental-purchase-header" />
+        <input
+          ref={purchaseBarcodePhotoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={handleBarcodePhotoCapture}
+          data-testid="mobile-incidental-purchase-photo-scan"
+        />
 
         <main className="rz-mobile-incidental-purchase-content">
           <section className="rz-mobile-incidental-purchase-form" aria-label="Incidentele aankoop toevoegen">
@@ -592,7 +616,7 @@ export default function IncidentalPurchasePage() {
 
                   {catalogChecked ? (
                     <div className="rz-mobile-incidental-purchase-recognized" data-testid="mobile-incidental-purchase-recognized">
-                      {catalogImageUrl ? <img src={catalogImageUrl} alt="" className="rz-mobile-incidental-purchase-product-image" /> : null}
+                      {catalogImageUrl ? <CatalogArticleThumbnail imageUrl={catalogImageUrl} productName={purchaseForm.articleName || catalogLookupResult?.article?.name || 'Product'} className="rz-mobile-incidental-purchase-product-image" /> : null}
                       <strong>{purchaseForm.articleName || catalogLookupResult?.article?.name || 'Product gecontroleerd'}</strong>
                       {catalogProduct?.brand ? <span>{catalogProduct.brand}</span> : null}
                       <span>Toegevoegd / bijgewerkt in Catalogus.</span>
@@ -633,7 +657,7 @@ export default function IncidentalPurchasePage() {
             ) : (
               <>
                 <div className="rz-mobile-incidental-purchase-recognized" data-testid="mobile-incidental-purchase-inventory-product">
-                  {catalogImageUrl ? <img src={catalogImageUrl} alt="" className="rz-mobile-incidental-purchase-product-image" /> : null}
+                  {catalogImageUrl ? <CatalogArticleThumbnail imageUrl={catalogImageUrl} productName={purchaseForm.articleName || catalogLookupResult?.article?.name || 'Product'} className="rz-mobile-incidental-purchase-product-image" /> : null}
                   <strong>{purchaseForm.articleName || catalogLookupResult?.article?.name || 'Product'}</strong>
                   <span>Catalogus is al bijgewerkt. Vul alleen de gegevens voor Voorraad aan.</span>
                 </div>

@@ -172,6 +172,17 @@ Passieve succes-, info-, waarschuwing- en foutmeldingen gebruiken uitsluitend de
 
 Op ieder beveiligd mobiel scherm staat de feedbackoverlay boven de vaste `MobileRecentActionsBar`, zodat melding en navigatie elkaar niet afdekken.
 
+## Mobiele artikelbeelden en scanner vanaf 2 oktober 2026
+
+Voor artikelpresentatie en mobiel scannen geldt aanvullend:
+
+- de artikelfoto's in lijsten behouden hun bestaande compacte afmetingen; de 40%-vergroting geldt **niet** voor de lijstweergave;
+- een beschikbare artikelfoto is overal waar de gedeelde artikelbeeldcomponent wordt gebruikt aanklikbaar en opent een schermvullende overlay; een volgende klik/tap sluit de overlay;
+- de foto in die overlay wordt circa **40% groter** weergegeven dan de eerdere overlaypresentatie; de donkere overlayachtergrond en onvervormde beeldverhouding blijven behouden;
+- de centrale mobiele **Terug**-knop blijft de enige terugbediening in de app-chrome, is compact en staat links in de header; schermen bouwen geen tweede concurrerende Terug-knop;
+- wanneer live barcodecamera in een mobiele browser niet beschikbaar is of faalt, blijft de scanactie herstelbaar via de native camera-/fotokeuze van het apparaat;
+- op de mobiele startpagina wordt **Meldingen** niet als extra losse actiekaart gedupliceerd wanneer het aparte meldingenoverzicht bovenaan al doorklikbaar aanwezig is; Meldingen blijft wel beschikbaar voor de centrale onderste actiebalk.
+
 ## Mobiele navigatie
 
 Inhuis gebruikt op mobiel twee navigatieniveaus:

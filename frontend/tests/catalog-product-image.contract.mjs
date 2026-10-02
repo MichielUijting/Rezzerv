@@ -82,3 +82,17 @@ assert.match(almostOut, /imageUrl=\{row\.imageUrl\}/)
 assert.match(shopping, /imageUrl=\{item\.image_url\}/)
 
 console.log('CATALOG_PRODUCT_IMAGE_CONTRACT_GREEN')
+
+assert.match(sharedThumbnail, /createPortal/)
+assert.match(sharedThumbnail, /product-image-overlay/)
+assert.match(image, /createPortal/)
+assert.match(image, /product-image-overlay/)
+assert.match(sharedThumbnailCss, /\.rz-product-image-overlay\s*\{[\s\S]*position:\s*fixed/)
+assert.match(sharedThumbnailCss, /cursor:\s*zoom-out/)
+
+// Lijstthumbnails behouden hun compacte baseline; alleen de aangeklikte overlay wordt 40% vergroot.
+assert.match(sharedThumbnailCss, /flex:\s*0 0 52px/)
+assert.match(sharedThumbnailCss, /width:\s*52px/)
+assert.match(sharedThumbnailCss, /height:\s*52px/)
+assert.match(css, /\.rz-catalog-product-image--compact\s*\{[\s\S]*width:\s*48px;[\s\S]*height:\s*48px;/)
+assert.match(sharedThumbnailCss, /\.rz-product-image-overlay img\s*\{[\s\S]*transform:\s*scale\(1\.4\)/)

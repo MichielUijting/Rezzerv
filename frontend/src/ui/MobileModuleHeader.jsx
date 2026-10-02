@@ -30,17 +30,19 @@ export function MobileBackControl({ testId = 'mobile-global-back', onBack = null
   )
 }
 
-export default function MobileModuleHeader({ title, testId = 'mobile-module-header', showBack = false, onBack = null, backLabel = 'Terug' }) {
+export default function MobileModuleHeader({ title, testId = 'mobile-module-header', showBack = false, onBack = null, backLabel = 'Terug', trailingAction = null }) {
   return (
     <header className="rz-mobile-module-header" data-testid={testId}>
       <div className="rz-mobile-module-header-leading">
         {showBack ? <button type="button" className="rz-mobile-back-control" onClick={onBack}>{backLabel}</button> : null}
         <h1>{title}</h1>
       </div>
-      <span className="rz-mobile-module-header-wordmark" aria-label="InHuis">
-        <span className="rz-mobile-module-header-wordmark-in">In</span>
-        <span className="rz-mobile-module-header-wordmark-huis">Huis</span>
-      </span>
+      {trailingAction ? <div className="rz-mobile-module-header-trailing">{trailingAction}</div> : (
+        <span className="rz-mobile-module-header-wordmark" aria-label="InHuis">
+          <span className="rz-mobile-module-header-wordmark-in">In</span>
+          <span className="rz-mobile-module-header-wordmark-huis">Huis</span>
+        </span>
+      )}
     </header>
   )
 }

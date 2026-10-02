@@ -104,3 +104,12 @@ assert.match(scannerHook, /autoCameraAttemptedRef/)
 assert.match(scannerHook, /startScannerRef\.current\?\.\(alternative\.deviceId\)/)
 
 console.log('MOBILE_INCIDENTAL_PURCHASE_CONTRACT_GREEN')
+
+assert.match(scannerHook, /scanImageFile/)
+assert.match(scannerHook, /decodeFromImageUrl/)
+assert.match(scannerHook, /Live camera is niet beschikbaar/)
+assert.match(source, /capture="environment"/)
+assert.match(source, /mobile-incidental-purchase-photo-scan/)
+assert.match(source, /purchaseCameraState\.status === 'error'/)
+assert.match(source, /scanPurchaseBarcodeImage/)
+assert.match(source, /CatalogArticleThumbnail/)

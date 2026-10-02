@@ -14,6 +14,8 @@ from app.services.authorization_foundation_service import (
 from app.services.frontteam_household_provisioning import (
     FRONTTEAM_HOUSEHOLD_ID,
     FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
+    FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE,
+    frontteam_personal_household_id,
     resolve_frontteam_personal_household_id,
 )
 from app.services.server_session_service import resolve_server_session
@@ -436,6 +438,48 @@ def test_logout_revokes_session_and_clears_cookie():
     finally:
         engine.dispose()
 
+
+
+def test_frontteam_role_revocation_recovers_when_old_bug_already_removed_mapping():
+    client, engine = build_client()
+    try:
+        with engine.begin() as conn:
+            personal_household_id = frontteam_personal_household_id("u1")
+            seed_household(
+                conn,
+                household_id=personal_household_id,
+                name=FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
+                context_type="regular",
+            )
+            _seed_membership(
+                conn,
+                membership_id="m-u1-former-frontteam",
+                household_id=personal_household_id,
+                user_id="u1",
+                email="admin@rezzerv.local",
+                role="admin",
+            )
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES ('u1', 'platform.frontteam', FALSE)
+                ON CONFLICT(user_id, role_key) DO UPDATE SET active = FALSE
+            """))
+            conn.execute(text(f"""
+                DELETE FROM {FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE}
+                WHERE user_id = 'u1'
+            """))
+
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["active_household_id"] == "1"
+        assert payload["is_frontteam"] is False
+        assert payload["permissions"].get("platform.frontteam_messages.create", False) is False
+    finally:
+        engine.dispose()
 
 def test_new_login_invalidates_previous_cookie():
     first_client, engine = build_client()

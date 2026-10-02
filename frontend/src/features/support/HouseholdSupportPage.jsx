@@ -166,7 +166,7 @@ export default function HouseholdSupportPage() {
   }
 
   if (isMobileViewport && !selected) {
-    return <MobileSupportInbox onOpenThread={openThread} onNewMessage={() => setSelected(null)} />
+    return <MobileSupportInbox authContext={authContext} onOpenThread={openThread} onNewMessage={() => setSelected(null)} />
   }
 
   if (isPlatformSuperuserFromContext(authContext)) {

@@ -7,6 +7,7 @@ ROUTER = ROOT / "src/app/router/AppRouter.jsx"
 PLATFORM_PAGE = ROOT / "src/features/support/PlatformSupportPage.jsx"
 SUPPORT_API = ROOT / "src/features/support/supportApi.js"
 SUPERUSER_OVERVIEW = ROOT / "src/features/superuser/SuperuserOverviewSection.jsx"
+MOBILE_SUPPORT = ROOT / "src/features/support/MobileSupportInbox.jsx"
 
 
 def require(path: Path, *needles: str) -> None:
@@ -55,6 +56,16 @@ def main() -> None:
         "fetchJsonWithAuth",
         "/api/platform/support/threads",
     )
+    require(
+        MOBILE_SUPPORT,
+        "canCurrentUserPerform('platform.frontteam_messages.create', authContext)",
+        ">Nieuw bericht</Button>",
+    )
+    mobile_support_text = MOBILE_SUPPORT.read_text(encoding="utf-8")
+    if "+ Nieuw bericht" in mobile_support_text:
+        raise AssertionError("Mobiele Berichten-knop mag geen plus in de naam bevatten")
+    if "isHouseholdFrontteamFromContext" in mobile_support_text:
+        raise AssertionError("Mobiele Berichten-knop moet de concrete create-permissie gebruiken")
     print("SUPPORT_MESSAGE_ROLE_ROUTING_GREEN")
 
 

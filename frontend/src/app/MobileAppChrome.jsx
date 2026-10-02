@@ -128,6 +128,9 @@ export default function MobileAppChrome({ children }) {
   }
 
   function handleHomeBack() {
+    const event = new Event('inhuis:mobile-home-back', { cancelable: true })
+    window.dispatchEvent(event)
+    if (event.defaultPrevented) return
     showFeedback({
       variant: 'warning',
       title: 'Inhuis verlaten',
