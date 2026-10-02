@@ -391,6 +391,55 @@ def test_frontteam_role_revocation_keeps_existing_household_session_but_removes_
     finally:
         engine.dispose()
 
+def test_frontteam_role_revocation_prefers_existing_household_over_former_personal_frontteam_household():
+    engine = _seed_session_fixture()
+    app = create_app_for_testing(engine)
+    client = TestClient(app)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+            VALUES ('u1', 'platform.frontteam', TRUE)
+            ON CONFLICT(user_id, role_key) DO UPDATE SET active = TRUE
+        """))
+        personal_household_id = frontteam_personal_household_id('u1')
+        seed_household(
+            conn,
+            household_id=personal_household_id,
+            name=FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
+            context_type='regular',
+        )
+        _seed_membership(
+            conn,
+            membership_id='m-u1-frontteam-personal',
+            household_id=personal_household_id,
+            user_id='u1',
+            email='admin@example.test',
+            role='admin',
+        )
+        conn.execute(text(f"""
+            INSERT INTO {FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE}(user_id, household_id)
+            VALUES ('u1', :household_id)
+            ON CONFLICT(user_id) DO UPDATE SET household_id = excluded.household_id
+        """), {'household_id': personal_household_id})
+        conn.execute(text("""
+            UPDATE auth_platform_user_roles
+            SET active = FALSE
+            WHERE user_id = 'u1' AND role_key = 'platform.frontteam'
+        """))
+
+    response = client.post(
+        '/api/auth/login',
+        json={'email': 'admin@example.test', 'password': 'Rezzerv123'},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['active_household_id'] == '1'
+    assert payload['is_frontteam'] is False
+    assert payload['permissions'].get('platform.frontteam_messages.create', False) is False
+
+
+
 def test_session_endpoint_ignores_stale_legacy_role_and_reflects_canonical_role_update():
     client, engine = build_client()
     try:
