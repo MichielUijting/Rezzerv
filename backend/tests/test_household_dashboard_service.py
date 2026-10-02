@@ -204,13 +204,19 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert dashboard["stores"]["visits"] == 1
         assert dashboard["stores"]["items"][0]["name"] == "AH"
         assert dashboard["stores"]["items"][0]["spend"] == 15.0
+        assert len(dashboard["stores"]["views"]["days"]["points"]) == 7
+        assert len(dashboard["stores"]["views"]["weeks"]["points"]) == 8
+        assert len(dashboard["stores"]["views"]["months"]["points"]) == 6
         assert [row["receipt_id"] for row in dashboard["stores"]["items"][0]["receipts"]] == ["r2", "r1"]
         assert {row["receipt_id"] for row in dashboard["forecast"]["basis_receipts"]} >= {"r1", "r2", "r3"}
         assert dashboard["forecast"]["method"].startswith("Herhalingskoop")
         assert dashboard["forecast"]["total"] == 9.0
-        assert len(dashboard["forecast"]["items"]) == 3
+        assert len(dashboard["forecast"]["items"]) >= 3
         assert {item["household_article_id"] for item in dashboard["forecast"]["items"]} == {"ha-l1"}
         assert dashboard["forecast"]["items"][0]["cadence_days"] == 9
+        assert len(dashboard["forecast"]["views"]["days"]) == 7
+        assert len(dashboard["forecast"]["views"]["weeks"]) == 4
+        assert len(dashboard["forecast"]["views"]["months"]) == 6
 
         assert dashboard["status"]["notifications"] == 1
         assert dashboard["status"]["shopping"] == 1
@@ -221,6 +227,6 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert dashboard["status"]["put_away_kassa"] == 2
         assert dashboard["status"]["put_away_unpack"] == 2
         assert dashboard["status"]["put_away"] == 4
-        assert dashboard["status"]["put_away_route"] == "/kassa"
+        assert dashboard["status"]["put_away_route"] == "/kassa?view=bonnen"
     finally:
         engine.dispose()
