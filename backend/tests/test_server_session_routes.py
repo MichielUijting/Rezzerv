@@ -14,6 +14,8 @@ from app.services.authorization_foundation_service import (
 from app.services.frontteam_household_provisioning import (
     FRONTTEAM_HOUSEHOLD_ID,
     FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
+    FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE,
+    frontteam_personal_household_id,
     resolve_frontteam_personal_household_id,
 )
 from app.services.server_session_service import resolve_server_session
@@ -391,55 +393,6 @@ def test_frontteam_role_revocation_keeps_existing_household_session_but_removes_
     finally:
         engine.dispose()
 
-def test_frontteam_role_revocation_prefers_existing_household_over_former_personal_frontteam_household():
-    engine = _seed_session_fixture()
-    app = create_app_for_testing(engine)
-    client = TestClient(app)
-
-    with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES ('u1', 'platform.frontteam', TRUE)
-            ON CONFLICT(user_id, role_key) DO UPDATE SET active = TRUE
-        """))
-        personal_household_id = frontteam_personal_household_id('u1')
-        seed_household(
-            conn,
-            household_id=personal_household_id,
-            name=FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
-            context_type='regular',
-        )
-        _seed_membership(
-            conn,
-            membership_id='m-u1-frontteam-personal',
-            household_id=personal_household_id,
-            user_id='u1',
-            email='admin@example.test',
-            role='admin',
-        )
-        conn.execute(text(f"""
-            INSERT INTO {FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE}(user_id, household_id)
-            VALUES ('u1', :household_id)
-            ON CONFLICT(user_id) DO UPDATE SET household_id = excluded.household_id
-        """), {'household_id': personal_household_id})
-        conn.execute(text("""
-            UPDATE auth_platform_user_roles
-            SET active = FALSE
-            WHERE user_id = 'u1' AND role_key = 'platform.frontteam'
-        """))
-
-    response = client.post(
-        '/api/auth/login',
-        json={'email': 'admin@example.test', 'password': 'Rezzerv123'},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload['active_household_id'] == '1'
-    assert payload['is_frontteam'] is False
-    assert payload['permissions'].get('platform.frontteam_messages.create', False) is False
-
-
-
 def test_session_endpoint_ignores_stale_legacy_role_and_reflects_canonical_role_update():
     client, engine = build_client()
     try:
@@ -488,46 +441,45 @@ def test_logout_revokes_session_and_clears_cookie():
 
 
 def test_frontteam_role_revocation_recovers_when_old_bug_already_removed_mapping():
-    engine = _seed_session_fixture()
-    app = create_app_for_testing(engine)
-    client = TestClient(app)
+    client, engine = build_client()
+    try:
+        with engine.begin() as conn:
+            personal_household_id = frontteam_personal_household_id("u1")
+            seed_household(
+                conn,
+                household_id=personal_household_id,
+                name=FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
+                context_type="regular",
+            )
+            _seed_membership(
+                conn,
+                membership_id="m-u1-former-frontteam",
+                household_id=personal_household_id,
+                user_id="u1",
+                email="admin@rezzerv.local",
+                role="admin",
+            )
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES ('u1', 'platform.frontteam', FALSE)
+                ON CONFLICT(user_id, role_key) DO UPDATE SET active = FALSE
+            """))
+            conn.execute(text(f"""
+                DELETE FROM {FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE}
+                WHERE user_id = 'u1'
+            """))
 
-    with engine.begin() as conn:
-        personal_household_id = frontteam_personal_household_id('u1')
-        seed_household(
-            conn,
-            household_id=personal_household_id,
-            name=FRONTTEAM_PERSONAL_HOUSEHOLD_NAME,
-            context_type='regular',
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "admin@rezzerv.local", "password": "Rezzerv123"},
         )
-        _seed_membership(
-            conn,
-            membership_id='m-u1-former-frontteam',
-            household_id=personal_household_id,
-            user_id='u1',
-            email='admin@example.test',
-            role='admin',
-        )
-        conn.execute(text("""
-            INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-            VALUES ('u1', 'platform.frontteam', FALSE)
-            ON CONFLICT(user_id, role_key) DO UPDATE SET active = FALSE
-        """))
-        conn.execute(text(f"""
-            DELETE FROM {FRONTTEAM_PERSONAL_HOUSEHOLD_TABLE}
-            WHERE user_id = 'u1'
-        """))
-
-    response = client.post(
-        '/api/auth/login',
-        json={'email': 'admin@example.test', 'password': 'Rezzerv123'},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload['active_household_id'] == '1'
-    assert payload['is_frontteam'] is False
-    assert payload['permissions'].get('platform.frontteam_messages.create', False) is False
-
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["active_household_id"] == "1"
+        assert payload["is_frontteam"] is False
+        assert payload["permissions"].get("platform.frontteam_messages.create", False) is False
+    finally:
+        engine.dispose()
 
 def test_new_login_invalidates_previous_cookie():
     first_client, engine = build_client()
