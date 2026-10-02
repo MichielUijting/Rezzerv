@@ -4,8 +4,20 @@ import { join } from 'node:path'
 
 const theme = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
 const tokens = readFileSync(new URL('../src/ui/tokens.css', import.meta.url), 'utf8')
+const textColorPolicy = readFileSync(new URL('../src/textColorPolicy.css', import.meta.url), 'utf8')
+const mobileCatalog = readFileSync(new URL('../src/features/catalog/mobileCatalog.css', import.meta.url), 'utf8')
 
 assert.match(tokens, /--radius-md:\s*6px;/, 'centrale knopradius moet 6px blijven')
+assert.match(
+  textColorPolicy,
+  /\.rz-button-primary,[\s\S]*\.rz-button-secondary \* \{\s*color:\s*#ffffff\s*!important;/,
+  'centrale primaire en secundaire donkergroene knoppen moeten altijd witte tekst afdwingen',
+)
+assert.doesNotMatch(
+  mobileCatalog,
+  /\.rz-mobile-catalog-pagination \.rz-button-secondary[^}]*color:\s*var\(--color-mobile-ui-primary\)\s*!important;/,
+  'mobiele Catalogus mag de witte knoptekst niet terug overschrijven naar donkergroen',
+)
 assert.match(
   theme,
   /button,\s*a\[role="button"\]\s*\{\s*border-radius:\s*var\(--radius-md\)\s*!important;/s,
