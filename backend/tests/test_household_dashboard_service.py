@@ -36,8 +36,8 @@ def _engine():
                 line_total NUMERIC,
                 matched_article_id TEXT,
                 matched_global_product_id TEXT,
-                is_deleted BOOLEAN,
-                inventory_eligible BOOLEAN,
+                is_deleted INTEGER,
+                inventory_eligible INTEGER,
                 line_role TEXT
             )
         """))
@@ -69,7 +69,7 @@ def _engine():
                 id TEXT PRIMARY KEY,
                 shopping_list_id TEXT NOT NULL,
                 household_id TEXT NOT NULL,
-                checked BOOLEAN
+                checked INTEGER
             )
         """))
         conn.execute(text("""
