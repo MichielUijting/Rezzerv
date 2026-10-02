@@ -55,6 +55,9 @@ assert.match(scanner, /height: \{ ideal: 1440 \}/)
 
 assert.match(scanner, /facingMode: \{ exact: 'environment' \}/)
 
+assert.match(source, /Camera wisselen/)
+assert.match(source, /purchaseAvailableCameras\.length < 2/)
+
 assert.doesNotMatch(scanner, /advanced\.push\(\{ zoom:/)
 
 assert.match(source, /autoScannerStartedRef/)
@@ -86,5 +89,11 @@ assert.match(source, /article_name: String\(articleName \|\| ''\)\.trim\(\) \|\|
 assert.match(source, /handleCancelInventoryStep/)
 
 assert.match(source, /navigate\('\/voorraad'\)/)
+
+const scannerHook = readFileSync(new URL('../src/lib/useBarcodeScanner.js', import.meta.url), 'utf8')
+assert.match(scannerHook, /AUTO_CAMERA_SWITCH/)
+assert.match(scannerHook, /Inhuis probeert automatisch een andere camera/)
+assert.match(scannerHook, /autoCameraAttemptedRef/)
+assert.match(scannerHook, /startScannerRef\.current\?\.\(alternative\.deviceId\)/)
 
 console.log('MOBILE_INCIDENTAL_PURCHASE_CONTRACT_GREEN')
