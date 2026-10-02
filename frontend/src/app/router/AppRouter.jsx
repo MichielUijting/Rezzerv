@@ -9,6 +9,7 @@ import RegisterPage from '../../features/auth/RegisterPage'
 import ResetPasswordPage from '../../features/auth/ResetPasswordPage.jsx'
 import HomePage from '../../features/home/HomePage'
 import DashboardDetailPage from '../../features/home/DashboardDetailPage.jsx'
+import MobileMorePage from '../../features/home/MobileMorePage.jsx'
 import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
 import PlatformCapabilityPage from '../../features/platform/PlatformCapabilityPage.jsx'
 import { PLATFORM_NAVIGATION_ITEMS } from '../../features/platform/platformNavigation.js'
@@ -177,6 +178,7 @@ const router = createBrowserRouter([
   { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
   { path: '/home', element: <Protected allowNone><HomePage /></Protected> },
   { path: '/dashboard/:metric', element: <Protected><DashboardDetailPage /></Protected> },
+  { path: '/meer', element: <Protected><MobileMorePage /></Protected> },
   ...platformRoutes,
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/superuser', element: <ProtectedSuperuser><SuperuserControlPage /></ProtectedSuperuser> },
