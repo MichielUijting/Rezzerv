@@ -19,7 +19,7 @@ De keuze tussen desktop-/tabelpresentatie en een beschikbare mobiele presentatie
 
 - `<=720px` gebruikt de mobiele app-chrome en, waar een scherm al een mobiele variant heeft, die mobiele variant;
 - `>720px` gebruikt de desktop-/tabelpresentatie;
-- gebruikersrol, Superuser/Admin/Lid, platformrechten, huishoudenstype en locatieconfiguratie bepalen **nooit** welke UI-variant wordt gekozen;
+- gebruikersrol, Superuser/Beheerder/Gebruiker, platformrechten, huishoudenstype en locatieconfiguratie bepalen **nooit** welke UI-variant wordt gekozen;
 - Inhuis toont **geen functionele schakelaar** voor Mobiel/Tabel/Automatisch;
 - op desktop/laptop kan de mobiele variant voor testen worden geactiveerd door de browserviewport responsief/smal te maken, bijvoorbeeld via de browser-device-mode (Ctrl+Shift+M waar ondersteund);
 - tabletgedrag volgt dezelfde viewportregel; oriëntatie, split-screen of browserweergave kan daardoor de effectieve variant veranderen;
@@ -38,6 +38,22 @@ Voor **Instellingen** geldt op viewports van maximaal 720px dezelfde centrale mo
 - iedere mobiele tabelcel toont het bijbehorende kolomlabel naast de waarde, zodat informatie niet betekenisloos wordt wanneer de desktopkop verdwijnt;
 - kolom-resizebediening is op mobiel niet zichtbaar;
 - autorisatie, routes, beschikbare velden en acties zijn identiek aan desktop; responsiviteit mag geen functionele rechten of gegevens verwijderen.
+
+## Mobiel dashboard als landingspagina vanaf 2 oktober 2026
+
+De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen tweede navigatiemenu:
+
+- de vaste onderste actiebalk blijft de primaire mobiele navigatie naar modules;
+- bovenaan het dashboard staat één compacte, horizontale statusregel met **Meldingen**, **Boodschappen** en **Nog opbergen**; ieder statusvlak is volledig aanklikbaar en opent de betreffende functionele flow;
+- daaronder staan informatiegerichte dashboardtegels voor **Gekochte artikelen**, **Uitgaven**, **Bezochte winkels** en **Begrote uitgaven**;
+- dashboardtegels tonen een kernwaarde, korte vergelijking/context en een compacte grafische weergave;
+- een klik op een dashboardtegel opent een consistente drill-down met meer detail;
+- de dashboardtegels gebruiken de centrale primaire kleur, witte surfaces, `--radius-md` en uitsluitend de twee centrale tekstgroottes;
+- de landingspagina toont niet daarnaast opnieuw grote actiekaarten voor Voorraad, Boodschappen, Kassa, Uitpakken, Catalogus en andere hoofdmodules;
+- Gebruiker, Beheerder en Frontteamlid gebruiken hetzelfde huishoud-dashboard; Frontteamfunctionaliteit blijft aanvullend via de centrale navigatie beschikbaar;
+- Superuser gebruikt het bestaande Superuser-beheercentrum als eigen dashboardingang;
+- gebruikerszichtbare huishoudrollen heten **Gebruiker** en **Beheerder**; legacy technische role keys mogen intern blijven bestaan;
+- Superuser en IP-eigenaar gelden in deze productfase als één gebruikerszichtbare hoogste rol.
 
 ## Mobiele ontwerpbaseline vanaf 22 september 2026
 
