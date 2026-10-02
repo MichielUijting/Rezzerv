@@ -1,9 +1,9 @@
 .rz-catalog-article-thumbnail {
-  flex: 0 0 52px;
+  flex: 0 0 73px;
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
+  width: 73px;
+  height: 73px;
   border: 1px solid #d7e2da;
   border-radius: 10px;
   background: #ffffff;
