@@ -186,11 +186,12 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert dashboard["status"]["notifications"] == 1
         assert dashboard["status"]["shopping"] == 1
 
-        # r2 zit nog in Kassa (1 artikelregel); r1 heeft 2 niet-verwerkte
-        # Uitpakken-regels. Verwijderde/processed regels tellen niet dubbel mee.
-        assert dashboard["status"]["put_away_kassa"] == 1
+        # r2 en de nog niet goedgekeurde r5 staan in Kassa (ieder 1 artikelregel);
+        # r1 heeft 2 niet-verwerkte Uitpakken-regels. Verwijderde/processed regels
+        # tellen niet dubbel mee.
+        assert dashboard["status"]["put_away_kassa"] == 2
         assert dashboard["status"]["put_away_unpack"] == 2
-        assert dashboard["status"]["put_away"] == 3
+        assert dashboard["status"]["put_away"] == 4
         assert dashboard["status"]["put_away_route"] == "/kassa"
     finally:
         engine.dispose()
