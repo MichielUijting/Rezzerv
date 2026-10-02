@@ -3,8 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import AppShell from '../app/AppShell.jsx'
 import Card from '../ui/Card.jsx'
 import Button from '../ui/Button.jsx'
+import Select from '../ui/Select.jsx'
+import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
+import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
+import { useMobileAppViewport } from '../app/mobileViewport.js'
 import useBarcodeScanner from '../lib/useBarcodeScanner.js'
 import { getAuthHeaders } from '../lib/authSession.js'
+import './incidentalPurchaseMobile.css'
 
 function buildLocationOptionState(options = []) {
   const locations = []
@@ -203,11 +208,14 @@ function clearBarcodeLinkedFields(previousForm, nextBarcode) {
   }
 }
 
-async function scanBarcodeArticle(barcode) {
+async function scanBarcodeArticle(barcode, articleName = '') {
   const response = await fetch('/api/articles/barcode-scan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ barcode }),
+    body: JSON.stringify({
+      barcode,
+      article_name: String(articleName || '').trim() || null,
+    }),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -286,9 +294,15 @@ function detectMobileScannerSupport() {
 
 export default function IncidentalPurchasePage() {
   const navigate = useNavigate()
+  const isMobileViewport = useMobileAppViewport()
+  const { showFeedback } = useAppFeedback()
   const [purchaseForm, setPurchaseForm] = useState(createInitialPurchaseForm)
   const [purchaseLookupState, setPurchaseLookupState] = useState({ status: 'idle', message: '' })
   const [purchaseSaveState, setPurchaseSaveState] = useState({ status: 'idle', message: '' })
+  const [additionalFieldsOpen, setAdditionalFieldsOpen] = useState(false)
+  const [catalogLookupResult, setCatalogLookupResult] = useState(null)
+  const [inventoryStepOpen, setInventoryStepOpen] = useState(false)
+  const autoScannerStartedRef = useRef(false)
   const purchaseFormRef = useRef(createInitialPurchaseForm())
   const purchaseLookupRequestRef = useRef('')
   const [locationOptions, setLocationOptions] = useState({ locations: [], sublocationsByLocation: new Map() })
@@ -327,13 +341,69 @@ export default function IncidentalPurchasePage() {
         logEvent?.('BARCODE_FIELD_UPDATED', { value: normalized })
         return next
       })
-      await processDetectedBarcode(normalized, scannerContext)
+      purchaseLookupRequestRef.current = ''
+      setCatalogLookupResult(null)
+      setInventoryStepOpen(false)
+      setPurchaseLookupState({ status: 'idle', message: '' })
       logEvent?.('BARCODE_FIELD_AFTER_UPDATE', { value: normalized })
     },
   })
 
   const purchaseSublocationOptions = purchaseForm.location ? (locationOptions.sublocationsByLocation.get(purchaseForm.location) || []) : []
   const locationOptionsEmpty = locationOptions.locations.length === 0
+  const mobileLocationOptions = locationOptions.locations.filter(
+    (location) => (locationOptions.sublocationsByLocation.get(location) || []).length > 0,
+  )
+  const mobileLocationOptionsEmpty = mobileLocationOptions.length === 0
+
+  useEffect(() => {
+    if (!isMobileViewport || !purchaseLookupState.message) return
+    if (!['success', 'warning', 'error'].includes(purchaseLookupState.status)) return
+    showFeedback({
+      variant: purchaseLookupState.status,
+      message: purchaseLookupState.message,
+      testId: 'mobile-incidental-purchase-lookup-feedback',
+    })
+  }, [isMobileViewport, purchaseLookupState.message, purchaseLookupState.status, showFeedback])
+
+  useEffect(() => {
+    if (!isMobileViewport || !purchaseSaveState.message) return
+    if (!['success', 'error'].includes(purchaseSaveState.status)) return
+    showFeedback({
+      variant: purchaseSaveState.status,
+      message: purchaseSaveState.message,
+      testId: 'mobile-incidental-purchase-save-feedback',
+    })
+  }, [isMobileViewport, purchaseSaveState.message, purchaseSaveState.status, showFeedback])
+
+  useEffect(() => {
+    if (!isMobileViewport || purchaseCameraState.status !== 'error' || !purchaseCameraState.message) return
+    showFeedback({
+      variant: 'error',
+      message: purchaseCameraState.message,
+      testId: 'mobile-incidental-purchase-camera-feedback',
+    })
+  }, [isMobileViewport, purchaseCameraState.message, purchaseCameraState.status, showFeedback])
+
+  useEffect(() => {
+    if (!isMobileViewport || !isMobileScanner || autoScannerStartedRef.current) return
+    autoScannerStartedRef.current = true
+    setCatalogLookupResult(null)
+    setInventoryStepOpen(false)
+    startPurchaseBarcodeScanner('')
+  }, [isMobileScanner, isMobileViewport, startPurchaseBarcodeScanner])
+
+
+  useEffect(() => {
+    if (!isMobileViewport || !purchaseCameraOpen) return
+    if (!['success', 'warning'].includes(purchaseLookupState.status)) return
+    stopPurchaseBarcodeCamera(false, 'barcode-detected')
+  }, [
+    isMobileViewport,
+    purchaseCameraOpen,
+    purchaseLookupState.status,
+    stopPurchaseBarcodeCamera,
+  ])
 
   function updatePurchaseForm(key, value) {
     setPurchaseForm((prev) => {
@@ -344,12 +414,15 @@ export default function IncidentalPurchasePage() {
     })
     if (key === 'barcode') {
       purchaseLookupRequestRef.current = ''
+      setCatalogLookupResult(null)
+      setInventoryStepOpen(false)
       setPurchaseLookupState({ status: 'idle', message: '' })
     }
     setPurchaseSaveState((prev) => (prev.status === 'idle' ? prev : { status: 'idle', message: '' }))
   }
 
   function applyBarcodeLookupResult(barcode, lookupResult) {
+    setCatalogLookupResult(lookupResult || null)
     const normalizedBarcode = String(barcode || '').trim()
     if (!normalizedBarcode || purchaseLookupRequestRef.current !== normalizedBarcode) return
     if (String(purchaseFormRef.current?.barcode || '').trim() !== normalizedBarcode) return
@@ -372,9 +445,42 @@ export default function IncidentalPurchasePage() {
     purchaseLookupRequestRef.current = normalizedBarcode
     setPurchaseLookupState({ status: 'loading', message: `Barcode ${normalizedBarcode} controleren…` })
     setPurchaseSaveState({ status: 'idle', message: '' })
-    const result = await scanBarcodeArticle(normalizedBarcode)
-    applyBarcodeLookupResult(normalizedBarcode, result)
-    logEvent?.('ENRICH_TRIGGERED', { barcode: String(barcode || '').trim(), found: Boolean(result?.found || result?.external_match) })
+    try {
+      const result = await scanBarcodeArticle(normalizedBarcode, purchaseFormRef.current?.articleName)
+      applyBarcodeLookupResult(normalizedBarcode, result)
+      logEvent?.('ENRICH_TRIGGERED', { barcode: normalizedBarcode, found: Boolean(result?.found || result?.external_match) })
+    } catch (error) {
+      if (purchaseLookupRequestRef.current !== normalizedBarcode) return
+      setPurchaseLookupState({
+        status: 'error',
+        message: error?.message || 'Barcode kon niet worden gecontroleerd.',
+      })
+      logEvent?.('ENRICH_TRIGGERED', { barcode: normalizedBarcode, found: false, error: true })
+    }
+  }
+
+  async function handleCheckBarcode() {
+    const normalizedBarcode = String(purchaseFormRef.current?.barcode || '').trim()
+    if (!normalizedBarcode) {
+      setPurchaseLookupState({ status: 'error', message: 'Vul eerst een barcode in.' })
+      return
+    }
+    await processDetectedBarcode(normalizedBarcode)
+  }
+
+  function handleOpenInventoryStep() {
+    const checked = catalogLookupResult && purchaseLookupRequestRef.current === String(purchaseFormRef.current?.barcode || '').trim()
+    if (!checked) {
+      setPurchaseLookupState({ status: 'warning', message: 'Controleer de barcode eerst voordat je naar Voorraad gaat.' })
+      return
+    }
+    setInventoryStepOpen(true)
+    setAdditionalFieldsOpen(false)
+  }
+
+  function handleCancelInventoryStep() {
+    setInventoryStepOpen(false)
+    navigate('/voorraad')
   }
 
   async function handleOpenBarcodeCamera() {
@@ -384,7 +490,14 @@ export default function IncidentalPurchasePage() {
     }
     setPurchaseLookupState({ status: 'idle', message: '' })
     setPurchaseSaveState({ status: 'idle', message: '' })
+    setAdditionalFieldsOpen(false)
+    setCatalogLookupResult(null)
+    setInventoryStepOpen(false)
     await startPurchaseBarcodeScanner(purchaseCameraMeta.deviceId)
+  }
+
+  function handleCancelScanner() {
+    stopPurchaseBarcodeCamera(true, 'scan-cancelled-to-manual')
   }
 
   async function handlePurchaseSubmit() {
@@ -406,10 +519,10 @@ export default function IncidentalPurchasePage() {
     try {
       let formForSave = purchaseFormRef.current
       const normalizedBarcode = String(formForSave?.barcode || '').trim()
-      if (normalizedBarcode) {
+      if (normalizedBarcode && (!catalogLookupResult || purchaseLookupRequestRef.current !== normalizedBarcode)) {
         purchaseLookupRequestRef.current = normalizedBarcode
         setPurchaseLookupState({ status: 'loading', message: 'Barcode wordt automatisch gecontroleerd…' })
-        const lookupResult = await scanBarcodeArticle(normalizedBarcode)
+        const lookupResult = await scanBarcodeArticle(normalizedBarcode, formForSave?.articleName)
         formForSave = buildPurchaseFormFromBarcodeLookup(formForSave, normalizedBarcode, lookupResult, locationOptions)
         setPurchaseForm(formForSave)
         applyBarcodeLookupResult(normalizedBarcode, lookupResult)
@@ -427,7 +540,230 @@ export default function IncidentalPurchasePage() {
     setPurchaseForm(createInitialPurchaseForm())
     setPurchaseLookupState({ status: 'idle', message: '' })
     setPurchaseSaveState({ status: 'idle', message: '' })
+    setAdditionalFieldsOpen(false)
+    setCatalogLookupResult(null)
+    setInventoryStepOpen(false)
     stopPurchaseBarcodeCamera(false, 'manual-reset')
+  }
+
+  const normalizedMobileBarcode = String(purchaseForm.barcode || '').trim()
+  const catalogChecked = Boolean(
+    normalizedMobileBarcode
+    && catalogLookupResult
+    && purchaseLookupRequestRef.current === normalizedMobileBarcode
+  )
+  const catalogProduct = catalogLookupResult?.product || catalogLookupResult?.enrichment || null
+  const catalogImageUrl = String(catalogLookupResult?.product?.image_url || catalogLookupResult?.enrichment?.image_url || '').trim()
+  const recognizedBarcodeProduct = catalogChecked
+    && Boolean(String(purchaseForm.articleName || catalogLookupResult?.article?.name || '').trim())
+
+  if (isMobileViewport) {
+    return (
+      <div className="rz-screen rz-mobile-incidental-purchase-screen" data-testid="mobile-incidental-purchase-page">
+        <MobileModuleHeader title="Incidentele aankoop" testId="mobile-incidental-purchase-header" />
+
+        <main className="rz-mobile-incidental-purchase-content">
+          <section className="rz-mobile-incidental-purchase-form" aria-label="Incidentele aankoop toevoegen">
+            {!inventoryStepOpen ? (
+              <>
+                <div className="rz-mobile-incidental-purchase-manual" data-testid="mobile-incidental-purchase-catalog-step">
+                  <label className="rz-mobile-incidental-purchase-field">
+                    <span>Barcode</span>
+                    <input
+                      className="rz-input"
+                      value={purchaseForm.barcode}
+                      onChange={(event) => updatePurchaseForm('barcode', event.target.value)}
+                      placeholder="Scan of vul barcode in"
+                      inputMode="numeric"
+                    />
+                  </label>
+
+                  {!recognizedBarcodeProduct ? (
+                    <label className="rz-mobile-incidental-purchase-field">
+                      <span>Artikelnaam</span>
+                      <input
+                        className="rz-input"
+                        value={purchaseForm.articleName}
+                        onChange={(event) => updatePurchaseForm('articleName', event.target.value)}
+                        placeholder="Alleen nodig als de bron geen naam vindt"
+                      />
+                    </label>
+                  ) : null}
+
+                  {catalogChecked ? (
+                    <div className="rz-mobile-incidental-purchase-recognized" data-testid="mobile-incidental-purchase-recognized">
+                      {catalogImageUrl ? <img src={catalogImageUrl} alt="" className="rz-mobile-incidental-purchase-product-image" /> : null}
+                      <strong>{purchaseForm.articleName || catalogLookupResult?.article?.name || 'Product gecontroleerd'}</strong>
+                      {catalogProduct?.brand ? <span>{catalogProduct.brand}</span> : null}
+                      <span>Toegevoegd / bijgewerkt in Catalogus.</span>
+                    </div>
+                  ) : null}
+
+                  <div className="rz-mobile-incidental-purchase-actions" data-testid="mobile-incidental-purchase-catalog-actions">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleCheckBarcode}
+                      disabled={!normalizedMobileBarcode || purchaseLookupState.status === 'loading'}
+                      data-testid="mobile-incidental-purchase-check"
+                    >
+                      {purchaseLookupState.status === 'loading' ? 'Controleren…' : 'Controleren'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={handleOpenInventoryStep}
+                      disabled={!catalogChecked}
+                      data-testid="mobile-incidental-purchase-to-inventory"
+                    >
+                      Naar voorraad
+                    </Button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleOpenBarcodeCamera}
+                    data-testid="mobile-incidental-purchase-rescan"
+                  >
+                    Opnieuw scannen
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rz-mobile-incidental-purchase-recognized" data-testid="mobile-incidental-purchase-inventory-product">
+                  {catalogImageUrl ? <img src={catalogImageUrl} alt="" className="rz-mobile-incidental-purchase-product-image" /> : null}
+                  <strong>{purchaseForm.articleName || catalogLookupResult?.article?.name || 'Product'}</strong>
+                  <span>Catalogus is al bijgewerkt. Vul alleen de gegevens voor Voorraad aan.</span>
+                </div>
+
+                <div className="rz-mobile-incidental-purchase-required">
+                  <div className="rz-mobile-incidental-purchase-field">
+                    <span id="mobile-incidental-purchase-location-label">Locatie</span>
+                    <Select
+                      ariaLabelledby="mobile-incidental-purchase-location-label"
+                      value={purchaseForm.location}
+                      onChange={(value) => updatePurchaseForm('location', value)}
+                      disabled={mobileLocationOptionsEmpty}
+                      dataTestId="mobile-incidental-purchase-location"
+                      triggerClassName="rz-mobile-incidental-purchase-select-trigger"
+                      options={[
+                        { value: '', label: mobileLocationOptionsEmpty ? 'Geen locatiecombinaties' : 'Kies een locatie' },
+                        ...mobileLocationOptions.map((option) => ({ value: option, label: option })),
+                      ]}
+                    />
+                  </div>
+
+                  <div className="rz-mobile-incidental-purchase-field">
+                    <span id="mobile-incidental-purchase-sublocation-label">Sublocatie</span>
+                    <Select
+                      ariaLabelledby="mobile-incidental-purchase-sublocation-label"
+                      value={purchaseForm.sublocation}
+                      onChange={(value) => updatePurchaseForm('sublocation', value)}
+                      disabled={!purchaseForm.location || purchaseSublocationOptions.length === 0}
+                      dataTestId="mobile-incidental-purchase-sublocation"
+                      triggerClassName="rz-mobile-incidental-purchase-select-trigger"
+                      options={[
+                        { value: '', label: 'Kies een sublocatie' },
+                        ...purchaseSublocationOptions.map((option) => ({ value: option, label: option })),
+                      ]}
+                    />
+                  </div>
+
+                  {mobileLocationOptionsEmpty ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => navigate('/instellingen/locaties')}
+                      data-testid="mobile-incidental-purchase-manage-locations"
+                    >
+                      Locatie toevoegen
+                    </Button>
+                  ) : null}
+                </div>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setAdditionalFieldsOpen((current) => !current)}
+                  data-testid="mobile-incidental-purchase-additional-toggle"
+                >
+                  {additionalFieldsOpen ? 'Minder gegevens' : 'Meer gegevens'}
+                </Button>
+
+                {additionalFieldsOpen ? (
+                  <div className="rz-mobile-incidental-purchase-additional" data-testid="mobile-incidental-purchase-additional">
+                    <label className="rz-mobile-incidental-purchase-field">
+                      <span>Aantal</span>
+                      <input className="rz-input" type="number" min="1" step="1" inputMode="numeric" value={purchaseForm.quantity} onChange={(event) => updatePurchaseForm('quantity', event.target.value)} />
+                    </label>
+                    <label className="rz-mobile-incidental-purchase-field">
+                      <span>Aankoopdatum</span>
+                      <input className="rz-input" type="date" value={purchaseForm.purchaseDate} onChange={(event) => updatePurchaseForm('purchaseDate', event.target.value)} />
+                    </label>
+                    <label className="rz-mobile-incidental-purchase-field">
+                      <span>Winkel / platform</span>
+                      <input className="rz-input" value={purchaseForm.supplier} onChange={(event) => updatePurchaseForm('supplier', event.target.value)} placeholder="Winkel / platform" />
+                    </label>
+                    <label className="rz-mobile-incidental-purchase-field">
+                      <span>Prijs</span>
+                      <input className="rz-input" inputMode="decimal" value={purchaseForm.price} onChange={(event) => updatePurchaseForm('price', event.target.value)} placeholder="0,00" />
+                    </label>
+                    <label className="rz-mobile-incidental-purchase-field">
+                      <span>Notitie</span>
+                      <input className="rz-input" value={purchaseForm.note} onChange={(event) => updatePurchaseForm('note', event.target.value)} placeholder="Notitie" />
+                    </label>
+                  </div>
+                ) : null}
+
+                <div className="rz-mobile-incidental-purchase-actions">
+                  <Button type="button" variant="secondary" onClick={handleCancelInventoryStep}>Annuleren</Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handlePurchaseSubmit}
+                    disabled={purchaseSaveState.status === 'saving'}
+                    data-testid="mobile-incidental-purchase-save"
+                  >
+                    {purchaseSaveState.status === 'saving' ? 'Opslaan…' : 'Opslaan'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </section>
+        </main>
+
+        {purchaseCameraOpen ? (
+          <div className="rz-modal-backdrop rz-mobile-incidental-purchase-camera-backdrop" role="presentation" data-testid="incidental-purchase-barcode-backdrop">
+            <div className="rz-modal-card rz-mobile-incidental-purchase-camera" role="dialog" aria-modal="true" aria-labelledby="incidental-purchase-barcode-title">
+              <h3 id="incidental-purchase-barcode-title" className="rz-modal-title">Barcode scannen</h3>
+              <video
+                ref={purchaseBarcodeVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="rz-mobile-incidental-purchase-camera-video"
+              />
+              <div
+                className="rz-mobile-incidental-purchase-camera-status"
+                data-testid="mobile-incidental-purchase-camera-status"
+              >
+                <span>{purchaseCameraState.message || 'Camera actief. Barcode zoeken…'}</span>
+                <span>
+                  Scanpogingen: {purchaseCameraMeta.decodeAttempts}
+                  {purchaseCameraMeta.label ? ` · ${purchaseCameraMeta.label}` : ''}
+                </span>
+              </div>
+              <div className="rz-mobile-incidental-purchase-camera-actions">
+                <Button type="button" variant="secondary" onClick={switchPurchaseBarcodeCamera} disabled={purchaseAvailableCameras.length < 2}>Camera wisselen</Button>
+                <Button type="button" variant="secondary" onClick={handleCancelScanner}>Annuleren</Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
   }
 
   return (

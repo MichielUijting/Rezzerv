@@ -1,5 +1,5 @@
 import { BrowserMultiFormatReader } from '@zxing/browser'
-import { BarcodeFormat, DecodeHintType } from '@zxing/library'
+import { BarcodeFormat, BinaryBitmap, DecodeHintType, HybridBinarizer, MultiFormatReader, RGBLuminanceSource } from '@zxing/library'
 
 const ZXING_NON_FATAL_ERRORS = new Set(['NotFoundException', 'ChecksumException', 'FormatException'])
 const RETAIL_BARCODE_FORMATS = [
@@ -15,6 +15,151 @@ SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, RETAIL_BARCODE_FORMATS)
 SCAN_HINTS.set(DecodeHintType.TRY_HARDER, true)
 
 const NATIVE_BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128']
+
+const PROCESSED_FRAME_INTERVAL_MS = 260
+const PROCESSED_FRAME_MAX_WIDTH = 1280
+
+function createProcessedFrameReader() {
+  const reader = new MultiFormatReader()
+  reader.setHints(SCAN_HINTS)
+  return reader
+}
+
+function buildFrameRegions(videoWidth, videoHeight) {
+  const regions = [
+    { name: 'center-wide', widthRatio: 0.92, heightRatio: 0.66 },
+    { name: 'center-tight', widthRatio: 0.78, heightRatio: 0.48 },
+    { name: 'full-frame', widthRatio: 1, heightRatio: 1 },
+  ]
+  return regions.map((region) => {
+    const width = Math.max(1, Math.round(videoWidth * region.widthRatio))
+    const height = Math.max(1, Math.round(videoHeight * region.heightRatio))
+    return {
+      ...region,
+      sx: Math.max(0, Math.round((videoWidth - width) / 2)),
+      sy: Math.max(0, Math.round((videoHeight - height) / 2)),
+      sw: width,
+      sh: height,
+    }
+  })
+}
+
+function enhanceBarcodeImageData(imageData, contrast = 1.65) {
+  const data = imageData.data
+  for (let index = 0; index < data.length; index += 4) {
+    const luminance = (data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114)
+    const enhanced = Math.max(0, Math.min(255, ((luminance - 128) * contrast) + 128))
+    data[index] = enhanced
+    data[index + 1] = enhanced
+    data[index + 2] = enhanced
+  }
+  return imageData
+}
+
+function decodeImageDataWithZxing(imageData, frameReader) {
+  const source = new RGBLuminanceSource(imageData.data, imageData.width, imageData.height)
+  const bitmap = new BinaryBitmap(new HybridBinarizer(source))
+  try {
+    return frameReader.decodeWithState(bitmap)
+  } finally {
+    frameReader.reset()
+  }
+}
+
+function createProcessedFrameCandidates(video, canvas, context) {
+  const videoWidth = video.videoWidth
+  const videoHeight = video.videoHeight
+  return buildFrameRegions(videoWidth, videoHeight).map((region) => {
+    const scale = Math.min(1, PROCESSED_FRAME_MAX_WIDTH / region.sw)
+    const targetWidth = Math.max(1, Math.round(region.sw * scale))
+    const targetHeight = Math.max(1, Math.round(region.sh * scale))
+    canvas.width = targetWidth
+    canvas.height = targetHeight
+    context.drawImage(
+      video,
+      region.sx,
+      region.sy,
+      region.sw,
+      region.sh,
+      0,
+      0,
+      targetWidth,
+      targetHeight,
+    )
+    const raw = context.getImageData(0, 0, targetWidth, targetHeight)
+    return [
+      { name: region.name + '-normal', imageData: raw },
+      { name: region.name + '-contrast', imageData: enhanceBarcodeImageData(new ImageData(new Uint8ClampedArray(raw.data), raw.width, raw.height)) },
+    ]
+  }).flat()
+}
+
+function startProcessedFrameDecoding({ video, onAttempt, onResult, onNonFatalError, log = null }) {
+  if (typeof document === 'undefined') return { stop: () => {} }
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) return { stop: () => {} }
+
+  const frameReader = createProcessedFrameReader()
+  let stopped = false
+  let timerId = 0
+  let running = false
+
+  const schedule = () => {
+    if (stopped) return
+    timerId = window.setTimeout(run, PROCESSED_FRAME_INTERVAL_MS)
+  }
+
+  const run = async () => {
+    if (stopped || running) return schedule()
+    if (video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) return schedule()
+    running = true
+    try {
+      const candidates = createProcessedFrameCandidates(video, canvas, context)
+      for (const candidate of candidates) {
+        if (stopped) break
+        onAttempt?.()
+        try {
+          const result = decodeImageDataWithZxing(candidate.imageData, frameReader)
+          const text = String(result?.getText?.() || '').trim()
+          if (text) {
+            log?.('PROCESSED_FRAME_DECODE_RESULT_FOUND', { variant: candidate.name, text })
+            stopped = true
+            emitResultOnce(result)
+            return
+          }
+        } catch (error) {
+          if (!isNonFatalBarcodeScanError(error)) {
+            log?.('PROCESSED_FRAME_DECODE_ERROR', { variant: candidate.name, errorName: error?.name, errorMessage: error?.message })
+            onNonFatalError?.(error)
+          }
+        }
+      }
+    } catch (error) {
+      log?.('PROCESSED_FRAME_PIPELINE_ERROR', { errorName: error?.name, errorMessage: error?.message })
+      onNonFatalError?.(error)
+    } finally {
+      running = false
+      if (!stopped) schedule()
+    }
+  }
+
+  log?.('PROCESSED_FRAME_PIPELINE_START', {
+    intervalMs: PROCESSED_FRAME_INTERVAL_MS,
+    variants: ['center-wide-normal', 'center-wide-contrast', 'center-tight-normal', 'center-tight-contrast', 'full-frame-normal', 'full-frame-contrast'],
+  })
+  run()
+
+  return {
+    stop: () => {
+      stopped = true
+      if (timerId) window.clearTimeout(timerId)
+      timerId = 0
+      try { frameReader.reset() } catch {}
+    },
+  }
+}
+
 
 export function isNonFatalBarcodeScanError(error) {
   const name = String(error?.name || '').trim()
@@ -69,8 +214,8 @@ function scoreDeviceLabel(label = '') {
 
 function buildScanVideoConstraints(extra = {}) {
   return {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: 2560 },
+    height: { ideal: 1440 },
     aspectRatio: { ideal: 1.777777778 },
     frameRate: { ideal: 24, min: 10 },
     ...extra,
@@ -94,9 +239,8 @@ async function applyTrackOptimizations(videoTrack) {
   if (Array.isArray(capabilities.exposureMode) && capabilities.exposureMode.includes('continuous')) {
     advanced.push({ exposureMode: 'continuous' })
   }
-  if (typeof capabilities.zoom?.max === 'number' && capabilities.zoom.max >= 1.5) {
-    advanced.push({ zoom: Math.min(2, capabilities.zoom.max) })
-  }
+  // Forceer geen digitale zoom: op veel telefoons maakt dat barcodes juist
+  // onscherper dan de normale achtercameraweergave.
   if (!advanced.length) return capabilities
   try {
     await videoTrack.applyConstraints({ advanced })
@@ -124,16 +268,21 @@ export async function openBarcodeCameraStream(preferredDeviceId = '', log = null
     pushAttempt({ audio: false, video: buildScanVideoConstraints({ deviceId: { exact: preferredDeviceId } }) })
   }
 
+  if (mobile) {
+    // Op mobiel eerst expliciet de reguliere achtercamera proberen. Voor de
+    // eerste toestemmingsaanvraag zijn cameralabels vaak nog leeg; device-order
+    // kan dan anders ten onrechte de frontcamera kiezen.
+    pushAttempt({ audio: false, video: buildScanVideoConstraints({ facingMode: { exact: 'environment' } }) })
+    pushAttempt({ audio: false, video: buildScanVideoConstraints({ facingMode: { ideal: 'environment' } }) })
+  }
+
   prioritizedDevices.forEach((device) => {
     if (device?.deviceId) {
       pushAttempt({ audio: false, video: buildScanVideoConstraints({ deviceId: { exact: device.deviceId } }) })
     }
   })
 
-  if (mobile) {
-    pushAttempt({ audio: false, video: buildScanVideoConstraints({ facingMode: { exact: 'environment' } }) })
-    pushAttempt({ audio: false, video: buildScanVideoConstraints({ facingMode: { ideal: 'environment' } }) })
-  } else {
+  if (!mobile) {
     pushAttempt({ audio: false, video: buildScanVideoConstraints() })
   }
 
@@ -240,19 +389,66 @@ export async function startBarcodeDecoding({
   const nativeDetector = await createNativeBarcodeDetector()
   log?.('VIDEO_FIRST_FRAME_CONFIRMED', { readyState: video.readyState, videoWidth: video.videoWidth, videoHeight: video.videoHeight })
 
+  let resultResolved = false
+  const emitResultOnce = (result) => {
+    if (resultResolved) return
+    resultResolved = true
+    processedFrameControls.stop()
+    onResult?.(result)
+  }
+  const processedFrameControls = startProcessedFrameDecoding({
+    video,
+    onAttempt,
+    onResult: emitResultOnce,
+    onNonFatalError,
+    log,
+  })
+
+  const startZxingFallback = async () => {
+    log?.('ZXING_FALLBACK_START')
+    const controls = await reader.decodeFromVideoElement(video, (result, error) => {
+      if (result) {
+        emitResultOnce(result)
+        return
+      }
+      onAttempt?.()
+      if (!error) return
+      if (isNonFatalBarcodeScanError(error)) {
+        onNonFatalError?.(error)
+        return
+      }
+      onFatalError?.(error)
+    })
+    return controls
+  }
+
   if (nativeDetector) {
     let stopped = false
+    let resolved = false
     let rafId = 0
     let timeoutId = 0
+    let fallbackTimerId = 0
+    let zxingControls = null
+
+    const stopNativeLoop = () => {
+      if (rafId) window.cancelAnimationFrame(rafId)
+      if (timeoutId) window.clearTimeout(timeoutId)
+      rafId = 0
+      timeoutId = 0
+    }
 
     const stop = () => {
       stopped = true
-      if (rafId) window.cancelAnimationFrame(rafId)
-      if (timeoutId) window.clearTimeout(timeoutId)
+      stopNativeLoop()
+      if (fallbackTimerId) window.clearTimeout(fallbackTimerId)
+      fallbackTimerId = 0
+      try { zxingControls?.stop?.() } catch {}
+      try { reader.reset?.() } catch {}
+      processedFrameControls.stop()
     }
 
     const loop = async () => {
-      if (stopped) return
+      if (stopped || resolved) return
       if (video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
         rafId = window.requestAnimationFrame(loop)
         return
@@ -262,12 +458,15 @@ export async function startBarcodeDecoding({
         const detections = await nativeDetector.detect(video)
         const detection = Array.isArray(detections) ? detections.find((item) => item?.rawValue) : null
         if (detection?.rawValue) {
-          stop()
+          resolved = true
+          if (fallbackTimerId) window.clearTimeout(fallbackTimerId)
+          stopNativeLoop()
+          log?.('NATIVE_DECODE_RESULT_FOUND', { text: detection.rawValue, format: detection.format })
           onResult?.({ text: detection.rawValue, rawValue: detection.rawValue, format: detection.format })
           return
         }
       } catch (error) {
-        if (!stopped) {
+        if (!stopped && !resolved) {
           console.info('Native BarcodeDetector scanpoging zonder resultaat', { error })
           onNonFatalError?.(error)
         }
@@ -277,28 +476,28 @@ export async function startBarcodeDecoding({
       }, 140)
     }
 
+    fallbackTimerId = window.setTimeout(async () => {
+      if (stopped || resolved) return
+      stopNativeLoop()
+      log?.('NATIVE_DETECTOR_FALLBACK', { reason: 'no-result-within-window' })
+      try {
+        zxingControls = await startZxingFallback()
+      } catch (error) {
+        if (!stopped && !resolved) onFatalError?.(error)
+      }
+    }, 1800)
+
     rafId = window.requestAnimationFrame(loop)
     return { stop }
   }
 
-  const controls = await reader.decodeFromVideoElement(video, (result, error) => {
-    if (result) {
-      onResult?.(result)
-      return
-    }
-    onAttempt?.()
-    if (!error) return
-    if (isNonFatalBarcodeScanError(error)) {
-      onNonFatalError?.(error)
-      return
-    }
-    onFatalError?.(error)
-  })
+  const controls = await startZxingFallback()
 
   return {
     stop: () => {
       try { controls?.stop?.() } catch {}
       try { reader.reset?.() } catch {}
+      processedFrameControls.stop()
     },
   }
 }

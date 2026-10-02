@@ -86,6 +86,7 @@ from app.db import engine
 from app.startup.runtime_initialization import run_runtime_initialization
 from app.startup.runtime_observability import log_runtime_datastore_configuration_event
 from app.startup.runtime_schema_validation import validate_runtime_schema
+from app.services.product_web_lookup_service import lookup_myrealfood_product_by_gtin
 from app.services.global_product_service import (
     build_global_product_fingerprint,
     get_or_create_global_product,
@@ -111,6 +112,10 @@ from app.services.unpacking_household_object_guard import (
 from app.services.household_alias_policy import install_household_alias_policy
 from app.services.household_representative_image_service import (
     backfill_household_representative_images,
+    materialize_household_representative_images,
+)
+from app.services.catalog_product_image_backfill_service import (
+    backfill_catalog_product_images_from_enrichments,
 )
 from app.services.household_product_configuration_service import (
     public_household_product_configuration_payload,
@@ -205,9 +210,9 @@ SUPPORTED_RECEIPT_ARCHIVE_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp'
 ZIP_MIME_TYPES = {'application/zip', 'application/x-zip-compressed', 'multipart/x-zip', 'application/octet-stream'}
 PRODUCT_SOURCE_ORDER = tuple(
     source.strip()
-    for source in os.getenv('REZZERV_PRODUCT_SOURCE_ORDER', 'open_food_facts,public_reference_catalog,gs1_my_product_manager_share').split(',')
+    for source in os.getenv('REZZERV_PRODUCT_SOURCE_ORDER', 'open_food_facts,myrealfood,public_reference_catalog,gs1_my_product_manager_share').split(',')
     if source.strip()
-) or ('open_food_facts', 'public_reference_catalog')
+) or ('open_food_facts', 'myrealfood', 'public_reference_catalog')
 PRODUCT_SOURCE_CONTINUE_ON_FAILURE = str(os.getenv('REZZERV_PRODUCT_SOURCE_CONTINUE_ON_FAILURE', 'true') or 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
 PUBLIC_PRODUCT_CATALOG_PATH = Path(__file__).resolve().parent / 'data' / 'public_product_catalog.json'
 
@@ -688,6 +693,7 @@ class InventoryTransferRequest(BaseModel):
 
 class BarcodeLookupRequest(BaseModel):
     barcode: str
+    article_name: Optional[str] = None
     household_id: Optional[str] = None
 
     @field_validator("barcode")
@@ -1526,6 +1532,10 @@ def sync_global_product_from_enrichment(conn, global_product_id: str | None, enr
             category = COALESCE(:category, category),
             size_value = COALESCE(:size_value, size_value),
             size_unit = COALESCE(:size_unit, size_unit),
+            image_url = COALESCE(
+                NULLIF(trim(image_url), ''),
+                NULLIF(trim(CAST(:image_url AS TEXT)), '')
+            ),
             source = COALESCE(:source, source),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = :global_product_id
@@ -1537,6 +1547,7 @@ def sync_global_product_from_enrichment(conn, global_product_id: str | None, enr
         'category': (enrichment or {}).get('category'),
         'size_value': (enrichment or {}).get('size_value'),
         'size_unit': (enrichment or {}).get('size_unit'),
+        'image_url': normalize_optional_text_field((enrichment or {}).get('image_url')),
         'source': normalize_global_product_source((enrichment or {}).get('source_name')),
     })
 
@@ -2498,6 +2509,62 @@ def load_public_reference_catalog() -> dict[str, dict]:
     return normalized
 
 
+class MyRealFoodAdapter:
+    source_name = 'myrealfood'
+
+    def lookup_by_barcode(self, barcode: str) -> EnrichmentLookupResult:
+        normalized_barcode = normalize_barcode_value(barcode)
+        result = lookup_myrealfood_product_by_gtin(normalized_barcode)
+        status = str(result.get('status') or 'failed')
+        product = result.get('product') if isinstance(result.get('product'), dict) else None
+        if status != 'found' or not product or not str(product.get('product_name') or '').strip():
+            mapped_status = 'not_found' if status in {'not_found', 'invalid_gtin'} else 'failed'
+            return EnrichmentLookupResult(
+                source_name=self.source_name,
+                status=mapped_status,
+                normalized_barcode=normalized_barcode,
+                message='Geen product gevonden bij MyRealFood' if mapped_status == 'not_found' else 'MyRealFood productlookup niet beschikbaar',
+                payload=None,
+                source_url=(product or {}).get('source_url') if product else None,
+                http_status=result.get('http_status'),
+                response_excerpt=str(result.get('error') or status)[:250],
+            )
+        title = str(product.get('product_name') or '').strip()
+        brand = str(product.get('brand') or '').strip() or None
+        source_url = str(product.get('source_url') or '').strip() or None
+        enrichment_payload = {
+            'source_name': self.source_name,
+            'source_record_id': normalized_barcode,
+            'title': title,
+            'brand': brand,
+            'category': str(product.get('category') or '').strip() or None,
+            'size_value': None,
+            'size_unit': None,
+            'ingredients_json': [],
+            'allergens_json': [],
+            'nutrition_json': {},
+            'image_url': str(product.get('image_url') or '').strip() or None,
+            'source_url': source_url,
+            'quality_score': float(product.get('quality_score') or 0.88),
+            'raw_payload_json': product,
+            'normalized_barcode': normalized_barcode,
+        }
+        return EnrichmentLookupResult(
+            source_name=self.source_name,
+            status='found',
+            normalized_barcode=normalized_barcode,
+            message=None,
+            payload=enrichment_payload,
+            source_record_id=normalized_barcode,
+            source_url=source_url,
+            http_status=result.get('http_status') or 200,
+            response_excerpt=json.dumps(
+                {'gtin': normalized_barcode, 'product_name': title, 'brand': brand},
+                ensure_ascii=False,
+            )[:250],
+        )
+
+
 class PublicReferenceCatalogAdapter:
     source_name = 'public_reference_catalog'
 
@@ -2708,6 +2775,7 @@ def get_configured_product_sources() -> list[dict]:
 def choose_product_source_adapters() -> list:
     available = {
         'open_food_facts': OpenFoodFactsAdapter,
+        'myrealfood': MyRealFoodAdapter,
         'public_reference_catalog': PublicReferenceCatalogAdapter,
         'gs1_my_product_manager_share': Gs1MyProductManagerShareAdapter,
     }
@@ -5484,6 +5552,9 @@ def upsert_global_product_enrichment(conn, global_product_id: str, enrichment: d
         ), {'id': str(uuid.uuid4()), **params})
     sync_global_product_from_enrichment(conn, global_product_id, {**enrichment, 'source_name': source_name})
     apply_enrichment_defaults_to_linked_household_articles(conn, global_product_id, enrichment)
+    linked_household_article_ids = get_household_article_ids_for_global_product(conn, global_product_id)
+    if linked_household_article_ids and normalize_optional_text_field(enrichment.get('image_url')):
+        materialize_household_representative_images(conn, linked_household_article_ids)
     write_product_enrichment_audit(conn, sentinel_household_article_id, source_name, 'lookup', 'found', payload_hash=payload_hash, normalized_barcode=resolved_barcode, source_request_key=f"{source_name}:{resolved_barcode}" if resolved_barcode else source_name, http_status=(audit_result.http_status if audit_result else None), response_excerpt=(audit_result.response_excerpt if audit_result else None), global_product_id=str(global_product_id))
     return get_latest_global_product_enrichment(conn, global_product_id)
 
@@ -5781,7 +5852,7 @@ def update_household_article_barcode(conn, household_id: str, article_name: str,
         text(
             """
             UPDATE household_articles
-            SET barcode = :barcode, external_source = CASE WHEN :barcode IS NULL THEN external_source ELSE COALESCE(external_source, 'manual') END, updated_at = CURRENT_TIMESTAMP
+            SET barcode = :barcode, external_source = CASE WHEN CAST(:barcode AS TEXT) IS NULL THEN external_source ELSE COALESCE(external_source, 'manual') END, updated_at = CURRENT_TIMESTAMP
             WHERE household_id = :household_id
               AND lower(trim(naam)) = lower(trim(:naam))
             """
@@ -13215,6 +13286,12 @@ run_runtime_initialization(
     receipt_storage_root=RECEIPT_STORAGE_ROOT,
 )
 
+catalog_image_backfill_count = backfill_catalog_product_images_from_enrichments(engine)
+logger.info(
+    "Catalogusfoto's terugwerkend uit opgeslagen productverrijking gevuld: %s",
+    catalog_image_backfill_count,
+)
+
 representative_image_backfill_count = backfill_household_representative_images(engine)
 logger.info(
     "Representatieve Voorraadfoto's terugwerkend gevuld: %s",
@@ -14261,6 +14338,7 @@ def update_inventory_external_product_link(inventory_id: str, payload: ArticleEx
         return {'status': 'ok', 'details': details}
 
 
+@app.post("/api/articles/barcode-scan")
 def scan_article_barcode(payload: BarcodeLookupRequest, authorization: Optional[str] = Header(None)):
     context = require_inventory_write_context(authorization, payload.household_id)
     household_id = str(context.get("active_household_id") or "demo-household")
@@ -14269,11 +14347,62 @@ def scan_article_barcode(payload: BarcodeLookupRequest, authorization: Optional[
             conn,
             household_id,
             payload.barcode,
+            product_name_hint=normalize_household_article_name(payload.article_name),
             create_global_product=True,
             create_household_article=False,
         )
         article = barcode_resolution.get('article')
         catalog_match = barcode_resolution.get('catalog_match') or {}
+        explicit_catalog_name = normalize_household_article_name(payload.article_name)
+        resolved_global_product_id = str(barcode_resolution.get('global_product_id') or '').strip()
+        if explicit_catalog_name and resolved_global_product_id and catalog_match.get('lookup_status') != 'found':
+            conn.execute(
+                text(
+                    """
+                    UPDATE global_products
+                    SET name = :name,
+                        source = CASE
+                            WHEN COALESCE(trim(source), '') IN ('', 'barcode_scan', 'user') THEN 'user'
+                            ELSE source
+                        END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :global_product_id
+                      AND (
+                        COALESCE(trim(name), '') = ''
+                        OR name = :placeholder_name
+                      )
+                    """
+                ),
+                {
+                    'global_product_id': resolved_global_product_id,
+                    'name': explicit_catalog_name,
+                    'placeholder_name': f'Product {payload.barcode}',
+                },
+            )
+            refreshed_product = conn.execute(
+                text(
+                    """
+                    SELECT id, primary_gtin, name, brand, category, size_value, size_unit, image_url, source, status
+                    FROM global_products
+                    WHERE id = :global_product_id
+                    LIMIT 1
+                    """
+                ),
+                {'global_product_id': resolved_global_product_id},
+            ).mappings().first()
+            if refreshed_product:
+                catalog_match['product'] = {
+                    **dict(catalog_match.get('product') or {}),
+                    'id': str(refreshed_product.get('id') or resolved_global_product_id),
+                    'name': refreshed_product.get('name'),
+                    'barcode': refreshed_product.get('primary_gtin') or payload.barcode,
+                    'brand': refreshed_product.get('brand'),
+                    'category': refreshed_product.get('category'),
+                    'size_value': refreshed_product.get('size_value'),
+                    'size_unit': refreshed_product.get('size_unit'),
+                    'image_url': refreshed_product.get('image_url'),
+                    'source': refreshed_product.get('source') or 'user',
+                }
         if article:
             article_name = str(article.get("naam") or "").strip()
             article_id = str(article.get("id") or "").strip()

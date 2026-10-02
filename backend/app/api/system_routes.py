@@ -53,6 +53,7 @@ from app.services.external_relation_batch_store import (
 )
 from app.services.open_food_facts_candidate_store import save_open_food_facts_preview_candidates
 from app.services.open_food_facts_search_preview import search_open_food_facts_preview
+from app.services.product_web_lookup_service import lookup_exact_gtin_sources
 from app.services.off_search_service import OffSearchError, search_off_candidates
 
 router = APIRouter()
@@ -224,6 +225,17 @@ def api_version():
         'version': VERSION_TAG,
         'source': 'VERSION.txt',
     }
+
+
+@router.post('/api/external-databases/gtin/lookup')
+def external_databases_exact_gtin_lookup(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Read-only exact-GTIN lookup across the shared public product sources."""
+    gtin = str(payload.get('gtin') or payload.get('barcode') or '').strip()
+    result = lookup_exact_gtin_sources(gtin)
+    result['creates_global_product'] = False
+    result['creates_household_article'] = False
+    result['creates_inventory_event'] = False
+    return result
 
 
 @router.post('/api/external-databases/catalog/promote-candidate')

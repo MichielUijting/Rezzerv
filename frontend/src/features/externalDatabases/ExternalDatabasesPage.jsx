@@ -51,6 +51,9 @@ export default function ExternalDatabasesPage() {
   const [isTesting, setIsTesting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
+  const [gtinLookupValue, setGtinLookupValue] = useState('4056489927952')
+  const [gtinLookupResult, setGtinLookupResult] = useState(null)
+  const [isLookingUpGtin, setIsLookingUpGtin] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -144,6 +147,32 @@ export default function ExternalDatabasesPage() {
     }
   }
 
+  async function lookupExactGtin(event) {
+    event.preventDefault()
+    const gtin = gtinLookupValue.trim()
+    if (!gtin) {
+      setError('Vul eerst een barcode in')
+      return
+    }
+    setIsLookingUpGtin(true)
+    setError('')
+    setGtinLookupResult(null)
+    try {
+      const response = await fetchJsonWithAuth('/api/external-databases/gtin/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gtin }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.detail || 'Barcode kon niet extern worden opgezocht')
+      setGtinLookupResult(data)
+    } catch (err) {
+      setError(err?.message || 'Barcode kon niet extern worden opgezocht')
+    } finally {
+      setIsLookingUpGtin(false)
+    }
+  }
+
   const candidates = Array.isArray(matchResult?.candidates) ? matchResult.candidates : []
   const offQueryTerms = Array.isArray(matchResult?.off_query_terms) ? matchResult.off_query_terms : []
 
@@ -151,6 +180,36 @@ export default function ExternalDatabasesPage() {
     if (tab === TAB_LABELS.overzicht) {
       return (
         <div className="rz-external-databases-overview">
+          <section className="rz-external-databases-test" aria-label="Product zoeken op barcode">
+            <div className="rz-external-databases-section-header">
+              <h3>Product zoeken op barcode</h3>
+              <span className="rz-external-databases-muted">Zoekt exact op GTIN in de gedeelde externe bronnen. Deze zoekactie wijzigt de Catalogus niet.</span>
+            </div>
+            <form onSubmit={lookupExactGtin} className="rz-external-databases-form">
+              <div className="rz-external-databases-form-grid">
+                <Input
+                  label="Barcode / GTIN"
+                  value={gtinLookupValue}
+                  onChange={(event) => setGtinLookupValue(event.target.value)}
+                  inputMode="numeric"
+                  placeholder="Bijvoorbeeld 4056489927952"
+                />
+              </div>
+              <div className="rz-external-databases-actions">
+                <Button type="submit" disabled={isLookingUpGtin}>
+                  {isLookingUpGtin ? 'Zoeken...' : 'Zoek product'}
+                </Button>
+              </div>
+            </form>
+            {gtinLookupResult ? (
+              <div className="rz-external-databases-preview-meta" data-testid="external-database-gtin-result">
+                <span>Status: {gtinLookupResult.status || '-'}</span>
+                <span>Bron: {gtinLookupResult.matched_source || '-'}</span>
+                <span>Artikel: {gtinLookupResult.product?.product_name || 'Niet gevonden'}</span>
+                <span>Merk: {gtinLookupResult.product?.brand || '-'}</span>
+              </div>
+            ) : null}
+          </section>
           <ReceiptItemsOverview onError={setError} onMessage={setError} />
         </div>
       )

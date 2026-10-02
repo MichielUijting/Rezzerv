@@ -1,0 +1,161 @@
+.rz-mobile-incidental-purchase-screen {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(240, 249, 242, 0.08) 100%),
+    url('/inhuis-green-wallpaper.svg') center top / cover no-repeat;
+  background-color: #EEF7F0;
+  color: var(--color-text-primary);
+}
+
+.rz-mobile-incidental-purchase-content {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 12px 14px calc(86px + env(safe-area-inset-bottom));
+}
+
+.rz-mobile-incidental-purchase-form {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  background: #FFFFFF;
+  box-shadow: none;
+}
+
+.rz-mobile-incidental-purchase-scan {
+  width: 100%;
+  min-height: 44px;
+}
+
+.rz-mobile-incidental-purchase-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: #000000;
+  font-size: var(--font-size-ui-body);
+  font-weight: 400;
+}
+
+.rz-mobile-incidental-purchase-field > span {
+  font-size: var(--font-size-ui-body);
+  color: #000000;
+}
+
+.rz-mobile-incidental-purchase-field .rz-input,
+.rz-mobile-incidental-purchase-select-trigger {
+  width: 100%;
+  min-height: 44px !important;
+  font-family: var(--font-family-base) !important;
+  font-size: var(--font-size-ui-body) !important;
+  font-weight: 400 !important;
+}
+
+.rz-mobile-incidental-purchase-select-trigger {
+  justify-content: space-between;
+}
+
+
+.rz-mobile-incidental-purchase-recognized,
+.rz-mobile-incidental-purchase-manual,
+.rz-mobile-incidental-purchase-required,
+.rz-mobile-incidental-purchase-additional {
+  display: grid;
+  gap: 10px;
+}
+
+.rz-mobile-incidental-purchase-recognized {
+  padding: 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: #FFFFFF;
+  color: #000000;
+  font-size: var(--font-size-ui-body);
+}
+
+.rz-mobile-incidental-purchase-product-image {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: #FFFFFF;
+}
+
+.rz-mobile-incidental-purchase-recognized strong {
+  font-size: var(--font-size-ui-title);
+  color: var(--color-mobile-ui-primary);
+}
+
+.rz-mobile-incidental-purchase-recognized span {
+  color: #000000;
+  font-size: var(--font-size-ui-body);
+}
+
+.rz-mobile-incidental-purchase-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.rz-mobile-incidental-purchase-actions button {
+  width: 100%;
+  min-height: 44px;
+}
+
+.rz-mobile-incidental-purchase-camera-backdrop {
+  padding: 10px;
+}
+
+.rz-mobile-incidental-purchase-camera {
+  width: min(100%, 640px);
+  max-height: calc(100vh - 20px);
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+}
+
+.rz-mobile-incidental-purchase-camera .rz-modal-title {
+  margin: 0;
+  font-size: var(--font-size-ui-title);
+  color: #000000;
+}
+
+.rz-mobile-incidental-purchase-camera-video {
+  display: block;
+  width: 100%;
+  max-height: min(58vh, 420px);
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: #000000;
+}
+
+.rz-mobile-incidental-purchase-camera-status {
+  display: grid;
+  gap: 4px;
+  color: #000000;
+  font-size: var(--font-size-ui-body);
+}
+
+.rz-mobile-incidental-purchase-camera-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rz-mobile-incidental-purchase-camera-actions button {
+  min-height: 44px;
+}
+
+@media (max-width: 380px) {
+  .rz-mobile-incidental-purchase-content {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .rz-mobile-incidental-purchase-form {
+    padding: 12px;
+  }
+}
