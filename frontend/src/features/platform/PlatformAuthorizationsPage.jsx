@@ -95,7 +95,7 @@ export default function PlatformAuthorizationsPage() {
     <div data-testid="platform-authorizations-page">
       <Header
         title="Platformautorisaties"
-        subtitle="Bekijk platformrollen; alleen de IP-eigenaar kan Superuser, Frontteamlid en Platformbeheerder aanstellen of intrekken."
+        subtitle="Bekijk platformrollen; de Superuser kan Superuser, Frontteamlid en Platformbeheerder aanstellen of intrekken."
       />
 
       <Card>
