@@ -52,6 +52,32 @@
 
 .rz-mobile-shopping-toolbar {
   margin-bottom: 14px;
+  overflow: visible;
+}
+
+.rz-mobile-shopping-search-wrap {
+  position: relative;
+  z-index: 20;
+}
+
+.rz-mobile-shopping-search-wrap .rz-mobile-inventory-search {
+  margin: 0;
+}
+
+.rz-mobile-shopping-candidate-overlay {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: min(320px, 52vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rz-mobile-shopping-candidate-overlay .rz-search-candidate-list {
+  margin-top: 0;
+  box-shadow: var(--elevation-2);
 }
 
 .rz-mobile-shopping-groups {
