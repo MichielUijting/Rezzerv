@@ -125,6 +125,66 @@ def ensure_bundled_dutch_gpc_reference(conn: Connection) -> dict[str, int | str]
             "source_version": source_version,
         })
 
+    # global_product_gpc_bricks.brick_code heeft een FK naar gpc_bricks.
+    # Daarom moet dezelfde officiële Nederlandse bundle eerst ook de canonieke
+    # Segment -> Family -> Class -> Brick-tabellen vullen. Anders kan een
+    # automatische Brick-toewijzing wel uit gpc_product_groups worden gekozen,
+    # maar vervolgens op de FK naar gpc_bricks stuklopen.
+    canonical_required = {"gpc_segments", "gpc_families", "gpc_classes", "gpc_bricks"}
+    if canonical_required.issubset(_tables(conn)):
+        segments = {}
+        families = {}
+        classes = {}
+        bricks = {}
+        for row in params:
+            segments[row["gpc_segment_code"]] = {
+                "segment_code": row["gpc_segment_code"],
+                "description": row["gpc_segment_name"],
+            }
+            families[row["gpc_family_code"]] = {
+                "family_code": row["gpc_family_code"],
+                "description": row["gpc_family_name"],
+                "segment_code": row["gpc_segment_code"],
+            }
+            classes[row["gpc_class_code"]] = {
+                "class_code": row["gpc_class_code"],
+                "description": row["gpc_class_name"],
+                "family_code": row["gpc_family_code"],
+            }
+            bricks[row["gpc_brick_code"]] = {
+                "brick_code": row["gpc_brick_code"],
+                "description": row["gpc_brick_name"],
+                "class_code": row["gpc_class_code"],
+            }
+
+        conn.execute(text("""
+            INSERT INTO gpc_segments (segment_code, description)
+            VALUES (:segment_code, :description)
+            ON CONFLICT(segment_code) DO UPDATE SET
+                description = excluded.description
+        """), list(segments.values()))
+        conn.execute(text("""
+            INSERT INTO gpc_families (family_code, description, segment_code)
+            VALUES (:family_code, :description, :segment_code)
+            ON CONFLICT(family_code) DO UPDATE SET
+                description = excluded.description,
+                segment_code = excluded.segment_code
+        """), list(families.values()))
+        conn.execute(text("""
+            INSERT INTO gpc_classes (class_code, description, family_code)
+            VALUES (:class_code, :description, :family_code)
+            ON CONFLICT(class_code) DO UPDATE SET
+                description = excluded.description,
+                family_code = excluded.family_code
+        """), list(classes.values()))
+        conn.execute(text("""
+            INSERT INTO gpc_bricks (brick_code, description, class_code)
+            VALUES (:brick_code, :description, :class_code)
+            ON CONFLICT(brick_code) DO UPDATE SET
+                description = excluded.description,
+                class_code = excluded.class_code
+        """), list(bricks.values()))
+
     conn.execute(text("""
         INSERT INTO gpc_product_groups (
             gpc_brick_code, gpc_brick_name,
