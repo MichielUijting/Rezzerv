@@ -59,6 +59,8 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 - de status **Nog opbergen** opent rechtstreeks **Kassa > Bonnen** en niet de camera;
 - de globale onderste actie **Meer** opent een apart overzicht met de overige beschikbare hoofdfuncties die niet al als recente acties onderin staan;
 - een klik op een dashboardtegel opent een consistente drill-down met meer detail;
+- een afzonderlijke staaf in een dashboardgrafiek is eveneens klikbaar/tikbaar en opent een drill-down die uitsluitend de bonnen, artikelen, winkels of verwachte herhalingskopen van precies die staafperiode en die reeks toont;
+- bij vergelijkingsgrafieken blijft onderscheid bestaan tussen de huidige staaf en de lichtgroene vergelijkingsstaaf; de drill-down volgt exact de aangeklikte reeks;
 - de dashboardtegels gebruiken de centrale primaire kleur, witte surfaces, `--radius-md` en uitsluitend de twee centrale tekstgroottes;
 - de landingspagina toont niet daarnaast opnieuw grote actiekaarten voor Voorraad, Boodschappen, Kassa, Uitpakken, Catalogus en andere hoofdmodules;
 - Gebruiker, Beheerder en Frontteamlid gebruiken hetzelfde huishoud-dashboard; Frontteamfunctionaliteit blijft aanvullend via de centrale navigatie beschikbaar;
