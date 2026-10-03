@@ -114,6 +114,7 @@ def test_dashboard_drilldown_route_uses_regular_server_session_context(monkeypat
         bucket_index,
         series,
         comparison,
+        group_key,
     ):
         captured.update({
             "household_id": household_id,
@@ -123,6 +124,7 @@ def test_dashboard_drilldown_route_uses_regular_server_session_context(monkeypat
             "bucket_index": bucket_index,
             "series": series,
             "comparison": comparison,
+            "group_key": group_key,
         })
         return {"label": "W40 2026", "receipts": []}
 
@@ -135,6 +137,7 @@ def test_dashboard_drilldown_route_uses_regular_server_session_context(monkeypat
         bucket_index=3,
         series="previous",
         comparison="year",
+        group_key="gpc-class:10000000",
     )
 
     assert payload["label"] == "W40 2026"
@@ -146,4 +149,5 @@ def test_dashboard_drilldown_route_uses_regular_server_session_context(monkeypat
         "bucket_index": 3,
         "series": "previous",
         "comparison": "year",
+        "group_key": "gpc-class:10000000",
     }
