@@ -31,6 +31,7 @@ def get_household_dashboard_drilldown(
     bucket_index: int,
     series: str = "current",
     comparison: str = "previous",
+    group_key: str | None = None,
 ):
     raw_session_id = request.cookies.get(SESSION_COOKIE_NAME)
     with engine.begin() as conn:
@@ -47,6 +48,7 @@ def get_household_dashboard_drilldown(
                 bucket_index=bucket_index,
                 series=series,
                 comparison=comparison,
+                group_key=group_key,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
