@@ -76,7 +76,7 @@ Voor het mobiele scherm **Boodschappen** geldt aanvullend:
 - iedere artikelrij toont rechts na `-` / aantal / `+` een afzonderlijke prullenbakknop;
 - de prullenbakknop heeft dezelfde compacte breedte en dezelfde touchhoogte als de min- en plusknop en verwijdert alleen die artikelregel; het pictogram zelf is circa 25% groter dan de eerste implementatie zodat het duidelijk herkenbaar is;
 - min, aantal, plus en prullenbak activeren niet per ongeluk de rijverplaatsing;
-- als **In winkelwagen** leeg is, staat daar uitsluitend **Leeg**, links uitgelijnd met de sectietitel;
+- als **In winkelwagen** leeg is, wordt onder de sectiekop geen extra leegtekst gerenderd; alleen de kop en teller 0 blijven zichtbaar;
 - bij **Artikel toevoegen** verschijnt tijdens zoeken geen inline tekst **Zoeken…**;
 - zoekresultaten worden als een zwevende **dropdown/overlay** direct onder het zoekveld getoond en nemen geen extra verticale ruimte in de schermflow in;
 - een klik/tik op een bestaand zoekresultaat geldt direct als toevoegen; een aparte vaste knop **Toevoegen** wordt niet getoond;
