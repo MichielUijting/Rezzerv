@@ -398,9 +398,7 @@ export default function MobileShopping() {
                 <div className="rz-mobile-shopping-list">
                   {cartItems.map(renderShoppingRow)}
                 </div>
-              ) : (
-                <div className="rz-mobile-shopping-empty-section">Leeg</div>
-              )}
+              ) : null}
             </section>
           </div>
         ) : null}
