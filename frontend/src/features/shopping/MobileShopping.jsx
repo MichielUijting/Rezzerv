@@ -47,7 +47,6 @@ export default function MobileShopping() {
   const [catalogResults, setCatalogResults] = useState([])
   const [selectedResultId, setSelectedResultId] = useState('')
   const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
-  const [selectedItemIds, setSelectedItemIds] = useState([])
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -60,8 +59,6 @@ export default function MobileShopping() {
     try {
       const payload = await requestJson('/api/shopping-list')
       setList(payload)
-      const existingIds = new Set((payload.items || []).map((item) => item.id))
-      setSelectedItemIds((current) => current.filter((id) => existingIds.has(id)))
     } catch (loadError) {
       setError(loadError?.message || 'Boodschappen konden niet worden geladen.')
     } finally {
@@ -137,31 +134,11 @@ export default function MobileShopping() {
     () => (list.items || []).filter((item) => item.checked),
     [list.items],
   )
-  const selectedToBuyItems = useMemo(
-    () => toBuyItems.filter((item) => selectedItemIds.includes(item.id)),
-    [selectedItemIds, toBuyItems],
-  )
-  const selectedCartItems = useMemo(
-    () => cartItems.filter((item) => selectedItemIds.includes(item.id)),
-    [cartItems, selectedItemIds],
-  )
-
   function patchListItem(itemId, patch) {
     setList((current) => ({
       ...current,
       items: (current.items || []).map((item) => item.id === itemId ? { ...item, ...patch } : item),
     }))
-  }
-
-  function toggleSelectedItem(itemId, selected) {
-    setSelectedItemIds((current) => selected
-      ? [...new Set([...current, itemId])]
-      : current.filter((id) => id !== itemId))
-  }
-
-  function clearSectionSelection(items) {
-    const ids = new Set(items.map((item) => item.id))
-    setSelectedItemIds((current) => current.filter((id) => !ids.has(id)))
   }
 
   async function addArticle() {
@@ -211,50 +188,29 @@ export default function MobileShopping() {
     }
   }
 
-  async function setPurchasedForItems(items, checked) {
-    if (!items.length) return
-    setSaving(true)
-    setError('')
-    try {
-      await Promise.all(items.map((item) => requestJson(
-        `/api/shopping-list/items/${encodeURIComponent(item.id)}`,
-        { method: 'PUT', body: JSON.stringify({ checked }) },
-      )))
-      clearSectionSelection(items)
-      await loadList()
-    } catch (saveError) {
-      setError(saveError?.message || 'De winkelwagenstatus kon niet worden opgeslagen.')
-      await loadList()
-    } finally {
-      setSaving(false)
-    }
+  async function moveItem(item) {
+    if (!item || saving) return
+    await updateItem(item, { checked: !Boolean(item.checked) })
   }
 
-  function deleteSelectedItems(items) {
-    if (!items.length) return
-    const count = items.length
+  function deleteItem(item) {
+    if (!item || saving) return
     showFeedback({
       variant: 'warning',
-      title: count === 1 ? 'Artikel verwijderen' : 'Artikelen verwijderen',
-      message: count === 1 ? '1 geselecteerd artikel verwijderen?' : `${count} geselecteerde artikelen verwijderen?`,
-      detail: 'De geselecteerde artikelen verdwijnen uit de actuele boodschappen.',
+      title: 'Artikel verwijderen',
+      message: `${item.article_name} verwijderen uit Boodschappen?`,
       testId: 'shopping-delete-confirmation',
       primaryActionLabel: 'Verwijderen',
       secondaryActionLabel: 'Annuleren',
       onPrimaryAction: async () => {
         setSaving(true)
+        setError('')
         try {
-          await Promise.all(items.map((item) => requestJson(
-            `/api/shopping-list/items/${encodeURIComponent(item.id)}`,
-            { method: 'DELETE' },
-          )))
-          clearSectionSelection(items)
+          await requestJson(`/api/shopping-list/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' })
           await loadList()
-          showFeedback({
-            variant: 'success',
-            title: 'Verwijderd',
-            message: count === 1 ? '1 artikel verwijderd.' : `${count} artikelen verwijderd.`,
-          })
+          showFeedback({ variant: 'success', title: 'Verwijderd', message: `${item.article_name} is verwijderd.` })
+        } catch (deleteError) {
+          setError(deleteError?.message || 'Het artikel kon niet worden verwijderd.')
         } finally {
           setSaving(false)
         }
@@ -275,7 +231,6 @@ export default function MobileShopping() {
         setSaving(true)
         try {
           await requestJson('/api/shopping-list/complete', { method: 'POST' })
-          setSelectedItemIds([])
           await loadList()
           showFeedback({ variant: 'success', title: 'Boodschappen afgerond', message: 'Boodschappen zijn leeggemaakt.' })
         } finally {
@@ -296,27 +251,35 @@ export default function MobileShopping() {
         imageProductName={item.article_name}
         checked={Boolean(item.checked)}
         testId={`mobile-shopping-item-${item.id}`}
-        leading={(
-          <input
-            type="checkbox"
-            checked={selectedItemIds.includes(item.id)}
-            onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
-            aria-label={`Selecteer ${item.article_name}`}
-          />
-        )}
+        onActivate={() => moveItem(item)}
         side={(
-          <QuantityStepper
-            value={String(quantityValue(item))}
-            decreaseDisabled={saving || quantityValue(item) <= 1}
-            increaseDisabled={saving}
-            decreaseLabel={`Verlaag aantal van ${item.article_name}`}
-            increaseLabel={`Verhoog aantal van ${item.article_name}`}
-            valueLabel={`Aantal ${quantityValue(item)}`}
-            valueEditable={false}
-            testIdPrefix={`mobile-shopping-quantity-${item.id}`}
-            onDecrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) - 1 }) }}
-            onIncrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) + 1 }) }}
-          />
+          <div className="rz-mobile-shopping-row-actions">
+            <QuantityStepper
+              value={String(quantityValue(item))}
+              decreaseDisabled={saving || quantityValue(item) <= 1}
+              increaseDisabled={saving}
+              decreaseLabel={`Verlaag aantal van ${item.article_name}`}
+              increaseLabel={`Verhoog aantal van ${item.article_name}`}
+              valueLabel={`Aantal ${quantityValue(item)}`}
+              valueEditable={false}
+              testIdPrefix={`mobile-shopping-quantity-${item.id}`}
+              onDecrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) - 1 }) }}
+              onIncrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) + 1 }) }}
+            />
+            <button
+              type="button"
+              className="rz-mobile-shopping-delete"
+              disabled={saving}
+              aria-label={`Verwijder ${item.article_name}`}
+              data-testid={`mobile-shopping-delete-${item.id}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.stopPropagation(); deleteItem(item) }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z" />
+              </svg>
+            </button>
+          </div>
         )}
       />
     )
@@ -400,29 +363,6 @@ export default function MobileShopping() {
               ) : (
                 <div className="rz-mobile-shopping-empty-section">Alles uit deze lijst zit in je winkelwagen.</div>
               )}
-              <div className="rz-mobile-shopping-selection-actions" data-testid="mobile-shopping-to-buy-actions">
-                <span>{selectedToBuyItems.length} geselecteerd</span>
-                <div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => deleteSelectedItems(selectedToBuyItems)}
-                    disabled={saving || selectedToBuyItems.length === 0}
-                    data-testid="mobile-shopping-delete-selected"
-                  >
-                    Verwijderen
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => setPurchasedForItems(selectedToBuyItems, true)}
-                    disabled={saving || selectedToBuyItems.length === 0}
-                    data-testid="mobile-shopping-move-to-cart"
-                  >
-                    In winkelwagen
-                  </Button>
-                </div>
-              </div>
             </section>
 
             <section className="rz-mobile-shopping-group" aria-label="In winkelwagen" data-testid="mobile-shopping-cart">
@@ -437,29 +377,6 @@ export default function MobileShopping() {
               ) : (
                 <div className="rz-mobile-shopping-empty-section">Nog geen artikelen in je winkelwagen.</div>
               )}
-              <div className="rz-mobile-shopping-selection-actions" data-testid="mobile-shopping-cart-actions">
-                <span>{selectedCartItems.length} geselecteerd</span>
-                <div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => deleteSelectedItems(selectedCartItems)}
-                    disabled={saving || selectedCartItems.length === 0}
-                    data-testid="mobile-shopping-cart-delete-selected"
-                  >
-                    Verwijderen
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setPurchasedForItems(selectedCartItems, false)}
-                    disabled={saving || selectedCartItems.length === 0}
-                    data-testid="mobile-shopping-return-to-buy"
-                  >
-                    Terug naar nog te kopen
-                  </Button>
-                </div>
-              </div>
             </section>
           </div>
         ) : null}
