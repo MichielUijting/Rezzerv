@@ -88,3 +88,62 @@ def test_dashboard_route_preserves_session_401(monkeypatch):
         dashboard_routes.get_household_dashboard(_request(cookie=None))
 
     assert exc.value.status_code == 401
+
+
+def test_dashboard_drilldown_route_uses_regular_server_session_context(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(dashboard_routes, "engine", _FakeEngine())
+    monkeypatch.setattr(
+        dashboard_routes,
+        "resolve_server_session",
+        lambda _conn, _raw_session_id: SimpleNamespace(
+            context_type="regular",
+            active_household_id="household-1",
+            user_id="user-1",
+        ),
+    )
+
+    def fake_drilldown(
+        _conn,
+        *,
+        household_id,
+        user_id,
+        metric,
+        granularity,
+        bucket_index,
+        series,
+        comparison,
+    ):
+        captured.update({
+            "household_id": household_id,
+            "user_id": user_id,
+            "metric": metric,
+            "granularity": granularity,
+            "bucket_index": bucket_index,
+            "series": series,
+            "comparison": comparison,
+        })
+        return {"label": "W40 2026", "receipts": []}
+
+    monkeypatch.setattr(dashboard_routes, "build_household_dashboard_drilldown", fake_drilldown)
+
+    payload = dashboard_routes.get_household_dashboard_drilldown(
+        _request(),
+        metric="spend",
+        granularity="weeks",
+        bucket_index=3,
+        series="previous",
+        comparison="year",
+    )
+
+    assert payload["label"] == "W40 2026"
+    assert captured == {
+        "household_id": "household-1",
+        "user_id": "user-1",
+        "metric": "spend",
+        "granularity": "weeks",
+        "bucket_index": 3,
+        "series": "previous",
+        "comparison": "year",
+    }
