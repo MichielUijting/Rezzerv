@@ -166,10 +166,10 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
       || (dashboard.forecast?.weeks || []).map((item) => ({ label: 'W' + item.week, value: item.value }))).slice(0, 4)
     const forecastTotal = forecastPoints.reduce((total, item) => total + Number(item.value || 0), 0)
     const forecastPeriodLabel = periodKey === 'days'
-      ? 'komende 7 dagen'
+      ? 'komende 4 dagen'
       : periodKey === 'weeks'
         ? 'komende 4 weken'
-        : 'komende 6 maanden'
+        : 'komende 4 maanden'
 
     return [
       {
