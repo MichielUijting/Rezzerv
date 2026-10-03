@@ -669,6 +669,140 @@ def _repeat_purchase_forecast(
     }
 
 
+
+def _dashboard_bucket_window(
+    *,
+    now: datetime,
+    granularity: str,
+    bucket_index: int,
+    series: str,
+    comparison: str,
+) -> tuple[datetime, datetime, str]:
+    if granularity not in {"days", "weeks", "months"}:
+        raise ValueError("Ongeldige dashboardperiode")
+    if bucket_index < 0 or bucket_index > 3:
+        raise ValueError("Ongeldige dashboardstaaf")
+    if series not in {"current", "previous"}:
+        raise ValueError("Ongeldige dashboardreeks")
+    if comparison not in {"previous", "year"}:
+        raise ValueError("Ongeldige dashboardvergelijking")
+
+    if granularity == "days":
+        current_day = (now - timedelta(days=3 - bucket_index)).date()
+        target_day = current_day
+        if series == "previous":
+            if comparison == "year":
+                try:
+                    target_day = current_day.replace(year=current_day.year - 1)
+                except ValueError:
+                    target_day = current_day.replace(year=current_day.year - 1, day=28)
+            else:
+                target_day = current_day - timedelta(days=4)
+        start = datetime.combine(target_day, datetime.min.time(), tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        return start, end, target_day.strftime("%d-%m-%Y")
+
+    if granularity == "weeks":
+        current_monday = (now - timedelta(days=now.weekday())).date()
+        current_start_date = current_monday - timedelta(weeks=3 - bucket_index)
+        target_start_date = current_start_date
+        if series == "previous":
+            target_start_date = (
+                current_start_date - timedelta(days=364)
+                if comparison == "year"
+                else current_start_date - timedelta(weeks=4)
+            )
+        start = datetime.combine(target_start_date, datetime.min.time(), tzinfo=timezone.utc)
+        end = start + timedelta(days=7)
+        return start, end, f"W{target_start_date.isocalendar().week} {target_start_date.isocalendar().year}"
+
+    current_year, current_month = _month_shift(now.year, now.month, -(3 - bucket_index))
+    target_year, target_month = current_year, current_month
+    if series == "previous":
+        if comparison == "year":
+            target_year -= 1
+        else:
+            target_year, target_month = _month_shift(current_year, current_month, -4)
+    start = datetime(target_year, target_month, 1, tzinfo=timezone.utc)
+    next_year, next_month = _month_shift(target_year, target_month, 1)
+    end = datetime(next_year, next_month, 1, tzinfo=timezone.utc)
+    return start, end, start.strftime("%m-%Y")
+
+
+def build_household_dashboard_drilldown(
+    conn: Connection,
+    *,
+    household_id: str,
+    user_id: str,
+    metric: str,
+    granularity: str,
+    bucket_index: int,
+    series: str = "current",
+    comparison: str = "previous",
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    del user_id
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    start, end, label = _dashboard_bucket_window(
+        now=now,
+        granularity=granularity,
+        bucket_index=bucket_index,
+        series=series,
+        comparison=comparison,
+    )
+
+    receipts = _approved_receipts(conn, household_id)
+    article_details = _receipt_article_details(conn, household_id)
+    selected_rows = [row for row in receipts if start <= row["_purchase_at"] < end]
+    selected_receipts = [
+        _receipt_detail(row, article_details)
+        for row in sorted(selected_rows, key=lambda item: item["_purchase_at"], reverse=True)
+    ]
+
+    stores: dict[str, dict[str, Any]] = {}
+    for receipt in selected_receipts:
+        key = str(receipt.get("store") or "Onbekende winkel").strip().lower()
+        store = stores.setdefault(key, {
+            "name": receipt.get("store") or "Onbekende winkel",
+            "visits": 0,
+            "spend": 0.0,
+            "receipts": [],
+        })
+        store["visits"] += 1
+        store["spend"] = round(store["spend"] + _number(receipt.get("total")), 2)
+        store["receipts"].append(receipt)
+
+    response: dict[str, Any] = {
+        "metric": metric,
+        "granularity": granularity,
+        "bucket_index": bucket_index,
+        "series": series,
+        "comparison": comparison,
+        "label": label,
+        "period_start": start.isoformat(),
+        "period_end": end.isoformat(),
+        "receipts": selected_receipts,
+        "stores": sorted(stores.values(), key=lambda item: (-item["spend"], item["name"].lower())),
+        "spend": round(sum(_number(row.get("total_amount")) for row in selected_rows), 2),
+        "article_count": round(sum(
+            _number(article.get("quantity"))
+            for receipt in selected_receipts
+            for article in receipt.get("articles", [])
+        ), 2),
+    }
+
+    if metric == "forecast":
+        repeat_forecast = _repeat_purchase_forecast(receipts, article_details, now=now)
+        items = [
+            item for item in repeat_forecast.get("items", [])
+            if start.date() <= datetime.fromisoformat(str(item.get("expected_date"))).date() < end.date()
+        ]
+        response["forecast_items"] = items
+        response["forecast_total"] = round(sum(_number(item.get("expected_amount")) for item in items), 2)
+
+    return response
+
+
 def build_household_dashboard(
     conn: Connection,
     *,
