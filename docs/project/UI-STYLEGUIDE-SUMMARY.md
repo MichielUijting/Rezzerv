@@ -60,8 +60,8 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 - de globale onderste actie **Meer** opent een apart overzicht met de overige beschikbare hoofdfuncties die niet al als recente acties onderin staan;
 - een klik op een dashboardtegel opent een consistente drill-down met meer detail;
 - een afzonderlijke staaf in een dashboardgrafiek is eveneens klikbaar/tikbaar en opent een drill-down die uitsluitend de bonnen, artikelen, winkels of verwachte herhalingskopen van precies die staafperiode en die reeks toont;
-- de twee **Uitgaven**-grafieken stapelen elke staaf op basis van **GS1 GPC Class/Groep**: maximaal vijf grootste Classes krijgen een eigen segment, kleinere Classes worden samengevoegd tot **Overig** en ontbrekende classificaties vallen onder **Niet ingedeeld**;
-- ieder gestapeld segment is afzonderlijk klikbaar/tikbaar en filtert de staafdrill-down verder tot alleen die GPC Class, **Overig** of **Niet ingedeeld**;
+- de twee **Uitgaven**-grafieken stapelen elke staaf op basis van **GS1 GPC-familie**: maximaal vijf grootste productfamilies krijgen een eigen segment, kleinere families worden samengevoegd tot **Overig** en ontbrekende classificaties vallen onder **Niet ingedeeld**;
+- ieder gestapeld segment is afzonderlijk klikbaar/tikbaar en filtert de staafdrill-down verder tot alleen die GPC-familie, **Overig** of **Niet ingedeeld**;
 - de brede **Uitgaven**-drill-down toont daarnaast een zichtbaar blok **Per categorie** met dezelfde top-5/Overig/Niet-ingedeeld-logica, inclusief een gestapelde balk, bedragen en procentuele verdeling;
 - vanuit een dashboarddrill-down opent **Open kassabon** altijd de bestaande mobiele **Kassa → Bonnen**-context en nooit de camerascan als eerste scherm;
 - segmentbedragen worden per bon proportioneel aan de productregels aan het bonbedrag gekoppeld, zodat gestapelde segmenten samen exact het uitgavenbedrag van de staaf blijven vormen;
@@ -77,11 +77,12 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 
 Voor de artikelcatalogus geldt:
 
-- ieder catalogusartikel met een bevestigde **GPC Brick** toont daarnaast automatisch de bijbehorende **GPC-familie**;
+- ieder catalogusartikel krijgt waar nog geen Brick is vastgelegd automatisch een best passende Brick uit de bestaande Nederlandse GS1 GPC-referentielijst; een bestaande handmatige/bevestigde Brick wordt nooit overschreven;
+- vanuit die Brick toont ieder catalogusartikel automatisch de bijbehorende **GPC-familie**;
 - de familie wordt niet handmatig dubbel opgeslagen maar afgeleid uit de centrale GS1-hiërarchie **Brick → Class/Groep → Family**; daardoor geldt dezelfde logica direct voor bestaande én nieuw geclassificeerde catalogusartikelen;
 - de desktop-Catalogus toont **GPC-familie** als afzonderlijke sorteerbare en filterbare kolom en neemt de familie mee in export;
 - de mobiele Catalogus en het Catalogusdetail tonen eveneens de GPC-familie;
-- artikelen zonder bevestigde Brick blijven zichtbaar als **Niet geclassificeerd**;
+- **Niet geclassificeerd** is alleen toegestaan als de Nederlandse referentielijst geen bruikbare kandidaat voor het artikel oplevert; dit wordt als uitzonderings-/datakwaliteitsgeval behandeld en mag niet de normale toestand van bestaande Catalogusartikelen zijn;
 - gebruikerszichtbare GPC-labels voor **Brick**, **GPC-groep/Class**, **GPC-familie** en Segment komen uitsluitend uit de officiële Nederlandse GS1 GPC-publicatie;
 - een Engelstalige naam is geen toegestane gebruikerszichtbare fallback; ontbreekt een Nederlands label lokaal, dan geldt dat als een onvolledige GS1-import/referentiedatafout die moet worden hersteld.
 
@@ -89,7 +90,7 @@ Voor de artikelcatalogus geldt:
 
 Voor **Catalogus, Voorraad, Bijna op en Boodschappen** geldt één centrale GPC-weergaveregel:
 
-- GPC-identiteit wordt uitsluitend afgeleid via de canonieke productkoppeling: huishoudartikel → `global_product_id` → bevestigde GPC Brick → `gpc_product_groups`;
+- GPC-identiteit wordt uitsluitend afgeleid via de canonieke productkoppeling: huishoudartikel → `global_product_id` → bestaande of automatisch afgeleide GPC Brick → `gpc_product_groups`;
 - gebruikerszichtbare namen komen uit de bestaande Nederlandse GS1-referentielijst met `language_code = nl`;
 - waar een canonieke productkoppeling bestaat, worden **Brick**, **GPC-groep/Class** en **GPC-familie** direct geprojecteerd voor zowel bestaande als nieuw toegevoegde artikelen; er is geen eenmalige artikelmigratie nodig;
 - **Voorraad**, **Bijna op** en **Boodschappen** tonen de Nederlandse GPC-hiërarchie als artikelmetadata; desktopoverzichten ondersteunen zoeken/filteren op die GPC-tekst;
