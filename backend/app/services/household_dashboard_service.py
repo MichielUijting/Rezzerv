@@ -906,6 +906,7 @@ def build_household_dashboard_drilldown(
     bucket_index: int,
     series: str = "current",
     comparison: str = "previous",
+    group_key: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     del user_id
@@ -943,10 +944,44 @@ def build_household_dashboard_drilldown(
     receipts = _approved_receipts(conn, household_id)
     article_details = _receipt_article_details(conn, household_id)
     selected_rows = [row for row in receipts if start <= row["_purchase_at"] < end]
-    selected_receipts = [
-        _receipt_detail(row, article_details)
-        for row in sorted(selected_rows, key=lambda item: item["_purchase_at"], reverse=True)
-    ]
+    selected_group_keys: set[str] | None = None
+    group_label = ""
+    if group_key and metric in {"spend", "stores"}:
+        grouping = _spend_group_series(
+            receipts,
+            article_details,
+            now=now,
+            granularity=granularity,
+            comparison=comparison,
+        )
+        if group_key == "other":
+            selected_group_keys = set(grouping.get("other_keys") or [])
+            group_label = "Overig"
+        else:
+            selected_group_keys = {group_key}
+            group_label = next(
+                (item.get("label") for item in grouping.get("legend", []) if item.get("key") == group_key),
+                "Niet ingedeeld" if group_key == "unclassified" else group_key,
+            )
+
+    selected_receipts = []
+    for row in sorted(selected_rows, key=lambda item: item["_purchase_at"], reverse=True):
+        if selected_group_keys is None:
+            selected_receipts.append(_receipt_detail(row, article_details))
+            continue
+        allocations = _receipt_group_allocations(row, article_details)
+        matched_keys = selected_group_keys.intersection(allocations)
+        if not matched_keys:
+            continue
+        detail = _receipt_detail(row, article_details)
+        detail["articles"] = [
+            article
+            for article in detail.get("articles", [])
+            if str(article.get("gpc_class_key") or "unclassified") in selected_group_keys
+        ]
+        detail["article_count"] = round(sum(_number(item.get("quantity")) for item in detail["articles"]), 2)
+        detail["total"] = round(sum(_number(allocations[key].get("value")) for key in matched_keys), 2)
+        selected_receipts.append(detail)
 
     stores: dict[str, dict[str, Any]] = {}
     store_visit_days: set[tuple[str, str]] = set()
@@ -971,12 +1006,14 @@ def build_household_dashboard_drilldown(
         "bucket_index": bucket_index,
         "series": series,
         "comparison": comparison,
+        "group_key": group_key,
+        "group_label": group_label,
         "label": label,
         "period_start": start.isoformat(),
         "period_end": end.isoformat(),
         "receipts": selected_receipts,
         "stores": sorted(stores.values(), key=lambda item: (-item["spend"], item["name"].lower())),
-        "spend": round(sum(_number(row.get("total_amount")) for row in selected_rows), 2),
+        "spend": round(sum(_number(receipt.get("total")) for receipt in selected_receipts), 2),
         "article_count": round(sum(
             _number(article.get("quantity"))
             for receipt in selected_receipts
@@ -1056,6 +1093,18 @@ def build_household_dashboard(
         "weeks": _spend_year_over_year_series(receipts, now=now, granularity="weeks"),
         "months": _spend_year_over_year_series(receipts, now=now, granularity="months"),
     }
+    spend_group_views = {
+        granularity: _spend_group_series(
+            receipts, article_details, now=now, granularity=granularity, comparison="previous"
+        )
+        for granularity in ("days", "weeks", "months")
+    }
+    spend_year_group_views = {
+        granularity: _spend_group_series(
+            receipts, article_details, now=now, granularity=granularity, comparison="year"
+        )
+        for granularity in ("days", "weeks", "months")
+    }
     repeat_forecast = _repeat_purchase_forecast(receipts, article_details, now=now)
     store_views = _store_period_views(receipts, now=now)
 
@@ -1106,11 +1155,13 @@ def build_household_dashboard(
             "delta": round(current_spend - previous_spend, 2),
             "daily": daily_spend,
             "views": spend_views,
+            "group_views": spend_group_views,
             "currency": "EUR",
             "receipts": current_receipts,
         },
         "spend_year_over_year": {
             "views": spend_year_over_year_views,
+            "group_views": spend_year_group_views,
             "currency": "EUR",
         },
         "stores": {
