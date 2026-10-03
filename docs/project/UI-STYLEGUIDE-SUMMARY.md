@@ -77,8 +77,11 @@ Voor het mobiele scherm **Boodschappen** geldt aanvullend:
 - de prullenbakknop heeft dezelfde compacte breedte en dezelfde touchhoogte als de min- en plusknop en verwijdert alleen die artikelregel; het pictogram zelf is circa 25% groter dan de eerste implementatie zodat het duidelijk herkenbaar is;
 - min, aantal, plus en prullenbak activeren niet per ongeluk de rijverplaatsing;
 - als **In winkelwagen** leeg is, staat daar uitsluitend **Leeg**, links uitgelijnd met de sectietitel;
-- bij **Artikel toevoegen** geldt een klik/tik op een zoekresultaat in de kandidatenlijst direct als toevoegen; een aparte knop **Toevoegen** wordt niet getoond;
-- handmatige vrije invoer zonder zoekresultaat kan met Enter worden toegevoegd.
+- bij **Artikel toevoegen** verschijnt tijdens zoeken geen inline tekst **Zoeken…**;
+- zoekresultaten worden als een zwevende **dropdown/overlay** direct onder het zoekveld getoond en nemen geen extra verticale ruimte in de schermflow in;
+- een klik/tik op een bestaand zoekresultaat geldt direct als toevoegen; een aparte vaste knop **Toevoegen** wordt niet getoond;
+- als de zoekactie geen kandidaat oplevert, verschijnt in dezelfde dropdown altijd de optie **Toevoegen: [ingevoerde tekst]** om het artikel uitsluitend aan de lokale boodschappenlijst toe te voegen;
+- handmatige vrije invoer zonder zoekresultaat kan daarnaast met Enter worden toegevoegd.
 
 ## Mobiele ontwerpbaseline vanaf 22 september 2026
 
