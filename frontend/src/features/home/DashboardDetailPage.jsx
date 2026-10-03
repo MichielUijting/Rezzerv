@@ -264,6 +264,7 @@ export default function DashboardDetailPage() {
   const bucketIndex = Number(searchParams.get('bucket'))
   const series = searchParams.get('series') || 'current'
   const comparison = searchParams.get('comparison') || 'previous'
+  const groupKey = searchParams.get('group') || ''
   const hasBarDrilldown = ['days', 'weeks', 'months'].includes(granularity)
     && Number.isInteger(bucketIndex)
     && bucketIndex >= 0
@@ -279,6 +280,7 @@ export default function DashboardDetailPage() {
         bucketIndex,
         series,
         comparison,
+        groupKey,
       })
         .then((payload) => {
           if (!active) return
@@ -296,7 +298,7 @@ export default function DashboardDetailPage() {
         .catch((exc) => { if (active) setError(exc?.message || 'Dashboard kon niet worden geladen.') })
     }
     return () => { active = false }
-  }, [hasBarDrilldown, definition.key, granularity, bucketIndex, series, comparison])
+  }, [hasBarDrilldown, definition.key, granularity, bucketIndex, series, comparison, groupKey])
 
   const body = useMemo(() => {
     if (barDrilldown) {
@@ -333,10 +335,10 @@ export default function DashboardDetailPage() {
       return <>
         <div className="rz-dashboard-detail-summary">
           <strong>{euro(barDrilldown.spend)}</strong>
-          <span>{barDrilldown.label} · {series === 'previous' ? 'vergelijkingsperiode' : 'huidige periode'}</span>
+          <span>{barDrilldown.label}{barDrilldown.group_label ? ' · ' + barDrilldown.group_label : ''} · {series === 'previous' ? 'vergelijkingsperiode' : 'huidige periode'}</span>
         </div>
         <section className="rz-dashboard-detail-section">
-          <h2>Artikelen in deze staaf</h2>
+          <h2>{barDrilldown.group_label ? 'Artikelen in ' + barDrilldown.group_label : 'Artikelen in deze staaf'}</h2>
           <ArticleTotals receipts={receipts} />
         </section>
         <section className="rz-dashboard-detail-section">
@@ -410,7 +412,9 @@ export default function DashboardDetailPage() {
     </>
   }, [dashboard, barDrilldown, definition.key, series])
 
-  const detailTitle = barDrilldown ? `${definition.title} · ${barDrilldown.label}` : definition.title
+  const detailTitle = barDrilldown
+    ? `${definition.title} · ${barDrilldown.label}${barDrilldown.group_label ? ' · ' + barDrilldown.group_label : ''}`
+    : definition.title
 
   return <main className="rz-mobile-home" data-testid={'dashboard-detail-' + metric}>
     <MobileModuleHeader title={detailTitle} testId="dashboard-detail-header" />
