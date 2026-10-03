@@ -8,7 +8,10 @@ from typing import Any
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
-from app.services.dutch_gpc_projection_service import (\n    dutch_gpc_by_global_product,\n    dutch_gpc_by_household_article,\n)
+from app.services.dutch_gpc_projection_service import (
+    dutch_gpc_by_global_product,
+    dutch_gpc_by_household_article,
+)
 
 
 def _to_datetime(value: Any) -> datetime | None:
