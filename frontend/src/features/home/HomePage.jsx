@@ -141,7 +141,7 @@ export default function HomePage() {
 
   function openTile(tile) {
     const route = tile.key === 'berichten' && visibility.isPlatformSuperuser
-      ? '/superuser/meldingen'
+      ? '/platform/meldingen'
       : TILE_ROUTES[tile.key]
     if (!tile.clickable || !route) return
     recordRecentAction(tile.key, context)
