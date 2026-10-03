@@ -12,6 +12,7 @@ const morePage = readFileSync(new URL('../src/features/home/MobileMorePage.jsx',
 const mobileChrome = readFileSync(new URL('../src/app/MobileAppChrome.jsx', import.meta.url), 'utf8')
 
 assert.match(home, /MobileModuleHeader title="Dashboard"/)
+assert.match(home, /Dashboard inlezen\./)
 assert.match(home, /dashboard-status-notifications/)
 assert.match(home, /dashboard-status-shopping/)
 assert.match(home, /dashboard-status-put-away/)
