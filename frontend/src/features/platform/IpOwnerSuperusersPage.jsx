@@ -10,6 +10,7 @@ export default function IpOwnerSuperusersPage() {
   const [error, setError] = React.useState('')
   const [result, setResult] = React.useState('')
   const [pending, setPending] = React.useState(null)
+  const [confirmation, setConfirmation] = React.useState(null)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -34,6 +35,7 @@ export default function IpOwnerSuperusersPage() {
 
   async function changeRole(user, action) {
     if (pending) return
+    setConfirmation(null)
     setPending(`${user.user_id}:${action}`)
     setError('')
     setResult('')
@@ -79,12 +81,12 @@ export default function IpOwnerSuperusersPage() {
                       <div>{user.is_ip_owner ? 'IP-eigenaar' : user.is_superuser ? 'Superuser actief' : 'Geen Superuser'}</div>
                     </div>
                     {!user.is_ip_owner && user.is_superuser && user.can_revoke && (
-                      <Button type="button" variant="secondary" disabled={isBusy} onClick={() => changeRole(user, 'revoke')}>
+                      <Button type="button" variant="secondary" disabled={isBusy} onClick={() => setConfirmation({ user, action: 'revoke' })}>
                         Deactiveren
                       </Button>
                     )}
                     {!user.is_ip_owner && !user.is_superuser && user.can_grant && (
-                      <Button type="button" disabled={isBusy} onClick={() => changeRole(user, 'grant')}>
+                      <Button type="button" disabled={isBusy} onClick={() => setConfirmation({ user, action: 'grant' })}>
                         Superuser maken
                       </Button>
                     )}
@@ -94,6 +96,22 @@ export default function IpOwnerSuperusersPage() {
             </div>
           )}
         </Card>
+        {confirmation ? (
+          <Card>
+            <div data-testid="ip-owner-superuser-confirmation">
+              <h2>{confirmation.action === 'grant' ? 'Superuser maken?' : 'Superuser deactiveren?'}</h2>
+              <p>Deze wijziging geldt voor <strong>{confirmation.user.email}</strong>.</p>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <Button type="button" variant="secondary" disabled={Boolean(pending)} onClick={() => setConfirmation(null)}>
+                  Annuleren
+                </Button>
+                <Button type="button" disabled={Boolean(pending)} onClick={() => changeRole(confirmation.user, confirmation.action)}>
+                  {confirmation.action === 'grant' ? 'Definitief Superuser maken' : 'Definitief deactiveren'}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ) : null}
       </div></div>
     </div>
   )
