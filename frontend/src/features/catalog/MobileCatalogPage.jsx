@@ -148,6 +148,7 @@ export default function MobileCatalogPage() {
                   <strong>{text(item.name)}</strong>
                   <span>{[kindLabel(item.catalog_kind), text(item.brand, '')].filter(Boolean).join(' • ')}</span>
                   <span>{text(item.product_type, 'Geen producttype')}</span>
+                  <span>GPC-familie: {text(item.gpc_family_name, 'Niet geclassificeerd')}</span>
                 </span>
 
               </button>
