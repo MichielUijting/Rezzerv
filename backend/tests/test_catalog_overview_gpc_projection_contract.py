@@ -15,11 +15,14 @@ def test_confirmed_gpc_assignment_is_projected_by_catalog_backend_query():
     assert "gpc_product_groups catalog_gpc_nl" in source
     assert "catalog_gpc_nl.language_code = 'nl'" in source
     assert "catalog_gpc_nl.gpc_brick_name" in source
+    assert "catalog_gpc_nl.gpc_class_name" in source
     assert "catalog_gpc_nl.gpc_family_name" in source
     assert "gpc_brick_name_en" not in source
     assert "gpc_family_name_en" not in source
     assert "AS product_type" in source
     assert "AS gpc_brick_code" in source
+    assert "AS gpc_brick_name" in source
+    assert "AS gpc_class_name" in source
     assert "AS gpc_family_code" in source
     assert "AS gpc_family_name" in source
     assert '"image_url": "gp.image_url"' in source
@@ -49,8 +52,17 @@ def test_backend_pagination_drives_filter_sort_total_and_exported_product_type()
 
     assert "primaryGtin: 'primary_gtin'" in frontend
     assert "productType: 'product_type'" in frontend
+    assert "gpcBrickCode: 'gpc_brick_code'" in frontend
+    assert "gpcBrickName: 'gpc_brick_name'" in frontend
+    assert "gpcClass: 'gpc_class'" in frontend
     assert "gpcFamily: 'gpc_family'" in frontend
-    assert "GPC-familie" in frontend
+    assert "Brick-code" in frontend
+    assert "Brick-naam" in frontend
+    assert "GPC-groep" in frontend
+    assert "Productfamilie" in frontend
+    assert "item.gpc_brick_code" in frontend
+    assert "item.gpc_brick_name" in frontend
+    assert "item.gpc_class_name" in frontend
     assert "item.gpc_family_name" in frontend
     assert "householdArticleCount: 'household_article_count'" in frontend
     assert "setTotal(Number(data?.total || 0))" in frontend
@@ -92,3 +104,16 @@ def test_catalog_projects_and_renders_product_images_with_fallback():
     assert ".rz-catalog-product-image--compact" in css
     assert ".rz-catalog-product-summary" in css
     assert "object-fit: contain" in css
+
+
+def test_catalog_detail_shows_complete_dutch_gpc_hierarchy():
+    detail = CATALOG_DETAIL.read_text(encoding="utf-8")
+
+    assert "<dt>Brick-code</dt>" in detail
+    assert "<dt>Brick-naam</dt>" in detail
+    assert "<dt>GPC-groep</dt>" in detail
+    assert "<dt>Productfamilie</dt>" in detail
+    assert "product.gpc_brick_code" in detail
+    assert "product.gpc_brick_name" in detail
+    assert "product.gpc_class_name" in detail
+    assert "product.gpc_family_name" in detail
