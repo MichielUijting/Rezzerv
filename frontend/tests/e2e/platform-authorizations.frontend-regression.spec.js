@@ -113,38 +113,36 @@ test('platformbeheerder can inspect authorizations but cannot mutate special rol
   expect(mutations).toBe(0)
 })
 
-test('IP-owner sees only Superuser management and can grant or revoke that role', async ({ page }) => {
+test('IP-owner sees only active Superusers and can grant by email or revoke', async ({ page }) => {
   await mockSession(page, ipOwnerSession)
   const mutations = []
   let isSuperuser = false
 
   await page.route('**/api/ip-owner/superusers', async (route) => {
+    const request = route.request()
+    if (request.method() === 'POST') {
+      mutations.push({ url: request.url(), method: request.method(), headers: request.headers(), postData: request.postData() })
+      isSuperuser = true
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ item: { user_id: 'target-user' }, context_type: 'none' }),
+      })
+      return
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        users: [
-          {
-            user_id: 'owner',
-            email: 'owner@example.test',
-            account_status: 'active',
-            is_current: true,
-            is_ip_owner: true,
-            is_superuser: false,
-            can_grant: false,
-            can_revoke: false,
-          },
-          {
-            user_id: 'target-user',
-            email: 'target-user@example.test',
-            account_status: 'active',
-            is_current: false,
-            is_ip_owner: false,
-            is_superuser: isSuperuser,
-            can_grant: !isSuperuser,
-            can_revoke: isSuperuser,
-          },
-        ],
+        users: isSuperuser
+          ? [{
+              user_id: 'target-user',
+              email: 'target-user@example.test',
+              account_status: 'active',
+              is_superuser: true,
+              can_revoke: true,
+            }]
+          : [],
         can_manage_superusers: true,
         context_type: 'none',
         household_context_used: false,
@@ -152,10 +150,10 @@ test('IP-owner sees only Superuser management and can grant or revoke that role'
     })
   })
 
-  await page.route('**/api/platform/authorizations/users/target-user/superuser/**', async (route) => {
+  await page.route('**/api/platform/authorizations/users/target-user/superuser/revoke', async (route) => {
     const request = route.request()
-    mutations.push({ url: request.url(), method: request.method(), headers: request.headers() })
-    isSuperuser = request.url().endsWith('/grant')
+    mutations.push({ url: request.url(), method: request.method(), headers: request.headers(), postData: request.postData() })
+    isSuperuser = false
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -165,26 +163,30 @@ test('IP-owner sees only Superuser management and can grant or revoke that role'
 
   await page.goto('/ip-eigenaar/superusers')
   await expect(page.getByTestId('ip-owner-superusers-page')).toBeVisible()
-  await expect(page.getByText('De IP-eigenaar kan uitsluitend Superusers aanstellen of deactiveren.')).toBeVisible()
+  await expect(page.getByText('De IP-eigenaar kan uitsluitend de Superuserrol beheren.')).toBeVisible()
   await expect(page.getByText('Platformbeheerder', { exact: true })).toHaveCount(0)
   await expect(page.getByText('Frontteamlid', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Er zijn geen actieve Superusers.')).toBeVisible()
 
-  const target = page.getByTestId('ip-owner-superuser-target-user')
-  await target.getByRole('button', { name: 'Superuser maken', exact: true }).click()
+  await page.getByLabel('E-mailadres').fill('target-user@example.test')
+  await page.getByRole('button', { name: 'Superuser maken', exact: true }).click()
   await expect(page.getByTestId('ip-owner-superuser-confirmation')).toContainText('Superuser maken?')
   expect(mutations).toHaveLength(0)
   await page.getByRole('button', { name: 'Definitief Superuser maken', exact: true }).click()
   await expect.poll(() => mutations.length).toBe(1)
   expect(mutations[0].method).toBe('POST')
-  expect(mutations[0].url).toContain('/superuser/grant')
+  expect(mutations[0].url).toContain('/api/ip-owner/superusers')
+  expect(JSON.parse(mutations[0].postData)).toEqual({ email: 'target-user@example.test' })
   expect(mutations[0].headers.authorization).toBeUndefined()
-  await expect(target.getByRole('button', { name: 'Deactiveren', exact: true })).toBeVisible()
 
+  const target = page.getByTestId('ip-owner-superuser-target-user')
+  await expect(target).toContainText('Superuser actief')
   await target.getByRole('button', { name: 'Deactiveren', exact: true }).click()
   await expect(page.getByTestId('ip-owner-superuser-confirmation')).toContainText('Superuser deactiveren?')
   await page.getByRole('button', { name: 'Definitief deactiveren', exact: true }).click()
   await expect.poll(() => mutations.length).toBe(2)
   expect(mutations[1].url).toContain('/superuser/revoke')
+  await expect(page.getByText('Er zijn geen actieve Superusers.')).toBeVisible()
 })
 
 test('platform authorizations direct route stays closed without inventory permission', async ({ page }) => {
