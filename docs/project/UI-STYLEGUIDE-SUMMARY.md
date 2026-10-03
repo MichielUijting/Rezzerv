@@ -62,6 +62,8 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 - een afzonderlijke staaf in een dashboardgrafiek is eveneens klikbaar/tikbaar en opent een drill-down die uitsluitend de bonnen, artikelen, winkels of verwachte herhalingskopen van precies die staafperiode en die reeks toont;
 - de twee **Uitgaven**-grafieken stapelen elke staaf op basis van **GS1 GPC Class/Groep**: maximaal vijf grootste Classes krijgen een eigen segment, kleinere Classes worden samengevoegd tot **Overig** en ontbrekende classificaties vallen onder **Niet ingedeeld**;
 - ieder gestapeld segment is afzonderlijk klikbaar/tikbaar en filtert de staafdrill-down verder tot alleen die GPC Class, **Overig** of **Niet ingedeeld**;
+- de brede **Uitgaven**-drill-down toont daarnaast een zichtbaar blok **Per categorie** met dezelfde top-5/Overig/Niet-ingedeeld-logica, inclusief een gestapelde balk, bedragen en procentuele verdeling;
+- vanuit een dashboarddrill-down opent **Open kassabon** altijd de bestaande mobiele **Kassa → Bonnen**-context en nooit de camerascan als eerste scherm;
 - segmentbedragen worden per bon proportioneel aan de productregels aan het bonbedrag gekoppeld, zodat gestapelde segmenten samen exact het uitgavenbedrag van de staaf blijven vormen;
 - bij vergelijkingsgrafieken blijft onderscheid bestaan tussen de huidige staaf en de lichtgroene vergelijkingsstaaf; de drill-down volgt exact de aangeklikte reeks;
 - de dashboardtegels gebruiken de centrale primaire kleur, witte surfaces, `--radius-md` en uitsluitend de twee centrale tekstgroottes;
