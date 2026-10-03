@@ -224,7 +224,7 @@ Bescherming van de IP-eigenaar:
 
 | Rol | Context en verantwoordelijkheid |
 |---|---|
-| Lid | Regulier huishouden |
+| Gebruiker | Regulier huishouden |
 | Beheerder | Regulier huishouden plus huishoudbeheer |
 | Frontteamlid | Eigen regulier huishouden plus aanvullende beperkte Frontteam-platformfuncties; de bestaande huishoudrol blijft behouden |
 | Superuser | Functioneel platformbeheer plus systeemhuishouden 0 |

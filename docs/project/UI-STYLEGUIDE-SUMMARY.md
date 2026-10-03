@@ -316,7 +316,7 @@ Het nog niet gemigreerde **Voorraad-artikeldetail** mag tijdelijk de oudere groe
 Vaste kenmerken:
 - compacte gekleurde header met **Voorraad links** en het witte Inhuis-logo rechts;
 - zoekveld als eerste ingang, gevolgd door compacte locatie-/artikelgroep-/sorteerfilters; artikelsortering biedt **Naam A–Z** en **Naam Z–A**, terwijl sortering op aantal niet wordt aangeboden;
-- iedere voorraadregel toont voor bevoegde Admin/Eigenaar direct `−` vóór en `+` na het aantal; `−` boekt exact één eenheid af via de bestaande inventory-eventlogica en `+` verhoogt exact één eenheid via de bestaande handmatige voorraadcorrectie; na iedere mutatie wordt de backendvoorraad opnieuw geladen;
+- iedere voorraadregel toont voor bevoegde Beheerder direct `−` vóór en `+` na het aantal; `−` boekt exact één eenheid af via de bestaande inventory-eventlogica en `+` verhoogt exact één eenheid via de bestaande handmatige voorraadcorrectie; na iedere mutatie wordt de backendvoorraad opnieuw geladen;
 - interactieve zoek-/select-/actievelden hebben minimaal circa `44px` touchhoogte;
 - aantalscontext en de bestaande actie **Incidentele aankoop** staan compact boven de lijst;
 - één witte lijstcontainer met subtiele horizontale scheidingen;

@@ -52,7 +52,7 @@ Bovenaan staan drie volledig klikbare statussen:
 ## Rolgedrag
 
 - Gebruiker en Beheerder zien hetzelfde dagelijkse dashboard.
-- Beheerrechten blijven via **Instellingen** lopen en worden niet als los Admin-dashboard op de landingspagina gedupliceerd.
+- Beheerrechten blijven via **Instellingen** lopen en worden niet als los beheerdashboard op de landingspagina gedupliceerd.
 - Frontteamlid ziet hetzelfde huishoud-dashboard als zijn gewone huishoudrol; Frontteam-functionaliteit blijft aanvullend beschikbaar via de bestaande navigatie.
 - De bestaande Superuser-omgeving achter **Superuser** blijft de dashboardingang voor functioneel platformbeheer. De IP-eigenaar heeft daarnaast de technische Platformbeheerfuncties en beschermd rollenbeheer.
 - Platformbeheer wordt niet in het gewone huishoud-dashboard gemengd.
@@ -89,8 +89,8 @@ TEST_LEVEL_PROVISIONAL: L
 Reden: centrale landingspagina, dashboardaggregaties, drill-downroutes en gebruikerszichtbare rolprojectie raken app-brede kernnavigatie en huishouddata. Finale kandidaat vereist de toepasselijke exact-candidate regressie.
 
 
-## Losse Admin onder Platformbeheer
-- De gebruikerszichtbare losse **Admin / Testdata**-pagina is vervallen.
+## Voormalige losse beheerroute onder Platformbeheer
+- De voormalige losse beheer-/testdatapagina is vervallen.
 - De oude route `/admin` blijft uitsluitend als beveiligde compatibiliteitsredirect naar **Platformbeheer → Testfixtures**.
 - Testfixturebeheer staat onder **Platformbeheer → Testfixtures**.
 - Permanente verwijdering van gearchiveerde kassabonnen staat onder **Platformbeheer → Herstel**.
@@ -102,6 +102,6 @@ Reden: centrale landingspagina, dashboardaggregaties, drill-downroutes en gebrui
 ## Gebruikerszichtbare rolnamen
 - Reguliere huishoudrollen worden uitsluitend getoond als **Gebruiker** en **Beheerder**.
 - Legacy keys zoals `household.viewer`, `household.advanced_member` en `household.owner` blijven alleen voor compatibiliteit bestaan en worden niet als aparte gebruikersrollen gepresenteerd.
-- De losse gebruikerszichtbare **Admin**-ingang bestaat niet meer; huishoudbeheer loopt via **Instellingen**.
+- De losse gebruikerszichtbare beheeringang bestaat niet meer; huishoudbeheer loopt via **Instellingen**.
 - Platformrollen blijven expliciet onderscheiden als **Superuser**, **Platformbeheerder** en **IP-eigenaar**.
 - Alleen de **IP-eigenaar** kan Superuser en Platformbeheerder aanstellen of intrekken; Frontteambeheer blijft volgens de afzonderlijke bestaande bevoegdheid verlopen.
