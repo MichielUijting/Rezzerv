@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
-from app.services.dutch_gpc_projection_service import dutch_gpc_by_global_product
+from app.services.dutch_gpc_projection_service import (\n    dutch_gpc_by_global_product,\n    dutch_gpc_by_household_article,\n)
 
 
 def _to_datetime(value: Any) -> datetime | None:
@@ -161,7 +161,27 @@ def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, l
         for row in eligible_lines
         if str(row.get("matched_global_product_id") or row.get("global_product_id") or "").strip()
     })
+    household_article_ids = sorted({
+        str(row.get("matched_article_id") or row.get("household_article_id") or "").strip()
+        for row in eligible_lines
+        if str(row.get("matched_article_id") or row.get("household_article_id") or "").strip()
+    })
     gpc_families = _gpc_family_by_global_product(conn, product_ids)
+    article_projection = dutch_gpc_by_household_article(
+        conn,
+        household_id,
+        household_article_ids,
+    )
+    article_families = {
+        article_id: {
+            "key": "gpc-family:" + str(payload.get("gpc_family_code") or "").strip(),
+            "name": str(payload.get("gpc_family_name") or "").strip(),
+        }
+        for article_id, payload in article_projection.items()
+        if str(payload.get("gpc_family_code") or "").strip()
+        and str(payload.get("gpc_family_name") or "").strip()
+    }
+
     for row in eligible_lines:
         label = "Artikel"
         for column in ("corrected_raw_label", "normalized_label", "raw_label", "article_name"):
@@ -169,17 +189,19 @@ def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, l
                 label = str(row.get(column)).strip()
                 break
         global_product_id = row.get("matched_global_product_id") or row.get("global_product_id")
-        classification = gpc_families.get(str(global_product_id or ""), {
-            "key": "unclassified",
-            "name": "Niet ingedeeld",
-        })
+        household_article_id = row.get("matched_article_id") or row.get("household_article_id")
+        classification = (
+            gpc_families.get(str(global_product_id or "").strip())
+            or article_families.get(str(household_article_id or "").strip())
+            or {"key": "unclassified", "name": "Niet ingedeeld"}
+        )
         grouped[str(row.get("receipt_table_id") or "")].append({
             "line_id": row.get("id"),
             "label": label,
             "quantity": _number(row.get("quantity")) or 1.0,
             "unit": row.get("unit"),
             "line_total": round(_number(row.get("line_total")), 2) if row.get("line_total") is not None else None,
-            "household_article_id": row.get("matched_article_id") or row.get("household_article_id"),
+            "household_article_id": household_article_id,
             "global_product_id": global_product_id,
             "gpc_family_key": classification["key"],
             "gpc_family_name": classification["name"],
