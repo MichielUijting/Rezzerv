@@ -11,6 +11,7 @@ import DashboardDetailPage from '../../features/home/DashboardDetailPage.jsx'
 import MobileMorePage from '../../features/home/MobileMorePage.jsx'
 import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
 import PlatformCapabilityPage from '../../features/platform/PlatformCapabilityPage.jsx'
+import IpOwnerSuperusersPage from '../../features/platform/IpOwnerSuperusersPage.jsx'
 import { PLATFORM_NAVIGATION_ITEMS } from '../../features/platform/platformNavigation.js'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
 import StoreBatchDetailPage from '../../features/purchaseImport/StoreBatchDetailPage.jsx'
@@ -171,6 +172,7 @@ const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
   { path: '/home', element: <Protected allowNone><HomePage /></Protected> },
+  { path: '/ip-eigenaar/superusers', element: <ProtectedPermission permission="platform.special_roles.manage" allowNone message="Alleen de IP-eigenaar kan Superusers beheren."><IpOwnerSuperusersPage /></ProtectedPermission> },
   { path: '/dashboard/:metric', element: <Protected><DashboardDetailPage /></Protected> },
   { path: '/meer', element: <Protected><MobileMorePage /></Protected> },
   ...platformRoutes,
