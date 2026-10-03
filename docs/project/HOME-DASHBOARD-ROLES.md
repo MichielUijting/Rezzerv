@@ -26,14 +26,15 @@ Bovenaan staan drie volledig klikbare statussen:
 
 ### Dashboardtegels met drill-down
 
-1. **Gekochte artikelen**
-   - aantal gekochte artikelen in de laatste 7 dagen;
-   - vergelijking met de 7 dagen daarvoor;
-   - drill-down naar dagelijkse verdeling en onderliggende aankopen.
+1. **Uitgaven t.o.v. vorig jaar**
+   - uitgaven over de laatste 4 gekozen perioden;
+   - vergelijking met exact dezelfde perioden een jaar eerder;
+   - huidige periode donkergroen, dezelfde periode vorig jaar lichtgroen;
+   - drill-down gebruikt dezelfde uitgavendetails als de gewone uitgaventegel.
 
 2. **Uitgaven**
-   - totale uitgaven in de laatste 7 dagen;
-   - vergelijking met de 7 dagen daarvoor;
+   - totale uitgaven over de laatste 4 gekozen perioden;
+   - vergelijking met de 4 perioden daarvoor;
    - drill-down naar dag, winkel en kassabon.
 
 3. **Bezochte winkels**
@@ -42,7 +43,8 @@ Bovenaan staan drie volledig klikbare statussen:
    - drill-down naar winkels en bijbehorende kassabonnen.
 
 4. **Begrote uitgaven**
-   - verwachte uitgaven voor de komende 4 weken;
+   - toont steeds 4 dagen, 4 weken of 4 maanden volgens de gekozen schakelaar;
+   - verwachte uitgaven blijven gebaseerd op herhalingskoop;
    - grafische verdeling per week;
    - drill-down met basis van de prognose.
 
