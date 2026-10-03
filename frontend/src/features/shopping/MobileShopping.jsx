@@ -114,7 +114,6 @@ export default function MobileShopping() {
     catalogSearchRequestRef.current += 1
     setSearchMode(nextMode)
     setCatalogResults([])
-    setSelectedResultId('')
     setSearching(false)
   }
 
