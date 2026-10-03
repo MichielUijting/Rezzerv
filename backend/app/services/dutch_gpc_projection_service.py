@@ -54,27 +54,36 @@ def _translated_text(conn: Connection, entity_type: str, code: str, fallback: st
 
 
 def _canonical_hierarchy_by_brick(conn: Connection, brick_codes: Iterable[Any]) -> dict[str, dict[str, str]]:
+    """Projecteer een bekende Brick rechtstreeks via de Nederlandse GS1-lijst.
+
+    gpc_product_groups is de gebruikerszichtbare Nederlandse referentiebron:
+    iedere rij bevat Brick, Class/Groep, Familie en Segment. Daardoor hoeft een
+    bekende Brick niet eerst via de losse canonieke hiërarchietabellen te worden
+    gereconstrueerd en kan dezelfde projectie overal worden hergebruikt.
+    """
     codes = _normalize_ids(brick_codes)
-    required = {"gpc_bricks", "gpc_classes", "gpc_families", "gpc_segments"}
-    if not codes or not required.issubset(_tables(conn)):
+    if not codes or "gpc_product_groups" not in _tables(conn):
         return {}
 
     rows = conn.execute(
-        text("""
+        text(f"""
             SELECT
-                b.brick_code AS gpc_brick_code,
-                b.description AS brick_description,
-                c.class_code AS gpc_class_code,
-                c.description AS class_description,
-                f.family_code AS gpc_family_code,
-                f.description AS family_description,
-                s.segment_code AS gpc_segment_code,
-                s.description AS segment_description
-            FROM gpc_bricks b
-            JOIN gpc_classes c ON c.class_code = b.class_code
-            JOIN gpc_families f ON f.family_code = c.family_code
-            JOIN gpc_segments s ON s.segment_code = f.segment_code
-            WHERE b.brick_code IN :brick_codes
+                gpg.gpc_brick_code,
+                gpg.gpc_brick_name,
+                gpg.gpc_class_code,
+                gpg.gpc_class_name,
+                gpg.gpc_family_code,
+                gpg.gpc_family_name,
+                gpg.gpc_segment_code,
+                gpg.gpc_segment_name
+            FROM gpc_product_groups gpg
+            WHERE gpg.gpc_brick_code IN :brick_codes
+              AND lower(COALESCE(gpg.language_code, '')) = 'nl'
+              AND {_active_clause(conn, 'gpg')}
+              AND trim(COALESCE(gpg.gpc_brick_name, '')) <> ''
+              AND trim(COALESCE(gpg.gpc_class_name, '')) <> ''
+              AND trim(COALESCE(gpg.gpc_family_name, '')) <> ''
+              AND trim(COALESCE(gpg.gpc_segment_name, '')) <> ''
         """).bindparams(bindparam("brick_codes", expanding=True)),
         {"brick_codes": codes},
     ).mappings().all()
@@ -82,18 +91,8 @@ def _canonical_hierarchy_by_brick(conn: Connection, brick_codes: Iterable[Any]) 
     result: dict[str, dict[str, str]] = {}
     for row in rows:
         brick_code = str(row.get("gpc_brick_code") or "").strip()
-        if not brick_code:
-            continue
-        result[brick_code] = {
-            "gpc_brick_code": brick_code,
-            "gpc_brick_name": _translated_text(conn, "brick", brick_code, row.get("brick_description")),
-            "gpc_class_code": str(row.get("gpc_class_code") or "").strip(),
-            "gpc_class_name": _translated_text(conn, "class", row.get("gpc_class_code"), row.get("class_description")),
-            "gpc_family_code": str(row.get("gpc_family_code") or "").strip(),
-            "gpc_family_name": _translated_text(conn, "family", row.get("gpc_family_code"), row.get("family_description")),
-            "gpc_segment_code": str(row.get("gpc_segment_code") or "").strip(),
-            "gpc_segment_name": _translated_text(conn, "segment", row.get("gpc_segment_code"), row.get("segment_description")),
-        }
+        if brick_code:
+            result[brick_code] = _row_payload(row)
     return result
 
 
