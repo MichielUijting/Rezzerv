@@ -124,6 +124,20 @@ export default function CatalogDetailPageV2() {
   function handleGpcAssignmentChange(assignment) {
     const description = String(assignment?.brick_description || assignment?.brick_description_en || '').trim()
     setConfirmedProductType(description)
+    setDetail((current) => current
+      ? {
+          ...current,
+          product: {
+            ...(current.product || {}),
+            product_type: description,
+            gpc_brick_code: assignment?.brick_code || null,
+            gpc_class_code: assignment?.class_code || null,
+            gpc_class_name: assignment?.class_description || '',
+            gpc_family_code: assignment?.family_code || null,
+            gpc_family_name: assignment?.family_description || '',
+          },
+        }
+      : current)
   }
 
   function openImageChoice() {
@@ -310,6 +324,7 @@ export default function CatalogDetailPageV2() {
                     <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
                     <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
                     <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
+                    <div><dt>GPC-familie</dt><dd>{text(product.gpc_family_name, 'Niet geclassificeerd')}</dd></div>
                     <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
                   </dl>
                 </div>
@@ -421,6 +436,7 @@ export default function CatalogDetailPageV2() {
                       <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
                       <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
                       <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
+                      <div><dt>GPC-familie</dt><dd>{text(product.gpc_family_name, 'Niet geclassificeerd')}</dd></div>
                       <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
                     </dl>
                   </div>
