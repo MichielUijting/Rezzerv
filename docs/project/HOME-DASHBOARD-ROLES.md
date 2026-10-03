@@ -61,6 +61,8 @@ Bovenaan staan drie volledig klikbare statussen:
 - De huidige grote hoofdactiekaarten op de mobiele landingspagina verdwijnen zodra hun functionaliteit via dashboardstatus/drill-down en de centrale onderste actiebalk bereikbaar is.
 - De onderste mobiele actiebalk blijft maximaal vier recente beschikbare acties plus **Meer** tonen volgens de bestaande app-brede navigatiebaseline.
 - Dashboardtegels zijn informatie-eerst en volledig aanklikbaar voor drill-down.
+- De vier dashboardtegels kunnen door de gebruiker met muis of touch worden versleept; tijdens het slepen verandert de volgorde direct.
+- De gekozen tegelvolgorde wordt per gebruiker lokaal bewaard en bij terugkeer/opstart opnieuw toegepast.
 
 ## Datadefinities
 
