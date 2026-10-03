@@ -231,19 +231,12 @@ def test_member_login_keeps_regular_household_context():
         engine.dispose()
 
 
-@pytest.mark.parametrize(
-    ("email", "is_superuser"),
-    [
-        (SUPERGEBRUIKER_EMAIL, True),
-        ("ip-owner@example.test", False),
-    ],
-)
-def test_system_platform_roles_login_without_household_membership(email, is_superuser):
+def test_superuser_login_without_household_membership_uses_system_context():
     client, engine = build_client()
     try:
         response = client.post(
             "/api/auth/login",
-            json={"email": email, "password": "Rezzerv123"},
+            json={"email": SUPERGEBRUIKER_EMAIL, "password": "Rezzerv123"},
         )
         raw_session_id = response.cookies.get("rezzerv_session")
         with engine.begin() as conn:
@@ -252,9 +245,32 @@ def test_system_platform_roles_login_without_household_membership(email, is_supe
         assert context.context_type == "system"
         assert context.active_household_id == "0"
         assert context.role == "owner"
-        assert context.is_platform_superuser is is_superuser
-        assert response.json()["is_platform_superuser"] is is_superuser
+        assert context.is_platform_superuser is True
+        assert response.json()["is_platform_superuser"] is True
         assert "platform_roles" not in response.json()
+    finally:
+        engine.dispose()
+
+
+def test_ip_owner_login_without_household_membership_uses_none_context():
+    client, engine = build_client()
+    try:
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "ip-owner@example.test", "password": "Rezzerv123"},
+        )
+        raw_session_id = response.cookies.get("rezzerv_session")
+        with engine.begin() as conn:
+            context = resolve_server_session(conn, raw_session_id)
+        payload = response.json()
+        assert response.status_code == 200
+        assert context.context_type == "none"
+        assert context.active_household_id is None
+        assert context.role is None
+        assert context.is_ip_owner is True
+        assert context.is_platform_superuser is False
+        assert payload["permissions"] == {"platform.special_roles.manage": True}
+        assert "platform_roles" not in payload
     finally:
         engine.dispose()
 
