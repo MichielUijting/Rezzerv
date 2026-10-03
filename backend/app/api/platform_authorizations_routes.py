@@ -161,9 +161,11 @@ def revoke_user_frontteam(user_id: str) -> dict:
 
 @router.post("/api/platform/authorizations/users/{user_id}/platform-admin/grant")
 def grant_user_platform_admin(user_id: str) -> dict:
+    require_platform_permission_from_session(PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION)
     raise HTTPException(status_code=403, detail="De IP-eigenaar beheert uitsluitend Superusers.")
 
 
 @router.post("/api/platform/authorizations/users/{user_id}/platform-admin/revoke")
 def revoke_user_platform_admin(user_id: str) -> dict:
+    require_platform_permission_from_session(PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION)
     raise HTTPException(status_code=403, detail="De IP-eigenaar beheert uitsluitend Superusers.")
