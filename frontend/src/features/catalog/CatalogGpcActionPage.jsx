@@ -271,7 +271,7 @@ export default function CatalogGpcActionPage() {
                   <div className="rz-catalog-gpc-summary">
                     <div className="rz-catalog-gpc-primary">
                       <span className="rz-catalog-gpc-label">Bevestigde classificatie</span>
-                      <strong>{assignment.brick_code} — {text(assignment.brick_description || assignment.brick_description_en)}</strong>
+                      <strong>{assignment.brick_code} — {text(assignment.brick_description)}</strong>
                     </div>
                     <dl className="rz-catalog-gpc-hierarchy">
                       <div><dt>Segment</dt><dd>{text(assignment.segment_description)}</dd></div>
@@ -291,7 +291,7 @@ export default function CatalogGpcActionPage() {
                       <div className="rz-catalog-gpc-suggestion" data-testid="catalog-gpc-action-suggestion" key={candidate.brick_code}>
                         <div>
                           <span className="rz-catalog-gpc-label">{index === 0 ? 'Voorgestelde classificatie' : `Alternatief ${index + 1}`}</span>
-                          <strong>{candidate.brick_code} — {text(candidate.brick_description || candidate.brick_description_en)}</strong>
+                          <strong>{candidate.brick_code} — {text(candidate.brick_description)}</strong>
                           <small>
                             Matchsterkte: {Number(candidate.match_strength_percent || Math.round(Number(candidate.confidence || 0) * 100))}% ({text(candidate.confidence_label, 'indicatief')})
                             {' · '}{text(candidate.suggestion_reason)}
@@ -318,7 +318,7 @@ export default function CatalogGpcActionPage() {
                       className="rz-input"
                       value={brickQuery}
                       onChange={(event) => setBrickQuery(event.target.value)}
-                      placeholder="Zoeken op Brickcode of Nederlandse/Engelse Brickomschrijving"
+                      placeholder="Zoeken op Brickcode of Nederlandse Brickomschrijving"
                       disabled={saving}
                     />
                     {searchingBricks ? <div className="rz-catalog-gpc-state">Bricks zoeken…</div> : null}
