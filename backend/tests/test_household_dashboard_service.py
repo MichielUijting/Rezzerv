@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import create_engine, text
 
-from app.services.household_dashboard_service import build_household_dashboard
+from app.services.household_dashboard_service import build_household_dashboard, build_household_dashboard_drilldown
 
 
 NOW = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
@@ -233,5 +233,95 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert dashboard["status"]["put_away_unpack"] == 2
         assert dashboard["status"]["put_away"] == 4
         assert dashboard["status"]["put_away_route"] == "/kassa?view=bonnen"
+    finally:
+        engine.dispose()
+
+
+def test_dashboard_drilldown_selects_exact_bar_period_and_deduplicates_store_visit():
+    engine = _engine()
+    try:
+        with engine.begin() as conn:
+            receipts = [
+                ("r-current-1", "h1", "AH", "2026-10-02T09:00:00+00:00", 10),
+                ("r-current-2", "h1", "AH", "2026-10-02T16:00:00+00:00", 5),
+                ("r-previous", "h1", "Lidl", "2026-09-28T10:00:00+00:00", 7),
+                ("r-year", "h1", "Jumbo", "2025-10-02T10:00:00+00:00", 12),
+            ]
+            for rid, household, store, purchase_at, total in receipts:
+                conn.execute(text("""
+                    INSERT INTO receipt_tables(
+                        id, household_id, store_name, purchase_at, total_amount, currency,
+                        parse_status, workflow_state, approved_at, deleted_at, created_at
+                    ) VALUES (
+                        :id, :household_id, :store_name, :purchase_at, :total_amount, 'EUR',
+                        'approved', 'active', :purchase_at, NULL, :purchase_at
+                    )
+                """), {
+                    "id": rid,
+                    "household_id": household,
+                    "store_name": store,
+                    "purchase_at": purchase_at,
+                    "total_amount": total,
+                })
+                conn.execute(text("""
+                    INSERT INTO receipt_table_lines(
+                        id, receipt_table_id, quantity, raw_label, line_total,
+                        matched_article_id, matched_global_product_id,
+                        is_deleted, inventory_eligible, line_role
+                    ) VALUES (
+                        :id, :receipt_table_id, 1, :label, :line_total,
+                        NULL, NULL, 0, 1, 'product'
+                    )
+                """), {
+                    "id": "line-" + rid,
+                    "receipt_table_id": rid,
+                    "label": rid,
+                    "line_total": total,
+                })
+
+            current = build_household_dashboard_drilldown(
+                conn,
+                household_id="h1",
+                user_id="u1",
+                metric="spend",
+                granularity="days",
+                bucket_index=3,
+                series="current",
+                comparison="previous",
+                now=NOW,
+            )
+            assert current["label"] == "02-10-2026"
+            assert current["spend"] == 15.0
+            assert len(current["receipts"]) == 2
+            assert len(current["stores"]) == 1
+            assert current["stores"][0]["visits"] == 1
+
+            previous = build_household_dashboard_drilldown(
+                conn,
+                household_id="h1",
+                user_id="u1",
+                metric="spend",
+                granularity="days",
+                bucket_index=3,
+                series="previous",
+                comparison="previous",
+                now=NOW,
+            )
+            assert previous["label"] == "28-09-2026"
+            assert previous["spend"] == 7.0
+
+            previous_year = build_household_dashboard_drilldown(
+                conn,
+                household_id="h1",
+                user_id="u1",
+                metric="spend",
+                granularity="days",
+                bucket_index=3,
+                series="previous",
+                comparison="year",
+                now=NOW,
+            )
+            assert previous_year["label"] == "02-10-2025"
+            assert previous_year["spend"] == 12.0
     finally:
         engine.dispose()
