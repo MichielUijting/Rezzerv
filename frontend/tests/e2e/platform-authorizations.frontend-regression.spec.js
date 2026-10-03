@@ -108,7 +108,7 @@ test('platformbeheerder can inspect authorizations but cannot mutate special rol
 
   await page.goto('/platform/autorisaties')
   await expect(page.getByTestId('platform-authorizations-page')).toBeVisible()
-  await expect(page.getByTestId('platform-authorizations-read-only')).toContainText('alleen de IP-eigenaar')
+  await expect(page.getByTestId('platform-authorizations-read-only')).toContainText('Alleen-lezen')
   await expect(page.getByRole('button', { name: /toekennen|intrekken/i })).toHaveCount(0)
   expect(mutations).toBe(0)
 })
