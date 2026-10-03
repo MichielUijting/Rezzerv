@@ -248,6 +248,24 @@ def dutch_gpc_by_household_article(
     if not ids or not required.issubset(_tables(conn)):
         return {}
 
+    linked_products = conn.execute(
+        text("""
+            SELECT CAST(global_product_id AS TEXT) AS global_product_id
+            FROM household_articles
+            WHERE household_id = :household_id
+              AND CAST(id AS TEXT) IN :household_article_ids
+              AND global_product_id IS NOT NULL
+        """).bindparams(bindparam("household_article_ids", expanding=True)),
+        {
+            "household_id": str(household_id),
+            "household_article_ids": ids,
+        },
+    ).mappings().all()
+    ensure_dutch_gpc_assignments(
+        conn,
+        [row.get("global_product_id") for row in linked_products],
+    )
+
     rows = conn.execute(
         text(f"""
             SELECT
