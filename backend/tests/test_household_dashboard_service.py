@@ -106,6 +106,20 @@ def _engine():
                 translated_text TEXT
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE gpc_product_groups (
+                gpc_brick_code TEXT PRIMARY KEY,
+                gpc_brick_name TEXT,
+                gpc_class_code TEXT,
+                gpc_class_name TEXT,
+                gpc_family_code TEXT,
+                gpc_family_name TEXT,
+                gpc_segment_code TEXT,
+                gpc_segment_name TEXT,
+                language_code TEXT,
+                active INTEGER
+            )
+        """))
     return engine
 
 
@@ -194,6 +208,17 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
                   ('class', '10000001', 'nl', 'Voeding'),
                   ('class', '10000002', 'nl', 'Fruit')
             """))
+            conn.execute(text("""
+                INSERT INTO gpc_product_groups(
+                    gpc_brick_code, gpc_brick_name,
+                    gpc_class_code, gpc_class_name,
+                    gpc_family_code, gpc_family_name,
+                    gpc_segment_code, gpc_segment_name,
+                    language_code, active
+                ) VALUES
+                  ('20000001', 'Algemene voeding', '10000001', 'Voeding', '30000001', 'Voedingsmiddelen', '40000001', 'Levensmiddelen', 'nl', 1),
+                  ('20000002', 'Vers fruit', '10000002', 'Fruit', '30000002', 'Verse groenten en fruit', '40000001', 'Levensmiddelen', 'nl', 1)
+            """))
 
             # r1 staat in Uitpakken: twee regels nog te verwerken, één al verwerkt.
             conn.execute(text("""
@@ -253,7 +278,7 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert len(dashboard["purchases"]["receipts"][1]["articles"]) == 2
         assert dashboard["spend"]["receipts"] == dashboard["purchases"]["receipts"]
         day_groups = dashboard["spend"]["group_views"]["days"]
-        assert [item["label"] for item in day_groups["legend"]] == ["Voeding", "Fruit"]
+        assert [item["label"] for item in day_groups["legend"]] == ["Voedingsmiddelen", "Verse groenten en fruit"]
         assert day_groups["points"][-2]["current"] == 15.0
         assert sum(item["value"] for item in day_groups["points"][-2]["current_segments"]) == 15.0
         assert dashboard["spend_year_over_year"]["group_views"]["days"]["points"][-2]["previous"] == 12.0
