@@ -477,3 +477,60 @@
   outline:2px solid var(--color-text-primary);
   outline-offset:2px;
 }
+
+.rz-dashboard-stacked-chart{
+  grid-template-rows:auto auto;
+}
+.rz-dashboard-stacked-chart .rz-dashboard-y-axis,
+.rz-dashboard-stacked-chart .rz-dashboard-chart-plot{
+  grid-row:1;
+}
+.rz-dashboard-stacked-bar{
+  display:flex;
+  flex-direction:column-reverse;
+  overflow:hidden;
+  padding:0;
+  background:transparent;
+}
+.rz-dashboard-stacked-bar--previous{
+  opacity:.55;
+}
+.rz-dashboard-stack-segment{
+  display:block;
+  width:100%;
+  min-height:2px;
+  cursor:pointer;
+}
+.rz-dashboard-stack-segment:focus-visible{
+  outline:2px solid var(--color-text-primary);
+  outline-offset:-2px;
+  z-index:1;
+}
+.rz-dashboard-stack-segment--0{background:#005F6A}
+.rz-dashboard-stack-segment--1{background:#2E7D72}
+.rz-dashboard-stack-segment--2{background:#4F9480}
+.rz-dashboard-stack-segment--3{background:#72AA8F}
+.rz-dashboard-stack-segment--4{background:#91BEA1}
+.rz-dashboard-stack-segment--5{background:#B0D1B5}
+.rz-dashboard-stack-segment--6{background:#D2E5D3}
+.rz-dashboard-stack-legend{
+  grid-column:1 / -1;
+  grid-row:2;
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px 10px;
+  margin-top:4px;
+  font-size:var(--font-size-ui-body);
+}
+.rz-dashboard-stack-legend span{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  min-width:0;
+}
+.rz-dashboard-stack-key{
+  width:10px;
+  height:10px;
+  flex:0 0 10px;
+  border-radius:2px;
+}
