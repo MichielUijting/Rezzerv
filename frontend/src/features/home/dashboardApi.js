@@ -25,6 +25,7 @@ export async function fetchHouseholdDashboardDrilldown({
   bucketIndex,
   series = 'current',
   comparison = 'previous',
+  groupKey = '',
 }) {
   const params = new URLSearchParams({
     metric,
@@ -33,6 +34,7 @@ export async function fetchHouseholdDashboardDrilldown({
     series,
     comparison,
   })
+  if (groupKey) params.set('group_key', groupKey)
   const response = await fetchJsonWithAuth('/api/dashboard/drilldown?' + params.toString(), {
     cache: 'no-store',
     headers: {
