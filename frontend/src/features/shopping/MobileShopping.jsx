@@ -134,6 +134,7 @@ export default function MobileShopping() {
   }
 
   async function addArticle(candidate = null) {
+    if (saving) return
     const manualName = catalogQuery.trim()
     if (!candidate && !manualName) return
     const payload = candidate ? {
