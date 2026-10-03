@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import { fetchHouseholdDashboard } from './dashboardApi.js'
+import { readDashboardCardOrder, writeDashboardCardOrder } from './dashboardCardOrder.js'
 import './mobileHome.css'
 
 const PERIODS = [
@@ -125,6 +126,14 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
   const [dashboard, setDashboard] = useState(null)
   const [error, setError] = useState('')
   const [periodKey, setPeriodKey] = useState('days')
+  const [cardOrder, setCardOrder] = useState(() => readDashboardCardOrder(context))
+  const [draggingKey, setDraggingKey] = useState('')
+  const dragStateRef = useRef(null)
+  const suppressClickRef = useRef('')
+
+  useEffect(() => {
+    setCardOrder(readDashboardCardOrder(context))
+  }, [context?.user_id])
 
   useEffect(() => {
     let active = true
@@ -204,6 +213,80 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     ]
   }, [dashboard, periodKey, period])
 
+  const orderedCards = useMemo(() => {
+    const byKey = new Map(cards.map((card) => [card.key, card]))
+    return cardOrder.map((key) => byKey.get(key)).filter(Boolean)
+  }, [cards, cardOrder])
+
+  function persistCardOrder(nextOrder) {
+    const normalized = writeDashboardCardOrder(nextOrder, context)
+    setCardOrder(normalized)
+  }
+
+  function moveCard(draggedKey, targetKey) {
+    if (!draggedKey || !targetKey || draggedKey === targetKey) return
+    setCardOrder((current) => {
+      const next = [...current]
+      const fromIndex = next.indexOf(draggedKey)
+      const toIndex = next.indexOf(targetKey)
+      if (fromIndex < 0 || toIndex < 0) return current
+      next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, draggedKey)
+      writeDashboardCardOrder(next, context)
+      return next
+    })
+  }
+
+  function handleCardPointerDown(event, cardKey) {
+    if (event.button != null && event.button !== 0) return
+    if (!event.target.closest('.rz-dashboard-comparison-chart')) return
+    dragStateRef.current = {
+      cardKey,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    }
+    setDraggingKey(cardKey)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  function handleCardPointerMove(event) {
+    const state = dragStateRef.current
+    if (!state || state.pointerId !== event.pointerId) return
+    const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
+    if (distance >= 6) {
+      state.moved = true
+      event.preventDefault()
+    }
+    if (!state.moved) return
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-dashboard-card-key]')
+    const targetKey = target?.getAttribute?.('data-dashboard-card-key') || ''
+    if (targetKey && targetKey !== state.cardKey) moveCard(state.cardKey, targetKey)
+  }
+
+  function finishCardDrag(event) {
+    const state = dragStateRef.current
+    if (!state || state.pointerId !== event.pointerId) return
+    if (state.moved) suppressClickRef.current = state.cardKey
+    try { event.currentTarget.releasePointerCapture?.(event.pointerId) } catch {}
+    dragStateRef.current = null
+    setDraggingKey('')
+  }
+
+  function cancelCardDrag() {
+    dragStateRef.current = null
+    setDraggingKey('')
+  }
+
+  function openCard(card) {
+    if (suppressClickRef.current === card.key) {
+      suppressClickRef.current = ''
+      return
+    }
+    navigate('/dashboard/' + (card.routeKey || card.key))
+  }
+
   function openStatus(key) {
     if (key === 'meldingen') return onOpenTile({ key: 'meldingen', clickable: true })
     if (key === 'winkelen') return onOpenTile({ key: 'winkelen', clickable: true })
@@ -258,12 +341,17 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         </div>
 
         <section className="rz-dashboard-grid" aria-label="Huishoudoverzicht">
-          {cards.map((card) => (
+          {orderedCards.map((card) => (
             <button
               type="button"
               key={card.key}
-              className="rz-dashboard-card"
-              onClick={() => navigate('/dashboard/' + (card.routeKey || card.key))}
+              className={'rz-dashboard-card' + (draggingKey === card.key ? ' is-dragging' : '')}
+              onClick={() => openCard(card)}
+              onPointerDown={(event) => handleCardPointerDown(event, card.key)}
+              onPointerMove={handleCardPointerMove}
+              onPointerUp={finishCardDrag}
+              onPointerCancel={cancelCardDrag}
+              data-dashboard-card-key={card.key}
               data-testid={'dashboard-card-' + card.key}
             >
               <span className="rz-dashboard-card-title">{card.title}</span>
