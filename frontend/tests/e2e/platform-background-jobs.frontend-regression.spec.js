@@ -67,7 +67,7 @@ const excludedEndpoints = [
   '**/api/testing/reports/latest',
 ]
 
-test('background jobs page confirms and runs only self-contained parsing tasks', async ({ page }) => {
+test('background jobs page confirms and runs platform-managed Kassa and parsing tasks', async ({ page }) => {
   await mockSession(page, noneSession)
   const requests = []
   const excludedRequests = []

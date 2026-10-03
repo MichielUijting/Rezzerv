@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FRONTEND = ROOT / "frontend"
 
 EXPECTED_CAPABILITIES = (
+    ("support", "platform.support_access.read", "/platform/meldingen", "PlatformSupportPage"),
     ("functional-features", "platform.functional_features.manage", "/platform/functionaliteiten", "PlatformFeatureFlagsPage"),
     ("diagnostics", "platform.diagnostics.view", "/platform/diagnostiek", "PlatformDiagnosticsPage"),
     ("logs", "platform.logs.view", "/platform/logs", "PlatformLogsPage"),
@@ -32,7 +33,8 @@ EXPECTED_CAPABILITIES = (
 )
 
 EXPECTED_PLATFORM_ADMIN_PERMISSIONS = frozenset(
-    item[1] for item in EXPECTED_CAPABILITIES if item[0] != "functional-features"
+    {item[1] for item in EXPECTED_CAPABILITIES if item[0] != "functional-features"}
+    | {"platform.support_access.mutate"}
 )
 
 EXPECTED_REGRESSION_SPECS = (
@@ -89,7 +91,11 @@ def _assert_authorization_matrix() -> None:
 
 def _assert_every_capability_has_concrete_page() -> None:
     source = _read("frontend/src/features/platform/PlatformCapabilityPage.jsx")
+    router_source = _read("frontend/src/app/router/AppRouter.jsx")
     for key, _permission, _route, page in EXPECTED_CAPABILITIES:
+        if key == "support":
+            assert "item.key === 'support' ? <PlatformSupportPage /> : <PlatformCapabilityPage item={item} />" in router_source
+            continue
         assert f"import {page} from './{page}.jsx'" in source, f"missing import for {page}"
         if key == "functional-features":
             assert "if (item?.key === 'functional-features')" in source
@@ -128,7 +134,7 @@ def _assert_none_native_route_boundary() -> None:
 
 
 def _assert_frontend_authority_hygiene() -> None:
-    pages = tuple(item[3] for item in EXPECTED_CAPABILITIES)
+    pages = tuple(item[3] for item in EXPECTED_CAPABILITIES if item[0] != "support")
     forbidden = ("'Authorization'", '"Authorization"', "Bearer ", "x-admin-key")
     for page in pages:
         source = _read(f"frontend/src/features/platform/{page}.jsx")
