@@ -80,6 +80,32 @@ def _engine():
                 read_at TEXT
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE global_product_gpc_bricks (
+                global_product_id TEXT PRIMARY KEY,
+                brick_code TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE gpc_bricks (
+                brick_code TEXT PRIMARY KEY,
+                class_code TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE gpc_classes (
+                class_code TEXT PRIMARY KEY,
+                description TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE gpc_translations (
+                entity_type TEXT,
+                entity_code TEXT,
+                language_code TEXT,
+                translated_text TEXT
+            )
+        """))
     return engine
 
 
@@ -146,6 +172,29 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
                     "deleted": line[3], "eligible": line[4], "role": line[5],
                 })
 
+            conn.execute(text("""
+                INSERT INTO gpc_classes(class_code, description) VALUES
+                  ('10000001', 'Food'),
+                  ('10000002', 'Fruit')
+            """))
+            conn.execute(text("""
+                INSERT INTO gpc_bricks(brick_code, class_code) VALUES
+                  ('20000001', '10000001'),
+                  ('20000002', '10000002')
+            """))
+            conn.execute(text("""
+                INSERT INTO global_product_gpc_bricks(global_product_id, brick_code) VALUES
+                  ('gp-l1', '20000001'),
+                  ('gp-l2', '20000001'),
+                  ('gp-l5', '20000002'),
+                  ('gp-l6', '20000001')
+            """))
+            conn.execute(text("""
+                INSERT INTO gpc_translations(entity_type, entity_code, language_code, translated_text) VALUES
+                  ('class', '10000001', 'nl', 'Voeding'),
+                  ('class', '10000002', 'nl', 'Fruit')
+            """))
+
             # r1 staat in Uitpakken: twee regels nog te verwerken, één al verwerkt.
             conn.execute(text("""
                 INSERT INTO purchase_import_batches(id, household_id, source_type, source_reference)
@@ -203,6 +252,11 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert dashboard["purchases"]["receipts"][0]["articles"][0]["household_article_id"] == "ha-l5"
         assert len(dashboard["purchases"]["receipts"][1]["articles"]) == 2
         assert dashboard["spend"]["receipts"] == dashboard["purchases"]["receipts"]
+        day_groups = dashboard["spend"]["group_views"]["days"]
+        assert [item["label"] for item in day_groups["legend"]] == ["Voeding", "Fruit"]
+        assert day_groups["points"][-2]["current"] == 15.0
+        assert sum(item["value"] for item in day_groups["points"][-2]["current_segments"]) == 15.0
+        assert dashboard["spend_year_over_year"]["group_views"]["days"]["points"][-2]["previous"] == 12.0
 
         # Twee AH-bonnen op dezelfde kalenderdag vormen één winkelbezoek.
         assert dashboard["stores"]["unique"] == 1
@@ -295,6 +349,21 @@ def test_dashboard_drilldown_selects_exact_bar_period_and_deduplicates_store_vis
             assert len(current["receipts"]) == 2
             assert len(current["stores"]) == 1
             assert current["stores"][0]["visits"] == 1
+
+            unclassified = build_household_dashboard_drilldown(
+                conn,
+                household_id="h1",
+                user_id="u1",
+                metric="spend",
+                granularity="days",
+                bucket_index=3,
+                series="current",
+                comparison="previous",
+                group_key="unclassified",
+                now=NOW,
+            )
+            assert unclassified["group_label"] == "Niet ingedeeld"
+            assert unclassified["spend"] == 15.0
 
             previous = build_household_dashboard_drilldown(
                 conn,
