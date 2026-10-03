@@ -66,13 +66,13 @@ const ipOwnerSession = {
   user: { id: 'owner', email: 'owner@example.test' },
   user_id: 'owner',
   email: 'owner@example.test',
-  context_type: 'system',
-  active_household_id: '0',
-  active_household_name: 'Systeem',
-  role: 'owner',
-  display_role: 'IP-eigenaar',
-  permissions: { [INVENTORY_PERMISSION]: true, [SPECIAL_ROLES_PERMISSION]: true },
-  supported_permissions: [INVENTORY_PERMISSION, SPECIAL_ROLES_PERMISSION],
+  context_type: 'none',
+  active_household_id: null,
+  active_household_name: '',
+  role: null,
+  display_role: null,
+  permissions: { [SPECIAL_ROLES_PERMISSION]: true },
+  supported_permissions: [SPECIAL_ROLES_PERMISSION],
   is_platform_superuser: false,
   is_frontteam: false,
 }
@@ -113,88 +113,73 @@ test('platformbeheerder can inspect authorizations but cannot mutate special rol
   expect(mutations).toBe(0)
 })
 
-test('IP-owner manages the three ordinary special roles only after explicit confirmation', async ({ page }) => {
+test('IP-owner sees only Superuser management and can grant or revoke that role', async ({ page }) => {
   await mockSession(page, ipOwnerSession)
   const mutations = []
-  let currentTarget = user()
-  const protectedOwner = user({
-    user_id: 'owner',
-    email: 'owner@example.test',
-    platform_role_keys: ['platform.ip_owner'],
-    effective_platform_permissions: [INVENTORY_PERMISSION, SPECIAL_ROLES_PERMISSION],
-    is_current: true,
-    is_ip_owner: true,
-    role_actions: {
-      'platform.superuser': action(false, false, false, 'IP-eigenaar is beschermd tegen regulier rolbeheer'),
-      'platform.frontteam': action(false, false, false, 'IP-eigenaar is beschermd tegen regulier rolbeheer'),
-      'platform.platform_admin': action(false, false, false, 'IP-eigenaar is beschermd tegen regulier rolbeheer'),
-    },
-  })
+  let isSuperuser = false
 
-  await page.route(AUTHORIZATIONS_ENDPOINT, async (route) => {
-    const request = route.request()
-    expect(request.method()).toBe('GET')
-    expect(request.headers().authorization).toBeUndefined()
-    expect(request.headers()['x-admin-key']).toBeUndefined()
+  await page.route('**/api/ip-owner/superusers', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        users: [protectedOwner, currentTarget],
-        roles,
-        inventory_permission: INVENTORY_PERMISSION,
-        special_roles_permission: SPECIAL_ROLES_PERMISSION,
-        can_manage_special_roles: true,
+        users: [
+          {
+            user_id: 'owner',
+            email: 'owner@example.test',
+            account_status: 'active',
+            is_current: true,
+            is_ip_owner: true,
+            is_superuser: false,
+            can_grant: false,
+            can_revoke: false,
+          },
+          {
+            user_id: 'target-user',
+            email: 'target-user@example.test',
+            account_status: 'active',
+            is_current: false,
+            is_ip_owner: false,
+            is_superuser: isSuperuser,
+            can_grant: !isSuperuser,
+            can_revoke: isSuperuser,
+          },
+        ],
+        can_manage_superusers: true,
+        context_type: 'none',
         household_context_used: false,
-        context_type: 'system',
       }),
     })
   })
 
-  await page.route('**/api/platform/authorizations/users/target-user/**', async (route) => {
+  await page.route('**/api/platform/authorizations/users/target-user/superuser/**', async (route) => {
     const request = route.request()
-    mutations.push({ url: request.url(), method: request.method(), headers: request.headers(), postData: request.postData() })
-    currentTarget = user({
-      platform_role_keys: ['platform.superuser'],
-      role_actions: {
-        'platform.superuser': action(true, false, true, 'Rol is al actief'),
-        'platform.frontteam': action(false, false, false, 'Frontteamlid kan niet met een systeem- of Platformbeheerderrol worden gecombineerd'),
-        'platform.platform_admin': action(false, true, false, 'Rol is niet actief'),
-      },
-    })
+    mutations.push({ url: request.url(), method: request.method(), headers: request.headers() })
+    isSuperuser = request.url().endsWith('/grant')
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ item: currentTarget, household_context_used: false, context_type: 'system' }),
+      body: JSON.stringify({ item: { user_id: 'target-user' }, context_type: 'none' }),
     })
   })
 
-  await page.goto('/platform/autorisaties')
-  const target = page.getByTestId('platform-authorization-user-target-user')
-  const owner = page.getByTestId('platform-authorization-user-owner')
-  await expect(owner).toContainText('Beschermde IP-eigenaar')
-  await expect(owner.getByRole('button')).toHaveCount(0)
-  await expect(target.getByRole('button', { name: 'Superuser toekennen', exact: true })).toBeVisible()
-  await expect(target.getByRole('button', { name: 'Frontteamlid toekennen', exact: true })).toBeVisible()
-  await expect(target.getByRole('button', { name: 'Platformbeheerder toekennen', exact: true })).toBeVisible()
+  await page.goto('/ip-eigenaar/superusers')
+  await expect(page.getByTestId('ip-owner-superusers-page')).toBeVisible()
+  await expect(page.getByText('De IP-eigenaar kan uitsluitend Superusers aanstellen of deactiveren.')).toBeVisible()
+  await expect(page.getByText('Platformbeheerder', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Frontteamlid', { exact: true })).toHaveCount(0)
 
-  await target.getByRole('button', { name: 'Superuser toekennen', exact: true }).click()
-  await expect(page.getByTestId('platform-authorization-confirmation')).toContainText('Superuser definitief toekennen?')
-  expect(mutations).toHaveLength(0)
-  await page.getByRole('button', { name: 'Annuleren', exact: true }).click()
-  expect(mutations).toHaveLength(0)
-
-  await target.getByRole('button', { name: 'Superuser toekennen', exact: true }).click()
-  await page.getByRole('button', { name: 'Definitief toekennen', exact: true }).click()
+  const target = page.getByTestId('ip-owner-superuser-target-user')
+  await target.getByRole('button', { name: 'Superuser maken', exact: true }).click()
   await expect.poll(() => mutations.length).toBe(1)
   expect(mutations[0].method).toBe('POST')
-  expect(mutations[0].postData).toBeNull()
-  expect(mutations[0].url).toContain('/api/platform/authorizations/users/target-user/superuser/grant')
-  expect(mutations[0].url).not.toContain('household')
+  expect(mutations[0].url).toContain('/superuser/grant')
   expect(mutations[0].headers.authorization).toBeUndefined()
-  expect(mutations[0].headers['x-admin-key']).toBeUndefined()
-  await expect(target.getByRole('button', { name: 'Superuser intrekken', exact: true })).toBeVisible()
-  await expect(target.getByRole('button', { name: 'Platformbeheerder toekennen', exact: true })).toBeVisible()
+  await expect(target.getByRole('button', { name: 'Deactiveren', exact: true })).toBeVisible()
+
+  await target.getByRole('button', { name: 'Deactiveren', exact: true }).click()
+  await expect.poll(() => mutations.length).toBe(2)
+  expect(mutations[1].url).toContain('/superuser/revoke')
 })
 
 test('platform authorizations direct route stays closed without inventory permission', async ({ page }) => {
