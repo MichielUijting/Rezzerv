@@ -68,7 +68,22 @@ function aggregateCategories(receipts = []) {
       groups.set(key, current)
     }
   }
-  return Array.from(groups.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'nl'))
+
+  const unclassified = groups.get('unclassified') || null
+  const ranked = Array.from(groups.values())
+    .filter((item) => item.key !== 'unclassified')
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'nl'))
+  const visible = ranked.slice(0, 5)
+  const rest = ranked.slice(5)
+  if (rest.length) {
+    visible.push({
+      key: 'other',
+      label: 'Overig',
+      total: rest.reduce((sum, item) => sum + Number(item.total || 0), 0),
+    })
+  }
+  if (unclassified) visible.push(unclassified)
+  return visible
 }
 
 function aggregateArticles(receipts = []) {
@@ -218,14 +233,28 @@ function ReceiptGroupList({ groups = [], metric = 'spend' }) {
 
 function CategoryTotals({ receipts = [] }) {
   const rows = useMemo(() => aggregateCategories(receipts), [receipts])
+  const total = rows.reduce((sum, item) => sum + Number(item.total || 0), 0)
   if (!rows.length) {
     return <p className="rz-dashboard-empty">Nog geen categorie-indeling beschikbaar voor deze periode.</p>
   }
   return <div className="rz-dashboard-category-totals">
-    {rows.map((group) => (
+    <div className="rz-dashboard-category-stack" aria-label="Uitgaven per categorie">
+      {rows.map((group, index) => (
+        <span
+          key={group.key}
+          className={'rz-dashboard-category-stack-segment rz-dashboard-stack-segment--' + (index % 7)}
+          style={{ flexGrow: Math.max(0.0001, Number(group.total || 0)) }}
+          title={`${group.label}: ${euro(group.total)}`}
+        />
+      ))}
+    </div>
+    {rows.map((group, index) => (
       <div className="rz-dashboard-category-total-row" key={group.key}>
-        <span><strong>{group.label}</strong></span>
-        <strong>{euro(group.total)}</strong>
+        <span>
+          <i className={'rz-dashboard-stack-key rz-dashboard-stack-segment--' + (index % 7)} />
+          <strong>{group.label}</strong>
+        </span>
+        <strong>{euro(group.total)}{total > 0 ? ' · ' + Math.round((Number(group.total || 0) / total) * 100) + '%' : ''}</strong>
       </div>
     ))}
   </div>
