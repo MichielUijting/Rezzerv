@@ -95,17 +95,16 @@ export default function PlatformAuthorizationsPage() {
     <div data-testid="platform-authorizations-page">
       <Header
         title="Platformautorisaties"
-        subtitle="Bekijk platformrollen; alleen de IP-eigenaar kan Superuser, Frontteamlid en Platformbeheerder aanstellen of intrekken."
+        subtitle="Bekijk de actuele platformrollen en effectieve platformbevoegdheden."
       />
 
       <Card>
         <p>
-          Inventarisatie gebruikt <strong>platform.permissions.manage</strong>. Speciale rolmutaties gebruiken
-          afzonderlijk <strong>platform.special_roles.manage</strong>. De backend blijft de enige authority;
-          er is geen householdcontext en geen H0-fallback voor deze beheeractie.
+          Deze pagina is de read-only inventarisatie voor Platformbeheer. De backend blijft de enige authority;
+          er is geen huishoudcontext en geen H0-fallback voor deze inventarisatie.
         </p>
         <p>
-          De IP-eigenaar is beschermd en kan hier niet worden verwijderd of gedegradeerd. Superuser en
+          De IP-eigenaar is beschermd en wordt hier alleen ter informatie getoond. Superuser en
           Platformbeheerder mogen samen bestaan; Frontteamlid blijft een afzonderlijke accountvorm met een eigen
           persoonlijk regulier huishouden.
         </p>
@@ -115,7 +114,7 @@ export default function PlatformAuthorizationsPage() {
         </p>
         {!canManageSpecialRoles ? (
           <p data-testid="platform-authorizations-read-only">
-            Read-only: alleen de IP-eigenaar beschikt over platform.special_roles.manage.
+            Alleen-lezen: rolwijzigingen worden niet vanuit deze Platformbeheerpagina uitgevoerd.
           </p>
         ) : null}
       </Card>
@@ -195,7 +194,7 @@ export default function PlatformAuthorizationsPage() {
               <div key={role.role_key} data-testid={`platform-role-${role.role_key}`}>
                 <h3>{role.name}</h3>
                 <p>Rol: {role.role_key}</p>
-                <p>{role.protected ? 'Beschermde rol' : role.managed_by_this_page ? 'Beheerbaar door IP-eigenaar' : 'Read-only op deze pagina'}</p>
+                <p>{role.protected ? 'Beschermde rol' : role.managed_by_this_page ? 'Beheerbaar via de daarvoor bevoegde functie' : 'Alleen-lezen op deze pagina'}</p>
                 <p>Permissies: {(role.permissions || []).join(', ') || 'Geen'}</p>
               </div>
             ))}

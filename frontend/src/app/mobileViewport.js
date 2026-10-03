@@ -4,10 +4,13 @@ export const MOBILE_APP_MEDIA_QUERY = '(max-width: 720px)'
 export const MOBILE_APP_TOUCH_QUERY = '(pointer: coarse)'
 export const MOBILE_APP_LANDSCAPE_MAX_WIDTH = 960
 
-export function isMobileAppViewport(mediaQueryList, touchQueryList, viewportWidth) {
+export function isMobileAppViewport(mediaQueryList, touchQueryList, viewportWidth, screenWidth = null) {
   if (mediaQueryList?.matches) return true
 
   const width = Number(viewportWidth)
+  const physicalWidth = Number(screenWidth)
+  if (Number.isFinite(physicalWidth) && physicalWidth > 0 && physicalWidth <= 720) return true
+
   return Boolean(
     touchQueryList?.matches
       && Number.isFinite(width)
@@ -22,6 +25,7 @@ export function readMobileAppViewport() {
     window.matchMedia(MOBILE_APP_MEDIA_QUERY),
     window.matchMedia(MOBILE_APP_TOUCH_QUERY),
     window.innerWidth,
+    window.screen?.width,
   )
 }
 
@@ -34,7 +38,7 @@ export function useMobileAppViewport() {
     const mediaQuery = window.matchMedia(MOBILE_APP_MEDIA_QUERY)
     const touchQuery = window.matchMedia(MOBILE_APP_TOUCH_QUERY)
     const handleViewportChange = () => setIsMobileViewport(
-      isMobileAppViewport(mediaQuery, touchQuery, window.innerWidth),
+      isMobileAppViewport(mediaQuery, touchQuery, window.innerWidth, window.screen?.width),
     )
 
     handleViewportChange()

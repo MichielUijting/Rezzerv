@@ -30,6 +30,8 @@ def test_platform_admin_none_session_projects_exact_platform_permissions():
     }
 
     assert granted_permissions == expected_permissions
+    assert payload["permissions"]["platform.support_access.read"] is True
+    assert payload["permissions"]["platform.support_access.mutate"] is True
     assert payload["supported_permissions"] == sorted(expected_permissions)
     assert not granted_permissions.intersection(HOUSEHOLD_PERMISSIONS)
     assert payload["active_household_id"] is None
@@ -43,3 +45,33 @@ def test_platform_admin_none_session_projects_exact_platform_permissions():
     assert payload["is_platform_superuser"] is False
     assert payload["is_frontteam"] is False
     assert "platform_roles" not in payload
+
+
+def test_ip_owner_none_session_projects_only_superuser_management_permission():
+    issued_at = datetime(2026, 10, 3, 21, 30, tzinfo=timezone.utc)
+    context = ServerSessionContext(
+        session_id="session-ip-owner",
+        user_id="ip-owner",
+        email="owner@example.test",
+        active_household_id=None,
+        context_type="none",
+        role=None,
+        session_version=1,
+        issued_at=issued_at,
+        expires_at=issued_at + timedelta(hours=12),
+        is_ip_owner=True,
+    )
+    payload = public_session_payload(context)
+    expected_permissions = {"platform.special_roles.manage"}
+    granted_permissions = {
+        key for key, allowed in payload["permissions"].items() if allowed
+    }
+
+    assert granted_permissions == expected_permissions
+    assert payload["active_household_id"] is None
+    assert payload["active_household_name"] == ""
+    assert payload["context_type"] == "none"
+    assert payload["role"] is None
+    assert payload["display_role"] is None
+    assert payload["is_platform_superuser"] is False
+    assert not granted_permissions.intersection(HOUSEHOLD_PERMISSIONS)

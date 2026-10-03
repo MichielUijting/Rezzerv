@@ -1,0 +1,33 @@
+.rz-mobile-more{
+  min-height:100dvh;
+  background:#EEF7F0 url('/inhuis-green-wallpaper.svg') center/cover fixed;
+  color:var(--color-text-primary);
+  padding:0 10px calc(84px + env(safe-area-inset-bottom));
+}
+.rz-mobile-more>.rz-mobile-module-header{margin:0 -10px 14px}
+.rz-mobile-more-inner{width:min(100%,640px);margin:0 auto;display:grid;gap:12px}
+.rz-mobile-more-inner h1{margin:0;font-size:var(--font-size-ui-title)}
+.rz-mobile-more-list{
+  display:grid;
+  border:1px solid var(--color-border-default);
+  border-radius:var(--radius-md);
+  background:#fff;
+  overflow:hidden;
+}
+.rz-mobile-more-list button{
+  min-height:50px;
+  padding:10px 12px;
+  border:0;
+  border-bottom:1px solid var(--color-border-default);
+  background:#fff;
+  color:var(--color-text-primary);
+  font:inherit;
+  font-size:var(--font-size-ui-body);
+  text-align:left;
+  cursor:pointer;
+}
+.rz-mobile-more-list button:last-child{border-bottom:0}
+.rz-mobile-more-list button:focus-visible{
+  outline:2px solid var(--color-mobile-ui-primary);
+  outline-offset:-2px;
+}

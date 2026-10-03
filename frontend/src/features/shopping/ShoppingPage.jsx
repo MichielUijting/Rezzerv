@@ -58,7 +58,7 @@ export default function ShoppingPage() {
   const [selectedResultId, setSelectedResultId] = useState('')
   const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
   const [selectedItemIds, setSelectedItemIds] = useState([])
-  const [filters, setFilters] = useState({ checked: 'all', article: '', productType: '' })
+  const [filters, setFilters] = useState({ checked: 'all', article: '', productType: '', gpc: '' })
   const [sort, setSort] = useState({ key: 'article', direction: 'asc' })
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
@@ -149,6 +149,10 @@ export default function ShoppingPage() {
     if (filters.checked === 'checked' && !item.checked) return false
     if (filters.article && !String(item.article_name || '').toLowerCase().includes(filters.article.toLowerCase())) return false
     if (filters.productType && String(item.product_type_name || '') !== filters.productType) return false
+    if (filters.gpc) {
+      const gpc = [item.gpc_brick_name, item.gpc_class_name, item.gpc_family_name].filter(Boolean).join(' · ').toLowerCase()
+      if (!gpc.includes(String(filters.gpc || '').toLowerCase())) return false
+    }
     return true
   }), [list.items, filters])
 
@@ -306,8 +310,18 @@ export default function ShoppingPage() {
   function exportSelectedItems() {
     if (selectedItems.length === 0) return
     const rows = [
-      ['Artikel', 'Producttype', 'Aantal', 'Omvang', 'Opmerking', 'Gekocht'],
-      ...selectedItems.map((item) => [item.article_name, item.product_type_name, item.quantity ?? 1, item.size, item.note, item.checked ? 'Ja' : 'Nee']),
+      ['Artikel', 'Producttype', 'GPC Brick', 'GPC Groep', 'GPC Familie', 'Aantal', 'Omvang', 'Opmerking', 'Gekocht'],
+      ...selectedItems.map((item) => [
+        item.article_name,
+        item.product_type_name,
+        item.gpc_brick_name,
+        item.gpc_class_name,
+        item.gpc_family_name,
+        item.quantity ?? 1,
+        item.size,
+        item.note,
+        item.checked ? 'Ja' : 'Nee',
+      ]),
     ]
     const csv = `\uFEFF${rows.map((row) => row.map(csvValue).join(';')).join('\r\n')}`
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -352,6 +366,7 @@ export default function ShoppingPage() {
   const dataTableFilters = {
     article: filters.article,
     productType: filters.productType,
+    gpc: filters.gpc,
     checked: filters.checked === 'checked' ? 'checked' : '',
   }
   const shoppingColumns = useMemo(() => [
@@ -419,6 +434,19 @@ export default function ShoppingPage() {
         </select>
       ),
       renderCell: (item) => <span title={item.product_type_name}>{item.product_type_name}</span>,
+    },
+    {
+      key: 'gpc',
+      label: 'GPC: Brick · Groep · Familie',
+      width: 380,
+      sortable: true,
+      filterable: true,
+      getFilterValue: (item) => [item.gpc_brick_name, item.gpc_class_name, item.gpc_family_name].filter(Boolean).join(' · '),
+      getSortValue: (item) => [item.gpc_family_name, item.gpc_class_name, item.gpc_brick_name].filter(Boolean).join(' · '),
+      renderCell: (item) => {
+        const value = [item.gpc_brick_name, item.gpc_class_name, item.gpc_family_name].filter(Boolean).join(' · ')
+        return <span title={value || 'Geen GPC-classificatie'}>{value || 'Geen GPC-classificatie'}</span>
+      },
     },
     {
       key: 'quantity',
@@ -515,6 +543,10 @@ export default function ShoppingPage() {
       setFilters((current) => ({ ...current, productType: value }))
       return
     }
+    if (key === 'gpc') {
+      setFilters((current) => ({ ...current, gpc: value }))
+      return
+    }
     if (key === 'checked') {
       setFilters((current) => ({ ...current, checked: value === 'checked' ? 'checked' : 'all' }))
     }
@@ -546,7 +578,12 @@ export default function ShoppingPage() {
                     items={catalogResults}
                     selectedKey={selectedResultId}
                     getKey={(item) => `${item.source_type}:${item.source_id}`}
-                    getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
+                    getLabel={(item) => [
+                      item.label,
+                      item.gpc_brick_name ? `Brick: ${item.gpc_brick_name}` : '',
+                      item.gpc_family_name ? `GPC-familie: ${item.gpc_family_name}` : '',
+                      SOURCE_LABELS[item.source_type] || item.source_type,
+                    ].filter(Boolean).join(' — ')}
                     onSelect={setSelectedResultId}
                     loading={searching}
                     ariaLabel="Kandidaten voor artikel toevoegen"

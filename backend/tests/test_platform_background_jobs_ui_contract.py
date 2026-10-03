@@ -4,6 +4,8 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ROUTE_SOURCE_PATH = BACKEND_ROOT / 'app' / 'api' / 'dev_test_routes.py'
+KASSA_REGRESSION_ROUTE_SOURCE_PATH = BACKEND_ROOT / 'app' / 'api' / 'routes' / 'kassa_regression_routes.py'
+KASSA_SMOKE_ROUTE_SOURCE_PATH = BACKEND_ROOT / 'app' / 'api' / 'routes' / 'kassa_smoke_routes.py'
 
 SELF_CONTAINED_BACKGROUND_ROUTES = {
     '/api/testing/regression/parsing-fixtures/run',
@@ -87,3 +89,12 @@ def test_completion_callback_and_diagnostics_read_are_not_operator_start_actions
 
     assert ('GET', DIAGNOSTICS_REPORT_ROUTE) in routes
     assert DIAGNOSTICS_REPORT_ROUTE not in SELF_CONTAINED_BACKGROUND_ROUTES
+
+
+def test_kassa_background_jobs_and_diagnostics_are_platform_permission_guarded():
+    for path in (KASSA_REGRESSION_ROUTE_SOURCE_PATH, KASSA_SMOKE_ROUTE_SOURCE_PATH):
+        source = path.read_text(encoding='utf-8')
+        assert 'BACKGROUND_JOB_PERMISSION = "platform.background_jobs.manage"' in source
+        assert 'DIAGNOSTICS_VIEW_PERMISSION = "platform.diagnostics.view"' in source
+        assert 'require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)' in source
+        assert 'require_platform_permission_from_session(DIAGNOSTICS_VIEW_PERMISSION, authorization)' in source

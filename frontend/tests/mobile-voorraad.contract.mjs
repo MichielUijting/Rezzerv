@@ -71,6 +71,9 @@ assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
 assert.match(mobileSource, /MobileArticleRow/)
 assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
+assert.match(mobileSource, /gpcBrickName/)
+assert.match(mobileSource, /GPC-groep:/)
+assert.match(mobileSource, /GPC-familie:/)
 
 
 

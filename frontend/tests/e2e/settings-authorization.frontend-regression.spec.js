@@ -44,12 +44,12 @@ function authorizationPayload(roleKey = 'household.member') {
     household_id: '1',
     members: [
       { membership_id: 'member-admin', email: 'admin@rezzerv.local', role_key: 'household.admin', role_name: 'Beheerder', permission_overrides: [], is_current_user: true },
-      { membership_id: 'member-lid', email: 'lid@rezzerv.local', role_key: roleKey, role_name: 'Lid', permission_overrides: [] },
+      { membership_id: 'member-lid', email: 'lid@rezzerv.local', role_key: roleKey, role_name: 'Gebruiker', permission_overrides: [] },
     ],
     roles: [
-      { role_key: 'household.member', name: 'Lid', permission_keys: ['inventory.view', 'inventory.update', 'members.view'] },
+      { role_key: 'household.member', name: 'Gebruiker', permission_keys: ['inventory.view', 'inventory.update', 'members.view'] },
       { role_key: 'household.admin', name: 'Beheerder', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
-      { role_key: 'household.owner', name: 'Superuser', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
+      { role_key: 'household.owner', name: 'Beheerder', permission_keys: ['inventory.view', 'inventory.update', 'inventory.correct', 'members.view', 'members.manage'] },
     ],
     permissions: [
       { permission_key: 'inventory.view', description: 'inventory.view' },
@@ -93,11 +93,10 @@ test.describe('Autorisaties frontend-regressie', () => {
     await expect(authorizationPage).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Autorisaties', exact: true })).toBeVisible()
     await expect(page.getByTestId('authorization-role-matrix')).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Lid', exact: true })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Gebruiker', exact: true })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Beheerder', exact: true })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Superuser', exact: true })).toBeVisible()
     await expect(page.getByRole('rowheader', { name: 'Voorraad bekijken', exact: true })).toBeVisible()
-    await expect(page.getByLabel('Voorraad wijzigen voor Lid: toegestaan')).toBeChecked()
+    await expect(page.getByLabel('Voorraad wijzigen voor Gebruiker: toegestaan')).toBeChecked()
     await expect(authorizationPage.getByText('admin@rezzerv.local')).toHaveCount(0)
     await expect(authorizationPage.getByText('inventory.view')).toHaveCount(0)
     await expect(authorizationPage.locator('select')).toHaveCount(0)
@@ -194,14 +193,14 @@ test.describe('Autorisaties frontend-regressie', () => {
     await expect(page.getByText('Rechten voor leden')).toHaveCount(0)
     await expect(page.getByLabel('Rol lid@rezzerv.local')).toHaveValue('household.advanced_member')
     await expect(page.getByLabel('Rol lid@rezzerv.local').locator('option')).toHaveText([
-      'Geavanceerd lid (bestaande rol)',
-      'Lid',
+      'Beheerder (bestaande rol)',
+      'Gebruiker',
       'Beheerder',
     ])
 
     await page.getByLabel('Rol lid@rezzerv.local').selectOption('household.member')
     const roleFeedback = page.getByTestId('app-feedback-success')
-    await expect(roleFeedback).toContainText('De rol van lid@rezzerv.local is gewijzigd naar Lid.')
+    await expect(roleFeedback).toContainText('De rol van lid@rezzerv.local is gewijzigd naar Gebruiker.')
     await roleFeedback.getByRole('button', { name: 'OK' }).click()
     await expect(page.getByLabel('Rol lid@rezzerv.local')).toHaveValue('household.member')
 
@@ -212,7 +211,7 @@ test.describe('Autorisaties frontend-regressie', () => {
     await nameFeedback.getByRole('button', { name: 'OK' }).click()
     await expect(page.getByTestId('household-name-input')).toHaveValue('Molenstraat 19 Driel bijgewerkt')
 
-    await expect(page.getByRole('heading', { name: 'Huishoudlid uitnodigen', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Gebruiker uitnodigen', exact: true })).toBeVisible()
     await expect(page.getByTestId('household-settings-page').getByLabel('Wachtwoord')).toHaveCount(0)
     await page.getByTestId('household-invitation-email-input').fill('nieuw-lid@example.com')
     await page.getByTestId('household-invitation-submit').click()

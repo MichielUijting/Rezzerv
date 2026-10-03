@@ -25,6 +25,20 @@ async function mockSession(page, session) {
 
 const allowedActions = [
   {
+    key: 'kassa-smoke',
+    title: 'Kassa releasecontrole uitvoeren',
+    confirm: 'Kassa releasecontrole starten',
+    endpoint: '**/api/admin/kassa-smoke/run',
+    asyncJob: true,
+  },
+  {
+    key: 'kassa-regression',
+    title: 'Kassa inleesregressie uitvoeren',
+    confirm: 'Kassa inleesregressie starten',
+    endpoint: '**/api/admin/kassa-regression/run',
+    asyncJob: true,
+  },
+  {
     key: 'parsing-fixtures',
     title: 'Parsing-fixture regressie uitvoeren',
     confirm: 'Fixture-regressie starten',
@@ -42,6 +56,8 @@ const allowedActions = [
 
 const excludedEndpoints = [
   '**/api/testing/regression/smoke/run',
+  '**/api/admin/kassa-smoke/status',
+  '**/api/admin/kassa-regression/status',
   '**/api/testing/regression/all/run',
   '**/api/testing/regression/layer1/run',
   '**/api/testing/regression/layer2/run',
@@ -51,7 +67,7 @@ const excludedEndpoints = [
   '**/api/testing/reports/latest',
 ]
 
-test('background jobs page confirms and runs only self-contained parsing tasks', async ({ page }) => {
+test('background jobs page confirms and runs platform-managed Kassa and parsing tasks', async ({ page }) => {
   await mockSession(page, noneSession)
   const requests = []
   const excludedRequests = []
@@ -63,13 +79,20 @@ test('background jobs page confirms and runs only self-contained parsing tasks',
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          test_type: action.testType,
-          last_run_at: '2026-08-24T13:45:00+00:00',
-          blocked_count: 0,
-          results: [
-            { name: 'controle 1', status: 'passed', error: null },
-            { name: 'controle 2', status: 'passed', error: null },
-          ],
+          ...(action.asyncJob ? {
+            status: 'running',
+            progress_current: 0,
+            progress_total: action.key === 'kassa-smoke' ? 6 : 18,
+            message: 'Taak gestart',
+          } : {
+            test_type: action.testType,
+            last_run_at: '2026-08-24T13:45:00+00:00',
+            blocked_count: 0,
+            results: [
+              { name: 'controle 1', status: 'passed', error: null },
+              { name: 'controle 2', status: 'passed', error: null },
+            ],
+          }),
         }),
       })
     })
@@ -88,7 +111,7 @@ test('background jobs page confirms and runs only self-contained parsing tasks',
 
   await page.goto('/platform/achtergrondtaken')
   await expect(page.getByTestId('platform-background-jobs-page')).toBeVisible()
-  await expect(page.getByText('De huidige smoke-, volledige regressie- en layer-startmarkers zijn hier bewust niet beschikbaar: zij markeren alleen een externe run als gestart en voeren zonder aparte runner geen complete taak uit.')).toBeVisible()
+  await expect(page.getByText('Zelfstandig uitvoerbare Kassa- en parsingregressies kunnen hier worden gestart. Externe layer-startmarkers blijven bewust buiten deze beheerpagina.')).toBeVisible()
   await expect(page.getByText('Status en historie vallen onder Diagnostiek en worden op deze pagina niet gelezen zonder')).toBeVisible()
   expect(requests).toEqual([])
   expect(excludedRequests).toEqual([])
@@ -102,17 +125,23 @@ test('background jobs page confirms and runs only self-contained parsing tasks',
 
     await page.getByRole('button', { name: action.confirm, exact: true }).click()
     const result = page.getByTestId(`platform-background-jobs-result-${action.key}`)
-    await expect(result).toContainText(`Taaktype: ${action.testType}`)
-    await expect(result).toContainText('Controles: 2')
-    await expect(result).toContainText('Geslaagd: 2')
-    await expect(result).toContainText('Mislukt: 0')
-    await expect(result).toContainText('Geblokkeerd: 0')
+    if (action.asyncJob) {
+      await expect(result).toContainText('Status: running')
+      await expect(result).toContainText('Voortgang: 0 /')
+      await expect(result).toContainText('Taak gestart')
+    } else {
+      await expect(result).toContainText(`Taaktype: ${action.testType}`)
+      await expect(result).toContainText('Controles: 2')
+      await expect(result).toContainText('Geslaagd: 2')
+      await expect(result).toContainText('Mislukt: 0')
+      await expect(result).toContainText('Geblokkeerd: 0')
+    }
     expect(requests).toHaveLength(before + 1)
     expect(requests[requests.length - 1]).toBe(`POST ${action.key}`)
     expect(excludedRequests).toEqual([])
   }
 
-  expect(requests).toEqual(['POST parsing-fixtures', 'POST parsing-raw'])
+  expect(requests).toEqual(['POST kassa-smoke', 'POST kassa-regression', 'POST parsing-fixtures', 'POST parsing-raw'])
   expect(excludedRequests).toEqual([])
 })
 

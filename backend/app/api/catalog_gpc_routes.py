@@ -13,7 +13,6 @@ from app.services.gpc_candidate_service import (
     rank_gpc_candidates,
 )
 from app.services.gpc_reference_catalog_service import (
-    bundled_official_gpc_bricks,
     ensure_official_gpc_brick,
     search_official_gpc_bricks,
 )
@@ -43,7 +42,7 @@ def _require_gpc_tables() -> None:
         "gpc_classes",
         "gpc_families",
         "gpc_segments",
-        "gpc_translations",
+        "gpc_product_groups",
     }
     missing = sorted(required - _tables())
     if missing:
@@ -105,16 +104,6 @@ def _global_product_exists(conn, global_product_id: str) -> bool:
     ).first())
 
 
-def _localized(alias: str, entity_type: str, code_column: str, source_column: str) -> str:
-    return (
-        "COALESCE((SELECT translated_text FROM gpc_translations tr "
-        f"WHERE tr.entity_type='{entity_type}' "
-        f"AND tr.entity_code={alias}.{code_column} "
-        "AND tr.language_code='nl'), "
-        f"{alias}.{source_column})"
-    )
-
-
 def _brick_select_sql(where_clause: str = "", assignment_alias: str | None = None) -> str:
     assignment_fields = ""
     if assignment_alias:
@@ -127,19 +116,22 @@ def _brick_select_sql(where_clause: str = "", assignment_alias: str | None = Non
     return f"""
         SELECT
             b.brick_code,
-            {_localized('b', 'brick', 'brick_code', 'description')} AS brick_description,
-            b.description AS brick_description_en,
+            nl.gpc_brick_name AS brick_description,
             c.class_code,
-            {_localized('c', 'class', 'class_code', 'description')} AS class_description,
+            nl.gpc_class_name AS class_description,
             f.family_code,
-            {_localized('f', 'family', 'family_code', 'description')} AS family_description,
+            nl.gpc_family_name AS family_description,
             s.segment_code,
-            {_localized('s', 'segment', 'segment_code', 'description')} AS segment_description
+            nl.gpc_segment_name AS segment_description
             {assignment_fields}
         FROM gpc_bricks b
         JOIN gpc_classes c ON c.class_code = b.class_code
         JOIN gpc_families f ON f.family_code = c.family_code
         JOIN gpc_segments s ON s.segment_code = f.segment_code
+        JOIN gpc_product_groups nl
+          ON nl.gpc_brick_code = b.brick_code
+         AND lower(COALESCE(nl.language_code, '')) = 'nl'
+         AND COALESCE(nl.active, TRUE) = TRUE
         {where_clause}
     """
 
@@ -264,23 +256,12 @@ def _external_product_metadata(conn, product: dict[str, Any]) -> dict[str, Any]:
 
 
 def _candidate_catalog_rows(conn) -> list[dict[str, Any]]:
-    rows = [
+    return [
         dict(row)
         for row in conn.execute(
-            text(_brick_select_sql() + " ORDER BY b.brick_code")
+            text(_brick_select_sql() + " ORDER BY nl.gpc_brick_name, b.brick_code")
         ).mappings().all()
     ]
-    known = {str(row.get("brick_code") or "") for row in rows}
-
-    # De gebundelde GS1-referentie is de volledige officiële fallback.
-    # Daardoor wordt kandidaatgeneratie niet beperkt door een partiële DB-import.
-    for bundled in bundled_official_gpc_bricks():
-        code = str(bundled.get("brick_code") or "")
-        if not code or code in known:
-            continue
-        rows.append(dict(bundled))
-        known.add(code)
-    return rows
 
 
 def _legacy_suggestion_row(

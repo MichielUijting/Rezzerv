@@ -27,7 +27,7 @@ def test_overview_reuses_existing_meldingen_route_instead_of_reimplementing_supp
     source = _read("frontend/src/features/superuser/SuperuserOverviewSection.jsx")
     assert "navigate(notificationRoute)" in source
     assert "Meldingen (" in source
-    assert "'/superuser/meldingen'" in source
+    assert "'/platform/meldingen'" in source
     assert "PlatformSupportPage" not in source
     assert "createPlatformBroadcast" not in source
 
@@ -55,4 +55,4 @@ def test_attention_table_can_open_existing_read_only_household_inspector():
 def test_landing_meldingen_tile_remains_until_po_migration_go():
     source = _read("frontend/src/features/home/HomePage.jsx")
     assert "{ key: 'meldingen', label: 'Meldingen'" in source
-    assert "'/superuser/meldingen'" in source
+    assert "'/platform/meldingen'" in source

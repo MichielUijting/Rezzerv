@@ -11,6 +11,7 @@ const tokensCss = readFrontend('src/ui/tokens.css')
 const themeCss = readFrontend('src/ui/theme.css')
 const headerCss = readFrontend('src/ui/components/header.css')
 const buttonCss = readFrontend('src/ui/components/button.css')
+const searchCandidateCss = readFrontend('src/ui/searchCandidateList.css')
 const legacyStylesCss = readFrontend('src/styles.css')
 const mainSource = readFrontend('src/main.jsx')
 const preferenceSource = readFrontend('src/ui/primaryColorPreference.js')
@@ -34,11 +35,18 @@ assert.match(themeCss, /\.rz-header\s*\{[\s\S]*background:\s*var\(--color-ui-pri
 assert.match(themeCss, /\.rz-header \.rz-header-title,[\s\S]*\.rz-header \.rz-header-subtitle[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-header \.rz-header-logo img[\s\S]*filter:\s*none/)
 assert.match(themeCss, /button\.rz-button-primary,[\s\S]*background:\s*var\(--color-ui-primary\);[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
+assert.match(buttonCss, /button\.rz-button-primary:disabled,[\s\S]*background:\s*#d8f3dc;[\s\S]*color:\s*var\(--color-ui-primary\)/i)
+assert.match(searchCandidateCss, /\.rz-search-candidate-option--selected[\s\S]*background:\s*var\(--color-brand-light\);[\s\S]*color:\s*var\(--color-brand-primary\)/)
 assert.match(themeCss, /\.rz-table thead tr\.rz-table-header th,[\s\S]*background:\s*var\(--color-ui-primary\);[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 assert.match(themeCss, /\.rz-table-header \.rz-sort-button,[\s\S]*color:\s*var\(--color-ui-primary-text\)/)
 
 const textColorPolicyCss = readFrontend('src/textColorPolicy.css')
 assert.match(textColorPolicyCss, /\.rz-table thead tr\.rz-table-header th,[\s\S]*\.rz-table thead tr:first-child th,[\s\S]*\.rz-sort-button,[\s\S]*color:\s*#ffffff\s*!important/i)
+assert.match(
+  textColorPolicyCss,
+  /button\.rz-button-primary:disabled,[\s\S]*button\.rz-button-secondary:disabled,[\s\S]*\.rz-search-candidate-option--selected[\s\S]*color:\s*var\(--color-ui-primary\)\s*!important/i,
+  'lichtgroene knoppen moeten app-breed donkergroene tekst afdwingen',
+)
 
 assert.match(mainSource, /import "\.\/ui\/theme\.css";/)
 assert.match(mainSource, /initializePrimaryColorPreference\(\)/)
@@ -138,5 +146,29 @@ for (const root of ['src', 'public']) {
   }
 }
 assert.deepEqual(hardcodedDefaultViolations, [], hardcodedDefaultViolations.join('\n'))
+
+
+const lightGreenButtonViolations = []
+const lightGreenBackground = /(?:#d8f3dc|#d9f5e0|var\(--color-brand-light\)|var\(--rz-green-light\))/i
+const whiteForeground = /color\s*:\s*(?:#fff(?:fff)?|white|var\(--color-ui-primary-text\)|var\(--color-text-inverse\))/i
+for (const filePath of listSourceFiles(path.join(frontendRoot, 'src'))) {
+  if (path.extname(filePath).toLowerCase() !== '.css') continue
+  const relativePath = path.relative(frontendRoot, filePath).replaceAll('\\', '/')
+  const css = fs.readFileSync(filePath, 'utf8')
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
+    const selector = match[1]
+    const declarations = match[2]
+    if (!/(button|\.rz-button|\.btn-|candidate-option|action)/i.test(selector)) continue
+    if (!lightGreenBackground.test(declarations)) continue
+    if (whiteForeground.test(declarations)) {
+      lightGreenButtonViolations.push(`${relativePath} :: ${selector.trim()} gebruikt witte tekst op lichtgroen`)
+    }
+  }
+}
+assert.deepEqual(
+  lightGreenButtonViolations,
+  [],
+  'Lichtgroene knoppen mogen nergens witte tekst gebruiken:\n' + lightGreenButtonViolations.join('\n'),
+)
 
 console.log('INHUIS_PRIMARY_COLOR_CONTRACT_GREEN')

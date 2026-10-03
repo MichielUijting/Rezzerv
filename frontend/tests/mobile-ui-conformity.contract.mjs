@@ -120,6 +120,9 @@ assert.match(
 
 // Shared mobile chrome owns navigation for every protected mobile route.
 assert.match(mobileViewportSource, /MOBILE_APP_MEDIA_QUERY = '\(max-width: 720px\)'/)
+assert.match(mobileViewportSource, /screenWidth/)
+assert.match(mobileViewportSource, /physicalWidth <= 720/)
+assert.match(mobileViewportSource, /window\.screen\?\.width/)
 assert.match(mobileAppChromeSource, /useMobileAppViewport\(\)/)
 for (const responsiveSource of [inventoryResponsiveSource, almostOutResponsiveSource, shoppingResponsiveSource, articleResponsiveSource]) {
   assert.match(responsiveSource, /useMobileAppViewport\(\)/)
@@ -157,8 +160,9 @@ assert.match(
 )
 assert.match(
   mobileAppChromeCss,
-  /\.rz-mobile-app-chrome > \.rz-mobile-back-control\s*\{[\s\S]*position:\s*fixed;[\s\S]*left:\s*8px;/,
+  /\.rz-mobile-app-chrome > \.rz-mobile-back-control\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*position:\s*fixed;[\s\S]*left:\s*8px;/,
 )
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-bottom-space\s*\{[\s\S]*display:\s*block;/)
 assert.match(
   mobileAppChromeCss,
   /\.rz-mobile-app-chrome:not\(:has\(\.rz-header, \.rz-mobile-module-header\)\)\s*\{[\s\S]*padding-top:\s*calc\(58px \+ env\(safe-area-inset-top\)\);/,

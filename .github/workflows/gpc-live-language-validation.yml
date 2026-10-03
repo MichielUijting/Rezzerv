@@ -4,7 +4,12 @@ on:
   pull_request:
     paths:
       - "backend/app/cli/validate_live_gpc_languages.py"
+      - "backend/app/cli/build_dutch_gpc_reference.py"
+      - "backend/app/data/gpc_bricks_nl.json"
+      - "backend/app/services/dutch_gpc_projection_service.py"
+      - "backend/app/services/gpc_reference_catalog_service.py"
       - "backend/tests/test_live_gpc_language_validation.py"
+      - "backend/tests/test_bundled_dutch_gpc_reference.py"
       - ".github/workflows/gpc-live-language-validation.yml"
   workflow_dispatch:
 
@@ -29,9 +34,36 @@ jobs:
       - name: Compile and test comparison logic
         run: |
           python -m py_compile app/cli/validate_live_gpc_languages.py
-          python -m pytest -q tests/test_live_gpc_language_validation.py
+          python -m py_compile app/cli/build_dutch_gpc_reference.py
+          python -m py_compile app/services/dutch_gpc_projection_service.py
+          python -m py_compile app/services/gpc_reference_catalog_service.py
+          python -m pytest -q tests/test_live_gpc_language_validation.py tests/test_bundled_dutch_gpc_reference.py
       - name: Download and compare official English and Dutch publications
         run: python -m app.cli.validate_live_gpc_languages --output-dir /tmp/gpc-live-evidence
+      - name: Build bundled Dutch Brick and product-family reference
+        run: |
+          NL_XML="$(find /tmp/gpc-live-evidence/nl -type f -name '*.xml' | head -n 1)"
+          test -n "$NL_XML"
+          VERSION="$(basename "$NL_XML" .xml | sed -E 's/^gpc-nl-//')"
+          python -m app.cli.build_dutch_gpc_reference \
+            --xml "$NL_XML" \
+            --output /tmp/gpc_bricks_nl.generated.json \
+            --publication-version "$VERSION"
+      - name: Verify bundled Dutch GPC reference matches official publication
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          bundled = json.loads(Path("app/data/gpc_bricks_nl.json").read_text(encoding="utf-8"))
+          generated = json.loads(Path("/tmp/gpc_bricks_nl.generated.json").read_text(encoding="utf-8"))
+          if bundled != generated:
+              raise SystemExit("Meegeleverde Nederlandse GPC-referentie wijkt af van de officiële publicatie")
+          if bundled.get("language_code") != "nl":
+              raise SystemExit("Meegeleverde GPC-referentie is niet Nederlands")
+          if int(bundled.get("brick_count") or 0) != len(bundled.get("bricks") or []):
+              raise SystemExit("Brick-aantal in meegeleverde GPC-referentie klopt niet")
+          PY
       - name: Upload validation evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -121,6 +121,10 @@ from app.services.household_product_configuration_service import (
     public_household_product_configuration_payload,
     resolve_household_product_configuration,
 )
+from app.services.dutch_gpc_projection_service import (
+    dutch_gpc_by_global_product,
+    dutch_gpc_by_household_article,
+)
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.catalog_routes import router as catalog_router
@@ -234,6 +238,14 @@ def _dev_inventory_preview_row(row):
         "sublocatie": row.get("sublocatie") or "",
         "space_id": row.get("space_id") or None,
         "sublocation_id": row.get("sublocation_id") or None,
+        "gpc_brick_code": row.get("gpc_brick_code") or "",
+        "gpc_brick_name": row.get("gpc_brick_name") or "",
+        "gpc_class_code": row.get("gpc_class_code") or "",
+        "gpc_class_name": row.get("gpc_class_name") or "",
+        "gpc_family_code": row.get("gpc_family_code") or "",
+        "gpc_family_name": row.get("gpc_family_name") or "",
+        "gpc_segment_code": row.get("gpc_segment_code") or "",
+        "gpc_segment_name": row.get("gpc_segment_name") or "",
     }
 
 
@@ -263,8 +275,20 @@ def dev_inventory_preview(authorization: Optional[str] = Header(None)):
             ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
             """
         ), {"household_id": effective_household_id}).mappings().all()
+        gpc_by_article = dutch_gpc_by_household_article(
+            conn,
+            effective_household_id,
+            [row.get("household_article_id") for row in rows],
+        )
+        projected_rows = [
+            {
+                **dict(row),
+                **gpc_by_article.get(str(row.get("household_article_id") or "").strip(), {}),
+            }
+            for row in rows
+        ]
 
-    return {"rows": [_dev_inventory_preview_row(row) for row in rows]}
+    return {"rows": [_dev_inventory_preview_row(row) for row in projected_rows]}
 
 
 def _dev_resolve_space_id(conn, household_id: str | None, space_id: str | None, space_name: str | None):
@@ -4413,6 +4437,12 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
         return []
 
     article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
+    gpc_by_article = dutch_gpc_by_household_article(
+        conn,
+        household_id,
+        article_ids,
+    )
+
     settings_map_by_article: dict[str, dict[str, Any]] = {}
     if article_ids:
         settings_rows = conn.execute(
@@ -4434,13 +4464,15 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
 
     items: list[dict] = []
     for article_row in article_rows:
+        article_id = str(article_row.get('id') or '').strip()
         evaluation = evaluate_household_article_almost_out(
             conn,
             household_id,
             article_row,
             household_settings=household_settings,
-            article_settings_map=settings_map_by_article.get(str(article_row.get('id') or '').strip(), {}),
+            article_settings_map=settings_map_by_article.get(article_id, {}),
         )
+        evaluation.update(gpc_by_article.get(article_id, {}))
         if evaluation.get('include_in_almost_out'):
             items.append(evaluation)
 

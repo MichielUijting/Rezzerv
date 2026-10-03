@@ -38,7 +38,7 @@ export default function PlatformSupportPage() {
     if (!message) return
     showFeedback({
       variant: /mislukt|fout|geen toegang|niet toegestaan/i.test(String(message)) ? 'error' : 'success',
-      title: 'Superuser / Meldingen',
+      title: 'Platformbeheer / Meldingen',
       message: String(message),
       testId: 'platform-support-feedback',
     })
@@ -195,7 +195,7 @@ export default function PlatformSupportPage() {
     : 'Nog niet ververst'
 
   return (
-    <AppShell title="Superuser / Meldingen" showExit={false}>
+    <AppShell title="Platformbeheer / Meldingen" showExit={false}>
       <div className="rz-support-layout" data-testid="platform-support-page">
         <Card>
           <div className="rz-support-toolbar">
@@ -261,7 +261,7 @@ export default function PlatformSupportPage() {
           ) : (
             <form onSubmit={confirmBroadcast} className="rz-support-form" data-testid="platform-support-broadcast-form">
               <h2>Nieuwe melding aan alle leden</h2>
-              <p>Alleen de superuser kan een platformmelding naar alle actieve Inhuis-leden sturen.</p>
+              <p>Platformbeheer kan een platformmelding naar alle actieve Inhuis-leden sturen.</p>
               <label>Onderwerp<Input value={broadcastSubject} onChange={(event) => setBroadcastSubject(event.target.value)} required maxLength={250} /></label>
               <label>Bericht<textarea value={broadcastMessage} onChange={(event) => setBroadcastMessage(event.target.value)} required maxLength={10000} /></label>
               <label className="rz-support-checkbox"><input type="checkbox" checked={broadcastReplyAllowed} onChange={(event) => setBroadcastReplyAllowed(event.target.checked)} /> Antwoorden toestaan</label>

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Header, HTTPException, Request
 
 from app.api.article_detail_admin_routes import router as article_detail_admin_router
 from app.api.authorization_membership_routes import router as authorization_membership_router
@@ -18,6 +18,8 @@ from app.services.off_product_link_service import (
 from app.services.product_group_crud_store import create_product_group, delete_product_group, list_product_groups, update_product_group
 from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
+from app.db import engine
+from app.services.server_session_service import SESSION_COOKIE_NAME, resolve_server_session
 from app.services.session_request_context import require_platform_permission_from_session
 
 router = APIRouter()
@@ -36,8 +38,13 @@ def _payload_text(payload: dict[str, Any], *keys: str) -> str:
 
 
 @router.get('/api/inventory/groups')
-def inventory_groups(household_id: str | None = Query(default=None)):
-    return list_inventory_groups_with_hierarchy(household_id=household_id)
+def inventory_groups(request: Request):
+    raw_session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    with engine.begin() as conn:
+        context = resolve_server_session(conn, raw_session_id)
+    if context.context_type != 'regular':
+        raise HTTPException(status_code=403, detail='Productgroepen zijn alleen beschikbaar binnen een huishouden')
+    return list_inventory_groups_with_hierarchy(household_id=context.active_household_id)
 
 
 @router.get('/api/product-groups')

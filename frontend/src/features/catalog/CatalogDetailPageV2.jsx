@@ -122,8 +122,23 @@ export default function CatalogDetailPageV2() {
   const productType = confirmedProductType || product.product_type
 
   function handleGpcAssignmentChange(assignment) {
-    const description = String(assignment?.brick_description || assignment?.brick_description_en || '').trim()
+    const description = String(assignment?.brick_description || '').trim()
     setConfirmedProductType(description)
+    setDetail((current) => current
+      ? {
+          ...current,
+          product: {
+            ...(current.product || {}),
+            product_type: description,
+            gpc_brick_code: assignment?.brick_code || null,
+            gpc_brick_name: assignment?.brick_description || '',
+            gpc_class_code: assignment?.class_code || null,
+            gpc_class_name: assignment?.class_description || '',
+            gpc_family_code: assignment?.family_code || null,
+            gpc_family_name: assignment?.family_description || '',
+          },
+        }
+      : current)
   }
 
   function openImageChoice() {
@@ -310,6 +325,10 @@ export default function CatalogDetailPageV2() {
                     <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
                     <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
                     <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
+                    <div><dt>Brick-code</dt><dd>{text(product.gpc_brick_code, 'Niet geclassificeerd')}</dd></div>
+                    <div><dt>Brick-naam</dt><dd>{text(product.gpc_brick_name, 'Niet geclassificeerd')}</dd></div>
+                    <div><dt>GPC-groep</dt><dd>{text(product.gpc_class_name, 'Niet geclassificeerd')}</dd></div>
+                    <div><dt>Productfamilie</dt><dd>{text(product.gpc_family_name, 'Niet geclassificeerd')}</dd></div>
                     <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
                   </dl>
                 </div>
@@ -421,6 +440,10 @@ export default function CatalogDetailPageV2() {
                       <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
                       <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
                       <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
+                      <div><dt>Brick-code</dt><dd>{text(product.gpc_brick_code, 'Niet geclassificeerd')}</dd></div>
+                      <div><dt>Brick-naam</dt><dd>{text(product.gpc_brick_name, 'Niet geclassificeerd')}</dd></div>
+                      <div><dt>GPC-groep</dt><dd>{text(product.gpc_class_name, 'Niet geclassificeerd')}</dd></div>
+                      <div><dt>Productfamilie</dt><dd>{text(product.gpc_family_name, 'Niet geclassificeerd')}</dd></div>
                       <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
                     </dl>
                   </div>

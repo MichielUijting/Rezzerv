@@ -8,6 +8,11 @@ import uuid
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
+from app.services.dutch_gpc_projection_service import (
+    dutch_gpc_by_global_product,
+    dutch_gpc_by_household_article,
+)
+
 ALLOWED_UNITS = {"", "stuk", "stuks", "gram", "kilogram", "milliliter", "liter", "verpakking"}
 ALLOWED_SEARCH_SCOPES = {"household_articles", "global_products", "product_types", "article_groups"}
 
@@ -157,6 +162,18 @@ def _serialize_item(row: Any) -> dict[str, Any]:
     row_keys = set(row.keys()) if hasattr(row, "keys") else set()
     if "image_url" in row_keys:
         payload["image_url"] = str(row.get("image_url") or "").strip()
+    for field in (
+        "gpc_brick_code",
+        "gpc_brick_name",
+        "gpc_class_code",
+        "gpc_class_name",
+        "gpc_family_code",
+        "gpc_family_name",
+        "gpc_segment_code",
+        "gpc_segment_name",
+    ):
+        if field in row_keys:
+            payload[field] = str(row.get(field) or "").strip()
     return payload
 
 
@@ -253,23 +270,19 @@ def _global_product_type_expression(conn: Connection) -> str:
     tables = set(inspect(conn).get_table_names())
     expressions: list[str] = []
 
-    if {"global_product_gpc_bricks", "gpc_bricks"}.issubset(tables):
-        translation_expression = "NULL"
-        if "gpc_translations" in tables:
-            translation_columns = _table_columns(conn, "gpc_translations")
-            if {"entity_type", "entity_code", "language_code", "translated_text"}.issubset(translation_columns):
-                translation_expression = """
-                    (SELECT tr.translated_text
-                     FROM gpc_translations tr
-                     WHERE tr.entity_type = 'brick'
-                       AND tr.entity_code = gpgb.brick_code
-                       AND tr.language_code = 'nl'
-                     LIMIT 1)
-                """
+    if {"global_product_gpc_bricks", "gpc_product_groups"}.issubset(tables):
+        active_condition = (
+            "COALESCE(nl.active, TRUE) IS TRUE"
+            if conn.dialect.name == "postgresql"
+            else "COALESCE(nl.active, 1) = 1"
+        )
         expressions.append(f"""
-            (SELECT COALESCE({translation_expression}, gb.description, '')
+            (SELECT nl.gpc_brick_name
              FROM global_product_gpc_bricks gpgb
-             JOIN gpc_bricks gb ON gb.brick_code = gpgb.brick_code
+             JOIN gpc_product_groups nl
+               ON nl.gpc_brick_code = gpgb.brick_code
+              AND lower(COALESCE(nl.language_code, '')) = 'nl'
+              AND {active_condition}
              WHERE gpgb.global_product_id = gp.id
              ORDER BY gpgb.brick_code
              LIMIT 1)
@@ -343,6 +356,10 @@ def _search_global_products(
         "limit": limit,
     }).mappings().all()
 
+    gpc_by_product = dutch_gpc_by_global_product(
+        conn,
+        [row.get("source_id") for row in rows],
+    )
     return [
         {
             "source_type": "global_product",
@@ -354,6 +371,7 @@ def _search_global_products(
             "brand": str(row.get("brand") or "").strip(),
             "primary_gtin": str(row.get("primary_gtin") or "").strip(),
             "image_url": str(row.get("image_url") or "").strip(),
+            **gpc_by_product.get(str(row.get("source_id") or "").strip(), {}),
         }
         for row in rows
         if str(row.get("label") or "").strip()
@@ -430,6 +448,11 @@ def search_shopping_catalog(
                     "query": f"%{normalized_query.lower()}%",
                     "limit": safe_limit,
                 }).mappings().all()
+                gpc_by_article = dutch_gpc_by_household_article(
+                    conn,
+                    household_id,
+                    [row.get("source_id") for row in rows],
+                )
                 items = [{
                     "source_type": "household_article",
                     "source_id": str(row.get("source_id") or ""),
@@ -437,6 +460,7 @@ def search_shopping_catalog(
                     "article_name": str(row.get("label") or "").strip(),
                     "article_group_name": str(row.get("article_group_name") or ""),
                     "product_type_name": str(row.get("product_type_name") or ""),
+                    **gpc_by_article.get(str(row.get("source_id") or "").strip(), {}),
                 } for row in rows if str(row.get("label") or "").strip()]
 
     deduplicated: list[dict[str, Any]] = []
@@ -487,7 +511,29 @@ def get_active_shopping_list(conn: Connection, household_id: str) -> dict[str, A
         WHERE sli.shopping_list_id = :shopping_list_id AND sli.household_id = :household_id
         ORDER BY sli.checked ASC, lower(sli.article_name) ASC, sli.created_at ASC
     """), {"shopping_list_id": active["id"], "household_id": str(household_id)}).mappings().all()
-    return {**active, "items": [_serialize_item(row) for row in rows], "item_count": len(rows)}
+    global_ids = [
+        row.get("source_id")
+        for row in rows
+        if str(row.get("source_type") or "").strip().lower() == "global_product"
+    ]
+    household_article_ids = [
+        row.get("source_id")
+        for row in rows
+        if str(row.get("source_type") or "").strip().lower() == "household_article"
+    ]
+    gpc_by_product = dutch_gpc_by_global_product(conn, global_ids)
+    gpc_by_article = dutch_gpc_by_household_article(conn, household_id, household_article_ids)
+    items = []
+    for row in rows:
+        row_payload = dict(row)
+        source_type = str(row_payload.get("source_type") or "").strip().lower()
+        source_id = str(row_payload.get("source_id") or "").strip()
+        if source_type == "global_product":
+            row_payload.update(gpc_by_product.get(source_id, {}))
+        elif source_type == "household_article":
+            row_payload.update(gpc_by_article.get(source_id, {}))
+        items.append(_serialize_item(row_payload))
+    return {**active, "items": items, "item_count": len(items)}
 
 
 def add_shopping_list_item(conn: Connection, household_id: str, payload: dict[str, Any]) -> dict[str, Any]:

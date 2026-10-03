@@ -141,18 +141,14 @@ def test_active_platform_role_resolution_uses_only_registered_active_platform_ro
 
 def test_v2_platform_role_permission_boundaries():
     assert "platform.system_household.access" in V2_SUPERUSER_TARGET_PERMISSIONS
-    assert "platform.system_household.access" in IP_OWNER_PERMISSIONS
+    assert "platform.system_household.access" not in IP_OWNER_PERMISSIONS
     assert "platform.system_household.access" not in PLATFORM_ADMIN_PERMISSIONS
     assert "platform.system_household.access" not in FRONTTEAM_PLATFORM_PERMISSIONS
     assert "platform.special_roles.manage" in IP_OWNER_PERMISSIONS
     assert "platform.special_roles.manage" not in V2_SUPERUSER_TARGET_PERMISSIONS
     assert "platform.special_roles.manage" not in PLATFORM_ADMIN_PERMISSIONS
     assert "platform.special_roles.manage" not in FRONTTEAM_PLATFORM_PERMISSIONS
-    assert IP_OWNER_PERMISSIONS == (
-        V2_SUPERUSER_TARGET_PERMISSIONS
-        | PLATFORM_ADMIN_PERMISSIONS
-        | {"platform.special_roles.manage"}
-    )
+    assert IP_OWNER_PERMISSIONS == {"platform.special_roles.manage"}
 
 
 def test_frontteam_external_permissions_only_link_existing_products():

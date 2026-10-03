@@ -56,7 +56,6 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
                 {
                   brick_code: '10000167',
                   brick_description: 'Kaas — Smeerbaar',
-                  brick_description_en: 'Cheese — Spreadable',
                   class_code: '50131700',
                   class_description: 'Kaas en kaassubstituten',
                   family_code: '50130000',
@@ -77,7 +76,7 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await articleSearch.fill('Boursin');
     await page.getByRole('button', { name: /3073780966000 — Boursin Knoflook/ }).click();
 
-    const brickSearch = page.getByPlaceholder('Zoeken op Brickcode of Nederlandse/Engelse Brickomschrijving');
+    const brickSearch = page.getByPlaceholder('Zoeken op Brickcode of Nederlandse Brickomschrijving');
     await expect(brickSearch).toBeVisible();
 
     await brickSearch.fill('kaas');
@@ -185,7 +184,7 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await expect(page.getByText(/10000002 — Bouillonpoeder/)).toBeVisible();
     await expect(page.getByText(/10000003 — Soepbasis/)).toBeVisible();
 
-    await expect(page.getByPlaceholder('Zoeken op Brickcode of Nederlandse/Engelse Brickomschrijving')).toHaveCount(0);
+    await expect(page.getByPlaceholder('Zoeken op Brickcode of Nederlandse Brickomschrijving')).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
   });
 
@@ -634,7 +633,7 @@ test.describe('Catalogus GPC Brick zoekfunctie frontend-regressie', () => {
     await page.getByPlaceholder('Zoeken op artikelnaam, merk, barcode, GTIN of EAN').fill('Langzame');
     await page.getByRole('button', { name: /Langzame Brick zoektest/ }).click();
 
-    const brickSearch = page.getByPlaceholder('Zoeken op Brickcode of Nederlandse/Engelse Brickomschrijving');
+    const brickSearch = page.getByPlaceholder('Zoeken op Brickcode of Nederlandse Brickomschrijving');
     await expect(brickSearch).toBeVisible();
     await brickSearch.fill('kaas');
     await brickSearchStarted;

@@ -55,7 +55,9 @@ export default function HomePage() {
     actionButtons: actionAvailability.items,
     actionOrder: actionAvailability.order,
   })
-  const platformNavigation = context?.context_type === 'none'
+  const isIpOwner = context?.context_type === 'none'
+    && canCurrentUserPerform('platform.special_roles.manage', context)
+  const platformNavigation = context?.context_type === 'none' && !isIpOwner
     ? PLATFORM_NAVIGATION_ITEMS.filter((item) => canCurrentUserPerform(item.permission, context))
     : []
   const platformGroups = PLATFORM_NAVIGATION_GROUPS
@@ -88,6 +90,42 @@ export default function HomePage() {
     navigate('/login', { replace: true })
   }
 
+
+  if (isIpOwner) {
+    return (
+      <div className="rz-screen" data-testid="ip-owner-home">
+        <Header title="IP-eigenaar" />
+        <div className="rz-content"><div className="rz-content-inner">
+          <Card className="rz-card-home">
+            <h2>Eigenaarsbeheer</h2>
+            <p>Beheer uitsluitend wie Superuser is binnen Inhuis.</p>
+            <div className="rz-tile-grid" role="navigation" aria-label="IP-eigenaar">
+              <div
+                className="rz-tile"
+                data-testid="ip-owner-superusers-tile"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate('/ip-eigenaar/superusers')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    navigate('/ip-eigenaar/superusers')
+                  }
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className="rz-tile-icon" aria-hidden="true">👤</div>
+                <div className="rz-tile-label">Superusers</div>
+              </div>
+            </div>
+            <div style={{ marginTop: '24px' }}>
+              <Button type="button" variant="secondary" onClick={logout}>Uitloggen</Button>
+            </div>
+          </Card>
+        </div></div>
+      </div>
+    )
+  }
 
   if (context?.context_type === 'none') {
     return (
@@ -133,7 +171,7 @@ export default function HomePage() {
       <div className="rz-screen" data-testid="home-action-availability-loading">
         <Header title="Startpagina" />
         <div className="rz-content"><div className="rz-content-inner">
-          <Card className="rz-card-home"><p role="status">Beschikbare acties laden…</p></Card>
+          <Card className="rz-card-home"><p role="status">Dashboard inlezen.</p></Card>
         </div></div>
       </div>
     )
@@ -141,7 +179,7 @@ export default function HomePage() {
 
   function openTile(tile) {
     const route = tile.key === 'berichten' && visibility.isPlatformSuperuser
-      ? '/superuser/meldingen'
+      ? '/platform/meldingen'
       : TILE_ROUTES[tile.key]
     if (!tile.clickable || !route) return
     recordRecentAction(tile.key, context)

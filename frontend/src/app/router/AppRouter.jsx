@@ -1,6 +1,5 @@
 import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
-import AdminPage from '../../features/admin/AdminPage'
 import ArticlePageResponsive from '../../features/articles/ArticlePageResponsive.jsx'
 import ForgotPasswordPage from '../../features/auth/ForgotPasswordPage.jsx'
 import InvitationAcceptancePage from '../../features/auth/InvitationAcceptancePage.jsx'
@@ -8,8 +7,11 @@ import LoginPage from '../../features/auth/LoginPage'
 import RegisterPage from '../../features/auth/RegisterPage'
 import ResetPasswordPage from '../../features/auth/ResetPasswordPage.jsx'
 import HomePage from '../../features/home/HomePage'
+import DashboardDetailPage from '../../features/home/DashboardDetailPage.jsx'
+import MobileMorePage from '../../features/home/MobileMorePage.jsx'
 import OnboardingPage from '../../features/onboarding/OnboardingPage.jsx'
 import PlatformCapabilityPage from '../../features/platform/PlatformCapabilityPage.jsx'
+import IpOwnerSuperusersPage from '../../features/platform/IpOwnerSuperusersPage.jsx'
 import { PLATFORM_NAVIGATION_ITEMS } from '../../features/platform/platformNavigation.js'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
 import StoreBatchDetailPage from '../../features/purchaseImport/StoreBatchDetailPage.jsx'
@@ -48,7 +50,6 @@ import ShoppingResponsive from '../../features/shopping/ShoppingResponsive.jsx'
 import SuperuserControlPage from '../../features/superuser/SuperuserControlPage.jsx'
 import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
-import AdminGuard from './AdminGuard'
 import FrontteamGuard from './FrontteamGuard'
 import PermissionGuard from './PermissionGuard'
 import SettingsGuard from './SettingsGuard'
@@ -101,10 +102,6 @@ function LegacyReceiptLineRouteRedirect() {
 
 function Protected({ children, allowNone = false }) {
   return <AuthGuard allowNone={allowNone}><MobileAppChrome>{children}</MobileAppChrome></AuthGuard>
-}
-
-function ProtectedAdmin({ children }) {
-  return <AuthGuard><MobileAppChrome><AdminGuard>{children}</AdminGuard></MobileAppChrome></AuthGuard>
 }
 
 function ProtectedFrontteam({ children }) {
@@ -160,7 +157,7 @@ const platformRoutes = PLATFORM_NAVIGATION_ITEMS.map((item) => ({
       allowNone
       message={`Je hebt geen toegang tot ${item.label}.`}
     >
-      <PlatformCapabilityPage item={item} />
+      {item.key === 'support' ? <PlatformSupportPage /> : <PlatformCapabilityPage item={item} />}
     </ProtectedPermission>
   ),
 }))
@@ -175,10 +172,13 @@ const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/onboarding', element: <Protected><OnboardingRoute /></Protected> },
   { path: '/home', element: <Protected allowNone><HomePage /></Protected> },
+  { path: '/ip-eigenaar/superusers', element: <ProtectedPermission permission="platform.special_roles.manage" allowNone message="Alleen de IP-eigenaar kan Superusers beheren."><IpOwnerSuperusersPage /></ProtectedPermission> },
+  { path: '/dashboard/:metric', element: <Protected><DashboardDetailPage /></Protected> },
+  { path: '/meer', element: <Protected><MobileMorePage /></Protected> },
   ...platformRoutes,
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/superuser', element: <ProtectedSuperuser><SuperuserControlPage /></ProtectedSuperuser> },
-  { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
+  { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" allowNone message="Je hebt geen toegang tot Platformbeheer / Meldingen."><Navigate to="/platform/meldingen" replace /></ProtectedPermission> },
   { path: '/voorraad', element: <Protected><VoorraadResponsive /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutResponsive /></Protected> },
   { path: '/winkelen', element: <ProtectedPermission permission="shopping_list.view" message="Je rol mag Winkelen niet bekijken."><ShoppingResponsive /></ProtectedPermission> },
@@ -217,7 +217,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/locaties', element: <ProtectedSettingsRoute settingKey="locations"><SettingsLocationsRoutePage /></ProtectedSettingsRoute> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettingsRoute settingKey="locations"><Navigate to="/instellingen/locaties" replace /></ProtectedSettingsRoute> },
   { path: '/instellingen/sublocaties', element: <ProtectedSettingsRoute settingKey="locations"><Navigate to="/instellingen/locaties" replace /></ProtectedSettingsRoute> },
-  { path: '/admin', element: <ProtectedAdmin><AdminPage /></ProtectedAdmin> },
+  { path: '/admin', element: <ProtectedPermission permission="platform.test_fixtures.manage" allowNone message="De oude Admin-pagina is vervangen door Platformbeheer."><Navigate to="/platform/testfixtures" replace /></ProtectedPermission> },
   { path: '*', element: <Navigate to="/login" replace /> },
 ])
 

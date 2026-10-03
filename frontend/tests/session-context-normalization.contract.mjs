@@ -107,24 +107,25 @@ assert.equal(system.permissions['platform.system_household.access'], true)
 assert.equal(system.is_platform_superuser, true)
 assert.equal(isPlatformSuperuserFromContext(system), true)
 
-const ipOwnerSystem = storeAuthContext({
+const ipOwnerNone = storeAuthContext({
   user_id: 'ip-owner',
   email: 'owner@example.test',
-  context_type: 'system',
-  active_household_id: '0',
-  role: 'owner',
-  display_role: 'owner',
+  context_type: 'none',
+  active_household_id: null,
+  role: null,
+  display_role: null,
   permissions: {
-    'platform.system_household.access': true,
     'platform.special_roles.manage': true,
   },
   is_platform_superuser: false,
 })
 
-assert.equal(ipOwnerSystem.context_type, 'system')
-assert.equal(ipOwnerSystem.is_platform_superuser, false)
-assert.equal(ipOwnerSystem.permissions['platform.system_household.access'], true)
-assert.equal(isPlatformSuperuserFromContext(ipOwnerSystem), true)
+assert.equal(ipOwnerNone.context_type, 'none')
+assert.equal(ipOwnerNone.active_household_id, null)
+assert.equal(ipOwnerNone.is_platform_superuser, false)
+assert.equal(ipOwnerNone.permissions['platform.special_roles.manage'], true)
+assert.equal(ipOwnerNone.permissions['platform.system_household.access'], undefined)
+assert.equal(isPlatformSuperuserFromContext(ipOwnerNone), false)
 
 const technicalPlatformAdmin = storeAuthContext({
   user_id: 'platform-admin',

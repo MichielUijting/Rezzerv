@@ -68,6 +68,9 @@ function buildMobileInventoryRows(liveRows = [], articleGroupItems = []) {
         householdName: householdName || productName || 'Onbekend artikel',
         productName,
         imageUrl: String(item?.image_url || '').trim(),
+        gpcBrickName: String(item?.gpc_brick_name || '').trim(),
+        gpcClassName: String(item?.gpc_class_name || '').trim(),
+        gpcFamilyName: String(item?.gpc_family_name || '').trim(),
         articleGroup,
         quantity,
         inventoryEntries: inventoryId ? [{ inventoryId, quantity, sourceIndex: index }] : [],
@@ -260,7 +263,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
       if (locationTrackingEnabled && locationFilter && row.location !== locationFilter) return false
       if (groupFilter && row.articleGroup !== groupFilter) return false
       if (!needle) return true
-      const searchableValues = [row.householdName, row.productName, row.articleGroup]
+      const searchableValues = [row.householdName, row.productName, row.articleGroup, row.gpcBrickName, row.gpcClassName, row.gpcFamilyName]
       if (locationTrackingEnabled) searchableValues.push(row.location, row.sublocation)
       return searchableValues.some((value) => normalizeText(value).includes(needle))
     })
@@ -411,11 +414,14 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                   title={row.householdName}
                   subtitle={row.productName && row.productName !== row.householdName ? row.productName : ''}
                   meta={[
+                    row.gpcBrickName ? `Brick: ${row.gpcBrickName}` : '',
+                    row.gpcClassName ? `GPC-groep: ${row.gpcClassName}` : '',
+                    row.gpcFamilyName ? `GPC-familie: ${row.gpcFamilyName}` : '',
                     row.articleGroup || 'Niet ingedeeld',
                     locationTrackingEnabled
                       ? (row.sublocation ? `${row.location} / ${row.sublocation}` : row.location)
                       : '',
-                  ]}
+                  ].filter(Boolean)}
                   imageUrl={row.imageUrl}
                   imageProductName={row.productName || row.householdName}
                   onActivate={detailTarget && !rowBusy ? () => navigate(detailTarget) : null}

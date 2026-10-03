@@ -1,0 +1,184 @@
+from sqlalchemy import create_engine, text
+
+from app.services.dutch_gpc_projection_service import (
+    dutch_gpc_by_global_product,
+    dutch_gpc_by_household_article,
+    ensure_dutch_gpc_assignments,
+)
+
+
+def _engine():
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE global_product_gpc_bricks (
+                global_product_id TEXT NOT NULL,
+                brick_code TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE gpc_product_groups (
+                gpc_brick_code TEXT PRIMARY KEY,
+                gpc_brick_name TEXT,
+                gpc_class_code TEXT,
+                gpc_class_name TEXT,
+                gpc_family_code TEXT,
+                gpc_family_name TEXT,
+                gpc_segment_code TEXT,
+                gpc_segment_name TEXT,
+                language_code TEXT,
+                active INTEGER
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE household_articles (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                global_product_id TEXT,
+                representative_image_gpc_brick_code TEXT
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
+            VALUES ('gp-1', '10000001'), ('gp-2', '10000002')
+        """))
+        conn.execute(text("""
+            INSERT INTO gpc_product_groups(
+                gpc_brick_code, gpc_brick_name, gpc_class_code, gpc_class_name,
+                gpc_family_code, gpc_family_name, gpc_segment_code, gpc_segment_name,
+                language_code, active
+            ) VALUES
+            ('10000001', 'Bananen', '20000001', 'Vers fruit',
+             '30000001', 'Fruit - onbereid/onbewerkt (vers)',
+             '40000001', 'Voedingsmiddelen', 'nl', 1),
+            ('10000002', 'English only', '20000002', 'English class',
+             '30000002', 'English family',
+             '40000002', 'English segment', 'en', 1)
+        """))
+        conn.execute(text("""
+            INSERT INTO household_articles(
+                id, household_id, global_product_id, representative_image_gpc_brick_code
+            )
+            VALUES
+            ('ha-1', 'h1', 'gp-1', NULL),
+            ('ha-2', 'h1', 'gp-2', NULL),
+            ('ha-direct', 'h1', NULL, '10000001'),
+            ('ha-other', 'h2', 'gp-1', NULL)
+        """))
+    return engine
+
+
+def test_dutch_gpc_by_global_product_uses_only_dutch_reference_rows():
+    engine = _engine()
+    try:
+        with engine.begin() as conn:
+            payload = dutch_gpc_by_global_product(conn, ['gp-1', 'gp-2'])
+        assert payload == {
+            'gp-1': {
+                'gpc_brick_code': '10000001',
+                'gpc_brick_name': 'Bananen',
+                'gpc_class_code': '20000001',
+                'gpc_class_name': 'Vers fruit',
+                'gpc_family_code': '30000001',
+                'gpc_family_name': 'Fruit - onbereid/onbewerkt (vers)',
+                'gpc_segment_code': '40000001',
+                'gpc_segment_name': 'Voedingsmiddelen',
+            }
+        }
+    finally:
+        engine.dispose()
+
+
+def test_dutch_gpc_by_household_article_respects_household_boundary():
+    engine = _engine()
+    try:
+        with engine.begin() as conn:
+            payload = dutch_gpc_by_household_article(conn, 'h1', ['ha-1', 'ha-other'])
+        assert set(payload) == {'ha-1'}
+        assert payload['ha-1']['gpc_brick_name'] == 'Bananen'
+        assert payload['ha-1']['gpc_family_name'] == 'Fruit - onbereid/onbewerkt (vers)'
+    finally:
+        engine.dispose()
+
+
+
+def test_household_article_with_known_brick_uses_dutch_family_directly():
+    engine = _engine()
+    try:
+        with engine.begin() as conn:
+            payload = dutch_gpc_by_household_article(conn, 'h1', ['ha-direct'])
+
+        assert payload['ha-direct']['gpc_brick_name'] == 'Bananen'
+        assert payload['ha-direct']['gpc_class_name'] == 'Vers fruit'
+        assert payload['ha-direct']['gpc_family_name'] == 'Fruit - onbereid/onbewerkt (vers)'
+        assert payload['ha-direct']['gpc_segment_name'] == 'Voedingsmiddelen'
+    finally:
+        engine.dispose()
+
+
+def test_unclassified_catalog_product_is_assigned_from_dutch_gpc_reference():
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE global_products (
+                    id TEXT PRIMARY KEY,
+                    name TEXT,
+                    category TEXT
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE global_product_gpc_bricks (
+                    global_product_id TEXT PRIMARY KEY,
+                    brick_code TEXT NOT NULL,
+                    assignment_source TEXT NOT NULL DEFAULT 'manual_catalog_detail',
+                    confidence REAL NOT NULL DEFAULT 1.0,
+                    migrated_from TEXT,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE gpc_product_groups (
+                    gpc_brick_code TEXT PRIMARY KEY,
+                    gpc_brick_name TEXT,
+                    gpc_class_code TEXT,
+                    gpc_class_name TEXT,
+                    gpc_family_code TEXT,
+                    gpc_family_name TEXT,
+                    gpc_segment_code TEXT,
+                    gpc_segment_name TEXT,
+                    language_code TEXT,
+                    active INTEGER
+                )
+            """))
+            conn.execute(text("""
+                INSERT INTO global_products(id, name, category)
+                VALUES ('banana-product', 'Bananen', NULL)
+            """))
+            conn.execute(text("""
+                INSERT INTO gpc_product_groups(
+                    gpc_brick_code, gpc_brick_name, gpc_class_code, gpc_class_name,
+                    gpc_family_code, gpc_family_name, gpc_segment_code, gpc_segment_name,
+                    language_code, active
+                ) VALUES
+                ('10000001', 'Bananen', '20000001', 'Vers fruit',
+                 '30000001', 'Fruit - onbereid/onbewerkt (vers)',
+                 '40000001', 'Voedingsmiddelen', 'nl', 1)
+            """))
+
+            outcome = ensure_dutch_gpc_assignments(conn, ['banana-product'])
+            projected = dutch_gpc_by_global_product(conn, ['banana-product'])
+            assignment = conn.execute(text("""
+                SELECT brick_code, assignment_source, confidence
+                FROM global_product_gpc_bricks
+                WHERE global_product_id = 'banana-product'
+            """)).mappings().first()
+
+        assert outcome["assigned"] == 1
+        assert outcome["unresolved"] == 0
+        assert assignment["brick_code"] == '10000001'
+        assert assignment["assignment_source"] == 'auto_dutch_gpc_candidate'
+        assert projected['banana-product']['gpc_brick_name'] == 'Bananen'
+        assert projected['banana-product']['gpc_family_name'] == 'Fruit - onbereid/onbewerkt (vers)'
+    finally:
+        engine.dispose()

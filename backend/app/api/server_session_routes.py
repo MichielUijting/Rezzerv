@@ -49,7 +49,7 @@ from app.services.system_superuser_session_provisioning import (
 )
 
 REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
-SYSTEM_PLATFORM_ROLES = frozenset({"platform.superuser", "platform.ip_owner"})
+SYSTEM_PLATFORM_ROLES = frozenset({"platform.superuser"})
 
 
 def _normalize_email(value: str) -> str:
@@ -244,6 +244,15 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             "active_household_id": SUPERGEBRUIKER_HUISHOUDEN_ID,
             "role": "owner",
             "platform_system_context": True,
+        }
+
+    if "platform.ip_owner" in platform_roles:
+        return {
+            "user_id": user_id,
+            "email": str(account.get("email") or ""),
+            "active_household_id": None,
+            "role": None,
+            "platform_system_context": False,
         }
 
     join_condition = membership_user_join_condition(conn)

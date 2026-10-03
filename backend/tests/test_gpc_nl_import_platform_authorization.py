@@ -231,6 +231,18 @@ def test_gpc_nl_import_is_technical_reference_data_mutation_not_household_invent
     assert '"mutates_inventory": False' in source
 
 
+def test_gpc_nl_import_uses_official_dutch_json_publication_and_full_hierarchy():
+    source = IMPORT_SERVICE_SOURCE_PATH.read_text(encoding="utf-8-sig")
+    assert 'GS1_GPC_LANGUAGES_URL = "https://gpc-api.gs1.org/api/browser/language/all"' in source
+    assert "/api/browser/publication?languageId={language_id}" in source
+    assert "/api/blob/download/publication/{publication_id}/json" in source
+    assert '_fetch_language("nl")' in source
+    assert '"gpc_family_code"' in source
+    assert '"gpc_family_name"' in source
+    assert '"gpc_class_code"' in source
+    assert '"gpc_brick_code"' in source
+
+
 def test_gpc_nl_route_decorator_and_bundled_route_remain_distinct():
     source = ROUTE_SOURCE_PATH.read_text(encoding="utf-8-sig")
     assert f"@router.post('{ROUTE_PATH}')" in source

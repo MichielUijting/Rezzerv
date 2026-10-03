@@ -21,18 +21,21 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
 from app.api.routes import kassa_regression_routes as regression
 from app.services.receipt_service import detect_mime_type, parse_receipt_content
+from app.services.session_request_context import require_platform_permission_from_session
 
 router = APIRouter()
 
 SMOKE_MANIFEST_PATH = regression.REGRESSION_ROOT / "smoke_manifest.json"
 REQUIRED_CHAINS = ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl", "Picnic"]
 REQUIRED_RECEIPT_COUNT = 6
+BACKGROUND_JOB_PERMISSION = "platform.background_jobs.manage"
+DIAGNOSTICS_VIEW_PERMISSION = "platform.diagnostics.view"
 
 _JOB_LOCK = threading.Lock()
 _JOB_STATE: dict[str, Any] = {
@@ -205,7 +208,8 @@ def _run_job(job_id: str) -> None:
 
 
 @router.post("/api/admin/kassa-smoke/run")
-def start_kassa_smoke_check() -> dict[str, Any]:
+def start_kassa_smoke_check(authorization: Optional[str] = Header(None)) -> dict[str, Any]:
+    require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
     with _JOB_LOCK:
         if _JOB_STATE.get("status") == "running":
             return copy.deepcopy(_JOB_STATE)
@@ -216,5 +220,6 @@ def start_kassa_smoke_check() -> dict[str, Any]:
 
 
 @router.get("/api/admin/kassa-smoke/status")
-def get_kassa_smoke_check_status() -> dict[str, Any]:
+def get_kassa_smoke_check_status(authorization: Optional[str] = Header(None)) -> dict[str, Any]:
+    require_platform_permission_from_session(DIAGNOSTICS_VIEW_PERMISSION, authorization)
     return _state()
