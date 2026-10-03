@@ -218,11 +218,6 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     return cardOrder.map((key) => byKey.get(key)).filter(Boolean)
   }, [cards, cardOrder])
 
-  function persistCardOrder(nextOrder) {
-    const normalized = writeDashboardCardOrder(nextOrder, context)
-    setCardOrder(normalized)
-  }
-
   function moveCard(draggedKey, targetKey) {
     if (!draggedKey || !targetKey || draggedKey === targetKey) return
     setCardOrder((current) => {
