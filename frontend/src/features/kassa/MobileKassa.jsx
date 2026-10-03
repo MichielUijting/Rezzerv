@@ -158,13 +158,19 @@ export default function MobileKassa() {
 
   useEffect(() => {
     let cancelled = false
-    const requestedView = new URLSearchParams(window.location.search).get('view') || ''
+    const searchParams = new URLSearchParams(window.location.search)
+    const requestedView = searchParams.get('view') || ''
+    const requestedReceiptId = searchParams.get('receipt') || ''
     fetchJson('/api/household').then(async (household) => {
       if (cancelled) return
       const id = String(household?.active_household_id ?? household?.id ?? '')
       setHouseholdId(id)
       await loadReceipts(id)
       if (cancelled) return
+      if (requestedReceiptId) {
+        await openReceipt(requestedReceiptId)
+        return
+      }
       if (requestedView === 'bonnen') {
         setMode('list')
         return
