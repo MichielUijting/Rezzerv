@@ -135,38 +135,30 @@ def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]
 
 
 def _gpc_class_by_global_product(conn: Connection) -> dict[str, dict[str, str]]:
-    required = {"global_product_gpc_bricks", "gpc_bricks", "gpc_classes"}
+    required = {"global_product_gpc_bricks", "gpc_product_groups"}
     if not required.issubset(_tables(conn)):
         return {}
 
-    translation_join = ""
-    translation_expr = "c.description"
-    if "gpc_translations" in _tables(conn):
-        translation_join = """
-            LEFT JOIN gpc_translations tr
-              ON tr.entity_type = 'class'
-             AND tr.entity_code = c.class_code
-             AND tr.language_code = 'nl'
-        """
-        translation_expr = "COALESCE(NULLIF(tr.translated_text, ''), c.description)"
-
-    rows = conn.execute(text(f"""
+    rows = conn.execute(text("""
         SELECT
             CAST(a.global_product_id AS TEXT) AS global_product_id,
-            CAST(c.class_code AS TEXT) AS class_code,
-            {translation_expr} AS class_name
+            CAST(nl.gpc_class_code AS TEXT) AS class_code,
+            nl.gpc_class_name AS class_name
         FROM global_product_gpc_bricks a
-        JOIN gpc_bricks b ON b.brick_code = a.brick_code
-        JOIN gpc_classes c ON c.class_code = b.class_code
-        {translation_join}
+        JOIN gpc_product_groups nl
+          ON nl.gpc_brick_code = a.brick_code
+         AND nl.language_code = 'nl'
+         AND nl.active = TRUE
     """)).mappings().all()
     return {
         str(row.get("global_product_id") or ""): {
             "key": "gpc-class:" + str(row.get("class_code") or "").strip(),
-            "name": str(row.get("class_name") or "").strip() or "Niet ingedeeld",
+            "name": str(row.get("class_name") or "").strip(),
         }
         for row in rows
         if str(row.get("global_product_id") or "").strip()
+        and str(row.get("class_code") or "").strip()
+        and str(row.get("class_name") or "").strip()
     }
 
 
