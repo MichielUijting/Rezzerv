@@ -8,6 +8,8 @@ from typing import Any
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
+from app.services.dutch_gpc_projection_service import dutch_gpc_by_global_product
+
 
 def _to_datetime(value: Any) -> datetime | None:
     if value is None or value == "":
@@ -134,46 +136,40 @@ def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]
     return dict(totals)
 
 
-def _gpc_class_by_global_product(conn: Connection) -> dict[str, dict[str, str]]:
-    required = {"global_product_gpc_bricks", "gpc_product_groups"}
-    if not required.issubset(_tables(conn)):
-        return {}
-
-    rows = conn.execute(text("""
-        SELECT
-            CAST(a.global_product_id AS TEXT) AS global_product_id,
-            CAST(nl.gpc_class_code AS TEXT) AS class_code,
-            nl.gpc_class_name AS class_name
-        FROM global_product_gpc_bricks a
-        JOIN gpc_product_groups nl
-          ON nl.gpc_brick_code = a.brick_code
-         AND nl.language_code = 'nl'
-         AND nl.active = TRUE
-    """)).mappings().all()
+def _gpc_family_by_global_product(
+    conn: Connection,
+    global_product_ids: list[str],
+) -> dict[str, dict[str, str]]:
+    projected = dutch_gpc_by_global_product(conn, global_product_ids)
     return {
-        str(row.get("global_product_id") or ""): {
-            "key": "gpc-class:" + str(row.get("class_code") or "").strip(),
-            "name": str(row.get("class_name") or "").strip(),
+        product_id: {
+            "key": "gpc-family:" + str(payload.get("gpc_family_code") or "").strip(),
+            "name": str(payload.get("gpc_family_name") or "").strip(),
         }
-        for row in rows
-        if str(row.get("global_product_id") or "").strip()
-        and str(row.get("class_code") or "").strip()
-        and str(row.get("class_name") or "").strip()
+        for product_id, payload in projected.items()
+        if str(payload.get("gpc_family_code") or "").strip()
+        and str(payload.get("gpc_family_name") or "").strip()
     }
 
 
 def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, list[dict[str, Any]]]:
     columns = _columns(conn, "receipt_table_lines")
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    gpc_classes = _gpc_class_by_global_product(conn)
-    for row in _eligible_receipt_lines(conn, household_id):
+    eligible_lines = _eligible_receipt_lines(conn, household_id)
+    product_ids = sorted({
+        str(row.get("matched_global_product_id") or row.get("global_product_id") or "").strip()
+        for row in eligible_lines
+        if str(row.get("matched_global_product_id") or row.get("global_product_id") or "").strip()
+    })
+    gpc_families = _gpc_family_by_global_product(conn, product_ids)
+    for row in eligible_lines:
         label = "Artikel"
         for column in ("corrected_raw_label", "normalized_label", "raw_label", "article_name"):
             if column in columns and str(row.get(column) or "").strip():
                 label = str(row.get(column)).strip()
                 break
         global_product_id = row.get("matched_global_product_id") or row.get("global_product_id")
-        classification = gpc_classes.get(str(global_product_id or ""), {
+        classification = gpc_families.get(str(global_product_id or ""), {
             "key": "unclassified",
             "name": "Niet ingedeeld",
         })
@@ -185,8 +181,8 @@ def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, l
             "line_total": round(_number(row.get("line_total")), 2) if row.get("line_total") is not None else None,
             "household_article_id": row.get("matched_article_id") or row.get("household_article_id"),
             "global_product_id": global_product_id,
-            "gpc_class_key": classification["key"],
-            "gpc_class_name": classification["name"],
+            "gpc_family_key": classification["key"],
+            "gpc_family_name": classification["name"],
         })
     for items in grouped.values():
         items.sort(key=lambda item: str(item.get("label") or "").lower())
@@ -203,8 +199,8 @@ def _receipt_group_allocations(
     raw_groups: dict[str, dict[str, Any]] = {}
 
     for article in articles:
-        key = str(article.get("gpc_class_key") or "unclassified")
-        name = str(article.get("gpc_class_name") or "Niet ingedeeld")
+        key = str(article.get("gpc_family_key") or "unclassified")
+        name = str(article.get("gpc_family_name") or "Niet ingedeeld")
         entry = raw_groups.setdefault(key, {"key": key, "name": name, "raw": 0.0, "articles": []})
         entry["raw"] += max(0.0, _number(article.get("line_total")))
         entry["articles"].append(article)
@@ -984,7 +980,7 @@ def build_household_dashboard_drilldown(
         detail["articles"] = [
             article
             for article in detail.get("articles", [])
-            if str(article.get("gpc_class_key") or "unclassified") in selected_group_keys
+            if str(article.get("gpc_family_key") or "unclassified") in selected_group_keys
         ]
         detail["article_count"] = round(sum(_number(item.get("quantity")) for item in detail["articles"]), 2)
         detail["total"] = round(sum(_number(allocations[key].get("value")) for key in matched_keys), 2)
