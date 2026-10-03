@@ -73,6 +73,17 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 - gebruikerszichtbare huishoudrollen heten **Gebruiker** en **Beheerder**; legacy technische role keys mogen intern blijven bestaan;
 - Superuser en IP-eigenaar gelden in deze productfase als één gebruikerszichtbare hoogste rol.
 
+## Catalogus GPC-hiërarchie vanaf 3 oktober 2026
+
+Voor de artikelcatalogus geldt:
+
+- ieder catalogusartikel met een bevestigde **GPC Brick** toont daarnaast automatisch de bijbehorende **GPC-familie**;
+- de familie wordt niet handmatig dubbel opgeslagen maar afgeleid uit de centrale GS1-hiërarchie **Brick → Class/Groep → Family**; daardoor geldt dezelfde logica direct voor bestaande én nieuw geclassificeerde catalogusartikelen;
+- de desktop-Catalogus toont **GPC-familie** als afzonderlijke sorteerbare en filterbare kolom en neemt de familie mee in export;
+- de mobiele Catalogus en het Catalogusdetail tonen eveneens de GPC-familie;
+- artikelen zonder bevestigde Brick blijven zichtbaar als **Niet geclassificeerd**;
+- Nederlandse labels komen uit de centrale Nederlandse GS1 GPC-publicatie; de Engelse canonieke beschrijving blijft fallback wanneer een Nederlandse vertaling ontbreekt.
+
 ## Mobiele Boodschappen-interactie vanaf 3 oktober 2026
 
 Voor het mobiele scherm **Boodschappen** geldt aanvullend:
