@@ -125,6 +125,19 @@ export default function MobileShopping() {
     () => (list.items || []).filter((item) => item.checked),
     [list.items],
   )
+  const candidateItems = useMemo(() => {
+    if (catalogResults.length > 0) return catalogResults
+    const query = catalogQuery.trim()
+    if (searching || query.length < 2) return []
+    return [{
+      source_type: 'manual',
+      source_id: '__manual__',
+      label: `Toevoegen: ${query}`,
+      article_name: query,
+      is_manual_add: true,
+    }]
+  }, [catalogQuery, catalogResults, searching])
+
   function patchListItem(itemId, patch) {
     setList((current) => ({
       ...current,
@@ -291,31 +304,39 @@ export default function MobileShopping() {
         <section className="rz-mobile-inventory-toolbar rz-mobile-shopping-toolbar" aria-label="Artikel toevoegen">
           <div className="rz-mobile-shopping-toolbar-title">Artikel toevoegen</div>
 
-          <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
-            <span className="rz-mobile-inventory-label">Zoek of typ een artikel</span>
-            <input
-              className="rz-input"
-              type="search"
-              value={catalogQuery}
-              disabled={saving}
-              onChange={(event) => updateCatalogQuery(event.target.value)}
-              onKeyDown={handleManualAddKeyDown}
-              placeholder="Zoek in de catalogus of voer zelf een naam in"
-              aria-label="Artikel toevoegen"
-              aria-controls="mobile-shopping-candidate-list"
-              aria-expanded={catalogResults.length > 0}
-              autoComplete="off"
-            />
-          </label>
-          <SearchCandidateList
-            items={catalogResults}
-            getKey={(item) => `${item.source_type}:${item.source_id}`}
-            getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
-            onSelect={(_key, item) => addArticle(item)}
-            loading={searching}
-            ariaLabel="Kandidaten voor artikel toevoegen"
-            dataTestId="mobile-shopping-candidate-list"
-          />
+          <div className="rz-mobile-shopping-search-wrap">
+            <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
+              <span className="rz-mobile-inventory-label">Zoek of typ een artikel</span>
+              <input
+                className="rz-input"
+                type="search"
+                value={catalogQuery}
+                disabled={saving}
+                onChange={(event) => updateCatalogQuery(event.target.value)}
+                onKeyDown={handleManualAddKeyDown}
+                placeholder="Zoek in de catalogus of voer zelf een naam in"
+                aria-label="Artikel toevoegen"
+                aria-controls="mobile-shopping-candidate-list"
+                aria-expanded={candidateItems.length > 0}
+                aria-busy={searching}
+                autoComplete="off"
+              />
+            </label>
+            {candidateItems.length > 0 ? (
+              <div className="rz-mobile-shopping-candidate-overlay">
+                <SearchCandidateList
+                  items={candidateItems}
+                  getKey={(item) => `${item.source_type}:${item.source_id}`}
+                  getLabel={(item) => item.is_manual_add
+                    ? item.label
+                    : `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
+                  onSelect={(_key, item) => addArticle(item.is_manual_add ? null : item)}
+                  ariaLabel="Kandidaten voor artikel toevoegen"
+                  dataTestId="mobile-shopping-candidate-list"
+                />
+              </div>
+            ) : null}
+          </div>
 
           <div className="rz-mobile-inventory-field">
             <span className="rz-mobile-inventory-label" id="mobile-shopping-search-mode-label">Zoekwijze</span>
