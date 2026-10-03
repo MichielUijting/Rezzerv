@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
-import { fetchHouseholdDashboard } from './dashboardApi.js'
+import { fetchHouseholdDashboard, fetchHouseholdDashboardDrilldown } from './dashboardApi.js'
 import './mobileHome.css'
 
 const METRICS = {
@@ -255,19 +255,100 @@ function RepeatPurchaseList({ items = [] }) {
 
 export default function DashboardDetailPage() {
   const { metric = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const definition = METRICS[metric] || METRICS.aankopen
   const [dashboard, setDashboard] = useState(null)
+  const [barDrilldown, setBarDrilldown] = useState(null)
   const [error, setError] = useState('')
+  const granularity = searchParams.get('granularity') || ''
+  const bucketIndex = Number(searchParams.get('bucket'))
+  const series = searchParams.get('series') || 'current'
+  const comparison = searchParams.get('comparison') || 'previous'
+  const hasBarDrilldown = ['days', 'weeks', 'months'].includes(granularity)
+    && Number.isInteger(bucketIndex)
+    && bucketIndex >= 0
+    && bucketIndex <= 3
 
   useEffect(() => {
     let active = true
-    fetchHouseholdDashboard()
-      .then((payload) => { if (active) setDashboard(payload) })
-      .catch((exc) => { if (active) setError(exc?.message || 'Dashboard kon niet worden geladen.') })
+    setError('')
+    if (hasBarDrilldown) {
+      fetchHouseholdDashboardDrilldown({
+        metric: definition.key,
+        granularity,
+        bucketIndex,
+        series,
+        comparison,
+      })
+        .then((payload) => {
+          if (!active) return
+          setBarDrilldown(payload)
+          setDashboard(null)
+        })
+        .catch((exc) => { if (active) setError(exc?.message || 'Dashboarddetail kon niet worden geladen.') })
+    } else {
+      fetchHouseholdDashboard()
+        .then((payload) => {
+          if (!active) return
+          setDashboard(payload)
+          setBarDrilldown(null)
+        })
+        .catch((exc) => { if (active) setError(exc?.message || 'Dashboard kon niet worden geladen.') })
+    }
     return () => { active = false }
-  }, [])
+  }, [hasBarDrilldown, definition.key, granularity, bucketIndex, series, comparison])
 
   const body = useMemo(() => {
+    if (barDrilldown) {
+      const receipts = barDrilldown.receipts || []
+      if (definition.key === 'forecast') {
+        return <>
+          <div className="rz-dashboard-detail-summary">
+            <strong>{euro(barDrilldown.forecast_total)}</strong>
+            <span>{barDrilldown.label}</span>
+          </div>
+          <section className="rz-dashboard-detail-section">
+            <h2>Verwachte herhalingskopen</h2>
+            <RepeatPurchaseList items={barDrilldown.forecast_items || []} />
+          </section>
+        </>
+      }
+      if (definition.key === 'stores') {
+        return <>
+          <div className="rz-dashboard-detail-summary">
+            <strong>{numberLabel((barDrilldown.stores || []).length)} winkels</strong>
+            <span>{barDrilldown.label}</span>
+          </div>
+          <div className="rz-dashboard-store-list">
+            {(barDrilldown.stores || []).map((item) => <details key={item.name}>
+              <summary>
+                <span><strong>{item.name}</strong><small>{item.visits} bezoek{item.visits === 1 ? '' : 'en'}</small></span>
+                <strong>{euro(item.spend)}</strong>
+              </summary>
+              <ReceiptList receipts={item.receipts || []} />
+            </details>)}
+          </div>
+        </>
+      }
+      return <>
+        <div className="rz-dashboard-detail-summary">
+          <strong>{euro(barDrilldown.spend)}</strong>
+          <span>{barDrilldown.label} · {series === 'previous' ? 'vergelijkingsperiode' : 'huidige periode'}</span>
+        </div>
+        <section className="rz-dashboard-detail-section">
+          <h2>Artikelen in deze staaf</h2>
+          <ArticleTotals receipts={receipts} />
+        </section>
+        <section className="rz-dashboard-detail-section">
+          <h2>Per winkel</h2>
+          <ReceiptGroupList groups={groupReceiptsByStore(receipts)} metric="spend" />
+        </section>
+        <section className="rz-dashboard-detail-section">
+          <h2>Kassabonnen in deze staaf</h2>
+          <ReceiptList receipts={receipts} />
+        </section>
+      </>
+    }
     if (!dashboard) return null
     if (definition.key === 'purchases') {
       const receipts = dashboard.purchases.receipts || []
@@ -327,13 +408,15 @@ export default function DashboardDetailPage() {
         <ReceiptList receipts={dashboard.forecast.basis_receipts || []} />
       </section>
     </>
-  }, [dashboard, definition.key])
+  }, [dashboard, barDrilldown, definition.key, series])
+
+  const detailTitle = barDrilldown ? `${definition.title} · ${barDrilldown.label}` : definition.title
 
   return <main className="rz-mobile-home" data-testid={'dashboard-detail-' + metric}>
-    <MobileModuleHeader title={definition.title} testId="dashboard-detail-header" />
+    <MobileModuleHeader title={detailTitle} testId="dashboard-detail-header" />
     <section className="rz-mobile-home-inner">
       {error ? <div role="alert" className="rz-dashboard-error">{error}</div> : null}
-      {!dashboard && !error ? <p role="status">Dashboard laden…</p> : body}
+      {!dashboard && !barDrilldown && !error ? <p role="status">Dashboard inlezen.</p> : body}
     </section>
   </main>
 }
