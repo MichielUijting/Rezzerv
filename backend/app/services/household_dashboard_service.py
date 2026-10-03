@@ -333,6 +333,7 @@ def _spend_group_series(
 def _receipt_detail(row: dict[str, Any], article_details: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     receipt_id = str(row.get("id") or "")
     articles = article_details.get(receipt_id, [])
+    allocations = _receipt_group_allocations(row, article_details)
     return {
         "receipt_id": receipt_id,
         "store": row.get("_store") or "Onbekende winkel",
@@ -342,6 +343,14 @@ def _receipt_detail(row: dict[str, Any], article_details: dict[str, list[dict[st
         "currency": row.get("currency") or "EUR",
         "article_count": round(sum(_number(item.get("quantity")) for item in articles), 2),
         "articles": articles,
+        "group_allocations": [
+            {
+                "key": item.get("key"),
+                "label": item.get("name"),
+                "value": round(_number(item.get("value")), 2),
+            }
+            for item in allocations.values()
+        ],
     }
 
 
