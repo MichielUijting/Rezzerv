@@ -16,7 +16,7 @@ Dit protocol valideert het rollen- en accountmodel v2 als geheel. Het historisch
 | Superuser | `system` | H0 + exacte functionele Superuser-v2 platformset, geen technische Platformbeheerderrechten |
 | Platformbeheerder | `none` | exacte technische Platformbeheerder-set, geen household-/Superuserfallback |
 | Superuser + Platformbeheerder | `system` | union van beide permission-sets, geen IP-owner-only special-role authority |
-| IP-owner | `system` | exacte protected union incl. `platform.special_roles.manage`, zonder extra role rows te vereisen |
+| IP-owner | `none` | uitsluitend `platform.special_roles.manage` voor Superuserbeheer; geen household-, Superuser- of Platformbeheerderauthority |
 
 ## 3. Algemene security-invarianten
 
@@ -35,7 +35,7 @@ Iedere relevante regressie moet waar van toepassing bewijzen:
 - normale household rolmutatie kan alleen Lid en Beheerder toekennen;
 - legacy viewer/advanced-member data blijft non-destructief compatible maar is geen nieuw toewijsbare productrol;
 - `platform.special_roles.manage` is uitsluitend IP-owner;
-- de functionele Superuser-UI-boundary volgt de canonical system-capability en context, niet een hardgecodeerd e-mailadres of een extra gefabriceerde role row.
+- de functionele Superuser-UI-boundary volgt de canonical Superuser-system-capability en verleent de IP-owner geen functionele Superusertoegang.
 
 ## 4. Permission-partition
 
@@ -44,9 +44,9 @@ Iedere relevante regressie moet waar van toepassing bewijzen:
 Exact `V2_SUPERUSER_TARGET_PERMISSIONS`. Geen overlap met `PLATFORM_ADMIN_PERMISSIONS` en geen `platform.special_roles.manage`.
 
 Functionele beschikbaarheid: Superuser heeft `platform.functional_features.manage`
-en geen `platform.feature_flags.manage`; Platformbeheerder-only precies andersom;
-IP-eigenaar beide. Beide beheer-API's weigeren sleutels uit de andere categorie.
-De globale UIT-status geldt ook voor Superuser/IP-eigenaar bij productgebruik.
+en geen `platform.feature_flags.manage`; Platformbeheerder-only precies andersom.
+De IP-eigenaar heeft geen van beide beheerpermissions. Beide beheer-API's weigeren
+sleutels uit de andere categorie. De globale UIT-status geldt voor Superuser bij productgebruik.
 Gerichte regressie: `test_functional_feature_availability.py` en
 `functional-feature-availability.contract.mjs` plus de gelijknamige Playwrighttest.
 
@@ -62,9 +62,9 @@ Exact de union van beide sets. De combinatie krijgt daardoor niet `platform.spec
 
 Exact:
 
-`V2_SUPERUSER_TARGET_PERMISSIONS | PLATFORM_ADMIN_PERMISSIONS | {"platform.special_roles.manage"}`
+`{"platform.special_roles.manage"}`
 
-Een IP-owner-only system-session moet deze platformset publiek als permissions projecteren zonder `platform_roles` te exposen. De frontend functionele Superuser-boundary moet dezelfde owner herkennen via `context_type=system` + `platform.system_household.access`, zonder een extra `platform.superuser` role row te vereisen.
+Een IP-owner-only sessie gebruikt `context_type=none`, heeft geen actief huishouden en projecteert uitsluitend deze permission zonder `platform_roles` te exposen. De frontend geeft de IP-owner alleen toegang tot de aparte Superuserbeheerpagina; functionele Superuser- en technische Platformbeheerfuncties blijven gesloten.
 
 ## 5. Bestaande functionele domeinen
 
@@ -79,7 +79,7 @@ De umbrella closure moet minstens de volgende bestaande boundaries meenemen:
 - systeemhuishouden 0;
 - special-role management;
 - server-side session/context foundation;
-- frontend functionele Superuser system-capability boundary.
+- frontend functionele Superuser system-capability boundary én de aparte IP-owner Superuserbeheergrens.
 
 ## 6. Executable testlagen
 
@@ -101,7 +101,7 @@ Deze gate draait minimaal:
 - GPC-NL platform authorization;
 - de bestaande household compatibility authorization matrix;
 - server-session security selftest;
-- `frontend/tests/session-context-normalization.contract.mjs` als directe capability/contexttest voor Superuser/IP-owner versus Platformbeheerder/regular/e-mailfallback.
+- `frontend/tests/session-context-normalization.contract.mjs` als directe capability/contexttest voor Superuser versus IP-owner/Platformbeheerder/regular/e-mailfallback, plus de IP-owner frontendregressie voor uitsluitend Superuserbeheer.
 
 ### B. Focused bestaande gates
 
