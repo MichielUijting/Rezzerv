@@ -9,6 +9,7 @@ export default function MobileArticleRow({
   leading = null,
   side = null,
   onActivate = null,
+  activationRole = 'link',
   testId = undefined,
   checked = false,
 }) {
@@ -16,7 +17,7 @@ export default function MobileArticleRow({
   return (
     <div
       className={`rz-mobile-inventory-card${interactive ? '' : ' rz-mobile-article-row--static'}${checked ? ' rz-mobile-article-row--checked' : ''}`}
-      role={interactive ? 'link' : undefined}
+      role={interactive ? activationRole : undefined}
       tabIndex={interactive ? 0 : undefined}
       onClick={interactive ? onActivate : undefined}
       onKeyDown={interactive ? (event) => {
