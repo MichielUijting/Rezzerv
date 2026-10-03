@@ -261,26 +261,26 @@ def test_platform_role_is_separate_from_household_membership():
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key)
-            VALUES ('support-1', 'platform.support_read')
+            VALUES ('platform-admin-1', 'platform.platform_admin')
         """))
-        metadata = evaluate_platform_permission(
+        support_read = evaluate_platform_permission(
             conn,
-            user_id="support-1",
-            permission_key="platform.households.view_metadata",
+            user_id="platform-admin-1",
+            permission_key="platform.support_access.read",
         )
-        mutate = evaluate_platform_permission(
+        support_mutate = evaluate_platform_permission(
             conn,
-            user_id="support-1",
+            user_id="platform-admin-1",
             permission_key="platform.support_access.mutate",
         )
         household = evaluate_household_permission(
             conn,
             household_id="household-a",
-            membership_id="support-1",
+            membership_id="platform-admin-1",
             permission_key="inventory.view",
         )
-    assert metadata.allowed is True
-    assert mutate.allowed is False
+    assert support_read.allowed is True
+    assert support_mutate.allowed is True
     assert household.allowed is False
 
 
