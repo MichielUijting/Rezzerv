@@ -451,3 +451,21 @@
   .rz-mobile-home{padding-left:14px;padding-right:14px}
   .rz-dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+.rz-dashboard-card .rz-dashboard-comparison-chart {
+  touch-action: none;
+  cursor: grab;
+}
+
+.rz-dashboard-card.is-dragging {
+  opacity: 0.72;
+  transform: scale(0.985);
+}
+
+.rz-dashboard-card.is-dragging .rz-dashboard-comparison-chart {
+  cursor: grabbing;
+}
+
+.rz-dashboard-card {
+  transition: transform 120ms ease, opacity 120ms ease;
+}
