@@ -56,6 +56,15 @@ Bovenaan staan drie volledig klikbare statussen:
 - De bestaande Superuser-omgeving achter **Superuser** blijft inhoudelijk intact en is de dashboardingang voor Superuser/IP-eigenaar.
 - Platformbeheer wordt niet in het gewone huishoud-dashboard gemengd.
 
+## Platformbeheer en support
+
+- **Platformbeheerder** omvat nu ook de platformbrede supportverantwoordelijkheid.
+- De platform-inbox staat onder **Platformbeheer → Meldingen** op `/platform/meldingen`.
+- Platformbeheerder heeft daarvoor zowel `platform.support_access.read` als `platform.support_access.mutate`.
+- De oude route `/superuser/meldingen` blijft uitsluitend als compatibiliteitsredirect bestaan en verwijst naar Platformbeheer.
+- Frontteamleden sturen hun meldingen gebruikerszichtbaar naar **Platformbeheer**; de bestaande support-API en audittrail blijven de autorisatiegrens.
+- Superuser/IP-eigenaar kan dezelfde inbox blijven gebruiken via zijn bestaande supportpermissies, maar Meldingen is geen aparte Superuser-omgeving meer.
+
 ## Navigatie
 
 - De huidige grote hoofdactiekaarten op de mobiele landingspagina verdwijnen zodra hun functionaliteit via dashboardstatus/drill-down en de centrale onderste actiebalk bereikbaar is.
