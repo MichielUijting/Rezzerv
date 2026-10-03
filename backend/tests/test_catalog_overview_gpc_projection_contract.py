@@ -13,9 +13,14 @@ def test_confirmed_gpc_assignment_is_projected_by_catalog_backend_query():
 
     assert "global_product_gpc_bricks catalog_gpc" in source
     assert "gpc_bricks catalog_brick" in source
+    assert "gpc_classes catalog_class" in source
+    assert "gpc_families catalog_family" in source
     assert "tr.entity_type = 'brick'" in source
+    assert "tr.entity_type = 'family'" in source
     assert "AS product_type" in source
     assert "AS gpc_brick_code" in source
+    assert "AS gpc_family_code" in source
+    assert "AS gpc_family_name" in source
     assert '"image_url": "gp.image_url"' in source
 
 
@@ -43,10 +48,15 @@ def test_backend_pagination_drives_filter_sort_total_and_exported_product_type()
 
     assert "primaryGtin: 'primary_gtin'" in frontend
     assert "productType: 'product_type'" in frontend
+    assert "gpcFamily: 'gpc_family'" in frontend
+    assert "GPC-familie" in frontend
+    assert "item.gpc_family_name" in frontend
     assert "householdArticleCount: 'household_article_count'" in frontend
     assert "setTotal(Number(data?.total || 0))" in frontend
     assert "Math.ceil(total / PAGE_SIZE)" in frontend
-    assert "item.product_type, item.source" in frontend
+    assert "item.product_type" in frontend
+    assert "item.gpc_family_name" in frontend
+    assert "item.source" in frontend
     assert "order_expression = expressions.get(sort_by" in backend
     assert "LOWER({expressions[key]}) LIKE" in backend
     assert '"total": total' in backend
