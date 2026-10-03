@@ -270,7 +270,13 @@ def _spend_group_series(
                 comparison=comparison,
             )
             if series == "current":
-                point["label"] = label if granularity != "days" else start.strftime("%d-%m")
+                point["label"] = (
+                    start.strftime("%d-%m")
+                    if granularity == "days"
+                    else f"W{start.date().isocalendar().week}"
+                    if granularity == "weeks"
+                    else start.strftime("%b")
+                )
             grouped: dict[str, float] = defaultdict(float)
             for row in receipts:
                 if not (start <= row["_purchase_at"] < end):
