@@ -171,6 +171,9 @@ test('IP-owner sees only Superuser management and can grant or revoke that role'
 
   const target = page.getByTestId('ip-owner-superuser-target-user')
   await target.getByRole('button', { name: 'Superuser maken', exact: true }).click()
+  await expect(page.getByTestId('ip-owner-superuser-confirmation')).toContainText('Superuser maken?')
+  expect(mutations).toHaveLength(0)
+  await page.getByRole('button', { name: 'Definitief Superuser maken', exact: true }).click()
   await expect.poll(() => mutations.length).toBe(1)
   expect(mutations[0].method).toBe('POST')
   expect(mutations[0].url).toContain('/superuser/grant')
@@ -178,6 +181,8 @@ test('IP-owner sees only Superuser management and can grant or revoke that role'
   await expect(target.getByRole('button', { name: 'Deactiveren', exact: true })).toBeVisible()
 
   await target.getByRole('button', { name: 'Deactiveren', exact: true }).click()
+  await expect(page.getByTestId('ip-owner-superuser-confirmation')).toContainText('Superuser deactiveren?')
+  await page.getByRole('button', { name: 'Definitief deactiveren', exact: true }).click()
   await expect.poll(() => mutations.length).toBe(2)
   expect(mutations[1].url).toContain('/superuser/revoke')
 })
