@@ -261,7 +261,7 @@ export default function PlatformSupportPage() {
           ) : (
             <form onSubmit={confirmBroadcast} className="rz-support-form" data-testid="platform-support-broadcast-form">
               <h2>Nieuwe melding aan alle leden</h2>
-              <p>Alleen de superuser kan een platformmelding naar alle actieve Inhuis-leden sturen.</p>
+              <p>Platformbeheer kan een platformmelding naar alle actieve Inhuis-leden sturen.</p>
               <label>Onderwerp<Input value={broadcastSubject} onChange={(event) => setBroadcastSubject(event.target.value)} required maxLength={250} /></label>
               <label>Bericht<textarea value={broadcastMessage} onChange={(event) => setBroadcastMessage(event.target.value)} required maxLength={10000} /></label>
               <label className="rz-support-checkbox"><input type="checkbox" checked={broadcastReplyAllowed} onChange={(event) => setBroadcastReplyAllowed(event.target.checked)} /> Antwoorden toestaan</label>
