@@ -133,7 +133,7 @@ export default function HomePage() {
       <div className="rz-screen" data-testid="home-action-availability-loading">
         <Header title="Startpagina" />
         <div className="rz-content"><div className="rz-content-inner">
-          <Card className="rz-card-home"><p role="status">Beschikbare acties laden…</p></Card>
+          <Card className="rz-card-home"><p role="status">Dashboard inlezen.</p></Card>
         </div></div>
       </div>
     )
