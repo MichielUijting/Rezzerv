@@ -44,7 +44,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         working-directory: .
         run: |
-          if git diff --quiet -- backend/app/data/gpc_bricks_nl.json; then
+          if [ -z "$(git status --porcelain -- backend/app/data/gpc_bricks_nl.json)" ]; then
             echo "Nederlandse GPC-referentie is ongewijzigd."
             exit 0
           fi
