@@ -82,7 +82,8 @@ Voor de artikelcatalogus geldt:
 - de desktop-Catalogus toont **GPC-familie** als afzonderlijke sorteerbare en filterbare kolom en neemt de familie mee in export;
 - de mobiele Catalogus en het Catalogusdetail tonen eveneens de GPC-familie;
 - artikelen zonder bevestigde Brick blijven zichtbaar als **Niet geclassificeerd**;
-- Nederlandse labels komen uit de centrale Nederlandse GS1 GPC-publicatie; de Engelse canonieke beschrijving blijft fallback wanneer een Nederlandse vertaling ontbreekt.
+- gebruikerszichtbare GPC-labels voor **Brick**, **GPC-groep/Class**, **GPC-familie** en Segment komen uitsluitend uit de officiële Nederlandse GS1 GPC-publicatie;
+- een Engelstalige naam is geen toegestane gebruikerszichtbare fallback; ontbreekt een Nederlands label lokaal, dan geldt dat als een onvolledige GS1-import/referentiedatafout die moet worden hersteld.
 
 ## Mobiele Boodschappen-interactie vanaf 3 oktober 2026
 
