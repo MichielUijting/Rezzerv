@@ -85,6 +85,18 @@ Voor de artikelcatalogus geldt:
 - gebruikerszichtbare GPC-labels voor **Brick**, **GPC-groep/Class**, **GPC-familie** en Segment komen uitsluitend uit de officiële Nederlandse GS1 GPC-publicatie;
 - een Engelstalige naam is geen toegestane gebruikerszichtbare fallback; ontbreekt een Nederlands label lokaal, dan geldt dat als een onvolledige GS1-import/referentiedatafout die moet worden hersteld.
 
+## Nederlandse GPC-hiërarchie in artikeloverzichten vanaf 3 oktober 2026
+
+Voor **Catalogus, Voorraad, Bijna op en Boodschappen** geldt één centrale GPC-weergaveregel:
+
+- GPC-identiteit wordt uitsluitend afgeleid via de canonieke productkoppeling: huishoudartikel → `global_product_id` → bevestigde GPC Brick → `gpc_product_groups`;
+- gebruikerszichtbare namen komen uit de bestaande Nederlandse GS1-referentielijst met `language_code = nl`;
+- waar een canonieke productkoppeling bestaat, worden **Brick**, **GPC-groep/Class** en **GPC-familie** direct geprojecteerd voor zowel bestaande als nieuw toegevoegde artikelen; er is geen eenmalige artikelmigratie nodig;
+- **Voorraad**, **Bijna op** en **Boodschappen** tonen de Nederlandse GPC-hiërarchie als artikelmetadata; desktopoverzichten ondersteunen zoeken/filteren op die GPC-tekst;
+- de Catalogus blijft de centrale bron voor de GPC-classificatie en toont in elk geval de Nederlandse Brick/Producttype- en Familienaam; detail/classificatie toont de volledige hiërarchie;
+- een puur lokale handmatige boodschappenregel zonder koppeling aan een huishoudartikel of Catalogusproduct krijgt niet op basis van alleen de artikelnaam een GPC-code toegewezen; naamgokken is niet toegestaan. Zodra zo'n regel canoniek wordt gekoppeld, verschijnt de Nederlandse GPC-hiërarchie automatisch;
+- Engelse GPC-labels worden niet als gebruikerszichtbare fallback gebruikt.
+
 ## Mobiele Boodschappen-interactie vanaf 3 oktober 2026
 
 Voor het mobiele scherm **Boodschappen** geldt aanvullend:
