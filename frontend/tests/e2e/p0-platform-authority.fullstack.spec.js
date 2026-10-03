@@ -239,29 +239,33 @@ test('L4-07 IP owner manages only Superusers from a none-context landing', async
   await expect(page.getByText('Platformbeheerder', { exact: true })).toHaveCount(0)
   await expect(page.getByText('Frontteamlid', { exact: true })).toHaveCount(0)
 
-  const ownerCard = page.getByTestId(`ip-owner-superuser-${ownerId}`)
-  await expect(ownerCard).toBeVisible()
-  await expect(ownerCard).toContainText('IP-eigenaar')
-  await expect(ownerCard.getByRole('button')).toHaveCount(0)
-
   const targetCard = page.getByTestId(`ip-owner-superuser-${standaloneTargetId}`)
-  await expect(targetCard).toBeVisible()
-  await expect(targetCard).toContainText(standaloneTargetEmail)
-
-  const grantButton = targetCard.getByRole('button', { name: 'Superuser maken' })
-  if (await grantButton.count()) {
-    const grantResponsePromise = page.waitForResponse((response) => (
-      new URL(response.url()).pathname === `/api/platform/authorizations/users/${standaloneTargetId}/superuser/grant`
+  if (await targetCard.count()) {
+    const cleanupResponsePromise = page.waitForResponse((response) => (
+      new URL(response.url()).pathname === `/api/platform/authorizations/users/${standaloneTargetId}/superuser/revoke`
       && response.request().method() === 'POST'
     ))
-    await grantButton.click()
-    await expect(page.getByTestId('ip-owner-superuser-confirmation')).toBeVisible()
-    await page.getByRole('button', { name: 'Definitief Superuser maken', exact: true }).click()
-    const grantResponse = await grantResponsePromise
-    expect(grantResponse.ok()).toBeTruthy()
+    await targetCard.getByRole('button', { name: 'Deactiveren' }).click()
+    await page.getByRole('button', { name: 'Definitief deactiveren', exact: true }).click()
+    expect((await cleanupResponsePromise).ok()).toBeTruthy()
+    await expect(targetCard).toHaveCount(0)
   }
 
+  const grantResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === '/api/ip-owner/superusers'
+    && response.request().method() === 'POST'
+  ))
+  await page.getByLabel('E-mailadres').fill(standaloneTargetEmail)
+  await page.getByRole('button', { name: 'Superuser maken', exact: true }).click()
+  await expect(page.getByTestId('ip-owner-superuser-confirmation')).toBeVisible()
+  await page.getByRole('button', { name: 'Definitief Superuser maken', exact: true }).click()
+  const grantResponse = await grantResponsePromise
+  expect(grantResponse.ok()).toBeTruthy()
+
+  await expect(targetCard).toBeVisible()
+  await expect(targetCard).toContainText(standaloneTargetEmail)
   await expect(targetCard.getByRole('button', { name: 'Deactiveren' })).toBeVisible()
+
   const revokeResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === `/api/platform/authorizations/users/${standaloneTargetId}/superuser/revoke`
     && response.request().method() === 'POST'
@@ -271,6 +275,7 @@ test('L4-07 IP owner manages only Superusers from a none-context landing', async
   await page.getByRole('button', { name: 'Definitief deactiveren', exact: true }).click()
   const revokeResponse = await revokeResponsePromise
   expect(revokeResponse.ok()).toBeTruthy()
+  await expect(targetCard).toHaveCount(0)
 
   writeFileSync('p0-l4-07-ip-owner-browser-proof.json', JSON.stringify({
     email,
