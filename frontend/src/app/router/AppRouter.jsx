@@ -162,7 +162,7 @@ const platformRoutes = PLATFORM_NAVIGATION_ITEMS.map((item) => ({
       allowNone
       message={`Je hebt geen toegang tot ${item.label}.`}
     >
-      <PlatformCapabilityPage item={item} />
+      {item.key === 'support' ? <PlatformSupportPage /> : <PlatformCapabilityPage item={item} />}
     </ProtectedPermission>
   ),
 }))
@@ -182,7 +182,7 @@ const router = createBrowserRouter([
   ...platformRoutes,
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/superuser', element: <ProtectedSuperuser><SuperuserControlPage /></ProtectedSuperuser> },
-  { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
+  { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" allowNone message="Je hebt geen toegang tot Platformbeheer / Meldingen."><Navigate to="/platform/meldingen" replace /></ProtectedPermission> },
   { path: '/voorraad', element: <Protected><VoorraadResponsive /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutResponsive /></Protected> },
   { path: '/winkelen', element: <ProtectedPermission permission="shopping_list.view" message="Je rol mag Winkelen niet bekijken."><ShoppingResponsive /></ProtectedPermission> },
