@@ -743,13 +743,35 @@ def build_household_dashboard_drilldown(
 ) -> dict[str, Any]:
     del user_id
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    start, end, label = _dashboard_bucket_window(
-        now=now,
-        granularity=granularity,
-        bucket_index=bucket_index,
-        series=series,
-        comparison=comparison,
-    )
+    if metric == "forecast":
+        if series != "current":
+            raise ValueError("Begrotingsstaven hebben geen vergelijkingsreeks")
+        if granularity == "days":
+            target_day = now.date() + timedelta(days=bucket_index)
+            start = datetime.combine(target_day, datetime.min.time(), tzinfo=timezone.utc)
+            end = start + timedelta(days=1)
+            label = target_day.strftime("%d-%m-%Y")
+        elif granularity == "weeks":
+            target_day = now.date() + timedelta(days=bucket_index * 7)
+            start = datetime.combine(target_day, datetime.min.time(), tzinfo=timezone.utc)
+            end = start + timedelta(days=7)
+            label = f"W{bucket_index + 1}"
+        elif granularity == "months":
+            target_year, target_month = _month_shift(now.year, now.month, bucket_index)
+            start = datetime(target_year, target_month, 1, tzinfo=timezone.utc)
+            next_year, next_month = _month_shift(target_year, target_month, 1)
+            end = datetime(next_year, next_month, 1, tzinfo=timezone.utc)
+            label = start.strftime("%m-%Y")
+        else:
+            raise ValueError("Ongeldige dashboardperiode")
+    else:
+        start, end, label = _dashboard_bucket_window(
+            now=now,
+            granularity=granularity,
+            bucket_index=bucket_index,
+            series=series,
+            comparison=comparison,
+        )
 
     receipts = _approved_receipts(conn, household_id)
     article_details = _receipt_article_details(conn, household_id)
@@ -760,6 +782,7 @@ def build_household_dashboard_drilldown(
     ]
 
     stores: dict[str, dict[str, Any]] = {}
+    store_visit_days: set[tuple[str, str]] = set()
     for receipt in selected_receipts:
         key = str(receipt.get("store") or "Onbekende winkel").strip().lower()
         store = stores.setdefault(key, {
@@ -768,7 +791,10 @@ def build_household_dashboard_drilldown(
             "spend": 0.0,
             "receipts": [],
         })
-        store["visits"] += 1
+        visit_key = (key, str(receipt.get("date") or ""))
+        if visit_key not in store_visit_days:
+            store["visits"] += 1
+            store_visit_days.add(visit_key)
         store["spend"] = round(store["spend"] + _number(receipt.get("total")), 2)
         store["receipts"].append(receipt)
 
