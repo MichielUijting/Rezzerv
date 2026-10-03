@@ -137,6 +137,92 @@ function MiniBars({ values = [], format = (value) => String(value) }) {
   </div>
 }
 
+function familyViewFromReceipts(receipts = [], label = '', series = 'current') {
+  const rows = aggregateCategories(receipts)
+  const segments = rows.map((group) => ({
+    key: group.key,
+    label: group.label,
+    value: Number(group.total || 0),
+  }))
+  const total = segments.reduce((sum, item) => sum + Number(item.value || 0), 0)
+  const point = {
+    label,
+    current: 0,
+    previous: 0,
+    current_segments: [],
+    previous_segments: [],
+  }
+  point[series] = total
+  point[series + '_segments'] = segments
+  return {
+    points: [point],
+    legend: rows.map((group) => ({ key: group.key, label: group.label })),
+  }
+}
+
+function StackedFamilyBars({ view = null, currency = true }) {
+  const points = view?.points || []
+  const legend = view?.legend || []
+  const classByKey = new Map(legend.map((item, index) => [item.key, index % 7]))
+  const max = Math.max(1, ...points.flatMap((point) => [Number(point.current || 0), Number(point.previous || 0)]))
+  const middle = max / 2
+
+  function renderStack(point, series) {
+    const total = Number(point?.[series] || 0)
+    const segments = point?.[series + '_segments'] || []
+    return <span
+      className={'rz-dashboard-bar rz-dashboard-stacked-bar rz-dashboard-stacked-bar--' + series}
+      style={{ height: Math.max(3, Math.round((total / max) * 100)) + '%' }}
+      aria-label={`${point.label}, ${series === 'current' ? 'huidige' : 'vergelijkings'} periode: ${currency ? euro(total) : numberLabel(total)}`}
+    >
+      {segments.map((segment) => (
+        <span
+          key={segment.key}
+          className={'rz-dashboard-stack-segment rz-dashboard-stack-segment--' + (classByKey.get(segment.key) ?? 0)}
+          style={{ flexGrow: Math.max(0.0001, Number(segment.value || 0)) }}
+          title={`${segment.label}: ${currency ? euro(segment.value) : numberLabel(segment.value)}`}
+        />
+      ))}
+    </span>
+  }
+
+  if (!points.length) return null
+
+  return <div className="rz-dashboard-detail-family-chart">
+    <div className="rz-dashboard-comparison-chart rz-dashboard-stacked-chart" aria-label="Gestapelde grafiek per productfamilie">
+      <div className="rz-dashboard-y-axis" aria-hidden="true">
+        <span>{currency ? euro(max) : numberLabel(max)}</span>
+        <span>{currency ? euro(middle) : numberLabel(middle)}</span>
+        <span>{currency ? euro(0) : '0'}</span>
+      </div>
+      <div className="rz-dashboard-chart-plot">
+        <div className="rz-dashboard-gridline rz-dashboard-gridline--top" />
+        <div className="rz-dashboard-gridline rz-dashboard-gridline--mid" />
+        <div className="rz-dashboard-gridline rz-dashboard-gridline--base" />
+        <div className="rz-dashboard-comparison-bars">
+          {points.map((point, index) => (
+            <div className="rz-dashboard-comparison-group" key={point.label || index}>
+              <div className="rz-dashboard-comparison-pair">
+                {renderStack(point, 'previous')}
+                {renderStack(point, 'current')}
+              </div>
+              <small>{point.label}</small>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+    {legend.length ? <div className="rz-dashboard-stack-legend" aria-label="Productfamilies">
+      {legend.map((item, index) => (
+        <span key={item.key}>
+          <i className={'rz-dashboard-stack-key rz-dashboard-stack-segment--' + (index % 7)} />
+          {item.label}
+        </span>
+      ))}
+    </div> : null}
+  </div>
+}
+
 function ReceiptList({ receipts = [], showArticleCount = true }) {
   const navigate = useNavigate()
   const [openIds, setOpenIds] = useState(() => new Set())
@@ -238,7 +324,7 @@ function CategoryTotals({ receipts = [] }) {
     return <p className="rz-dashboard-empty">Nog geen categorie-indeling beschikbaar voor deze periode.</p>
   }
   return <div className="rz-dashboard-category-totals">
-    <div className="rz-dashboard-category-stack" aria-label="Uitgaven per categorie">
+    <div className="rz-dashboard-category-stack" aria-label="Uitgaven per productfamilie">
       {rows.map((group, index) => (
         <span
           key={group.key}
@@ -398,12 +484,16 @@ export default function DashboardDetailPage() {
           <strong>{euro(barDrilldown.spend)}</strong>
           <span>{barDrilldown.label}{barDrilldown.group_label ? ' · ' + barDrilldown.group_label : ''} · {series === 'previous' ? 'vergelijkingsperiode' : 'huidige periode'}</span>
         </div>
+        <StackedFamilyBars
+          view={familyViewFromReceipts(receipts, barDrilldown.label, series)}
+          currency
+        />
         <section className="rz-dashboard-detail-section">
           <h2>{barDrilldown.group_label ? 'Artikelen in ' + barDrilldown.group_label : 'Artikelen in deze staaf'}</h2>
           <ArticleTotals receipts={receipts} />
         </section>
         {!barDrilldown.group_label ? <section className="rz-dashboard-detail-section">
-          <h2>Per categorie</h2>
+          <h2>Per productfamilie</h2>
           <CategoryTotals receipts={receipts} />
         </section> : null}
         <section className="rz-dashboard-detail-section">
@@ -436,9 +526,9 @@ export default function DashboardDetailPage() {
       const receipts = dashboard.spend.receipts || []
       return <>
         <div className="rz-dashboard-detail-summary"><strong>{euro(dashboard.spend.current)}</strong><span>Vorige 7 dagen: {euro(dashboard.spend.previous)}</span></div>
-        <MiniBars values={dashboard.spend.daily} format={euro} />
+        <StackedFamilyBars view={dashboard.spend.group_views?.days} currency />
         <section className="rz-dashboard-detail-section">
-          <h2>Per categorie</h2>
+          <h2>Per productfamilie</h2>
           <CategoryTotals receipts={receipts} />
         </section>
         <section className="rz-dashboard-detail-section">
