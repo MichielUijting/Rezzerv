@@ -59,7 +59,7 @@ export default function CatalogPage() {
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
   const [filters, setFilters] = useState({
-    name: '', catalogKind: '', brand: '', primaryGtin: '', productType: '',
+    name: '', catalogKind: '', brand: '', primaryGtin: '', productType: '', gpcFamily: '',
     householdArticleCount: '',
   })
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
@@ -88,6 +88,7 @@ export default function CatalogPage() {
           brand: 'brand',
           primaryGtin: 'primary_gtin',
           productType: 'product_type',
+          gpcFamily: 'gpc_family',
           householdArticleCount: 'household_article_count',
         }
         Object.entries(mappings).forEach(([stateKey, parameter]) => {
@@ -230,13 +231,14 @@ export default function CatalogPage() {
       return
     }
     const rows = [
-      ['Universeel artikel', 'Soort', 'Merk', 'Primaire GTIN', 'Producttype', 'Bron', 'Huishoudartikelen'],
+      ['Universeel artikel', 'Soort', 'Merk', 'Primaire GTIN', 'Producttype', 'GPC-familie', 'Bron', 'Huishoudartikelen'],
       ...selectedItems.map((item) => [
         item.name,
         catalogKindLabel(item.catalog_kind),
         item.brand,
         item.primary_gtin,
         item.product_type,
+        item.gpc_family_name,
         sourceLabel(item.source),
         item.household_article_count,
       ]),
@@ -295,7 +297,7 @@ export default function CatalogPage() {
                 <colgroup>
                   <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col className="rz-catalog-col-kind" />
                   <col className="rz-catalog-col-brand" /><col className="rz-catalog-col-gtin" /><col className="rz-catalog-col-product-type" />
-                  <col className="rz-catalog-col-household-count" />
+                  <col className="rz-catalog-col-gpc-family" /><col className="rz-catalog-col-household-count" />
                 </colgroup>
                 <thead>
                   <tr className="rz-table-header">
@@ -305,6 +307,7 @@ export default function CatalogPage() {
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('brand')}>Merk <span>{sortMark('brand')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('primary_gtin')}>Primaire GTIN <span>{sortMark('primary_gtin')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('product_type')}>Producttype <span>{sortMark('product_type')}</span></button></th>
+                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('gpc_family_name')}>GPC-familie <span>{sortMark('gpc_family_name')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('household_article_count')}>Huishoudartikelen <span>{sortMark('household_article_count')}</span></button></th>
                   </tr>
                   <tr className="rz-table-filters rz-external-databases-filter-row">
@@ -314,11 +317,12 @@ export default function CatalogPage() {
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.brand} onChange={(event) => updateFilter('brand', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.primaryGtin} onChange={(event) => updateFilter('primaryGtin', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.productType} onChange={(event) => updateFilter('productType', event.target.value)} /></th>
+                    <th><input className="rz-table-filter" placeholder="Filter" value={filters.gpcFamily} onChange={(event) => updateFilter('gpcFamily', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? <tr><td colSpan="7">Catalogus laden...</td></tr> : items.length ? items.map((item) => (
+                  {isLoading ? <tr><td colSpan="8">Catalogus laden...</td></tr> : items.length ? items.map((item) => (
                     <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
                       <td className="rz-check"><input type="checkbox" checked={Boolean(selectedRows[item.id])} onChange={() => toggleSelected(item)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
                       <td>
@@ -327,12 +331,13 @@ export default function CatalogPage() {
                           <span>{text(item.name)}</span>
                         </div>
                       </td><td>{catalogKindLabel(item.catalog_kind)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
+                      <td>{text(item.gpc_family_name, 'Niet geclassificeerd')}</td>
                       <td className="rz-num">{Number(item.household_article_count || 0)}</td>
                     </tr>
-                  )) : <tr><td colSpan="7">Geen universele artikelen gevonden.</td></tr>}
+                  )) : <tr><td colSpan="8">Geen universele artikelen gevonden.</td></tr>}
                   {!isLoading ? Array.from({ length: fillerRowCount }, (_, index) => (
                     <tr key={`catalog-filler-${index}`} className="rz-catalog-filler-row" aria-hidden="true" data-testid="catalog-filler-row">
-                      <td colSpan="7">&nbsp;</td>
+                      <td colSpan="8">&nbsp;</td>
                     </tr>
                   )) : null}
                 </tbody>
