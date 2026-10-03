@@ -114,9 +114,9 @@ function ComparisonChart({ points = [], currency = false, onBarActivate = null }
   </div>
 }
 
-function StackedComparisonChart({ view = null, currency = false, onSegmentActivate = null }) {
+function StackedComparisonChart({ view = null, currency = false, onSegmentActivate = null, paletteLegend = [] }) {
   const points = view?.points || []
-  const legend = view?.legend || []
+  const legend = paletteLegend.length ? paletteLegend : (view?.legend || [])
   const classByKey = new Map(legend.map((item, index) => [item.key, index % 7]))
   const max = Math.max(1, ...points.flatMap((point) => [Number(point.current || 0), Number(point.previous || 0)]))
   const middle = max / 2
@@ -177,14 +177,6 @@ function StackedComparisonChart({ view = null, currency = false, onSegmentActiva
         ))}
       </div>
     </div>
-    {legend.length ? <div className="rz-dashboard-stack-legend" aria-label="Productfamilies">
-      {legend.map((item, index) => (
-        <span key={item.key}>
-          <i className={'rz-dashboard-stack-key rz-dashboard-stack-segment--' + (index % 7)} />
-          {item.label}
-        </span>
-      ))}
-    </div> : null}
   </div>
 }
 
@@ -263,6 +255,21 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
   const name = firstName(context) || 'gebruiker'
   const period = PERIODS.find((item) => item.key === periodKey) || PERIODS[0]
 
+  const sharedFamilyLegend = useMemo(() => {
+    if (!dashboard) return []
+    const sources = [
+      ...(dashboard.spend?.group_views?.[periodKey]?.legend || []),
+      ...(dashboard.spend_year_over_year?.group_views?.[periodKey]?.legend || []),
+    ]
+    const unique = new Map()
+    for (const item of sources) {
+      const key = String(item?.key || '').trim()
+      if (!key || unique.has(key)) continue
+      unique.set(key, { key, label: item?.label || key })
+    }
+    return Array.from(unique.values()).slice(0, 7)
+  }, [dashboard, periodKey])
+
   const cards = useMemo(() => {
     if (!dashboard) return []
     const yearSpendGroupView = dashboard.spend_year_over_year?.group_views?.[periodKey] || null
@@ -302,6 +309,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         chart: <StackedComparisonChart
           view={yearSpendGroupView || { points: yearSpendPoints, legend: [] }}
           currency
+          paletteLegend={sharedFamilyLegend}
           onSegmentActivate={(index, series, segment) => openBarDrilldown('uitgaven', index, series, 'year', segment.key)}
         />,
       },
@@ -313,6 +321,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         chart: <StackedComparisonChart
           view={spendGroupView || { points: spendPoints, legend: [] }}
           currency
+          paletteLegend={sharedFamilyLegend}
           onSegmentActivate={(index, series, segment) => openBarDrilldown('uitgaven', index, series, 'previous', segment.key)}
         />,
       },
@@ -337,7 +346,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         />,
       },
     ]
-  }, [dashboard, periodKey, period])
+  }, [dashboard, periodKey, period, sharedFamilyLegend])
 
   const orderedCards = useMemo(() => {
     const byKey = new Map(cards.map((card) => [card.key, card]))
@@ -467,11 +476,6 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
           ))}
         </div>
 
-        <div className="rz-dashboard-legend" aria-label="Legenda">
-          <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--current" />Huidige periode</span>
-          <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--previous" />Vergelijkingsperiode</span>
-        </div>
-
         <section className="rz-dashboard-grid" aria-label="Huishoudoverzicht">
           {orderedCards.map((card) => (
             <button
@@ -493,6 +497,21 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
             </button>
           ))}
         </section>
+
+        <div className="rz-dashboard-shared-legend" aria-label="Legenda dashboardgrafieken">
+          <div className="rz-dashboard-legend">
+            <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--current" />Huidige periode</span>
+            <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--previous" />Vergelijkingsperiode</span>
+          </div>
+          {sharedFamilyLegend.length ? <div className="rz-dashboard-stack-legend" aria-label="Productfamilies">
+            {sharedFamilyLegend.map((item, index) => (
+              <span key={item.key}>
+                <i className={'rz-dashboard-stack-key rz-dashboard-stack-segment--' + (index % 7)} />
+                {item.label}
+              </span>
+            ))}
+          </div> : null}
+        </div>
       </> : null}
     </section>
   </main>
