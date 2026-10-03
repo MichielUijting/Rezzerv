@@ -12,11 +12,12 @@ def test_confirmed_gpc_assignment_is_projected_by_catalog_backend_query():
     source = CATALOG_ROUTES.read_text(encoding="utf-8")
 
     assert "global_product_gpc_bricks catalog_gpc" in source
-    assert "gpc_bricks catalog_brick" in source
-    assert "gpc_classes catalog_class" in source
-    assert "gpc_families catalog_family" in source
-    assert "tr.entity_type = 'brick'" in source
-    assert "tr.entity_type = 'family'" in source
+    assert "gpc_product_groups catalog_gpc_nl" in source
+    assert "catalog_gpc_nl.language_code = 'nl'" in source
+    assert "catalog_gpc_nl.gpc_brick_name" in source
+    assert "catalog_gpc_nl.gpc_family_name" in source
+    assert "gpc_brick_name_en" not in source
+    assert "gpc_family_name_en" not in source
     assert "AS product_type" in source
     assert "AS gpc_brick_code" in source
     assert "AS gpc_family_code" in source
