@@ -469,3 +469,11 @@
 .rz-dashboard-card {
   transition: transform 120ms ease, opacity 120ms ease;
 }
+
+.rz-dashboard-bar[role="button"]{
+  cursor:pointer;
+}
+.rz-dashboard-bar[role="button"]:focus-visible{
+  outline:2px solid var(--color-text-primary);
+  outline-offset:2px;
+}
