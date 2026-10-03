@@ -54,7 +54,7 @@ function deltaText(current, previous, formatter, period) {
   return (diff > 0 ? '+' : '−') + formatter(Math.abs(diff)) + ' t.o.v. ' + period.previousLabel
 }
 
-function ComparisonChart({ points = [], currency = false }) {
+function ComparisonChart({ points = [], currency = false, onBarActivate = null }) {
   const max = Math.max(1, ...points.flatMap((point) => [Number(point.current || 0), Number(point.previous || 0)]))
   const middle = max / 2
   return <div className="rz-dashboard-comparison-chart" aria-label="Vergelijkingsgrafiek">
@@ -73,12 +73,36 @@ function ComparisonChart({ points = [], currency = false }) {
             <div className="rz-dashboard-comparison-pair">
               <span
                 className="rz-dashboard-bar rz-dashboard-bar--previous"
+                role={onBarActivate ? 'button' : undefined}
+                tabIndex={onBarActivate ? 0 : undefined}
                 title={'Vorige periode: ' + (currency ? euro(point.previous) : numberLabel(point.previous))}
+                aria-label={onBarActivate ? `${point.label}, vergelijkingsperiode: ${currency ? euro(point.previous) : numberLabel(point.previous)}` : undefined}
+                onPointerDown={onBarActivate ? (event) => event.stopPropagation() : undefined}
+                onClick={onBarActivate ? (event) => { event.stopPropagation(); onBarActivate(index, 'previous', point) } : undefined}
+                onKeyDown={onBarActivate ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onBarActivate(index, 'previous', point)
+                  }
+                } : undefined}
                 style={{ height: Math.max(3, Math.round((Number(point.previous || 0) / max) * 100)) + '%' }}
               />
               <span
                 className="rz-dashboard-bar rz-dashboard-bar--current"
+                role={onBarActivate ? 'button' : undefined}
+                tabIndex={onBarActivate ? 0 : undefined}
                 title={'Huidige periode: ' + (currency ? euro(point.current) : numberLabel(point.current))}
+                aria-label={onBarActivate ? `${point.label}, huidige periode: ${currency ? euro(point.current) : numberLabel(point.current)}` : undefined}
+                onPointerDown={onBarActivate ? (event) => event.stopPropagation() : undefined}
+                onClick={onBarActivate ? (event) => { event.stopPropagation(); onBarActivate(index, 'current', point) } : undefined}
+                onKeyDown={onBarActivate ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onBarActivate(index, 'current', point)
+                  }
+                } : undefined}
                 style={{ height: Math.max(3, Math.round((Number(point.current || 0) / max) * 100)) + '%' }}
               />
             </div>
@@ -90,7 +114,7 @@ function ComparisonChart({ points = [], currency = false }) {
   </div>
 }
 
-function ForecastChart({ values = [] }) {
+function ForecastChart({ values = [], onBarActivate = null }) {
   const max = Math.max(1, ...values.map((item) => Number(item.value || 0)))
   const middle = max / 2
   return <div className="rz-dashboard-comparison-chart rz-dashboard-forecast-chart" aria-label="Begrote uitgaven">
@@ -109,7 +133,19 @@ function ForecastChart({ values = [] }) {
             <div className="rz-dashboard-comparison-pair rz-dashboard-comparison-pair--single">
               <span
                 className="rz-dashboard-bar rz-dashboard-bar--current"
+                role={onBarActivate ? 'button' : undefined}
+                tabIndex={onBarActivate ? 0 : undefined}
                 title={euro(item.value)}
+                aria-label={onBarActivate ? `${item.label || ('W' + item.week)}, begrote uitgaven: ${euro(item.value)}` : undefined}
+                onPointerDown={onBarActivate ? (event) => event.stopPropagation() : undefined}
+                onClick={onBarActivate ? (event) => { event.stopPropagation(); onBarActivate(index, 'current', item) } : undefined}
+                onKeyDown={onBarActivate ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onBarActivate(index, 'current', item)
+                  }
+                } : undefined}
                 style={{ height: Math.max(3, Math.round((Number(item.value || 0) / max) * 100)) + '%' }}
               />
             </div>
@@ -187,28 +223,42 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         title: 'Uitgaven t.o.v. vorig jaar',
         value: euro(yearSpendCurrent),
         detail: deltaText(yearSpendCurrent, yearSpendPrevious, euro, { previousLabel: 'dezelfde periode vorig jaar' }),
-        chart: <ComparisonChart points={yearSpendPoints} currency />,
+        chart: <ComparisonChart
+          points={yearSpendPoints}
+          currency
+          onBarActivate={(index, series) => openBarDrilldown('uitgaven', index, series, 'year')}
+        />,
       },
       {
         key: 'uitgaven',
         title: 'Uitgaven',
         value: euro(spendCurrent),
         detail: deltaText(spendCurrent, spendPrevious, euro, period),
-        chart: <ComparisonChart points={spendPoints} currency />,
+        chart: <ComparisonChart
+          points={spendPoints}
+          currency
+          onBarActivate={(index, series) => openBarDrilldown('uitgaven', index, series, 'previous')}
+        />,
       },
       {
         key: 'winkels',
         title: 'Bezochte winkels',
         value: numberLabel(storeView.current.unique) + ' winkels',
         detail: numberLabel(storeView.current.visits) + ' bezoeken · ' + deltaText(storeView.current.visits, storeView.previous.visits, numberLabel, period),
-        chart: <ComparisonChart points={storeView.points || []} />,
+        chart: <ComparisonChart
+          points={storeView.points || []}
+          onBarActivate={(index, series) => openBarDrilldown('winkels', index, series, 'previous')}
+        />,
       },
       {
         key: 'begroting',
         title: 'Begrote uitgaven',
         value: euro(forecastTotal),
         detail: 'herhalingskoop verwacht in de ' + forecastPeriodLabel,
-        chart: <ForecastChart values={forecastPoints} />,
+        chart: <ForecastChart
+          values={forecastPoints}
+          onBarActivate={(index, series) => openBarDrilldown('begroting', index, series, 'previous')}
+        />,
       },
     ]
   }, [dashboard, periodKey, period])
@@ -272,6 +322,16 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
   function cancelCardDrag() {
     dragStateRef.current = null
     setDraggingKey('')
+  }
+
+  function openBarDrilldown(metric, bucketIndex, series, comparison = 'previous') {
+    const params = new URLSearchParams({
+      granularity: periodKey,
+      bucket: String(bucketIndex),
+      series,
+      comparison,
+    })
+    navigate('/dashboard/' + metric + '?' + params.toString())
   }
 
   function openCard(card) {
