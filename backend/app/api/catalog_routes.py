@@ -147,6 +147,10 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
 
     gpc_product_type = "NULL"
     gpc_brick_code = "NULL"
+    gpc_class_code = "NULL"
+    gpc_class_name = "NULL"
+    gpc_family_code = "NULL"
+    gpc_family_name = "NULL"
     if {"global_product_gpc_bricks", "gpc_bricks"}.issubset(tables):
         joins.extend([
             """
@@ -159,6 +163,19 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
             """,
         ])
         gpc_brick_code = "catalog_gpc.brick_code"
+        if {"gpc_classes", "gpc_families"}.issubset(tables):
+            joins.extend([
+                """
+                LEFT JOIN gpc_classes catalog_class
+                  ON catalog_class.class_code = catalog_brick.class_code
+                """,
+                """
+                LEFT JOIN gpc_families catalog_family
+                  ON catalog_family.family_code = catalog_class.family_code
+                """,
+            ])
+            gpc_class_code = "catalog_class.class_code"
+            gpc_family_code = "catalog_family.family_code"
         if "gpc_translations" in tables:
             gpc_product_type = """
                 COALESCE(
@@ -171,8 +188,34 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
                     catalog_brick.description
                 )
             """
+            if {"gpc_classes", "gpc_families"}.issubset(tables):
+                gpc_class_name = """
+                    COALESCE(
+                        (SELECT tr.translated_text
+                         FROM gpc_translations tr
+                         WHERE tr.entity_type = 'class'
+                           AND tr.entity_code = catalog_class.class_code
+                           AND tr.language_code = 'nl'
+                         LIMIT 1),
+                        catalog_class.description
+                    )
+                """
+                gpc_family_name = """
+                    COALESCE(
+                        (SELECT tr.translated_text
+                         FROM gpc_translations tr
+                         WHERE tr.entity_type = 'family'
+                           AND tr.entity_code = catalog_family.family_code
+                           AND tr.language_code = 'nl'
+                         LIMIT 1),
+                        catalog_family.description
+                    )
+                """
         else:
             gpc_product_type = "catalog_brick.description"
+            if {"gpc_classes", "gpc_families"}.issubset(tables):
+                gpc_class_name = "catalog_class.description"
+                gpc_family_name = "catalog_family.description"
 
     product_type_expression = f"COALESCE({gpc_product_type}, {legacy_product_type})"
     product_type_id_expression = f"COALESCE({gpc_brick_code}, {legacy_product_type_id})"
@@ -180,6 +223,10 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         f"{product_type_id_expression} AS product_type_id",
         f"{product_type_expression} AS product_type",
         f"{gpc_brick_code} AS gpc_brick_code",
+        f"{gpc_class_code} AS gpc_class_code",
+        f"{gpc_class_name} AS gpc_class_name",
+        f"{gpc_family_code} AS gpc_family_code",
+        f"{gpc_family_name} AS gpc_family_name",
     ])
 
     household_table = _household_table()
@@ -304,6 +351,7 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         "primary_gtin": primary_gtin_expression,
         "catalog_kind": catalog_kind_expression,
         "product_type": f"COALESCE({product_type_expression}, '')",
+        "gpc_family_name": f"COALESCE({gpc_family_name}, '')",
         "source": source_expression,
         "household_article_count": household_count_expression,
         "catalog_visible": alias_visibility_expression,
@@ -318,6 +366,7 @@ def _catalog_where(
     primary_gtin: str,
     catalog_kind: str,
     product_type: str,
+    gpc_family: str,
     source: str,
     household_article_count: str,
 ) -> tuple[str, dict[str, Any]]:
@@ -329,6 +378,7 @@ def _catalog_where(
         "primary_gtin": primary_gtin,
         "catalog_kind": catalog_kind,
         "product_type": product_type,
+        "gpc_family_name": gpc_family,
         "source": source,
     }
     for key, raw_value in filters.items():
@@ -377,6 +427,7 @@ def list_catalog(
     primary_gtin: str = Query(default="", max_length=200),
     catalog_kind: str = Query(default="", max_length=50),
     product_type: str = Query(default="", max_length=200),
+    gpc_family: str = Query(default="", max_length=200),
     source: str = Query(default="", max_length=200),
     household_article_count: str = Query(default="", max_length=50),
     sort_by: str = Query(default="name", max_length=50),
@@ -395,12 +446,13 @@ def list_catalog(
         primary_gtin,
         catalog_kind,
         product_type,
+        gpc_family,
         source,
         household_article_count,
     )
     order_expression = expressions.get(sort_by, expressions["name"])
     direction = "DESC" if sort_direction.lower() == "desc" else "ASC"
-    if sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "source"}:
+    if sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "gpc_family_name", "source"}:
         order_sql = (
             f"LOWER({order_expression}) {direction}, "
             f"{order_expression} {direction}"
