@@ -3,8 +3,7 @@
 }
 
 .rz-mobile-shopping-summary-card,
-.rz-mobile-shopping-group,
-.rz-mobile-shopping-selection-actions {
+.rz-mobile-shopping-group {
   border: 1px solid rgba(255, 255, 255, 0.78);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
@@ -214,69 +213,13 @@
   min-height: 44px;
 }
 
-.rz-mobile-shopping-selection-actions {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 12px 14px;
-}
-
-.rz-mobile-shopping-selection-actions > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.rz-mobile-shopping-selection-actions .rz-button-primary,
-.rz-mobile-shopping-selection-actions .rz-button-secondary {
-  min-height: 44px;
-}
-
-.rz-mobile-shopping-complete {
-  position: sticky;
-  bottom: calc(var(--size-app-bar-mobile) + 10px + env(safe-area-inset-bottom));
-  z-index: 4;
-  display: grid;
-  margin-top: 18px;
-}
-
-.rz-mobile-shopping-complete .rz-button-primary {
-  width: 100%;
-  min-height: 50px;
-  border-radius: 14px;
-  font-weight: 400;
-  box-shadow: 0 10px 25px color-mix(in srgb, var(--color-ui-primary) 23%, transparent);
-}
-
-@media (max-width: 520px) {
-  .rz-mobile-shopping-editor {
-    grid-template-columns: 1fr;
-  }
-
-  .rz-mobile-shopping-card {
-    padding: 12px 11px;
-  }
-}
-
-/* Boodschappen reuses the canonical mobile inventory row; only module-specific slots live here. */
-.rz-mobile-shopping-list .rz-mobile-inventory-card { border-radius: 0; box-shadow: none; border-left: 0; border-right: 0; border-top: 0; }
-.rz-mobile-shopping-list .rz-mobile-inventory-card:last-child { border-bottom: 0; }
-.rz-mobile-shopping-list .rz-mobile-inventory-card-side { min-width: 108px; }
-.rz-mobile-shopping-list .rz-mobile-article-row-leading { display: flex; align-items: center; justify-content: center; }
-.rz-mobile-shopping-list .rz-mobile-article-row-leading input[type="checkbox"] { width: 20px; height: 20px; margin: 0; accent-color: var(--color-ui-primary); cursor: pointer; }
-.rz-mobile-shopping-empty-section { padding: 14px; color: #000000; font-size: var(--font-size-ui-body); line-height: 1.35; }
-.rz-mobile-shopping-selection-actions { border: 0; border-top: 1px solid var(--color-border-default); border-radius: 0; box-shadow: none; background: #ffffff; font-size: var(--font-size-ui-body); }
-.rz-mobile-shopping-selection-actions > span { color: #000000; }
-.rz-mobile-shopping-selection-actions > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.rz-mobile-shopping-selection-actions .rz-button-primary,
-.rz-mobile-shopping-selection-actions .rz-button-secondary { width: 100%; font-size: var(--font-size-ui-body); }
 .rz-mobile-shopping-toolbar .rz-select-trigger,
 .rz-mobile-shopping-toolbar .rz-select-listbox,
 .rz-mobile-shopping-toolbar .rz-select-option { font-size: var(--font-size-ui-body) !important; }
 
 /* Boodschappen is deliberately denser than detail-oriented article lists: one shopping action row. */
 .rz-mobile-shopping-list .rz-mobile-inventory-card {
-  grid-template-columns: 24px 44px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-height: 58px;
@@ -299,3 +242,50 @@
   justify-content: flex-end;
 }
 .rz-mobile-shopping-list .rz-quantity-stepper { flex-wrap: nowrap; }
+
+.rz-mobile-shopping-list .rz-mobile-inventory-card:not(.rz-mobile-article-row--static) {
+  cursor: pointer;
+}
+
+.rz-mobile-shopping-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.rz-mobile-shopping-delete {
+  box-sizing: border-box;
+  flex: 0 0 31px;
+  width: 31px;
+  min-width: 31px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--color-mobile-ui-primary);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--color-mobile-ui-primary);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rz-mobile-shopping-delete svg {
+  width: 19px;
+  height: 19px;
+  fill: currentColor;
+}
+
+.rz-mobile-shopping-delete:hover,
+.rz-mobile-shopping-delete:focus-visible {
+  border-color: var(--color-mobile-ui-primary);
+  background: var(--color-mobile-ui-primary);
+  color: #ffffff;
+  outline: none;
+}
+
+.rz-mobile-shopping-delete:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
