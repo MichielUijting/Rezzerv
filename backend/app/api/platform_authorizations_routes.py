@@ -63,6 +63,36 @@ def revoke_user_superuser(user_id: str) -> dict:
     return _run_role_change(user_id, role_key=SUPERUSER_ROLE_KEY, operation=revoke_special_role)
 
 
+@router.get("/api/ip-owner/superusers")
+def get_ip_owner_superusers() -> dict:
+    context = require_platform_permission_from_session(PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION)
+    with engine.connect() as conn:
+        payload = list_platform_authorizations(conn, current_user_id=context.user_id)
+
+    users = []
+    for item in payload.get("users", []):
+        superuser_action = (item.get("role_actions") or {}).get(SUPERUSER_ROLE_KEY, {})
+        users.append({
+            "user_id": item.get("user_id"),
+            "email": item.get("email"),
+            "account_status": item.get("account_status"),
+            "is_current": bool(item.get("is_current")),
+            "is_ip_owner": bool(item.get("is_ip_owner")),
+            "is_superuser": bool(superuser_action.get("active")),
+            "can_grant": bool(superuser_action.get("can_grant")),
+            "can_revoke": bool(superuser_action.get("can_revoke")),
+            "grant_blocked_reason": superuser_action.get("grant_blocked_reason"),
+            "revoke_blocked_reason": superuser_action.get("revoke_blocked_reason"),
+        })
+
+    return {
+        "users": users,
+        "can_manage_superusers": True,
+        "context_type": context.context_type,
+        "household_context_used": False,
+    }
+
+
 @router.get("/api/platform/frontteam-management")
 def get_frontteam_management() -> dict:
     context = require_platform_permission_from_session(PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION)
@@ -109,9 +139,9 @@ def revoke_user_frontteam(user_id: str) -> dict:
 
 @router.post("/api/platform/authorizations/users/{user_id}/platform-admin/grant")
 def grant_user_platform_admin(user_id: str) -> dict:
-    return _run_role_change(user_id, role_key=PLATFORM_ADMIN_ROLE_KEY, operation=grant_special_role)
+    raise HTTPException(status_code=403, detail="De IP-eigenaar beheert uitsluitend Superusers.")
 
 
 @router.post("/api/platform/authorizations/users/{user_id}/platform-admin/revoke")
 def revoke_user_platform_admin(user_id: str) -> dict:
-    return _run_role_change(user_id, role_key=PLATFORM_ADMIN_ROLE_KEY, operation=revoke_special_role)
+    raise HTTPException(status_code=403, detail="De IP-eigenaar beheert uitsluitend Superusers.")
