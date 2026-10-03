@@ -54,12 +54,6 @@
   margin-bottom: 14px;
 }
 
-.rz-mobile-shopping-toolbar .rz-button-primary {
-  width: 100%;
-  min-height: 44px;
-  margin: 0;
-}
-
 .rz-mobile-shopping-groups {
   display: grid;
   gap: 12px;
