@@ -238,16 +238,6 @@ def test_ip_owner_none_session_has_no_household_and_only_owner_permission():
     finally:
         engine.dispose()
 
-            conn.execute(text("""
-                UPDATE auth_platform_user_roles SET active = FALSE
-                WHERE user_id = :user_id AND role_key = :role_key
-            """), {"user_id": user_id, "role_key": role_key})
-            with pytest.raises(HTTPException) as exc:
-                resolve_server_session(conn, raw_id)
-            assert_http_status(exc, 403)
-    finally:
-        engine.dispose()
-
 
 def test_revoked_and_expired_sessions_fail_closed():
     engine = _seed_regular_fixture()
