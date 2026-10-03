@@ -283,9 +283,9 @@ def _comparison_series(
 
     points: list[dict[str, Any]] = []
     if granularity == "days":
-        for offset in range(6, -1, -1):
+        for offset in range(3, -1, -1):
             current_day = (now - timedelta(days=offset)).date()
-            previous_day = current_day - timedelta(days=7)
+            previous_day = current_day - timedelta(days=4)
             current_value = sum(row_value(row) for row in receipts if row["_purchase_at"].date() == current_day)
             previous_value = sum(row_value(row) for row in receipts if row["_purchase_at"].date() == previous_day)
             points.append({
@@ -297,10 +297,10 @@ def _comparison_series(
 
     if granularity == "weeks":
         current_monday = (now - timedelta(days=now.weekday())).date()
-        for offset in range(7, -1, -1):
+        for offset in range(3, -1, -1):
             start = current_monday - timedelta(weeks=offset)
             end = start + timedelta(days=7)
-            previous_start = start - timedelta(weeks=8)
+            previous_start = start - timedelta(weeks=4)
             previous_end = previous_start + timedelta(days=7)
             current_value = sum(
                 row_value(row)
@@ -320,9 +320,9 @@ def _comparison_series(
         return points
 
     year, month = now.year, now.month
-    for offset in range(5, -1, -1):
+    for offset in range(3, -1, -1):
         current_year, current_month = _month_shift(year, month, -offset)
-        previous_year, previous_month = _month_shift(current_year, current_month, -6)
+        previous_year, previous_month = _month_shift(current_year, current_month, -4)
         current_value = sum(
             row_value(row)
             for row in receipts
@@ -343,17 +343,96 @@ def _comparison_series(
 
 
 
+def _spend_year_over_year_series(
+    receipts: list[dict[str, Any]],
+    *,
+    now: datetime,
+    granularity: str,
+) -> list[dict[str, Any]]:
+    def spend_for(start, end) -> float:
+        return round(sum(
+            _number(row.get("total_amount"))
+            for row in receipts
+            if start <= row["_purchase_at"] < end
+        ), 2)
+
+    points: list[dict[str, Any]] = []
+    if granularity == "days":
+        for offset in range(3, -1, -1):
+            current_day = (now - timedelta(days=offset)).date()
+            try:
+                previous_day = current_day.replace(year=current_day.year - 1)
+            except ValueError:
+                previous_day = current_day.replace(year=current_day.year - 1, day=28)
+            current_value = sum(
+                _number(row.get("total_amount"))
+                for row in receipts
+                if row["_purchase_at"].date() == current_day
+            )
+            previous_value = sum(
+                _number(row.get("total_amount"))
+                for row in receipts
+                if row["_purchase_at"].date() == previous_day
+            )
+            points.append({
+                "label": current_day.strftime("%d-%m"),
+                "current": round(current_value, 2),
+                "previous": round(previous_value, 2),
+            })
+        return points
+
+    if granularity == "weeks":
+        current_monday = (now - timedelta(days=now.weekday())).date()
+        for offset in range(3, -1, -1):
+            start_date = current_monday - timedelta(weeks=offset)
+            end_date = start_date + timedelta(days=7)
+            previous_start_date = start_date - timedelta(days=364)
+            previous_end_date = previous_start_date + timedelta(days=7)
+            current_start = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+            current_end = datetime.combine(end_date, datetime.min.time(), tzinfo=timezone.utc)
+            previous_start = datetime.combine(previous_start_date, datetime.min.time(), tzinfo=timezone.utc)
+            previous_end = datetime.combine(previous_end_date, datetime.min.time(), tzinfo=timezone.utc)
+            points.append({
+                "label": f"W{start_date.isocalendar().week}",
+                "current": spend_for(current_start, current_end),
+                "previous": spend_for(previous_start, previous_end),
+            })
+        return points
+
+    for offset in range(3, -1, -1):
+        current_year, current_month = _month_shift(now.year, now.month, -offset)
+        current_value = sum(
+            _number(row.get("total_amount"))
+            for row in receipts
+            if row["_purchase_at"].year == current_year
+            and row["_purchase_at"].month == current_month
+        )
+        previous_value = sum(
+            _number(row.get("total_amount"))
+            for row in receipts
+            if row["_purchase_at"].year == current_year - 1
+            and row["_purchase_at"].month == current_month
+        )
+        label = datetime(current_year, current_month, 1, tzinfo=timezone.utc).strftime("%b")
+        points.append({
+            "label": label,
+            "current": round(current_value, 2),
+            "previous": round(previous_value, 2),
+        })
+    return points
+
+
 def _period_windows(now: datetime, granularity: str) -> tuple[datetime, datetime, datetime]:
     if granularity == "days":
-        current_start = now - timedelta(days=7)
-        previous_start = now - timedelta(days=14)
+        current_start = now - timedelta(days=4)
+        previous_start = now - timedelta(days=8)
         return current_start, previous_start, current_start
     if granularity == "weeks":
-        current_start = now - timedelta(weeks=8)
-        previous_start = now - timedelta(weeks=16)
+        current_start = now - timedelta(weeks=4)
+        previous_start = now - timedelta(weeks=8)
         return current_start, previous_start, current_start
-    current_start = now - timedelta(days=183)
-    previous_start = now - timedelta(days=366)
+    current_start = now - timedelta(days=122)
+    previous_start = now - timedelta(days=244)
     return current_start, previous_start, current_start
 
 
@@ -375,9 +454,9 @@ def _store_period_views(receipts: list[dict[str, Any]], *, now: datetime) -> dic
 
         if granularity == "days":
             points = []
-            for offset in range(6, -1, -1):
+            for offset in range(3, -1, -1):
                 current_day = (now - timedelta(days=offset)).date()
-                previous_day = current_day - timedelta(days=7)
+                previous_day = current_day - timedelta(days=4)
                 current_visits = {
                     str(row.get("_store") or "").strip().lower()
                     for row in receipts
@@ -396,10 +475,10 @@ def _store_period_views(receipts: list[dict[str, Any]], *, now: datetime) -> dic
         elif granularity == "weeks":
             points = []
             current_monday = (now - timedelta(days=now.weekday())).date()
-            for offset in range(7, -1, -1):
+            for offset in range(3, -1, -1):
                 start = current_monday - timedelta(weeks=offset)
                 end = start + timedelta(days=7)
-                previous_start = start - timedelta(weeks=8)
+                previous_start = start - timedelta(weeks=4)
                 previous_end = previous_start + timedelta(days=7)
                 current_visits = {
                     (str(row.get("_store") or "").strip().lower(), row["_purchase_at"].date().isoformat())
@@ -418,9 +497,9 @@ def _store_period_views(receipts: list[dict[str, Any]], *, now: datetime) -> dic
                 })
         else:
             points = []
-            for offset in range(5, -1, -1):
+            for offset in range(3, -1, -1):
                 current_year, current_month = _month_shift(now.year, now.month, -offset)
-                previous_year, previous_month = _month_shift(current_year, current_month, -6)
+                previous_year, previous_month = _month_shift(current_year, current_month, -4)
                 current_visits = {
                     (str(row.get("_store") or "").strip().lower(), row["_purchase_at"].date().isoformat())
                     for row in receipts
@@ -450,7 +529,7 @@ def _forecast_views(items: list[dict[str, Any]], *, now: datetime) -> dict[str, 
     result: dict[str, list[dict[str, Any]]] = {}
 
     days = []
-    for offset in range(7):
+    for offset in range(4):
         day = now.date() + timedelta(days=offset)
         value = sum(
             _number(item.get("expected_amount"))
@@ -473,7 +552,7 @@ def _forecast_views(items: list[dict[str, Any]], *, now: datetime) -> dict[str, 
     result["weeks"] = weeks
 
     months = []
-    for offset in range(6):
+    for offset in range(4):
         year, month = _month_shift(now.year, now.month, offset)
         value = sum(
             _number(item.get("expected_amount"))
@@ -645,6 +724,11 @@ def build_household_dashboard(
         "weeks": _comparison_series(receipts, quantities, now=now, granularity="weeks", metric="spend"),
         "months": _comparison_series(receipts, quantities, now=now, granularity="months", metric="spend"),
     }
+    spend_year_over_year_views = {
+        "days": _spend_year_over_year_series(receipts, now=now, granularity="days"),
+        "weeks": _spend_year_over_year_series(receipts, now=now, granularity="weeks"),
+        "months": _spend_year_over_year_series(receipts, now=now, granularity="months"),
+    }
     repeat_forecast = _repeat_purchase_forecast(receipts, article_details, now=now)
     store_views = _store_period_views(receipts, now=now)
 
@@ -697,6 +781,10 @@ def build_household_dashboard(
             "views": spend_views,
             "currency": "EUR",
             "receipts": current_receipts,
+        },
+        "spend_year_over_year": {
+            "views": spend_year_over_year_views,
+            "currency": "EUR",
         },
         "stores": {
             "unique": len(stores),
