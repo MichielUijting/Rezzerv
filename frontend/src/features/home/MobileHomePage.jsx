@@ -177,7 +177,7 @@ function StackedComparisonChart({ view = null, currency = false, onSegmentActiva
         ))}
       </div>
     </div>
-    {legend.length ? <div className="rz-dashboard-stack-legend" aria-label="Artikelgroepen">
+    {legend.length ? <div className="rz-dashboard-stack-legend" aria-label="Productfamilies">
       {legend.map((item, index) => (
         <span key={item.key}>
           <i className={'rz-dashboard-stack-key rz-dashboard-stack-segment--' + (index % 7)} />
@@ -299,14 +299,10 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         title: 'Uitgaven t.o.v. vorig jaar',
         value: euro(yearSpendCurrent),
         detail: deltaText(yearSpendCurrent, yearSpendPrevious, euro, { previousLabel: 'dezelfde periode vorig jaar' }),
-        chart: yearSpendGroupView ? <StackedComparisonChart
-          view={yearSpendGroupView}
+        chart: <StackedComparisonChart
+          view={yearSpendGroupView || { points: yearSpendPoints, legend: [] }}
           currency
           onSegmentActivate={(index, series, segment) => openBarDrilldown('uitgaven', index, series, 'year', segment.key)}
-        /> : <ComparisonChart
-          points={yearSpendPoints}
-          currency
-          onBarActivate={(index, series) => openBarDrilldown('uitgaven', index, series, 'year')}
         />,
       },
       {
@@ -314,14 +310,10 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         title: 'Uitgaven',
         value: euro(spendCurrent),
         detail: deltaText(spendCurrent, spendPrevious, euro, period),
-        chart: spendGroupView ? <StackedComparisonChart
-          view={spendGroupView}
+        chart: <StackedComparisonChart
+          view={spendGroupView || { points: spendPoints, legend: [] }}
           currency
           onSegmentActivate={(index, series, segment) => openBarDrilldown('uitgaven', index, series, 'previous', segment.key)}
-        /> : <ComparisonChart
-          points={spendPoints}
-          currency
-          onBarActivate={(index, series) => openBarDrilldown('uitgaven', index, series, 'previous')}
         />,
       },
       {
