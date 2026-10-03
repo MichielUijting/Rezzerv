@@ -46,6 +46,33 @@ def test_bundled_dutch_gpc_reference_can_seed_empty_runtime_table():
     try:
         with engine.begin() as conn:
             conn.execute(text("""
+                CREATE TABLE gpc_segments (
+                    segment_code TEXT PRIMARY KEY,
+                    description TEXT NOT NULL
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE gpc_families (
+                    family_code TEXT PRIMARY KEY,
+                    description TEXT NOT NULL,
+                    segment_code TEXT NOT NULL REFERENCES gpc_segments(segment_code)
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE gpc_classes (
+                    class_code TEXT PRIMARY KEY,
+                    description TEXT NOT NULL,
+                    family_code TEXT NOT NULL REFERENCES gpc_families(family_code)
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE gpc_bricks (
+                    brick_code TEXT PRIMARY KEY,
+                    description TEXT NOT NULL,
+                    class_code TEXT NOT NULL REFERENCES gpc_classes(class_code)
+                )
+            """))
+            conn.execute(text("""
                 CREATE TABLE gpc_product_groups (
                     gpc_brick_code TEXT PRIMARY KEY,
                     gpc_brick_name TEXT,
@@ -84,5 +111,19 @@ def test_bundled_dutch_gpc_reference_can_seed_empty_runtime_table():
             """)).mappings().one()
             assert banana["gpc_brick_name"] == "Bananen (Cavendish)"
             assert banana["gpc_family_name"] == "Fruit - Onbewerkt/Onverwerkt (Vers)"
+
+            canonical = conn.execute(text("""
+                SELECT b.description AS brick_name, c.description AS class_name,
+                       f.description AS family_name, s.description AS segment_name
+                FROM gpc_bricks b
+                JOIN gpc_classes c ON c.class_code = b.class_code
+                JOIN gpc_families f ON f.family_code = c.family_code
+                JOIN gpc_segments s ON s.segment_code = f.segment_code
+                WHERE b.brick_code = '10005897'
+            """)).mappings().one()
+            assert canonical["brick_name"] == "Bananen (Cavendish)"
+            assert canonical["class_name"] == "Bananen"
+            assert canonical["family_name"] == "Fruit - Onbewerkt/Onverwerkt (Vers)"
+            assert canonical["segment_name"] == "Levensmiddelen/Dranken"
     finally:
         engine.dispose()
