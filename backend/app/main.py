@@ -4436,12 +4436,13 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
     if not article_rows:
         return []
 
-    gpc_by_product = dutch_gpc_by_global_product(
+    article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
+    gpc_by_article = dutch_gpc_by_household_article(
         conn,
-        [row.get('global_product_id') for row in article_rows],
+        household_id,
+        article_ids,
     )
 
-    article_ids = [str(row.get('id') or '').strip() for row in article_rows if str(row.get('id') or '').strip()]
     settings_map_by_article: dict[str, dict[str, Any]] = {}
     if article_ids:
         settings_rows = conn.execute(
@@ -4463,16 +4464,15 @@ def build_almost_out_items(conn, household_id: str) -> list[dict]:
 
     items: list[dict] = []
     for article_row in article_rows:
+        article_id = str(article_row.get('id') or '').strip()
         evaluation = evaluate_household_article_almost_out(
             conn,
             household_id,
             article_row,
             household_settings=household_settings,
-            article_settings_map=settings_map_by_article.get(str(article_row.get('id') or '').strip(), {}),
+            article_settings_map=settings_map_by_article.get(article_id, {}),
         )
-        global_product_id = str(article_row.get('global_product_id') or '').strip()
-        if global_product_id:
-            evaluation.update(gpc_by_product.get(global_product_id, {}))
+        evaluation.update(gpc_by_article.get(article_id, {}))
         if evaluation.get('include_in_almost_out'):
             items.append(evaluation)
 
