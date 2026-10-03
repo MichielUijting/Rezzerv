@@ -255,6 +255,8 @@ test('L4-07 IP owner manages only Superusers from a none-context landing', async
       && response.request().method() === 'POST'
     ))
     await grantButton.click()
+    await expect(page.getByTestId('ip-owner-superuser-confirmation')).toBeVisible()
+    await page.getByRole('button', { name: 'Definitief Superuser maken', exact: true }).click()
     const grantResponse = await grantResponsePromise
     expect(grantResponse.ok()).toBeTruthy()
   }
@@ -265,6 +267,8 @@ test('L4-07 IP owner manages only Superusers from a none-context landing', async
     && response.request().method() === 'POST'
   ))
   await targetCard.getByRole('button', { name: 'Deactiveren' }).click()
+  await expect(page.getByTestId('ip-owner-superuser-confirmation')).toBeVisible()
+  await page.getByRole('button', { name: 'Definitief deactiveren', exact: true }).click()
   const revokeResponse = await revokeResponsePromise
   expect(revokeResponse.ok()).toBeTruthy()
 
