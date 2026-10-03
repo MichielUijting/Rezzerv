@@ -93,6 +93,7 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
                 ("r3", "h1", "Lidl", "2026-09-22T10:00:00+00:00", 20, "approved", "active", "2026-09-22T10:05:00+00:00", None),
                 ("r4", "h1", "Jumbo", "2026-10-01T11:00:00+00:00", 99, "approved", "archived", "2026-10-01T11:05:00+00:00", None),
                 ("r5", "h1", "Plus", "2026-10-01T12:00:00+00:00", 88, "needs_review", "active", None, None),
+                ("r6", "h1", "AH", "2025-10-01T10:00:00+00:00", 12, "approved", "active", "2025-10-01T10:05:00+00:00", None),
             ]
             for rid, household, store, purchase_at, total, status, workflow, approved_at, deleted_at in receipts:
                 conn.execute(text("""
@@ -189,10 +190,14 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert dashboard["purchases"]["previous"] == 4.0
         assert dashboard["spend"]["current"] == 15.0
         assert dashboard["spend"]["previous"] == 20.0
-        assert len(dashboard["purchases"]["views"]["days"]) == 7
-        assert dashboard["purchases"]["views"]["days"][-2]["previous"] == 4.0
-        assert len(dashboard["purchases"]["views"]["weeks"]) == 8
-        assert len(dashboard["purchases"]["views"]["months"]) == 6
+        assert len(dashboard["purchases"]["views"]["days"]) == 4
+        assert len(dashboard["purchases"]["views"]["weeks"]) == 4
+        assert len(dashboard["purchases"]["views"]["months"]) == 4
+        assert len(dashboard["spend_year_over_year"]["views"]["days"]) == 4
+        assert dashboard["spend_year_over_year"]["views"]["days"][-2]["current"] == 15.0
+        assert dashboard["spend_year_over_year"]["views"]["days"][-2]["previous"] == 12.0
+        assert len(dashboard["spend_year_over_year"]["views"]["weeks"]) == 4
+        assert len(dashboard["spend_year_over_year"]["views"]["months"]) == 4
         assert [row["receipt_id"] for row in dashboard["purchases"]["receipts"]] == ["r2", "r1"]
         assert dashboard["purchases"]["receipts"][0]["articles"][0]["label"] == "Artikel l5"
         assert dashboard["purchases"]["receipts"][0]["articles"][0]["household_article_id"] == "ha-l5"
@@ -204,9 +209,9 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert dashboard["stores"]["visits"] == 1
         assert dashboard["stores"]["items"][0]["name"] == "AH"
         assert dashboard["stores"]["items"][0]["spend"] == 15.0
-        assert len(dashboard["stores"]["views"]["days"]["points"]) == 7
-        assert len(dashboard["stores"]["views"]["weeks"]["points"]) == 8
-        assert len(dashboard["stores"]["views"]["months"]["points"]) == 6
+        assert len(dashboard["stores"]["views"]["days"]["points"]) == 4
+        assert len(dashboard["stores"]["views"]["weeks"]["points"]) == 4
+        assert len(dashboard["stores"]["views"]["months"]["points"]) == 4
         assert [row["receipt_id"] for row in dashboard["stores"]["items"][0]["receipts"]] == ["r2", "r1"]
         assert {row["receipt_id"] for row in dashboard["forecast"]["basis_receipts"]} >= {"r1", "r2", "r3"}
         assert dashboard["forecast"]["method"].startswith("Herhalingskoop")
@@ -214,9 +219,9 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert len(dashboard["forecast"]["items"]) >= 3
         assert {item["household_article_id"] for item in dashboard["forecast"]["items"]} == {"ha-l1"}
         assert dashboard["forecast"]["items"][0]["cadence_days"] == 9
-        assert len(dashboard["forecast"]["views"]["days"]) == 7
+        assert len(dashboard["forecast"]["views"]["days"]) == 4
         assert len(dashboard["forecast"]["views"]["weeks"]) == 4
-        assert len(dashboard["forecast"]["views"]["months"]) == 6
+        assert len(dashboard["forecast"]["views"]["months"]) == 4
 
         assert dashboard["status"]["notifications"] == 1
         assert dashboard["status"]["shopping"] == 1
