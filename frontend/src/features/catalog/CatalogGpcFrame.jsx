@@ -220,8 +220,8 @@ export default function CatalogGpcFrame({ globalProductId, onAssignmentChange })
           {assignment ? (
             <dl className="rz-catalog-gpc-hierarchy">
               <div><dt>Segment</dt><dd>{valueOrDash(assignment.segment_description)}</dd></div>
-              <div><dt>Family</dt><dd>{valueOrDash(assignment.family_description)}</dd></div>
-              <div><dt>Class</dt><dd>{valueOrDash(assignment.class_description)}</dd></div>
+              <div><dt>GPC-familie</dt><dd>{valueOrDash(assignment.family_description)}</dd></div>
+              <div><dt>GPC-groep</dt><dd>{valueOrDash(assignment.class_description)}</dd></div>
               <div><dt>Engelse brontekst</dt><dd>{valueOrDash(assignment.brick_description_en)}</dd></div>
             </dl>
           ) : null}
