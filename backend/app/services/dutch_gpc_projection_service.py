@@ -435,6 +435,7 @@ def dutch_gpc_by_household_article(
     household_id: str,
     household_article_ids: Iterable[Any],
 ) -> dict[str, dict[str, str]]:
+    ensure_bundled_dutch_gpc_reference(conn)
     ids = _normalize_ids(household_article_ids)
     if not ids or "household_articles" not in _tables(conn):
         return {}
