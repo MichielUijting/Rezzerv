@@ -45,7 +45,6 @@ export default function MobileShopping() {
   const [list, setList] = useState({ items: [], item_count: 0 })
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
-  const [selectedResultId, setSelectedResultId] = useState('')
   const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
@@ -72,7 +71,6 @@ export default function MobileShopping() {
     catalogSearchRequestRef.current += 1
     setCatalogQuery(value)
     setCatalogResults([])
-    setSelectedResultId('')
     setSearching(false)
   }
 
@@ -80,7 +78,6 @@ export default function MobileShopping() {
     const query = catalogQuery.trim()
     const requestId = catalogSearchRequestRef.current
     let cancelled = false
-    setSelectedResultId('')
 
     if (query.length < 2) {
       setCatalogResults([])
@@ -121,11 +118,6 @@ export default function MobileShopping() {
     setSearching(false)
   }
 
-  const selectedResult = useMemo(
-    () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
-    [catalogResults, selectedResultId],
-  )
-
   const toBuyItems = useMemo(
     () => (list.items || []).filter((item) => !item.checked),
     [list.items],
@@ -141,22 +133,22 @@ export default function MobileShopping() {
     }))
   }
 
-  async function addArticle() {
+  async function addArticle(candidate = null) {
     const manualName = catalogQuery.trim()
-    if (!selectedResult && !manualName) return
-    const payload = selectedResult ? {
-      article_name: selectedResult.article_name || selectedResult.label,
-      article_group_name: selectedResult.article_group_name || '',
-      product_type_name: selectedResult.product_type_name || '',
-      source_type: selectedResult.source_type,
-      source_id: selectedResult.source_id,
+    if (!candidate && !manualName) return
+    const payload = candidate ? {
+      article_name: candidate.article_name || candidate.label,
+      article_group_name: candidate.article_group_name || '',
+      product_type_name: candidate.product_type_name || '',
+      source_type: candidate.source_type,
+      source_id: candidate.source_id,
     } : {
       article_name: manualName,
       source_type: 'manual',
       source_id: '',
       quantity: 1,
     }
-    const addedLabel = selectedResult?.label || manualName
+    const addedLabel = candidate?.label || manualName
     setSaving(true)
     setError('')
     try {
@@ -169,6 +161,12 @@ export default function MobileShopping() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleManualAddKeyDown(event) {
+    if (event.key !== 'Enter' || saving || catalogResults.length > 0 || !catalogQuery.trim()) return
+    event.preventDefault()
+    addArticle()
   }
 
   async function updateItem(item, patch) {
@@ -301,6 +299,7 @@ export default function MobileShopping() {
               value={catalogQuery}
               disabled={saving}
               onChange={(event) => updateCatalogQuery(event.target.value)}
+              onKeyDown={handleManualAddKeyDown}
               placeholder="Zoek in de catalogus of voer zelf een naam in"
               aria-label="Artikel toevoegen"
               aria-controls="mobile-shopping-candidate-list"
@@ -310,10 +309,9 @@ export default function MobileShopping() {
           </label>
           <SearchCandidateList
             items={catalogResults}
-            selectedKey={selectedResultId}
             getKey={(item) => `${item.source_type}:${item.source_id}`}
             getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
-            onSelect={setSelectedResultId}
+            onSelect={(_key, item) => addArticle(item)}
             loading={searching}
             ariaLabel="Kandidaten voor artikel toevoegen"
             dataTestId="mobile-shopping-candidate-list"
@@ -332,9 +330,6 @@ export default function MobileShopping() {
             />
           </div>
 
-          <Button type="button" variant="primary" onClick={addArticle} disabled={saving || (!selectedResult && !catalogQuery.trim())} data-testid="mobile-shopping-add">
-            Toevoegen
-          </Button>
         </section>
 
         <section className="rz-mobile-shopping-summary-card" aria-label="Mijn boodschappen">
@@ -376,7 +371,7 @@ export default function MobileShopping() {
                   {cartItems.map(renderShoppingRow)}
                 </div>
               ) : (
-                <div className="rz-mobile-shopping-empty-section">Nog geen artikelen in je winkelwagen.</div>
+                <div className="rz-mobile-shopping-empty-section">Leeg</div>
               )}
             </section>
           </div>
