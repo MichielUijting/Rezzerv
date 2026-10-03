@@ -40,8 +40,8 @@ class PlatformThreadCreateRequest(BaseModel):
     recipient_type: str
     admin_user_ids: list[str] = Field(default_factory=list)
     reply_allowed: bool = True
-    screen_name: str = "Superuser Meldingen"
-    route: str | None = "/superuser/meldingen"
+    screen_name: str = "Platformbeheer / Meldingen"
+    route: str | None = "/platform/meldingen"
     app_version: str | None = None
 
 
@@ -93,7 +93,7 @@ def _platform_actor(authorization: str | None, permission_key: str) -> dict[str,
     return {
         "user_id": context.user_id,
         "name": context.email or "Platformgebruiker",
-        "role": str(context.role or "platform.user"),
+        "role": "Platformbeheerder",
     }
 
 
