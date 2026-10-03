@@ -54,6 +54,23 @@ function groupReceiptsByStore(receipts = []) {
   return Array.from(groups.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'nl'))
 }
 
+function aggregateCategories(receipts = []) {
+  const groups = new Map()
+  for (const receipt of receipts) {
+    for (const group of receipt.group_allocations || []) {
+      const key = String(group.key || 'unclassified')
+      const current = groups.get(key) || {
+        key,
+        label: group.label || 'Niet ingedeeld',
+        total: 0,
+      }
+      current.total += Number(group.value || 0)
+      groups.set(key, current)
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'nl'))
+}
+
 function aggregateArticles(receipts = []) {
   const articles = new Map()
   for (const receipt of receipts) {
@@ -168,7 +185,7 @@ function ReceiptList({ receipts = [], showArticleCount = true }) {
           <button
             type="button"
             className="rz-dashboard-receipt-open"
-            onClick={() => navigate('/kassa?receipt=' + encodeURIComponent(receipt.receipt_id))}
+            onClick={() => navigate('/kassa?view=bonnen&receipt=' + encodeURIComponent(receipt.receipt_id))}
           >
             Open kassabon
           </button>
@@ -196,6 +213,21 @@ function ReceiptGroupList({ groups = [], metric = 'spend' }) {
       </summary>
       <ReceiptList receipts={group.receipts} />
     </details>)}
+  </div>
+}
+
+function CategoryTotals({ receipts = [] }) {
+  const rows = useMemo(() => aggregateCategories(receipts), [receipts])
+  if (!rows.length) {
+    return <p className="rz-dashboard-empty">Nog geen categorie-indeling beschikbaar voor deze periode.</p>
+  }
+  return <div className="rz-dashboard-category-totals">
+    {rows.map((group) => (
+      <div className="rz-dashboard-category-total-row" key={group.key}>
+        <span><strong>{group.label}</strong></span>
+        <strong>{euro(group.total)}</strong>
+      </div>
+    ))}
   </div>
 }
 
@@ -341,6 +373,10 @@ export default function DashboardDetailPage() {
           <h2>{barDrilldown.group_label ? 'Artikelen in ' + barDrilldown.group_label : 'Artikelen in deze staaf'}</h2>
           <ArticleTotals receipts={receipts} />
         </section>
+        {!barDrilldown.group_label ? <section className="rz-dashboard-detail-section">
+          <h2>Per categorie</h2>
+          <CategoryTotals receipts={receipts} />
+        </section> : null}
         <section className="rz-dashboard-detail-section">
           <h2>Per winkel</h2>
           <ReceiptGroupList groups={groupReceiptsByStore(receipts)} metric="spend" />
@@ -372,6 +408,10 @@ export default function DashboardDetailPage() {
       return <>
         <div className="rz-dashboard-detail-summary"><strong>{euro(dashboard.spend.current)}</strong><span>Vorige 7 dagen: {euro(dashboard.spend.previous)}</span></div>
         <MiniBars values={dashboard.spend.daily} format={euro} />
+        <section className="rz-dashboard-detail-section">
+          <h2>Per categorie</h2>
+          <CategoryTotals receipts={receipts} />
+        </section>
         <section className="rz-dashboard-detail-section">
           <h2>Per winkel</h2>
           <ReceiptGroupList groups={groupReceiptsByStore(receipts)} metric="spend" />
