@@ -81,6 +81,14 @@ def _engine():
             )
         """))
         conn.execute(text("""
+            CREATE TABLE household_articles (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                global_product_id TEXT,
+                representative_image_gpc_brick_code TEXT
+            )
+        """))
+        conn.execute(text("""
             CREATE TABLE global_product_gpc_bricks (
                 global_product_id TEXT PRIMARY KEY,
                 brick_code TEXT NOT NULL
@@ -182,7 +190,7 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
                     "label": f"Artikel {line[0]}",
                     "line_total": float(line[2]),
                     "article_id": ("ha-l1" if line[0] == "l6" else f"ha-{line[0]}") if line[4] else None,
-                    "product_id": f"gp-{line[0]}" if line[4] else None,
+                    "product_id": (None if line[0] == "l5" else f"gp-{line[0]}") if line[4] else None,
                     "deleted": line[3], "eligible": line[4], "role": line[5],
                 })
 
@@ -218,6 +226,12 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
                 ) VALUES
                   ('20000001', 'Algemene voeding', '10000001', 'Voeding', '30000001', 'Voedingsmiddelen', '40000001', 'Levensmiddelen', 'nl', 1),
                   ('20000002', 'Vers fruit', '10000002', 'Fruit', '30000002', 'Verse groenten en fruit', '40000001', 'Levensmiddelen', 'nl', 1)
+            """))
+            conn.execute(text("""
+                INSERT INTO household_articles(
+                    id, household_id, global_product_id, representative_image_gpc_brick_code
+                ) VALUES
+                  ('ha-l5', 'h1', NULL, '20000002')
             """))
 
             # r1 staat in Uitpakken: twee regels nog te verwerken, één al verwerkt.
