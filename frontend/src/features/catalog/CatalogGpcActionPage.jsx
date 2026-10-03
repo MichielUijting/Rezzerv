@@ -275,8 +275,8 @@ export default function CatalogGpcActionPage() {
                     </div>
                     <dl className="rz-catalog-gpc-hierarchy">
                       <div><dt>Segment</dt><dd>{text(assignment.segment_description)}</dd></div>
-                      <div><dt>Family</dt><dd>{text(assignment.family_description)}</dd></div>
-                      <div><dt>Class</dt><dd>{text(assignment.class_description)}</dd></div>
+                      <div><dt>GPC-familie</dt><dd>{text(assignment.family_description)}</dd></div>
+                      <div><dt>GPC-groep</dt><dd>{text(assignment.class_description)}</dd></div>
                     </dl>
                   </div>
                 ) : null}
