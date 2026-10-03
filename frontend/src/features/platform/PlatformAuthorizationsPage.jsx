@@ -95,12 +95,12 @@ export default function PlatformAuthorizationsPage() {
     <div data-testid="platform-authorizations-page">
       <Header
         title="Platformautorisaties"
-        subtitle="Bekijk platformrollen; de Superuser kan Superuser, Frontteamlid en Platformbeheerder aanstellen of intrekken."
+        subtitle="Bekijk platformrollen; alleen de IP-eigenaar kan Superuser en Platformbeheerder aanstellen of intrekken."
       />
 
       <Card>
         <p>
-          Inventarisatie gebruikt <strong>platform.permissions.manage</strong>. Speciale rolmutaties gebruiken
+          Inventarisatie gebruikt <strong>platform.permissions.manage</strong>. Beheer van Superuser en Platformbeheerder gebruikt
           afzonderlijk <strong>platform.special_roles.manage</strong>. De backend blijft de enige authority;
           er is geen householdcontext en geen H0-fallback voor deze beheeractie.
         </p>

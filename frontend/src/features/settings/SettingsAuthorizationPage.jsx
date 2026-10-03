@@ -8,13 +8,11 @@ import './settingsAuthorization.css'
 const ROLE_LABELS = {
   'household.member': 'Gebruiker',
   'household.admin': 'Beheerder',
-  'household.owner': 'Superuser',
 }
 
 const AUTHORIZATION_ROLE_KEYS = new Set([
   'household.member',
   'household.admin',
-  'household.owner',
 ])
 
 const AUTHORIZATION_ROWS = [
@@ -51,8 +49,8 @@ const AUTHORIZATION_ROWS = [
   ['loyalty.manage', 'Spaartegoeden beheren'],
   ['insights.view', 'Inzichten en prognoses bekijken'],
   ['insights.export', 'Inzichten en prognoses exporteren'],
-  ['members.view', 'Huishoudleden bekijken'],
-  ['members.manage', 'Huishoudleden en rollen beheren'],
+  ['members.view', 'Gebruikers bekijken'],
+  ['members.manage', 'Gebruikers en rollen beheren'],
   ['household_settings.view', 'Huishoudinstellingen bekijken'],
   ['household_settings.manage', 'Huishoudinstellingen beheren'],
   ['permissions.view', 'Autorisaties bekijken'],
@@ -124,7 +122,7 @@ export default function SettingsAuthorizationPage() {
           {loading ? <div className="rz-authorization-loading">Autorisaties laden…</div> : (
             <>
               <p className="rz-authorization-explanation">
-                De rollen zijn vaste profielen. Wijs een rol aan een huishoudlid toe in het scherm Huishouden.
+                De rollen zijn vaste profielen. Wijs een rol aan een gebruiker toe in het scherm Huishouden.
               </p>
               <div className="rz-authorization-mobile" data-testid="authorization-role-cards">
                 {roleColumns.map((role) => (

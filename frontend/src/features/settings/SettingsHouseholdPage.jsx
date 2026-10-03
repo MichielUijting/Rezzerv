@@ -28,7 +28,7 @@ const ROLE_LABELS = {
   'household.member': 'Gebruiker',
   'household.advanced_member': 'Beheerder',
   'household.admin': 'Beheerder',
-  'household.owner': 'Superuser',
+  'household.owner': 'Beheerder',
 }
 
 const INVITATION_STATUS_LABELS = {
@@ -47,6 +47,11 @@ const DELIVERY_STATUS_LABELS = {
 }
 
 const ASSIGNABLE_ROLE_KEYS = new Set(['household.member', 'household.admin'])
+
+function displayRoleOptionLabel(role) {
+  const label = ROLE_LABELS[role?.role_key] || role?.name || 'Onbekende rol'
+  return ASSIGNABLE_ROLE_KEYS.has(role?.role_key) ? label : `${label} (bestaande rol)`
+}
 
 function payloadCanManageInvitations(payload) {
   const permissions = payload?.permissions
@@ -83,7 +88,7 @@ function ConfirmRemoveModal({ member, onConfirm, onCancel, busy }) {
   return (
     <div className="rz-modal-backdrop" role="presentation">
       <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="household-remove-modal-title" data-testid="household-remove-modal">
-        <h3 id="household-remove-modal-title" className="rz-modal-title">Huishoudlid ontkoppelen</h3>
+        <h3 id="household-remove-modal-title" className="rz-modal-title">Gebruiker ontkoppelen</h3>
         <p className="rz-modal-text">Weet je zeker dat je <strong>{member.email}</strong> uit dit huishouden wilt verwijderen?</p>
         <div className="rz-modal-actions">
           <Button variant="secondary" onClick={onCancel} disabled={busy} data-testid="household-remove-cancel">Annuleren</Button>
@@ -128,7 +133,7 @@ export default function SettingsHouseholdPage() {
   const canManageInvitations = payloadCanManageInvitations(data)
   const householdSummary = useMemo(() => {
     if (!data) return 'Huishouden laden…'
-    return `${data.household_name || 'Mijn huishouden'} · ${data.member_count || 0} leden`
+    return `${data.household_name || 'Mijn huishouden'} · ${data.member_count || 0} gebruikers`
   }, [data])
 
   const authorizationByEmail = useMemo(() => new Map(
@@ -294,7 +299,7 @@ export default function SettingsHouseholdPage() {
                 <h2 className="rz-household-title">Huishouden</h2>
                 <p className="rz-household-subtitle">Beheer de naam, gekoppelde gebruikers en hun rol binnen het huishouden.</p>
                 <p className="rz-household-summary">{householdSummary}</p>
-                {!isLoading && !isAdmin ? <p className="rz-household-warning">Alleen een beheerder kan de huishoudnaam, leden en rollen wijzigen.</p> : null}
+                {!isLoading && !isAdmin ? <p className="rz-household-warning">Alleen een Beheerder kan de huishoudnaam, gebruikers en rollen wijzigen.</p> : null}
               </div>
             </div>
 
@@ -315,8 +320,8 @@ export default function SettingsHouseholdPage() {
 
                 <section className="rz-household-form-section">
                   <div>
-                    <h3 className="rz-household-section-title">Gekoppelde huishoudleden</h3>
-                    <p className="rz-household-section-copy">Kies hier de rol van ieder lid. Bekijk de betekenis van de rollen via Autorisaties.</p>
+                    <h3 className="rz-household-section-title">Gekoppelde gebruikers</h3>
+                    <p className="rz-household-section-copy">Kies hier de rol van iedere gebruiker. Bekijk de betekenis van de rollen via Autorisaties.</p>
                   </div>
                   <div className="rz-household-members-list">
                     {(data?.members || []).map((member) => {
@@ -332,7 +337,7 @@ export default function SettingsHouseholdPage() {
                         <div key={member.email} data-testid={`household-member-${member.email}`} className="rz-household-member-card">
                           <div className="rz-household-member-content">
                             <div className="rz-household-member-email">{member.email}</div>
-                            <div className="rz-household-member-meta">{member.is_current_user ? 'Huidige gebruiker' : 'Gekoppeld huishoudlid'}</div>
+                            <div className="rz-household-member-meta">{member.is_current_user ? 'Huidige gebruiker' : 'Gekoppelde gebruiker'}</div>
                           </div>
                           <div className="rz-household-member-actions">
                             <label className="rz-household-form-field" style={{ minWidth: '180px' }}>
@@ -345,7 +350,7 @@ export default function SettingsHouseholdPage() {
                                 data-testid={`household-role-select-${member.email}`}
                                 aria-label={`Rol ${member.email}`}
                               >
-                                {roleOptions.map((role) => <option key={role.role_key} value={role.role_key}>{ROLE_LABELS[role.role_key] || role.name}</option>)}
+                                {roleOptions.map((role) => <option key={role.role_key} value={role.role_key}>{displayRoleOptionLabel(role)}</option>)}
                               </select>
                             </label>
                             {isAdmin ? <Button variant="secondary" onClick={() => setMemberToRemove(member)} disabled={isSaving || !member.can_remove} data-testid={`household-remove-${member.email}`}>Ontkoppelen</Button> : null}
@@ -358,9 +363,9 @@ export default function SettingsHouseholdPage() {
 
                 <section className="rz-household-form-section" data-testid="household-invitations-section">
                   <div>
-                    <h3 className="rz-household-section-title">Huishoudlid uitnodigen</h3>
-                    <p className="rz-household-section-copy">Vul alleen het e-mailadres in. De ontvanger wordt pas Lid nadat de uitnodiging met het bedoelde account is geaccepteerd.</p>
-                    {!canManageInvitations ? <p className="rz-household-warning rz-household-warning--subtle">Je hebt geen bevoegdheid om huishoudleden uit te nodigen.</p> : null}
+                    <h3 className="rz-household-section-title">Gebruiker uitnodigen</h3>
+                    <p className="rz-household-section-copy">Vul alleen het e-mailadres in. De ontvanger wordt pas Gebruiker nadat de uitnodiging met het bedoelde account is geaccepteerd.</p>
+                    {!canManageInvitations ? <p className="rz-household-warning rz-household-warning--subtle">Je hebt geen bevoegdheid om gebruikers uit te nodigen.</p> : null}
                   </div>
                   <form onSubmit={handleCreateInvitation} className="rz-form rz-household-invitation-form">
                     <div className="rz-household-form-field">

@@ -364,13 +364,13 @@ def _seed_registry(conn) -> None:
             ON CONFLICT(permission_key) DO UPDATE SET active = TRUE
         """), {"key": key, "description": key})
     role_names = {
-        "household.viewer": "Viewer",
-        "household.member": "Lid",
-        "household.advanced_member": "Gevorderd lid",
-        "household.admin": "Huishoudbeheerder",
-        "household.owner": "Superuser-huishoudrol",
+        "household.viewer": "Gebruiker",
+        "household.member": "Gebruiker",
+        "household.advanced_member": "Beheerder",
+        "household.admin": "Beheerder",
+        "household.owner": "Beheerder",
         "platform.frontteam": "Frontteamlid",
-        "platform.superuser": "Platform-superuser",
+        "platform.superuser": "Superuser",
         "platform.platform_admin": "Platformbeheerder",
         "platform.ip_owner": "IP-eigenaar",
     }

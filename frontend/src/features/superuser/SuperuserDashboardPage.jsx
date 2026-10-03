@@ -47,7 +47,7 @@ const DUTCH_VALUE_LABELS = {
   active: 'Actief', inactive: 'Inactief', new: 'Nieuw', reviewed: 'Gecontroleerd', purchase: 'Aankoop', pending: 'In behandeling',
   processed: 'Verwerkt', approved: 'Goedgekeurd', rejected: 'Afgewezen', failed: 'Mislukt', ready: 'Gereed', completed: 'Afgerond',
   ignored: 'Genegeerd', manual: 'Handmatig', automatic: 'Automatisch', imported: 'Geïmporteerd', draft: 'Concept', open: 'Open',
-  closed: 'Gesloten', owner: 'Eigenaar', admin: 'Beheerder', member: 'Lid', user: 'Gebruiker', viewer: 'Lezer', system: 'Systeem',
+  closed: 'Gesloten', owner: 'Beheerder', admin: 'Beheerder', member: 'Gebruiker', user: 'Gebruiker', viewer: 'Gebruiker', system: 'Systeem',
   unknown: 'Onbekend', consumption: 'Verbruik', consume: 'Verbruik', correction: 'Correctie', receipt: 'Kassabon', server_session: 'Serversessie',
   request_context: 'Aanvraagcontext', actor_attribution: 'Gebruikersherkomst', legacy: 'Historisch', archived: 'Gearchiveerd',
 }

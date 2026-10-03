@@ -59,7 +59,7 @@ function assertNoLocationsHomeTile(navigation) {
   assert.ok(keys(navigation.primaryTiles).includes('prognoses'))
   assert.ok(!keys(navigation.primaryTiles).includes('recepten'))
   assert.ok(keys(navigation.primaryTiles).includes('instellingen'))
-  assert.ok(keys(navigation.primaryTiles).includes('admin'))
+  assert.ok(!keys(navigation.primaryTiles).includes('admin'))
   assert.equal(navigation.moreTiles.length, 0)
 }
 
@@ -179,7 +179,7 @@ function assertNoLocationsHomeTile(navigation) {
   })
   assert.deepEqual(keys(navigation.primaryTiles), ['winkelen', 'instellingen'])
   assert.ok(!keys(navigation.moreTiles).includes('instellingen'))
-  assert.ok(keys(navigation.moreTiles).includes('admin'))
+  assert.ok(!keys(navigation.moreTiles).includes('admin'))
   assert.ok(keys(navigation.moreTiles).includes('externe-databases'))
   assert.ok(!keys(navigation.moreTiles).includes('superuser'))
   assertNoLocationsHomeTile(navigation)

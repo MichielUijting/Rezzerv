@@ -42,7 +42,7 @@ assert.match(
 for (const [roleKey, label] of [
   ['household.viewer', 'Gebruiker'],
   ['household.advanced_member', 'Beheerder'],
-  ['household.owner', 'Superuser'],
+  ['household.owner', 'Beheerder'],
 ]) {
   assert.ok(householdSource.includes(`'${roleKey}': '${label}'`))
 }
@@ -50,10 +50,10 @@ for (const [roleKey, label] of [
 for (const [roleKey, label] of [
   ['household.member', 'Gebruiker'],
   ['household.admin', 'Beheerder'],
-  ['household.owner', 'Superuser'],
 ]) {
   assert.ok(authorizationSource.includes(`'${roleKey}': '${label}'`))
 }
+assert.doesNotMatch(authorizationSource, /'household\.owner'/)
 assert.match(
   authorizationSource,
   /overview\.roles\.filter\(\(role\) => AUTHORIZATION_ROLE_KEYS\.has\(role\.role_key\)\)/,
@@ -61,6 +61,7 @@ assert.match(
 )
 assert.doesNotMatch(authorizationSource, /'household\.viewer'/)
 assert.doesNotMatch(authorizationSource, /'household\.advanced_member'/)
+assert.match(householdSource, /\$\{label\} \(bestaande rol\)/)
 
 const assignableRolesBlock = membershipServiceSource.match(/allowed_roles = \{([\s\S]*?)\n    \}/)?.[1] || ''
 assert.match(assignableRolesBlock, /"household\.member"/)

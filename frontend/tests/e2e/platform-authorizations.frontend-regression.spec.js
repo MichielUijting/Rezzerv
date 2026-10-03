@@ -10,7 +10,7 @@ const roles = [
   { role_key: 'platform.frontteam', name: 'Frontteamlid', permissions: [], managed_by_this_page: true, protected: false },
   { role_key: 'platform.ip_owner', name: 'IP-eigenaar', permissions: [SPECIAL_ROLES_PERMISSION], managed_by_this_page: false, protected: true },
   { role_key: 'platform.platform_admin', name: 'Platformbeheerder', permissions: [INVENTORY_PERMISSION], managed_by_this_page: true, protected: false },
-  { role_key: 'platform.superuser', name: 'Platform-superuser', permissions: [], managed_by_this_page: true, protected: false },
+  { role_key: 'platform.superuser', name: 'Superuser', permissions: [], managed_by_this_page: true, protected: false },
 ]
 
 function action(active, canGrant, canRevoke, reason = null) {
@@ -70,7 +70,7 @@ const ipOwnerSession = {
   active_household_id: '0',
   active_household_name: 'Systeem',
   role: 'owner',
-  display_role: 'Eigenaar',
+  display_role: 'IP-eigenaar',
   permissions: { [INVENTORY_PERMISSION]: true, [SPECIAL_ROLES_PERMISSION]: true },
   supported_permissions: [INVENTORY_PERMISSION, SPECIAL_ROLES_PERMISSION],
   is_platform_superuser: false,

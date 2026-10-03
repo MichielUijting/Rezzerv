@@ -71,7 +71,7 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 - Gebruiker, Beheerder en Frontteamlid gebruiken hetzelfde huishoud-dashboard; Frontteamfunctionaliteit blijft aanvullend via de centrale navigatie beschikbaar;
 - Superuser gebruikt het bestaande Superuser-beheercentrum als eigen dashboardingang;
 - gebruikerszichtbare huishoudrollen heten **Gebruiker** en **Beheerder**; legacy technische role keys mogen intern blijven bestaan;
-- Superuser en IP-eigenaar gelden in deze productfase als één gebruikerszichtbare hoogste rol.
+- Superuser, Platformbeheerder en IP-eigenaar blijven drie onderscheiden gebruikerszichtbare platformrollen: Superuser voor functioneel platformbeheer, Platformbeheerder voor technisch beheer/support en IP-eigenaar als beschermde hoogste bevoegdheid met beide sets plus speciaal rollenbeheer.
 
 ## Catalogus GPC-hiërarchie vanaf 3 oktober 2026
 

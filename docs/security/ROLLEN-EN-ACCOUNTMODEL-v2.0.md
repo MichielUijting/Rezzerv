@@ -37,10 +37,10 @@ niet stilzwijgend ten gunste van v1.1 worden opgelost.
 
 ## 2. Rollen en accounttypen
 
-### 2.1 Lid
+### 2.1 Gebruiker
 
 - Hoort bij een regulier huishouden.
-- Wordt normaal uitgenodigd door een Beheerder.
+- Wordt normaal als Gebruiker uitgenodigd door een Beheerder.
 - Gebruikt de functionele huishoudinstellingen die de Beheerder heeft bepaald.
 - Beheert die huishoudinstellingen niet zelf.
 - Is geen platformrol.
@@ -51,9 +51,9 @@ niet stilzwijgend ten gunste van v1.1 worden opgelost.
 - Iemand die Rezzerv normaal zelf registreert, wordt automatisch Beheerder van
   een nieuw regulier huishouden.
 - Beheert huishoudinstellingen en leden.
-- Kan een Lid uitnodigen.
-- Kan een Lid promoveren tot Beheerder.
-- Kan een Beheerder terugzetten naar Lid zolang minimaal één Beheerder
+- Kan een Gebruiker uitnodigen.
+- Kan een Gebruiker promoveren tot Beheerder.
+- Kan een Beheerder terugzetten naar Gebruiker zolang minimaal één Beheerder
   overblijft.
 - In ieder regulier huishouden moet altijd minimaal één Beheerder overblijven.
 - Is geen platformrol.
@@ -181,7 +181,7 @@ Bescherming van de IP-eigenaar:
 | Situatie | Regel |
 |---|---|
 | Normale nieuwe registratie | Maakt een nieuw regulier huishouden; de gebruiker wordt automatisch Beheerder. |
-| Uitnodiging vanuit een huishouden | De gebruiker wordt standaard Lid; voor een normale uitnodiging is geen rolkeuze nodig. |
+| Uitnodiging vanuit een huishouden | De gebruiker wordt standaard Gebruiker; voor een normale uitnodiging is geen rolkeuze nodig. |
 | Uitnodigingsflow | Gebruikt een beveiligde uitnodigingslink; distributie via app-/storekanalen kan later verder worden uitgebreid. |
 | Frontteamlid | Heeft of krijgt een eigen regulier huishouden; bij een bestaande gebruiker blijven huishouden en huishoudrol behouden. De Frontteamrol is een aanvullende platformrol bovenop de reguliere huishoudcontext. |
 | Superuser | Heeft geen regulier huishouden en wel toegang tot gedeeld systeemhuishouden 0. |
@@ -194,9 +194,9 @@ Bescherming van de IP-eigenaar:
 
 | Actie | Wie mag dit |
 |---|---|
-| Lid uitnodigen | Beheerder van dat huishouden |
-| Lid → Beheerder | Beheerder van dat huishouden, met behoud van minimaal één Beheerder |
-| Beheerder → Lid | Beheerder van dat huishouden, niet wanneer daardoor geen Beheerder overblijft |
+| Gebruiker uitnodigen | Beheerder van dat huishouden |
+| Gebruiker → Beheerder | Beheerder van dat huishouden, met behoud van minimaal één Beheerder |
+| Beheerder → Gebruiker | Beheerder van dat huishouden, niet wanneer daardoor geen Beheerder overblijft |
 | Frontteamlid aanstellen | Superuser of IP-eigenaar |
 | Frontteamrol intrekken | Superuser of IP-eigenaar |
 | Superuser aanstellen | Uitsluitend IP-eigenaar |
@@ -207,8 +207,9 @@ Bescherming van de IP-eigenaar:
 
 ## 6. Legacycompatibiliteit
 
-- `household.viewer` / Kijker is legacy.
-- `household.advanced_member` / Geavanceerd lid is legacy.
+- `household.viewer` is een legacyvorm van de gebruikerszichtbare rol **Gebruiker**.
+- `household.advanced_member` is een legacyvorm van de gebruikerszichtbare rol **Beheerder**.
+- `household.owner` blijft uitsluitend als huishoudelijke compatibilityvorm bestaan en wordt gebruikerszichtbaar als **Beheerder** gepresenteerd.
 - Bestaande gegevens mogen niet destructief verdwijnen.
 - Legacyrollen zijn geen nieuwe gebruikersrollen en worden niet opnieuw voor
   normale toewijzing aangeboden.
