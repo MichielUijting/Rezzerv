@@ -37,10 +37,12 @@ jobs:
           NL_XML="$(find /tmp/gpc-live-evidence/nl -type f -name '*.xml' | head -n 1)"
           test -n "$NL_XML"
           VERSION="$(basename "$NL_XML" .xml | sed -E 's/^gpc-nl-//')"
-          python -m app.cli.build_dutch_gpc_reference             --xml "$NL_XML"             --output app/data/gpc_bricks_nl.json             --publication-version "$VERSION"
+          python -m app.cli.build_dutch_gpc_reference \
+            --xml "$NL_XML" \
+            --output /tmp/gpc_bricks_nl.generated.json \
+            --publication-version "$VERSION"
       - name: Verify bundled Dutch GPC reference matches official publication
         run: |
-          cmp --silent app/data/gpc_bricks_nl.json app/data/gpc_bricks_nl.json
           python - <<'PY'
           import json
           from pathlib import Path
