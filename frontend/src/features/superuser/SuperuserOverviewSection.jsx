@@ -42,11 +42,11 @@ export default function SuperuserOverviewSection() {
 
   const metrics = data.metrics || {}
   const trends = data.trends || {}
-  const notificationRoute = data.notification_route || '/superuser/meldingen'
+  const notificationRoute = data.notification_route || '/platform/meldingen'
 
   function openHouseholdNotifications(householdId) {
     if (!householdId) return
-    navigate(`/superuser/meldingen?householdId=${encodeURIComponent(householdId)}`)
+    navigate(`/platform/meldingen?householdId=${encodeURIComponent(householdId)}`)
   }
 
   return (
