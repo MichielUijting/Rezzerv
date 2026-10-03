@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PAGE = ROOT / "frontend/src/features/catalog/CatalogPage.jsx"
 CATALOG_ROUTES = ROOT / "backend/app/api/catalog_routes.py"
 CATALOG_DETAIL = ROOT / "frontend/src/features/catalog/CatalogDetailPageV2.jsx"
+MOBILE_CATALOG = ROOT / "frontend/src/features/catalog/MobileCatalogPage.jsx"
 CATALOG_CSS = ROOT / "frontend/src/features/catalog/catalog.css"
 
 
@@ -117,3 +118,16 @@ def test_catalog_detail_shows_complete_dutch_gpc_hierarchy():
     assert "product.gpc_brick_name" in detail
     assert "product.gpc_class_name" in detail
     assert "product.gpc_family_name" in detail
+
+
+def test_mobile_catalog_shows_complete_dutch_gpc_hierarchy():
+    mobile = MOBILE_CATALOG.read_text(encoding="utf-8")
+
+    assert "Brick-code:" in mobile
+    assert "Brick-naam:" in mobile
+    assert "GPC-groep:" in mobile
+    assert "Productfamilie:" in mobile
+    assert "item.gpc_brick_code" in mobile
+    assert "item.gpc_brick_name" in mobile
+    assert "item.gpc_class_name" in mobile
+    assert "item.gpc_family_name" in mobile
