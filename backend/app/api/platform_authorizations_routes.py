@@ -14,6 +14,7 @@ from app.services.platform_authorization_management_service import (
     PlatformAuthorizationConflictError,
     PlatformAuthorizationNotFoundError,
     grant_special_role,
+    find_platform_user_by_email,
     add_frontteam_member_by_email,
     remove_frontteam_membership,
     list_platform_authorizations,
@@ -30,6 +31,10 @@ router = APIRouter()
 
 
 class FrontteamMemberCreateRequest(BaseModel):
+    email: str
+
+
+class SuperuserCreateRequest(BaseModel):
     email: str
 
 
@@ -72,16 +77,14 @@ def get_ip_owner_superusers() -> dict:
     users = []
     for item in payload.get("users", []):
         superuser_action = (item.get("role_actions") or {}).get(SUPERUSER_ROLE_KEY, {})
+        if not superuser_action.get("active"):
+            continue
         users.append({
             "user_id": item.get("user_id"),
             "email": item.get("email"),
             "account_status": item.get("account_status"),
-            "is_current": bool(item.get("is_current")),
-            "is_ip_owner": bool(item.get("is_ip_owner")),
-            "is_superuser": bool(superuser_action.get("active")),
-            "can_grant": bool(superuser_action.get("can_grant")),
+            "is_superuser": True,
             "can_revoke": bool(superuser_action.get("can_revoke")),
-            "grant_blocked_reason": superuser_action.get("grant_blocked_reason"),
             "revoke_blocked_reason": superuser_action.get("revoke_blocked_reason"),
         })
 
@@ -91,6 +94,25 @@ def get_ip_owner_superusers() -> dict:
         "context_type": context.context_type,
         "household_context_used": False,
     }
+
+
+@router.post("/api/ip-owner/superusers")
+def create_ip_owner_superuser(payload: SuperuserCreateRequest) -> dict:
+    context = require_platform_permission_from_session(PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION)
+    try:
+        with engine.begin() as conn:
+            row = find_platform_user_by_email(conn, payload.email)
+            item = grant_special_role(
+                conn,
+                str(row["id"]),
+                role_key=SUPERUSER_ROLE_KEY,
+                actor_user_id=context.user_id,
+            )
+    except PlatformAuthorizationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PlatformAuthorizationConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"item": item, "household_context_used": False, "context_type": context.context_type}
 
 
 @router.get("/api/platform/frontteam-management")
