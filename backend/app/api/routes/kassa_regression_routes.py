@@ -23,11 +23,12 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
 from app.services.receipt_service import detect_mime_type, parse_receipt_content
+from app.services.session_request_context import require_platform_permission_from_session
 
 router = APIRouter()
 
@@ -37,6 +38,8 @@ RAW_DIR = REGRESSION_ROOT / "raw"
 RAW_B64_DIR = REGRESSION_ROOT / "raw_b64"
 REQUIRED_CHAINS = ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl", "Picnic"]
 REQUIRED_RECEIPT_COUNT = 18
+BACKGROUND_JOB_PERMISSION = "platform.background_jobs.manage"
+DIAGNOSTICS_VIEW_PERMISSION = "platform.diagnostics.view"
 
 _JOB_LOCK = threading.Lock()
 _JOB_STATE: dict[str, Any] = {
@@ -296,7 +299,8 @@ def _execute_kassa_regression_job(job_id: str) -> None:
 
 
 @router.post("/api/admin/kassa-regression/run")
-def start_kassa_receipt_regression() -> dict[str, Any]:
+def start_kassa_receipt_regression(authorization: Optional[str] = Header(None)) -> dict[str, Any]:
+    require_platform_permission_from_session(BACKGROUND_JOB_PERMISSION, authorization)
     with _JOB_LOCK:
         if _JOB_STATE.get("status") == "running":
             return copy.deepcopy(_JOB_STATE)
@@ -307,5 +311,6 @@ def start_kassa_receipt_regression() -> dict[str, Any]:
 
 
 @router.get("/api/admin/kassa-regression/status")
-def get_kassa_receipt_regression_status() -> dict[str, Any]:
+def get_kassa_receipt_regression_status(authorization: Optional[str] = Header(None)) -> dict[str, Any]:
+    require_platform_permission_from_session(DIAGNOSTICS_VIEW_PERMISSION, authorization)
     return _get_job_state()

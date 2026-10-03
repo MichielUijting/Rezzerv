@@ -6,6 +6,22 @@ import { API_BASE_URL } from '../../lib/apiClient.js'
 
 const BACKGROUND_ACTIONS = Object.freeze([
   {
+    key: 'kassa-smoke',
+    title: 'Kassa releasecontrole uitvoeren',
+    description: 'Start de vaste Kassa smoke-baseline met één representatieve kassabon per ondersteunde winkelketen.',
+    endpoint: '/api/admin/kassa-smoke/run',
+    confirmLabel: 'Kassa releasecontrole starten',
+    asynchronous: true,
+  },
+  {
+    key: 'kassa-regression',
+    title: 'Kassa inleesregressie uitvoeren',
+    description: 'Start de volledige vaste Kassa inleesbaseline op de meegeleverde regressiekassabonnen.',
+    endpoint: '/api/admin/kassa-regression/run',
+    confirmLabel: 'Kassa inleesregressie starten',
+    asynchronous: true,
+  },
+  {
     key: 'parsing-fixtures',
     title: 'Parsing-fixture regressie uitvoeren',
     description: 'Voer de server-side parsingbaseline uit op de vaste kassabonfixtures.',
@@ -37,6 +53,15 @@ async function runBackgroundAction(endpoint) {
 
 function BackgroundResult({ actionKey, report }) {
   if (!report) return null
+  if (Object.prototype.hasOwnProperty.call(report, 'progress_total')) {
+    return (
+      <div data-testid={`platform-background-jobs-result-${actionKey}`}>
+        <p>Status: {String(report.status || 'gestart')}</p>
+        <p>Voortgang: {String(report.progress_current || 0)} / {String(report.progress_total || 0)}</p>
+        {report.message ? <p>{String(report.message)}</p> : null}
+      </div>
+    )
+  }
   const results = Array.isArray(report.results) ? report.results : []
   const passed = results.filter((item) => item?.status === 'passed').length
   const failed = results.filter((item) => item?.status === 'failed').length
@@ -83,10 +108,10 @@ export default function PlatformBackgroundJobsPage() {
           <Card className="rz-card-home">
             <h2>Technische regressietaken</h2>
             <p>Start uitsluitend zelfstandig uitvoerbare server-side taken waarvoor je expliciet bent geautoriseerd.</p>
-            <p>De huidige smoke-, volledige regressie- en layer-startmarkers zijn hier bewust niet beschikbaar: zij markeren alleen een externe run als gestart en voeren zonder aparte runner geen complete taak uit.</p>
+            <p>Zelfstandig uitvoerbare Kassa- en parsingregressies kunnen hier worden gestart. Externe layer-startmarkers blijven bewust buiten deze beheerpagina.</p>
             <p>Het completion-endpoint is een interne callback en is geen beheeractie.</p>
             <p>Status en historie vallen onder Diagnostiek en worden op deze pagina niet gelezen zonder <code>platform.diagnostics.view</code>.</p>
-            <p>De twee onderstaande taken worden volledig binnen de serverrequest uitgevoerd. De pagina blijft daarom bezig totdat de taak is afgerond.</p>
+            <p>Parsingtaken worden binnen de serverrequest uitgevoerd. De Kassa-controles starten als server-side achtergrondtaak; de actuele voortgang is daarna onder Diagnostiek zichtbaar.</p>
 
             {BACKGROUND_ACTIONS.map((action) => (
               <div key={action.key} data-testid={`platform-background-jobs-action-${action.key}`}>

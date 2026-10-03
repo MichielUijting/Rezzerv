@@ -115,6 +115,10 @@ def _assert_none_native_route_boundary() -> None:
     )
     for fragment in required_fragments:
         assert fragment in source, f"platform route boundary drifted: missing {fragment!r}"
+    assert "import AdminPage" not in source
+    assert "AdminGuard" not in source
+    assert "path: '/admin'" in source
+    assert '<Navigate to="/platform/testfixtures" replace />' in source
 
     platform_route_block = source.split("const platformRoutes =", 1)[1].split("const router =", 1)[0]
     assert "ProtectedPermission" in platform_route_block

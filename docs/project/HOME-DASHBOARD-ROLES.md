@@ -86,3 +86,13 @@ Bovenaan staan drie volledig klikbare statussen:
 TEST_LEVEL_PROVISIONAL: L
 
 Reden: centrale landingspagina, dashboardaggregaties, drill-downroutes en gebruikerszichtbare rolprojectie raken app-brede kernnavigatie en huishouddata. Finale kandidaat vereist de toepasselijke exact-candidate regressie.
+
+
+## Losse Admin onder Platformbeheer
+- De gebruikerszichtbare losse **Admin / Testdata**-pagina is vervallen.
+- De oude route `/admin` blijft uitsluitend als beveiligde compatibiliteitsredirect naar **Platformbeheer → Testfixtures**.
+- Testfixturebeheer staat onder **Platformbeheer → Testfixtures**.
+- Permanente verwijdering van gearchiveerde kassabonnen staat onder **Platformbeheer → Herstel**.
+- Kassa releasecontrole en volledige Kassa-inleesregressie worden gestart onder **Platformbeheer → Achtergrondtaken**; status is zichtbaar onder **Platformbeheer → Diagnostiek**.
+- De Kassa-startendpoints vereisen `platform.background_jobs.manage`; statuslezing vereist `platform.diagnostics.view`.
+- Een huishoudelijke Beheerder krijgt door de huishoudrol geen toegang tot deze technische Platformbeheerfuncties.
