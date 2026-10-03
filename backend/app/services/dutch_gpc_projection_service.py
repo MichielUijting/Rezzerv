@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Iterable
 
 from sqlalchemy import inspect, text, bindparam
 from sqlalchemy.engine import Connection
 
 from app.services.gpc_candidate_service import build_product_signals, rank_gpc_candidates
+
+
+BUNDLED_DUTCH_GPC_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_bricks_nl.json"
 
 
 def _tables(conn: Connection) -> set[str]:
@@ -51,6 +56,108 @@ def _translated_text(conn: Connection, entity_type: str, code: str, fallback: st
         LIMIT 1
     """), {"entity_type": entity_type, "entity_code": str(code or "").strip()}).mappings().first()
     return str((row or {}).get("translated_text") or fallback or "").strip()
+
+
+def ensure_bundled_dutch_gpc_reference(conn: Connection) -> dict[str, int | str]:
+    """Vul de Nederlandse GPC-referentie uit het meegeleverde officiële bestand.
+
+    Dit is uitsluitend referentiedata-DML. Het maakt of wijzigt geen schema en
+    wijzigt geen huishoud-, voorraad- of kassabongegevens.
+    """
+    if "gpc_product_groups" not in _tables(conn) or not BUNDLED_DUTCH_GPC_PATH.is_file():
+        return {"expected": 0, "loaded": 0, "source_version": ""}
+
+    columns = {
+        str(column.get("name") or "")
+        for column in inspect(conn).get_columns("gpc_product_groups")
+    }
+    required = {
+        "gpc_brick_code",
+        "gpc_brick_name",
+        "gpc_class_code",
+        "gpc_class_name",
+        "gpc_family_code",
+        "gpc_family_name",
+        "gpc_segment_code",
+        "gpc_segment_name",
+        "language_code",
+        "source_version",
+        "active",
+        "created_at",
+        "updated_at",
+    }
+    if not required.issubset(columns):
+        return {"expected": 0, "loaded": 0, "source_version": ""}
+
+    payload = json.loads(BUNDLED_DUTCH_GPC_PATH.read_text(encoding="utf-8"))
+    rows = list(payload.get("bricks") or [])
+    source_version = str(payload.get("publication_version") or "").strip()
+    expected = int(payload.get("brick_count") or len(rows))
+    if not rows or expected != len(rows) or not source_version:
+        raise RuntimeError("Meegeleverde Nederlandse GPC-referentie is ongeldig")
+
+    already_loaded = int(conn.execute(text("""
+        SELECT COUNT(*)
+        FROM gpc_product_groups
+        WHERE lower(COALESCE(language_code, '')) = 'nl'
+          AND COALESCE(source_version, '') = :source_version
+          AND COALESCE(active, TRUE) IS TRUE
+    """), {"source_version": source_version}).scalar() or 0)
+    if already_loaded >= expected:
+        return {
+            "expected": expected,
+            "loaded": 0,
+            "source_version": source_version,
+        }
+
+    params = []
+    for row in rows:
+        brick_code = str(row.get("gpc_brick_code") or "").strip()
+        brick_name = str(row.get("gpc_brick_name") or "").strip()
+        family_name = str(row.get("gpc_family_name") or "").strip()
+        if not brick_code or not brick_name or not family_name:
+            raise RuntimeError(
+                f"Meegeleverde Nederlandse GPC-referentie is onvolledig voor Brick {brick_code or '?'}"
+            )
+        params.append({
+            **row,
+            "language_code": "nl",
+            "source_version": source_version,
+        })
+
+    conn.execute(text("""
+        INSERT INTO gpc_product_groups (
+            gpc_brick_code, gpc_brick_name,
+            gpc_class_code, gpc_class_name,
+            gpc_family_code, gpc_family_name,
+            gpc_segment_code, gpc_segment_name,
+            language_code, source_version, active, created_at, updated_at
+        ) VALUES (
+            :gpc_brick_code, :gpc_brick_name,
+            :gpc_class_code, :gpc_class_name,
+            :gpc_family_code, :gpc_family_name,
+            :gpc_segment_code, :gpc_segment_name,
+            :language_code, :source_version, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT(gpc_brick_code) DO UPDATE SET
+            gpc_brick_name = excluded.gpc_brick_name,
+            gpc_class_code = excluded.gpc_class_code,
+            gpc_class_name = excluded.gpc_class_name,
+            gpc_family_code = excluded.gpc_family_code,
+            gpc_family_name = excluded.gpc_family_name,
+            gpc_segment_code = excluded.gpc_segment_code,
+            gpc_segment_name = excluded.gpc_segment_name,
+            language_code = excluded.language_code,
+            source_version = excluded.source_version,
+            active = TRUE,
+            updated_at = CURRENT_TIMESTAMP
+    """), params)
+
+    return {
+        "expected": expected,
+        "loaded": len(params),
+        "source_version": source_version,
+    }
 
 
 def _canonical_hierarchy_by_brick(conn: Connection, brick_codes: Iterable[Any]) -> dict[str, dict[str, str]]:
@@ -161,6 +268,7 @@ def ensure_dutch_gpc_assignments(
     global_product_ids: Iterable[Any],
 ) -> dict[str, int]:
     ids = _normalize_ids(global_product_ids)
+    ensure_bundled_dutch_gpc_reference(conn)
     required = {"global_products", "global_product_gpc_bricks", "gpc_product_groups"}
     if not ids or not required.issubset(_tables(conn)):
         return {"requested": len(ids), "existing": 0, "assigned": 0, "unresolved": len(ids)}
