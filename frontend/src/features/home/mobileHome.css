@@ -186,14 +186,12 @@
     "title title"
     "value value"
     "detail detail"
-    "chart chart"
-    "link link";
+    "chart chart";
   gap:5px 10px;
 }
 .rz-dashboard-card-title{grid-area:title;font-size:var(--font-size-ui-body);font-weight:700;color:var(--color-mobile-ui-primary)}
 .rz-dashboard-card-value{grid-area:value;font-size:var(--font-size-ui-title)}
 .rz-dashboard-card-detail{grid-area:detail;font-size:var(--font-size-ui-body)}
-.rz-dashboard-card-link{grid-area:link;font-size:var(--font-size-ui-body);color:var(--color-mobile-ui-primary);justify-self:end}
 .rz-dashboard-bars{
   grid-area:chart;
   height:54px;
