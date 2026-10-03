@@ -483,7 +483,7 @@ def dutch_gpc_by_household_article(
                     FROM product_identities
                     WHERE CAST(household_article_id AS TEXT) IN :household_article_ids
                       AND global_product_id IS NOT NULL
-                    ORDER BY COALESCE(is_primary, 0) DESC, created_at DESC
+                    ORDER BY CASE WHEN is_primary THEN 1 ELSE 0 END DESC, created_at DESC
                 """).bindparams(bindparam("household_article_ids", expanding=True)),
                 {"household_article_ids": ids},
             ).mappings().all()
