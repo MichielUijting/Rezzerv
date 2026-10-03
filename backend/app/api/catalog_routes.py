@@ -11,6 +11,7 @@ from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.db import engine
+from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
     require_platform_permission_from_session,
     resolve_current_server_session,
@@ -392,6 +393,18 @@ def list_catalog(
     if "global_products" not in _tables():
         return {"items": [], "total": 0, "limit": limit, "offset": offset}
 
+    with engine.begin() as conn:
+        product_ids = [
+            str(row.get("id") or "").strip()
+            for row in conn.execute(text("""
+                SELECT id
+                FROM global_products
+                WHERE LOWER(TRIM(COALESCE(status, 'active'))) <> 'deleted'
+            """)).mappings().all()
+            if str(row.get("id") or "").strip()
+        ]
+        ensure_dutch_gpc_assignments(conn, product_ids)
+
     select_parts, joins, expressions = _catalog_projection()
     where_sql, params = _catalog_where(
         expressions,
@@ -690,6 +703,8 @@ def _receipt_line_rows(global_product_id: str) -> list[dict[str, Any]]:
 
 @router.get("/{global_product_id}")
 def get_catalog_product(global_product_id: str):
+    with engine.begin() as conn:
+        ensure_dutch_gpc_assignments(conn, [global_product_id])
     product = _catalog_row(global_product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
