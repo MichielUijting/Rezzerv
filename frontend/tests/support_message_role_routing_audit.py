@@ -5,6 +5,7 @@ HOME = ROOT / "src/features/home/HomePage.jsx"
 HOME_NAVIGATION = ROOT / "src/features/home/homeNavigation.js"
 ROUTER = ROOT / "src/app/router/AppRouter.jsx"
 PLATFORM_PAGE = ROOT / "src/features/support/PlatformSupportPage.jsx"
+PLATFORM_NAVIGATION = ROOT / "src/features/platform/platformNavigation.js"
 SUPPORT_API = ROOT / "src/features/support/supportApi.js"
 SUPERUSER_OVERVIEW = ROOT / "src/features/superuser/SuperuserOverviewSection.jsx"
 MOBILE_SUPPORT = ROOT / "src/features/support/MobileSupportInbox.jsx"
@@ -23,7 +24,7 @@ def main() -> None:
         "isPlatformSuperuserFromContext",
         "meldingen: '/meldingen'",
         "tile.key === 'berichten' && visibility.isPlatformSuperuser",
-        "'/superuser/meldingen'",
+        "'/platform/meldingen'",
     )
     require(
         HOME_NAVIGATION,
@@ -40,8 +41,17 @@ def main() -> None:
     require(
         ROUTER,
         "PlatformSupportPage",
+        "item.key === 'support'",
         "path: '/superuser/meldingen'",
         'permission="platform.support_access.read"',
+        '<Navigate to="/platform/meldingen" replace />',
+    )
+    require(
+        PLATFORM_NAVIGATION,
+        "key: 'support'",
+        "permission: 'platform.support_access.read'",
+        "route: '/platform/meldingen'",
+        "label: 'Meldingen'",
     )
     require(
         PLATFORM_PAGE,
