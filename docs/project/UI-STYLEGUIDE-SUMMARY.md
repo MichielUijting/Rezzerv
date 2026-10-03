@@ -45,11 +45,16 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 
 - de vaste onderste actiebalk blijft de primaire mobiele navigatie naar modules;
 - bovenaan het dashboard staat één compacte, horizontale statusregel met **Meldingen**, **Boodschappen** en **Nog opbergen**; ieder statusvlak is volledig aanklikbaar en opent de betreffende functionele flow;
-- daaronder staan informatiegerichte dashboardtegels voor **Gekochte artikelen**, **Uitgaven**, **Bezochte winkels** en **Begrote uitgaven**;
+- daaronder staan informatiegerichte dashboardtegels voor **Uitgaven t.o.v. vorig jaar**, **Uitgaven**, **Bezochte winkels** en **Begrote uitgaven**;
 - dashboardtegels tonen een kernwaarde, korte vergelijking/context en een compacte grafische weergave;
-- boven de grafieken staat één compacte schakelaar **Dagen / Weken / Maanden**; Dagen vergelijkt de laatste 7 dagen met de 7 dagen daarvoor, Weken vergelijkt 8 weken met de 8 weken daarvoor en Maanden vergelijkt 6 maanden met de 6 maanden daarvoor;
-- **alle vier dashboardtegels** reageren op die periodekeuze: aankopen, uitgaven en winkelbezoeken wisselen hun historische periode/vergelijking mee; de begroting toont de overeenkomstige toekomstige horizon (7 dagen, 4 weken of 6 maanden);
-- vergelijkingsgrafieken tonen een zichtbare verticale waarde-as; de actuele periode gebruikt de primaire donkergroene kleur en de vorige periode een lichtgroene vergelijkingskleur;
+- boven de grafieken staat één compacte schakelaar **Dagen / Weken / Maanden**; iedere keuze toont exact de laatste vier perioden;
+- **Uitgaven t.o.v. vorig jaar** vergelijkt die vier perioden met exact dezelfde perioden één jaar eerder; de vergelijkingswaarden zijn lichtgroen;
+- de overige historische vergelijkingsgrafieken vergelijken de vier huidige perioden met de vier direct voorafgaande perioden;
+- **alle vier dashboardtegels** reageren op de periodekeuze; de begroting toont overeenkomstig de komende 4 dagen, 4 weken of 4 maanden;
+- vergelijkingsgrafieken tonen een zichtbare verticale waarde-as; de actuele periode gebruikt de primaire donkergroene kleur en de vergelijkingsperiode een lichtgroene kleur;
+- de tekst **Bekijk details** staat niet in de dashboardtegels; de volledige tegel blijft aanklikbaar;
+- de gebruiker kan een dashboardgrafiek verslepen met muis of door aanraken en bewegen op het grafiekvlak; de overige grafieken herschikken direct;
+- de dashboardvolgorde wordt per gebruiker lokaal bewaard en bij terugkeer naar het dashboard opnieuw toegepast;
 - **Begrote uitgaven** wordt niet afgeleid van een simpel historisch weekgemiddelde, maar van verwachte **herhalingskoop** per artikel op basis van het historische koopritme en het verwachte volgende koopmoment;
 - de status **Nog opbergen** opent rechtstreeks **Kassa > Bonnen** en niet de camera;
 - de globale onderste actie **Meer** opent een apart overzicht met de overige beschikbare hoofdfuncties die niet al als recente acties onderin staan;
@@ -60,6 +65,17 @@ De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen twee
 - Superuser gebruikt het bestaande Superuser-beheercentrum als eigen dashboardingang;
 - gebruikerszichtbare huishoudrollen heten **Gebruiker** en **Beheerder**; legacy technische role keys mogen intern blijven bestaan;
 - Superuser en IP-eigenaar gelden in deze productfase als één gebruikerszichtbare hoogste rol.
+
+## Mobiele Boodschappen-interactie vanaf 3 oktober 2026
+
+Voor het mobiele scherm **Boodschappen** geldt aanvullend:
+
+- een tik op een artikel onder **Nog te kopen** verplaatst het direct naar **In winkelwagen**;
+- een tik op een artikel in **In winkelwagen** verplaatst het direct terug naar **Nog te kopen**;
+- de eerdere selectiecheckboxen en bulkknoppen voor verplaatsen/verwijderen vervallen;
+- iedere artikelrij toont rechts na `-` / aantal / `+` een afzonderlijke prullenbakknop;
+- de prullenbakknop heeft dezelfde compacte breedte en dezelfde touchhoogte als de min- en plusknop en verwijdert alleen die artikelregel;
+- min, aantal, plus en prullenbak activeren niet per ongeluk de rijverplaatsing.
 
 ## Mobiele ontwerpbaseline vanaf 22 september 2026
 
