@@ -30,6 +30,8 @@ def test_platform_admin_none_session_projects_exact_platform_permissions():
     }
 
     assert granted_permissions == expected_permissions
+    assert payload["permissions"]["platform.support_access.read"] is True
+    assert payload["permissions"]["platform.support_access.mutate"] is True
     assert payload["supported_permissions"] == sorted(expected_permissions)
     assert not granted_permissions.intersection(HOUSEHOLD_PERMISSIONS)
     assert payload["active_household_id"] is None
