@@ -5,9 +5,9 @@ import { fetchHouseholdDashboard } from './dashboardApi.js'
 import './mobileHome.css'
 
 const PERIODS = [
-  { key: 'days', label: 'Dagen', currentLabel: 'laatste 7 dagen', previousLabel: '7 dagen daarvoor' },
-  { key: 'weeks', label: 'Weken', currentLabel: 'laatste 8 weken', previousLabel: '8 weken daarvoor' },
-  { key: 'months', label: 'Maanden', currentLabel: 'laatste 6 maanden', previousLabel: '6 maanden daarvoor' },
+  { key: 'days', label: 'Dagen', currentLabel: 'laatste 4 dagen', previousLabel: '4 dagen daarvoor' },
+  { key: 'weeks', label: 'Weken', currentLabel: 'laatste 4 weken', previousLabel: '4 weken daarvoor' },
+  { key: 'months', label: 'Maanden', currentLabel: 'laatste 4 maanden', previousLabel: '4 maanden daarvoor' },
 ]
 
 function firstName(context) {
@@ -146,27 +146,24 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
 
   const cards = useMemo(() => {
     if (!dashboard) return []
-    const purchasePoints = dashboard.purchases?.views?.[periodKey] || dashboard.purchases?.daily?.map((item) => ({
+    const yearSpendPoints = (dashboard.spend_year_over_year?.views?.[periodKey] || []).slice(-4)
+    const spendPoints = (dashboard.spend?.views?.[periodKey] || dashboard.spend?.daily?.map((item) => ({
       label: String(item.date || '').slice(5),
       current: item.value,
       previous: 0,
-    })) || []
-    const spendPoints = dashboard.spend?.views?.[periodKey] || dashboard.spend?.daily?.map((item) => ({
-      label: String(item.date || '').slice(5),
-      current: item.value,
-      previous: 0,
-    })) || []
-    const purchaseCurrent = sumSeries(purchasePoints, 'current')
-    const purchasePrevious = sumSeries(purchasePoints, 'previous')
+    })) || []).slice(-4)
+    const yearSpendCurrent = sumSeries(yearSpendPoints, 'current')
+    const yearSpendPrevious = sumSeries(yearSpendPoints, 'previous')
     const spendCurrent = sumSeries(spendPoints, 'current')
     const spendPrevious = sumSeries(spendPoints, 'previous')
-    const storeView = dashboard.stores?.views?.[periodKey] || {
+    const rawStoreView = dashboard.stores?.views?.[periodKey] || {
       current: { unique: dashboard.stores?.unique || 0, visits: dashboard.stores?.visits || 0 },
       previous: { unique: 0, visits: 0 },
       points: [],
     }
-    const forecastPoints = dashboard.forecast?.views?.[periodKey]
-      || (dashboard.forecast?.weeks || []).map((item) => ({ label: 'W' + item.week, value: item.value }))
+    const storeView = { ...rawStoreView, points: (rawStoreView.points || []).slice(-4) }
+    const forecastPoints = (dashboard.forecast?.views?.[periodKey]
+      || (dashboard.forecast?.weeks || []).map((item) => ({ label: 'W' + item.week, value: item.value }))).slice(0, 4)
     const forecastTotal = forecastPoints.reduce((total, item) => total + Number(item.value || 0), 0)
     const forecastPeriodLabel = periodKey === 'days'
       ? 'komende 7 dagen'
@@ -176,11 +173,12 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
 
     return [
       {
-        key: 'aankopen',
-        title: 'Gekochte artikelen',
-        value: numberLabel(purchaseCurrent) + ' artikelen',
-        detail: deltaText(purchaseCurrent, purchasePrevious, numberLabel, period),
-        chart: <ComparisonChart points={purchasePoints} />,
+        key: 'uitgaven-vorig-jaar',
+        routeKey: 'uitgaven',
+        title: 'Uitgaven t.o.v. vorig jaar',
+        value: euro(yearSpendCurrent),
+        detail: deltaText(yearSpendCurrent, yearSpendPrevious, euro, { previousLabel: 'dezelfde periode vorig jaar' }),
+        chart: <ComparisonChart points={yearSpendPoints} currency />,
       },
       {
         key: 'uitgaven',
@@ -255,8 +253,8 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         </div>
 
         <div className="rz-dashboard-legend" aria-label="Legenda">
-          <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--current" />{period.currentLabel}</span>
-          <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--previous" />{period.previousLabel}</span>
+          <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--current" />Huidige periode</span>
+          <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--previous" />Vergelijkingsperiode</span>
         </div>
 
         <section className="rz-dashboard-grid" aria-label="Huishoudoverzicht">
@@ -265,14 +263,13 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
               type="button"
               key={card.key}
               className="rz-dashboard-card"
-              onClick={() => navigate('/dashboard/' + card.key)}
+              onClick={() => navigate('/dashboard/' + (card.routeKey || card.key))}
               data-testid={'dashboard-card-' + card.key}
             >
               <span className="rz-dashboard-card-title">{card.title}</span>
               <strong className="rz-dashboard-card-value">{card.value}</strong>
               <span className="rz-dashboard-card-detail">{card.detail}</span>
               {card.chart}
-              <span className="rz-dashboard-card-link">Bekijk details ›</span>
             </button>
           ))}
         </section>
