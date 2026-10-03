@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate-live-gpc-languages:
@@ -21,6 +21,8 @@ jobs:
       PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -32,6 +34,25 @@ jobs:
           python -m pytest -q tests/test_live_gpc_language_validation.py
       - name: Download and compare official English and Dutch publications
         run: python -m app.cli.validate_live_gpc_languages --output-dir /tmp/gpc-live-evidence
+      - name: Build bundled Dutch Brick and product-family reference
+        run: |
+          NL_XML="$(find /tmp/gpc-live-evidence/nl -type f -name '*.xml' | head -n 1)"
+          test -n "$NL_XML"
+          VERSION="$(basename "$NL_XML" .xml | sed -E 's/^gpc-nl-//')"
+          python -m app.cli.build_dutch_gpc_reference             --xml "$NL_XML"             --output app/data/gpc_bricks_nl.json             --publication-version "$VERSION"
+      - name: Commit official Dutch GPC reference to task branch
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: .
+        run: |
+          if git diff --quiet -- backend/app/data/gpc_bricks_nl.json; then
+            echo "Nederlandse GPC-referentie is ongewijzigd."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/data/gpc_bricks_nl.json
+          git commit -m "Neem officiële Nederlandse GPC-referentie op"
+          git push origin "HEAD:${{ github.head_ref }}"
       - name: Upload validation evidence
         if: always()
         uses: actions/upload-artifact@v4
