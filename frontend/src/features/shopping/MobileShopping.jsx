@@ -252,6 +252,7 @@ export default function MobileShopping() {
         checked={Boolean(item.checked)}
         testId={`mobile-shopping-item-${item.id}`}
         onActivate={() => moveItem(item)}
+        activationRole="button"
         side={(
           <div className="rz-mobile-shopping-row-actions">
             <QuantityStepper
