@@ -71,3 +71,7 @@ def test_platform_admin_includes_platform_support_responsibility():
     permissions = set(PLATFORM_ADMIN_PERMISSIONS)
     assert "platform.support_access.read" in permissions
     assert "platform.support_access.mutate" in permissions
+
+
+def test_ip_owner_is_narrow_superuser_assignment_authority():
+    assert ROLE_PERMISSIONS["platform.ip_owner"] == {"platform.special_roles.manage"}
