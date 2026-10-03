@@ -212,9 +212,24 @@ export async function fetchJsonWithAuth(url, options = {}) {
   delete mergedHeaders.Authorization
   delete mergedHeaders.authorization
 
-  const response = await fetch(url, {
+  const requestOptions = {
     ...restOptions, credentials: 'include', headers: mergedHeaders, cache,
-  })
+  }
+  let response
+  try {
+    response = await fetch(url, requestOptions)
+  } catch (firstError) {
+    const method = String(requestOptions.method || 'GET').trim().toUpperCase()
+    if (method !== 'GET') throw firstError
+    await new Promise((resolve) => window.setTimeout(resolve, 300))
+    try {
+      response = await fetch(url, requestOptions)
+    } catch (secondError) {
+      const error = new Error('Verbinding met Inhuis kon niet worden gemaakt. Probeer opnieuw.')
+      error.cause = secondError
+      throw error
+    }
+  }
   if (response.status === 401) {
     redirectToLogin('Je sessie is verlopen. Log opnieuw in.')
     const error = new Error('Je sessie is verlopen. Log opnieuw in.')
