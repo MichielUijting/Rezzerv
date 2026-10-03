@@ -38,7 +38,7 @@ export default function PlatformSupportPage() {
     if (!message) return
     showFeedback({
       variant: /mislukt|fout|geen toegang|niet toegestaan/i.test(String(message)) ? 'error' : 'success',
-      title: 'Superuser / Meldingen',
+      title: 'Platformbeheer / Meldingen',
       message: String(message),
       testId: 'platform-support-feedback',
     })
@@ -195,7 +195,7 @@ export default function PlatformSupportPage() {
     : 'Nog niet ververst'
 
   return (
-    <AppShell title="Superuser / Meldingen" showExit={false}>
+    <AppShell title="Platformbeheer / Meldingen" showExit={false}>
       <div className="rz-support-layout" data-testid="platform-support-page">
         <Card>
           <div className="rz-support-toolbar">
