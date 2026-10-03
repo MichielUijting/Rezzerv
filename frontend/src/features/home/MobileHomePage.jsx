@@ -114,6 +114,80 @@ function ComparisonChart({ points = [], currency = false, onBarActivate = null }
   </div>
 }
 
+function StackedComparisonChart({ view = null, currency = false, onSegmentActivate = null }) {
+  const points = view?.points || []
+  const legend = view?.legend || []
+  const classByKey = new Map(legend.map((item, index) => [item.key, index % 7]))
+  const max = Math.max(1, ...points.flatMap((point) => [Number(point.current || 0), Number(point.previous || 0)]))
+  const middle = max / 2
+
+  function renderStack(point, index, series) {
+    const total = Number(point?.[series] || 0)
+    const segments = point?.[series + '_segments'] || []
+    return <span
+      className={'rz-dashboard-bar rz-dashboard-stacked-bar rz-dashboard-stacked-bar--' + series}
+      style={{ height: Math.max(3, Math.round((total / max) * 100)) + '%' }}
+      aria-label={`${point.label}, ${series === 'current' ? 'huidige' : 'vergelijkings'} periode: ${currency ? euro(total) : numberLabel(total)}`}
+    >
+      {segments.map((segment) => (
+        <span
+          key={segment.key}
+          role={onSegmentActivate ? 'button' : undefined}
+          tabIndex={onSegmentActivate ? 0 : undefined}
+          className={'rz-dashboard-stack-segment rz-dashboard-stack-segment--' + (classByKey.get(segment.key) ?? 0)}
+          style={{ flexGrow: Math.max(0.0001, Number(segment.value || 0)) }}
+          title={`${segment.label}: ${currency ? euro(segment.value) : numberLabel(segment.value)}`}
+          aria-label={onSegmentActivate ? `${point.label}, ${segment.label}: ${currency ? euro(segment.value) : numberLabel(segment.value)}` : undefined}
+          onPointerDown={onSegmentActivate ? (event) => event.stopPropagation() : undefined}
+          onClick={onSegmentActivate ? (event) => {
+            event.stopPropagation()
+            onSegmentActivate(index, series, segment)
+          } : undefined}
+          onKeyDown={onSegmentActivate ? (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              event.stopPropagation()
+              onSegmentActivate(index, series, segment)
+            }
+          } : undefined}
+        />
+      ))}
+    </span>
+  }
+
+  return <div className="rz-dashboard-comparison-chart rz-dashboard-stacked-chart" aria-label="Gestapelde uitgavengrafiek">
+    <div className="rz-dashboard-y-axis" aria-hidden="true">
+      <span>{compactAxis(max, currency)}</span>
+      <span>{compactAxis(middle, currency)}</span>
+      <span>{compactAxis(0, currency)}</span>
+    </div>
+    <div className="rz-dashboard-chart-plot">
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--top" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--mid" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--base" />
+      <div className="rz-dashboard-comparison-bars">
+        {points.map((point, index) => (
+          <div className="rz-dashboard-comparison-group" key={point.label || index}>
+            <div className="rz-dashboard-comparison-pair">
+              {renderStack(point, index, 'previous')}
+              {renderStack(point, index, 'current')}
+            </div>
+            <small>{point.label}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+    {legend.length ? <div className="rz-dashboard-stack-legend" aria-label="Artikelgroepen">
+      {legend.map((item, index) => (
+        <span key={item.key}>
+          <i className={'rz-dashboard-stack-key rz-dashboard-stack-segment--' + (index % 7)} />
+          {item.label}
+        </span>
+      ))}
+    </div> : null}
+  </div>
+}
+
 function ForecastChart({ values = [], onBarActivate = null }) {
   const max = Math.max(1, ...values.map((item) => Number(item.value || 0)))
   const middle = max / 2
@@ -191,8 +265,10 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
 
   const cards = useMemo(() => {
     if (!dashboard) return []
-    const yearSpendPoints = (dashboard.spend_year_over_year?.views?.[periodKey] || []).slice(-4)
-    const spendPoints = (dashboard.spend?.views?.[periodKey] || dashboard.spend?.daily?.map((item) => ({
+    const yearSpendGroupView = dashboard.spend_year_over_year?.group_views?.[periodKey] || null
+    const spendGroupView = dashboard.spend?.group_views?.[periodKey] || null
+    const yearSpendPoints = (yearSpendGroupView?.points || dashboard.spend_year_over_year?.views?.[periodKey] || []).slice(-4)
+    const spendPoints = (spendGroupView?.points || dashboard.spend?.views?.[periodKey] || dashboard.spend?.daily?.map((item) => ({
       label: String(item.date || '').slice(5),
       current: item.value,
       previous: 0,
@@ -223,7 +299,11 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         title: 'Uitgaven t.o.v. vorig jaar',
         value: euro(yearSpendCurrent),
         detail: deltaText(yearSpendCurrent, yearSpendPrevious, euro, { previousLabel: 'dezelfde periode vorig jaar' }),
-        chart: <ComparisonChart
+        chart: yearSpendGroupView ? <StackedComparisonChart
+          view={yearSpendGroupView}
+          currency
+          onSegmentActivate={(index, series, segment) => openBarDrilldown('uitgaven', index, series, 'year', segment.key)}
+        /> : <ComparisonChart
           points={yearSpendPoints}
           currency
           onBarActivate={(index, series) => openBarDrilldown('uitgaven', index, series, 'year')}
@@ -234,7 +314,11 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         title: 'Uitgaven',
         value: euro(spendCurrent),
         detail: deltaText(spendCurrent, spendPrevious, euro, period),
-        chart: <ComparisonChart
+        chart: spendGroupView ? <StackedComparisonChart
+          view={spendGroupView}
+          currency
+          onSegmentActivate={(index, series, segment) => openBarDrilldown('uitgaven', index, series, 'previous', segment.key)}
+        /> : <ComparisonChart
           points={spendPoints}
           currency
           onBarActivate={(index, series) => openBarDrilldown('uitgaven', index, series, 'previous')}
@@ -324,13 +408,14 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     setDraggingKey('')
   }
 
-  function openBarDrilldown(metric, bucketIndex, series, comparison = 'previous') {
+  function openBarDrilldown(metric, bucketIndex, series, comparison = 'previous', groupKey = '') {
     const params = new URLSearchParams({
       granularity: periodKey,
       bucket: String(bucketIndex),
       series,
       comparison,
     })
+    if (groupKey) params.set('group', groupKey)
     navigate('/dashboard/' + metric + '?' + params.toString())
   }
 
