@@ -135,12 +135,12 @@ IP-eigenaar is de beschermde eigenaarsrol voor het beheren van Superusers.
 - Erft geen functionele Superuserrechten.
 - Erft geen technische Platformbeheerderrechten.
 - Heeft als enige runtimebevoegdheid `platform.special_roles.manage`, uitsluitend toegepast op `platform.superuser`.
-- Kan bestaande Inhuis-accounts als Superuser aanstellen.
+- Kan een bestaande Inhuis-gebruiker via e-mailadres als Superuser aanstellen, zonder toegang tot een algemene gebruikersinventaris.
 - Kan een actieve Superuserrol intrekken/deactiveren.
 - Kan geen Frontteamlid of Platformbeheerder aanstellen of intrekken.
 - Krijgt geen huishoud-dashboard of operationele huishoudfuncties.
 - Krijgt geen platformdiagnostiek, logs, featureflags, integraties, herstelacties of overige technische Platformbeheerfuncties.
-- De gebruikersinterface toont een eigen eenvoudige landing met uitsluitend **Superusers** en **Uitloggen**.
+- De gebruikersinterface toont een eigen eenvoudige landing met uitsluitend **Superusers** en **Uitloggen**. De Superuserpagina toont alleen actieve Superusers en gebruikt e-mailinvoer om een bestaande gebruiker aan te stellen.
 
 Bescherming van de IP-eigenaar:
 

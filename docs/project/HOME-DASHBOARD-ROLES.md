@@ -111,5 +111,5 @@ Reden: centrale landingspagina, dashboardaggregaties, drill-downroutes en gebrui
 - De IP-eigenaar is geen operationele huishoudrol en heeft geen toegang tot Dashboard, Voorraad, Kassa, Boodschappen, Catalogus, Meldingen, huishoudinstellingen of systeemhuishouden 0.
 - De IP-eigenaar erft geen Superuser- of Platformbeheerderrechten.
 - Na inloggen krijgt de IP-eigenaar een eigen eenvoudige landing met uitsluitend **Superusers** en **Uitloggen**.
-- De beheerpagina **Superusers** toont bestaande accounts en laat de IP-eigenaar uitsluitend `platform.superuser` toekennen of intrekken.
+- De beheerpagina **Superusers** toont alleen actieve Superusers. Een nieuwe Superuser wordt privacy-minimaal aangesteld door het e-mailadres van een bestaande Inhuis-gebruiker in te voeren; de IP-eigenaar krijgt geen algemene gebruikersinventaris.
 - De backend blijft de autorisatiegrens; directe pogingen om via de IP-eigenaarsbevoegdheid Platformbeheerder te muteren worden geweigerd.
