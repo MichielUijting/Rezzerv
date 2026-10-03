@@ -151,73 +151,27 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
     gpc_class_name = "NULL"
     gpc_family_code = "NULL"
     gpc_family_name = "NULL"
-    if {"global_product_gpc_bricks", "gpc_bricks"}.issubset(tables):
+    if {"global_product_gpc_bricks", "gpc_product_groups"}.issubset(tables):
         joins.extend([
             """
             LEFT JOIN global_product_gpc_bricks catalog_gpc
               ON catalog_gpc.global_product_id = gp.id
             """,
             """
-            LEFT JOIN gpc_bricks catalog_brick
-              ON catalog_brick.brick_code = catalog_gpc.brick_code
+            LEFT JOIN gpc_product_groups catalog_gpc_nl
+              ON catalog_gpc_nl.gpc_brick_code = catalog_gpc.brick_code
+             AND catalog_gpc_nl.language_code = 'nl'
+             AND catalog_gpc_nl.active = TRUE
             """,
         ])
         gpc_brick_code = "catalog_gpc.brick_code"
-        if {"gpc_classes", "gpc_families"}.issubset(tables):
-            joins.extend([
-                """
-                LEFT JOIN gpc_classes catalog_class
-                  ON catalog_class.class_code = catalog_brick.class_code
-                """,
-                """
-                LEFT JOIN gpc_families catalog_family
-                  ON catalog_family.family_code = catalog_class.family_code
-                """,
-            ])
-            gpc_class_code = "catalog_class.class_code"
-            gpc_family_code = "catalog_family.family_code"
-        if "gpc_translations" in tables:
-            gpc_product_type = """
-                COALESCE(
-                    (SELECT tr.translated_text
-                     FROM gpc_translations tr
-                     WHERE tr.entity_type = 'brick'
-                       AND tr.entity_code = catalog_gpc.brick_code
-                       AND tr.language_code = 'nl'
-                     LIMIT 1),
-                    catalog_brick.description
-                )
-            """
-            if {"gpc_classes", "gpc_families"}.issubset(tables):
-                gpc_class_name = """
-                    COALESCE(
-                        (SELECT tr.translated_text
-                         FROM gpc_translations tr
-                         WHERE tr.entity_type = 'class'
-                           AND tr.entity_code = catalog_class.class_code
-                           AND tr.language_code = 'nl'
-                         LIMIT 1),
-                        catalog_class.description
-                    )
-                """
-                gpc_family_name = """
-                    COALESCE(
-                        (SELECT tr.translated_text
-                         FROM gpc_translations tr
-                         WHERE tr.entity_type = 'family'
-                           AND tr.entity_code = catalog_family.family_code
-                           AND tr.language_code = 'nl'
-                         LIMIT 1),
-                        catalog_family.description
-                    )
-                """
-        else:
-            gpc_product_type = "catalog_brick.description"
-            if {"gpc_classes", "gpc_families"}.issubset(tables):
-                gpc_class_name = "catalog_class.description"
-                gpc_family_name = "catalog_family.description"
+        gpc_product_type = "catalog_gpc_nl.gpc_brick_name"
+        gpc_class_code = "catalog_gpc_nl.gpc_class_code"
+        gpc_class_name = "catalog_gpc_nl.gpc_class_name"
+        gpc_family_code = "catalog_gpc_nl.gpc_family_code"
+        gpc_family_name = "catalog_gpc_nl.gpc_family_name"
 
-    product_type_expression = f"COALESCE({gpc_product_type}, {legacy_product_type})"
+    product_type_expression = f"CASE WHEN {gpc_brick_code} IS NOT NULL THEN {gpc_product_type} ELSE {legacy_product_type} END"
     product_type_id_expression = f"COALESCE({gpc_brick_code}, {legacy_product_type_id})"
     select_parts.extend([
         f"{product_type_id_expression} AS product_type_id",
