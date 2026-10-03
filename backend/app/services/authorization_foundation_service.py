@@ -195,11 +195,12 @@ PLATFORM_ADMIN_PERMISSIONS = {
     "platform.feature_flags.manage",
 }
 
-IP_OWNER_PERMISSIONS = (
-    V2_SUPERUSER_TARGET_PERMISSIONS
-    | PLATFORM_ADMIN_PERMISSIONS
-    | {"platform.special_roles.manage"}
-)
+# The IP-eigenaar is deliberately a narrow ownership role. It does not inherit
+# household, Superuser, Frontteam or technical Platformbeheer permissions.
+# Its only runtime authority is managing Superuser assignments.
+IP_OWNER_PERMISSIONS = {
+    "platform.special_roles.manage",
+}
 
 ROLE_PERMISSIONS = {
     "household.viewer": {key for key in HOUSEHOLD_PERMISSIONS if key.endswith(".view")},
