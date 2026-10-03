@@ -10,7 +10,7 @@ Gebruikerszichtbaar gelden voor deze taak:
 - **Frontteamlid** — aanvullende platformrol bovenop Gebruiker of Beheerder;
 - **Platformbeheerder** — support en technisch platformbeheer;
 - **Superuser** — functioneel platformbeheer;
-- **IP-eigenaar** — beschermde hoogste platformrol met Superuser- én Platformbeheerderrechten plus speciaal rollenbeheer.
+- **IP-eigenaar** — beschermde eigenaarsrol die uitsluitend Superusers kan aanstellen en deactiveren.
 
 Interne technische role keys mogen behouden blijven wanneer dat voor compatibiliteit noodzakelijk is. De gebruikerszichtbare terminologie volgt bovenstaande namen.
 
@@ -54,7 +54,7 @@ Bovenaan staan drie volledig klikbare statussen:
 - Gebruiker en Beheerder zien hetzelfde dagelijkse dashboard.
 - Beheerrechten blijven via **Instellingen** lopen en worden niet als los beheerdashboard op de landingspagina gedupliceerd.
 - Frontteamlid ziet hetzelfde huishoud-dashboard als zijn gewone huishoudrol; Frontteam-functionaliteit blijft aanvullend beschikbaar via de bestaande navigatie.
-- De bestaande Superuser-omgeving achter **Superuser** blijft de dashboardingang voor functioneel platformbeheer. De IP-eigenaar heeft daarnaast de technische Platformbeheerfuncties en beschermd rollenbeheer.
+- De bestaande Superuser-omgeving achter **Superuser** blijft de dashboardingang voor functioneel platformbeheer. De IP-eigenaar krijgt geen huishoud-dashboard, Superuseromgeving of technische Platformbeheerfuncties; de eigen landing bevat uitsluitend **Superusers** en **Uitloggen**.
 - Platformbeheer wordt niet in het gewone huishoud-dashboard gemengd.
 
 ## Platformbeheer en support
@@ -64,7 +64,7 @@ Bovenaan staan drie volledig klikbare statussen:
 - Platformbeheerder heeft daarvoor zowel `platform.support_access.read` als `platform.support_access.mutate`.
 - De oude route `/superuser/meldingen` blijft uitsluitend als compatibiliteitsredirect bestaan en verwijst naar Platformbeheer.
 - Frontteamleden sturen hun meldingen gebruikerszichtbaar naar **Platformbeheer**; de bestaande support-API en audittrail blijven de autorisatiegrens.
-- Superuser en IP-eigenaar kunnen dezelfde inbox blijven gebruiken via hun bestaande supportpermissies, maar Meldingen is geen aparte Superuser-omgeving meer.
+- Superuser kan de platform-inbox gebruiken via de bestaande supportpermissies. De IP-eigenaar heeft geen supportpermissies.
 
 ## Navigatie
 
@@ -104,4 +104,12 @@ Reden: centrale landingspagina, dashboardaggregaties, drill-downroutes en gebrui
 - Legacy keys zoals `household.viewer`, `household.advanced_member` en `household.owner` blijven alleen voor compatibiliteit bestaan en worden niet als aparte gebruikersrollen gepresenteerd.
 - De losse gebruikerszichtbare beheeringang bestaat niet meer; huishoudbeheer loopt via **Instellingen**.
 - Platformrollen blijven expliciet onderscheiden als **Superuser**, **Platformbeheerder** en **IP-eigenaar**.
-- Alleen de **IP-eigenaar** kan Superuser en Platformbeheerder aanstellen of intrekken; Frontteambeheer blijft volgens de afzonderlijke bestaande bevoegdheid verlopen.
+- Alleen de **IP-eigenaar** kan Superusers aanstellen of intrekken. Platformbeheerder- en Frontteambeheer vallen niet onder de IP-eigenaarsrol.
+
+
+## IP-eigenaar vereenvoudigd — PO-besluit 3 oktober 2026
+- De IP-eigenaar is geen operationele huishoudrol en heeft geen toegang tot Dashboard, Voorraad, Kassa, Boodschappen, Catalogus, Meldingen, huishoudinstellingen of systeemhuishouden 0.
+- De IP-eigenaar erft geen Superuser- of Platformbeheerderrechten.
+- Na inloggen krijgt de IP-eigenaar een eigen eenvoudige landing met uitsluitend **Superusers** en **Uitloggen**.
+- De beheerpagina **Superusers** toont bestaande accounts en laat de IP-eigenaar uitsluitend `platform.superuser` toekennen of intrekken.
+- De backend blijft de autorisatiegrens; directe pogingen om via de IP-eigenaarsbevoegdheid Platformbeheerder te muteren worden geweigerd.
