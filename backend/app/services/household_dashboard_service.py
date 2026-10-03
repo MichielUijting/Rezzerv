@@ -134,15 +134,57 @@ def _receipt_quantities(conn: Connection, household_id: str) -> dict[str, float]
     return dict(totals)
 
 
+def _gpc_class_by_global_product(conn: Connection) -> dict[str, dict[str, str]]:
+    required = {"global_product_gpc_bricks", "gpc_bricks", "gpc_classes"}
+    if not required.issubset(_tables(conn)):
+        return {}
+
+    translation_join = ""
+    translation_expr = "c.description"
+    if "gpc_translations" in _tables(conn):
+        translation_join = """
+            LEFT JOIN gpc_translations tr
+              ON tr.entity_type = 'class'
+             AND tr.entity_code = c.class_code
+             AND tr.language_code = 'nl'
+        """
+        translation_expr = "COALESCE(NULLIF(tr.translated_text, ''), c.description)"
+
+    rows = conn.execute(text(f"""
+        SELECT
+            CAST(a.global_product_id AS TEXT) AS global_product_id,
+            CAST(c.class_code AS TEXT) AS class_code,
+            {translation_expr} AS class_name
+        FROM global_product_gpc_bricks a
+        JOIN gpc_bricks b ON b.brick_code = a.brick_code
+        JOIN gpc_classes c ON c.class_code = b.class_code
+        {translation_join}
+    """)).mappings().all()
+    return {
+        str(row.get("global_product_id") or ""): {
+            "key": "gpc-class:" + str(row.get("class_code") or "").strip(),
+            "name": str(row.get("class_name") or "").strip() or "Niet ingedeeld",
+        }
+        for row in rows
+        if str(row.get("global_product_id") or "").strip()
+    }
+
+
 def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, list[dict[str, Any]]]:
     columns = _columns(conn, "receipt_table_lines")
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    gpc_classes = _gpc_class_by_global_product(conn)
     for row in _eligible_receipt_lines(conn, household_id):
         label = "Artikel"
         for column in ("corrected_raw_label", "normalized_label", "raw_label", "article_name"):
             if column in columns and str(row.get(column) or "").strip():
                 label = str(row.get(column)).strip()
                 break
+        global_product_id = row.get("matched_global_product_id") or row.get("global_product_id")
+        classification = gpc_classes.get(str(global_product_id or ""), {
+            "key": "unclassified",
+            "name": "Niet ingedeeld",
+        })
         grouped[str(row.get("receipt_table_id") or "")].append({
             "line_id": row.get("id"),
             "label": label,
@@ -150,11 +192,136 @@ def _receipt_article_details(conn: Connection, household_id: str) -> dict[str, l
             "unit": row.get("unit"),
             "line_total": round(_number(row.get("line_total")), 2) if row.get("line_total") is not None else None,
             "household_article_id": row.get("matched_article_id") or row.get("household_article_id"),
-            "global_product_id": row.get("matched_global_product_id") or row.get("global_product_id"),
+            "global_product_id": global_product_id,
+            "gpc_class_key": classification["key"],
+            "gpc_class_name": classification["name"],
         })
     for items in grouped.values():
         items.sort(key=lambda item: str(item.get("label") or "").lower())
     return dict(grouped)
+
+
+def _receipt_group_allocations(
+    row: dict[str, Any],
+    article_details: dict[str, list[dict[str, Any]]],
+) -> dict[str, dict[str, Any]]:
+    receipt_id = str(row.get("id") or "")
+    articles = article_details.get(receipt_id, [])
+    receipt_total = max(0.0, _number(row.get("total_amount")))
+    raw_groups: dict[str, dict[str, Any]] = {}
+
+    for article in articles:
+        key = str(article.get("gpc_class_key") or "unclassified")
+        name = str(article.get("gpc_class_name") or "Niet ingedeeld")
+        entry = raw_groups.setdefault(key, {"key": key, "name": name, "raw": 0.0, "articles": []})
+        entry["raw"] += max(0.0, _number(article.get("line_total")))
+        entry["articles"].append(article)
+
+    raw_total = sum(item["raw"] for item in raw_groups.values())
+    if not raw_groups or raw_total <= 0:
+        return {
+            "unclassified": {
+                "key": "unclassified",
+                "name": "Niet ingedeeld",
+                "value": round(receipt_total, 2),
+                "articles": articles,
+            }
+        }
+
+    allocations: dict[str, dict[str, Any]] = {}
+    assigned = 0.0
+    keys = list(raw_groups)
+    for index, key in enumerate(keys):
+        item = raw_groups[key]
+        if index == len(keys) - 1:
+            value = round(receipt_total - assigned, 2)
+        else:
+            value = round(receipt_total * item["raw"] / raw_total, 2)
+            assigned += value
+        allocations[key] = {
+            "key": key,
+            "name": item["name"],
+            "value": max(0.0, value),
+            "articles": item["articles"],
+        }
+    return allocations
+
+
+def _spend_group_series(
+    receipts: list[dict[str, Any]],
+    article_details: dict[str, list[dict[str, Any]]],
+    *,
+    now: datetime,
+    granularity: str,
+    comparison: str,
+) -> dict[str, Any]:
+    buckets: list[dict[str, Any]] = []
+    totals: dict[str, float] = defaultdict(float)
+    names: dict[str, str] = {}
+
+    for bucket_index in range(4):
+        point: dict[str, Any] = {"label": ""}
+        for series in ("current", "previous"):
+            start, end, label = _dashboard_bucket_window(
+                now=now,
+                granularity=granularity,
+                bucket_index=bucket_index,
+                series=series,
+                comparison=comparison,
+            )
+            if series == "current":
+                point["label"] = label if granularity != "days" else start.strftime("%d-%m")
+            grouped: dict[str, float] = defaultdict(float)
+            for row in receipts:
+                if not (start <= row["_purchase_at"] < end):
+                    continue
+                for key, allocation in _receipt_group_allocations(row, article_details).items():
+                    grouped[key] += _number(allocation.get("value"))
+                    names[key] = str(allocation.get("name") or "Niet ingedeeld")
+                    totals[key] += _number(allocation.get("value"))
+            point[series + "_raw"] = {key: round(value, 2) for key, value in grouped.items()}
+        buckets.append(point)
+
+    ranked = [
+        key for key, _value in sorted(
+            ((key, value) for key, value in totals.items() if key != "unclassified"),
+            key=lambda item: (-item[1], names.get(item[0], "").lower()),
+        )
+    ]
+    top_keys = ranked[:5]
+    remaining_keys = set(ranked[5:])
+    legend = [{"key": key, "label": names.get(key, key)} for key in top_keys]
+    if remaining_keys:
+        legend.append({"key": "other", "label": "Overig"})
+    if totals.get("unclassified", 0) > 0:
+        legend.append({"key": "unclassified", "label": "Niet ingedeeld"})
+
+    points: list[dict[str, Any]] = []
+    for bucket in buckets:
+        point = {"label": bucket["label"]}
+        for series in ("current", "previous"):
+            raw = bucket[series + "_raw"]
+            segments = [
+                {"key": key, "label": names.get(key, key), "value": round(_number(raw.get(key)), 2)}
+                for key in top_keys
+                if _number(raw.get(key)) > 0
+            ]
+            other_value = round(sum(_number(raw.get(key)) for key in remaining_keys), 2)
+            if other_value > 0:
+                segments.append({"key": "other", "label": "Overig", "value": other_value})
+            unclassified_value = round(_number(raw.get("unclassified")), 2)
+            if unclassified_value > 0:
+                segments.append({"key": "unclassified", "label": "Niet ingedeeld", "value": unclassified_value})
+            point[series + "_segments"] = segments
+            point[series] = round(sum(_number(item.get("value")) for item in segments), 2)
+        points.append(point)
+
+    return {
+        "points": points,
+        "legend": legend,
+        "top_keys": top_keys,
+        "other_keys": sorted(remaining_keys),
+    }
 
 
 def _receipt_detail(row: dict[str, Any], article_details: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
