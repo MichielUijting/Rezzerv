@@ -179,6 +179,8 @@ ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS = set(V2_SUPERUSER_TARGET_PERMISSIONS)
 ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS = ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS
 
 PLATFORM_ADMIN_PERMISSIONS = {
+    "platform.support_access.read",
+    "platform.support_access.mutate",
     "platform.diagnostics.view",
     "platform.logs.view",
     "platform.audit.view",
