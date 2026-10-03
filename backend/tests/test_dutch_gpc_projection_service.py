@@ -34,7 +34,8 @@ def _engine():
             CREATE TABLE household_articles (
                 id TEXT PRIMARY KEY,
                 household_id TEXT NOT NULL,
-                global_product_id TEXT
+                global_product_id TEXT,
+                representative_image_gpc_brick_code TEXT
             )
         """))
         conn.execute(text("""
@@ -55,11 +56,14 @@ def _engine():
              '40000002', 'English segment', 'en', 1)
         """))
         conn.execute(text("""
-            INSERT INTO household_articles(id, household_id, global_product_id)
+            INSERT INTO household_articles(
+                id, household_id, global_product_id, representative_image_gpc_brick_code
+            )
             VALUES
-            ('ha-1', 'h1', 'gp-1'),
-            ('ha-2', 'h1', 'gp-2'),
-            ('ha-other', 'h2', 'gp-1')
+            ('ha-1', 'h1', 'gp-1', NULL),
+            ('ha-2', 'h1', 'gp-2', NULL),
+            ('ha-direct', 'h1', NULL, '10000001'),
+            ('ha-other', 'h2', 'gp-1', NULL)
         """))
     return engine
 
@@ -96,6 +100,20 @@ def test_dutch_gpc_by_household_article_respects_household_boundary():
     finally:
         engine.dispose()
 
+
+
+def test_household_article_with_known_brick_uses_dutch_family_directly():
+    engine = _engine()
+    try:
+        with engine.begin() as conn:
+            payload = dutch_gpc_by_household_article(conn, 'h1', ['ha-direct'])
+
+        assert payload['ha-direct']['gpc_brick_name'] == 'Bananen'
+        assert payload['ha-direct']['gpc_class_name'] == 'Vers fruit'
+        assert payload['ha-direct']['gpc_family_name'] == 'Fruit - onbereid/onbewerkt (vers)'
+        assert payload['ha-direct']['gpc_segment_name'] == 'Voedingsmiddelen'
+    finally:
+        engine.dispose()
 
 
 def test_unclassified_catalog_product_is_assigned_from_dutch_gpc_reference():
