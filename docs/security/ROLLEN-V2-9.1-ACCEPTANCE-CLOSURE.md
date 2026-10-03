@@ -10,9 +10,9 @@ Status: **9.1.9 acceptance candidate**. Dit document sluit geen PR zelfstandig; 
 - resterende transitional regressieclaims te verwijderen of als legacy-compatibility te classificeren;
 - legacy huishoudrollen niet-destructief te behouden maar buiten normale nieuwe roltoewijzing te houden;
 - de expliciet in v2 genoemde bestaande functionele domeinen tegen de actuele permissiongrenzen te controleren;
-- twee gevonden runtimegaps te sluiten:
-  - IP-owner-only system-sessies moeten de canonical IP-owner permission-union publiek projecteren zonder losse Superuser- of Platformbeheerderrollen te vereisen;
-  - een pure IP-owner moet de functionele Superuser-UI kunnen gebruiken via de canonical system-capability, zonder extra Superuser-role row of e-mail/H0-fallback.
+- de actuele PO-beslissing over IP-owner te borgen:
+  - IP-owner gebruikt geen systeemhuishouden 0 en geen functionele/technische platformcontext;
+  - IP-owner krijgt uitsluitend een none-context met `platform.special_roles.manage` voor Superuserbeheer.
 
 ## 2. Canonical v2 rol- en contextmatrix
 
@@ -24,7 +24,7 @@ Status: **9.1.9 acceptance candidate**. Dit document sluit geen PR zelfstandig; 
 | Superuser | `system` | systeemhuishouden 0 | exact `V2_SUPERUSER_TARGET_PERMISSIONS` |
 | Platformbeheerder | `none` | geen huishouden | exact `PLATFORM_ADMIN_PERMISSIONS` |
 | Superuser + Platformbeheerder | `system` | systeemhuishouden 0 | union Superuser-v2 + Platformbeheerder, zonder `platform.special_roles.manage` |
-| IP-owner | `system` | systeemhuishouden 0 | Superuser-v2 + Platformbeheerder + `platform.special_roles.manage` |
+| IP-owner | `none` | geen huishouden | uitsluitend `platform.special_roles.manage` voor Superuserbeheer |
 
 `platform_roles` is geen publieke browserauthority en wordt niet in `/api/session` geprojecteerd.
 
@@ -46,7 +46,7 @@ De normale household role mutation boundary accepteert uitsluitend:
 De actieve platformroutegrens gebruikt `platform.support_access.*`:
 
 - Superuser: functioneel toegestaan;
-- IP-owner: toegestaan;
+- IP-owner: niet toegestaan;
 - Platformbeheerder: niet vanwege de technische rol alleen;
 - Frontteam: geen Superuser-supportbeheer.
 
@@ -58,23 +58,23 @@ De actieve `/api/external-databases/*`-grens gebruikt:
 - `platform.external_products.search`;
 - `platform.external_products.link_existing`.
 
-Frontteam, Superuser en IP-owner bezitten deze functionele capabilities. Platformbeheerder niet.
+Frontteam en Superuser bezitten deze functionele capabilities. Platformbeheerder en IP-owner niet.
 
 ### Centrale catalogus en universele artikelen
 
-De functionele platformcataloguspermissions (`platform.catalog.*`) behoren tot Superuser-v2 en IP-owner, niet tot de technische Platformbeheerderrol.
+De functionele platformcataloguspermissions (`platform.catalog.*`) behoren tot Superuser-v2, niet tot Platformbeheerder of IP-owner.
 
 ### GPC
 
-Functionele `platform.gpc.*`-rechten behoren tot Superuser-v2 en IP-owner. De afzonderlijke technische GPC-NL importactie blijft bewust achter `platform.technical_configuration.manage` en is daarmee Platformbeheerder/IP-owner-only.
+Functionele `platform.gpc.*`-rechten behoren tot Superuser-v2. De afzonderlijke technische GPC-NL importactie blijft achter `platform.technical_configuration.manage` en is daarmee Platformbeheerder-only.
 
 ### Externe databronconfiguratie
 
-`platform.external_sources.view/manage` behoort tot Superuser-v2 en IP-owner. Dit verleent geen technische Platformbeheerderrechten en is gescheiden van de Frontteam `platform.external_products.*`-capabilities.
+`platform.external_sources.view/manage` behoort tot Superuser-v2. IP-owner krijgt deze functionele bronconfiguratie niet. Dit is gescheiden van de Frontteam `platform.external_products.*`-capabilities.
 
 ### Systeemhuishouden 0
 
-H0 is uitsluitend `context_type=system`. Een vast e-mailadres verleent geen authority. Superuser en IP-owner krijgen system-context via actieve server-side platformrollen. Superuser+Platformbeheerder-stacking gebruikt dezelfde H0-context. Platformbeheerder-only blijft `none`.
+H0 is uitsluitend `context_type=system`. Een vast e-mailadres verleent geen authority. Superuser krijgt system-context via de actieve server-side Superuserrol. Superuser+Platformbeheerder-stacking gebruikt dezelfde H0-context. Platformbeheerder-only en IP-owner blijven `none`; IP-owner heeft geen H0-toegang.
 
 ### Authorization/session foundation
 
@@ -82,35 +82,26 @@ Server-side sessies blijven de identity/contextauthority. Platformpermissions wo
 
 ## 5. 9.1.9 runtimecorrecties
 
-### 5.1 IP-owner public permission projection
+### 5.1 IP-owner none-context en minimale permissionprojectie
 
-Voor 9.1.9 kon een account met uitsluitend `platform.ip_owner` backend-routepermissions correct verkrijgen via de canonical evaluator, maar de publieke system-sessionpayload projecteerde niet automatisch `ROLE_PERMISSIONS["platform.ip_owner"]`.
+De actuele PO-beslissing maakt IP-owner expliciet geen operationele platformrol. Een account met uitsluitend `platform.ip_owner`:
 
-De closure voegt daarom intern `is_ip_owner` toe aan `ServerSessionContext` en projecteert bij een IP-owner system-session exact de canonical IP-owner platformpermission-set. Dit:
-
-- vereist geen extra `platform.superuser` of `platform.platform_admin` role rows;
+- gebruikt `context_type=none`;
+- heeft geen actief huishouden en geen toegang tot systeemhuishouden 0;
+- projecteert exact `{"platform.special_roles.manage"}`;
 - publiceert geen `platform_roles`;
-- verandert geen householdauthority;
-- houdt `platform.special_roles.manage` exclusief bij IP-owner.
+- erft geen Superuser- of Platformbeheerderpermissions.
 
-### 5.2 IP-owner functional Superuser UI boundary
+### 5.2 Aparte IP-owner UI-boundary
 
-Voor 9.1.9 gebruikte `SuperuserGuard` via `isPlatformSuperuserFromContext()` alleen de expliciete `is_platform_superuser`-flag. Een account met uitsluitend `platform.ip_owner` hoefde die extra Superuser-role row volgens v2 juist niet te hebben en kon daardoor ondanks correcte backendpermissions uit de functionele Superuser-UI worden geweerd.
+De IP-owner krijgt geen functionele Superuser-UI. De frontend toont een eigen eenvoudige landing met uitsluitend **Superusers** en **Uitloggen**. De aparte Superuserbeheerpagina:
 
-De centrale frontendhelper accepteert daarom nu:
+- toont alleen de gegevens die nodig zijn om Superuserstatus te beheren;
+- laat alleen `platform.superuser` toekennen of intrekken;
+- toont geen Frontteam- of Platformbeheerdermutaties;
+- blijft server-side beschermd door `platform.special_roles.manage`.
 
-- de expliciete Superuserflag; of
-- exact `context_type=system` plus `platform.system_household.access`.
-
-Daarmee geldt:
-
-- pure IP-owner krijgt functionele Superuser-UI zonder extra role row;
-- Platformbeheerder-only (`none`) blijft uitgesloten;
-- een reguliere context met geïnjecteerde system-permission blijft uitgesloten;
-- e-mail-only/H0-fallback verleent geen toegang;
-- de backend blijft de beslissende autorisatieauthority.
-
-Deze grens wordt direct executable bewaakt door `frontend/tests/session-context-normalization.contract.mjs` in de umbrella closureworkflow.
+Directe Platformbeheerdermutaties via de voormalige special-role route worden geweigerd. Frontteambeheer blijft achter de afzonderlijke Superuserbevoegdheid.
 
 ## 6. Regressiebron na closure
 
