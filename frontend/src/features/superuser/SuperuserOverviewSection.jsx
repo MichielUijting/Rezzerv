@@ -42,7 +42,7 @@ export default function SuperuserOverviewSection() {
 
   const metrics = data.metrics || {}
   const trends = data.trends || {}
-  const notificationRoute = data.notification_route || '/platform/meldingen'
+  const notificationRoute = '/platform/meldingen'
 
   function openHouseholdNotifications(householdId) {
     if (!householdId) return
