@@ -188,7 +188,7 @@ export default function CatalogGpcFrame({ globalProductId, onAssignmentChange })
 
   const currentLabel = useMemo(() => {
     if (!assignment) return 'Nog niet geclassificeerd'
-    const description = assignment.brick_description || assignment.brick_description_en
+    const description = assignment.brick_description
     return `${valueOrDash(assignment.brick_code)} — ${valueOrDash(description)}`
   }, [assignment])
 
@@ -222,7 +222,6 @@ export default function CatalogGpcFrame({ globalProductId, onAssignmentChange })
               <div><dt>Segment</dt><dd>{valueOrDash(assignment.segment_description)}</dd></div>
               <div><dt>GPC-familie</dt><dd>{valueOrDash(assignment.family_description)}</dd></div>
               <div><dt>GPC-groep</dt><dd>{valueOrDash(assignment.class_description)}</dd></div>
-              <div><dt>Engelse brontekst</dt><dd>{valueOrDash(assignment.brick_description_en)}</dd></div>
             </dl>
           ) : null}
         </div>
@@ -238,7 +237,7 @@ export default function CatalogGpcFrame({ globalProductId, onAssignmentChange })
             <div className="rz-catalog-gpc-suggestion" data-testid="catalog-gpc-suggestion" key={candidate.brick_code}>
               <div>
                 <span className="rz-catalog-gpc-label">{index === 0 ? 'Voorgestelde classificatie' : `Alternatief ${index + 1}`}</span>
-                <strong>{candidate.brick_code} — {valueOrDash(candidate.brick_description || candidate.brick_description_en)}</strong>
+                <strong>{candidate.brick_code} — {valueOrDash(candidate.brick_description)}</strong>
                 <small>
                   Matchsterkte: {Number(candidate.match_strength_percent || Math.round(Number(candidate.confidence || 0) * 100))}% ({valueOrDash(candidate.confidence_label)})
                   {' · '}{valueOrDash(candidate.suggestion_reason)}
@@ -265,7 +264,7 @@ export default function CatalogGpcFrame({ globalProductId, onAssignmentChange })
         <div className="rz-catalog-gpc-editor">
           <label htmlFor="catalog-gpc-search">Zoek een GPC Brick</label>
           <input id="catalog-gpc-search" className="rz-input" data-testid="catalog-gpc-search" value={query}
-            onChange={(event) => setQuery(event.target.value)} placeholder="Zoeken op Brickcode of Nederlandse/Engelse omschrijving"
+            onChange={(event) => setQuery(event.target.value)} placeholder="Zoeken op Brickcode of Nederlandse omschrijving"
             disabled={saving} autoFocus />
           {searching ? <div className="rz-catalog-gpc-state">Zoeken…</div> : null}
           {query.trim() && !searching && !results.length ? <div className="rz-catalog-gpc-empty">Geen passende GPC Bricks gevonden.</div> : null}
