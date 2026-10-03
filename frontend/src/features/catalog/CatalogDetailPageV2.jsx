@@ -122,7 +122,7 @@ export default function CatalogDetailPageV2() {
   const productType = confirmedProductType || product.product_type
 
   function handleGpcAssignmentChange(assignment) {
-    const description = String(assignment?.brick_description || assignment?.brick_description_en || '').trim()
+    const description = String(assignment?.brick_description || '').trim()
     setConfirmedProductType(description)
     setDetail((current) => current
       ? {
