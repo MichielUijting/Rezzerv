@@ -48,6 +48,7 @@ export default function MobileShopping() {
   const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
+  const [completedSearchQuery, setCompletedSearchQuery] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const catalogSearchRequestRef = useRef(0)
@@ -71,6 +72,7 @@ export default function MobileShopping() {
     catalogSearchRequestRef.current += 1
     setCatalogQuery(value)
     setCatalogResults([])
+    setCompletedSearchQuery('')
     setSearching(false)
   }
 
@@ -81,6 +83,7 @@ export default function MobileShopping() {
 
     if (query.length < 2) {
       setCatalogResults([])
+      setCompletedSearchQuery('')
       return () => { cancelled = true }
     }
 
@@ -99,7 +102,10 @@ export default function MobileShopping() {
         setCatalogResults([])
         setError(searchError?.message || 'Artikelen konden niet worden doorzocht.')
       } finally {
-        if (!cancelled && catalogSearchRequestRef.current === requestId) setSearching(false)
+        if (!cancelled && catalogSearchRequestRef.current === requestId) {
+          setCompletedSearchQuery(query)
+          setSearching(false)
+        }
       }
     }, 250)
 
@@ -114,6 +120,7 @@ export default function MobileShopping() {
     catalogSearchRequestRef.current += 1
     setSearchMode(nextMode)
     setCatalogResults([])
+    setCompletedSearchQuery('')
     setSearching(false)
   }
 
@@ -128,7 +135,7 @@ export default function MobileShopping() {
   const candidateItems = useMemo(() => {
     if (catalogResults.length > 0) return catalogResults
     const query = catalogQuery.trim()
-    if (searching || query.length < 2) return []
+    if (searching || query.length < 2 || completedSearchQuery !== query) return []
     return [{
       source_type: 'manual',
       source_id: '__manual__',
@@ -136,7 +143,7 @@ export default function MobileShopping() {
       article_name: query,
       is_manual_add: true,
     }]
-  }, [catalogQuery, catalogResults, searching])
+  }, [catalogQuery, catalogResults, completedSearchQuery, searching])
 
   function patchListItem(itemId, patch) {
     setList((current) => ({
