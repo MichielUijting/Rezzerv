@@ -234,7 +234,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         </button>
       </div>
 
-      {!dashboard && !error ? <p role="status">Dashboard laden…</p> : null}
+      {!dashboard && !error ? <p role="status">Dashboard inlezen.</p> : null}
 
       {dashboard ? <>
         <div className="rz-dashboard-period-switch" role="group" aria-label="Periode grafieken">
