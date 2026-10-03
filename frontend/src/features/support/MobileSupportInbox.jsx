@@ -45,7 +45,7 @@ export default function MobileSupportInbox({ onOpenThread, authContext = null })
   const items = useMemo(() => {
     const messages = threads.map((thread) => ({
       id: 'message-' + thread.id, kind: 'messages', sourceId: thread.id,
-      title: thread.subject, detail: thread.status, category: 'Superuser',
+      title: thread.subject, detail: thread.status, category: 'Platformbeheer',
       createdAt: thread.updated_at, unread: false,
     }))
     const inhuis = notifications.map((item) => ({
@@ -89,7 +89,7 @@ export default function MobileSupportInbox({ onOpenThread, authContext = null })
         </div>
         {composing && canMessageSuperuser ? (
           <form className="rz-mobile-support-compose" onSubmit={submitNew}>
-            <strong>Nieuw bericht aan Superuser</strong>
+            <strong>Nieuw bericht aan Platformbeheer</strong>
             <label>Onderwerp<Input value={subject} onChange={(event) => setSubject(event.target.value)} required maxLength={250} /></label>
             <label>Bericht<textarea value={message} onChange={(event) => setMessage(event.target.value)} required maxLength={10000} /></label>
             <div><Button type="submit" variant="primary" disabled={!subject.trim() || !message.trim()}>Versturen</Button> <Button type="button" variant="secondary" onClick={() => setComposing(false)}>Annuleren</Button></div>
