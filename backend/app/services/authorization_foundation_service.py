@@ -207,11 +207,6 @@ ROLE_PERMISSIONS = {
     "household.advanced_member": set(ADMIN_PERMISSIONS),
     "household.admin": set(ADMIN_PERMISSIONS),
     "household.owner": set(SUPERUSER_HOUSEHOLD_PERMISSIONS),
-    "platform.support_read": {
-        "platform.households.search", "platform.households.view_metadata",
-        "platform.support_access.request", "platform.support_access.activate",
-        "platform.support_access.read", "platform.audit.view",
-    },
     "platform.frontteam": set(FRONTTEAM_PLATFORM_PERMISSIONS),
     "platform.superuser": set(ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS),
     "platform.platform_admin": set(PLATFORM_ADMIN_PERMISSIONS),
@@ -344,6 +339,18 @@ def _seed_registry(conn) -> None:
         DELETE FROM auth_role_permissions
         WHERE role_key = 'household.frontteam'
     """))
+    # Support is part of Platformbeheer. Keep the legacy role record only as
+    # inactive compatibility data so it cannot be assigned or shown as a
+    # separate active platform role.
+    conn.execute(text("""
+        UPDATE auth_roles
+        SET active = FALSE
+        WHERE role_key = 'platform.support_read'
+    """))
+    conn.execute(text("""
+        DELETE FROM auth_role_permissions
+        WHERE role_key = 'platform.support_read'
+    """))
     for key in HOUSEHOLD_PERMISSIONS:
         conn.execute(text("""
             INSERT INTO auth_permissions(permission_key, scope, description)
@@ -362,7 +369,6 @@ def _seed_registry(conn) -> None:
         "household.advanced_member": "Gevorderd lid",
         "household.admin": "Huishoudbeheerder",
         "household.owner": "Superuser-huishoudrol",
-        "platform.support_read": "Supportmedewerker lezen",
         "platform.frontteam": "Frontteamlid",
         "platform.superuser": "Platform-superuser",
         "platform.platform_admin": "Platformbeheerder",
