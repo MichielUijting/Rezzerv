@@ -89,18 +89,18 @@ def test_inventory_and_mutation_use_separate_canonical_permissions():
     assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION == "platform.frontteam_roles.manage"
 
     assert PLATFORM_AUTHORIZATIONS_PERMISSION in ROLE_PERMISSIONS["platform.platform_admin"]
-    assert PLATFORM_AUTHORIZATIONS_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
+    assert PLATFORM_AUTHORIZATIONS_PERMISSION not in ROLE_PERMISSIONS["platform.ip_owner"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.superuser"]
     assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION in ROLE_PERMISSIONS["platform.superuser"]
-    assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
+    assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.ip_owner"]
     assert PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["platform.frontteam"]
     assert PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION not in ROLE_PERMISSIONS["household.admin"]
 
 
-def test_inventory_is_safe_and_ip_owner_gets_all_three_managed_role_actions():
+def test_inventory_is_safe_and_ip_owner_gets_only_superuser_role_action():
     engine = _engine()
     with engine.begin() as conn:
         _create_schema(conn)
@@ -121,14 +121,16 @@ def test_inventory_is_safe_and_ip_owner_gets_all_three_managed_role_actions():
             for role in owner_payload["roles"]
             if role["managed_by_this_page"]
         }
-        assert managed_roles == {SUPERUSER_ROLE_KEY, FRONTTEAM_ROLE_KEY, PLATFORM_ADMIN_ROLE_KEY}
+        assert managed_roles == {SUPERUSER_ROLE_KEY, FRONTTEAM_ROLE_KEY}
         ip_owner_role = next(role for role in owner_payload["roles"] if role["role_key"] == IP_OWNER_ROLE_KEY)
         assert ip_owner_role["protected"] is True
         assert ip_owner_role["managed_by_this_page"] is False
 
         owner_target = next(item for item in owner_payload["users"] if item["user_id"] == "target")
         admin_target = next(item for item in admin_payload["users"] if item["user_id"] == "target")
-        assert all(owner_target["role_actions"][role_key]["can_grant"] for role_key in MANAGED_SPECIAL_ROLE_KEYS)
+        assert owner_target["role_actions"][SUPERUSER_ROLE_KEY]["can_grant"] is True
+        assert owner_target["role_actions"][FRONTTEAM_ROLE_KEY]["can_grant"] is False
+        assert owner_target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is False
         assert all(
             not admin_target["role_actions"][role_key]["can_grant"]
             for role_key in MANAGED_SPECIAL_ROLE_KEYS
@@ -140,7 +142,7 @@ def test_inventory_is_safe_and_ip_owner_gets_all_three_managed_role_actions():
         assert "token" not in rendered
 
 
-def test_ip_owner_can_stack_superuser_and_platform_admin_after_context_cutover():
+def test_ip_owner_projected_actions_do_not_offer_platform_admin_or_frontteam():
     engine = _engine()
     with engine.begin() as conn:
         _create_schema(conn)
@@ -148,58 +150,21 @@ def test_ip_owner_can_stack_superuser_and_platform_admin_after_context_cutover()
         _insert_user(conn, "target", "target@example.test")
         _assign_role(conn, "owner", IP_OWNER_ROLE_KEY)
 
-        grant_special_role(conn, "target", role_key=SUPERUSER_ROLE_KEY, actor_user_id="owner")
-        owner_payload = list_platform_authorizations(conn, current_user_id="owner")
-        target = next(item for item in owner_payload["users"] if item["user_id"] == "target")
-        assert target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is True
-        assert target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["grant_blocked_reason"] is None
+        payload = list_platform_authorizations(conn, current_user_id="owner")
+        target = next(item for item in payload["users"] if item["user_id"] == "target")
 
-        stacked = grant_special_role(
-            conn,
-            "target",
-            role_key=PLATFORM_ADMIN_ROLE_KEY,
-            actor_user_id="owner",
-        )
-        assert set(stacked["platform_role_keys"]) == {
-            SUPERUSER_ROLE_KEY,
-            PLATFORM_ADMIN_ROLE_KEY,
-        }
+        assert target["role_actions"][SUPERUSER_ROLE_KEY]["can_grant"] is True
+        assert target["role_actions"][FRONTTEAM_ROLE_KEY]["can_grant"] is False
+        assert target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is False
         assert evaluate_platform_permission(
-            conn, user_id="target", permission_key=PLATFORM_AUTHORIZATIONS_PERMISSION
+            conn, user_id="owner", permission_key=PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION
         ).allowed is True
         assert evaluate_platform_permission(
-            conn, user_id="target", permission_key=PLATFORM_SPECIAL_ROLE_MUTATION_PERMISSION
+            conn, user_id="owner", permission_key=PLATFORM_AUTHORIZATIONS_PERMISSION
         ).allowed is False
-
-        with pytest.raises(PlatformAuthorizationConflictError, match="Frontteamlid"):
-            grant_special_role(conn, "target", role_key=FRONTTEAM_ROLE_KEY, actor_user_id="owner")
-
-        superuser_only = revoke_special_role(
-            conn,
-            "target",
-            role_key=PLATFORM_ADMIN_ROLE_KEY,
-            actor_user_id="owner",
-        )
-        assert superuser_only["platform_role_keys"] == [SUPERUSER_ROLE_KEY]
-
-        platform_admin_only = grant_special_role(
-            conn,
-            "target",
-            role_key=PLATFORM_ADMIN_ROLE_KEY,
-            actor_user_id="owner",
-        )
-        revoke_special_role(
-            conn,
-            "target",
-            role_key=SUPERUSER_ROLE_KEY,
-            actor_user_id="owner",
-        )
-        assert platform_admin_only["platform_role_keys"] == [PLATFORM_ADMIN_ROLE_KEY, SUPERUSER_ROLE_KEY]
-        owner_payload = list_platform_authorizations(conn, current_user_id="owner")
-        target = next(item for item in owner_payload["users"] if item["user_id"] == "target")
-        assert target["platform_role_keys"] == [PLATFORM_ADMIN_ROLE_KEY]
-        assert target["role_actions"][SUPERUSER_ROLE_KEY]["can_grant"] is True
-
+        assert evaluate_platform_permission(
+            conn, user_id="owner", permission_key=PLATFORM_FRONTTEAM_ROLE_MUTATION_PERMISSION
+        ).allowed is False
 
 def test_ip_owner_target_is_immutable_and_suspended_grant_is_blocked():
     engine = _engine()
