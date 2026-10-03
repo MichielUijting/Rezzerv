@@ -69,19 +69,6 @@ export default function MobileKassa() {
     })
   }, [message, showFeedback])
 
-  useEffect(() => {
-    const requestedReceiptId = new URLSearchParams(window.location.search).get('receipt') || ''
-    if (!requestedReceiptId) return
-    openReceipt(requestedReceiptId).catch((error) => {
-      showFeedback({
-        variant: 'error',
-        title: 'Kassa',
-        message: normalizeErrorMessage(error?.message) || 'Kassabon kon niet worden geopend.',
-      })
-    })
-  }, [showFeedback])
-
-
   async function loadReceipts(id = householdId) {
     const requestId = ++receiptRequestRef.current
     setReceiptsLoading(true)
