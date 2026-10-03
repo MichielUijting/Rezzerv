@@ -264,7 +264,11 @@ export default function MobileShopping() {
         key={item.id}
         title={item.article_name}
         subtitle=""
-        meta={[]}
+        meta={[
+          item.gpc_brick_name ? `Brick: ${item.gpc_brick_name}` : '',
+          item.gpc_class_name ? `GPC-groep: ${item.gpc_class_name}` : '',
+          item.gpc_family_name ? `GPC-familie: ${item.gpc_family_name}` : '',
+        ].filter(Boolean)}
         imageUrl={item.image_url}
         imageProductName={item.article_name}
         checked={Boolean(item.checked)}
@@ -336,7 +340,12 @@ export default function MobileShopping() {
                   getKey={(item) => `${item.source_type}:${item.source_id}`}
                   getLabel={(item) => item.is_manual_add
                     ? item.label
-                    : `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
+                    : [
+                        item.label,
+                        item.gpc_brick_name ? `Brick: ${item.gpc_brick_name}` : '',
+                        item.gpc_family_name ? `GPC-familie: ${item.gpc_family_name}` : '',
+                        SOURCE_LABELS[item.source_type] || item.source_type,
+                      ].filter(Boolean).join(' — ')}
                   onSelect={(_key, item) => addArticle(item.is_manual_add ? null : item)}
                   ariaLabel="Kandidaten voor artikel toevoegen"
                   dataTestId="mobile-shopping-candidate-list"
