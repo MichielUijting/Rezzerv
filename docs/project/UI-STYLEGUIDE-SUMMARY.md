@@ -74,8 +74,11 @@ Voor het mobiele scherm **Boodschappen** geldt aanvullend:
 - een tik op een artikel in **In winkelwagen** verplaatst het direct terug naar **Nog te kopen**;
 - de eerdere selectiecheckboxen en bulkknoppen voor verplaatsen/verwijderen vervallen;
 - iedere artikelrij toont rechts na `-` / aantal / `+` een afzonderlijke prullenbakknop;
-- de prullenbakknop heeft dezelfde compacte breedte en dezelfde touchhoogte als de min- en plusknop en verwijdert alleen die artikelregel;
-- min, aantal, plus en prullenbak activeren niet per ongeluk de rijverplaatsing.
+- de prullenbakknop heeft dezelfde compacte breedte en dezelfde touchhoogte als de min- en plusknop en verwijdert alleen die artikelregel; het pictogram zelf is circa 25% groter dan de eerste implementatie zodat het duidelijk herkenbaar is;
+- min, aantal, plus en prullenbak activeren niet per ongeluk de rijverplaatsing;
+- als **In winkelwagen** leeg is, staat daar uitsluitend **Leeg**, links uitgelijnd met de sectietitel;
+- bij **Artikel toevoegen** geldt een klik/tik op een zoekresultaat in de kandidatenlijst direct als toevoegen; een aparte knop **Toevoegen** wordt niet getoond;
+- handmatige vrije invoer zonder zoekresultaat kan met Enter worden toegevoegd.
 
 ## Mobiele ontwerpbaseline vanaf 22 september 2026
 
@@ -141,6 +144,8 @@ Centrale tokens:
 - `--color-table-grid`: `#8FD19E`.
 
 Gebruik:
+- op **lichtgroene knoppen of lichtgroene interactieve knoptoestanden** is de tekst/iconkleur altijd de centrale donkergroene primaire kleur; witte tekst is daar niet toegestaan;
+- witte knoptekst is alleen voor voldoende donkere primaire surfaces bedoeld;
 - `#005F6A` is de standaard primaire Inhuis-UI-kleur; alle primaire surfaces lezen de centrale tokens zodat een geldige lokale Weergave-voorkeur applicatiebreed tegelijk doorwerkt;
 - tekst en iconen op `#005F6A` gebruiken centraal `#FFFFFF`; dit geldt applicatiebreed voor primaire gekleurde surfaces en vervangt de eerdere donkere tekstkleur;
 - `#005F6A` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
