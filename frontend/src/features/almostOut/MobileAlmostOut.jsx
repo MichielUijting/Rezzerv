@@ -82,7 +82,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
     const nextRows = rows.filter((row) => {
       if (locationTrackingEnabled && locationFilter && row.location !== locationFilter) return false
       if (!needle) return true
-      const searchableValues = [row.householdName, row.primaryName, row.productName, row.packaging]
+      const searchableValues = [row.householdName, row.primaryName, row.productName, row.packaging, row.gpcBrickName, row.gpcClassName, row.gpcFamilyName]
       if (locationTrackingEnabled) searchableValues.push(row.location)
       return searchableValues.some((value) => normalizeAlmostOutText(value).includes(needle))
     })
@@ -198,6 +198,9 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
               const contextParts = []
               if (row.productName && row.productName !== title) contextParts.push(row.productName)
               if (row.packaging && row.packaging !== '—') contextParts.push(row.packaging)
+              if (row.gpcBrickName) contextParts.push(`Brick: ${row.gpcBrickName}`)
+              if (row.gpcClassName) contextParts.push(`GPC-groep: ${row.gpcClassName}`)
+              if (row.gpcFamilyName) contextParts.push(`GPC-familie: ${row.gpcFamilyName}`)
 
               const content = (
                 <>
