@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
+from app.services.dutch_gpc_projection_service import ensure_bundled_dutch_gpc_reference
+
 
 _GPC_CODE = re.compile(r"^\d{8}$")
 
@@ -83,6 +85,7 @@ def bundled_official_gpc_bricks() -> list[dict[str, Any]]:
 
 
 def list_official_gpc_bricks(conn: Connection) -> list[dict[str, Any]]:
+    ensure_bundled_dutch_gpc_reference(conn)
     if "gpc_product_groups" not in _tables(conn):
         return []
     return [
@@ -93,6 +96,7 @@ def list_official_gpc_bricks(conn: Connection) -> list[dict[str, Any]]:
 
 
 def ensure_official_gpc_brick(conn: Connection, brick_code: str) -> dict[str, Any] | None:
+    ensure_bundled_dutch_gpc_reference(conn)
     code = str(brick_code or "").strip()
     if not _GPC_CODE.fullmatch(code):
         return None
@@ -145,6 +149,7 @@ def search_official_gpc_bricks(
     query: str = "",
     limit: int = 25,
 ) -> list[dict[str, Any]]:
+    ensure_bundled_dutch_gpc_reference(conn)
     if "gpc_product_groups" not in _tables(conn):
         return []
 
