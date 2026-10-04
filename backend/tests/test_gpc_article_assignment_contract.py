@@ -180,8 +180,9 @@ def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_proven
     frontend = EXTERNAL_DATABASES.read_text(encoding="utf-8")
 
     assert "ensure_official_gpc_brick" in backend
-    assert "FROM gpc_bricks b" in reference
     assert "FROM gpc_product_groups gpg" in reference
+    assert "ensure_bundled_dutch_gpc_reference" in reference
+    assert "gpc_bricks_2026_05_en.json" not in reference
     assert "Onbekende GS1 GPC Brickcode" in backend
     assert "global_product_gpc_bricks" in backend
     assert "assignment_source" in backend
@@ -206,7 +207,8 @@ def test_unclassified_catalog_product_returns_ranked_top_five_candidates():
 
     assert "rank_gpc_candidates" in routes
     assert "build_product_signals" in routes
-    assert "bundled_official_gpc_bricks" in routes
+    assert "_candidate_catalog_rows" in routes
+    assert "gpc_product_groups" in routes
     assert "_external_product_metadata" in routes
     assert '"suggestions": suggestions' in routes
     assert "limit=5" in routes
