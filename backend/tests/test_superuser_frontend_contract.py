@@ -22,7 +22,7 @@ def test_home_keeps_meldingen_and_routes_superuser_berichten_to_platform_inbox()
     assert "if (tile.key === 'meldingen') return true" in navigation
     assert "if (tile.key === 'berichten') return visibility.canOpenMessages" in navigation
     assert "tile.key === 'berichten' && visibility.isPlatformSuperuser" in home
-    assert "'/superuser/meldingen'" in home
+    assert "'/platform/meldingen'" in home
     assert "meldingen: '/meldingen'" in home
     assert "visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen'" not in home
     assert "visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen'" not in navigation
