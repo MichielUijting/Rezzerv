@@ -73,14 +73,16 @@ test.describe('Winkelen kolomcontrols', () => {
 
     const articleHeader = table.getByRole('columnheader', { name: 'Artikel sorteren', exact: true })
     const productTypeHeader = table.getByRole('columnheader', { name: 'Producttype sorteren', exact: true })
+    const articleResizeHandle = table.getByRole('separator', { name: 'Kolom breedte aanpassen' }).nth(1)
 
     const articleBefore = await articleHeader.boundingBox()
     const productTypeBefore = await productTypeHeader.boundingBox()
-    if (!articleBefore || !productTypeBefore) throw new Error('Kolomkoppen hebben geen meetbare browserpositie.')
+    const articleHandleBefore = await articleResizeHandle.boundingBox()
+    if (!articleBefore || !productTypeBefore || !articleHandleBefore) throw new Error('Kolomkoppen of Artikel-resize-handle zijn niet meetbaar.')
 
     const boundaryPoint = {
-      x: productTypeBefore.x + 2,
-      y: productTypeBefore.y + productTypeBefore.height / 2,
+      x: articleHandleBefore.x + articleHandleBefore.width / 2,
+      y: articleHandleBefore.y + articleHandleBefore.height / 2,
     }
 
     await page.mouse.move(boundaryPoint.x, boundaryPoint.y)
@@ -123,10 +125,11 @@ test.describe('Winkelen kolomcontrols', () => {
     )).toBeGreaterThan(articleBefore.width + 70)
 
     const articleBeforeShrink = await articleHeader.boundingBox()
-    if (!articleBeforeShrink) throw new Error('Artikelkolom ontbreekt voor verkleinen.')
+    const articleHandleBeforeShrink = await articleResizeHandle.boundingBox()
+    if (!articleBeforeShrink || !articleHandleBeforeShrink) throw new Error('Artikelkolom of resize-handle ontbreekt voor verkleinen.')
     const shrinkBoundaryPoint = {
-      x: articleBeforeShrink.x + articleBeforeShrink.width - 2,
-      y: articleBeforeShrink.y + articleBeforeShrink.height / 2,
+      x: articleHandleBeforeShrink.x + articleHandleBeforeShrink.width / 2,
+      y: articleHandleBeforeShrink.y + articleHandleBeforeShrink.height / 2,
     }
 
     await page.mouse.move(shrinkBoundaryPoint.x, shrinkBoundaryPoint.y)
