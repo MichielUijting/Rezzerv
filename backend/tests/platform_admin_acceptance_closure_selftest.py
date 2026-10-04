@@ -76,16 +76,17 @@ def _assert_authorization_matrix() -> None:
     assert functional_permission not in PLATFORM_ADMIN_PERMISSIONS
 
     ip_owner = frozenset(ROLE_PERMISSIONS["platform.ip_owner"])
-    assert EXPECTED_PLATFORM_ADMIN_PERMISSIONS <= ip_owner
-    assert functional_permission in ip_owner
-    assert "platform.special_roles.manage" in ip_owner
+    assert ip_owner == frozenset({"platform.special_roles.manage"})
     assert "platform.special_roles.manage" not in ROLE_PERMISSIONS["platform.platform_admin"]
 
     superuser = frozenset(ROLE_PERMISSIONS["platform.superuser"])
     assert superuser == frozenset(ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS)
     assert superuser == frozenset(V2_SUPERUSER_TARGET_PERMISSIONS)
     assert functional_permission in superuser
-    assert not (superuser & EXPECTED_PLATFORM_ADMIN_PERMISSIONS)
+    assert (superuser & EXPECTED_PLATFORM_ADMIN_PERMISSIONS) == frozenset({
+        "platform.support_access.read",
+        "platform.support_access.mutate",
+    })
     assert "platform.special_roles.manage" not in superuser
 
 
