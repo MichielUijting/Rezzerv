@@ -75,8 +75,8 @@ jobs:
             exit 1
           fi
           grep -F "home-tile-superuser" "$spec"
-          grep -F "Platformbeheerder toekennen" "$spec"
-          grep -F "Definitief toekennen" "$spec"
+          grep -F "Superuser maken" "$spec"
+          grep -F "Definitief Superuser maken" "$spec"
           echo 'P0_L4_07_NO_CORE_ROUTE_MOCKS_GREEN'
 
       - name: Build and start real frontend, backend and PostgreSQL
