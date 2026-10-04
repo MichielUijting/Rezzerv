@@ -232,6 +232,8 @@ jobs:
             -e PLAYWRIGHT_TEST_ADMIN_EMAIL="$PLAYWRIGHT_TEST_ADMIN_EMAIL" \
             -e PLAYWRIGHT_TEST_ADMIN_PASSWORD="$PLAYWRIGHT_TEST_ADMIN_PASSWORD" \
             -e PLAYWRIGHT_HOUSEHOLD_ID="$PLAYWRIGHT_HOUSEHOLD_ID" \
+            -e REZZERV_TEST_SUPERUSER_EMAIL="$REZZERV_TEST_SUPERUSER_EMAIL" \
+            -e REZZERV_TEST_SUPERUSER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
             mcr.microsoft.com/playwright:v1.58.2-noble \
@@ -262,6 +264,8 @@ jobs:
             -e PLAYWRIGHT_TEST_ADMIN_EMAIL="$PLAYWRIGHT_TEST_ADMIN_EMAIL" \
             -e PLAYWRIGHT_TEST_ADMIN_PASSWORD="$PLAYWRIGHT_TEST_ADMIN_PASSWORD" \
             -e PLAYWRIGHT_HOUSEHOLD_ID="$PLAYWRIGHT_HOUSEHOLD_ID" \
+            -e REZZERV_TEST_SUPERUSER_EMAIL="$REZZERV_TEST_SUPERUSER_EMAIL" \
+            -e REZZERV_TEST_SUPERUSER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
             mcr.microsoft.com/playwright:v1.58.2-noble \
