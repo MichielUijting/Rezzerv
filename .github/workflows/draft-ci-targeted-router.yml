@@ -1,0 +1,109 @@
+name: Draft CI targeted router
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - converted_to_draft
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: draft-ci-router-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  route:
+    name: Route only relevant Draft workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Ensure comparison commits are available
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || git fetch --no-tags origin "$BASE_SHA"
+          if [[ -n "${BEFORE_SHA:-}" ]] && [[ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null || git fetch --no-tags origin "$BEFORE_SHA"
+          fi
+
+      - name: Validate router implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ci/draft_workflow_router.py
+          python scripts/ci/draft_workflow_router.py self-test | tee draft-ci-router-self-test.log
+          grep -Fx 'DRAFT_CI_ROUTER_SELF_TEST_GREEN' draft-ci-router-self-test.log
+
+      - name: Plan and dispatch targeted Draft workflows
+        id: router
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_ACTION: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/draft_workflow_router.py run             --repo "$GITHUB_REPOSITORY"             --action "$PR_ACTION"             --draft "$PR_DRAFT"             --base-sha "$BASE_SHA"             --before-sha "${BEFORE_SHA:-}"             --head-sha "$HEAD_SHA"             --head-ref "$HEAD_REF"             --evidence draft-ci-router-plan.json             | tee draft-ci-router.log
+          grep -Fx 'DRAFT_CI_ROUTER_GREEN' draft-ci-router.log
+
+      - name: Publish routing summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Draft CI targeted router'
+            echo
+            if [[ -f draft-ci-router-plan.json ]]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path("draft-ci-router-plan.json").read_text())
+          print(f"- Comparison: **{plan['comparison_mode']}**")
+          print(f"- Latest changed files: **{len(plan['changed_files'])}**")
+          print(f"- Routed workflow inventory: **{plan['routed_workflow_count']}**")
+          print(f"- Newly dispatched workflows: **{len(plan['dispatch_targets'])}**")
+          print(f"- Reused already-running/green workflows: **{len(plan['skipped_existing'])}**")
+          if plan['previous_failed_workflows']:
+              print("- Previous red workflows forced into this repair cycle:")
+              for name in plan['previous_failed_workflows']:
+                  print(f"  - {name}")
+          if plan['dispatch_targets']:
+              print("- Dispatched:")
+              for item in plan['dispatch_targets']:
+                  print(f"  - {item['name']}")
+          PY
+            else
+              echo '- Router plan was not produced.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload router evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: draft-ci-router-${{ github.run_id }}
+          path: |
+            draft-ci-router-self-test.log
+            draft-ci-router.log
+            draft-ci-router-plan.json
+          if-no-files-found: warn
+          retention-days: 14
