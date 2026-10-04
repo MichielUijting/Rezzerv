@@ -126,6 +126,21 @@ def _cleanup(conn) -> None:
     conn.execute(
         text(
             """
+            DELETE FROM global_product_gpc_bricks
+            WHERE global_product_id IN (
+                SELECT id
+                FROM global_products
+                WHERE source = 'user'
+                  AND name = :legacy_name
+                  AND COALESCE(TRIM(primary_gtin), '') = ''
+            )
+            """
+        ),
+        {"legacy_name": GLOBAL_SCOPE_RECEIPT_TEXT},
+    )
+    conn.execute(
+        text(
+            """
             DELETE FROM global_products
             WHERE source = 'user'
               AND name = :legacy_name
@@ -138,10 +153,11 @@ def _cleanup(conn) -> None:
         text(
             "DELETE FROM global_product_gpc_bricks "
             "WHERE global_product_id IN ("
-            "SELECT id FROM global_products WHERE primary_gtin = :gtin_charlie"
+            "SELECT id FROM global_products "
+            "WHERE primary_gtin IN (:gtin_alpha, :gtin_bravo, :gtin_charlie)"
             ")"
         ),
-        {"gtin_charlie": GTIN_CHARLIE},
+        {"gtin_alpha": GTIN_ALPHA, "gtin_bravo": GTIN_BRAVO, "gtin_charlie": GTIN_CHARLIE},
     )
     conn.execute(
         text(
