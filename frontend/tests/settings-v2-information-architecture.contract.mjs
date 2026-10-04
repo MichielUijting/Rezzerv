@@ -124,7 +124,6 @@ for (const legacyPath of ['/instellingen/ruimtes', '/instellingen/sublocaties'])
 }
 assert.ok(appRouterSource.includes('<Navigate to="/instellingen/locaties" replace />'))
 
-console.log('SETTINGS_V2_INFORMATION_ARCHITECTURE_CONTRACT_GREEN')
-
 assert.equal(getSettingsTile('frontteam'), null, 'Frontteambeheer hoort niet in gewone Instellingen')
 assert.match(appRouterSource, /path: '\/instellingen\/frontteam'.*ProtectedSuperuser/)
+console.log('SETTINGS_V2_INFORMATION_ARCHITECTURE_CONTRACT_GREEN')
