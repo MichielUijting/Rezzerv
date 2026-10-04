@@ -1,7 +1,10 @@
 name: F5 PostgreSQL locationless unpacking regression
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/tests/locationless_unpacking_configuration_fixture.py'
       - 'backend/alembic/**'
