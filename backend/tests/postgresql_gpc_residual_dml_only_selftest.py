@@ -139,6 +139,10 @@ def _cleanup(conn, product_id: str | None = None) -> None:
         {"brick_code": BRICK_CODE},
     )
     conn.execute(text("DELETE FROM gpc_bricks WHERE brick_code = :code"), {"code": BRICK_CODE})
+    conn.execute(
+        text("DELETE FROM gpc_bricks WHERE class_code = :class_code"),
+        {"class_code": CLASS_CODE},
+    )
     conn.execute(text("DELETE FROM gpc_classes WHERE class_code = :code"), {"code": CLASS_CODE})
     conn.execute(text("DELETE FROM gpc_families WHERE family_code = :code"), {"code": FAMILY_CODE})
     conn.execute(text("DELETE FROM gpc_segments WHERE segment_code = :code"), {"code": SEGMENT_CODE})
