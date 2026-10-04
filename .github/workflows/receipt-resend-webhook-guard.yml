@@ -1,7 +1,10 @@
 name: Receipt Resend webhook guard
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/__init__.py'
       - 'backend/app/services/receipt_resend_webhook_guard.py'

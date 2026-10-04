@@ -1,7 +1,10 @@
 name: Receipt status loyalty local runner validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches: [main]
     paths:
       - 'scripts/run-receipt-status-loyalty-regression.ps1'
