@@ -166,7 +166,7 @@ jobs:
             -d "$missing_payload" \
             http://localhost:8011/api/ip-owner/superusers)"
           test "$missing_status" = '404'
-          test "$(jq -r '.detail' f6-05-platform-missing-target.json)" = 'Gebruiker niet gevonden'
+          test "$(jq -r '.detail' f6-05-platform-missing-target.json)" = 'Geen bestaande Inhuis-gebruiker met dit e-mailadres gevonden'
           echo 'F6_05_PLATFORM_MISSING_TARGET_404_GREEN'
 
       - name: Prove exact PostgreSQL no-pollution end state
