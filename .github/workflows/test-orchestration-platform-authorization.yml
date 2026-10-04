@@ -1,7 +1,10 @@
 name: Test orchestration platform authorization validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/dev_test_routes.py'
       - 'backend/app/services/authorization_foundation_service.py'

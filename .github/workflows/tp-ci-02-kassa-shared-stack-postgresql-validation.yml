@@ -1,7 +1,10 @@
 name: TP-CI-02 Kassa shared full-stack PostgreSQL validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:
