@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { MIN_RESIZABLE_COLUMN_WIDTH, resizeTableBoundary } from './tableResize.js'
 
 const DEFAULT_KEYBOARD_STEP = 28
@@ -15,25 +15,6 @@ function tableColumnWidths(table) {
   return Array.from(table.querySelectorAll('thead tr:first-child th')).map((cell) => Math.round(cell.getBoundingClientRect().width))
 }
 
-function ensureResizableColgroup(table, widths) {
-  let colgroup = table.querySelector('colgroup')
-  if (!colgroup) {
-    colgroup = document.createElement('colgroup')
-    table.insertBefore(colgroup, table.firstChild)
-  }
-
-  while (colgroup.children.length < widths.length) {
-    colgroup.appendChild(document.createElement('col'))
-  }
-
-  widths.forEach((width, index) => {
-    const col = colgroup.children[index]
-    if (col) col.style.width = `${Math.max(1, Math.round(Number(width) || 1))}px`
-  })
-
-  return colgroup
-}
-
 export default function Table({
   wrapperClassName = "",
   tableClassName = "",
@@ -46,7 +27,6 @@ export default function Table({
   children,
 }) {
   const resizeRef = useRef(null)
-  const committedWidthsRef = useRef(null)
   const wrapperRef = useRef(null)
 
   useEffect(() => {
@@ -66,23 +46,6 @@ export default function Table({
       })
     })
   }, [children])
-
-  useLayoutEffect(() => {
-    const wrapper = wrapperRef.current
-    const table = wrapper?.querySelector('table')
-    const committedWidths = committedWidthsRef.current
-    if (!table || !Array.isArray(committedWidths) || committedWidths.length === 0) return
-    const headerCount = table.querySelectorAll('thead tr:first-child th').length
-    if (headerCount !== committedWidths.length) {
-      committedWidthsRef.current = null
-      return
-    }
-    const colgroup = ensureResizableColgroup(table, committedWidths)
-    committedWidths.forEach((width, index) => {
-      const col = colgroup.children[index]
-      if (col) col.style.width = `${width}px`
-    })
-  }, [children, tableStyle])
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -148,12 +111,7 @@ export default function Table({
       MIN_RESIZABLE_COLUMN_WIDTH,
     )
 
-    nextWidths.forEach((nextWidth, columnIndex) => {
-      const col = activeResize.colgroup.children[columnIndex]
-      if (col) col.style.width = `${nextWidth}px`
-    })
     activeResize.lastWidths = nextWidths
-    committedWidthsRef.current = [...nextWidths]
     onColumnResize?.(
       activeResize.columnIndex,
       nextWidths[activeResize.columnIndex],
@@ -170,7 +128,6 @@ export default function Table({
     document.body.classList.remove('rz-table-column-resizing')
     resizeRef.current = null
     const finalWidths = activeResize.lastWidths || activeResize.startWidths
-    committedWidthsRef.current = [...finalWidths]
     onColumnResize?.(
       activeResize.columnIndex,
       finalWidths[activeResize.columnIndex],
@@ -202,13 +159,7 @@ export default function Table({
     const widths = tableColumnWidths(table)
     if (columnIndex < 0 || columnIndex >= widths.length - 1) return
 
-    const fixedTableWidth = Math.round(table.getBoundingClientRect().width)
-    const colgroup = ensureResizableColgroup(table, widths)
-    table.style.width = `${fixedTableWidth}px`
-
     resizeRef.current = {
-      table,
-      colgroup,
       columnIndex,
       startX: event.clientX,
       startWidths: widths,
