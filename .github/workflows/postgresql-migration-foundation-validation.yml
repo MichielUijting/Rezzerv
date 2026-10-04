@@ -140,7 +140,11 @@ jobs:
           python-version: '3.11'
 
       - name: Build exact current backend image
-        run: docker build -t rezzerv-migration-runtime ./backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s \
+            docker build --progress=plain -t rezzerv-migration-runtime ./backend
 
       - name: Prepare existing unversioned SQLite baseline
         shell: bash
