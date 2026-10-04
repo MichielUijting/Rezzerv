@@ -20,7 +20,7 @@ from app.services.platform_log_service import (
 def test_platform_logs_permission_uses_existing_role_matrix_without_expanding_v1_1_superuser():
     assert PLATFORM_LOGS_VIEW_PERMISSION == "platform.logs.view"
     assert PLATFORM_LOGS_VIEW_PERMISSION in ROLE_PERMISSIONS["platform.platform_admin"]
-    assert PLATFORM_LOGS_VIEW_PERMISSION in ROLE_PERMISSIONS["platform.ip_owner"]
+    assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["platform.ip_owner"]
     assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["platform.superuser"]
     assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["platform.support_read"]
     assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["platform.frontteam"]
