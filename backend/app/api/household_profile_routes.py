@@ -4,7 +4,7 @@ from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -40,7 +40,7 @@ class HouseholdProfileUpdateRequest(BaseModel):
     postal_code: str | None = None
     city: str | None = None
     country_code: str | None = "NL"
-    preferred_stores: list[str] = []
+    preferred_stores: list[str] = Field(default_factory=list)
     shopping_interval_days: int | None = None
     default_reserve_days: int | None = None
 
