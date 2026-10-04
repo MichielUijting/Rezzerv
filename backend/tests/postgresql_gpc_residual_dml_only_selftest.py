@@ -34,6 +34,7 @@ FALLBACK_SEGMENT_CODE = "50000000"
 FALLBACK_FAMILY_CODE = "50220000"
 FALLBACK_CLASS_CODE = "50221200"
 FALLBACK_BRICK_CODE = "10000284"
+ASSIGNMENT_BRICK_CODE = FALLBACK_BRICK_CODE
 
 
 def _engine_url():
@@ -215,13 +216,13 @@ def _assert_assignment_dml(engine) -> str:
             source="postgresql_pr2l_selftest",
         )
 
-    payload = catalog_gpc_routes.GpcBrickAssignmentRequest(brick_code=BRICK_CODE)
+    payload = catalog_gpc_routes.GpcBrickAssignmentRequest(brick_code=ASSIGNMENT_BRICK_CODE)
     written = catalog_gpc_routes.set_catalog_product_gpc_brick(product_id, payload)
     assignment = written.get("assignment") or {}
-    if assignment.get("brick_code") != BRICK_CODE:
+    if assignment.get("brick_code") != ASSIGNMENT_BRICK_CODE:
         raise AssertionError(written)
     read = catalog_gpc_routes.get_catalog_product_gpc_brick(product_id)
-    if (read.get("assignment") or {}).get("brick_code") != BRICK_CODE:
+    if (read.get("assignment") or {}).get("brick_code") != ASSIGNMENT_BRICK_CODE:
         raise AssertionError(read)
     cleared = catalog_gpc_routes.clear_catalog_product_gpc_brick(product_id)
     if cleared.get("assignment") is not None:
