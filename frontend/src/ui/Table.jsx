@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
 import { MIN_RESIZABLE_COLUMN_WIDTH, resizeTableBoundary } from './tableResize.js'
 
 const DEFAULT_KEYBOARD_STEP = 28
@@ -67,7 +67,7 @@ export default function Table({
     })
   }, [children])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const wrapper = wrapperRef.current
     const table = wrapper?.querySelector('table')
     const committedWidths = committedWidthsRef.current
@@ -153,6 +153,7 @@ export default function Table({
       if (col) col.style.width = `${nextWidth}px`
     })
     activeResize.lastWidths = nextWidths
+    committedWidthsRef.current = [...nextWidths]
     event.preventDefault()
   }, [])
 
