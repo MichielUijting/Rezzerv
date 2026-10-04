@@ -22,6 +22,10 @@ from app.services.authorization_foundation_service import (
 
 
 ROLES = ("lid", "beheerder", "superuser")
+SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS = {
+    "platform.support_access.read",
+    "platform.support_access.mutate",
+}
 
 
 @dataclass(frozen=True)
@@ -127,8 +131,9 @@ def run() -> int:
             superuser_platform == set(ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS),
         ),
         (
-            "superuser heeft geen technische Platformbeheerderrechten",
-            not (set(PLATFORM_ADMIN_PERMISSIONS) & superuser_platform),
+            "superuser deelt met Platformbeheerder uitsluitend supportrechten",
+            (set(PLATFORM_ADMIN_PERMISSIONS) & superuser_platform)
+            == SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS,
         ),
         (
             "superuser beheert geen speciale platformrollen",
