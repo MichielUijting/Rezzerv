@@ -318,7 +318,11 @@ def _candidate_haystacks(candidate: dict[str, Any]) -> dict[str, str]:
         display_value = normalize_taxonomy_text(candidate.get(display_field))
         nl_value = normalize_taxonomy_text(candidate.get(nl_field))
         en_value = normalize_taxonomy_text(candidate.get(en_field))
-        if not nl_value and display_value and en_value and display_value != en_value:
+        # De canonieke gebruikerszichtbare referentie levert Nederlandse
+        # labels in de generieke description-velden. Alleen wanneer een
+        # expliciete Engelse variant aanwezig is, mag die als interne
+        # fallback-evidence worden gebruikt.
+        if not nl_value and display_value:
             nl_value = display_value
         if not en_value and display_value and not nl_value:
             en_value = display_value
