@@ -209,27 +209,33 @@ def verify_end_state() -> int:
                 text(
                     """
                     SELECT COUNT(*) FROM auth_platform_user_roles
-                    WHERE user_id = :user_id AND role_key = 'platform.platform_admin' AND active IS TRUE
+                    WHERE user_id = :user_id AND active IS TRUE
                     """
                 ),
                 {"user_id": standalone_id},
             ).scalar_one()
-        ) == 1
+        ) == 0
 
-        audit = conn.execute(
+        audits = conn.execute(
             text(
                 """
                 SELECT actor_user_id, action, object_type, reason
                 FROM auth_audit_log
-                WHERE object_id = :user_id AND action = 'platform.role.granted'
-                ORDER BY created_at DESC LIMIT 1
+                WHERE object_id = :user_id
+                  AND action IN ('platform.role.granted', 'platform.role.revoked')
+                ORDER BY created_at
                 """
             ),
             {"user_id": standalone_id},
-        ).mappings().one()
-        assert str(audit["actor_user_id"]) == ip_owner_id, audit
-        assert str(audit["object_type"]) == "platform_user_role", audit
-        assert str(audit["reason"]) == "platform.special_roles.manage", audit
+        ).mappings().all()
+        assert [str(row["action"]) for row in audits[-2:]] == [
+            "platform.role.granted",
+            "platform.role.revoked",
+        ], audits
+        for audit in audits[-2:]:
+            assert str(audit["actor_user_id"]) == ip_owner_id, audit
+            assert str(audit["object_type"]) == "platform_user_role", audit
+            assert str(audit["reason"]) == "platform.special_roles.manage", audit
         assert int(
             conn.execute(
                 text(
