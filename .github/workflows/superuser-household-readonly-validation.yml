@@ -1,7 +1,10 @@
 name: Superuser household read-only validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches: [main]
     paths:
       - 'backend/app/api/superuser_household_routes.py'

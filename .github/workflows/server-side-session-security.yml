@@ -1,7 +1,10 @@
 name: Server-side session security
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/server_session_routes.py'
       - 'backend/app/api/household_onboarding_routes.py'

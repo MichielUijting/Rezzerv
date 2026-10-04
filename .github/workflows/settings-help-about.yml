@@ -1,7 +1,10 @@
 name: Settings Help & About validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/src/features/settings/SettingsHelpAboutPage.jsx'

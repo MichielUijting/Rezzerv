@@ -1,7 +1,10 @@
 name: Settings My account validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/consumer_account_routes.py'
       - 'backend/app/api/router.py'

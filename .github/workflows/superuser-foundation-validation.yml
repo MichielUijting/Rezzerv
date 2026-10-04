@@ -1,7 +1,10 @@
 name: Superuser foundation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches: [main]
     paths:
       - 'backend/app/api/superuser_routes.py'
