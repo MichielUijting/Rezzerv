@@ -4,7 +4,7 @@ Status: **historische/compatibility huishoudmatrix; niet langer de volledige pla
 
 Voor de actuele rollen-, account- en contextarchitectuur is `docs/security/ROLLEN-EN-ACCOUNTMODEL-v2.0.md` leidend. Voor de 9.1 acceptance closure en toekomstige rollen-v2 regressie is `docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v2.0.md` het canonical protocol. Dit v1.1-document blijft behouden voor non-destructieve household/legacy compatibility en de bestaande household-matrixregressie.
 
-Vanaf 9.1.8a gebruikt `platform.superuser` de functionele v2-permissionset. Vanaf 9.1.8c is Superuser + Platformbeheerder stacking executable. IP-owner is een afzonderlijke protected rol met de union van Superuser-v2, Platformbeheerder en `platform.special_roles.manage`.
+Vanaf 9.1.8a gebruikt `platform.superuser` de functionele v2-permissionset. Vanaf 9.1.8c is Superuser + Platformbeheerder stacking executable. De IP-eigenaar is een afzonderlijke protected rol met uitsluitend `platform.special_roles.manage`, alleen voor Superuser-toewijzing.
 
 ## 1. Doel
 
@@ -32,7 +32,7 @@ De backend bepaalt bij ieder beveiligd verzoek opnieuw:
 - Geen bevoegdheid of vereist lidmaatschap: HTTP 403.
 - Een Bearer-token zonder geldige canonical sessie geeft geen autoriteit.
 - Geen automatische fallback naar huishouden `0`.
-- Huishouden `0` is `context_type=system` en vereist een actieve server-side systeemrol (`platform.superuser` of `platform.ip_owner`); een e-mailadres alleen verleent geen authority.
+- Huishouden `0` is `context_type=system` en vereist de actieve server-side systeemrol `platform.superuser`; een e-mailadres of IP-eigenaarschap verleent geen authority.
 - Platformbeheerder-only gebruikt `context_type=none`.
 - Superuser + Platformbeheerder gebruikt na 9.1.8c één H0/system-context met de union van beide permission-sets.
 - Frontendvelden zoals `role`, `household_id` en `permissions` zijn niet autoritatief.
@@ -138,7 +138,7 @@ De household compatibilitymatrix alleen bewijst geen volledige v2-UI. Voor rolle
 4. Superuser — H0 plus functionele v2-capabilities, geen technische rechten zonder stacking;
 5. Platformbeheerder — `none` plus technische platformroutes, geen householdfallback;
 6. Superuser + Platformbeheerder — H0 plus permission-union;
-7. IP-owner — protected union inclusief special-role management.
+7. IP-eigenaar — `none`-context, uitsluitend Superusers aanstellen/intrekken; geen huishoud-, Superuser- of technische Platformbeheerrechten.
 
 Controleer per actor directe route, zichtbaarheid, backendresponse, 401/403-semantiek en actuele context.
 
