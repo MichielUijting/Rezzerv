@@ -1,7 +1,10 @@
 name: PostgreSQL operational startup validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - '.gitattributes'
       - 'start.bat'

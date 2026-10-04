@@ -1,7 +1,10 @@
 name: PostgreSQL platform feature/support authority
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/versions/20260829_14_platform_feature_support_persistence_authority.py'
       - 'backend/app/services/platform_feature_flag_service.py'

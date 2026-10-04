@@ -1,7 +1,10 @@
 name: PostgreSQL zero-residual gate
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/**'
       - 'backend/tests/postgresql_zero_residual_selftest.py'
