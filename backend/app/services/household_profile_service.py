@@ -256,6 +256,8 @@ def _validate_resident(
     band = str(age_band or "").strip() or None
     if band is not None and band not in AGE_BANDS:
         raise ValueError("Ongeldige leeftijdscategorie")
+    if birth_date is not None and band is not None:
+        raise ValueError("Vul geboortedatum of leeftijdscategorie in, niet beide")
     if birth_date is not None:
         today = date.today()
         if birth_date > today:
