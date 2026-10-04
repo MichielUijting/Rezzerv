@@ -116,9 +116,8 @@ export default function SettingsPage() {
         <span className="rz-settings-tile-icon" aria-hidden="true">{SETTINGS_TILE_ICONS[tile.key] || '•'}</span>
         <div className="rz-settings-tile-copy">
           <div className="rz-settings-tile-title" style={{ fontWeight: 600 }}>{tile.title}</div>
-          <div className="rz-settings-tile-description" style={{ color: '#667085', fontSize: '14px' }}>{tile.description}</div>
+          <div className="rz-settings-tile-description" style={{ color: '#000000', fontSize: '14px' }}>{tile.description}</div>
         </div>
-        <div className="rz-settings-tile-chevron" aria-hidden="true">›</div>
       </Link>
     )
   }
@@ -161,7 +160,7 @@ export default function SettingsPage() {
             >
               <div>
                 <h3 style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Jouw Inhuis</h3>
-                <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>
+                <p style={{ margin: 0, color: '#000000', fontSize: '14px' }}>
                   Dit is de inrichting die voor dit huishouden actief is. De instellingen hieronder sluiten hierop aan.
                 </p>
               </div>
@@ -194,7 +193,7 @@ export default function SettingsPage() {
               <div className="rz-settings-section-heading">
                 <span className="rz-settings-section-icon" aria-hidden="true">{SETTINGS_SECTION_ICONS[section.key] || '•'}</span>
                 <h3 style={{ margin: 0, fontSize: '17px' }}>{section.title}</h3>
-                <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>{section.description}</p>
+                <p style={{ margin: 0, color: '#000000', fontSize: '14px' }}>{section.description}</p>
               </div>
               <div className="rz-settings-tile-list" style={{ display: 'grid', gap: '12px' }}>
                 {section.tiles.map(renderTile)}
