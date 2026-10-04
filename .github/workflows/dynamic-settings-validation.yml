@@ -1,7 +1,10 @@
 name: Dynamic settings validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/canonical_direct_location_service.py'
       - 'backend/app/services/household_product_configuration_service.py'

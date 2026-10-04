@@ -1,8 +1,11 @@
 name: F5 conditional Locations tab regression
+# draft-ci-router: routed
 # F5-13 final-head closure authority
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:

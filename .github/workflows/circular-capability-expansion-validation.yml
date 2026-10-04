@@ -1,7 +1,10 @@
 name: Circular capability expansion validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - '.github/actions/postgresql-acceptance-foundation/action.yml'
       - 'backend/alembic/**'
