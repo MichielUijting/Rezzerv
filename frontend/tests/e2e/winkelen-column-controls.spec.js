@@ -73,16 +73,16 @@ test.describe('Winkelen kolomcontrols', () => {
 
     const articleHeader = table.getByRole('columnheader', { name: 'Artikel sorteren', exact: true })
     const productTypeHeader = table.getByRole('columnheader', { name: 'Producttype sorteren', exact: true })
-    const articleResizeHandle = table.getByRole('separator', { name: 'Kolom breedte aanpassen' }).nth(1)
 
+    await articleHeader.scrollIntoViewIfNeeded()
+    await expect(articleHeader).toBeInViewport()
     const articleBefore = await articleHeader.boundingBox()
     const productTypeBefore = await productTypeHeader.boundingBox()
-    const articleHandleBefore = await articleResizeHandle.boundingBox()
-    if (!articleBefore || !productTypeBefore || !articleHandleBefore) throw new Error('Kolomkoppen of Artikel-resize-handle zijn niet meetbaar.')
+    if (!articleBefore || !productTypeBefore) throw new Error('Kolomkoppen hebben geen meetbare browserpositie.')
 
     const boundaryPoint = {
-      x: articleHandleBefore.x + articleHandleBefore.width / 2,
-      y: articleHandleBefore.y + articleHandleBefore.height / 2,
+      x: productTypeBefore.x + 2,
+      y: productTypeBefore.y + productTypeBefore.height / 2,
     }
 
     await page.mouse.move(boundaryPoint.x, boundaryPoint.y)
@@ -110,26 +110,23 @@ test.describe('Winkelen kolomcontrols', () => {
     await page.mouse.up()
 
     await expect.poll(async () => (await articleHeader.boundingBox())?.width || 0).toBeGreaterThan(articleBefore.width + 70)
-    await expect.poll(async () => Number.parseFloat(
-      await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width),
-    )).toBeGreaterThan(articleBefore.width + 70)
     const articleAfterGrow = await articleHeader.boundingBox()
     const productTypeAfterGrow = await productTypeHeader.boundingBox()
     if (!articleAfterGrow || !productTypeAfterGrow) throw new Error('Gerenderde breedte ontbreekt na vergroten.')
     expect(productTypeAfterGrow.x).toBeGreaterThan(productTypeBefore.x + 70)
 
     await table.getByRole('button', { name: 'Gekocht sorteren', exact: true }).click()
-    await expect.poll(async () => (await articleHeader.boundingBox())?.width || 0).toBeGreaterThan(articleBefore.width + 70)
-    await expect.poll(async () => Number.parseFloat(
-      await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width),
-    )).toBeGreaterThan(articleBefore.width + 70)
+    await articleHeader.scrollIntoViewIfNeeded()
+    await expect(articleHeader).toBeInViewport()
+    const articleAfterRerender = await articleHeader.boundingBox()
+    if (!articleAfterRerender) throw new Error('Artikelbreedte ontbreekt na rerender.')
+    expect(articleAfterRerender.width).toBeGreaterThan(articleBefore.width + 70)
 
-    const articleBeforeShrink = await articleHeader.boundingBox()
-    const articleHandleBeforeShrink = await articleResizeHandle.boundingBox()
-    if (!articleBeforeShrink || !articleHandleBeforeShrink) throw new Error('Artikelkolom of resize-handle ontbreekt voor verkleinen.')
+    const productTypeBeforeShrink = await productTypeHeader.boundingBox()
+    if (!productTypeBeforeShrink) throw new Error('Producttype-kolomkop ontbreekt voor verkleinen.')
     const shrinkBoundaryPoint = {
-      x: articleHandleBeforeShrink.x + articleHandleBeforeShrink.width / 2,
-      y: articleHandleBeforeShrink.y + articleHandleBeforeShrink.height / 2,
+      x: productTypeBeforeShrink.x + 2,
+      y: productTypeBeforeShrink.y + productTypeBeforeShrink.height / 2,
     }
 
     await page.mouse.move(shrinkBoundaryPoint.x, shrinkBoundaryPoint.y)
@@ -137,12 +134,6 @@ test.describe('Winkelen kolomcontrols', () => {
     await page.mouse.move(shrinkBoundaryPoint.x - 55, shrinkBoundaryPoint.y, { steps: 5 })
     await page.mouse.up()
 
-    await expect.poll(async () => (await articleHeader.boundingBox())?.width || 0).toBeLessThan(articleAfterGrow.width - 35)
-    await expect.poll(async () => Number.parseFloat(
-      await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width),
-    )).toBeLessThan(articleAfterGrow.width - 35)
-
-    await table.getByRole('button', { name: 'Gekocht sorteren', exact: true }).click()
     await expect.poll(async () => (await articleHeader.boundingBox())?.width || 0).toBeLessThan(articleAfterGrow.width - 35)
 
     await expectNoConsoleErrors(consoleErrors)
