@@ -5,6 +5,8 @@ import {
   expectRouteLoads,
 } from './helpers/rezzervAssertions.js';
 
+test.use({ storageState: 'playwright/.auth/superuser.json' })
+
 test.describe('Externe databases ontkoppelen regressie', () => {
   test('Bestaande cataloguskoppeling wordt niet vermengd met tijdelijke OFF-zoekresultaten', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
