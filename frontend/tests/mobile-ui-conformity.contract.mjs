@@ -32,7 +32,7 @@ const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), '
 // Sole visual conformance authority for mobile roots already migrated to the
 // new PO-approved design. Functional mobile contracts remain separate.
 const MOBILE_UI_MANIFEST = Object.freeze([
-  { key: 'startpagina', source: mobileHomeSource, css: mobileHomeCss, header: /<MobileModuleHeader title="Startpagina"/ },
+  { key: 'startpagina', source: mobileHomeSource, css: mobileHomeCss, header: /<MobileModuleHeader title="Dashboard"/ },
   { key: 'voorraad', source: mobileInventorySource, css: mobileInventoryCss, header: /<MobileModuleHeader title="Voorraad"/ },
   { key: 'voorraad-detail', source: mobileArticleSource, css: mobileArticleCss, header: /<MobileModuleHeader title="Artikel in Voorraad"/ },
   { key: 'bijna-op', source: mobileAlmostOutSource, css: mobileInventoryCss, header: /<MobileModuleHeader title="Bijna op"/ },
@@ -55,10 +55,16 @@ for (const screen of MOBILE_UI_MANIFEST) {
 }
 
 assert.match(mobileHomeSource, /data-testid="mobile-home-page"/)
-assert.match(mobileHomeSource, /<MobileModuleHeader title="Startpagina" testId="mobile-home-header" \/>/)
-assert.match(mobileHomeSource, /mobile-home-customize/)
-assert.match(mobileHomeSource, /inhuis-mobile-home-order:/)
-assert.match(mobileHomeSource, /listHouseholdThreads\('Open'\)/)
+assert.match(mobileHomeSource, /<MobileModuleHeader title="Dashboard" testId="mobile-home-header" \/>/)
+assert.match(mobileHomeSource, /data-testid="dashboard-status-notifications"/)
+assert.match(mobileHomeSource, /data-testid="dashboard-status-shopping"/)
+assert.match(mobileHomeSource, /data-testid="dashboard-status-put-away"/)
+assert.match(mobileHomeSource, /PERIODS\.map/)
+assert.match(mobileHomeSource, /data-testid=\{'dashboard-period-' \+ item\.key\}/)
+assert.match(mobileHomeSource, /rz-dashboard-grid/)
+assert.match(mobileHomeSource, /rz-dashboard-shared-legend/)
+assert.match(mobileHomeSource, /aria-label="Productfamilies"/)
+assert.match(mobileHomeSource, /openBarDrilldown/)
 assert.match(mobileHomeSource, /rz-inhuis-wordmark-in/)
 assert.match(mobileHomeCss, /color:\s*rgb\(40 169 158\)/i)
 assert.match(mobileHomeCss, /Segoe Script/)
@@ -191,15 +197,10 @@ assert.doesNotMatch(mobileInventoryCss, /rz-mobile-inventory-quick-feedback|rz-m
 console.log('MOBILE_UI_CONFORMITY_GREEN')
 
 assert.match(mobileAppChromeSource, /inhuis:mobile-home-back/)
-assert.match(mobileHomeSource, /mobile-home-reorder-header/)
-assert.match(mobileHomeSource, /rz-mobile-home-edit-done/)
-assert.doesNotMatch(mobileHomeSource, /rz-mobile-home-edit-header/)
 assert.match(mobileComponentsCss, /min-width:\s*56px/)
 assert.match(mobileAppChromeCss, /left:\s*8px/)
 
-// Meldingen staat op de landingspagina alleen als teller/doorklik en blijft beschikbaar voor de globale onderbalk.
-assert.match(mobileHomeSource, /map\.delete\('meldingen'\)/)
-assert.match(mobileHomeSource, /rz-mobile-home-notifications/)
+// Meldingen blijft als dashboardstatus doorklikbaar en als actie beschikbaar in de globale onderbalk.
+assert.match(mobileHomeSource, /openStatus\('meldingen'\)/)
 assert.match(mobileHomeSource, /key: 'meldingen', clickable: true/)
-assert.doesNotMatch(mobileHomeSource, /DEFAULT_ORDER = \[[^\]]*'meldingen'/)
 assert.match(mobileAppChromeSource, /if \(key === 'meldingen'\) return 'bell'/)
