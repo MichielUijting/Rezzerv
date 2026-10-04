@@ -22,7 +22,7 @@ def test_platform_logs_permission_uses_existing_role_matrix_without_expanding_v1
     assert PLATFORM_LOGS_VIEW_PERMISSION in ROLE_PERMISSIONS["platform.platform_admin"]
     assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["platform.ip_owner"]
     assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["platform.superuser"]
-    assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["platform.support_read"]
+    assert "platform.support_read" not in ROLE_PERMISSIONS
     assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["platform.frontteam"]
     assert PLATFORM_LOGS_VIEW_PERMISSION not in ROLE_PERMISSIONS["household.admin"]
 
