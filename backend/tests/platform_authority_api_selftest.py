@@ -284,125 +284,88 @@ def run() -> int:
 
         with TestClient(app) as ip_owner:
             owner_session = _login(ip_owner, IP_OWNER_EMAIL)
-            assert owner_session["active_household_id"] == "0"
-            assert owner_session["context_type"] == "system"
+            assert owner_session["active_household_id"] is None
+            assert owner_session["context_type"] == "none"
+            assert owner_session["permissions"]["platform.special_roles.manage"] is True
+            assert owner_session["permissions"].get("platform.permissions.manage") is not True
 
             inventory = ip_owner.get("/api/platform/authorizations")
-            assert inventory.status_code == 200, inventory.text
-            assert inventory.json()["can_manage_special_roles"] is True
+            assert inventory.status_code == 403, inventory.text
 
             blocked_regular = ip_owner.post(
                 f"/api/platform/authorizations/users/{TARGET_ADMIN_ID}/platform-admin/grant"
             )
-            assert blocked_regular.status_code == 409, blocked_regular.text
-            assert "huishoudlidmaatschap" in str(blocked_regular.json().get("detail") or "").lower()
-            checks.append("ip_owner_cannot_stack_platform_role_on_regular_household_member")
+            assert blocked_regular.status_code == 403, blocked_regular.text
+            checks.append("ip_owner_cannot_manage_platform_admin")
 
             granted = ip_owner.post(
-                f"/api/platform/authorizations/users/{STANDALONE_TARGET_ID}/platform-admin/grant"
+                "/api/ip-owner/superusers",
+                json={"email": STANDALONE_TARGET_EMAIL},
             )
             assert granted.status_code == 200, granted.text
             granted_item = granted.json()["item"]
-            assert "platform.platform_admin" in granted_item["platform_role_keys"]
+            assert "platform.superuser" in granted_item["platform_role_keys"]
             assert granted.json()["household_context_used"] is False
-        checks.append("ip_owner_grants_special_role_to_standalone_user")
+        checks.append("ip_owner_grants_superuser_to_standalone_user")
 
         with engine.begin() as conn:
             memberships_after = conn.execute(
-                text(
-                    """
+                text("""
                     SELECT household_id, role
                     FROM household_memberships
                     WHERE lower(user_email) = :email
                     ORDER BY household_id
-                    """
-                ),
+                """),
                 {"email": TARGET_ADMIN_EMAIL},
             ).mappings().all()
             assert memberships_after == memberships_before
 
-            blocked_target_role_count = int(
-                conn.execute(
-                    text(
-                        """
-                        SELECT COUNT(*)
-                        FROM auth_platform_user_roles
-                        WHERE user_id = :user_id
-                          AND role_key = 'platform.platform_admin'
-                          AND active IS TRUE
-                        """
-                    ),
-                    {"user_id": TARGET_ADMIN_ID},
-                ).scalar_one()
-            )
-            assert blocked_target_role_count == 0
-
-            standalone_membership_count = int(
-                conn.execute(
-                    text(
-                        """
-                        SELECT COUNT(*)
-                        FROM household_memberships hm
-                        JOIN app_users u ON lower(trim(hm.user_email)) = lower(trim(u.email))
-                        WHERE u.id = :user_id
-                        """
-                    ),
-                    {"user_id": STANDALONE_TARGET_ID},
-                ).scalar_one()
-            )
-            assert standalone_membership_count == 0
-
-            active_role = conn.execute(
-                text(
-                    """
-                    SELECT active
-                    FROM auth_platform_user_roles
+            blocked_target_role_count = int(conn.execute(
+                text("""
+                    SELECT COUNT(*) FROM auth_platform_user_roles
                     WHERE user_id = :user_id
                       AND role_key = 'platform.platform_admin'
-                    """
-                ),
+                      AND active IS TRUE
+                """),
+                {"user_id": TARGET_ADMIN_ID},
+            ).scalar_one())
+            assert blocked_target_role_count == 0
+
+            active_role = conn.execute(
+                text("""
+                    SELECT active FROM auth_platform_user_roles
+                    WHERE user_id = :user_id AND role_key = 'platform.superuser'
+                """),
                 {"user_id": STANDALONE_TARGET_ID},
             ).scalar_one()
             assert bool(active_role) is True
 
             audit = conn.execute(
-                text(
-                    """
+                text("""
                     SELECT actor_user_id, action, object_type, object_id, reason
                     FROM auth_audit_log
                     WHERE object_id = :user_id
                       AND action = 'platform.role.granted'
                     ORDER BY created_at DESC
                     LIMIT 1
-                    """
-                ),
+                """),
                 {"user_id": STANDALONE_TARGET_ID},
             ).mappings().one()
             assert str(audit["actor_user_id"]) == IP_OWNER_ID
             assert audit["object_type"] == "platform_user_role"
             assert audit["reason"] == "platform.special_roles.manage"
-        checks.append("platform_role_change_is_audited_without_household_membership_mutation")
+        checks.append("superuser_role_change_is_audited_without_household_membership_mutation")
 
         with TestClient(app) as standalone_after_role_change:
-            login_after_role_change = _login(
-                standalone_after_role_change,
-                STANDALONE_TARGET_EMAIL,
-            )
-            assert login_after_role_change["context_type"] == "none"
-            assert login_after_role_change["active_household_id"] is None
-            household_list = standalone_after_role_change.get("/api/session/households")
-            assert household_list.status_code == 200, household_list.text
-            assert household_list.json() == {
-                "items": [],
-                "total": 0,
-                "can_switch_households": False,
-            }
+            login_after_role_change = _login(standalone_after_role_change, STANDALONE_TARGET_EMAIL)
+            assert login_after_role_change["context_type"] == "system"
+            assert login_after_role_change["active_household_id"] == "0"
             forbidden_switch = standalone_after_role_change.post(
                 "/api/session/household",
                 json={"household_id": ISOLATION_HOUSEHOLD},
             )
             assert forbidden_switch.status_code == 403, forbidden_switch.text
-        checks.append("platform_role_does_not_create_cross_household_access")
+        checks.append("superuser_role_does_not_create_cross_household_access")
 
         for check in checks:
             print(f"PASS {check}")

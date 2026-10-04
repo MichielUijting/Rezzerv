@@ -15,6 +15,7 @@ from app.services.authorization_membership_service import (
     require_household_permission,
 )
 from app.services.server_session_service import SESSION_COOKIE_NAME, resolve_server_session
+from app.services.dutch_gpc_projection_service import dutch_gpc_by_household_article
 from app.services.shopping_list_service import (
     add_shopping_list_item,
     complete_active_shopping_list,
@@ -146,6 +147,15 @@ def _project_existing_catalog(scope: str, household_id: str, query: str, limit: 
 def _search_one_scope(scope: str, household_id: str, query: str, limit: int) -> dict[str, Any]:
     projected = _project_existing_catalog(scope, household_id, query, limit)
     if projected is not None:
+        if scope == "household_articles" and projected.get("items"):
+            with engine.begin() as conn:
+                gpc_by_article = dutch_gpc_by_household_article(
+                    conn,
+                    household_id,
+                    [item.get("source_id") for item in projected["items"]],
+                )
+            for item in projected["items"]:
+                item.update(gpc_by_article.get(str(item.get("source_id") or "").strip(), {}))
         return projected
     with engine.begin() as conn:
         return search_shopping_catalog(

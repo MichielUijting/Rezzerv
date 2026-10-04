@@ -5,6 +5,8 @@ import {
   expectRouteLoads,
 } from './helpers/rezzervAssertions.js';
 
+test.use({ storageState: 'playwright/.auth/superuser.json' })
+
 test.describe('Externe databases bekende GTIN regressie', () => {
   test('Bonartikel met bestaande GTIN behoudt artikelcode en start geen OFF-zoekactie', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);

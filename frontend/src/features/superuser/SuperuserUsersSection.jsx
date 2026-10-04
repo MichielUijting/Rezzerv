@@ -7,8 +7,8 @@ import { fetchJsonWithAuth } from '../../lib/authSession.js'
 const PAGE_SIZE = 10
 
 const DUTCH_VALUE_LABELS = {
-  active: 'Actief', inactive: 'Inactief', owner: 'Eigenaar', admin: 'Beheerder', member: 'Lid',
-  user: 'Gebruiker', viewer: 'Lezer', pending: 'In behandeling', archived: 'Gearchiveerd',
+  active: 'Actief', inactive: 'Inactief', owner: 'Beheerder', admin: 'Beheerder', member: 'Gebruiker',
+  user: 'Gebruiker', viewer: 'Gebruiker', pending: 'In behandeling', archived: 'Gearchiveerd',
 }
 
 function dutchValue(value) {

@@ -19,7 +19,6 @@ const LEGACY_TILES = [
   { key: 'bestellen', label: 'Bestellen', icon: '📋', clickable: false },
   { key: 'verlengen', label: 'Verlengen', icon: '⏳', clickable: false },
   { key: 'instellingen', label: 'Instellingen', icon: '⚙️', clickable: true },
-  { key: 'admin', label: 'Admin', icon: '🛠️', clickable: true },
   { key: 'superuser', label: 'Superuser', icon: '🛡️', clickable: true },
 ]
 
@@ -35,7 +34,6 @@ function isVisible(tile, visibility) {
   if (!tile.feature && !isGloballyAvailable(tile, visibility.actionButtons)) return false
   if (tile.key === 'berichten') return visibility.canOpenMessages
   if (tile.key === 'meldingen') return true
-  if (tile.key === 'admin') return visibility.canOpenAdmin
   if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
   if (tile.key === 'superuser') return visibility.isPlatformSuperuser
   return true

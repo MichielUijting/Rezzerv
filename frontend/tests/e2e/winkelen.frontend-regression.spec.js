@@ -164,7 +164,7 @@ test.describe('Boodschappen frontend-regressie', () => {
     await expect(table.locator('thead tr:first-child th').first()).toBeVisible();
 
     const headerLabels = await table.locator('thead tr:first-child th').allTextContents();
-    expect(headerLabels.map((value) => value.replace(/\s*[\^v]\s*$/, '').trim())).toEqual(['', 'Artikel', 'Producttype', 'Aantal', 'Omvang', 'Opmerking', 'Gekocht']);
+    expect(headerLabels.map((value) => value.replace(/\s*[\^v]\s*$/, '').trim())).toEqual(['', 'Artikel', 'Producttype', 'GPC: Brick · Groep · Familie', 'Aantal', 'Omvang', 'Opmerking', 'Gekocht']);
 
     await expect(table.locator('thead tr:first-child')).toHaveClass(/rz-table-header/);
     const headerColor = await table.getByRole('button', { name: 'Artikel sorteren', exact: true }).evaluate(
@@ -172,7 +172,7 @@ test.describe('Boodschappen frontend-regressie', () => {
     );
     expect(headerColor).toBe('rgb(255, 255, 255)');
 
-    const sortableHeaders = ['Artikel', 'Producttype', 'Aantal', 'Omvang', 'Opmerking', 'Gekocht'].map((label) => ({
+    const sortableHeaders = ['Artikel', 'Producttype', 'GPC: Brick · Groep · Familie', 'Aantal', 'Omvang', 'Opmerking', 'Gekocht'].map((label) => ({
       label,
       button: table.getByRole('button', { name: `${label} sorteren`, exact: true }),
       header: table.getByRole('columnheader', { name: `${label} sorteren`, exact: true }),
@@ -191,7 +191,7 @@ test.describe('Boodschappen frontend-regressie', () => {
 
     await expect(page.getByLabel('Filter gekocht')).toHaveAttribute('type', 'checkbox');
     const filterControls = table.locator('thead tr:nth-child(2) .rz-input');
-    await expect(filterControls).toHaveCount(2);
+    await expect(filterControls).toHaveCount(3);
     for (let index = 0; index < await filterControls.count(); index += 1) {
       const metrics = await filterControls.nth(index).evaluate((element) => {
         const style = window.getComputedStyle(element);
@@ -215,11 +215,13 @@ test.describe('Boodschappen frontend-regressie', () => {
     expect(configuredFilterRowHeight).toBe('34px');
 
     const columnWidths = await table.locator('colgroup col').evaluateAll((columns) => columns.map((column) => Number.parseFloat(column.style.width)));
-    expect(columnWidths).toEqual([60, 330, 300, 90, 120, 220, 90]);
+    expect(columnWidths).toEqual([60, 330, 300, 380, 90, 120, 220, 90]);
 
     const resizeHandles = table.getByRole('separator', { name: 'Kolom breedte aanpassen' });
-    await expect(resizeHandles).toHaveCount(7);
+    await expect(resizeHandles).toHaveCount(8);
     const articleResizeHandle = resizeHandles.nth(1);
+    await articleResizeHandle.scrollIntoViewIfNeeded();
+    await expect(articleResizeHandle).toBeInViewport();
     const resizeBox = await articleResizeHandle.boundingBox();
     if (!resizeBox) throw new Error('Resize-handle voor Artikel ontbreekt.');
     const articleWidthBefore = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
@@ -280,8 +282,8 @@ test.describe('Boodschappen frontend-regressie', () => {
     const exportDownload = await exportDownloadPromise;
     expect(exportDownload.suggestedFilename()).toBe('winkelen-geselecteerde-rijen.csv');
     const exportedCsv = await readFile(await exportDownload.path(), 'utf8');
-    expect(exportedCsv).toContain('"Artikel";"Producttype";"Aantal";"Omvang";"Opmerking";"Gekocht"');
-    expect(exportedCsv).toContain('"Melk";"Halfvolle melk";"3";"2 × 1,5 liter";"Halfvol";"Ja"');
+    expect(exportedCsv).toContain('"Artikel";"Producttype";"GPC Brick";"GPC Groep";"GPC Familie";"Aantal";"Omvang";"Opmerking";"Gekocht"');
+    expect(exportedCsv).toContain('"Melk";"Halfvolle melk";"";"";"";"3";"2 × 1,5 liter";"Halfvol";"Ja"');
 
     const nativeDialogs = [];
     page.on('dialog', async (dialog) => {

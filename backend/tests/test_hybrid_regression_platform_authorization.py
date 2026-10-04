@@ -76,11 +76,11 @@ def auth_engine():
 
 def _context(user_id: str) -> ServerSessionContext:
     now = datetime.now(timezone.utc)
-    if user_id in {"superuser", "ip-owner"}:
+    if user_id == "superuser":
         context_type = "system"
         household_id = "0"
         role = "owner"
-    elif user_id in {"platform-admin", "job-only", "fixture-only"}:
+    elif user_id in {"platform-admin", "ip-owner", "job-only", "fixture-only"}:
         context_type = "none"
         household_id = None
         role = None
@@ -147,8 +147,8 @@ def test_hybrid_classifier_is_exact_and_requires_both_existing_permissions():
     ) == ()
 
 
-@pytest.mark.parametrize("user_id", ["ip-owner", "platform-admin"])
-def test_ip_owner_and_platform_admin_satisfy_both_permissions(
+@pytest.mark.parametrize("user_id", ["platform-admin"])
+def test_platform_admin_satisfies_both_permissions(
     monkeypatch,
     auth_engine,
     user_id,
@@ -165,6 +165,7 @@ def test_ip_owner_and_platform_admin_satisfy_both_permissions(
 @pytest.mark.parametrize(
     "user_id",
     [
+        "ip-owner",
         "superuser",
         "support-reader",
         "frontteam",

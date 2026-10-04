@@ -68,7 +68,7 @@ def _load_platform_role_matrix(conn: Connection) -> list[dict[str, Any]]:
             "role_key": str(row["role_key"]),
             "name": str(row["name"]),
             "permissions": permissions_by_role.get(str(row["role_key"]), []),
-            "managed_by_this_page": str(row["role_key"]) in MANAGED_SPECIAL_ROLE_KEYS,
+            "managed_by_this_page": str(row["role_key"]) in {SUPERUSER_ROLE_KEY, FRONTTEAM_ROLE_KEY},
             "protected": str(row["role_key"]) == IP_OWNER_ROLE_KEY,
         }
         for row in role_rows
@@ -258,7 +258,9 @@ def _role_actions(
             active_role_keys=active_role_keys,
         )
         revoke_reason = _revoke_block_reason(role_key, active_role_keys)
-        can_manage_role = can_manage_special_roles or (
+        can_manage_role = (
+            role_key == SUPERUSER_ROLE_KEY and can_manage_special_roles
+        ) or (
             role_key == FRONTTEAM_ROLE_KEY and can_manage_frontteam_roles
         )
         result[role_key] = {

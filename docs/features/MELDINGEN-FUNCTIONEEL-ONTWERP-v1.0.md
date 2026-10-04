@@ -10,7 +10,7 @@
 
 ## Doel
 
-Meldingen ondersteunt communicatie tussen Rezzerv-gebruikers en de centrale superuser. Iedere conversatie blijft afgeschermd per gebruiker en huishouden.
+Meldingen ondersteunt communicatie tussen Inhuis-gebruikers en centraal Platformbeheer. Iedere conversatie blijft afgeschermd per gebruiker en huishouden.
 
 ## Rollen en bevoegdheden
 
@@ -18,35 +18,42 @@ Meldingen ondersteunt communicatie tussen Rezzerv-gebruikers en de centrale supe
 
 - ziet de tegel **Meldingen** en opent `/meldingen`;
 - ontvangt en leest Inhuis-meldingen waarvoor de gebruiker ontvanger is;
-- kan geen gesprek met de superuser starten of beantwoorden;
+- kan zonder Frontteamrol geen gesprek met Platformbeheer starten of beantwoorden;
 - kan geen platformbreed bericht versturen.
 
-### Superuser
+### Platformbeheerder
 
-- opent via de tegel automatisch `/superuser/meldingen`;
+- opent **Meldingen** binnen Platformbeheer op `/platform/meldingen`;
 - ziet meldingen van alle huishoudens;
 - leest en beantwoordt ieder gesprek;
 - wijzigt de status naar Open, In behandeling of Gesloten;
 - filtert op status en huishouden;
 - exporteert meldingen als CSV;
 - verwijdert meldingen;
-- stuurt als enige een melding aan alle actieve Rezzerv-leden;
-- kent als enige de huishoudrol **Frontteamlid** toe en trekt die als enige weer in.
+- kan een platformmelding aan alle actieve Inhuis-leden versturen;
+- gebruikt daarvoor `platform.support_access.read` en `platform.support_access.mutate`.
 
-### Beheerder, Lid en Frontteam
+### Superuser en IP-eigenaar
 
-Deze rollen hebben geen platformbreed broadcastrecht. Een huishoudrol op zichzelf geeft geen toegang tot `/superuser/meldingen`.
+- Superusers gebruiken de gedeelde Platformbeheer-inbox via `platform.support_access.read` en `platform.support_access.mutate`;
+- Superusers gebruiken geen afzonderlijke supportomgeving; de oude route `/superuser/meldingen` is uitsluitend een compatibiliteitsredirect naar `/platform/meldingen`;
+- Frontteamrollen toekennen of intrekken blijft een Superuserfunctie;
+- de IP-eigenaar heeft geen support-, meldingen- of Frontteambevoegdheid en beheert uitsluitend Superusers.
 
-Alleen een gebruiker met de aanvullende platformrol `platform.frontteam` en de bijbehorende Frontteam-berichtpermissies mag vanuit het eigen huishouden een gesprek met de Superuser starten en daarop antwoorden. De bestaande huishoudrol blijft daarbij ongewijzigd. Het toekennen of intrekken van `platform.frontteam` is voorbehouden aan de Superuser of IP-eigenaar en wordt server-side afgedwongen en geaudit.
+### Beheerder, Gebruiker en Frontteam
+
+Een huishoudrol op zichzelf geeft geen platformbrede supporttoegang of broadcastrecht.
+
+Alleen een gebruiker met de aanvullende platformrol `platform.frontteam` en de bijbehorende Frontteam-berichtpermissies mag vanuit het eigen huishouden een gesprek met Platformbeheer starten en daarop antwoorden. De bestaande huishoudrol blijft daarbij ongewijzigd. Het toekennen of intrekken van `platform.frontteam` blijft voorbehouden aan de daarvoor bevoegde Superuser en wordt server-side afgedwongen en geaudit.
 
 ## Functioneel gedrag
 
-### Frontteammelding naar superuser
+### Frontteammelding naar Platformbeheer
 
 1. Het Frontteamlid vult onderwerp en bericht in.
 2. De melding wordt centraal opgeslagen.
 3. De gebruiker ziet de melding in **Mijn meldingen**.
-4. De superuser ziet dezelfde conversatie in **Alle meldingen**.
+4. Platformbeheer ziet dezelfde conversatie in **Alle meldingen**.
 5. Beide partijen kunnen binnen dezelfde thread antwoorden.
 6. Status en berichtinhoud blijven consistent aan beide kanten.
 
@@ -72,19 +79,19 @@ Alleen een gebruiker met de aanvullende platformrol `platform.frontteam` en de b
 - Verwijderen gebruikt het centrale `AppFeedbackProvider`-component.
 - De bevestiging bevat Verwijderen en Annuleren.
 - Een gewone gebruiker kan uitsluitend een eigen melding verwijderen.
-- De superuser kan meldingen vanuit het platformoverzicht verwijderen.
+- Platformbeheer kan meldingen vanuit de platform-inbox verwijderen.
 
 ### Platformbericht aan alle leden
 
-- Alleen de superuser ziet **Nieuwe melding aan alle leden**.
+- Gebruikers met `platform.support_access.mutate` zien **Nieuwe melding aan alle leden**.
 - Het formulier bevat onderwerp, bericht en Antwoorden toestaan.
 - Verzending gebruikt het centrale bevestigingscomponent.
 - De ontvangers worden bepaald uit actieve lidmaatschappen.
 - `household_memberships.user_email` wordt gekoppeld aan het interne gebruikers-ID in `app_users`.
-- Systeemhuishouden `0` en de superuser zelf worden uitgesloten.
+- Systeemhuishouden `0` en de verzendende platformgebruiker zelf worden uitgesloten.
 - Dubbele ontvangers worden voorkomen.
 - Ieder actief lid krijgt een eigen, afgeschermde conversatie.
-- De superuser blijft als afzender zichtbaar.
+- Platformbeheerder blijft als afzender zichtbaar.
 
 ## Presentatieregels
 
@@ -107,14 +114,14 @@ Container-rebuilds mogen bestaande meldingen niet verwijderen.
 
 - Huishoudroutes gebruiken de actuele server-side sessie en actieve huishoudcontext.
 - Platformroutes vereisen `platform.support_access.read` of `platform.support_access.mutate`.
-- Alleen de canonieke superuser heeft het broadcastrecht.
+- Broadcast vereist `platform.support_access.mutate`; Platformbeheerder en Superuser voldoen daaraan. De IP-eigenaar niet.
 - Gebruikers mogen geen gesprekken van andere gebruikers openen, beantwoorden of verwijderen.
 
 ## Positieve PO-acceptatie
 
 De Product Owner heeft positief getest:
 
-- melding van Huishouden2 naar de superuser;
+- melding van Huishouden2 naar Platformbeheer;
 - zichtbaarheid van dezelfde thread aan beide kanten;
 - antwoorden over en weer;
 - statusconsistentie;
@@ -122,7 +129,7 @@ De Product Owner heeft positief getest:
 - standaardfilter Open;
 - lichtgroene ongelezenmarkering;
 - verwijderen via centraal Rezzerv-component;
-- platformbericht door de superuser aan alle actieve leden;
+- platformbericht vanuit Platformbeheer aan alle actieve leden;
 - ontvangst als afzonderlijke, afgeschermde gesprekken.
 
 ## Wijzigingsregel

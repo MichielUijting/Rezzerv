@@ -179,6 +179,8 @@ ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS = set(V2_SUPERUSER_TARGET_PERMISSIONS)
 ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS = ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS
 
 PLATFORM_ADMIN_PERMISSIONS = {
+    "platform.support_access.read",
+    "platform.support_access.mutate",
     "platform.diagnostics.view",
     "platform.logs.view",
     "platform.audit.view",
@@ -193,11 +195,12 @@ PLATFORM_ADMIN_PERMISSIONS = {
     "platform.feature_flags.manage",
 }
 
-IP_OWNER_PERMISSIONS = (
-    V2_SUPERUSER_TARGET_PERMISSIONS
-    | PLATFORM_ADMIN_PERMISSIONS
-    | {"platform.special_roles.manage"}
-)
+# The IP-eigenaar is deliberately a narrow ownership role. It does not inherit
+# household, Superuser, Frontteam or technical Platformbeheer permissions.
+# Its only runtime authority is managing Superuser assignments.
+IP_OWNER_PERMISSIONS = {
+    "platform.special_roles.manage",
+}
 
 ROLE_PERMISSIONS = {
     "household.viewer": {key for key in HOUSEHOLD_PERMISSIONS if key.endswith(".view")},
@@ -205,11 +208,6 @@ ROLE_PERMISSIONS = {
     "household.advanced_member": set(ADMIN_PERMISSIONS),
     "household.admin": set(ADMIN_PERMISSIONS),
     "household.owner": set(SUPERUSER_HOUSEHOLD_PERMISSIONS),
-    "platform.support_read": {
-        "platform.households.search", "platform.households.view_metadata",
-        "platform.support_access.request", "platform.support_access.activate",
-        "platform.support_access.read", "platform.audit.view",
-    },
     "platform.frontteam": set(FRONTTEAM_PLATFORM_PERMISSIONS),
     "platform.superuser": set(ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS),
     "platform.platform_admin": set(PLATFORM_ADMIN_PERMISSIONS),
@@ -342,6 +340,18 @@ def _seed_registry(conn) -> None:
         DELETE FROM auth_role_permissions
         WHERE role_key = 'household.frontteam'
     """))
+    # Support is part of Platformbeheer. Keep the legacy role record only as
+    # inactive compatibility data so it cannot be assigned or shown as a
+    # separate active platform role.
+    conn.execute(text("""
+        UPDATE auth_roles
+        SET active = FALSE
+        WHERE role_key = 'platform.support_read'
+    """))
+    conn.execute(text("""
+        DELETE FROM auth_role_permissions
+        WHERE role_key = 'platform.support_read'
+    """))
     for key in HOUSEHOLD_PERMISSIONS:
         conn.execute(text("""
             INSERT INTO auth_permissions(permission_key, scope, description)
@@ -355,14 +365,13 @@ def _seed_registry(conn) -> None:
             ON CONFLICT(permission_key) DO UPDATE SET active = TRUE
         """), {"key": key, "description": key})
     role_names = {
-        "household.viewer": "Viewer",
-        "household.member": "Lid",
-        "household.advanced_member": "Gevorderd lid",
-        "household.admin": "Huishoudbeheerder",
-        "household.owner": "Superuser-huishoudrol",
-        "platform.support_read": "Supportmedewerker lezen",
+        "household.viewer": "Gebruiker",
+        "household.member": "Gebruiker",
+        "household.advanced_member": "Beheerder",
+        "household.admin": "Beheerder",
+        "household.owner": "Beheerder",
         "platform.frontteam": "Frontteamlid",
-        "platform.superuser": "Platform-superuser",
+        "platform.superuser": "Superuser",
         "platform.platform_admin": "Platformbeheerder",
         "platform.ip_owner": "IP-eigenaar",
     }

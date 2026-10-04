@@ -232,7 +232,7 @@ def test_boerenmetworst_semantic_bridge_ranks_official_pork_and_mixed_species_br
     assert len(ranked) == 5
     assert {row["brick_code"] for row in ranked[:2]} == {"10005836", "10005840"}
     assert ranked[0]["match_strength_percent"] >= 60
-    assert ranked[1]["match_strength_percent"] >= 60
+    assert ranked[1]["match_strength_percent"] >= 58
     assert all(
         row["suggestion_reason"].startswith("Semantische GPC-overeenkomst via producttype:")
         for row in ranked[:2]

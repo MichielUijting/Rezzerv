@@ -1,6 +1,6 @@
 # 9.1.8b — Special-role management door de IP-eigenaar
 
-Status: afgeronde v2 special-role management authority; 9.1.8c voert de eerder gereserveerde stackingcutover uit.
+Status: historisch 9.1.8b-contract. Voor de actuele IP-eigenaarscope geldt het PO-besluit van 3 oktober 2026 in `ROLLEN-EN-ACCOUNTMODEL-v2.0.md`: IP-eigenaar beheert uitsluitend Superusers.
 
 ## Doel
 
@@ -86,3 +86,16 @@ Een Frontteamregistratie kent twee toestanden:
 - `inactive`: de gebruiker blijft als Frontteamlid geregistreerd, maar de aanvullende Frontteambevoegdheden zijn uitgeschakeld.
 
 Activeren en deactiveren wijzigen uitsluitend de Frontteambevoegdheid. Verwijderen verwijdert de Frontteamregistratie. Geen van deze acties verwijdert het Inhuis-account, het reguliere huishouden of de bestaande huishoudrol.
+
+
+## Actuele IP-eigenaarscope vanaf 3 oktober 2026
+
+De oorspronkelijke 9.1.8b-inrichting waarin de IP-eigenaar meerdere speciale rollen kon beheren is voor de productruntime vervangen door een smallere eigenaarsrol:
+
+- IP-eigenaar heeft uitsluitend `platform.special_roles.manage`;
+- deze authority wordt in de actuele beheerflow alleen toegepast op `platform.superuser`;
+- Frontteambeheer blijft bij Superuser;
+- Platformbeheerderbeheer valt buiten de IP-eigenaarsflow;
+- IP-eigenaar heeft geen H0-, Superuser- of Platformbeheerdercontext.
+
+De historische beschrijving hierboven blijft alleen relevant om oudere migraties en regressieclaims te duiden.

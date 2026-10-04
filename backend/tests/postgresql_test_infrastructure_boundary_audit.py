@@ -95,6 +95,36 @@ PATTERNS = (
 # These files intentionally exercise historical SQLite source/schema behavior;
 # they are not normal application-runtime test harnesses.
 ALLOWED_COMPATIBILITY_FILES: dict[str, str] = {
+    ".github/workflows/gpc-live-language-validation.yml": (
+        "Runs static GPC publication/reference tests only; no application runtime or production datastore path."
+    ),
+    "backend/tests/test_authorization_foundation_contract.py": (
+        "Exercises isolated authorization-foundation compatibility contracts; PostgreSQL full-stack gates remain authoritative."
+    ),
+    "backend/tests/test_bundled_dutch_gpc_reference.py": (
+        "Exercises bundled Dutch GPC reference DML against an isolated in-memory compatibility schema."
+    ),
+    "backend/tests/test_dutch_gpc_projection_service.py": (
+        "Exercises Dutch GPC projection logic against an isolated in-memory compatibility schema."
+    ),
+    "backend/tests/test_household_dashboard_service.py": (
+        "Exercises dashboard aggregation logic in an isolated compatibility harness; PostgreSQL request gates remain authoritative."
+    ),
+    "backend/tests/test_platform_audit_route_authorization.py": (
+        "Exercises isolated platform audit permission contracts; PostgreSQL platform authority gates remain authoritative."
+    ),
+    "backend/tests/test_platform_integrations_route_authorization.py": (
+        "Exercises isolated integration permission contracts; PostgreSQL platform authority gates remain authoritative."
+    ),
+    "backend/tests/test_platform_sessions_route_authorization.py": (
+        "Exercises isolated session permission contracts; PostgreSQL platform authority gates remain authoritative."
+    ),
+    "backend/tests/test_platform_users_route_authorization.py": (
+        "Exercises isolated platform-user permission contracts; PostgreSQL platform authority gates remain authoritative."
+    ),
+    "backend/tests/test_superuser_v2_permission_cutover.py": (
+        "Exercises isolated Superuser v2 permission compatibility; PostgreSQL role/session gates remain authoritative."
+    ),
     ".github/workflows/postgresql-data-migration-validation.yml": (
         "Validates the controlled SQLite production-source to PostgreSQL importer."
     ),

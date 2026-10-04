@@ -37,10 +37,10 @@ niet stilzwijgend ten gunste van v1.1 worden opgelost.
 
 ## 2. Rollen en accounttypen
 
-### 2.1 Lid
+### 2.1 Gebruiker
 
 - Hoort bij een regulier huishouden.
-- Wordt normaal uitgenodigd door een Beheerder.
+- Wordt normaal als Gebruiker uitgenodigd door een Beheerder.
 - Gebruikt de functionele huishoudinstellingen die de Beheerder heeft bepaald.
 - Beheert die huishoudinstellingen niet zelf.
 - Is geen platformrol.
@@ -51,9 +51,9 @@ niet stilzwijgend ten gunste van v1.1 worden opgelost.
 - Iemand die Rezzerv normaal zelf registreert, wordt automatisch Beheerder van
   een nieuw regulier huishouden.
 - Beheert huishoudinstellingen en leden.
-- Kan een Lid uitnodigen.
-- Kan een Lid promoveren tot Beheerder.
-- Kan een Beheerder terugzetten naar Lid zolang minimaal één Beheerder
+- Kan een Gebruiker uitnodigen.
+- Kan een Gebruiker promoveren tot Beheerder.
+- Kan een Beheerder terugzetten naar Gebruiker zolang minimaal één Beheerder
   overblijft.
 - In ieder regulier huishouden moet altijd minimaal één Beheerder overblijven.
 - Is geen platformrol.
@@ -128,42 +128,30 @@ Platformbeheerder is een speciaal technisch platformaccount.
 
 ### 2.6 IP-eigenaar
 
-IP-eigenaar is de hoogste, beschermde platformbevoegdheid.
+IP-eigenaar is de beschermde eigenaarsrol voor het beheren van Superusers.
 
 - Heeft geen regulier gebruikershuishouden.
-- Heeft vanwege de functionele Superuserbevoegdheden wel toegang tot
-  systeemhuishouden 0.
-- Heeft functioneel de bevoegdheden van Superuser.
-- Heeft technisch de bevoegdheden van Platformbeheerder.
-- Hoeft in de UI niet als drie gestapelde rollen te worden getoond en wordt
-  zichtbaar aangeduid als **IP-eigenaar**.
-
-De IP-eigenaar kan:
-
-- Superusers aanstellen en verwijderen of deactiveren;
-- Frontteamleden aanstellen en de Frontteamrol intrekken;
-- Platformbeheerders aanstellen en Platformbeheerderrechten intrekken;
-- speciale rollen overzien;
-- audit- en beheerhistorie inzien;
-- functioneel en technisch platformbeheer uitvoeren;
-- systeemhuishouden 0 gebruiken voor tests, diagnose en foutanalyse.
+- Heeft geen toegang tot systeemhuishouden 0.
+- Erft geen functionele Superuserrechten.
+- Erft geen technische Platformbeheerderrechten.
+- Heeft als enige runtimebevoegdheid `platform.special_roles.manage`, uitsluitend toegepast op `platform.superuser`.
+- Kan een bestaande Inhuis-gebruiker via e-mailadres als Superuser aanstellen, zonder toegang tot een algemene gebruikersinventaris.
+- Kan een actieve Superuserrol intrekken/deactiveren.
+- Kan geen Frontteamlid of Platformbeheerder aanstellen of intrekken.
+- Krijgt geen huishoud-dashboard of operationele huishoudfuncties.
+- Krijgt geen platformdiagnostiek, logs, featureflags, integraties, herstelacties of overige technische Platformbeheerfuncties.
+- De gebruikersinterface toont een eigen eenvoudige landing met uitsluitend **Superusers** en **Uitloggen**. De Superuserpagina toont alleen actieve Superusers en gebruikt e-mailinvoer om een bestaande gebruiker aan te stellen.
 
 Bescherming van de IP-eigenaar:
 
-- Superusers, Platformbeheerders en Frontteamleden kunnen de IP-eigenaar niet
-  verwijderen of degraderen.
-- Eigenaarschap mag niet via een normale één-klik-rolwijziging verdwijnen.
-- Kritieke acties moeten later worden beschermd met een duidelijke waarschuwing
-  inclusief gevolgen, herauthenticatie, een bewuste eindbevestiging voor de
-  zwaarste acties en auditregistratie.
-- Overdracht van IP-eigenaarschap is later een afzonderlijke uitzonderlijke
-  procedure en geen normale rolwijziging.
+- Andere rollen kunnen de IP-eigenaar niet verwijderen of degraderen via normale rollenadministratie.
+- De IP-eigenaar kan zichzelf niet via de Superuserbeheerflow wijzigen.
+- Overdracht van IP-eigenaarschap blijft een afzonderlijke uitzonderlijke procedure en geen normale rolwijziging.
 
 ## 3. Systeemhuishouden 0
 
 - Huishouden 0 is geen normaal gebruikershuishouden.
-- Het is het gedeelde systeemhuishouden van de bevoegde Superuser(s) en de
-  beschermde IP-eigenaar.
+- Het is het gedeelde systeemhuishouden van de bevoegde Superuser(s).
 - Het wordt voornamelijk gebruikt voor geautomatiseerde en functionele tests,
   het reproduceren en analyseren van fout- en uitzonderingssituaties en de
   diagnose van Rezzerv-processen.
@@ -181,34 +169,35 @@ Bescherming van de IP-eigenaar:
 | Situatie | Regel |
 |---|---|
 | Normale nieuwe registratie | Maakt een nieuw regulier huishouden; de gebruiker wordt automatisch Beheerder. |
-| Uitnodiging vanuit een huishouden | De gebruiker wordt standaard Lid; voor een normale uitnodiging is geen rolkeuze nodig. |
+| Uitnodiging vanuit een huishouden | De gebruiker wordt standaard Gebruiker; voor een normale uitnodiging is geen rolkeuze nodig. |
 | Uitnodigingsflow | Gebruikt een beveiligde uitnodigingslink; distributie via app-/storekanalen kan later verder worden uitgebreid. |
 | Frontteamlid | Heeft of krijgt een eigen regulier huishouden; bij een bestaande gebruiker blijven huishouden en huishoudrol behouden. De Frontteamrol is een aanvullende platformrol bovenop de reguliere huishoudcontext. |
 | Superuser | Heeft geen regulier huishouden en wel toegang tot gedeeld systeemhuishouden 0. |
 | Platformbeheerder | Heeft geen regulier huishouden en geen automatische toegang tot huishouden 0. |
-| IP-eigenaar | Heeft geen regulier huishouden en wel toegang tot huishouden 0. |
+| IP-eigenaar | Heeft geen regulier huishouden en geen toegang tot huishouden 0. |
 | Privégebruik platformaccounts | Een Superuser, Platformbeheerder of IP-eigenaar gebruikt voor privégebruik een afzonderlijk regulier account. |
-| Rolstapeling | Eén platformaccount mag Superuser én Platformbeheerder zijn. Frontteamlid is door de verplichte reguliere huishoudcontext een andere constructie. De IP-eigenaar hoeft zichzelf deze rollen niet aanvullend toe te kennen. |
+| Rolstapeling | Eén platformaccount mag Superuser én Platformbeheerder zijn. Frontteamlid is door de verplichte reguliere huishoudcontext een andere constructie. IP-eigenaarschap blijft een afzonderlijke beschermde rol en wordt niet met operationele platformrollen gestapeld. |
 
 ## 5. Toewijzingsbevoegdheden
 
 | Actie | Wie mag dit |
 |---|---|
-| Lid uitnodigen | Beheerder van dat huishouden |
-| Lid → Beheerder | Beheerder van dat huishouden, met behoud van minimaal één Beheerder |
-| Beheerder → Lid | Beheerder van dat huishouden, niet wanneer daardoor geen Beheerder overblijft |
-| Frontteamlid aanstellen | Superuser of IP-eigenaar |
-| Frontteamrol intrekken | Superuser of IP-eigenaar |
+| Gebruiker uitnodigen | Beheerder van dat huishouden |
+| Gebruiker → Beheerder | Beheerder van dat huishouden, met behoud van minimaal één Beheerder |
+| Beheerder → Gebruiker | Beheerder van dat huishouden, niet wanneer daardoor geen Beheerder overblijft |
+| Frontteamlid aanstellen | Superuser |
+| Frontteamrol intrekken | Superuser |
 | Superuser aanstellen | Uitsluitend IP-eigenaar |
 | Superuser verwijderen of intrekken | Uitsluitend IP-eigenaar |
-| Platformbeheerder aanstellen | Uitsluitend IP-eigenaar |
-| Platformbeheerder verwijderen of intrekken | Uitsluitend IP-eigenaar |
+| Platformbeheerder aanstellen | Niet via de IP-eigenaarsflow; afzonderlijk platformbeheerproces |
+| Platformbeheerder verwijderen of intrekken | Niet via de IP-eigenaarsflow; afzonderlijk platformbeheerproces |
 | IP-eigenaar verwijderen of degraderen | Niet via normale rollenadministratie |
 
 ## 6. Legacycompatibiliteit
 
-- `household.viewer` / Kijker is legacy.
-- `household.advanced_member` / Geavanceerd lid is legacy.
+- `household.viewer` is een legacyvorm van de gebruikerszichtbare rol **Gebruiker**.
+- `household.advanced_member` is een legacyvorm van de gebruikerszichtbare rol **Beheerder**.
+- `household.owner` blijft uitsluitend als huishoudelijke compatibilityvorm bestaan en wordt gebruikerszichtbaar als **Beheerder** gepresenteerd.
 - Bestaande gegevens mogen niet destructief verdwijnen.
 - Legacyrollen zijn geen nieuwe gebruikersrollen en worden niet opnieuw voor
   normale toewijzing aangeboden.
@@ -223,19 +212,20 @@ Bescherming van de IP-eigenaar:
 
 | Rol | Context en verantwoordelijkheid |
 |---|---|
-| Lid | Regulier huishouden |
+| Gebruiker | Regulier huishouden |
 | Beheerder | Regulier huishouden plus huishoudbeheer |
 | Frontteamlid | Eigen regulier huishouden plus aanvullende beperkte Frontteam-platformfuncties; de bestaande huishoudrol blijft behouden |
 | Superuser | Functioneel platformbeheer plus systeemhuishouden 0 |
 | Platformbeheerder | Technisch platformbeheer |
 | Superuser + Platformbeheerder | Systeemhuishouden 0 plus de exacte union van functionele en technische platformrechten |
-| IP-eigenaar | Hoogste bevoegdheid over functioneel en technisch platformbeheer plus systeemhuishouden 0 en protected special-role authority |
+| IP-eigenaar | Beschermd eigenaarsbeheer: uitsluitend Superusers aanstellen/intrekken, zonder huishoud- of Platformbeheerfunctionaliteit |
 
 Een technische rol geeft niet automatisch functionele centrale rechten. De
 functionele Superuserrol geeft niet automatisch technische beheerrechten.
 Systeemhuishouden 0 is een bijzondere systeemcontext en geen regulier
 gebruikershuishouden. De combinatie Superuser + Platformbeheerder geeft niet de
-IP-owner-only permission `platform.special_roles.manage`.
+IP-owner-only permission `platform.special_roles.manage`. Die permission geeft
+de IP-eigenaar uitsluitend bevoegdheid over Superuser-toewijzing.
 
 ## 8. Bestaande en toekomstige functionaliteit
 
@@ -244,8 +234,8 @@ IP-owner-only permission `platform.special_roles.manage`.
 Functionele en technische flags delen de canonical definities en de tabel
 `platform_feature_flags`. Afzonderlijke API-categoriegrenzen vereisen respectievelijk
 `platform.functional_features.manage` en `platform.feature_flags.manage` en
-weigeren sleutels uit de andere categorie. IP-eigenaar krijgt beide via de
-bestaande permission-union. Geen categorie verleent gebruikspermissies.
+weigeren sleutels uit de andere categorie. De IP-eigenaar krijgt geen van beide
+beheerpermissions. Geen categorie verleent gebruikspermissies.
 
 Er is uitsluitend globale AAN/UIT-beschikbaarheid: geen user-, household-,
 role-, groeps- of abonnements-overrides. Bestaande onboardingvoorkeuren zoals

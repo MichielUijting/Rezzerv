@@ -58,7 +58,7 @@ assert.match(mobileSource, /onValueCommit=\{\(nextQuantity\) =>/)
 assert.match(mobileSource, /setExactInventoryQuantity\(row, nextQuantity\)/)
 assert.match(mobileSource, /testIdPrefix=\{\`mobile-inventory-/)
 assert.match(mobileSource, /\/inventory-events/)
-assert.match(mobileAppChromeSource, /MORE_NAV_ITEM = \{ key: 'meer', label: 'Meer', route: '\/home'/)
+assert.match(mobileAppChromeSource, /MORE_NAV_ITEM = \{ key: 'meer', label: 'Meer', route: '\/meer'/)
 assert.match(homeSource, /recordRecentAction\(tile\.key, context\)/)
 assert.doesNotMatch(mobileSource, /<Header title="Voorraad"/)
 assert.match(mobileSource, /locationTrackingEnabled \? 'Zoek artikel, groep of locatie' : 'Zoek artikel of groep'/)
@@ -71,6 +71,9 @@ assert.match(mobileSource, /\/api\/article-groups\/household-articles/)
 assert.match(mobileSource, /MobileArticleRow/)
 assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
+assert.match(mobileSource, /gpcBrickName/)
+assert.match(mobileSource, /GPC-groep:/)
+assert.match(mobileSource, /GPC-familie:/)
 
 
 

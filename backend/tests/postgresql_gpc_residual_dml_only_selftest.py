@@ -25,15 +25,16 @@ from app.services.gpc_translation_service import (
     import_gpc_translations_csv,
 )
 
-SEGMENT_CODE = "99000000"
-FAMILY_CODE = "99010000"
-CLASS_CODE = "99010100"
-BRICK_CODE = "99010101"
+SEGMENT_CODE = "99999990"
+FAMILY_CODE = "99999991"
+CLASS_CODE = "99999992"
+BRICK_CODE = "99999993"
 TRANSLATION_SOURCE_NAME = "pr2l-gpc-translation.csv"
 FALLBACK_SEGMENT_CODE = "50000000"
 FALLBACK_FAMILY_CODE = "50220000"
 FALLBACK_CLASS_CODE = "50221200"
 FALLBACK_BRICK_CODE = "10000284"
+ASSIGNMENT_BRICK_CODE = FALLBACK_BRICK_CODE
 
 
 def _engine_url():
@@ -139,28 +140,18 @@ def _cleanup(conn, product_id: str | None = None) -> None:
         {"brick_code": BRICK_CODE},
     )
     conn.execute(text("DELETE FROM gpc_bricks WHERE brick_code = :code"), {"code": BRICK_CODE})
+    conn.execute(
+        text("DELETE FROM gpc_bricks WHERE class_code = :class_code"),
+        {"class_code": CLASS_CODE},
+    )
     conn.execute(text("DELETE FROM gpc_classes WHERE class_code = :code"), {"code": CLASS_CODE})
     conn.execute(text("DELETE FROM gpc_families WHERE family_code = :code"), {"code": FAMILY_CODE})
     conn.execute(text("DELETE FROM gpc_segments WHERE segment_code = :code"), {"code": SEGMENT_CODE})
 
 
 def _cleanup_fallback_reference(conn) -> None:
-    conn.execute(
-        text("DELETE FROM gpc_bricks WHERE brick_code = :code"),
-        {"code": FALLBACK_BRICK_CODE},
-    )
-    conn.execute(
-        text("DELETE FROM gpc_classes WHERE class_code = :code"),
-        {"code": FALLBACK_CLASS_CODE},
-    )
-    conn.execute(
-        text("DELETE FROM gpc_families WHERE family_code = :code"),
-        {"code": FALLBACK_FAMILY_CODE},
-    )
-    conn.execute(
-        text("DELETE FROM gpc_segments WHERE segment_code = :code"),
-        {"code": FALLBACK_SEGMENT_CODE},
-    )
+    # De volledige Nederlandse referentie deelt classes/families/segmenten tussen
+    # duizenden Bricks. Verwijder alleen de projecties van deze test-Brick.
     conn.execute(
         text("DELETE FROM product_inventory_groups WHERE inventory_group_key = :key"),
         {"key": f"gpc:{FALLBACK_BRICK_CODE}"},
@@ -169,7 +160,10 @@ def _cleanup_fallback_reference(conn) -> None:
         text("DELETE FROM gpc_product_groups WHERE gpc_brick_code = :code"),
         {"code": FALLBACK_BRICK_CODE},
     )
-
+    conn.execute(
+        text("DELETE FROM gpc_bricks WHERE brick_code = :code"),
+        {"code": FALLBACK_BRICK_CODE},
+    )
 
 def _assert_complete_reference_fallback(engine) -> None:
     with engine.begin() as conn:
@@ -194,7 +188,7 @@ def _assert_complete_reference_fallback(engine) -> None:
         )
         if not results or results[0].get("brick_code") != FALLBACK_BRICK_CODE:
             raise AssertionError(results)
-        if results[0].get("reference_source") != "bundled_gpc_2026_05_en":
+        if results[0].get("reference_source") != "gs1_gpc_nl":
             raise AssertionError(results[0])
 
         materialized = ensure_official_gpc_brick(conn, FALLBACK_BRICK_CODE)
@@ -204,7 +198,7 @@ def _assert_complete_reference_fallback(engine) -> None:
             text("SELECT description FROM gpc_bricks WHERE brick_code=:code"),
             {"code": FALLBACK_BRICK_CODE},
         ).scalar_one_or_none()
-        if stored != "Cereal Products - Ready to Eat (Shelf Stable)":
+        if stored != "Graanproducten - Gebruiksklaar (Houdbaar)":
             raise AssertionError(stored)
         _cleanup_fallback_reference(conn)
 
@@ -222,13 +216,13 @@ def _assert_assignment_dml(engine) -> str:
             source="postgresql_pr2l_selftest",
         )
 
-    payload = catalog_gpc_routes.GpcBrickAssignmentRequest(brick_code=BRICK_CODE)
+    payload = catalog_gpc_routes.GpcBrickAssignmentRequest(brick_code=ASSIGNMENT_BRICK_CODE)
     written = catalog_gpc_routes.set_catalog_product_gpc_brick(product_id, payload)
     assignment = written.get("assignment") or {}
-    if assignment.get("brick_code") != BRICK_CODE:
+    if assignment.get("brick_code") != ASSIGNMENT_BRICK_CODE:
         raise AssertionError(written)
     read = catalog_gpc_routes.get_catalog_product_gpc_brick(product_id)
-    if (read.get("assignment") or {}).get("brick_code") != BRICK_CODE:
+    if (read.get("assignment") or {}).get("brick_code") != ASSIGNMENT_BRICK_CODE:
         raise AssertionError(read)
     cleared = catalog_gpc_routes.clear_catalog_product_gpc_brick(product_id)
     if cleared.get("assignment") is not None:

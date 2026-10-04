@@ -31,6 +31,12 @@ from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EM
 from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
+SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS = {
+    "platform.support_access.read",
+    "platform.support_access.mutate",
+}
+
+
 def make_engine():
     return create_engine("sqlite+pysqlite:///:memory:")
 
@@ -141,18 +147,14 @@ def test_active_platform_role_resolution_uses_only_registered_active_platform_ro
 
 def test_v2_platform_role_permission_boundaries():
     assert "platform.system_household.access" in V2_SUPERUSER_TARGET_PERMISSIONS
-    assert "platform.system_household.access" in IP_OWNER_PERMISSIONS
+    assert "platform.system_household.access" not in IP_OWNER_PERMISSIONS
     assert "platform.system_household.access" not in PLATFORM_ADMIN_PERMISSIONS
     assert "platform.system_household.access" not in FRONTTEAM_PLATFORM_PERMISSIONS
     assert "platform.special_roles.manage" in IP_OWNER_PERMISSIONS
     assert "platform.special_roles.manage" not in V2_SUPERUSER_TARGET_PERMISSIONS
     assert "platform.special_roles.manage" not in PLATFORM_ADMIN_PERMISSIONS
     assert "platform.special_roles.manage" not in FRONTTEAM_PLATFORM_PERMISSIONS
-    assert IP_OWNER_PERMISSIONS == (
-        V2_SUPERUSER_TARGET_PERMISSIONS
-        | PLATFORM_ADMIN_PERMISSIONS
-        | {"platform.special_roles.manage"}
-    )
+    assert IP_OWNER_PERMISSIONS == {"platform.special_roles.manage"}
 
 
 def test_frontteam_external_permissions_only_link_existing_products():
@@ -326,7 +328,7 @@ def test_active_v2_superuser_permissions_and_public_payload_are_exact():
     assert ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS == expected
     assert ROLE_PERMISSIONS["platform.superuser"] == expected
     assert permissions_for_session_role("", platform_superuser=True) == expected
-    assert not (expected & PLATFORM_ADMIN_PERMISSIONS)
+    assert (expected & PLATFORM_ADMIN_PERMISSIONS) == SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS
     assert "platform.special_roles.manage" not in expected
 
     now = datetime.now(timezone.utc)
@@ -346,7 +348,7 @@ def test_active_v2_superuser_permissions_and_public_payload_are_exact():
     assert set(payload["permissions"]) == expected_public_permissions
     assert set(payload["supported_permissions"]) == expected_public_permissions
     assert payload["is_platform_superuser"] is True
-    assert not (PLATFORM_ADMIN_PERMISSIONS & set(payload["permissions"]))
+    assert (PLATFORM_ADMIN_PERMISSIONS & set(payload["permissions"])) == SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS
     assert "platform.special_roles.manage" not in payload["permissions"]
 
 
@@ -400,7 +402,9 @@ def test_existing_platform_superuser_is_cut_over_to_exact_v2_target_permissions(
                 user_id="existing-superuser",
                 permission_key=permission_key,
             )
-            assert decision.allowed is False, permission_key
+            assert decision.allowed is (
+                permission_key in SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS
+            ), permission_key
         special_role = evaluate_platform_permission(
             conn,
             user_id="existing-superuser",

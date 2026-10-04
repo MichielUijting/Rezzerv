@@ -31,6 +31,7 @@ export default function HouseholdSupportPage() {
   const [authContext, setAuthContext] = useState(() => readStoredAuthContext())
   const currentUserId = String(authContext?.user_id || authContext?.email || '').trim().toLowerCase()
   const canMessageSuperuser = canCurrentUserPerform('platform.frontteam_messages.create', authContext)
+  const canOpenPlatformSupport = canCurrentUserPerform('platform.support_access.read', authContext)
 
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
@@ -145,7 +146,7 @@ export default function HouseholdSupportPage() {
       setMessage('')
       await refresh()
       await openThread(created.thread_id)
-      setFeedback('Melding verzonden naar de superuser.')
+      setFeedback('Melding verzonden naar Platformbeheer.')
     } catch (error) { setFeedback(error.message) }
     finally { setBusy(false) }
   }
@@ -165,12 +166,12 @@ export default function HouseholdSupportPage() {
     finally { setBusy(false) }
   }
 
-  if (isMobileViewport && !selected) {
-    return <MobileSupportInbox authContext={authContext} onOpenThread={openThread} onNewMessage={() => setSelected(null)} />
+  if (canOpenPlatformSupport || isPlatformSuperuserFromContext(authContext)) {
+    return <Navigate to="/platform/meldingen" replace />
   }
 
-  if (isPlatformSuperuserFromContext(authContext)) {
-    return <Navigate to="/superuser/meldingen" replace />
+  if (isMobileViewport && !selected) {
+    return <MobileSupportInbox authContext={authContext} onOpenThread={openThread} onNewMessage={() => setSelected(null)} />
   }
 
   const refreshLabel = lastRefreshedAt
@@ -224,7 +225,7 @@ export default function HouseholdSupportPage() {
                   <label>Reactie<textarea value={reply} onChange={(event) => setReply(event.target.value)} required maxLength={10000} /></label>
                   <Button variant="primary" type="submit" disabled={busy || !reply.trim()}>Versturen</Button>
                 </form>
-              ) : canMessageSuperuser ? <p>De superuser heeft antwoorden voor deze melding uitgeschakeld.</p> : null}
+              ) : canMessageSuperuser ? <p>Platformbeheer heeft antwoorden voor deze melding uitgeschakeld.</p> : null}
             </>
           ) : canMessageSuperuser ? (
             <form onSubmit={submitNew} className="rz-support-form">
@@ -234,7 +235,7 @@ export default function HouseholdSupportPage() {
               <label>Bericht<textarea value={message} onChange={(event) => setMessage(event.target.value)} required maxLength={10000} /></label>
               <Button variant="primary" type="submit" disabled={busy || !subject.trim() || !message.trim()}>Melding versturen</Button>
             </form>
-          ) : <p>Alleen leden van het Frontteam kunnen een bericht naar de Superuser sturen.</p>}
+          ) : <p>Alleen leden van het Frontteam kunnen een bericht naar Platformbeheer sturen.</p>}
         </Card>
       </div>
     </AppShell>

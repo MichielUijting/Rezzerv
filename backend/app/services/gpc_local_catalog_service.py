@@ -269,13 +269,12 @@ def rank_external_gpc_candidates(*, product_name: str, category: str = "", categ
         "reference_count": len(reference_rows),
         "dutch_reference_count": sum(
             1 for row in reference_rows
-            if any(str(row.get(field) or "").strip() for field in (
-                "brick_description_nl", "class_description_nl",
-                "family_description_nl", "segment_description_nl",
-            ))
+            if str(row.get("brick_description") or "").strip()
+            and str(row.get("family_description") or "").strip()
+            and str(row.get("reference_source") or "") == "gs1_gpc_nl"
         ),
         "signal_count": len(signal_bundle.get("signals") or []),
-        "matching_policy": "dutch_gpc_primary_semantic_english_fallback",
+        "matching_policy": "dutch_gpc_only",
     }
 
 
@@ -328,29 +327,25 @@ def classify_gpc_product(*, product_name: str, category: str = "", category_tags
             "candidate_generation": candidate_generation,
         }
 
-        query = _normalize(f"{product_name} {category}")
-        rows = conn.execute(text("""
-            SELECT gpc_brick_code,gpc_brick_name,gpc_brick_name_en,source_version,source
-            FROM gpc_product_groups
-            WHERE COALESCE(active, TRUE) IS TRUE AND gpc_segment_code='50000000'
-              AND upper(COALESCE(gpc_brick_name_en,'')) NOT LIKE '%UNCLASSIFIED%'
-        """)).mappings().all()
-    ranked = []
-    for row in rows:
-        title = _normalize(row.get("gpc_brick_name_en"))
-        score = _score(query, title)
-        if score > 0:
-            ranked.append((score, row))
-    ranked.sort(key=lambda item: (-item[0], str(item[1].get("gpc_brick_code") or "")))
-    if not ranked:
-        return {"ok": True, "status": "not_classified", "reason": "no_match", "query": query, **suggestion_payload}
-    best_score, best = ranked[0]
-    second_score = ranked[1][0] if len(ranked) > 1 else 0.0
-    margin = best_score - second_score
-    if best_score < 0.90 or (best_score < 0.97 and margin < 0.08):
-        return {"ok": True, "status": "not_classified", "reason": "insufficient_confidence",
-                "query": query, "best_score": best_score, "margin": margin, **suggestion_payload}
-    result = dict(best)
-    return {"ok": True, "status": "classified", "classification_source": "gpc_taxonomy_name_match",
-            "confidence": best_score, "margin": margin,
-            "product_type_id": f"gpc:{best['gpc_brick_code']}", **result, **suggestion_payload}
+        top = suggestions[0] if suggestions else None
+        if top and float(top.get("confidence") or 0.0) >= 0.78:
+            return {
+                "ok": True,
+                "status": "classified",
+                "classification_source": "dutch_gpc_candidate",
+                "confidence": float(top.get("confidence") or 0.0),
+                "product_type_id": str(top.get("product_type_id") or ""),
+                "gpc_brick_code": str(top.get("gpc_brick_code") or ""),
+                "gpc_brick_name": str(top.get("gpc_brick_name") or ""),
+                "source_version": VERSION,
+                "source": "gs1_gpc_official",
+                "reference_source": top.get("reference_source"),
+                **suggestion_payload,
+            }
+        return {
+            "ok": True,
+            "status": "not_classified",
+            "reason": "insufficient_confidence" if top else "no_match",
+            "query": _normalize(f"{product_name} {category}"),
+            **suggestion_payload,
+        }

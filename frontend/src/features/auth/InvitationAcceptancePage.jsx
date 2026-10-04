@@ -153,7 +153,7 @@ export default function InvitationAcceptancePage() {
               <>
                 <h2 style={{ marginTop: 0 }}>Je bent uitgenodigd</h2>
                 <p>
-                  Je bent uitgenodigd voor <strong>{preview.household_name}</strong> als Lid.
+                  Je bent uitgenodigd voor <strong>{preview.household_name}</strong> als Gebruiker.
                   De uitnodiging is gericht aan <strong>{preview.invitee_email_masked}</strong>.
                 </p>
 
@@ -193,7 +193,7 @@ export default function InvitationAcceptancePage() {
                     ) : (
                       <form className="rz-form" onSubmit={registerAndAccept} data-testid="invitation-register-form">
                         <p style={{ marginTop: 0 }}>
-                          Dit account wordt direct lid van het uitgenodigde huishouden; er wordt geen extra leeg huishouden aangemaakt.
+                          Dit account wordt direct gebruiker binnen het uitgenodigde huishouden; er wordt geen extra leeg huishouden aangemaakt.
                         </p>
                         <Input label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required data-testid="invitation-register-email" />
                         <Input label="Wachtwoord" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required data-testid="invitation-register-password" />

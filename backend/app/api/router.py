@@ -19,6 +19,7 @@ from app.api.article_group_routes import router as article_group_router
 from app.api.barcode_routes import router as barcode_router
 from app.api.consumer_account_routes import router as consumer_account_router
 from app.api.day_article_routes import router as day_article_router
+from app.api.dashboard_routes import router as dashboard_router
 from app.api.household_capability_expansion_routes import router as household_capability_expansion_router
 from app.api.household_invitation_acceptance_routes import create_household_invitation_acceptance_router
 from app.api.household_invitation_routes import create_household_invitation_router
@@ -96,6 +97,7 @@ api_router.include_router(article_group_router)
 api_router.include_router(barcode_router)
 api_router.include_router(consumer_account_router)
 api_router.include_router(day_article_router)
+api_router.include_router(dashboard_router)
 api_router.include_router(household_capability_expansion_router)
 api_router.include_router(household_invitation_router)
 api_router.include_router(household_notification_router)

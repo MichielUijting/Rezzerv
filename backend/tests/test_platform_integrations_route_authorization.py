@@ -43,11 +43,11 @@ def auth_engine():
 
 def _context(user_id: str) -> ServerSessionContext:
     now = datetime.now(timezone.utc)
-    if user_id in {"superuser", "ip-owner"}:
+    if user_id == "superuser":
         context_type = "system"
         household_id = "0"
         role = "owner"
-    elif user_id == "platform-admin":
+    elif user_id in {"platform-admin", "ip-owner"}:
         context_type = "none"
         household_id = None
         role = None
@@ -104,7 +104,7 @@ def _bind_safe_integration_status(monkeypatch):
     ("user_id", "allowed"),
     [
         ("platform-admin", True),
-        ("ip-owner", True),
+        ("ip-owner", False),
         ("superuser", False),
         ("support-reader", False),
         ("frontteam", False),

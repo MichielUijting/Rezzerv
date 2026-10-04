@@ -121,8 +121,8 @@ def test_inventory_exposes_special_role_actions_to_ip_owner_and_frontteam_action
     admin_target = next(item for item in admin_inventory["users"] if item["user_id"] == "target")
     superuser_target = next(item for item in superuser_inventory["users"] if item["user_id"] == "target")
     assert owner_target["role_actions"][SUPERUSER_ROLE_KEY]["can_grant"] is True
-    assert owner_target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is True
-    assert owner_target["role_actions"][FRONTTEAM_ROLE_KEY]["can_grant"] is True
+    assert owner_target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is False
+    assert owner_target["role_actions"][FRONTTEAM_ROLE_KEY]["can_grant"] is False
     assert all(
         action["can_grant"] is False and action["can_revoke"] is False
         for action in admin_target["role_actions"].values()
@@ -150,61 +150,13 @@ def test_ip_owner_is_protected_from_ordinary_special_role_management(connection)
         )
 
 
-def test_superuser_and_platform_admin_stacking_is_allowed_in_both_directions(connection):
-    grant_special_role(
-        connection,
-        "target",
-        role_key=SUPERUSER_ROLE_KEY,
-        actor_user_id="owner",
-    )
+def test_ip_owner_inventory_does_not_offer_platform_admin_or_frontteam_mutation(connection):
     inventory = list_platform_authorizations(connection, current_user_id="owner")
     target = next(item for item in inventory["users"] if item["user_id"] == "target")
-    assert target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is True
 
-    grant_special_role(
-        connection,
-        "target",
-        role_key=PLATFORM_ADMIN_ROLE_KEY,
-        actor_user_id="owner",
-    )
-    assert active_roles(connection, "target") == {
-        SUPERUSER_ROLE_KEY,
-        PLATFORM_ADMIN_ROLE_KEY,
-    }
-
-    revoke_special_role(
-        connection,
-        "target",
-        role_key=SUPERUSER_ROLE_KEY,
-        actor_user_id="owner",
-    )
-    revoke_special_role(
-        connection,
-        "target",
-        role_key=PLATFORM_ADMIN_ROLE_KEY,
-        actor_user_id="owner",
-    )
-    grant_special_role(
-        connection,
-        "target",
-        role_key=PLATFORM_ADMIN_ROLE_KEY,
-        actor_user_id="owner",
-    )
-    inventory = list_platform_authorizations(connection, current_user_id="owner")
-    target = next(item for item in inventory["users"] if item["user_id"] == "target")
     assert target["role_actions"][SUPERUSER_ROLE_KEY]["can_grant"] is True
-
-    grant_special_role(
-        connection,
-        "target",
-        role_key=SUPERUSER_ROLE_KEY,
-        actor_user_id="owner",
-    )
-    assert active_roles(connection, "target") == {
-        SUPERUSER_ROLE_KEY,
-        PLATFORM_ADMIN_ROLE_KEY,
-    }
-
+    assert target["role_actions"][PLATFORM_ADMIN_ROLE_KEY]["can_grant"] is False
+    assert target["role_actions"][FRONTTEAM_ROLE_KEY]["can_grant"] is False
 
 def test_frontteam_revoke_keeps_regular_household_and_regrant_reuses_exact_household(connection):
     grant_special_role(

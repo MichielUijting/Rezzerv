@@ -46,7 +46,10 @@ def test_superuser_system_role_combines_h0_household_and_functional_v2_platform_
     assert "platform.gpc.manage" in platform_permissions
     assert "platform.external_sources.manage" in platform_permissions
     assert "platform.support_access.mutate" in platform_permissions
-    assert not (set(PLATFORM_ADMIN_PERMISSIONS) & platform_permissions)
+    assert set(PLATFORM_ADMIN_PERMISSIONS) & platform_permissions == {
+        "platform.support_access.read",
+        "platform.support_access.mutate",
+    }
     assert "platform.special_roles.manage" not in platform_permissions
 
 
@@ -62,3 +65,13 @@ def test_active_frontteam_platform_role_is_separate_from_household_role():
     assert "platform.external_products.search" in permissions
     assert "platform.external_products.link_existing" in permissions
     assert "platform.special_roles.manage" not in permissions
+
+
+def test_platform_admin_includes_platform_support_responsibility():
+    permissions = set(PLATFORM_ADMIN_PERMISSIONS)
+    assert "platform.support_access.read" in permissions
+    assert "platform.support_access.mutate" in permissions
+
+
+def test_ip_owner_is_narrow_superuser_assignment_authority():
+    assert ROLE_PERMISSIONS["platform.ip_owner"] == {"platform.special_roles.manage"}

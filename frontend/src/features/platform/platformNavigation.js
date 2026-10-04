@@ -6,6 +6,15 @@ export const PLATFORM_NAVIGATION_GROUPS = Object.freeze([
 
 export const PLATFORM_NAVIGATION_ITEMS = Object.freeze([
   {
+    key: 'support',
+    group: 'operations',
+    permission: 'platform.support_access.read',
+    label: 'Meldingen',
+    icon: '💬',
+    route: '/platform/meldingen',
+    description: 'Beheer meldingen van Frontteamleden en platformbrede communicatie.',
+  },
+  {
     key: 'functional-features',
     group: 'operations',
     permission: 'platform.functional_features.manage',

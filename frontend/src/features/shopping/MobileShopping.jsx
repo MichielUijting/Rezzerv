@@ -45,11 +45,10 @@ export default function MobileShopping() {
   const [list, setList] = useState({ items: [], item_count: 0 })
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogResults, setCatalogResults] = useState([])
-  const [selectedResultId, setSelectedResultId] = useState('')
   const [searchMode, setSearchMode] = useState(() => readShoppingSearchModePreference(readStoredAuthContext()))
-  const [selectedItemIds, setSelectedItemIds] = useState([])
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
+  const [completedSearchQuery, setCompletedSearchQuery] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const catalogSearchRequestRef = useRef(0)
@@ -60,8 +59,6 @@ export default function MobileShopping() {
     try {
       const payload = await requestJson('/api/shopping-list')
       setList(payload)
-      const existingIds = new Set((payload.items || []).map((item) => item.id))
-      setSelectedItemIds((current) => current.filter((id) => existingIds.has(id)))
     } catch (loadError) {
       setError(loadError?.message || 'Boodschappen konden niet worden geladen.')
     } finally {
@@ -75,7 +72,7 @@ export default function MobileShopping() {
     catalogSearchRequestRef.current += 1
     setCatalogQuery(value)
     setCatalogResults([])
-    setSelectedResultId('')
+    setCompletedSearchQuery('')
     setSearching(false)
   }
 
@@ -83,10 +80,10 @@ export default function MobileShopping() {
     const query = catalogQuery.trim()
     const requestId = catalogSearchRequestRef.current
     let cancelled = false
-    setSelectedResultId('')
 
     if (query.length < 2) {
       setCatalogResults([])
+      setCompletedSearchQuery('')
       return () => { cancelled = true }
     }
 
@@ -105,7 +102,10 @@ export default function MobileShopping() {
         setCatalogResults([])
         setError(searchError?.message || 'Artikelen konden niet worden doorzocht.')
       } finally {
-        if (!cancelled && catalogSearchRequestRef.current === requestId) setSearching(false)
+        if (!cancelled && catalogSearchRequestRef.current === requestId) {
+          setCompletedSearchQuery(query)
+          setSearching(false)
+        }
       }
     }, 250)
 
@@ -120,14 +120,9 @@ export default function MobileShopping() {
     catalogSearchRequestRef.current += 1
     setSearchMode(nextMode)
     setCatalogResults([])
-    setSelectedResultId('')
+    setCompletedSearchQuery('')
     setSearching(false)
   }
-
-  const selectedResult = useMemo(
-    () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
-    [catalogResults, selectedResultId],
-  )
 
   const toBuyItems = useMemo(
     () => (list.items || []).filter((item) => !item.checked),
@@ -137,14 +132,18 @@ export default function MobileShopping() {
     () => (list.items || []).filter((item) => item.checked),
     [list.items],
   )
-  const selectedToBuyItems = useMemo(
-    () => toBuyItems.filter((item) => selectedItemIds.includes(item.id)),
-    [selectedItemIds, toBuyItems],
-  )
-  const selectedCartItems = useMemo(
-    () => cartItems.filter((item) => selectedItemIds.includes(item.id)),
-    [cartItems, selectedItemIds],
-  )
+  const candidateItems = useMemo(() => {
+    if (catalogResults.length > 0) return catalogResults
+    const query = catalogQuery.trim()
+    if (searching || query.length < 2 || completedSearchQuery !== query) return []
+    return [{
+      source_type: 'manual',
+      source_id: '__manual__',
+      label: `Toevoegen: ${query}`,
+      article_name: query,
+      is_manual_add: true,
+    }]
+  }, [catalogQuery, catalogResults, completedSearchQuery, searching])
 
   function patchListItem(itemId, patch) {
     setList((current) => ({
@@ -153,33 +152,23 @@ export default function MobileShopping() {
     }))
   }
 
-  function toggleSelectedItem(itemId, selected) {
-    setSelectedItemIds((current) => selected
-      ? [...new Set([...current, itemId])]
-      : current.filter((id) => id !== itemId))
-  }
-
-  function clearSectionSelection(items) {
-    const ids = new Set(items.map((item) => item.id))
-    setSelectedItemIds((current) => current.filter((id) => !ids.has(id)))
-  }
-
-  async function addArticle() {
+  async function addArticle(candidate = null) {
+    if (saving) return
     const manualName = catalogQuery.trim()
-    if (!selectedResult && !manualName) return
-    const payload = selectedResult ? {
-      article_name: selectedResult.article_name || selectedResult.label,
-      article_group_name: selectedResult.article_group_name || '',
-      product_type_name: selectedResult.product_type_name || '',
-      source_type: selectedResult.source_type,
-      source_id: selectedResult.source_id,
+    if (!candidate && !manualName) return
+    const payload = candidate ? {
+      article_name: candidate.article_name || candidate.label,
+      article_group_name: candidate.article_group_name || '',
+      product_type_name: candidate.product_type_name || '',
+      source_type: candidate.source_type,
+      source_id: candidate.source_id,
     } : {
       article_name: manualName,
       source_type: 'manual',
       source_id: '',
       quantity: 1,
     }
-    const addedLabel = selectedResult?.label || manualName
+    const addedLabel = candidate?.label || manualName
     setSaving(true)
     setError('')
     try {
@@ -192,6 +181,12 @@ export default function MobileShopping() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleManualAddKeyDown(event) {
+    if (event.key !== 'Enter' || saving || catalogResults.length > 0 || !catalogQuery.trim()) return
+    event.preventDefault()
+    addArticle()
   }
 
   async function updateItem(item, patch) {
@@ -211,50 +206,29 @@ export default function MobileShopping() {
     }
   }
 
-  async function setPurchasedForItems(items, checked) {
-    if (!items.length) return
-    setSaving(true)
-    setError('')
-    try {
-      await Promise.all(items.map((item) => requestJson(
-        `/api/shopping-list/items/${encodeURIComponent(item.id)}`,
-        { method: 'PUT', body: JSON.stringify({ checked }) },
-      )))
-      clearSectionSelection(items)
-      await loadList()
-    } catch (saveError) {
-      setError(saveError?.message || 'De winkelwagenstatus kon niet worden opgeslagen.')
-      await loadList()
-    } finally {
-      setSaving(false)
-    }
+  async function moveItem(item) {
+    if (!item || saving) return
+    await updateItem(item, { checked: !Boolean(item.checked) })
   }
 
-  function deleteSelectedItems(items) {
-    if (!items.length) return
-    const count = items.length
+  function deleteItem(item) {
+    if (!item || saving) return
     showFeedback({
       variant: 'warning',
-      title: count === 1 ? 'Artikel verwijderen' : 'Artikelen verwijderen',
-      message: count === 1 ? '1 geselecteerd artikel verwijderen?' : `${count} geselecteerde artikelen verwijderen?`,
-      detail: 'De geselecteerde artikelen verdwijnen uit de actuele boodschappen.',
+      title: 'Artikel verwijderen',
+      message: `${item.article_name} verwijderen uit Boodschappen?`,
       testId: 'shopping-delete-confirmation',
       primaryActionLabel: 'Verwijderen',
       secondaryActionLabel: 'Annuleren',
       onPrimaryAction: async () => {
         setSaving(true)
+        setError('')
         try {
-          await Promise.all(items.map((item) => requestJson(
-            `/api/shopping-list/items/${encodeURIComponent(item.id)}`,
-            { method: 'DELETE' },
-          )))
-          clearSectionSelection(items)
+          await requestJson(`/api/shopping-list/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' })
           await loadList()
-          showFeedback({
-            variant: 'success',
-            title: 'Verwijderd',
-            message: count === 1 ? '1 artikel verwijderd.' : `${count} artikelen verwijderd.`,
-          })
+          showFeedback({ variant: 'success', title: 'Verwijderd', message: `${item.article_name} is verwijderd.` })
+        } catch (deleteError) {
+          setError(deleteError?.message || 'Het artikel kon niet worden verwijderd.')
         } finally {
           setSaving(false)
         }
@@ -275,7 +249,6 @@ export default function MobileShopping() {
         setSaving(true)
         try {
           await requestJson('/api/shopping-list/complete', { method: 'POST' })
-          setSelectedItemIds([])
           await loadList()
           showFeedback({ variant: 'success', title: 'Boodschappen afgerond', message: 'Boodschappen zijn leeggemaakt.' })
         } finally {
@@ -291,32 +264,45 @@ export default function MobileShopping() {
         key={item.id}
         title={item.article_name}
         subtitle=""
-        meta={[]}
+        meta={[
+          item.gpc_brick_name ? `Brick: ${item.gpc_brick_name}` : '',
+          item.gpc_class_name ? `GPC-groep: ${item.gpc_class_name}` : '',
+          item.gpc_family_name ? `GPC-familie: ${item.gpc_family_name}` : '',
+        ].filter(Boolean)}
         imageUrl={item.image_url}
         imageProductName={item.article_name}
         checked={Boolean(item.checked)}
         testId={`mobile-shopping-item-${item.id}`}
-        leading={(
-          <input
-            type="checkbox"
-            checked={selectedItemIds.includes(item.id)}
-            onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
-            aria-label={`Selecteer ${item.article_name}`}
-          />
-        )}
+        onActivate={() => moveItem(item)}
+        activationRole="button"
         side={(
-          <QuantityStepper
-            value={String(quantityValue(item))}
-            decreaseDisabled={saving || quantityValue(item) <= 1}
-            increaseDisabled={saving}
-            decreaseLabel={`Verlaag aantal van ${item.article_name}`}
-            increaseLabel={`Verhoog aantal van ${item.article_name}`}
-            valueLabel={`Aantal ${quantityValue(item)}`}
-            valueEditable={false}
-            testIdPrefix={`mobile-shopping-quantity-${item.id}`}
-            onDecrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) - 1 }) }}
-            onIncrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) + 1 }) }}
-          />
+          <div className="rz-mobile-shopping-row-actions">
+            <QuantityStepper
+              value={String(quantityValue(item))}
+              decreaseDisabled={saving || quantityValue(item) <= 1}
+              increaseDisabled={saving}
+              decreaseLabel={`Verlaag aantal van ${item.article_name}`}
+              increaseLabel={`Verhoog aantal van ${item.article_name}`}
+              valueLabel={`Aantal ${quantityValue(item)}`}
+              valueEditable={false}
+              testIdPrefix={`mobile-shopping-quantity-${item.id}`}
+              onDecrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) - 1 }) }}
+              onIncrease={(event) => { event.stopPropagation(); updateItem(item, { quantity: quantityValue(item) + 1 }) }}
+            />
+            <button
+              type="button"
+              className="rz-mobile-shopping-delete"
+              disabled={saving}
+              aria-label={`Verwijder ${item.article_name}`}
+              data-testid={`mobile-shopping-delete-${item.id}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.stopPropagation(); deleteItem(item) }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z" />
+              </svg>
+            </button>
+          </div>
         )}
       />
     )
@@ -329,31 +315,44 @@ export default function MobileShopping() {
         <section className="rz-mobile-inventory-toolbar rz-mobile-shopping-toolbar" aria-label="Artikel toevoegen">
           <div className="rz-mobile-shopping-toolbar-title">Artikel toevoegen</div>
 
-          <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
-            <span className="rz-mobile-inventory-label">Zoek of typ een artikel</span>
-            <input
-              className="rz-input"
-              type="search"
-              value={catalogQuery}
-              disabled={saving}
-              onChange={(event) => updateCatalogQuery(event.target.value)}
-              placeholder="Zoek in de catalogus of voer zelf een naam in"
-              aria-label="Artikel toevoegen"
-              aria-controls="mobile-shopping-candidate-list"
-              aria-expanded={catalogResults.length > 0}
-              autoComplete="off"
-            />
-          </label>
-          <SearchCandidateList
-            items={catalogResults}
-            selectedKey={selectedResultId}
-            getKey={(item) => `${item.source_type}:${item.source_id}`}
-            getLabel={(item) => `${item.label} — ${SOURCE_LABELS[item.source_type] || item.source_type}`}
-            onSelect={setSelectedResultId}
-            loading={searching}
-            ariaLabel="Kandidaten voor artikel toevoegen"
-            dataTestId="mobile-shopping-candidate-list"
-          />
+          <div className="rz-mobile-shopping-search-wrap">
+            <label className="rz-mobile-inventory-field rz-mobile-inventory-search">
+              <span className="rz-mobile-inventory-label">Zoek of typ een artikel</span>
+              <input
+                className="rz-input"
+                type="search"
+                value={catalogQuery}
+                disabled={saving}
+                onChange={(event) => updateCatalogQuery(event.target.value)}
+                onKeyDown={handleManualAddKeyDown}
+                placeholder="Zoek in de catalogus of voer zelf een naam in"
+                aria-label="Artikel toevoegen"
+                aria-controls="mobile-shopping-candidate-list"
+                aria-expanded={candidateItems.length > 0}
+                aria-busy={searching}
+                autoComplete="off"
+              />
+            </label>
+            {candidateItems.length > 0 ? (
+              <div className="rz-mobile-shopping-candidate-overlay">
+                <SearchCandidateList
+                  items={candidateItems}
+                  getKey={(item) => `${item.source_type}:${item.source_id}`}
+                  getLabel={(item) => item.is_manual_add
+                    ? item.label
+                    : [
+                        item.label,
+                        item.gpc_brick_name ? `Brick: ${item.gpc_brick_name}` : '',
+                        item.gpc_family_name ? `GPC-familie: ${item.gpc_family_name}` : '',
+                        SOURCE_LABELS[item.source_type] || item.source_type,
+                      ].filter(Boolean).join(' — ')}
+                  onSelect={(_key, item) => addArticle(item.is_manual_add ? null : item)}
+                  ariaLabel="Kandidaten voor artikel toevoegen"
+                  dataTestId="mobile-shopping-candidate-list"
+                />
+              </div>
+            ) : null}
+          </div>
 
           <div className="rz-mobile-inventory-field">
             <span className="rz-mobile-inventory-label" id="mobile-shopping-search-mode-label">Zoekwijze</span>
@@ -368,9 +367,6 @@ export default function MobileShopping() {
             />
           </div>
 
-          <Button type="button" variant="primary" onClick={addArticle} disabled={saving || (!selectedResult && !catalogQuery.trim())} data-testid="mobile-shopping-add">
-            Toevoegen
-          </Button>
         </section>
 
         <section className="rz-mobile-shopping-summary-card" aria-label="Mijn boodschappen">
@@ -400,29 +396,6 @@ export default function MobileShopping() {
               ) : (
                 <div className="rz-mobile-shopping-empty-section">Alles uit deze lijst zit in je winkelwagen.</div>
               )}
-              <div className="rz-mobile-shopping-selection-actions" data-testid="mobile-shopping-to-buy-actions">
-                <span>{selectedToBuyItems.length} geselecteerd</span>
-                <div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => deleteSelectedItems(selectedToBuyItems)}
-                    disabled={saving || selectedToBuyItems.length === 0}
-                    data-testid="mobile-shopping-delete-selected"
-                  >
-                    Verwijderen
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => setPurchasedForItems(selectedToBuyItems, true)}
-                    disabled={saving || selectedToBuyItems.length === 0}
-                    data-testid="mobile-shopping-move-to-cart"
-                  >
-                    In winkelwagen
-                  </Button>
-                </div>
-              </div>
             </section>
 
             <section className="rz-mobile-shopping-group" aria-label="In winkelwagen" data-testid="mobile-shopping-cart">
@@ -434,32 +407,7 @@ export default function MobileShopping() {
                 <div className="rz-mobile-shopping-list">
                   {cartItems.map(renderShoppingRow)}
                 </div>
-              ) : (
-                <div className="rz-mobile-shopping-empty-section">Nog geen artikelen in je winkelwagen.</div>
-              )}
-              <div className="rz-mobile-shopping-selection-actions" data-testid="mobile-shopping-cart-actions">
-                <span>{selectedCartItems.length} geselecteerd</span>
-                <div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => deleteSelectedItems(selectedCartItems)}
-                    disabled={saving || selectedCartItems.length === 0}
-                    data-testid="mobile-shopping-cart-delete-selected"
-                  >
-                    Verwijderen
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setPurchasedForItems(selectedCartItems, false)}
-                    disabled={saving || selectedCartItems.length === 0}
-                    data-testid="mobile-shopping-return-to-buy"
-                  >
-                    Terug naar nog te kopen
-                  </Button>
-                </div>
-              </div>
+              ) : null}
             </section>
           </div>
         ) : null}

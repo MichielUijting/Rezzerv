@@ -28,11 +28,11 @@ def auth_engine():
 
 def _context(user_id: str) -> ServerSessionContext:
     now = datetime.now(timezone.utc)
-    if user_id in {"superuser", "ip-owner"}:
+    if user_id == "superuser":
         context_type = "system"
         household_id = "0"
         role = "owner"
-    elif user_id == "platform-admin":
+    elif user_id in {"platform-admin", "ip-owner"}:
         context_type = "none"
         household_id = None
         role = None
@@ -71,12 +71,10 @@ def _bind_context(monkeypatch, auth_engine, user_id: str) -> ServerSessionContex
     [
         ("superuser", READ_PERMISSION, True),
         ("superuser", MUTATE_PERMISSION, True),
-        ("ip-owner", READ_PERMISSION, True),
-        ("ip-owner", MUTATE_PERMISSION, True),
-        ("support-reader", READ_PERMISSION, True),
-        ("support-reader", MUTATE_PERMISSION, False),
-        ("platform-admin", READ_PERMISSION, False),
-        ("platform-admin", MUTATE_PERMISSION, False),
+        ("ip-owner", READ_PERMISSION, False),
+        ("ip-owner", MUTATE_PERMISSION, False),
+        ("platform-admin", READ_PERMISSION, True),
+        ("platform-admin", MUTATE_PERMISSION, True),
         ("frontteam", READ_PERMISSION, False),
         ("frontteam", MUTATE_PERMISSION, False),
         ("ordinary-admin", READ_PERMISSION, False),
@@ -160,7 +158,7 @@ def test_support_message_platform_actor_uses_permission_helper_without_legacy_ad
     monkeypatch,
     auth_engine,
 ):
-    _bind_context(monkeypatch, auth_engine, "support-reader")
+    _bind_context(monkeypatch, auth_engine, "platform-admin")
     monkeypatch.setattr(
         support_message_routes,
         "_main_module",
@@ -171,21 +169,19 @@ def test_support_message_platform_actor_uses_permission_helper_without_legacy_ad
         "Bearer forged-legacy-token",
         READ_PERMISSION,
     )
-    assert actor["user_id"] == "support-reader"
-
-    with pytest.raises(HTTPException) as exc:
-        support_message_routes._platform_actor(
-            "Bearer forged-legacy-token",
-            MUTATE_PERMISSION,
-        )
-    assert exc.value.status_code == 403
+    assert actor["user_id"] == "platform-admin"
+    mutate_actor = support_message_routes._platform_actor(
+        "Bearer forged-legacy-token",
+        MUTATE_PERMISSION,
+    )
+    assert mutate_actor["user_id"] == "platform-admin"
 
 
 def test_support_broadcast_requires_mutate_permission_without_legacy_admin_gate(
     monkeypatch,
     auth_engine,
 ):
-    _bind_context(monkeypatch, auth_engine, "support-reader")
+    _bind_context(monkeypatch, auth_engine, "frontteam")
     monkeypatch.setattr(
         support_broadcast_routes,
         "_main_module",
@@ -196,6 +192,6 @@ def test_support_broadcast_requires_mutate_permission_without_legacy_admin_gate(
         support_broadcast_routes._platform_actor("Bearer forged-legacy-token")
     assert exc.value.status_code == 403
 
-    _bind_context(monkeypatch, auth_engine, "ip-owner")
+    _bind_context(monkeypatch, auth_engine, "platform-admin")
     actor = support_broadcast_routes._platform_actor(None)
-    assert actor["user_id"] == "ip-owner"
+    assert actor["user_id"] == "platform-admin"

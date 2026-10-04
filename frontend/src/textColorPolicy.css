@@ -94,3 +94,20 @@ button[style*='color:'] {
 .rz-button-secondary * {
   color: #ffffff !important;
 }
+
+/* Light-green buttons always use the canonical dark-green foreground.
+   This override comes after the dark-surface white-text authority so disabled
+   or explicitly light-green actions never render white text on light green. */
+button.rz-button-primary:disabled,
+button.rz-button-primary:disabled *,
+button.rz-button-secondary:disabled,
+button.rz-button-secondary:disabled *,
+a.rz-button-primary[aria-disabled="true"],
+a.rz-button-primary[aria-disabled="true"] *,
+a.rz-button-secondary[aria-disabled="true"],
+a.rz-button-secondary[aria-disabled="true"] *,
+.rz-search-candidate-option:hover,
+.rz-search-candidate-option:focus-visible,
+.rz-search-candidate-option--selected {
+  color: var(--color-ui-primary) !important;
+}

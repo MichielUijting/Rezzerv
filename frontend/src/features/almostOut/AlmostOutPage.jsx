@@ -96,6 +96,7 @@ export default function AlmostOutPage() {
   const [filters, setFilters] = useState({
     householdName: '',
     productName: '',
+    gpc: '',
     currentQuantity: '',
     minStock: '',
     idealStock: '',
@@ -107,6 +108,7 @@ export default function AlmostOutPage() {
   const almostOutTableColumns = useMemo(() => ([
     { key: 'huishoudnaam', width: 220 },
     { key: 'productnaam', width: 260 },
+    { key: 'gpc', width: 360 },
     { key: 'huidig', width: 110 },
     { key: 'minimum', width: 120 },
     { key: 'streef', width: 120 },
@@ -153,6 +155,10 @@ export default function AlmostOutPage() {
       id: String(item?.household_article_id || item?.article_id || item?.article_name || Math.random()),
       ...buildArticleNames(item),
       imageUrl: String(item?.image_url || '').trim(),
+      gpcBrickName: String(item?.gpc_brick_name || '').trim(),
+      gpcClassName: String(item?.gpc_class_name || '').trim(),
+      gpcFamilyName: String(item?.gpc_family_name || '').trim(),
+      gpc: [item?.gpc_brick_name, item?.gpc_class_name, item?.gpc_family_name].map((value) => String(value || '').trim()).filter(Boolean).join(' · '),
       currentQuantity: normalizeNumber(item?.current_quantity ?? item?.huidige_voorraad),
       minStock: normalizeNumber(item?.min_stock ?? item?.minimumvoorraad),
       idealStock: normalizeNumber(item?.ideal_stock ?? item?.streefvoorraad),
@@ -166,6 +172,7 @@ export default function AlmostOutPage() {
     const filtered = rows.filter((row) => {
       if (filters.householdName && !normalizeText(row.householdName).includes(normalizeText(filters.householdName))) return false
       if (filters.productName && !normalizeText(row.productName).includes(normalizeText(filters.productName))) return false
+      if (filters.gpc && !normalizeText(row.gpc).includes(normalizeText(filters.gpc))) return false
       if (filters.currentQuantity && !normalizeText(formatQuantity(row.currentQuantity)).includes(normalizeText(filters.currentQuantity))) return false
       if (filters.minStock && !normalizeText(formatQuantity(row.minStock)).includes(normalizeText(filters.minStock))) return false
       if (filters.idealStock && !normalizeText(formatQuantity(row.idealStock)).includes(normalizeText(filters.idealStock))) return false
@@ -178,6 +185,7 @@ export default function AlmostOutPage() {
     return sortItems(filtered, tableSort, {
       householdName: (row) => row.householdName || row.primaryName || '',
       productName: (row) => row.productName || '',
+      gpc: (row) => row.gpc || '',
       currentQuantity: (row) => Number(row.currentQuantity ?? 0),
       minStock: (row) => Number(row.minStock ?? 0),
       idealStock: (row) => Number(row.idealStock ?? 0),
@@ -200,6 +208,7 @@ export default function AlmostOutPage() {
               <colgroup>
                 <col style={{ width: `${tableWidths.huishoudnaam}px` }} />
                 <col style={{ width: `${tableWidths.productnaam}px` }} />
+                <col style={{ width: `${tableWidths.gpc}px` }} />
                 <col style={{ width: `${tableWidths.huidig}px` }} />
                 <col style={{ width: `${tableWidths.minimum}px` }} />
                 <col style={{ width: `${tableWidths.streef}px` }} />
@@ -210,7 +219,8 @@ export default function AlmostOutPage() {
               <thead>
                 <tr className="rz-table-header">
                   <ResizableHeaderCell columnKey="huishoudnaam" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'householdName'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'householdName', { householdName: 'asc', productName: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Huishoudnaam</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="productnaam" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'productName'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'productName', { householdName: 'asc', productName: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Productnaam</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="productnaam" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'productName'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'productName', { householdName: 'asc', productName: 'asc', gpc: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Productnaam</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="gpc" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'gpc'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'gpc', { householdName: 'asc', productName: 'asc', gpc: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>GPC: Brick · Groep · Familie</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="huidig" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'currentQuantity'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'currentQuantity', { householdName: 'asc', productName: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Huidig</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="minimum" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'minStock'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'minStock', { householdName: 'asc', productName: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Minimum</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="streef" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'idealStock'} sortDirection={tableSort.direction} onSort={() => setTableSort((current) => nextSortState(current, 'idealStock', { householdName: 'asc', productName: 'asc', currentQuantity: 'desc', minStock: 'asc', idealStock: 'asc', amountToBuy: 'desc', packaging: 'asc', location: 'asc' }))}>Streef</ResizableHeaderCell>
@@ -221,6 +231,7 @@ export default function AlmostOutPage() {
                 <tr className="rz-table-filters">
                   <th><input value={filters.householdName} onChange={(event) => handleFilterChange('householdName', event.target.value)} placeholder="Filter" /></th>
                   <th><input value={filters.productName} onChange={(event) => handleFilterChange('productName', event.target.value)} placeholder="Filter" /></th>
+                  <th><input value={filters.gpc} onChange={(event) => handleFilterChange('gpc', event.target.value)} placeholder="Filter" aria-label="Filter op GPC" /></th>
                   <th className="rz-num"><input value={filters.currentQuantity} onChange={(event) => handleFilterChange('currentQuantity', event.target.value)} placeholder="Filter" /></th>
                   <th className="rz-num"><input value={filters.minStock} onChange={(event) => handleFilterChange('minStock', event.target.value)} placeholder="Filter" /></th>
                   <th className="rz-num"><input value={filters.idealStock} onChange={(event) => handleFilterChange('idealStock', event.target.value)} placeholder="Filter" /></th>
@@ -231,9 +242,9 @@ export default function AlmostOutPage() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={8}>Bijna-op-artikelen laden…</td></tr>
+                  <tr><td colSpan={9}>Bijna-op-artikelen laden…</td></tr>
                 ) : filteredRows.length === 0 ? (
-                  <tr><td colSpan={8}>Er zijn op dit moment geen artikelen die aangevuld moeten worden.</td></tr>
+                  <tr><td colSpan={9}>Er zijn op dit moment geen artikelen die aangevuld moeten worden.</td></tr>
                 ) : filteredRows.map((row) => (
                   <tr key={row.id}>
                     <td title={row.householdName || '—'}>
@@ -243,6 +254,7 @@ export default function AlmostOutPage() {
                       </div>
                     </td>
                     <td title={row.productName || row.primaryName}>{row.productName || row.primaryName}</td>
+                    <td title={row.gpc || 'Geen GPC-classificatie'}>{row.gpc || 'Geen GPC-classificatie'}</td>
                     <td className="rz-num">{formatQuantity(row.currentQuantity)}</td>
                     <td className="rz-num">{formatQuantity(row.minStock)}</td>
                     <td className="rz-num">{formatQuantity(row.idealStock)}</td>

@@ -11,6 +11,7 @@ from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
 from app.db import engine
+from app.services.dutch_gpc_projection_service import ensure_dutch_gpc_assignments
 from app.services.session_request_context import (
     require_platform_permission_from_session,
     resolve_current_server_session,
@@ -147,39 +148,43 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
 
     gpc_product_type = "NULL"
     gpc_brick_code = "NULL"
-    if {"global_product_gpc_bricks", "gpc_bricks"}.issubset(tables):
+    gpc_brick_name = "NULL"
+    gpc_class_code = "NULL"
+    gpc_class_name = "NULL"
+    gpc_family_code = "NULL"
+    gpc_family_name = "NULL"
+    if {"global_product_gpc_bricks", "gpc_product_groups"}.issubset(tables):
         joins.extend([
             """
             LEFT JOIN global_product_gpc_bricks catalog_gpc
               ON catalog_gpc.global_product_id = gp.id
             """,
             """
-            LEFT JOIN gpc_bricks catalog_brick
-              ON catalog_brick.brick_code = catalog_gpc.brick_code
+            LEFT JOIN gpc_product_groups catalog_gpc_nl
+              ON catalog_gpc_nl.gpc_brick_code = catalog_gpc.brick_code
+             AND catalog_gpc_nl.language_code = 'nl'
+             AND catalog_gpc_nl.active = TRUE
             """,
         ])
         gpc_brick_code = "catalog_gpc.brick_code"
-        if "gpc_translations" in tables:
-            gpc_product_type = """
-                COALESCE(
-                    (SELECT tr.translated_text
-                     FROM gpc_translations tr
-                     WHERE tr.entity_type = 'brick'
-                       AND tr.entity_code = catalog_gpc.brick_code
-                       AND tr.language_code = 'nl'
-                     LIMIT 1),
-                    catalog_brick.description
-                )
-            """
-        else:
-            gpc_product_type = "catalog_brick.description"
+        gpc_brick_name = "catalog_gpc_nl.gpc_brick_name"
+        gpc_product_type = gpc_brick_name
+        gpc_class_code = "catalog_gpc_nl.gpc_class_code"
+        gpc_class_name = "catalog_gpc_nl.gpc_class_name"
+        gpc_family_code = "catalog_gpc_nl.gpc_family_code"
+        gpc_family_name = "catalog_gpc_nl.gpc_family_name"
 
-    product_type_expression = f"COALESCE({gpc_product_type}, {legacy_product_type})"
+    product_type_expression = f"CASE WHEN {gpc_brick_code} IS NOT NULL THEN {gpc_product_type} ELSE {legacy_product_type} END"
     product_type_id_expression = f"COALESCE({gpc_brick_code}, {legacy_product_type_id})"
     select_parts.extend([
         f"{product_type_id_expression} AS product_type_id",
         f"{product_type_expression} AS product_type",
         f"{gpc_brick_code} AS gpc_brick_code",
+        f"{gpc_brick_name} AS gpc_brick_name",
+        f"{gpc_class_code} AS gpc_class_code",
+        f"{gpc_class_name} AS gpc_class_name",
+        f"{gpc_family_code} AS gpc_family_code",
+        f"{gpc_family_name} AS gpc_family_name",
     ])
 
     household_table = _household_table()
@@ -304,6 +309,10 @@ def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
         "primary_gtin": primary_gtin_expression,
         "catalog_kind": catalog_kind_expression,
         "product_type": f"COALESCE({product_type_expression}, '')",
+        "gpc_brick_code": f"COALESCE({gpc_brick_code}, '')",
+        "gpc_brick_name": f"COALESCE({gpc_brick_name}, '')",
+        "gpc_class_name": f"COALESCE({gpc_class_name}, '')",
+        "gpc_family_name": f"COALESCE({gpc_family_name}, '')",
         "source": source_expression,
         "household_article_count": household_count_expression,
         "catalog_visible": alias_visibility_expression,
@@ -318,6 +327,10 @@ def _catalog_where(
     primary_gtin: str,
     catalog_kind: str,
     product_type: str,
+    gpc_brick_code: str,
+    gpc_brick_name: str,
+    gpc_class: str,
+    gpc_family: str,
     source: str,
     household_article_count: str,
 ) -> tuple[str, dict[str, Any]]:
@@ -329,14 +342,20 @@ def _catalog_where(
         "primary_gtin": primary_gtin,
         "catalog_kind": catalog_kind,
         "product_type": product_type,
+        "gpc_brick_code": gpc_brick_code,
+        "gpc_brick_name": gpc_brick_name,
+        "gpc_class_name": gpc_class,
+        "gpc_family_name": gpc_family,
         "source": source,
     }
     for key, raw_value in filters.items():
-        value = raw_value.strip().lower()
+        value = (raw_value if isinstance(raw_value, str) else "").strip().lower()
         if value:
             conditions.append(f"LOWER({expressions[key]}) LIKE :{key}")
             params[key] = f"%{value}%"
-    household_value = household_article_count.strip()
+    household_value = (
+        household_article_count if isinstance(household_article_count, str) else ""
+    ).strip()
     if household_value:
         conditions.append(
             f"CAST({expressions['household_article_count']} AS TEXT) LIKE :household_article_count"
@@ -377,6 +396,10 @@ def list_catalog(
     primary_gtin: str = Query(default="", max_length=200),
     catalog_kind: str = Query(default="", max_length=50),
     product_type: str = Query(default="", max_length=200),
+    gpc_brick_code: str = Query(default="", max_length=50),
+    gpc_brick_name: str = Query(default="", max_length=200),
+    gpc_class: str = Query(default="", max_length=200),
+    gpc_family: str = Query(default="", max_length=200),
     source: str = Query(default="", max_length=200),
     household_article_count: str = Query(default="", max_length=50),
     sort_by: str = Query(default="name", max_length=50),
@@ -387,6 +410,18 @@ def list_catalog(
     if "global_products" not in _tables():
         return {"items": [], "total": 0, "limit": limit, "offset": offset}
 
+    with engine.begin() as conn:
+        product_ids = [
+            str(row.get("id") or "").strip()
+            for row in conn.execute(text("""
+                SELECT id
+                FROM global_products
+                WHERE LOWER(TRIM(COALESCE(status, 'active'))) <> 'deleted'
+            """)).mappings().all()
+            if str(row.get("id") or "").strip()
+        ]
+        ensure_dutch_gpc_assignments(conn, product_ids)
+
     select_parts, joins, expressions = _catalog_projection()
     where_sql, params = _catalog_where(
         expressions,
@@ -395,12 +430,20 @@ def list_catalog(
         primary_gtin,
         catalog_kind,
         product_type,
+        gpc_brick_code,
+        gpc_brick_name,
+        gpc_class,
+        gpc_family,
         source,
         household_article_count,
     )
-    order_expression = expressions.get(sort_by, expressions["name"])
-    direction = "DESC" if sort_direction.lower() == "desc" else "ASC"
-    if sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "source"}:
+    normalized_sort_by = sort_by if isinstance(sort_by, str) else "name"
+    normalized_sort_direction = sort_direction if isinstance(sort_direction, str) else "asc"
+    normalized_limit = limit if isinstance(limit, int) else 10
+    normalized_offset = offset if isinstance(offset, int) else 0
+    order_expression = expressions.get(normalized_sort_by, expressions["name"])
+    direction = "DESC" if normalized_sort_direction.lower() == "desc" else "ASC"
+    if normalized_sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "gpc_brick_code", "gpc_brick_name", "gpc_class_name", "gpc_family_name", "source"}:
         order_sql = (
             f"LOWER({order_expression}) {direction}, "
             f"{order_expression} {direction}"
@@ -416,14 +459,19 @@ def list_catalog(
         ORDER BY {order_sql}, gp.id ASC
         LIMIT :limit OFFSET :offset
     """
-    page_params = {**params, "limit": limit, "offset": offset}
+    page_params = {**params, "limit": normalized_limit, "offset": normalized_offset}
     with engine.begin() as conn:
         total = int(conn.execute(text(count_sql), params).scalar() or 0)
         items = [
             dict(row)
             for row in conn.execute(text(page_sql), page_params).mappings().all()
         ]
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "total": total,
+        "limit": normalized_limit,
+        "offset": normalized_offset,
+    }
 
 
 
@@ -684,6 +732,8 @@ def _receipt_line_rows(global_product_id: str) -> list[dict[str, Any]]:
 
 @router.get("/{global_product_id}")
 def get_catalog_product(global_product_id: str):
+    with engine.begin() as conn:
+        ensure_dutch_gpc_assignments(conn, [global_product_id])
     product = _catalog_row(global_product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")

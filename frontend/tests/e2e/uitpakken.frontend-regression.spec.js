@@ -69,14 +69,9 @@ test.describe('Uitpakken frontend-regressie', () => {
 
     await expect(page.locator('body')).toBeVisible();
     await expect(page.getByText('Kassabon Kassabon')).toHaveCount(0);
-    await expectAnyVisible(page, [
-      'Kassabon',
-      'Artikel',
-      'Locatie',
-      'Sublocatie',
-      'Verwerken',
-      'Uitpakken',
-    ], 'uitpakken detail');
+    await expect(page.getByRole('tab', { name: 'Bonregels', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Diagnose', exact: true })).toBeVisible();
+    await expect(page.getByTestId('receipt-detail-title')).toHaveCount(1);
 
     await expectNoConsoleErrors(consoleErrors);
   });

@@ -8,7 +8,7 @@ function required(name, value) {
   return String(value).trim()
 }
 
-test('P0 authorization legacy advanced_member -> canonical permissions -> browser admin authority', async ({ page }) => {
+test('P0 authorization legacy advanced_member -> canonical permissions -> browser household authority', async ({ page }) => {
   const accountEmail = required('PLAYWRIGHT_P0_AUTH_LEGACY_EMAIL', email).toLowerCase()
   const accountPassword = required('PLAYWRIGHT_P0_AUTH_LEGACY_PASSWORD', password)
 
@@ -39,14 +39,6 @@ test('P0 authorization legacy advanced_member -> canonical permissions -> browse
   expect(session.permissions?.['household_settings.manage']).toBe(true)
   expect(session.permissions?.['gpc.update']).toBe(true)
   expect(Boolean(session.permissions?.['catalog.update'])).toBe(false)
-
-  // AdminGuard must follow the server-side permission projection, not a hard-coded
-  // legacy role-name allowlist. The current page contains two equivalent admin roots,
-  // so visibility of the first root proves the guarded route is rendered without
-  // coupling this authority to that unrelated markup duplication.
-  await page.goto('/admin')
-  await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByTestId('admin-page').first()).toBeVisible()
 
   await page.goto('/instellingen/huishouden/autorisaties')
   await expect(page).toHaveURL(/\/instellingen\/huishouden\/autorisaties$/)

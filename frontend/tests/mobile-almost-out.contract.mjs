@@ -11,6 +11,9 @@ const rows = buildMobileAlmostOutRows([
     household_article_name: 'Halfvolle melk',
     product_name: 'Melk halfvol',
     image_url: 'https://images.example.test/melk.jpg',
+    gpc_brick_name: 'Melk',
+    gpc_class_name: 'Zuivel',
+    gpc_family_name: 'Melkproducten',
     current_quantity: 1,
     min_stock: 2,
     ideal_stock: 4,
@@ -29,6 +32,9 @@ assert.equal(rows[0].detailId, 'article-1')
 assert.equal(rows[0].householdName, 'Halfvolle melk')
 assert.equal(rows[0].productName, 'Melk halfvol')
 assert.equal(rows[0].imageUrl, 'https://images.example.test/melk.jpg')
+assert.equal(rows[0].gpcBrickName, 'Melk')
+assert.equal(rows[0].gpcClassName, 'Zuivel')
+assert.equal(rows[0].gpcFamilyName, 'Melkproducten')
 assert.equal(rows[0].currentQuantity, 1)
 assert.equal(rows[0].minStock, 2)
 assert.equal(rows[0].idealStock, 4)
@@ -62,6 +68,8 @@ assert.match(mobileSource, /data-testid="mobile-almost-out-location-filter"/)
 assert.match(mobileSource, /Te kopen \{formatAlmostOutQuantity\(row\.amountToBuy\)\}/)
 assert.match(mobileSource, /CatalogArticleThumbnail/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
+assert.match(mobileSource, /GPC-groep:/)
+assert.match(mobileSource, /GPC-familie:/)
 assert.match(mobileSource, /\/voorraad\/\$\{encodeURIComponent\(row\.detailId\)\}/)
 assert.doesNotMatch(mobileSource, /Alles naar Winkelen/i)
 assert.doesNotMatch(mobileSource, /Naar Winkelen/i)

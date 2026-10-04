@@ -192,44 +192,49 @@ def test_platform_admin_superuser_conflict_creates_no_none_session():
         engine.dispose()
 
 
-@pytest.mark.parametrize(
-    ("user_id", "email", "role_key", "is_superuser"),
-    [
-        ("system-superuser", SUPERGEBRUIKER_EMAIL, "platform.superuser", True),
-        ("ip-owner", "ip-owner@example.test", "platform.ip_owner", False),
-    ],
-)
-def test_system_session_uses_active_platform_role_without_household_membership(
-    user_id,
-    email,
-    role_key,
-    is_superuser,
-):
+def test_superuser_system_session_uses_active_platform_role_without_household_membership():
     engine = _seed_regular_fixture()
     try:
         with engine.begin() as conn:
-            seed_user(conn, user_id=user_id, email=email, password="Rezzerv123")
+            seed_user(conn, user_id="system-superuser", email=SUPERGEBRUIKER_EMAIL, password="Rezzerv123")
             conn.execute(text("""
                 INSERT INTO auth_platform_user_roles(user_id, role_key, active)
-                VALUES (:user_id, :role_key, TRUE)
-            """), {"user_id": user_id, "role_key": role_key})
-            raw_id, created = create_system_server_session(conn, user_id=user_id)
+                VALUES ('system-superuser', 'platform.superuser', TRUE)
+            """))
+            raw_id, created = create_system_server_session(conn, user_id="system-superuser")
             resolved = resolve_server_session(conn, raw_id)
             payload = public_session_payload(resolved)
             assert created.context_type == resolved.context_type == "system"
             assert created.active_household_id == resolved.active_household_id == "0"
             assert created.role == resolved.role == "owner"
-            assert resolved.is_platform_superuser is is_superuser
-            assert payload["is_platform_superuser"] is is_superuser
+            assert resolved.is_platform_superuser is True
+            assert payload["is_platform_superuser"] is True
             assert "platform_roles" not in payload
+    finally:
+        engine.dispose()
 
+
+def test_ip_owner_none_session_has_no_household_and_only_owner_permission():
+    engine = _seed_regular_fixture()
+    try:
+        with engine.begin() as conn:
+            seed_user(conn, user_id="ip-owner", email="ip-owner@example.test", password="Rezzerv123")
             conn.execute(text("""
-                UPDATE auth_platform_user_roles SET active = FALSE
-                WHERE user_id = :user_id AND role_key = :role_key
-            """), {"user_id": user_id, "role_key": role_key})
-            with pytest.raises(HTTPException) as exc:
-                resolve_server_session(conn, raw_id)
-            assert_http_status(exc, 403)
+                INSERT INTO auth_platform_user_roles(user_id, role_key, active)
+                VALUES ('ip-owner', 'platform.ip_owner', TRUE)
+            """))
+            raw_id, created = create_none_server_session(conn, user_id="ip-owner")
+            resolved = resolve_server_session(conn, raw_id)
+            payload = public_session_payload(resolved)
+            assert created.context_type == resolved.context_type == "none"
+            assert created.active_household_id is None
+            assert resolved.active_household_id is None
+            assert created.role is None
+            assert resolved.role is None
+            assert resolved.is_ip_owner is True
+            assert resolved.is_platform_superuser is False
+            assert payload["permissions"] == {"platform.special_roles.manage": True}
+            assert "platform_roles" not in payload
     finally:
         engine.dispose()
 

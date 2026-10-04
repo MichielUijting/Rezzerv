@@ -19,7 +19,7 @@ De keuze tussen desktop-/tabelpresentatie en een beschikbare mobiele presentatie
 
 - `<=720px` gebruikt de mobiele app-chrome en, waar een scherm al een mobiele variant heeft, die mobiele variant;
 - `>720px` gebruikt de desktop-/tabelpresentatie;
-- gebruikersrol, Superuser/Admin/Lid, platformrechten, huishoudenstype en locatieconfiguratie bepalen **nooit** welke UI-variant wordt gekozen;
+- gebruikersrol, Superuser/Beheerder/Gebruiker, platformrechten, huishoudenstype en locatieconfiguratie bepalen **nooit** welke UI-variant wordt gekozen;
 - Inhuis toont **geen functionele schakelaar** voor Mobiel/Tabel/Automatisch;
 - op desktop/laptop kan de mobiele variant voor testen worden geactiveerd door de browserviewport responsief/smal te maken, bijvoorbeeld via de browser-device-mode (Ctrl+Shift+M waar ondersteund);
 - tabletgedrag volgt dezelfde viewportregel; oriëntatie, split-screen of browserweergave kan daardoor de effectieve variant veranderen;
@@ -38,6 +38,82 @@ Voor **Instellingen** geldt op viewports van maximaal 720px dezelfde centrale mo
 - iedere mobiele tabelcel toont het bijbehorende kolomlabel naast de waarde, zodat informatie niet betekenisloos wordt wanneer de desktopkop verdwijnt;
 - kolom-resizebediening is op mobiel niet zichtbaar;
 - autorisatie, routes, beschikbare velden en acties zijn identiek aan desktop; responsiviteit mag geen functionele rechten of gegevens verwijderen.
+
+## Mobiel dashboard als landingspagina vanaf 2 oktober 2026
+
+De mobiele landingspagina is vanaf deze wijziging een **dashboard** en geen tweede navigatiemenu:
+
+- de vaste onderste actiebalk blijft de primaire mobiele navigatie naar modules;
+- bovenaan het dashboard staat één compacte, horizontale statusregel met **Meldingen**, **Boodschappen** en **Nog opbergen**; ieder statusvlak is volledig aanklikbaar en opent de betreffende functionele flow;
+- daaronder staan informatiegerichte dashboardtegels voor **Uitgaven t.o.v. vorig jaar**, **Uitgaven**, **Bezochte winkels** en **Begrote uitgaven**;
+- dashboardtegels tonen een kernwaarde, korte vergelijking/context en een compacte grafische weergave;
+- boven de grafieken staat één compacte schakelaar **Dagen / Weken / Maanden**; iedere keuze toont exact de laatste vier perioden;
+- **Uitgaven t.o.v. vorig jaar** vergelijkt die vier perioden met exact dezelfde perioden één jaar eerder; de vergelijkingswaarden zijn lichtgroen;
+- de overige historische vergelijkingsgrafieken vergelijken de vier huidige perioden met de vier direct voorafgaande perioden;
+- **alle vier dashboardtegels** reageren op de periodekeuze; de begroting toont overeenkomstig de komende 4 dagen, 4 weken of 4 maanden;
+- vergelijkingsgrafieken tonen een zichtbare verticale waarde-as; de actuele periode gebruikt de primaire donkergroene kleur en de vergelijkingsperiode een lichtgroene kleur;
+- de tekst **Bekijk details** staat niet in de dashboardtegels; de volledige tegel blijft aanklikbaar;
+- de gebruiker kan een dashboardgrafiek verslepen met muis of door aanraken en bewegen op het grafiekvlak; de overige grafieken herschikken direct;
+- de dashboardvolgorde wordt per gebruiker lokaal bewaard en bij terugkeer naar het dashboard opnieuw toegepast;
+- **Begrote uitgaven** wordt niet afgeleid van een simpel historisch weekgemiddelde, maar van verwachte **herhalingskoop** per artikel op basis van het historische koopritme en het verwachte volgende koopmoment;
+- de status **Nog opbergen** opent rechtstreeks **Kassa > Bonnen** en niet de camera;
+- de globale onderste actie **Meer** opent een apart overzicht met de overige beschikbare hoofdfuncties die niet al als recente acties onderin staan;
+- een klik op een dashboardtegel opent een consistente drill-down met meer detail;
+- een afzonderlijke staaf in een dashboardgrafiek is eveneens klikbaar/tikbaar en opent een drill-down die uitsluitend de bonnen, artikelen, winkels of verwachte herhalingskopen van precies die staafperiode en die reeks toont;
+- de twee **Uitgaven**-grafieken stapelen elke staaf op basis van **GS1 GPC-familie**: maximaal vijf grootste productfamilies krijgen een eigen segment, kleinere families worden samengevoegd tot **Overig** en ontbrekende classificaties vallen onder **Niet ingedeeld**;
+- ieder gestapeld segment is afzonderlijk klikbaar/tikbaar en filtert de staafdrill-down verder tot alleen die GPC-familie, **Overig** of **Niet ingedeeld**;
+- de brede **Uitgaven**-drill-down toont daarnaast een zichtbaar blok **Per categorie** met dezelfde top-5/Overig/Niet-ingedeeld-logica, inclusief een gestapelde balk, bedragen en procentuele verdeling;
+- vanuit een dashboarddrill-down opent **Open kassabon** altijd de bestaande mobiele **Kassa → Bonnen**-context en nooit de camerascan als eerste scherm;
+- segmentbedragen worden per bon proportioneel aan de productregels aan het bonbedrag gekoppeld, zodat gestapelde segmenten samen exact het uitgavenbedrag van de staaf blijven vormen;
+- bij vergelijkingsgrafieken blijft onderscheid bestaan tussen de huidige staaf en de lichtgroene vergelijkingsstaaf; de drill-down volgt exact de aangeklikte reeks;
+- de dashboardtegels gebruiken de centrale primaire kleur, witte surfaces, `--radius-md` en uitsluitend de twee centrale tekstgroottes;
+- de landingspagina toont niet daarnaast opnieuw grote actiekaarten voor Voorraad, Boodschappen, Kassa, Uitpakken, Catalogus en andere hoofdmodules;
+- Gebruiker, Beheerder en Frontteamlid gebruiken hetzelfde huishoud-dashboard; Frontteamfunctionaliteit blijft aanvullend via de centrale navigatie beschikbaar;
+- Superuser gebruikt het bestaande Superuser-beheercentrum als eigen dashboardingang;
+- gebruikerszichtbare huishoudrollen heten **Gebruiker** en **Beheerder**; legacy technische role keys mogen intern blijven bestaan;
+- Superuser, Platformbeheerder en IP-eigenaar blijven drie onderscheiden gebruikerszichtbare platformrollen: Superuser voor functioneel platformbeheer, Platformbeheerder voor technisch beheer/support en IP-eigenaar als beschermde hoogste bevoegdheid met beide sets plus speciaal rollenbeheer.
+
+## Catalogus GPC-hiërarchie vanaf 3 oktober 2026
+
+Voor de artikelcatalogus geldt:
+
+- ieder catalogusartikel krijgt waar nog geen Brick is vastgelegd automatisch een best passende Brick uit de bestaande Nederlandse GS1 GPC-referentielijst; een bestaande handmatige/bevestigde Brick wordt nooit overschreven;
+- vanuit die Brick toont ieder catalogusartikel automatisch de bijbehorende **GPC-familie**;
+- de familie wordt niet handmatig dubbel opgeslagen maar afgeleid uit de centrale GS1-hiërarchie **Brick → Class/Groep → Family**; daardoor geldt dezelfde logica direct voor bestaande én nieuw geclassificeerde catalogusartikelen;
+- de desktop-Catalogus toont **GPC-familie** als afzonderlijke sorteerbare en filterbare kolom en neemt de familie mee in export;
+- de mobiele Catalogus en het Catalogusdetail tonen eveneens de GPC-familie;
+- **Niet geclassificeerd** is alleen toegestaan als de Nederlandse referentielijst geen bruikbare kandidaat voor het artikel oplevert; dit wordt als uitzonderings-/datakwaliteitsgeval behandeld en mag niet de normale toestand van bestaande Catalogusartikelen zijn;
+- gebruikerszichtbare GPC-labels voor **Brick**, **GPC-groep/Class**, **GPC-familie** en Segment komen uitsluitend uit de officiële Nederlandse GS1 GPC-publicatie;
+- een Engelstalige naam is geen toegestane gebruikerszichtbare fallback; ontbreekt een Nederlands label lokaal, dan geldt dat als een onvolledige GS1-import/referentiedatafout die moet worden hersteld.
+
+## Nederlandse GPC-hiërarchie in artikeloverzichten vanaf 3 oktober 2026
+
+Voor **Catalogus, Voorraad, Bijna op en Boodschappen** geldt één centrale GPC-weergaveregel:
+
+- GPC-identiteit wordt uitsluitend afgeleid via de canonieke productkoppeling: huishoudartikel → `global_product_id` → bestaande of automatisch afgeleide GPC Brick → `gpc_product_groups`;
+- gebruikerszichtbare namen komen uit de bestaande Nederlandse GS1-referentielijst met `language_code = nl`;
+- waar een canonieke productkoppeling bestaat, worden **Brick**, **GPC-groep/Class** en **GPC-familie** direct geprojecteerd voor zowel bestaande als nieuw toegevoegde artikelen; er is geen eenmalige artikelmigratie nodig;
+- **Voorraad**, **Bijna op** en **Boodschappen** tonen de Nederlandse GPC-hiërarchie als artikelmetadata; desktopoverzichten ondersteunen zoeken/filteren op die GPC-tekst;
+- de Catalogus blijft de centrale bron voor de GPC-classificatie en toont in elk geval de Nederlandse Brick/Producttype- en Familienaam; detail/classificatie toont de volledige hiërarchie;
+- een puur lokale handmatige boodschappenregel zonder koppeling aan een huishoudartikel of Catalogusproduct krijgt niet op basis van alleen de artikelnaam een GPC-code toegewezen; naamgokken is niet toegestaan. Zodra zo'n regel canoniek wordt gekoppeld, verschijnt de Nederlandse GPC-hiërarchie automatisch;
+- Engelse GPC-labels worden niet als gebruikerszichtbare fallback gebruikt.
+
+## Mobiele Boodschappen-interactie vanaf 3 oktober 2026
+
+Voor het mobiele scherm **Boodschappen** geldt aanvullend:
+
+- een tik op een artikel onder **Nog te kopen** verplaatst het direct naar **In winkelwagen**;
+- een tik op een artikel in **In winkelwagen** verplaatst het direct terug naar **Nog te kopen**;
+- de eerdere selectiecheckboxen en bulkknoppen voor verplaatsen/verwijderen vervallen;
+- iedere artikelrij toont rechts na `-` / aantal / `+` een afzonderlijke prullenbakknop;
+- de prullenbakknop heeft dezelfde compacte breedte en dezelfde touchhoogte als de min- en plusknop en verwijdert alleen die artikelregel; het pictogram zelf is circa 25% groter dan de eerste implementatie zodat het duidelijk herkenbaar is;
+- min, aantal, plus en prullenbak activeren niet per ongeluk de rijverplaatsing;
+- als **In winkelwagen** leeg is, wordt onder de sectiekop geen extra leegtekst gerenderd; alleen de kop en teller 0 blijven zichtbaar;
+- bij **Artikel toevoegen** verschijnt tijdens zoeken geen inline tekst **Zoeken…**;
+- zoekresultaten worden als een zwevende **dropdown/overlay** direct onder het zoekveld getoond en nemen geen extra verticale ruimte in de schermflow in;
+- een klik/tik op een bestaand zoekresultaat geldt direct als toevoegen; een aparte vaste knop **Toevoegen** wordt niet getoond;
+- als de zoekactie geen kandidaat oplevert, verschijnt in dezelfde dropdown altijd de optie **Toevoegen: [ingevoerde tekst]** om het artikel uitsluitend aan de lokale boodschappenlijst toe te voegen;
+- handmatige vrije invoer zonder zoekresultaat kan daarnaast met Enter worden toegevoegd.
 
 ## Mobiele ontwerpbaseline vanaf 22 september 2026
 
@@ -103,6 +179,8 @@ Centrale tokens:
 - `--color-table-grid`: `#8FD19E`.
 
 Gebruik:
+- op **lichtgroene knoppen of lichtgroene interactieve knoptoestanden** is de tekst/iconkleur altijd de centrale donkergroene primaire kleur; witte tekst is daar niet toegestaan;
+- witte knoptekst is alleen voor voldoende donkere primaire surfaces bedoeld;
 - `#005F6A` is de standaard primaire Inhuis-UI-kleur; alle primaire surfaces lezen de centrale tokens zodat een geldige lokale Weergave-voorkeur applicatiebreed tegelijk doorwerkt;
 - tekst en iconen op `#005F6A` gebruiken centraal `#FFFFFF`; dit geldt applicatiebreed voor primaire gekleurde surfaces en vervangt de eerdere donkere tekstkleur;
 - `#005F6A` blijft de brand-ink voor tekst, iconen, focus/accent en geselecteerde status op lichte of witte surfaces;
@@ -238,7 +316,7 @@ Het nog niet gemigreerde **Voorraad-artikeldetail** mag tijdelijk de oudere groe
 Vaste kenmerken:
 - compacte gekleurde header met **Voorraad links** en het witte Inhuis-logo rechts;
 - zoekveld als eerste ingang, gevolgd door compacte locatie-/artikelgroep-/sorteerfilters; artikelsortering biedt **Naam A–Z** en **Naam Z–A**, terwijl sortering op aantal niet wordt aangeboden;
-- iedere voorraadregel toont voor bevoegde Admin/Eigenaar direct `−` vóór en `+` na het aantal; `−` boekt exact één eenheid af via de bestaande inventory-eventlogica en `+` verhoogt exact één eenheid via de bestaande handmatige voorraadcorrectie; na iedere mutatie wordt de backendvoorraad opnieuw geladen;
+- iedere voorraadregel toont voor bevoegde Beheerder direct `−` vóór en `+` na het aantal; `−` boekt exact één eenheid af via de bestaande inventory-eventlogica en `+` verhoogt exact één eenheid via de bestaande handmatige voorraadcorrectie; na iedere mutatie wordt de backendvoorraad opnieuw geladen;
 - interactieve zoek-/select-/actievelden hebben minimaal circa `44px` touchhoogte;
 - aantalscontext en de bestaande actie **Incidentele aankoop** staan compact boven de lijst;
 - één witte lijstcontainer met subtiele horizontale scheidingen;

@@ -62,11 +62,22 @@ def test_assignment_targets_existing_global_product_and_known_brick():
     assert "household_article_gpc_bricks" not in source
 
 
-def test_dutch_text_has_official_english_fallback():
+def test_user_visible_gpc_text_is_dutch_only_without_english_fallback():
     source = GPC_ROUTES.read_text(encoding="utf-8")
-    assert "COALESCE((SELECT translated_text FROM gpc_translations" in source
-    assert "brick_description_en" in source
-    assert "tr.language_code='nl'" in source
+    reference = GPC_REFERENCE_SERVICE.read_text(encoding="utf-8")
+    frame = FRAME.read_text(encoding="utf-8")
+    action = ACTION_PAGE.read_text(encoding="utf-8")
+
+    assert "gpc_product_groups" in source
+    assert "language_code" in source
+    assert "brick_description_en" not in source
+    assert "gpc_brick_name_en" not in reference
+    assert "gpc_bricks_2026_05_en.json" not in reference
+    assert "bundled_gpc_2026_05_en" not in reference
+    assert "brick_description_en" not in frame
+    assert "brick_description_en" not in action
+    assert "Nederlandse/Engelse" not in frame
+    assert "Nederlandse/Engelse" not in action
 
 
 def test_existing_confirmed_product_group_is_migrated_idempotently():
@@ -131,7 +142,8 @@ def test_catalog_detail_uses_confirmed_brick_as_product_type_and_equal_columns()
     assert "onAssignmentChange?.(savedAssignment)" in frame
     assert "onAssignmentChange?.(null)" in frame
     assert "confirmedProductType || product.product_type" in detail
-    assert "assignment?.brick_description || assignment?.brick_description_en" in detail
+    assert "assignment?.brick_description || ''" in detail
+    assert "brick_description_en" not in detail
     assert detail.count("width: '25%'") == 8
     assert "width: '33.333%'" in detail
     assert "width: '33.334%'" in detail
@@ -168,8 +180,9 @@ def test_external_databases_manual_gpc_fallback_uses_official_catalog_and_proven
     frontend = EXTERNAL_DATABASES.read_text(encoding="utf-8")
 
     assert "ensure_official_gpc_brick" in backend
-    assert "FROM gpc_bricks b" in reference
     assert "FROM gpc_product_groups gpg" in reference
+    assert "ensure_bundled_dutch_gpc_reference" in reference
+    assert "gpc_bricks_2026_05_en.json" not in reference
     assert "Onbekende GS1 GPC Brickcode" in backend
     assert "global_product_gpc_bricks" in backend
     assert "assignment_source" in backend
@@ -194,7 +207,8 @@ def test_unclassified_catalog_product_returns_ranked_top_five_candidates():
 
     assert "rank_gpc_candidates" in routes
     assert "build_product_signals" in routes
-    assert "bundled_official_gpc_bricks" in routes
+    assert "_candidate_catalog_rows" in routes
+    assert "gpc_product_groups" in routes
     assert "_external_product_metadata" in routes
     assert '"suggestions": suggestions' in routes
     assert "limit=5" in routes
@@ -215,7 +229,7 @@ def test_unclassified_catalog_product_returns_ranked_top_five_candidates():
         assert "Andere Brick zoeken" in source
 
 
-def test_gpc_search_and_assignment_share_complete_official_reference_source():
+def test_gpc_search_and_assignment_share_complete_official_dutch_reference_source():
     routes = GPC_ROUTES.read_text(encoding="utf-8")
     reference = GPC_REFERENCE_SERVICE.read_text(encoding="utf-8")
     off_link = OFF_LINK_SERVICE.read_text(encoding="utf-8")
@@ -224,9 +238,11 @@ def test_gpc_search_and_assignment_share_complete_official_reference_source():
     assert "ensure_official_gpc_brick" in routes
     assert "ensure_official_gpc_brick" in off_link
     assert "FROM gpc_product_groups gpg" in reference
-    assert "gpc_bricks_2026_05_en.json" in reference
-    assert "_bundled_brick_row" in reference
-    assert '"bundled_gpc_2026_05_en"' in reference
+    assert "language_code" in reference
+    assert "'nl'" in reference
+    assert "gpc_bricks_2026_05_en.json" not in reference
+    assert "_bundled_brick_row" not in reference
+    assert '"bundled_gpc_2026_05_en"' not in reference
     assert "INSERT INTO gpc_segments" in reference
     assert "INSERT INTO gpc_families" in reference
     assert "INSERT INTO gpc_classes" in reference

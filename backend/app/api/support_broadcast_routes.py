@@ -36,7 +36,7 @@ def _platform_actor(authorization: str | None) -> dict[str, str]:
         "user_id": context.user_id,
         "email": str(context.email or "").strip().lower(),
         "name": context.email or "Platformgebruiker",
-        "role": str(context.role or "platform.user"),
+        "role": "Platformbeheerder",
     }
 
 
@@ -126,8 +126,8 @@ def create_platform_support_broadcast(
                     sender_role=actor["role"],
                     subject=payload.subject,
                     message_text=payload.message,
-                    origin_screen_name="Superuser / Meldingen",
-                    origin_route="/superuser/meldingen",
+                    origin_screen_name="Platformbeheer / Meldingen",
+                    origin_route="/platform/meldingen",
                     origin_app_version=payload.app_version,
                     household_id=household_id,
                     recipient_type=RECIPIENT_SINGLE_ADMIN,

@@ -40,7 +40,7 @@ SESSION_COOKIE_NAME = "rezzerv_session"
 DEFAULT_SESSION_TTL = timedelta(hours=12)
 REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
 SESSION_CONTEXT_TYPES = frozenset({"none", "regular", "system"})
-SYSTEM_PLATFORM_ROLES = frozenset({"platform.superuser", "platform.ip_owner"})
+SYSTEM_PLATFORM_ROLES = frozenset({"platform.superuser"})
 SessionContextType = Literal["none", "regular", "system"]
 
 
@@ -208,6 +208,12 @@ def _resolve_platform_context_roles(
         normalized_email == SUPERGEBRUIKER_EMAIL
         and "platform.superuser" not in platform_roles
     ):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
+    if "platform.ip_owner" in platform_roles and platform_roles != frozenset({"platform.ip_owner"}):
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
@@ -429,22 +435,24 @@ def _insert_server_session(
     )
 
 
-def _require_platform_admin_none_context(
+def _require_platform_none_context(
     conn: Connection,
     *,
     user_id: str,
     email: str,
-) -> None:
+) -> frozenset[str]:
     platform_roles, system_roles = _resolve_platform_context_roles(
         conn,
         user_id=user_id,
         email=email,
     )
-    if "platform.platform_admin" not in platform_roles or system_roles:
+    allowed_none_roles = {"platform.platform_admin", "platform.ip_owner"}
+    if not (set(platform_roles) & allowed_none_roles) or system_roles:
         raise HTTPException(
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    return platform_roles
 
 
 def create_none_server_session(
@@ -468,7 +476,7 @@ def create_none_server_session(
     if not user:
         raise HTTPException(status_code=401, detail="Gebruiker ontbreekt")
     email = str(user.get("email") or "")
-    _require_platform_admin_none_context(
+    platform_roles = _require_platform_none_context(
         conn,
         user_id=normalized_user_id,
         email=email,
@@ -483,7 +491,8 @@ def create_none_server_session(
         ttl=ttl,
         replace_existing=replace_existing,
         now=now,
-        is_platform_admin=True,
+        is_platform_admin="platform.platform_admin" in platform_roles,
+        is_ip_owner="platform.ip_owner" in platform_roles,
     )
 
 
@@ -590,7 +599,8 @@ def resolve_server_session(
     )
     raw_household_id = row.get("active_household_id")
     if raw_household_id is None:
-        if "platform.platform_admin" not in platform_roles or system_roles:
+        allowed_none_roles = {"platform.platform_admin", "platform.ip_owner"}
+        if not (set(platform_roles) & allowed_none_roles) or system_roles:
             raise HTTPException(
                 status_code=403,
                 detail="Geen geldige accountcontext beschikbaar.",
@@ -605,7 +615,8 @@ def resolve_server_session(
             session_version=int(row.get("session_version") or 1),
             issued_at=_normalize_database_datetime(row.get("issued_at")),
             expires_at=expires_at,
-            is_platform_admin=True,
+            is_platform_admin="platform.platform_admin" in platform_roles,
+            is_ip_owner="platform.ip_owner" in platform_roles,
         )
 
     household_id = str(raw_household_id).strip()
@@ -742,7 +753,11 @@ def rotate_active_household(
 
 def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
     if context.context_type == "none":
-        granted_permissions = set(ROLE_PERMISSIONS["platform.platform_admin"])
+        granted_permissions = set()
+        if context.is_platform_admin:
+            granted_permissions.update(ROLE_PERMISSIONS["platform.platform_admin"])
+        if context.is_ip_owner:
+            granted_permissions.update(ROLE_PERMISSIONS["platform.ip_owner"])
         permissions = {key: True for key in sorted(granted_permissions)}
         return {
             "user": {"id": context.user_id, "email": context.email},

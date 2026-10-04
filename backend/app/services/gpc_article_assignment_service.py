@@ -54,7 +54,7 @@ def _require_gpc_tables() -> None:
         "gpc_classes",
         "gpc_families",
         "gpc_segments",
-        "gpc_translations",
+        "gpc_product_groups",
     }
     missing = sorted(required - tables)
     if missing:
@@ -81,35 +81,25 @@ def _global_product_exists(conn, global_product_id: str) -> bool:
     """), {"global_product_id": global_product_id}).first())
 
 
-def _localized(column_alias: str, entity_type: str, code_column: str, source_column: str) -> str:
-    return (
-        "COALESCE((SELECT translated_text FROM gpc_translations tr "
-        f"WHERE tr.entity_type='{entity_type}' AND tr.entity_code={column_alias}.{code_column} "
-        "AND tr.language_code='nl'), "
-        f"{column_alias}.{source_column})"
-    )
-
-
 def _brick_select_sql(where_clause: str) -> str:
-    brick_label = _localized("b", "brick", "brick_code", "description")
-    class_label = _localized("c", "class", "class_code", "description")
-    family_label = _localized("f", "family", "family_code", "description")
-    segment_label = _localized("s", "segment", "segment_code", "description")
     return f"""
         SELECT
             b.brick_code,
-            {brick_label} AS brick_description,
-            b.description AS brick_description_en,
+            nl.gpc_brick_name AS brick_description,
             c.class_code,
-            {class_label} AS class_description,
+            nl.gpc_class_name AS class_description,
             f.family_code,
-            {family_label} AS family_description,
+            nl.gpc_family_name AS family_description,
             s.segment_code,
-            {segment_label} AS segment_description
+            nl.gpc_segment_name AS segment_description
         FROM gpc_bricks b
         JOIN gpc_classes c ON c.class_code = b.class_code
         JOIN gpc_families f ON f.family_code = c.family_code
         JOIN gpc_segments s ON s.segment_code = f.segment_code
+        JOIN gpc_product_groups nl
+          ON nl.gpc_brick_code = b.brick_code
+         AND nl.language_code = 'nl'
+         AND nl.active = TRUE
         {where_clause}
     """
 
@@ -135,13 +125,9 @@ def install_gpc_article_assignment_routes(main_module) -> None:
         if normalized:
             where = """
                 WHERE lower(b.brick_code) LIKE :query
-                   OR lower(b.description) LIKE :query
-                   OR lower(COALESCE((
-                        SELECT translated_text FROM gpc_translations tr
-                        WHERE tr.entity_type='brick'
-                          AND tr.entity_code=b.brick_code
-                          AND tr.language_code='nl'
-                   ), '')) LIKE :query
+                   OR lower(nl.gpc_brick_name) LIKE :query
+                   OR lower(nl.gpc_class_name) LIKE :query
+                   OR lower(nl.gpc_family_name) LIKE :query
             """
         sql = _brick_select_sql(where) + " ORDER BY brick_description, b.brick_code LIMIT :limit"
         with engine.begin() as conn:

@@ -211,7 +211,7 @@ test('L4-07 superuser uses the visible read-only system management journey', asy
   console.log('P0_L4_07_SUPERUSER_NO_IP_OWNER_AUTHORITY_GREEN')
 })
 
-test('L4-07 IP owner grants platform admin to a standalone user through visible UI', async ({ page }) => {
+test('L4-07 IP owner manages only Superusers from a none-context landing', async ({ page }) => {
   test.setTimeout(180_000)
   const email = required('PLAYWRIGHT_L4_07_IP_OWNER_EMAIL', ipOwnerEmail).toLowerCase()
   const password = required('PLAYWRIGHT_L4_07_IP_OWNER_PASSWORD', ipOwnerPassword)
@@ -221,41 +221,61 @@ test('L4-07 IP owner grants platform admin to a standalone user through visible 
 
   await login(page, email, password)
   const session = await readSession(page)
-  expect(session.context_type).toBe('system')
-  expect(String(session.active_household_id)).toBe('0')
+  expect(session.context_type).toBe('none')
+  expect(session.active_household_id).toBeNull()
+  expect(session.permissions?.['platform.special_roles.manage']).toBe(true)
+  expect(session.permissions?.['platform.permissions.manage']).not.toBe(true)
+  expect(session.permissions?.['platform.frontteam_roles.manage']).not.toBe(true)
 
-  await page.goto('/platform/autorisaties')
-  await expect(page).toHaveURL(/\/platform\/autorisaties$/)
-  await expect(page.getByTestId('platform-authorizations-page')).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByTestId('platform-authorizations-read-only')).toHaveCount(0)
+  await page.goto('/home')
+  await expect(page.getByTestId('ip-owner-home')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByTestId('ip-owner-superusers-tile')).toBeVisible()
+  await expect(page.getByText('Voorraad', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Platformbeheer', { exact: true })).toHaveCount(0)
 
-  const ownerCard = page.getByTestId(`platform-authorization-user-${ownerId}`)
-  await expect(ownerCard).toBeVisible()
-  await expect(ownerCard).toContainText('Beschermde IP-eigenaar')
+  await page.getByTestId('ip-owner-superusers-tile').click()
+  await expect(page).toHaveURL(/\/ip-eigenaar\/superusers$/)
+  await expect(page.getByTestId('ip-owner-superusers-page')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Platformbeheerder', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Frontteamlid', { exact: true })).toHaveCount(0)
 
-  const targetCard = page.getByTestId(`platform-authorization-user-${standaloneTargetId}`)
-  await expect(targetCard).toBeVisible()
-  await expect(targetCard).toContainText(standaloneTargetEmail)
-  await expect(targetCard).toContainText('Platformrollen: Geen')
-  await targetCard.getByRole('button', { name: 'Platformbeheerder toekennen' }).click()
+  const targetCard = page.getByTestId(`ip-owner-superuser-${standaloneTargetId}`)
+  if (await targetCard.count()) {
+    const cleanupResponsePromise = page.waitForResponse((response) => (
+      new URL(response.url()).pathname === `/api/platform/authorizations/users/${standaloneTargetId}/superuser/revoke`
+      && response.request().method() === 'POST'
+    ))
+    await targetCard.getByRole('button', { name: 'Deactiveren' }).click()
+    await page.getByRole('button', { name: 'Definitief deactiveren', exact: true }).click()
+    expect((await cleanupResponsePromise).ok()).toBeTruthy()
+    await expect(targetCard).toHaveCount(0)
+  }
 
-  const confirmation = page.getByTestId('platform-authorization-confirmation')
-  await expect(confirmation).toBeVisible()
-  await expect(confirmation).toContainText(standaloneTargetEmail)
   const grantResponsePromise = page.waitForResponse((response) => (
-    new URL(response.url()).pathname === `/api/platform/authorizations/users/${standaloneTargetId}/platform-admin/grant`
+    new URL(response.url()).pathname === '/api/ip-owner/superusers'
     && response.request().method() === 'POST'
   ))
-  await confirmation.getByRole('button', { name: 'Definitief toekennen' }).click()
+  await page.getByLabel('E-mailadres').fill(standaloneTargetEmail)
+  await page.getByRole('button', { name: 'Superuser maken', exact: true }).click()
+  await expect(page.getByTestId('ip-owner-superuser-confirmation')).toBeVisible()
+  await page.getByRole('button', { name: 'Definitief Superuser maken', exact: true }).click()
   const grantResponse = await grantResponsePromise
   expect(grantResponse.ok()).toBeTruthy()
-  const grantPayload = await grantResponse.json()
-  expect(grantPayload?.household_context_used).toBe(false)
-  expect(grantPayload?.item?.platform_role_keys || []).toContain('platform.platform_admin')
 
-  await expect(page.getByRole('status')).toContainText(`Platformbeheerder is toegekend aan ${standaloneTargetEmail}.`)
-  await expect(targetCard).toContainText('Platformbeheerder')
-  await expect(targetCard.getByRole('button', { name: 'Platformbeheerder intrekken' })).toBeVisible()
+  await expect(targetCard).toBeVisible()
+  await expect(targetCard).toContainText(standaloneTargetEmail)
+  await expect(targetCard.getByRole('button', { name: 'Deactiveren' })).toBeVisible()
+
+  const revokeResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === `/api/platform/authorizations/users/${standaloneTargetId}/superuser/revoke`
+    && response.request().method() === 'POST'
+  ))
+  await targetCard.getByRole('button', { name: 'Deactiveren' }).click()
+  await expect(page.getByTestId('ip-owner-superuser-confirmation')).toBeVisible()
+  await page.getByRole('button', { name: 'Definitief deactiveren', exact: true }).click()
+  const revokeResponse = await revokeResponsePromise
+  expect(revokeResponse.ok()).toBeTruthy()
+  await expect(targetCard).toHaveCount(0)
 
   writeFileSync('p0-l4-07-ip-owner-browser-proof.json', JSON.stringify({
     email,
@@ -264,10 +284,10 @@ test('L4-07 IP owner grants platform admin to a standalone user through visible 
     activeHouseholdId: session.active_household_id,
     standaloneTargetEmail,
     standaloneTargetId,
-    grantedRole: 'platform.platform_admin',
+    managedRole: 'platform.superuser',
   }, null, 2))
 
-  console.log('P0_L4_07_IP_OWNER_SYSTEM_CONTEXT_GREEN')
-  console.log('P0_L4_07_IP_OWNER_PROTECTED_BROWSER_GREEN')
-  console.log('P0_L4_07_IP_OWNER_ROLE_GRANT_THROUGH_UI_GREEN')
+  console.log('P0_L4_07_IP_OWNER_NONE_CONTEXT_GREEN')
+  console.log('P0_L4_07_IP_OWNER_SUPERUSER_ONLY_UI_GREEN')
+  console.log('P0_L4_07_IP_OWNER_SUPERUSER_GRANT_REVOKE_GREEN')
 })

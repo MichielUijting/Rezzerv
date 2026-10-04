@@ -255,32 +255,61 @@ def test_unknown_permission_is_denied_by_default():
     assert decision.reason == "unknown_or_wrong_scope"
 
 
+def test_legacy_support_role_is_retired_in_favor_of_platform_admin():
+    engine = make_engine()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO auth_roles(role_key, scope, name, active)
+            VALUES ('platform.support_read', 'platform', 'Supportmedewerker lezen', 1)
+        """))
+        conn.execute(text("""
+            INSERT INTO auth_permissions(permission_key, scope, description)
+            VALUES ('platform.support_access.read', 'platform', 'legacy support read')
+        """))
+        conn.execute(text("""
+            INSERT INTO auth_role_permissions(role_key, permission_key)
+            VALUES ('platform.support_read', 'platform.support_access.read')
+        """))
+        ensure_authorization_foundation(conn)
+        role = conn.execute(text("""
+            SELECT active FROM auth_roles WHERE role_key = 'platform.support_read'
+        """)).scalar_one()
+        grant_count = conn.execute(text("""
+            SELECT COUNT(*) FROM auth_role_permissions
+            WHERE role_key = 'platform.support_read'
+        """)).scalar_one()
+
+    assert bool(role) is False
+    assert grant_count == 0
+    assert "platform.support_read" not in ROLE_PERMISSIONS
+
+
 def test_platform_role_is_separate_from_household_membership():
     engine = make_engine()
     with engine.begin() as conn:
         ensure_authorization_foundation(conn)
         conn.execute(text("""
             INSERT INTO auth_platform_user_roles(user_id, role_key)
-            VALUES ('support-1', 'platform.support_read')
+            VALUES ('platform-admin-1', 'platform.platform_admin')
         """))
-        metadata = evaluate_platform_permission(
+        support_read = evaluate_platform_permission(
             conn,
-            user_id="support-1",
-            permission_key="platform.households.view_metadata",
+            user_id="platform-admin-1",
+            permission_key="platform.support_access.read",
         )
-        mutate = evaluate_platform_permission(
+        support_mutate = evaluate_platform_permission(
             conn,
-            user_id="support-1",
+            user_id="platform-admin-1",
             permission_key="platform.support_access.mutate",
         )
         household = evaluate_household_permission(
             conn,
             household_id="household-a",
-            membership_id="support-1",
+            membership_id="platform-admin-1",
             permission_key="inventory.view",
         )
-    assert metadata.allowed is True
-    assert mutate.allowed is False
+    assert support_read.allowed is True
+    assert support_mutate.allowed is True
     assert household.allowed is False
 
 

@@ -311,6 +311,7 @@ def build_product_signals(metadata: dict[str, Any]) -> dict[str, Any]:
 
 def _candidate_haystacks(candidate: dict[str, Any]) -> dict[str, str]:
     result: dict[str, str] = {}
+    is_dutch_reference = str(candidate.get("reference_source") or "").strip() == "gs1_gpc_nl"
     for level in ("brick", "class", "family", "segment"):
         display_field = f"{level}_description"
         nl_field = f"{level}_description_nl"
@@ -318,7 +319,11 @@ def _candidate_haystacks(candidate: dict[str, Any]) -> dict[str, str]:
         display_value = normalize_taxonomy_text(candidate.get(display_field))
         nl_value = normalize_taxonomy_text(candidate.get(nl_field))
         en_value = normalize_taxonomy_text(candidate.get(en_field))
-        if not nl_value and display_value and en_value and display_value != en_value:
+        # De canonieke gebruikerszichtbare referentie levert Nederlandse
+        # labels in de generieke description-velden. Alleen wanneer een
+        # expliciete Engelse variant aanwezig is, mag die als interne
+        # fallback-evidence worden gebruikt.
+        if not nl_value and display_value and is_dutch_reference:
             nl_value = display_value
         if not en_value and display_value and not nl_value:
             en_value = display_value

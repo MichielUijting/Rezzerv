@@ -406,8 +406,14 @@ test.describe('Artikeldetail frontend-regressie', () => {
     const settingsSection = page.getByTestId('article-household-settings-section');
     await expect(trigger).toBeVisible();
     await expect(settingsSection).toBeVisible();
+    // Playwright may scroll a visible-but-not-fully-in-viewport trigger before click.
+    // Establish the baseline only after that browser/test-runner scroll so this
+    // assertion measures layout movement caused by opening the Select itself.
+    await trigger.scrollIntoViewIfNeeded();
     const before = await settingsSection.boundingBox();
+    const scrollBefore = await page.evaluate(() => window.scrollY);
     expect(before).not.toBeNull();
+    const documentYBefore = before.y + scrollBefore;
 
     await trigger.click();
 
@@ -435,8 +441,12 @@ test.describe('Artikeldetail frontend-regressie', () => {
     expect(listMetrics.overflowY).toBe('auto');
 
     const after = await settingsSection.boundingBox();
+    const scrollAfter = await page.evaluate(() => window.scrollY);
     expect(after).not.toBeNull();
-    expect(Math.abs(after.y - before.y)).toBeLessThan(1);
+    const documentYAfter = after.y + scrollAfter;
+    // A fixed popover may cause the browser/test runner to move the viewport,
+    // but opening it must never reflow or move the underlying page content.
+    expect(Math.abs(documentYAfter - documentYBefore)).toBeLessThan(1);
 
     await listbox.hover();
     await page.mouse.wheel(0, 500);

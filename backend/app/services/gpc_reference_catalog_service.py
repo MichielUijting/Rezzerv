@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-from functools import lru_cache
-import json
-from pathlib import Path
 import re
 from typing import Any
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
+from app.services.dutch_gpc_projection_service import ensure_bundled_dutch_gpc_reference
+
 
 _GPC_CODE = re.compile(r"^\d{8}$")
-_BUNDLED_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "gpc_bricks_2026_05_en.json"
-_BUNDLED_REFERENCE_SOURCE = "bundled_gpc_2026_05_en"
 
 
 def _tables(conn: Connection) -> set[str]:
@@ -25,100 +22,6 @@ def _active_clause(conn: Connection, alias: str) -> str:
     return f"COALESCE({alias}.active, 1) = 1"
 
 
-def _canonical_brick_row(conn: Connection, brick_code: str) -> dict[str, Any] | None:
-    tables = _tables(conn)
-    required = {"gpc_bricks", "gpc_classes", "gpc_families", "gpc_segments"}
-    if not required.issubset(tables):
-        return None
-    has_translations = "gpc_translations" in tables
-    brick_nl = ("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='brick' AND tr.entity_code=b.brick_code AND tr.language_code='nl' LIMIT 1)" if has_translations else "NULL")
-    class_nl = ("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='class' AND tr.entity_code=c.class_code AND tr.language_code='nl' LIMIT 1)" if has_translations else "NULL")
-    family_nl = ("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='family' AND tr.entity_code=f.family_code AND tr.language_code='nl' LIMIT 1)" if has_translations else "NULL")
-    segment_nl = ("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='segment' AND tr.entity_code=s.segment_code AND tr.language_code='nl' LIMIT 1)" if has_translations else "NULL")
-    brick_label = (
-        "COALESCE((SELECT translated_text FROM gpc_translations tr "
-        "WHERE tr.entity_type='brick' AND tr.entity_code=b.brick_code "
-        "AND tr.language_code='nl' LIMIT 1), b.description)"
-        if has_translations else "b.description"
-    )
-    class_label = (
-        "COALESCE((SELECT translated_text FROM gpc_translations tr "
-        "WHERE tr.entity_type='class' AND tr.entity_code=c.class_code "
-        "AND tr.language_code='nl' LIMIT 1), c.description)"
-        if has_translations else "c.description"
-    )
-    family_label = (
-        "COALESCE((SELECT translated_text FROM gpc_translations tr "
-        "WHERE tr.entity_type='family' AND tr.entity_code=f.family_code "
-        "AND tr.language_code='nl' LIMIT 1), f.description)"
-        if has_translations else "f.description"
-    )
-    segment_label = (
-        "COALESCE((SELECT translated_text FROM gpc_translations tr "
-        "WHERE tr.entity_type='segment' AND tr.entity_code=s.segment_code "
-        "AND tr.language_code='nl' LIMIT 1), s.description)"
-        if has_translations else "s.description"
-    )
-    row = conn.execute(text(f"""
-        SELECT
-            b.brick_code,
-            {brick_label} AS brick_description,
-            {brick_nl} AS brick_description_nl,
-            b.description AS brick_description_en,
-            c.class_code,
-            {class_label} AS class_description,
-            {class_nl} AS class_description_nl,
-            c.description AS class_description_en,
-            f.family_code,
-            {family_label} AS family_description,
-            {family_nl} AS family_description_nl,
-            f.description AS family_description_en,
-            s.segment_code,
-            {segment_label} AS segment_description,
-            {segment_nl} AS segment_description_nl,
-            s.description AS segment_description_en,
-            'gpc_bricks' AS reference_source
-        FROM gpc_bricks b
-        JOIN gpc_classes c ON c.class_code = b.class_code
-        JOIN gpc_families f ON f.family_code = c.family_code
-        JOIN gpc_segments s ON s.segment_code = f.segment_code
-        WHERE b.brick_code = :brick_code
-        LIMIT 1
-    """), {"brick_code": brick_code}).mappings().first()
-    return dict(row) if row else None
-
-
-def _product_group_row(conn: Connection, brick_code: str) -> dict[str, Any] | None:
-    if "gpc_product_groups" not in _tables(conn):
-        return None
-    active_sql = _active_clause(conn, "gpg")
-    row = conn.execute(text(f"""
-        SELECT
-            gpg.gpc_brick_code AS brick_code,
-            COALESCE(NULLIF(gpg.gpc_brick_name, ''), NULLIF(gpg.gpc_brick_name_en, ''), gpg.gpc_brick_code) AS brick_description,
-            CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_brick_name, '') ELSE NULL END AS brick_description_nl,
-            COALESCE(NULLIF(gpg.gpc_brick_name_en, ''), NULLIF(gpg.gpc_brick_name, ''), gpg.gpc_brick_code) AS brick_description_en,
-            gpg.gpc_class_code AS class_code,
-            COALESCE(NULLIF(gpg.gpc_class_name, ''), NULLIF(gpg.gpc_class_name_en, ''), gpg.gpc_class_code) AS class_description,
-            CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_class_name, '') ELSE NULL END AS class_description_nl,
-            COALESCE(NULLIF(gpg.gpc_class_name_en, ''), NULLIF(gpg.gpc_class_name, ''), gpg.gpc_class_code) AS class_description_en,
-            gpg.gpc_family_code AS family_code,
-            COALESCE(NULLIF(gpg.gpc_family_name, ''), NULLIF(gpg.gpc_family_name_en, ''), gpg.gpc_family_code) AS family_description,
-            CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_family_name, '') ELSE NULL END AS family_description_nl,
-            COALESCE(NULLIF(gpg.gpc_family_name_en, ''), NULLIF(gpg.gpc_family_name, ''), gpg.gpc_family_code) AS family_description_en,
-            gpg.gpc_segment_code AS segment_code,
-            COALESCE(NULLIF(gpg.gpc_segment_name, ''), NULLIF(gpg.gpc_segment_name_en, ''), gpg.gpc_segment_code) AS segment_description,
-            CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_segment_name, '') ELSE NULL END AS segment_description_nl,
-            COALESCE(NULLIF(gpg.gpc_segment_name_en, ''), NULLIF(gpg.gpc_segment_name, ''), gpg.gpc_segment_code) AS segment_description_en,
-            'gpc_product_groups' AS reference_source
-        FROM gpc_product_groups gpg
-        WHERE gpg.gpc_brick_code = :brick_code
-          AND {active_sql}
-        LIMIT 1
-    """), {"brick_code": brick_code}).mappings().first()
-    return dict(row) if row else None
-
-
 def _valid_hierarchy(row: dict[str, Any]) -> bool:
     return all(
         _GPC_CODE.fullmatch(str(row.get(key) or "").strip())
@@ -126,173 +29,80 @@ def _valid_hierarchy(row: dict[str, Any]) -> bool:
     )
 
 
-def _bundled_row(raw: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "brick_code": str(raw.get("gpc_brick_code") or "").strip(),
-        "brick_description": str(raw.get("gpc_brick_name_en") or "").strip(),
-        "brick_description_nl": "",
-        "brick_description_en": str(raw.get("gpc_brick_name_en") or "").strip(),
-        "class_code": str(raw.get("gpc_class_code") or "").strip(),
-        "class_description": str(raw.get("gpc_class_name_en") or "").strip(),
-        "class_description_nl": "",
-        "class_description_en": str(raw.get("gpc_class_name_en") or "").strip(),
-        "family_code": str(raw.get("gpc_family_code") or "").strip(),
-        "family_description": str(raw.get("gpc_family_name_en") or "").strip(),
-        "family_description_nl": "",
-        "family_description_en": str(raw.get("gpc_family_name_en") or "").strip(),
-        "segment_code": str(raw.get("gpc_segment_code") or "").strip(),
-        "segment_description": str(raw.get("gpc_segment_name_en") or "").strip(),
-        "segment_description_nl": "",
-        "segment_description_en": str(raw.get("gpc_segment_name_en") or "").strip(),
-        "reference_source": _BUNDLED_REFERENCE_SOURCE,
-    }
+def _nl_select_sql(conn: Connection, *, where: str = "", limit: bool = False) -> str:
+    active_sql = _active_clause(conn, "gpg")
+    limit_sql = " LIMIT :limit" if limit else ""
+    return f"""
+        SELECT
+            gpg.gpc_brick_code AS brick_code,
+            gpg.gpc_brick_name AS brick_description,
+            gpg.gpc_class_code AS class_code,
+            gpg.gpc_class_name AS class_description,
+            gpg.gpc_family_code AS family_code,
+            gpg.gpc_family_name AS family_description,
+            gpg.gpc_segment_code AS segment_code,
+            gpg.gpc_segment_name AS segment_description,
+            'gs1_gpc_nl' AS reference_source
+        FROM gpc_product_groups gpg
+        WHERE lower(COALESCE(gpg.language_code, '')) = 'nl'
+          AND {active_sql}
+          AND trim(COALESCE(gpg.gpc_brick_name, '')) <> ''
+          AND trim(COALESCE(gpg.gpc_class_name, '')) <> ''
+          AND trim(COALESCE(gpg.gpc_family_name, '')) <> ''
+          AND trim(COALESCE(gpg.gpc_segment_name, '')) <> ''
+          {where}
+        ORDER BY gpg.gpc_brick_name, gpg.gpc_brick_code
+        {limit_sql}
+    """
 
 
-@lru_cache(maxsize=1)
-def _bundled_rows() -> tuple[dict[str, Any], ...]:
-    try:
-        payload = json.loads(_BUNDLED_DATA_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return ()
-    rows: list[dict[str, Any]] = []
-    for raw in payload.get("bricks") or []:
-        if not isinstance(raw, dict):
-            continue
-        row = _bundled_row(raw)
-        if _valid_hierarchy(row) and row.get("brick_description"):
-            rows.append(row)
-    return tuple(rows)
+def _product_group_row(conn: Connection, brick_code: str) -> dict[str, Any] | None:
+    if "gpc_product_groups" not in _tables(conn):
+        return None
+    rows = conn.execute(
+        text(_nl_select_sql(conn, where="AND gpg.gpc_brick_code = :brick_code", limit=True)),
+        {"brick_code": str(brick_code or "").strip(), "limit": 1},
+    ).mappings().all()
+    if not rows:
+        return None
+    row = dict(rows[0])
+    return row if _valid_hierarchy(row) else None
 
 
-@lru_cache(maxsize=1)
-def _bundled_by_code() -> dict[str, dict[str, Any]]:
-    return {str(row["brick_code"]): row for row in _bundled_rows()}
-
-
-def _bundled_brick_row(brick_code: str) -> dict[str, Any] | None:
-    row = _bundled_by_code().get(str(brick_code or "").strip())
-    return dict(row) if row else None
+def _canonical_brick_row(conn: Connection, brick_code: str) -> dict[str, Any] | None:
+    # Gebruikerszichtbare GPC-labels komen uitsluitend uit de officiële
+    # Nederlandse GS1-publicatie die in gpc_product_groups is geïmporteerd.
+    return _product_group_row(conn, brick_code)
 
 
 def bundled_official_gpc_bricks() -> list[dict[str, Any]]:
-    """Return the complete bundled official GPC fallback catalog.
+    """Compatibiliteitsfunctie.
 
-    Callers receive copies so candidate ranking can add transient scoring fields
-    without mutating the cached reference rows.
+    Een gebundelde Engelstalige fallback wordt bewust niet meer gebruikt.
+    Nederlandse GS1-referentiedata is verplicht voor gebruikerszichtbare GPC.
     """
-
-    return [dict(row) for row in _bundled_rows()]
+    return []
 
 
 def list_official_gpc_bricks(conn: Connection) -> list[dict[str, Any]]:
-    """Return the complete read-only official GPC reference for candidate ranking."""
-    tables = _tables(conn)
-    rows: list[dict[str, Any]] = []
-    known: set[str] = set()
-    required = {"gpc_bricks", "gpc_classes", "gpc_families", "gpc_segments"}
-    if required.issubset(tables):
-        has_translations = "gpc_translations" in tables
-        has_product_groups = "gpc_product_groups" in tables
-        brick_sources = []
-        class_sources = []
-        family_sources = []
-        segment_sources = []
-        if has_translations:
-            brick_sources.append("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='brick' AND tr.entity_code=b.brick_code AND tr.language_code='nl' LIMIT 1)")
-            class_sources.append("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='class' AND tr.entity_code=c.class_code AND tr.language_code='nl' LIMIT 1)")
-            family_sources.append("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='family' AND tr.entity_code=f.family_code AND tr.language_code='nl' LIMIT 1)")
-            segment_sources.append("(SELECT translated_text FROM gpc_translations tr WHERE tr.entity_type='segment' AND tr.entity_code=s.segment_code AND tr.language_code='nl' LIMIT 1)")
-        if has_product_groups:
-            brick_sources.append("(SELECT NULLIF(gpg.gpc_brick_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_brick_code=b.brick_code AND gpg.language_code='nl' LIMIT 1)")
-            class_sources.append("(SELECT NULLIF(gpg.gpc_class_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_class_code=c.class_code AND gpg.language_code='nl' LIMIT 1)")
-            family_sources.append("(SELECT NULLIF(gpg.gpc_family_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_family_code=f.family_code AND gpg.language_code='nl' LIMIT 1)")
-            segment_sources.append("(SELECT NULLIF(gpg.gpc_segment_name, '') FROM gpc_product_groups gpg WHERE gpg.gpc_segment_code=s.segment_code AND gpg.language_code='nl' LIMIT 1)")
-        brick_nl = brick_sources[0] if len(brick_sources) == 1 else (f"COALESCE({', '.join(brick_sources)})" if brick_sources else "NULL")
-        class_nl = class_sources[0] if len(class_sources) == 1 else (f"COALESCE({', '.join(class_sources)})" if class_sources else "NULL")
-        family_nl = family_sources[0] if len(family_sources) == 1 else (f"COALESCE({', '.join(family_sources)})" if family_sources else "NULL")
-        segment_nl = segment_sources[0] if len(segment_sources) == 1 else (f"COALESCE({', '.join(segment_sources)})" if segment_sources else "NULL")
-        brick_label = f"COALESCE({', '.join([*brick_sources, 'b.description'])})" if brick_sources else "b.description"
-        class_label = f"COALESCE({', '.join([*class_sources, 'c.description'])})" if class_sources else "c.description"
-        family_label = f"COALESCE({', '.join([*family_sources, 'f.description'])})" if family_sources else "f.description"
-        segment_label = f"COALESCE({', '.join([*segment_sources, 's.description'])})" if segment_sources else "s.description"
-        canonical = conn.execute(text(f"""
-            SELECT b.brick_code, {brick_label} AS brick_description,
-                   {brick_nl} AS brick_description_nl,
-                   b.description AS brick_description_en,
-                   c.class_code, {class_label} AS class_description,
-                   {class_nl} AS class_description_nl,
-                   c.description AS class_description_en,
-                   f.family_code, {family_label} AS family_description,
-                   {family_nl} AS family_description_nl,
-                   f.description AS family_description_en,
-                   s.segment_code, {segment_label} AS segment_description,
-                   {segment_nl} AS segment_description_nl,
-                   s.description AS segment_description_en,
-                   'gpc_bricks' AS reference_source
-            FROM gpc_bricks b
-            JOIN gpc_classes c ON c.class_code = b.class_code
-            JOIN gpc_families f ON f.family_code = c.family_code
-            JOIN gpc_segments s ON s.segment_code = f.segment_code
-            ORDER BY b.brick_code
-        """)).mappings().all()
-        for item in canonical:
-            row = dict(item)
-            code = str(row.get("brick_code") or "")
-            if code and _valid_hierarchy(row):
-                rows.append(row)
-                known.add(code)
-    if "gpc_product_groups" in tables:
-        active_sql = _active_clause(conn, "gpg")
-        fallback = conn.execute(text(f"""
-            SELECT gpg.gpc_brick_code AS brick_code,
-                   COALESCE(NULLIF(gpg.gpc_brick_name, ''), NULLIF(gpg.gpc_brick_name_en, ''), gpg.gpc_brick_code) AS brick_description,
-                   CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_brick_name, '') ELSE NULL END AS brick_description_nl,
-                   COALESCE(NULLIF(gpg.gpc_brick_name_en, ''), NULLIF(gpg.gpc_brick_name, ''), gpg.gpc_brick_code) AS brick_description_en,
-                   gpg.gpc_class_code AS class_code,
-                   COALESCE(NULLIF(gpg.gpc_class_name, ''), NULLIF(gpg.gpc_class_name_en, ''), gpg.gpc_class_code) AS class_description,
-                   CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_class_name, '') ELSE NULL END AS class_description_nl,
-                   COALESCE(NULLIF(gpg.gpc_class_name_en, ''), NULLIF(gpg.gpc_class_name, ''), gpg.gpc_class_code) AS class_description_en,
-                   gpg.gpc_family_code AS family_code,
-                   COALESCE(NULLIF(gpg.gpc_family_name, ''), NULLIF(gpg.gpc_family_name_en, ''), gpg.gpc_family_code) AS family_description,
-                   CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_family_name, '') ELSE NULL END AS family_description_nl,
-                   COALESCE(NULLIF(gpg.gpc_family_name_en, ''), NULLIF(gpg.gpc_family_name, ''), gpg.gpc_family_code) AS family_description_en,
-                   gpg.gpc_segment_code AS segment_code,
-                   COALESCE(NULLIF(gpg.gpc_segment_name, ''), NULLIF(gpg.gpc_segment_name_en, ''), gpg.gpc_segment_code) AS segment_description,
-                   CASE WHEN lower(COALESCE(gpg.language_code, ''))='nl' THEN NULLIF(gpg.gpc_segment_name, '') ELSE NULL END AS segment_description_nl,
-                   COALESCE(NULLIF(gpg.gpc_segment_name_en, ''), NULLIF(gpg.gpc_segment_name, ''), gpg.gpc_segment_code) AS segment_description_en,
-                   'gpc_product_groups' AS reference_source
-            FROM gpc_product_groups gpg
-            WHERE {active_sql}
-            ORDER BY gpg.gpc_brick_code
-        """)).mappings().all()
-        for item in fallback:
-            row = dict(item)
-            code = str(row.get("brick_code") or "")
-            if code and code not in known and _valid_hierarchy(row):
-                rows.append(row)
-                known.add(code)
-    for bundled in _bundled_rows():
-        code = str(bundled.get("brick_code") or "")
-        if code and code not in known:
-            rows.append(dict(bundled))
-            known.add(code)
-    rows.sort(key=lambda row: str(row.get("brick_code") or ""))
-    return rows
+    ensure_bundled_dutch_gpc_reference(conn)
+    if "gpc_product_groups" not in _tables(conn):
+        return []
+    return [
+        dict(row)
+        for row in conn.execute(text(_nl_select_sql(conn))).mappings().all()
+        if _valid_hierarchy(dict(row))
+    ]
 
 
 def ensure_official_gpc_brick(conn: Connection, brick_code: str) -> dict[str, Any] | None:
+    ensure_bundled_dutch_gpc_reference(conn)
     code = str(brick_code or "").strip()
     if not _GPC_CODE.fullmatch(code):
         return None
 
-    existing = _canonical_brick_row(conn, code)
-    if existing:
-        return existing
-
-    fallback = _product_group_row(conn, code)
-    if not fallback or not _valid_hierarchy(fallback):
-        fallback = _bundled_brick_row(code)
-    if not fallback or not _valid_hierarchy(fallback):
+    dutch = _product_group_row(conn, code)
+    if not dutch:
         return None
 
     tables = _tables(conn)
@@ -301,14 +111,14 @@ def ensure_official_gpc_brick(conn: Connection, brick_code: str) -> dict[str, An
         return None
 
     params = {
-        "segment_code": fallback["segment_code"],
-        "segment_description": str(fallback.get("segment_description") or fallback["segment_code"]).strip(),
-        "family_code": fallback["family_code"],
-        "family_description": str(fallback.get("family_description") or fallback["family_code"]).strip(),
-        "class_code": fallback["class_code"],
-        "class_description": str(fallback.get("class_description") or fallback["class_code"]).strip(),
-        "brick_code": fallback["brick_code"],
-        "brick_description": str(fallback.get("brick_description_en") or fallback.get("brick_description") or fallback["brick_code"]).strip(),
+        "segment_code": dutch["segment_code"],
+        "segment_description": str(dutch["segment_description"]).strip(),
+        "family_code": dutch["family_code"],
+        "family_description": str(dutch["family_description"]).strip(),
+        "class_code": dutch["class_code"],
+        "class_description": str(dutch["class_description"]).strip(),
+        "brick_code": dutch["brick_code"],
+        "brick_description": str(dutch["brick_description"]).strip(),
     }
     conn.execute(text("""
         INSERT INTO gpc_segments (segment_code, description)
@@ -330,7 +140,7 @@ def ensure_official_gpc_brick(conn: Connection, brick_code: str) -> dict[str, An
         VALUES (:brick_code, :brick_description, :class_code)
         ON CONFLICT(brick_code) DO NOTHING
     """), params)
-    return _canonical_brick_row(conn, code)
+    return dutch
 
 
 def search_official_gpc_bricks(
@@ -339,102 +149,31 @@ def search_official_gpc_bricks(
     query: str = "",
     limit: int = 25,
 ) -> list[dict[str, Any]]:
+    ensure_bundled_dutch_gpc_reference(conn)
+    if "gpc_product_groups" not in _tables(conn):
+        return []
+
     normalized = " ".join(str(query or "").strip().split()).lower()
     max_rows = max(1, min(int(limit), 100))
     params: dict[str, Any] = {"limit": max_rows}
-    like_where = ""
+    where = ""
     if normalized:
         params["query"] = f"%{normalized}%"
-        like_where = """
+        where = """
           AND (
             lower(gpg.gpc_brick_code) LIKE :query
-            OR lower(COALESCE(gpg.gpc_brick_name, '')) LIKE :query
-            OR lower(COALESCE(gpg.gpc_brick_name_en, '')) LIKE :query
-            OR lower(COALESCE(gpg.gpc_class_name, '')) LIKE :query
-            OR lower(COALESCE(gpg.gpc_class_name_en, '')) LIKE :query
+            OR lower(gpg.gpc_brick_name) LIKE :query
+            OR lower(gpg.gpc_class_name) LIKE :query
+            OR lower(gpg.gpc_family_name) LIKE :query
+            OR lower(gpg.gpc_segment_name) LIKE :query
           )
         """
 
-    rows: list[dict[str, Any]] = []
-    tables = _tables(conn)
-    if {"gpc_bricks", "gpc_classes", "gpc_families", "gpc_segments"}.issubset(tables):
-        has_translations = "gpc_translations" in tables
-        translation_filter = ""
-        if normalized and has_translations:
-            translation_filter = """
-                OR lower(COALESCE((
-                    SELECT translated_text FROM gpc_translations tr
-                    WHERE tr.entity_type='brick'
-                      AND tr.entity_code=b.brick_code
-                      AND tr.language_code='nl'
-                    LIMIT 1
-                ), '')) LIKE :query
-            """
-        canonical_where = ""
-        if normalized:
-            canonical_where = f"""
-                WHERE (
-                    lower(b.brick_code) LIKE :query
-                    OR lower(b.description) LIKE :query
-                    {translation_filter}
-                )
-            """
-        canonical = conn.execute(text(f"""
-            SELECT b.brick_code
-            FROM gpc_bricks b
-            {canonical_where}
-            ORDER BY b.brick_code
-            LIMIT :limit
-        """), params).mappings().all()
-        for item in canonical:
-            row = _canonical_brick_row(conn, str(item["brick_code"]))
-            if row:
-                rows.append(row)
-
-    known = {str(row.get("brick_code") or "") for row in rows}
-    if "gpc_product_groups" in tables:
-        active_sql = _active_clause(conn, "gpg")
-        fallback_rows = conn.execute(text(f"""
-            SELECT gpg.gpc_brick_code
-            FROM gpc_product_groups gpg
-            WHERE {active_sql}
-            {like_where}
-            ORDER BY gpg.gpc_brick_code
-            LIMIT :limit
-        """), params).mappings().all()
-        for item in fallback_rows:
-            code = str(item.get("gpc_brick_code") or "")
-            if code in known:
-                continue
-            row = _product_group_row(conn, code)
-            if row:
-                rows.append(row)
-                known.add(code)
-
-    for bundled in _bundled_rows():
-        code = str(bundled.get("brick_code") or "")
-        if code in known:
-            continue
-        if normalized:
-            haystack = " ".join(
-                str(bundled.get(key) or "").lower()
-                for key in (
-                    "brick_code",
-                    "brick_description",
-                    "brick_description_en",
-                    "class_description",
-                    "family_description",
-                    "segment_description",
-                )
-            )
-            if normalized not in haystack:
-                continue
-        rows.append(dict(bundled))
-        known.add(code)
-
-    rows.sort(key=lambda row: (
-        0 if normalized and str(row.get("brick_code") or "").lower() == normalized else 1,
-        str(row.get("brick_description") or "").lower(),
-        str(row.get("brick_code") or ""),
-    ))
-    return rows[:max_rows]
+    return [
+        dict(row)
+        for row in conn.execute(
+            text(_nl_select_sql(conn, where=where, limit=True)),
+            params,
+        ).mappings().all()
+        if _valid_hierarchy(dict(row))
+    ]

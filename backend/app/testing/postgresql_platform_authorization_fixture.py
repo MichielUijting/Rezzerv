@@ -18,7 +18,6 @@ from app.services.authorization_foundation_service import ensure_authorization_f
 _TEST_PLATFORM_ROLES = {
     "superuser": "platform.superuser",
     "ip-owner": "platform.ip_owner",
-    "support-reader": "platform.support_read",
     "platform-admin": "platform.platform_admin",
     "frontteam": "platform.frontteam",
 }
@@ -66,7 +65,7 @@ def cleanup_platform_authorization_test_engine(engine: Engine) -> None:
                     """
                     DELETE FROM auth_platform_user_roles
                     WHERE user_id IN (
-                        'superuser', 'ip-owner', 'support-reader',
+                        'superuser', 'ip-owner',
                         'platform-admin', 'frontteam'
                     )
                     """

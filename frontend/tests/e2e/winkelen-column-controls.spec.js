@@ -74,6 +74,8 @@ test.describe('Winkelen kolomcontrols', () => {
     const articleHeader = table.getByRole('columnheader', { name: 'Artikel sorteren', exact: true })
     const productTypeHeader = table.getByRole('columnheader', { name: 'Producttype sorteren', exact: true })
 
+    await articleHeader.scrollIntoViewIfNeeded()
+    await expect(articleHeader).toBeInViewport()
     const articleBefore = await articleHeader.boundingBox()
     const productTypeBefore = await productTypeHeader.boundingBox()
     if (!articleBefore || !productTypeBefore) throw new Error('Kolomkoppen hebben geen meetbare browserpositie.')
@@ -114,6 +116,8 @@ test.describe('Winkelen kolomcontrols', () => {
     expect(productTypeAfterGrow.x).toBeGreaterThan(productTypeBefore.x + 70)
 
     await table.getByRole('button', { name: 'Gekocht sorteren', exact: true }).click()
+    await articleHeader.scrollIntoViewIfNeeded()
+    await expect(articleHeader).toBeInViewport()
     const articleAfterRerender = await articleHeader.boundingBox()
     if (!articleAfterRerender) throw new Error('Artikelbreedte ontbreekt na rerender.')
     expect(articleAfterRerender.width).toBeGreaterThan(articleBefore.width + 70)

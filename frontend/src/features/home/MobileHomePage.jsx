@@ -1,34 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
-import { listHouseholdThreads } from '../support/supportApi.js'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import { fetchHouseholdDashboard } from './dashboardApi.js'
+import { readDashboardCardOrder, writeDashboardCardOrder } from './dashboardCardOrder.js'
 import './mobileHome.css'
 
-const DEFAULT_ORDER = ['berichten', 'kassa', 'kassabonnen', 'winkelen', 'voorraad', 'bijna-op', 'catalogus']
-const ACTION_ICONS = {
-  berichten: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="13" width="50" height="38" rx="6" fill="#ffffff" stroke="currentColor" strokeWidth="3"/><path d="M10 18l22 18 22-18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/></svg>,
-  kassa: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><path fill="#455a64" d="M10 31h44l5 25H5z"/><rect x="16" y="10" width="32" height="20" rx="5" fill="#90a4ae"/><rect x="21" y="14" width="22" height="9" rx="2" fill="#b2f2e9"/><rect x="26" y="34" width="24" height="14" rx="3" fill="#cfd8dc"/><g fill="#ff9f43"><circle cx="31" cy="39" r="2.5"/><circle cx="38" cy="39" r="2.5"/><circle cx="45" cy="39" r="2.5"/><circle cx="31" cy="45" r="2.5"/><circle cx="38" cy="45" r="2.5"/><circle cx="45" cy="45" r="2.5"/></g><rect x="14" y="50" width="36" height="4" rx="2" fill="#263238"/></svg>,
-  kassabonnen: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><defs><clipPath id="rz-bag-body"><path d="M13 22h38l-4 36H17z"/></clipPath></defs><path fill="#f5c46f" d="M13 22h38l-4 36H17z"/><g clipPath="url(#rz-bag-body)"><rect x="11" y="29" width="42" height="7" fill="#ef5350"/><rect x="11" y="36" width="42" height="7" fill="#42a5f5"/><rect x="11" y="43" width="42" height="7" fill="#f6c344"/></g><path d="M23 24v-5c0-12 18-12 18 0v5" fill="none" stroke="#9c5d16" strokeWidth="5" strokeLinecap="round"/><path d="M13 22h38l-4 36H17z" fill="none" stroke="#d69738" strokeWidth="2"/></svg>,
-  winkelen: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><path fill="#ef3e3e" d="M9 27h46l-5 28H14z"/><path d="M18 29L28 12m18 17L36 12" stroke="#37474f" strokeWidth="6" strokeLinecap="round"/><path d="M21 36v11m11-11v11m11-11v11" stroke="#ffd4d4" strokeWidth="4" strokeLinecap="round"/></svg>,
-  voorraad: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><g stroke="#607d8b" strokeWidth="2"><rect x="20" y="7" width="27" height="20" rx="4" fill="#eceff1"/><rect x="6" y="31" width="27" height="22" rx="4" fill="#9ccc65"/><rect x="34" y="31" width="24" height="22" rx="4" fill="#ffb74d"/></g><path fill="#42a5f5" d="M20 7h27v7H20z"/><path fill="#7cb342" d="M6 31h27v7H6z"/><path fill="#fb8c00" d="M34 31h24v7H34z"/><g fill="#546e7a"><rect x="29" y="17" width="9" height="4" rx="2"/><rect x="15" y="42" width="9" height="4" rx="2"/><rect x="42" y="42" width="9" height="4" rx="2"/></g></svg>,
-  'bijna-op': <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><path fill="#ffc83d" d="M13 46h38c-5-6-7-12-7-23a12 12 0 0 0-24 0c0 11-2 17-7 23z"/><circle cx="32" cy="50" r="5" fill="#e58b00"/><circle cx="48" cy="17" r="11" fill="#f44336"/><path d="M48 11v8m0 4h.1" stroke="#fff" strokeWidth="4" strokeLinecap="round"/><path d="M8 17l-5-4m8 14H4m52-10l5-4" stroke="#ff9800" strokeWidth="4" strokeLinecap="round"/></svg>,
-  catalogus: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><path fill="#7e57c2" d="M4 12c11-4 21-1 28 6 7-7 17-10 28-6v43c-11-4-21-1-28 6-7-7-17-10-28-6z"/><path fill="#fff" d="M8 16c9-2 16 0 22 5v33c-6-5-13-7-22-5zm48 0c-9-2-16 0-22 5v33c6-5 13-7 22-5z"/><circle cx="19" cy="29" r="6" fill="#ef5350"/><path fill="#43a047" d="M18 21c2-4 5-5 8-4-2 4-5 5-8 4z"/><rect x="39" y="23" width="10" height="15" rx="3" fill="#42a5f5"/><path stroke="#b0bec5" strokeWidth="2" d="M12 41h14m12 2h14"/></svg>,
-  meldingen: <svg className="rz-illustrated-icon" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="19" width="56" height="26" rx="8" fill="#ef3e3e"/><text x="32" y="36" textAnchor="middle" fontSize="13" fontWeight="900" fill="#fff">NIEUWS</text></svg>,
-}
-const META = {
-  berichten: { label: 'Berichten', detail: 'Berichten aan de Superuser', icon: ACTION_ICONS.berichten, tone: 'green' },
-  kassa: { label: 'Kassa', detail: 'Kassabon scannen', icon: ACTION_ICONS.kassa, tone: 'mint' },
-  kassabonnen: { label: 'Uitpakken', detail: 'Artikelen opruimen', icon: ACTION_ICONS.kassabonnen, tone: 'orange' },
-  winkelen: { label: 'Boodschappen', detail: 'Bekijk je boodschappenlijst', icon: ACTION_ICONS.winkelen, tone: 'red' },
-  voorraad: { label: 'Voorraad', detail: 'Bekijk je voorraad', icon: ACTION_ICONS.voorraad, tone: 'blue' },
-  'bijna-op': { label: 'Bijna op', detail: 'Bekijk wat bijna op is', icon: ACTION_ICONS['bijna-op'], tone: 'yellow' },
-  catalogus: { label: 'Catalogus', detail: 'Bekijk de productcatalogus', icon: ACTION_ICONS.catalogus, tone: 'purple' },
-  meldingen: { label: 'Meldingen', detail: 'Bekijk je meldingen', icon: ACTION_ICONS.meldingen, tone: 'blue' },
-}
-function identityKey(context) { return String(context?.user_id || context?.email || 'anonymous').trim().toLowerCase() }
-function storageKey(context) { return 'inhuis-mobile-home-order:' + identityKey(context) }
-function readPersonalOrder(context) {
-  try { const parsed = JSON.parse(window.localStorage.getItem(storageKey(context)) || '[]'); return Array.isArray(parsed) ? parsed.map(String) : [] } catch { return [] }
-}
+const PERIODS = [
+  { key: 'days', label: 'Dagen', currentLabel: 'laatste 4 dagen', previousLabel: '4 dagen daarvoor' },
+  { key: 'weeks', label: 'Weken', currentLabel: 'laatste 4 weken', previousLabel: '4 weken daarvoor' },
+  { key: 'months', label: 'Maanden', currentLabel: 'laatste 4 maanden', previousLabel: '4 maanden daarvoor' },
+]
+
 function firstName(context) {
   const explicit = String(context?.first_name || '').trim()
   if (explicit) return explicit
@@ -36,66 +18,501 @@ function firstName(context) {
   if (!candidate) return ''
   return candidate.charAt(0).toUpperCase() + candidate.slice(1)
 }
+
 function InHuisWordmark() {
   return <span className="rz-inhuis-wordmark" aria-label="InHuis"><span className="rz-inhuis-wordmark-in">In</span><span className="rz-inhuis-wordmark-huis">Huis</span></span>
 }
-function reorder(keys, key, direction) {
-  const index = keys.indexOf(key), target = index + direction
-  if (index < 0 || target < 0 || target >= keys.length) return keys
-  const next = [...keys]; [next[index], next[target]] = [next[target], next[index]]; return next
+
+function euro(value) {
+  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
 }
-export default function MobileHomePage({ context, navigation, welcomeText = 'Fijn dat je er weer bent.', onOpenTile }) {
-  const availableTiles = useMemo(() => {
-    const map = new Map([...navigation.primaryTiles, ...navigation.moreTiles].filter((tile) => tile?.clickable).map((tile) => [tile.key, tile]))
-    map.delete('locaties')
-    map.delete('meldingen')
-    return [...map.values()]
-  }, [navigation])
-  const availableKeys = useMemo(() => availableTiles.map((tile) => tile.key), [availableTiles])
-  const [order, setOrder] = useState(() => readPersonalOrder(context))
-  const [editing, setEditing] = useState(false)
-  const [openNotifications, setOpenNotifications] = useState(null)
-  useEffect(() => { setOrder(readPersonalOrder(context)) }, [context?.user_id, context?.email])
+
+function numberLabel(value) {
+  const number = Number(value || 0)
+  return Number.isInteger(number)
+    ? String(number)
+    : number.toLocaleString('nl-NL', { maximumFractionDigits: 1 })
+}
+
+function compactAxis(value, currency = false) {
+  const number = Number(value || 0)
+  if (currency) {
+    if (Math.abs(number) >= 1000) return '€' + (number / 1000).toLocaleString('nl-NL', { maximumFractionDigits: 1 }) + 'k'
+    return '€' + Math.round(number)
+  }
+  if (Math.abs(number) >= 1000) return (number / 1000).toLocaleString('nl-NL', { maximumFractionDigits: 1 }) + 'k'
+  return numberLabel(number)
+}
+
+function sumSeries(points = [], key = 'current') {
+  return points.reduce((total, point) => total + Number(point?.[key] || 0), 0)
+}
+
+function deltaText(current, previous, formatter, period) {
+  const diff = Number(current || 0) - Number(previous || 0)
+  if (Math.abs(diff) < 0.0001) return 'gelijk aan ' + period.previousLabel
+  return (diff > 0 ? '+' : '−') + formatter(Math.abs(diff)) + ' t.o.v. ' + period.previousLabel
+}
+
+function ComparisonChart({ points = [], currency = false, onBarActivate = null }) {
+  const max = Math.max(1, ...points.flatMap((point) => [Number(point.current || 0), Number(point.previous || 0)]))
+  const middle = max / 2
+  return <div className="rz-dashboard-comparison-chart" aria-label="Vergelijkingsgrafiek">
+    <div className="rz-dashboard-y-axis" aria-hidden="true">
+      <span>{compactAxis(max, currency)}</span>
+      <span>{compactAxis(middle, currency)}</span>
+      <span>{compactAxis(0, currency)}</span>
+    </div>
+    <div className="rz-dashboard-chart-plot">
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--top" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--mid" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--base" />
+      <div className="rz-dashboard-comparison-bars">
+        {points.map((point, index) => (
+          <div className="rz-dashboard-comparison-group" key={point.label || index}>
+            <div className="rz-dashboard-comparison-pair">
+              <span
+                className="rz-dashboard-bar rz-dashboard-bar--previous"
+                role={onBarActivate ? 'button' : undefined}
+                tabIndex={onBarActivate ? 0 : undefined}
+                title={'Vorige periode: ' + (currency ? euro(point.previous) : numberLabel(point.previous))}
+                aria-label={onBarActivate ? `${point.label}, vergelijkingsperiode: ${currency ? euro(point.previous) : numberLabel(point.previous)}` : undefined}
+                onPointerDown={onBarActivate ? (event) => event.stopPropagation() : undefined}
+                onClick={onBarActivate ? (event) => { event.stopPropagation(); onBarActivate(index, 'previous', point) } : undefined}
+                onKeyDown={onBarActivate ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onBarActivate(index, 'previous', point)
+                  }
+                } : undefined}
+                style={{ height: Math.max(3, Math.round((Number(point.previous || 0) / max) * 100)) + '%' }}
+              />
+              <span
+                className="rz-dashboard-bar rz-dashboard-bar--current"
+                role={onBarActivate ? 'button' : undefined}
+                tabIndex={onBarActivate ? 0 : undefined}
+                title={'Huidige periode: ' + (currency ? euro(point.current) : numberLabel(point.current))}
+                aria-label={onBarActivate ? `${point.label}, huidige periode: ${currency ? euro(point.current) : numberLabel(point.current)}` : undefined}
+                onPointerDown={onBarActivate ? (event) => event.stopPropagation() : undefined}
+                onClick={onBarActivate ? (event) => { event.stopPropagation(); onBarActivate(index, 'current', point) } : undefined}
+                onKeyDown={onBarActivate ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onBarActivate(index, 'current', point)
+                  }
+                } : undefined}
+                style={{ height: Math.max(3, Math.round((Number(point.current || 0) / max) * 100)) + '%' }}
+              />
+            </div>
+            <small>{point.label}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+}
+
+function StackedComparisonChart({ view = null, currency = false, onSegmentActivate = null, paletteLegend = [] }) {
+  const points = view?.points || []
+  const legend = paletteLegend.length ? paletteLegend : (view?.legend || [])
+  const classByKey = new Map(legend.map((item, index) => [item.key, index % 7]))
+  const max = Math.max(1, ...points.flatMap((point) => [Number(point.current || 0), Number(point.previous || 0)]))
+  const middle = max / 2
+
+  function renderStack(point, index, series) {
+    const total = Number(point?.[series] || 0)
+    const segments = point?.[series + '_segments'] || []
+    return <span
+      className={'rz-dashboard-bar rz-dashboard-stacked-bar rz-dashboard-stacked-bar--' + series}
+      style={{ height: Math.max(3, Math.round((total / max) * 100)) + '%' }}
+      aria-label={`${point.label}, ${series === 'current' ? 'huidige' : 'vergelijkings'} periode: ${currency ? euro(total) : numberLabel(total)}`}
+    >
+      {segments.map((segment) => (
+        <span
+          key={segment.key}
+          role={onSegmentActivate ? 'button' : undefined}
+          tabIndex={onSegmentActivate ? 0 : undefined}
+          className={'rz-dashboard-stack-segment rz-dashboard-stack-segment--' + (classByKey.get(segment.key) ?? 0)}
+          style={{ flexGrow: Math.max(0.0001, Number(segment.value || 0)) }}
+          title={`${segment.label}: ${currency ? euro(segment.value) : numberLabel(segment.value)}`}
+          aria-label={onSegmentActivate ? `${point.label}, ${segment.label}: ${currency ? euro(segment.value) : numberLabel(segment.value)}` : undefined}
+          onPointerDown={onSegmentActivate ? (event) => event.stopPropagation() : undefined}
+          onClick={onSegmentActivate ? (event) => {
+            event.stopPropagation()
+            onSegmentActivate(index, series, segment)
+          } : undefined}
+          onKeyDown={onSegmentActivate ? (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              event.stopPropagation()
+              onSegmentActivate(index, series, segment)
+            }
+          } : undefined}
+        />
+      ))}
+    </span>
+  }
+
+  return <div className="rz-dashboard-comparison-chart rz-dashboard-stacked-chart" aria-label="Gestapelde uitgavengrafiek">
+    <div className="rz-dashboard-y-axis" aria-hidden="true">
+      <span>{compactAxis(max, currency)}</span>
+      <span>{compactAxis(middle, currency)}</span>
+      <span>{compactAxis(0, currency)}</span>
+    </div>
+    <div className="rz-dashboard-chart-plot">
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--top" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--mid" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--base" />
+      <div className="rz-dashboard-comparison-bars">
+        {points.map((point, index) => (
+          <div className="rz-dashboard-comparison-group" key={point.label || index}>
+            <div className="rz-dashboard-comparison-pair">
+              {renderStack(point, index, 'previous')}
+              {renderStack(point, index, 'current')}
+            </div>
+            <small>{point.label}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+}
+
+function ForecastChart({ values = [], onBarActivate = null }) {
+  const max = Math.max(1, ...values.map((item) => Number(item.value || 0)))
+  const middle = max / 2
+  return <div className="rz-dashboard-comparison-chart rz-dashboard-forecast-chart" aria-label="Begrote uitgaven">
+    <div className="rz-dashboard-y-axis" aria-hidden="true">
+      <span>{compactAxis(max, true)}</span>
+      <span>{compactAxis(middle, true)}</span>
+      <span>€0</span>
+    </div>
+    <div className="rz-dashboard-chart-plot">
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--top" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--mid" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--base" />
+      <div className="rz-dashboard-comparison-bars">
+        {values.map((item, index) => (
+          <div className="rz-dashboard-comparison-group" key={item.label || item.week || index}>
+            <div className="rz-dashboard-comparison-pair rz-dashboard-comparison-pair--single">
+              <span
+                className="rz-dashboard-bar rz-dashboard-bar--current"
+                role={onBarActivate ? 'button' : undefined}
+                tabIndex={onBarActivate ? 0 : undefined}
+                title={euro(item.value)}
+                aria-label={onBarActivate ? `${item.label || ('W' + item.week)}, begrote uitgaven: ${euro(item.value)}` : undefined}
+                onPointerDown={onBarActivate ? (event) => event.stopPropagation() : undefined}
+                onClick={onBarActivate ? (event) => { event.stopPropagation(); onBarActivate(index, 'current', item) } : undefined}
+                onKeyDown={onBarActivate ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onBarActivate(index, 'current', item)
+                  }
+                } : undefined}
+                style={{ height: Math.max(3, Math.round((Number(item.value || 0) / max) * 100)) + '%' }}
+              />
+            </div>
+            <small>{item.label || ('W' + item.week)}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+}
+
+export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fijn dat je er weer bent.' }) {
+  const navigate = useNavigate()
+  const [dashboard, setDashboard] = useState(null)
+  const [error, setError] = useState('')
+  const [periodKey, setPeriodKey] = useState('days')
+  const [cardOrder, setCardOrder] = useState(() => readDashboardCardOrder(context))
+  const [draggingKey, setDraggingKey] = useState('')
+  const dragStateRef = useRef(null)
+  const suppressClickRef = useRef('')
+
   useEffect(() => {
-    const handleHomeBack = (event) => {
-      if (!editing) return
-      event.preventDefault()
-      setEditing(false)
-    }
-    window.addEventListener('inhuis:mobile-home-back', handleHomeBack)
-    return () => window.removeEventListener('inhuis:mobile-home-back', handleHomeBack)
-  }, [editing])
+    setCardOrder(readDashboardCardOrder(context))
+  }, [context?.user_id])
+
   useEffect(() => {
     let active = true
-    listHouseholdThreads('Open').then((payload) => { if (active) setOpenNotifications(Array.isArray(payload?.items) ? payload.items.length : 0) }).catch(() => { if (active) setOpenNotifications(null) })
+    fetchHouseholdDashboard()
+      .then((payload) => {
+        if (!active) return
+        setDashboard(payload)
+        setError('')
+      })
+      .catch((exc) => {
+        if (!active) return
+        setError(exc?.message || 'Dashboard kon niet worden geladen.')
+      })
     return () => { active = false }
   }, [context?.active_household_id, context?.user_id])
-  const orderedTiles = useMemo(() => {
-    const rank = [...order, ...DEFAULT_ORDER, ...availableKeys].filter((key, index, all) => all.indexOf(key) === index)
-    const byKey = new Map(availableTiles.map((tile) => [tile.key, tile]))
-    return rank.filter((key) => byKey.has(key)).map((key) => byKey.get(key))
-  }, [availableTiles, availableKeys, order])
-  function persist(nextKeys) { setOrder(nextKeys); try { window.localStorage.setItem(storageKey(context), JSON.stringify(nextKeys)) } catch {} }
-  function move(key, direction) { persist(reorder(orderedTiles.map((tile) => tile.key), key, direction)) }
-  const name = firstName(context) || 'gebruiker', primary = orderedTiles.slice(0, 4), more = orderedTiles.slice(4)
-  if (editing) return <main className="rz-mobile-home" data-testid="mobile-home-reorder">
-    <MobileModuleHeader
-      title="Volgorde aanpassen"
-      testId="mobile-home-reorder-header"
-      trailingAction={<button type="button" className="rz-mobile-home-edit-done" onClick={() => setEditing(false)}>Gereed</button>}
-    />
-    <section className="rz-mobile-home-inner"><p className="rz-mobile-home-intro">Bepaal zelf de volgorde van de acties op je startscherm. Deze volgorde wordt voor jou bewaard voor een volgende sessie op dit apparaat.</p>
-      <div className="rz-mobile-home-reorder-list" aria-label="Volgorde acties">{orderedTiles.map((tile, index) => {
-        const meta = META[tile.key] || { label: tile.label, icon: ACTION_ICONS.catalogus, tone: 'green' }
-        return <div className="rz-mobile-home-reorder-row" key={tile.key}><span className="rz-mobile-home-drag" aria-hidden="true">⠿</span><span className={`rz-mobile-home-icon rz-mobile-home-icon--${meta.tone || 'green'}`} aria-hidden="true">{meta.icon}</span><strong>{meta.label}</strong><span className="rz-mobile-home-reorder-controls"><button type="button" aria-label={meta.label + ' omhoog'} disabled={index === 0} onClick={() => move(tile.key, -1)}>↑</button><button type="button" aria-label={meta.label + ' omlaag'} disabled={index === orderedTiles.length - 1} onClick={() => move(tile.key, 1)}>↓</button></span></div>
-      })}</div>
+
+  const name = firstName(context) || 'gebruiker'
+  const period = PERIODS.find((item) => item.key === periodKey) || PERIODS[0]
+
+  const sharedFamilyLegend = useMemo(() => {
+    if (!dashboard) return []
+    const sources = [
+      ...(dashboard.spend?.group_views?.[periodKey]?.legend || []),
+      ...(dashboard.spend_year_over_year?.group_views?.[periodKey]?.legend || []),
+    ]
+    const unique = new Map()
+    for (const item of sources) {
+      const key = String(item?.key || '').trim()
+      if (!key || unique.has(key)) continue
+      unique.set(key, { key, label: item?.label || key })
+    }
+    return Array.from(unique.values()).slice(0, 7)
+  }, [dashboard, periodKey])
+
+  const cards = useMemo(() => {
+    if (!dashboard) return []
+    const yearSpendGroupView = dashboard.spend_year_over_year?.group_views?.[periodKey] || null
+    const spendGroupView = dashboard.spend?.group_views?.[periodKey] || null
+    const yearSpendPoints = (yearSpendGroupView?.points || dashboard.spend_year_over_year?.views?.[periodKey] || []).slice(-4)
+    const spendPoints = (spendGroupView?.points || dashboard.spend?.views?.[periodKey] || dashboard.spend?.daily?.map((item) => ({
+      label: String(item.date || '').slice(5),
+      current: item.value,
+      previous: 0,
+    })) || []).slice(-4)
+    const yearSpendCurrent = sumSeries(yearSpendPoints, 'current')
+    const yearSpendPrevious = sumSeries(yearSpendPoints, 'previous')
+    const spendCurrent = sumSeries(spendPoints, 'current')
+    const spendPrevious = sumSeries(spendPoints, 'previous')
+    const rawStoreView = dashboard.stores?.views?.[periodKey] || {
+      current: { unique: dashboard.stores?.unique || 0, visits: dashboard.stores?.visits || 0 },
+      previous: { unique: 0, visits: 0 },
+      points: [],
+    }
+    const storeView = { ...rawStoreView, points: (rawStoreView.points || []).slice(-4) }
+    const forecastPoints = (dashboard.forecast?.views?.[periodKey]
+      || (dashboard.forecast?.weeks || []).map((item) => ({ label: 'W' + item.week, value: item.value }))).slice(0, 4)
+    const forecastTotal = forecastPoints.reduce((total, item) => total + Number(item.value || 0), 0)
+    const forecastPeriodLabel = periodKey === 'days'
+      ? 'komende 4 dagen'
+      : periodKey === 'weeks'
+        ? 'komende 4 weken'
+        : 'komende 4 maanden'
+
+    return [
+      {
+        key: 'uitgaven-vorig-jaar',
+        routeKey: 'uitgaven',
+        title: 'Uitgaven t.o.v. vorig jaar',
+        value: euro(yearSpendCurrent),
+        detail: deltaText(yearSpendCurrent, yearSpendPrevious, euro, { previousLabel: 'dezelfde periode vorig jaar' }),
+        chart: <StackedComparisonChart
+          view={yearSpendGroupView || { points: yearSpendPoints, legend: [] }}
+          currency
+          paletteLegend={sharedFamilyLegend}
+          onSegmentActivate={(index, series, segment) => openBarDrilldown('uitgaven', index, series, 'year', segment.key)}
+        />,
+      },
+      {
+        key: 'uitgaven',
+        title: 'Uitgaven',
+        value: euro(spendCurrent),
+        detail: deltaText(spendCurrent, spendPrevious, euro, period),
+        chart: <StackedComparisonChart
+          view={spendGroupView || { points: spendPoints, legend: [] }}
+          currency
+          paletteLegend={sharedFamilyLegend}
+          onSegmentActivate={(index, series, segment) => openBarDrilldown('uitgaven', index, series, 'previous', segment.key)}
+        />,
+      },
+      {
+        key: 'winkels',
+        title: 'Bezochte winkels',
+        value: numberLabel(storeView.current.unique) + ' winkels',
+        detail: numberLabel(storeView.current.visits) + ' bezoeken · ' + deltaText(storeView.current.visits, storeView.previous.visits, numberLabel, period),
+        chart: <ComparisonChart
+          points={storeView.points || []}
+          onBarActivate={(index, series) => openBarDrilldown('winkels', index, series, 'previous')}
+        />,
+      },
+      {
+        key: 'begroting',
+        title: 'Begrote uitgaven',
+        value: euro(forecastTotal),
+        detail: 'herhalingskoop verwacht in de ' + forecastPeriodLabel,
+        chart: <ForecastChart
+          values={forecastPoints}
+          onBarActivate={(index, series) => openBarDrilldown('begroting', index, series, 'previous')}
+        />,
+      },
+    ]
+  }, [dashboard, periodKey, period, sharedFamilyLegend])
+
+  const orderedCards = useMemo(() => {
+    const byKey = new Map(cards.map((card) => [card.key, card]))
+    return cardOrder.map((key) => byKey.get(key)).filter(Boolean)
+  }, [cards, cardOrder])
+
+  function moveCard(draggedKey, targetKey) {
+    if (!draggedKey || !targetKey || draggedKey === targetKey) return
+    setCardOrder((current) => {
+      const next = [...current]
+      const fromIndex = next.indexOf(draggedKey)
+      const toIndex = next.indexOf(targetKey)
+      if (fromIndex < 0 || toIndex < 0) return current
+      next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, draggedKey)
+      writeDashboardCardOrder(next, context)
+      return next
+    })
+  }
+
+  function handleCardPointerDown(event, cardKey) {
+    if (event.button != null && event.button !== 0) return
+    if (!event.target.closest('.rz-dashboard-comparison-chart')) return
+    dragStateRef.current = {
+      cardKey,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    }
+    setDraggingKey(cardKey)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  function handleCardPointerMove(event) {
+    const state = dragStateRef.current
+    if (!state || state.pointerId !== event.pointerId) return
+    const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
+    if (distance >= 6) {
+      state.moved = true
+      event.preventDefault()
+    }
+    if (!state.moved) return
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-dashboard-card-key]')
+    const targetKey = target?.getAttribute?.('data-dashboard-card-key') || ''
+    if (targetKey && targetKey !== state.cardKey) moveCard(state.cardKey, targetKey)
+  }
+
+  function finishCardDrag(event) {
+    const state = dragStateRef.current
+    if (!state || state.pointerId !== event.pointerId) return
+    if (state.moved) suppressClickRef.current = state.cardKey
+    try { event.currentTarget.releasePointerCapture?.(event.pointerId) } catch {}
+    dragStateRef.current = null
+    setDraggingKey('')
+  }
+
+  function cancelCardDrag() {
+    dragStateRef.current = null
+    setDraggingKey('')
+  }
+
+  function openBarDrilldown(metric, bucketIndex, series, comparison = 'previous', groupKey = '') {
+    const params = new URLSearchParams({
+      granularity: periodKey,
+      bucket: String(bucketIndex),
+      series,
+      comparison,
+    })
+    if (groupKey) params.set('group', groupKey)
+    navigate('/dashboard/' + metric + '?' + params.toString())
+  }
+
+  function openCard(card) {
+    if (suppressClickRef.current === card.key) {
+      suppressClickRef.current = ''
+      return
+    }
+    navigate('/dashboard/' + (card.routeKey || card.key))
+  }
+
+  function openStatus(key) {
+    if (key === 'meldingen') return onOpenTile({ key: 'meldingen', clickable: true })
+    if (key === 'winkelen') return onOpenTile({ key: 'winkelen', clickable: true })
+    if (key === 'opbergen') return navigate('/kassa?view=bonnen')
+    return onOpenTile({ key: 'kassabonnen', clickable: true })
+  }
+
+  return <main className="rz-mobile-home" data-testid="mobile-home-page">
+    <MobileModuleHeader title="Dashboard" testId="mobile-home-header" />
+    <section className="rz-mobile-home-inner">
+      <h1 className="rz-mobile-home-welcome">Welkom {name} <InHuisWordmark /></h1>
+      <p className="rz-mobile-home-subtitle">{welcomeText}</p>
+
+      {error ? <div className="rz-dashboard-error" role="alert">{error}</div> : null}
+
+      <div className="rz-dashboard-status" aria-label="Actuele status">
+        <button type="button" onClick={() => openStatus('meldingen')} data-testid="dashboard-status-notifications">
+          <strong>{dashboard?.status?.notifications ?? '–'}</strong>
+          <span>Meldingen</span>
+        </button>
+        <button type="button" onClick={() => openStatus('winkelen')} data-testid="dashboard-status-shopping">
+          <strong>{dashboard?.status?.shopping ?? '–'}</strong>
+          <span>Boodschappen</span>
+        </button>
+        <button type="button" onClick={() => openStatus('opbergen')} data-testid="dashboard-status-put-away">
+          <strong>{dashboard?.status?.put_away ?? '–'}</strong>
+          <span>Nog opbergen</span>
+        </button>
+      </div>
+
+      {!dashboard && !error ? <p role="status">Dashboard inlezen.</p> : null}
+
+      {dashboard ? <>
+        <div className="rz-dashboard-period-switch" role="group" aria-label="Periode grafieken">
+          {PERIODS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={periodKey === item.key ? 'is-active' : ''}
+              aria-pressed={periodKey === item.key}
+              onClick={() => setPeriodKey(item.key)}
+              data-testid={'dashboard-period-' + item.key}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <section className="rz-dashboard-grid" aria-label="Huishoudoverzicht">
+          {orderedCards.map((card) => (
+            <button
+              type="button"
+              key={card.key}
+              className={'rz-dashboard-card' + (draggingKey === card.key ? ' is-dragging' : '')}
+              onClick={() => openCard(card)}
+              onPointerDown={(event) => handleCardPointerDown(event, card.key)}
+              onPointerMove={handleCardPointerMove}
+              onPointerUp={finishCardDrag}
+              onPointerCancel={cancelCardDrag}
+              data-dashboard-card-key={card.key}
+              data-testid={'dashboard-card-' + card.key}
+            >
+              <span className="rz-dashboard-card-title">{card.title}</span>
+              <strong className="rz-dashboard-card-value">{card.value}</strong>
+              <span className="rz-dashboard-card-detail">{card.detail}</span>
+              {card.chart}
+            </button>
+          ))}
+        </section>
+
+        <div className="rz-dashboard-shared-legend" aria-label="Legenda dashboardgrafieken">
+          <div className="rz-dashboard-legend">
+            <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--current" />Huidige periode</span>
+            <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--previous" />Vergelijkingsperiode</span>
+          </div>
+          {sharedFamilyLegend.length ? <div className="rz-dashboard-stack-legend" aria-label="Productfamilies">
+            {sharedFamilyLegend.map((item, index) => (
+              <span key={item.key}>
+                <i className={'rz-dashboard-stack-key rz-dashboard-stack-segment--' + (index % 7)} />
+                {item.label}
+              </span>
+            ))}
+          </div> : null}
+        </div>
+      </> : null}
     </section>
   </main>
-  return <main className="rz-mobile-home" data-testid="mobile-home-page"><MobileModuleHeader title="Startpagina" testId="mobile-home-header" /><section className="rz-mobile-home-inner">
-    <h1 className="rz-mobile-home-welcome">Welkom {name} <InHuisWordmark /></h1><p className="rz-mobile-home-subtitle">{welcomeText}</p>
-    <button type="button" className="rz-mobile-home-notifications" onClick={() => onOpenTile({ key: 'meldingen', clickable: true })}><span className="rz-mobile-home-notification-icon" aria-hidden="true">{ACTION_ICONS.meldingen}</span><span><strong>{openNotifications === null ? 'Openstaande meldingen' : openNotifications + ' openstaande melding' + (openNotifications === 1 ? '' : 'en')}</strong><small>Bekijk wat aandacht vraagt</small></span><span aria-hidden="true">›</span></button>
-    <div className="rz-mobile-home-section-title"><h2>Wat wil je doen?</h2><button type="button" onClick={() => setEditing(true)} data-testid="mobile-home-customize">⚙ Aanpassen</button></div>
-    <div className="rz-mobile-home-primary-actions">{primary.map((tile) => { const meta = META[tile.key] || { label: tile.label, detail: '', icon: '•' }; return <button type="button" className="rz-mobile-home-action-card" key={tile.key} onClick={() => onOpenTile(tile)} data-testid={'mobile-home-action-' + tile.key}><span className={`rz-mobile-home-icon rz-mobile-home-icon--${meta.tone || 'green'}`} aria-hidden="true">{meta.icon}</span><span><strong>{meta.label}</strong><small>{meta.detail}</small></span><span aria-hidden="true">›</span></button> })}</div>
-    {more.length ? <section className="rz-mobile-home-more"><h2>Meer acties</h2>{more.map((tile) => { const meta = META[tile.key] || { label: tile.label }; return <button type="button" key={tile.key} onClick={() => onOpenTile(tile)}><span>{meta.label}</span><span aria-hidden="true">›</span></button> })}</section> : null}
-  </section></main>
 }
