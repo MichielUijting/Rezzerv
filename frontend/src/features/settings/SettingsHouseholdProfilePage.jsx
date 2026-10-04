@@ -222,10 +222,10 @@ export default function SettingsHouseholdProfilePage() {
                   </select>
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-                  <Input label="Geboortedatum (optioneel)" type="date" value={resident.birth_date} onChange={(e) => setResident((current) => ({ ...current, birth_date: e.target.value }))} disabled={saving} />
+                  <Input label="Geboortedatum (optioneel)" type="date" value={resident.birth_date} onChange={(e) => setResident((current) => ({ ...current, birth_date: e.target.value, age_band: e.target.value ? '' : current.age_band }))} disabled={saving} />
                   <label className="rz-input-field">
                     <span className="rz-label">Leeftijdscategorie (optioneel)</span>
-                    <select className="rz-input" value={resident.age_band} onChange={(e) => setResident((current) => ({ ...current, age_band: e.target.value }))} disabled={saving}>
+                    <select className="rz-input" value={resident.age_band} onChange={(e) => setResident((current) => ({ ...current, age_band: e.target.value, birth_date: e.target.value ? '' : current.birth_date }))} disabled={saving}>
                       {AGE_BANDS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                     </select>
                   </label>
