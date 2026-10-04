@@ -219,13 +219,14 @@ test.describe('Boodschappen frontend-regressie', () => {
 
     const resizeHandles = table.getByRole('separator', { name: 'Kolom breedte aanpassen' });
     await expect(resizeHandles).toHaveCount(8);
-    const articleResizeHandle = resizeHandles.nth(1);
-    const resizeBox = await articleResizeHandle.boundingBox();
-    if (!resizeBox) throw new Error('Resize-handle voor Artikel ontbreekt.');
+    const articleHeaderBox = await table.getByRole('columnheader', { name: 'Artikel sorteren', exact: true }).boundingBox();
+    if (!articleHeaderBox) throw new Error('Kolomkop Artikel ontbreekt.');
     const articleWidthBefore = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
-    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
+    const articleBoundaryX = articleHeaderBox.x + articleHeaderBox.width - 2;
+    const articleBoundaryY = articleHeaderBox.y + articleHeaderBox.height / 2;
+    await page.mouse.move(articleBoundaryX, articleBoundaryY);
     await page.mouse.down();
-    await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 60, resizeBox.y + resizeBox.height / 2);
+    await page.mouse.move(articleBoundaryX + 60, articleBoundaryY);
     await page.mouse.up();
     const articleWidthAfter = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
     expect(articleWidthAfter).toBeGreaterThan(articleWidthBefore + 40);
