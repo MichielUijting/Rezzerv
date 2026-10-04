@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 AGE_BANDS = frozenset({"0_3", "4_12", "13_17", "18_34", "35_49", "50_64", "65_79", "80_plus"})
@@ -74,16 +74,38 @@ def _profile_row(conn: Connection, household_id: str) -> dict:
 
 
 def _linked_users(conn: Connection, household_id: str) -> list[dict]:
-    rows = conn.execute(text("""
-        SELECT DISTINCT u.id AS user_id, u.email, u.display_name
+    inspector = inspect(conn)
+    membership_columns = {
+        str(column.get("name") or "").strip().lower()
+        for column in inspector.get_columns("household_memberships")
+    }
+    user_columns = {
+        str(column.get("name") or "").strip().lower()
+        for column in inspector.get_columns("app_users")
+    }
+    if "household_id" not in membership_columns or "id" not in user_columns or "email" not in user_columns:
+        return []
+
+    join_parts: list[str] = []
+    if "user_id" in membership_columns:
+        join_parts.append("CAST(hm.user_id AS TEXT) = CAST(u.id AS TEXT)")
+    if "user_email" in membership_columns:
+        join_parts.append("lower(trim(hm.user_email)) = lower(trim(u.email))")
+    if not join_parts:
+        return []
+
+    active_condition = (
+        "lower(trim(COALESCE(hm.status, 'active'))) = 'active'"
+        if "status" in membership_columns
+        else "1 = 1"
+    )
+    display_name_expression = "u.display_name" if "display_name" in user_columns else "NULL"
+    rows = conn.execute(text(f"""
+        SELECT DISTINCT u.id AS user_id, u.email, {display_name_expression} AS display_name
         FROM household_memberships hm
-        JOIN app_users u
-          ON (
-               (hm.user_id IS NOT NULL AND CAST(hm.user_id AS TEXT) = CAST(u.id AS TEXT))
-            OR (hm.user_email IS NOT NULL AND lower(trim(hm.user_email)) = lower(trim(u.email)))
-          )
+        JOIN app_users u ON ({' OR '.join(join_parts)})
         WHERE CAST(hm.household_id AS TEXT) = :household_id
-          AND lower(trim(COALESCE(hm.status, 'active'))) = 'active'
+          AND {active_condition}
         ORDER BY lower(trim(u.email))
     """), {"household_id": household_id}).mappings().all()
     return [
