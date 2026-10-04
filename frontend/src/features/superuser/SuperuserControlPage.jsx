@@ -4,8 +4,9 @@ import ScreenCard from '../../ui/ScreenCard.jsx'
 import SuperuserDashboardPage from './SuperuserDashboardPage.jsx'
 import SuperuserActionButtonsSection from './SuperuserActionButtonsSection.jsx'
 import SuperuserLoginBackgroundSection from './SuperuserLoginBackgroundSection.jsx'
+import SettingsFrontteamPage from '../settings/SettingsFrontteamPage.jsx'
 
-const SUPERUSER_TABS = ['Beheercentrum', 'Actieknoppen', 'Inlogscherm']
+const SUPERUSER_TABS = ['Beheercentrum', 'Frontteam', 'Actieknoppen', 'Inlogscherm']
 
 export default function SuperuserControlPage() {
   const [activeTab, setActiveTab] = useState('Beheercentrum')
@@ -24,7 +25,7 @@ export default function SuperuserControlPage() {
                 aria-selected={active}
                 className={active ? 'rz-tab rz-tab-active' : 'rz-tab'}
                 onClick={() => setActiveTab(tab)}
-                data-testid={`superuser-control-tab-${tab === 'Beheercentrum' ? 'dashboard' : tab === 'Actieknoppen' ? 'action-buttons' : 'login-background'}`}
+                data-testid={`superuser-control-tab-${tab === 'Beheercentrum' ? 'dashboard' : tab === 'Frontteam' ? 'frontteam' : tab === 'Actieknoppen' ? 'action-buttons' : 'login-background'}`}
               >
                 {tab}
               </button>
@@ -35,6 +36,8 @@ export default function SuperuserControlPage() {
 
       {activeTab === 'Beheercentrum' ? (
         <SuperuserDashboardPage />
+      ) : activeTab === 'Frontteam' ? (
+        <SettingsFrontteamPage />
       ) : (
         <div className="rz-screen" data-testid={activeTab === 'Actieknoppen' ? 'superuser-action-buttons-page' : 'superuser-login-background-page'}>
           <Header title="Inhuis Beheercentrum" />
