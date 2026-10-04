@@ -220,18 +220,17 @@ test.describe('Boodschappen frontend-regressie', () => {
     const resizeHandles = table.getByRole('separator', { name: 'Kolom breedte aanpassen' });
     await expect(resizeHandles).toHaveCount(8);
     const articleResizeHandle = resizeHandles.nth(1);
-    const articleResizeBox = await articleResizeHandle.boundingBox();
-    if (!articleResizeBox) throw new Error('Resize-handle Artikel ontbreekt.');
+    await articleResizeHandle.scrollIntoViewIfNeeded();
+    await expect(articleResizeHandle).toBeInViewport();
+    const resizeBox = await articleResizeHandle.boundingBox();
+    if (!resizeBox) throw new Error('Resize-handle voor Artikel ontbreekt.');
     const articleWidthBefore = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
-    const articleHandleX = articleResizeBox.x + articleResizeBox.width / 2;
-    const articleHandleY = articleResizeBox.y + articleResizeBox.height / 2;
-    await page.mouse.move(articleHandleX, articleHandleY);
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(articleHandleX + 60, articleHandleY);
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 60, resizeBox.y + resizeBox.height / 2);
     await page.mouse.up();
-    await expect.poll(async () => Number.parseFloat(
-      await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width),
-    )).toBeGreaterThan(articleWidthBefore + 40);
+    const articleWidthAfter = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
+    expect(articleWidthAfter).toBeGreaterThan(articleWidthBefore + 40);
 
     await page.getByLabel('Artikel toevoegen', { exact: true }).fill('bananen');
     const candidateList = page.getByTestId('shopping-candidate-list');
