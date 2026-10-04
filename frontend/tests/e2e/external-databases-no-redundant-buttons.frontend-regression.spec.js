@@ -4,6 +4,8 @@ import {
   expectNoConsoleErrors,
 } from './helpers/rezzervAssertions.js';
 
+test.use({ storageState: 'playwright/.auth/superuser.json' })
+
 test.describe('Externe databases navigatieknoppen regressie', () => {
   test('Terug en Vernieuwen zijn niet aanwezig op Externe databases', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
