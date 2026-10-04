@@ -485,6 +485,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     let cancelled = false
     const timer = window.setTimeout(async () => {
       if (userGpcChoiceLockedRef.current) return
+      if (selectedItem && !selectedItem.hasKnownGtin && isOffLoading) return
       setGpcSearchText('')
       setGpcSearchResults([])
       setGpcSuggestedBricks([])
@@ -516,13 +517,56 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         setProductTypeMode('existing')
         setNewProductTypeName(selectedCandidate.candidateName === '-' ? '' : selectedCandidate.candidateName)
         if (explicitSuggestion) {
-          setSelectedProductTypeId(explicitSuggestion)
           if (selectedCandidate.isLinkedToCatalog) {
+            setSelectedProductTypeId(explicitSuggestion)
             setProductTypeSelectionSource('catalog')
             setProductTypeClassificationStatus('Producttype overgenomen uit de bestaande Cataloguskoppeling.')
-          } else {
+            return
+          }
+
+          const brickCode = candidateGpcBrickCode(selectedCandidate)
+          setIsClassifyingProductType(true)
+          setSelectedProductTypeId('')
+          setProductTypeSelectionSource('')
+          setProductTypeClassificationStatus('Nederlandse GS1 GPC-naam wordt gecontroleerd...')
+          try {
+            const response = await fetchJsonWithAuth(
+              `/api/catalog/gpc/bricks?query=${encodeURIComponent(brickCode)}&limit=5`,
+              { method: 'GET' },
+            )
+            const data = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(data?.detail || 'De officiële GS1 GPC-catalogus kon niet worden geraadpleegd')
+            if (cancelled || userGpcChoiceLockedRef.current) return
+
+            const exactBrick = (Array.isArray(data?.items) ? data.items : []).find(
+              (item) => String(item?.brick_code || '').trim() === brickCode,
+            )
+            const dutchName = String(exactBrick?.brick_description || '').trim()
+            if (!exactBrick || !dutchName) {
+              throw new Error(`Nederlandse GS1 GPC-naam ontbreekt voor Brick ${brickCode}`)
+            }
+
+            const option = {
+              inventory_group_key: explicitSuggestion,
+              display_name: dutchName,
+              gpc_brick_code: brickCode,
+              source: 'gs1_gpc_official_nl',
+            }
+            setProductTypeOptions((current) => [
+              ...current.filter((item) => item.inventory_group_key !== option.inventory_group_key),
+              option,
+            ])
+            setSelectedProductTypeId(explicitSuggestion)
             setProductTypeSelectionSource('external')
             setProductTypeClassificationStatus('Producttype bepaald via expliciete GPC Brickcode van de externe bron.')
+          } catch (err) {
+            if (!cancelled && !userGpcChoiceLockedRef.current) {
+              setSelectedProductTypeId('')
+              setProductTypeSelectionSource('')
+              setProductTypeClassificationStatus(err?.message || 'Nederlandse GS1 GPC-naam kon niet worden gecontroleerd.')
+            }
+          } finally {
+            if (!cancelled) setIsClassifyingProductType(false)
           }
           return
         }
@@ -591,7 +635,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     }, 250)
 
     return () => { cancelled = true; window.clearTimeout(timer) }
-  }, [selectedCandidateId, selectedItem?.id, selectedItem?.linkedProductTypeId, selectedItem?.catalogLinked, genericProductName, selectedCandidates[0]?.id])
+  }, [selectedCandidateId, selectedItem?.id, selectedItem?.linkedProductTypeId, selectedItem?.catalogLinked, selectedItem?.hasKnownGtin, genericProductName, selectedCandidates[0]?.id, isOffLoading])
 
   async function searchManualGpcBricks() {
     userGpcChoiceLockedRef.current = true

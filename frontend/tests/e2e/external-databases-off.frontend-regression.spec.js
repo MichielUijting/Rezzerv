@@ -334,6 +334,7 @@ test.describe('Externe databases OFF candidate flow', () => {
   test('Bananen gebruiken de expliciete officiële GPC Brick uit OFF zonder classificatie-omweg', async ({ page }) => {
     let classifyCalled = false;
     let exactCatalogLookupCalled = false;
+    let householdProductTypesCalled = false;
 
     await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(receiptItemsPayload()) });
@@ -362,20 +363,26 @@ test.describe('Externe databases OFF candidate flow', () => {
       classifyCalled = true;
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'Classificatie-omweg mag niet nodig zijn' }) });
     });
-    await page.route('**/api/inventory/groups', async (route) => {
+    await page.route('**/api/catalog/gpc/bricks?query=10005897&limit=5', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          group_options: [{
-            inventory_group_key: 'gpc:10005897',
-            display_name: 'Bananen',
-            default_base_unit: 'stuk',
-            gpc_brick_code: '10005897',
-            source: 'gs1_gpc_2026_05_en',
+          items: [{
+            brick_code: '10005897',
+            brick_description: 'Bananen',
+            class_description: 'Bananen',
+            family_description: 'Fruit',
+            segment_description: 'Voedingsmiddelen',
           }],
+          total: 1,
+          query: '10005897',
         }),
       });
+    });
+    await page.route('**/api/inventory/groups', async (route) => {
+      householdProductTypesCalled = true;
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'Huishoudroute mag niet worden gebruikt voor platformbrede GPC-labels' }) });
     });
 
     await page.goto('/externe-databases');
@@ -390,6 +397,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
     expect(exactCatalogLookupCalled).toBe(true);
     expect(classifyCalled).toBe(false);
+    expect(householdProductTypesCalled).toBe(false);
   });
 
   test('Langdurig laden van bonartikeltabel toont pas na één seconde het Inhuis-logo', async ({ page }) => {
