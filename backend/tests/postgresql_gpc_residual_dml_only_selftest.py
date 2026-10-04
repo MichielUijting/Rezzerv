@@ -194,7 +194,7 @@ def _assert_complete_reference_fallback(engine) -> None:
         )
         if not results or results[0].get("brick_code") != FALLBACK_BRICK_CODE:
             raise AssertionError(results)
-        if results[0].get("reference_source") != "bundled_gpc_2026_05_en":
+        if results[0].get("reference_source") != "gs1_gpc_nl":
             raise AssertionError(results[0])
 
         materialized = ensure_official_gpc_brick(conn, FALLBACK_BRICK_CODE)
@@ -204,7 +204,7 @@ def _assert_complete_reference_fallback(engine) -> None:
             text("SELECT description FROM gpc_bricks WHERE brick_code=:code"),
             {"code": FALLBACK_BRICK_CODE},
         ).scalar_one_or_none()
-        if stored != "Cereal Products - Ready to Eat (Shelf Stable)":
+        if stored != "Graanproducten - Gebruiksklaar (Houdbaar)":
             raise AssertionError(stored)
         _cleanup_fallback_reference(conn)
 
