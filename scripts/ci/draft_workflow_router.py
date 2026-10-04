@@ -21,6 +21,14 @@ from pathlib import Path
 
 ROUTED_MARKER = "# draft-ci-router: routed"
 WORKFLOW_DIR = Path(".github/workflows")
+CANONICAL_VERSION_FILES = {
+    "VERSION.txt",
+    "backend/VERSION.txt",
+    "version.json",
+    "frontend/version.json",
+    "frontend/public/version.json",
+    "frontend/package.json",
+}
 
 
 def run_git(*args: str) -> str:
@@ -39,6 +47,10 @@ def changed_files(old_sha: str, new_sha: str) -> list[str]:
         return []
     output = run_git("diff", "--name-only", old_sha, new_sha)
     return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def is_canonical_version_only_delta(files: list[str]) -> bool:
+    return set(files) == CANONICAL_VERSION_FILES
 
 
 def workflow_name(text: str, fallback: str) -> str:
@@ -217,12 +229,14 @@ def build_plan(
         comparison_mode = "full-pr"
 
     files = changed_files(comparison_base, head_sha)
+    version_only_delta = is_canonical_version_only_delta(files)
     selected: dict[str, dict] = {}
 
-    for workflow in workflows:
-        patterns = list(workflow["paths"])
-        if any(path_matches(path, patterns) for path in files):
-            selected[str(workflow["name"])] = workflow
+    if not version_only_delta:
+        for workflow in workflows:
+            patterns = list(workflow["paths"])
+            if any(path_matches(path, patterns) for path in files):
+                selected[str(workflow["name"])] = workflow
 
     previous_failed: list[str] = []
     if action == "synchronize" and before_sha:
@@ -263,6 +277,7 @@ def build_plan(
         "comparison_base_sha": comparison_base,
         "head_sha": head_sha,
         "changed_files": files,
+        "canonical_version_only_delta": version_only_delta,
         "previous_failed_workflows": sorted(previous_failed),
         "selected_workflows": [str(item["name"]) for item in dispatch_targets],
         "dispatch_targets": dispatch_targets,
@@ -288,6 +303,9 @@ def self_test() -> None:
     assert path_matches("frontend/src/a.jsx", ["frontend/src/**"])
     assert path_matches("docs/a.md", ["docs/**", "!docs/private/**"])
     assert not path_matches("docs/private/a.md", ["docs/**", "!docs/private/**"])
+    assert is_canonical_version_only_delta(sorted(CANONICAL_VERSION_FILES))
+    assert not is_canonical_version_only_delta(["frontend/package.json"])
+    assert not is_canonical_version_only_delta(sorted(CANONICAL_VERSION_FILES | {"README.md"}))
 
     sample = """name: Demo
 on:
@@ -353,6 +371,7 @@ def main() -> int:
 
     print(f"ROUTER_COMPARISON_MODE={plan['comparison_mode']}")
     print(f"ROUTER_CHANGED_FILE_COUNT={len(plan['changed_files'])}")
+    print(f"ROUTER_CANONICAL_VERSION_ONLY_DELTA={'true' if plan['canonical_version_only_delta'] else 'false'}")
     print(f"ROUTER_ROUTED_WORKFLOW_COUNT={plan['routed_workflow_count']}")
     print(f"ROUTER_TARGET_COUNT={len(plan['dispatch_targets'])}")
     for item in plan["dispatch_targets"]:
