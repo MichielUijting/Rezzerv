@@ -2347,8 +2347,19 @@ export default function KassaPage() {
       : null
     const outsideKassa = Boolean(existingReceipt?.approved_at)
     if (existingReceiptId && !outsideKassa && isAddReceiptRoute) {
-      // The route transition remounts Kassa. Reuse the share hand-off so that
-      // selection and detail are opened in the destination component.
+      // AppFeedbackProvider lives above the router, so publish the duplicate
+      // feedback before navigating away from /kassa/nieuw. The destination
+      // bootstrap still reuses the share hand-off to open/select the receipt,
+      // but the user-facing feedback no longer depends on route-remount timing.
+      setDuplicateNotice(message)
+      setArchivedDuplicate(null)
+      showKassaFeedback('warning', message, {
+        title: 'Bon al ingelezen',
+        detail: 'De bestaande kassabon is geopend in Kassa.',
+        key: `kassa-duplicate-receipt-${existingReceiptId}`,
+        dedupeMs: 0,
+        testId: 'kassa-duplicate-overlay',
+      })
       navigate(`/kassa?share_status=success&duplicate=1&receipt_table_id=${encodeURIComponent(existingReceiptId)}`)
       return
     }
