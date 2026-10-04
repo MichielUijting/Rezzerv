@@ -61,7 +61,7 @@ export default function DataTable({
 }) {
   const visibleColumns = useMemo(() => columns.filter((column) => column && column.hidden !== true), [columns])
   const defaultWidths = useMemo(() => buildDefaultWidths(visibleColumns), [visibleColumns])
-  const { widths, setColumnWidth } = useResizableColumnWidths(defaultWidths)
+  const { widths, setColumnWidth, setColumnWidths } = useResizableColumnWidths(defaultWidths)
   const headerRowRef = useRef(null)
   const [stickyHeaderOffset, setStickyHeaderOffset] = useState(42)
 
@@ -108,7 +108,13 @@ export default function DataTable({
     setInternalSort(next)
   }
 
-  function handleColumnResize(columnIndex, nextWidth) {
+  function handleColumnResize(columnIndex, nextWidth, nextWidths = null) {
+    if (Array.isArray(nextWidths)) {
+      setColumnWidths(Object.fromEntries(
+        visibleColumns.map((column, index) => [column.key, nextWidths[index]]),
+      ))
+      return
+    }
     const column = visibleColumns[columnIndex]
     if (!column?.key) return
     setColumnWidth(column.key, nextWidth)
