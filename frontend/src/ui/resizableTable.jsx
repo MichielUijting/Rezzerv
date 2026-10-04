@@ -27,9 +27,16 @@ export function useResizableColumnWidths(defaultWidths) {
     defaultsRef.current = defaultWidths || {}
     if (defaultsSignatureRef.current === defaultWidthsSignature) return
     defaultsSignatureRef.current = defaultWidthsSignature
-    const next = { ...defaultWidths }
-    widthsRef.current = next
-    setWidths(next)
+    setWidths((current) => {
+      const next = {}
+      for (const [key, defaultWidth] of Object.entries(defaultWidths || {})) {
+        next[key] = Object.hasOwn(current || {}, key)
+          ? current[key]
+          : normalizedDefaultWidth(defaultWidth)
+      }
+      widthsRef.current = next
+      return next
+    })
   }, [defaultWidthsSignature])
 
   function setColumnWidth(columnKey, nextWidth) {
