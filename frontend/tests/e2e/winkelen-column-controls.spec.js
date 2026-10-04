@@ -118,12 +118,11 @@ test.describe('Winkelen kolomcontrols', () => {
     if (!articleAfterRerender) throw new Error('Artikelbreedte ontbreekt na rerender.')
     expect(articleAfterRerender.width).toBeGreaterThan(articleBefore.width + 70)
 
-    const shrinkHandle = table.getByRole('separator', { name: 'Kolom breedte aanpassen' }).nth(1)
-    const shrinkHandleBox = await shrinkHandle.boundingBox()
-    if (!shrinkHandleBox) throw new Error('Resize-handle voor Artikel ontbreekt na rerender.')
+    const articleBeforeShrink = await articleHeader.boundingBox()
+    if (!articleBeforeShrink) throw new Error('Artikelkolom ontbreekt voor verkleinen.')
     const shrinkBoundaryPoint = {
-      x: shrinkHandleBox.x + shrinkHandleBox.width / 2,
-      y: shrinkHandleBox.y + shrinkHandleBox.height / 2,
+      x: articleBeforeShrink.x + articleBeforeShrink.width - 2,
+      y: articleBeforeShrink.y + articleBeforeShrink.height / 2,
     }
 
     await page.mouse.move(shrinkBoundaryPoint.x, shrinkBoundaryPoint.y)
