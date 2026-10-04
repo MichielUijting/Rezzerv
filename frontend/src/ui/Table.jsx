@@ -154,8 +154,13 @@ export default function Table({
     })
     activeResize.lastWidths = nextWidths
     committedWidthsRef.current = [...nextWidths]
+    onColumnResize?.(
+      activeResize.columnIndex,
+      nextWidths[activeResize.columnIndex],
+      nextWidths,
+    )
     event.preventDefault()
-  }, [])
+  }, [onColumnResize])
 
   const handleResizeEnd = useCallback(() => {
     const activeResize = resizeRef.current
