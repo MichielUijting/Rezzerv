@@ -68,6 +68,7 @@ export default function SettingsHouseholdProfilePage() {
   const [resident, setResident] = useState(residentForm())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [residentToRemove, setResidentToRemove] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -136,15 +137,16 @@ export default function SettingsHouseholdProfilePage() {
     }
   }
 
-  async function removeResident(item) {
-    if (!data?.can_manage || saving) return
-    if (!window.confirm(`${item.first_name} uit de bewonerslijst verwijderen?`)) return
+  async function confirmRemoveResident() {
+    if (!data?.can_manage || saving || !residentToRemove) return
+    const item = residentToRemove
     setSaving(true)
     try {
       const next = await deleteHouseholdResident(item.id)
       setData(next)
       setForm(profileForm(next))
       if (resident.id === item.id) setResident(residentForm())
+      setResidentToRemove(null)
       showFeedback({ variant: 'success', message: 'Bewoner verwijderd.' })
     } catch (error) {
       showFeedback({ variant: 'error', title: 'Bewoner niet verwijderd', message: error?.message || 'De bewoner kon niet worden verwijderd.' })
@@ -164,18 +166,18 @@ export default function SettingsHouseholdProfilePage() {
           {loading ? <p role="status">Huishoudprofiel laden…</p> : (
             <form onSubmit={saveProfile} style={{ display: 'grid', gap: 16 }}>
               <Input label="Naam huishouden" value={form.household_name} onChange={(e) => setField('household_name', e.target.value)} disabled={!canManage || saving} required />
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(100px, 1fr) minmax(100px, 1fr)', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
                 <Input label="Straat" value={form.street} onChange={(e) => setField('street', e.target.value)} disabled={!canManage || saving} />
                 <Input label="Huisnummer" value={form.house_number} onChange={(e) => setField('house_number', e.target.value)} disabled={!canManage || saving} />
                 <Input label="Toevoeging" value={form.house_number_addition} onChange={(e) => setField('house_number_addition', e.target.value)} disabled={!canManage || saving} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(0, 2fr) 100px', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
                 <Input label="Postcode" value={form.postal_code} onChange={(e) => setField('postal_code', e.target.value)} disabled={!canManage || saving} />
                 <Input label="Woonplaats" value={form.city} onChange={(e) => setField('city', e.target.value)} disabled={!canManage || saving} />
                 <Input label="Landcode" value={form.country_code} maxLength={2} onChange={(e) => setField('country_code', e.target.value.toUpperCase())} disabled={!canManage || saving} />
               </div>
               <Input label="Voorkeurswinkels (gescheiden door komma's)" value={form.preferred_stores} onChange={(e) => setField('preferred_stores', e.target.value)} disabled={!canManage || saving} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
                 <Input label="Normaal aantal dagen tussen boodschappen" type="number" min="1" max="90" value={form.shopping_interval_days} onChange={(e) => setField('shopping_interval_days', e.target.value)} disabled={!canManage || saving} />
                 <Input label="Standaard reservevoorraad in dagen" type="number" min="0" max="90" value={form.default_reserve_days} onChange={(e) => setField('default_reserve_days', e.target.value)} disabled={!canManage || saving} />
               </div>
@@ -197,7 +199,7 @@ export default function SettingsHouseholdProfilePage() {
                   </div>
                   {canManage ? <div style={{ display: 'flex', gap: 8 }}>
                     <Button type="button" variant="secondary" onClick={() => setResident(residentForm(item))}>Wijzigen</Button>
-                    <Button type="button" variant="secondary" onClick={() => removeResident(item)}>Verwijderen</Button>
+                    <Button type="button" variant="secondary" onClick={() => setResidentToRemove(item)}>Verwijderen</Button>
                   </div> : null}
                 </div>
               ))}
@@ -207,7 +209,7 @@ export default function SettingsHouseholdProfilePage() {
             {canManage ? (
               <form onSubmit={saveResident} style={{ display: 'grid', gap: 12 }} data-testid="household-resident-form">
                 <h3>{resident.id ? 'Bewoner wijzigen' : 'Bewoner toevoegen'}</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
                   <Input label="Voornaam" value={resident.first_name} onChange={(e) => setResident((current) => ({ ...current, first_name: e.target.value }))} required disabled={saving} />
                   <Input label="Achternaam (optioneel)" value={resident.last_name} onChange={(e) => setResident((current) => ({ ...current, last_name: e.target.value }))} disabled={saving} />
                 </div>
@@ -219,7 +221,7 @@ export default function SettingsHouseholdProfilePage() {
                     <option value="other">Anders</option>
                   </select>
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
                   <Input label="Geboortedatum (optioneel)" type="date" value={resident.birth_date} onChange={(e) => setResident((current) => ({ ...current, birth_date: e.target.value }))} disabled={saving} />
                   <label className="rz-input-field">
                     <span className="rz-label">Leeftijdscategorie (optioneel)</span>
@@ -244,6 +246,18 @@ export default function SettingsHouseholdProfilePage() {
           </Card>
         ) : null}
       </div></div>
+      {residentToRemove ? (
+        <div className="rz-modal-backdrop" role="presentation">
+          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="resident-remove-title" data-testid="household-resident-remove-modal">
+            <h3 id="resident-remove-title" className="rz-modal-title">Bewoner verwijderen</h3>
+            <p className="rz-modal-text">Weet je zeker dat je <strong>{residentToRemove.first_name}</strong> uit de bewonerslijst wilt verwijderen?</p>
+            <div className="rz-modal-actions">
+              <Button type="button" variant="secondary" disabled={saving} onClick={() => setResidentToRemove(null)}>Annuleren</Button>
+              <Button type="button" disabled={saving} onClick={confirmRemoveResident}>{saving ? 'Bezig…' : 'Verwijderen'}</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   )
 }
