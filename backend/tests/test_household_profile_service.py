@@ -177,3 +177,19 @@ def test_resident_update_keeps_household_scope():
         payload = public_household_profile(conn, "h1", can_manage=False)
         assert payload["can_manage"] is False
         assert payload["residents"][0]["first_name"] == "Alexandra"
+
+
+def test_resident_rejects_birth_date_and_age_band_together():
+    engine = _engine()
+    with engine.begin() as conn:
+        with pytest.raises(ValueError, match="geboortedatum of leeftijdscategorie"):
+            create_resident(
+                conn,
+                "h1",
+                first_name="Dubbel",
+                last_name=None,
+                resident_type="child",
+                birth_date=date(2015, 6, 1),
+                age_band="4_12",
+                linked_user_id=None,
+            )
