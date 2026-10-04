@@ -133,8 +133,12 @@ export default function Table({
     nextWidths.forEach((nextWidth, columnIndex) => {
       const col = activeResize.colgroup.children[columnIndex]
       if (col) col.style.width = `${nextWidth}px`
-      onColumnResize?.(columnIndex, nextWidth)
     })
+    onColumnResize?.(
+      activeResize.columnIndex,
+      nextWidths[activeResize.columnIndex],
+      nextWidths,
+    )
     event.preventDefault()
   }, [onColumnResize])
 
