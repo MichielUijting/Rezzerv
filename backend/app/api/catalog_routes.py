@@ -349,11 +349,13 @@ def _catalog_where(
         "source": source,
     }
     for key, raw_value in filters.items():
-        value = raw_value.strip().lower()
+        value = (raw_value if isinstance(raw_value, str) else "").strip().lower()
         if value:
             conditions.append(f"LOWER({expressions[key]}) LIKE :{key}")
             params[key] = f"%{value}%"
-    household_value = household_article_count.strip()
+    household_value = (
+        household_article_count if isinstance(household_article_count, str) else ""
+    ).strip()
     if household_value:
         conditions.append(
             f"CAST({expressions['household_article_count']} AS TEXT) LIKE :household_article_count"
@@ -435,9 +437,13 @@ def list_catalog(
         source,
         household_article_count,
     )
-    order_expression = expressions.get(sort_by, expressions["name"])
-    direction = "DESC" if sort_direction.lower() == "desc" else "ASC"
-    if sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "gpc_brick_code", "gpc_brick_name", "gpc_class_name", "gpc_family_name", "source"}:
+    normalized_sort_by = sort_by if isinstance(sort_by, str) else "name"
+    normalized_sort_direction = sort_direction if isinstance(sort_direction, str) else "asc"
+    normalized_limit = limit if isinstance(limit, int) else 10
+    normalized_offset = offset if isinstance(offset, int) else 0
+    order_expression = expressions.get(normalized_sort_by, expressions["name"])
+    direction = "DESC" if normalized_sort_direction.lower() == "desc" else "ASC"
+    if normalized_sort_by in {"name", "catalog_kind", "brand", "primary_gtin", "product_type", "gpc_brick_code", "gpc_brick_name", "gpc_class_name", "gpc_family_name", "source"}:
         order_sql = (
             f"LOWER({order_expression}) {direction}, "
             f"{order_expression} {direction}"
@@ -453,14 +459,19 @@ def list_catalog(
         ORDER BY {order_sql}, gp.id ASC
         LIMIT :limit OFFSET :offset
     """
-    page_params = {**params, "limit": limit, "offset": offset}
+    page_params = {**params, "limit": normalized_limit, "offset": normalized_offset}
     with engine.begin() as conn:
         total = int(conn.execute(text(count_sql), params).scalar() or 0)
         items = [
             dict(row)
             for row in conn.execute(text(page_sql), page_params).mappings().all()
         ]
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "total": total,
+        "limit": normalized_limit,
+        "offset": normalized_offset,
+    }
 
 
 
