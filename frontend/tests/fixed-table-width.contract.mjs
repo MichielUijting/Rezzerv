@@ -55,6 +55,20 @@ const sharedResizeFiles = new Set([
   'src/ui/resizableTable.jsx',
   'src/ui/tableResize.js',
 ])
+
+const tableSource = fs.readFileSync(path.join(frontendRoot, 'src/ui/Table.jsx'), 'utf8')
+const dataTableSource = fs.readFileSync(path.join(frontendRoot, 'src/ui/DataTable.jsx'), 'utf8')
+
+assert(!tableSource.includes('ensureResizableColgroup'),
+  'Table mag geen eigen colgroup-resize-authority bevatten')
+assert(!tableSource.includes('committedWidthsRef'),
+  'Table mag geen tweede committed breedtestaat bevatten')
+assert(!tableSource.includes('col.style.width'),
+  'Table mag kolombreedtes niet rechtstreeks in het DOM schrijven')
+assert(tableSource.includes('onColumnResize?.(') && tableSource.includes('nextWidths'),
+  'Table moet berekende breedtes uitsluitend doorgeven aan de state-owner')
+assert(dataTableSource.includes("style={{ width: `${widths[column.key] || column.width || 120}px` }}"),
+  'DataTable moet kolombreedtes vanuit React-state naar het colgroup renderen')
 const lowLevelResizePatterns = [
   { label: 'resize-handle markup', pattern: /rz-column-resize-handle/g },
   { label: 'resize body-state', pattern: /rz-table-column-resizing/g },
