@@ -10,7 +10,6 @@ LOGIN_PAGE = ROOT / "features" / "auth" / "LoginPage.jsx"
 API_CLIENT = ROOT / "lib" / "apiClient.js"
 HOME_PAGE = ROOT / "features" / "home" / "HomePage.jsx"
 CATALOG_PAGE = ROOT / "features" / "catalog" / "CatalogPage.jsx"
-ADMIN_GUARD = ROOT / "app" / "router" / "AdminGuard.jsx"
 FRONTTEAM_GUARD = ROOT / "app" / "router" / "FrontteamGuard.jsx"
 PERMISSION_GUARD = ROOT / "app" / "router" / "PermissionGuard.jsx"
 APP_ROUTER = ROOT / "app" / "router" / "AppRouter.jsx"
@@ -52,7 +51,6 @@ def run() -> int:
     api_text = API_CLIENT.read_text(encoding="utf-8")
     home_text = HOME_PAGE.read_text(encoding="utf-8")
     catalog_text = CATALOG_PAGE.read_text(encoding="utf-8")
-    admin_guard_text = ADMIN_GUARD.read_text(encoding="utf-8")
     frontteam_guard_text = FRONTTEAM_GUARD.read_text(encoding="utf-8")
     permission_guard_text = PERMISSION_GUARD.read_text(encoding="utf-8")
     router_text = APP_ROUTER.read_text(encoding="utf-8")
@@ -69,8 +67,13 @@ def run() -> int:
         "header does not read legacy localStorage": "localStorage.getItem" not in header_text,
         "household admin helper accepts admin": "'admin'" in auth_text,
         "household admin helper accepts owner": "'owner'" in auth_text,
-        "home admin tile uses household admin authority": "canOpenAdmin: isHouseholdAdminFromContext" in home_text,
-        "admin route uses household admin authority": "isHouseholdAdminFromContext" in admin_guard_text,
+        "household settings visibility uses household admin authority": "canOpenAdmin: isHouseholdAdminFromContext" in home_text,
+        "legacy admin route is platform-testfixture redirect": (
+            "path: '/admin'" in router_text
+            and 'permission="platform.test_fixtures.manage"' in router_text
+            and '<Navigate to="/platform/testfixtures" replace />' in router_text
+            and "AdminGuard" not in router_text
+        ),
         "frontteam helper exists": "isFrontteamMemberFromContext" in auth_text,
         "platform superuser inherits external database access": "isPlatformSuperuserFromContext(source)" in auth_text,
         "external databases tile uses frontteam authority": "canOpenExternalDatabases: isFrontteamMemberFromContext" in home_text,
@@ -98,6 +101,7 @@ def run() -> int:
     print("PASS frontend requests use the HttpOnly session cookie")
     print("PASS header renders identity and active household from server session context")
     print("PASS household admin authority is derived from the active household role")
+    print("PASS legacy Admin route is a platform-permission redirect without AdminGuard")
     print("PASS external databases is available to frontteam and platform superuser")
     print("PASS catalog view and GPC mutation controls follow the PO matrix")
     print("FRONTEND_COOKIE_SESSION_AUDIT_GREEN")
