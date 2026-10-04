@@ -228,8 +228,9 @@ test.describe('Boodschappen frontend-regressie', () => {
     await page.mouse.down();
     await page.mouse.move(articleBoundaryX + 60, articleBoundaryY);
     await page.mouse.up();
-    const articleWidthAfter = Number.parseFloat(await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width));
-    expect(articleWidthAfter).toBeGreaterThan(articleWidthBefore + 40);
+    await expect.poll(async () => Number.parseFloat(
+      await table.locator('colgroup col').nth(1).evaluate((column) => column.style.width),
+    )).toBeGreaterThan(articleWidthBefore + 40);
 
     await page.getByLabel('Artikel toevoegen', { exact: true }).fill('bananen');
     const candidateList = page.getByTestId('shopping-candidate-list');
