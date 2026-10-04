@@ -9,6 +9,7 @@ export default function Table({
   dataTestId = undefined,
   keyboardStep = DEFAULT_KEYBOARD_STEP,
   pageStep = DEFAULT_PAGE_STEP,
+  resizableColumns = false,
   children,
 }) {
   const wrapperRef = useRef(null)
@@ -86,7 +87,7 @@ export default function Table({
   const wrapperClasses = ["rz-table-component", "rz-table-wrapper", wrapperClassName]
     .filter(Boolean)
     .join(" ")
-  const tableClasses = ["rz-table", tableClassName]
+  const tableClasses = ["rz-table", resizableColumns ? "rz-table--resizable-columns" : "", tableClassName]
     .filter(Boolean)
     .join(" ")
 
