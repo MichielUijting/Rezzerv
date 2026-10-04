@@ -127,6 +127,11 @@ def routed_workflows() -> list[dict[str, object]]:
             raise RuntimeError(f"{path}: routed workflow mist pull_request.paths")
         if "  workflow_dispatch:" not in text:
             raise RuntimeError(f"{path}: routed workflow mist workflow_dispatch")
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if "github.event.pull_request" in line and "||" not in line:
+                raise RuntimeError(
+                    f"{path}:{line_number}: routed workflow gebruikt pull_request-context zonder workflow_dispatch-fallback"
+                )
         workflows.append(
             {
                 "path": path.as_posix(),
@@ -302,6 +307,11 @@ jobs:
         "frontend/src/**",
         ".github/workflows/demo.yml",
     ]
+
+    safe_dispatch_line = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+    unsafe_dispatch_line = "ref: ${{ github.event.pull_request.head.sha }}"
+    assert "github.event.pull_request" in safe_dispatch_line and "||" in safe_dispatch_line
+    assert "github.event.pull_request" in unsafe_dispatch_line and "||" not in unsafe_dispatch_line
     print("DRAFT_CI_ROUTER_SELF_TEST_GREEN")
 
 
