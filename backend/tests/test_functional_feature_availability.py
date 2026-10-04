@@ -65,7 +65,7 @@ def authority(monkeypatch):
 
 
 @pytest.mark.parametrize('user,functional,technical', [
-    ('superuser', 200, 403), ('technical', 403, 200), ('owner', 200, 200),
+    ('superuser', 200, 403), ('technical', 403, 200), ('owner', 403, 403),
     ('member', 403, 403), ('admin', 403, 403), (None, 401, 401),
 ])
 def test_permission_partition_and_both_write_boundaries(authority, user, functional, technical):
@@ -80,7 +80,7 @@ def test_permission_partition_and_both_write_boundaries(authority, user, functio
         assert response.status_code == expected
 
 
-@pytest.mark.parametrize('user', ['superuser', 'owner'])
+@pytest.mark.parametrize('user', ['superuser'])
 def test_functional_endpoint_cannot_change_technical_or_unknown_keys(authority, user):
     engine, actor, client = authority
     actor['id'] = user
@@ -91,7 +91,7 @@ def test_functional_endpoint_cannot_change_technical_or_unknown_keys(authority, 
         assert conn.execute(text('SELECT count(*) FROM platform_feature_flags')).scalar_one() == 0
 
 
-@pytest.mark.parametrize('user', ['technical', 'owner'])
+@pytest.mark.parametrize('user', ['technical'])
 def test_technical_endpoint_cannot_change_functional_key(authority, user):
     _, actor, client = authority
     actor['id'] = user
@@ -190,7 +190,7 @@ def test_postgresql_concurrent_first_write_has_one_audited_transition(authority)
                                             enabled=True, updated_by=actor)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        list(pool.map(enable, ['superuser', 'owner']))
+        list(pool.map(enable, ['superuser-a', 'superuser-b']))
     with engine.connect() as conn:
         assert flags.is_platform_feature_enabled(conn, flags.FEATURE_GERECHTEN) is True
         rows = conn.execute(text('SELECT * FROM auth_audit_log')).mappings().all()
