@@ -17,7 +17,6 @@ export function useResizableColumnWidths(defaultWidths) {
   const [widths, setWidths] = useState(() => ({ ...defaultWidths }))
   const widthsRef = useRef(widths)
   const defaultsRef = useRef(defaultWidths || {})
-  const defaultsSignatureRef = useRef(defaultWidthsSignature)
 
   useEffect(() => {
     widthsRef.current = widths
@@ -25,18 +24,7 @@ export function useResizableColumnWidths(defaultWidths) {
 
   useEffect(() => {
     defaultsRef.current = defaultWidths || {}
-    if (defaultsSignatureRef.current === defaultWidthsSignature) return
-    defaultsSignatureRef.current = defaultWidthsSignature
-    setWidths((current) => {
-      const next = {}
-      for (const [key, defaultWidth] of Object.entries(defaultWidths || {})) {
-        next[key] = Object.hasOwn(current || {}, key)
-          ? current[key]
-          : normalizedDefaultWidth(defaultWidth)
-      }
-      widthsRef.current = next
-      return next
-    })
+    setWidths({ ...defaultWidths })
   }, [defaultWidthsSignature])
 
   function setColumnWidth(columnKey, nextWidth) {
@@ -45,26 +33,7 @@ export function useResizableColumnWidths(defaultWidths) {
       minimumWidth,
       Math.round(Number(nextWidth) || minimumWidth),
     )
-    setWidths((current) => {
-      const next = { ...current, [columnKey]: normalizedWidth }
-      widthsRef.current = next
-      return next
-    })
-  }
-
-  function setColumnWidths(nextWidths) {
-    setWidths((current) => {
-      const next = { ...current }
-      for (const [columnKey, nextWidth] of Object.entries(nextWidths || {})) {
-        const minimumWidth = minimumWidthFor(defaultsRef.current, columnKey)
-        next[columnKey] = Math.max(
-          minimumWidth,
-          Math.round(Number(nextWidth) || minimumWidth),
-        )
-      }
-      widthsRef.current = next
-      return next
-    })
+    setWidths((current) => ({ ...current, [columnKey]: normalizedWidth }))
   }
 
   function startResize(columnKey, event) {
@@ -88,23 +57,19 @@ export function useResizableColumnWidths(defaultWidths) {
         delta,
         MIN_RESIZABLE_COLUMN_WIDTH,
       )
-      const next = Object.fromEntries(orderedKeys.map((key, index) => [key, nextWidths[index]]))
-      widthsRef.current = next
-      setWidths(next)
+      setWidths(Object.fromEntries(orderedKeys.map((key, index) => [key, nextWidths[index]])))
     }
 
     function handleMouseUp() {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
-      document.body.classList.remove('rz-table-column-resizing')
     }
 
-    document.body.classList.add('rz-table-column-resizing')
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
   }
 
-  return { widths, startResize, setColumnWidth, setColumnWidths }
+  return { widths, startResize, setColumnWidth }
 }
 
 export function ResizableHeaderCell({
@@ -157,10 +122,9 @@ export function ResizableHeaderCell({
           cursor: 'col-resize',
           userSelect: 'none',
           touchAction: 'none',
-          pointerEvents: 'auto',
+          pointerEvents: 'none',
           zIndex: 4,
         }}
-        onMouseDown={(event) => onStartResize?.(columnKey, event)}
       />
     </th>
   )
