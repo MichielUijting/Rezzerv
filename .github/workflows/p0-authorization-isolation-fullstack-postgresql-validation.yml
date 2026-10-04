@@ -145,7 +145,7 @@ jobs:
           grep -F "getByTestId('login-submit').click()" "$spec"
           grep -F "expect(session.role).toBe('advanced_member')" "$spec"
           grep -F "expect(session.permissions?.['admin.access']).toBe(true)" "$spec"
-          grep -F "getByTestId('admin-page')" "$spec"
+          grep -F "getByTestId('authorization-settings-page')" "$spec"
           grep -F "expect(members.items[0].role_key).toBe('household.advanced_member')" "$spec"
           echo 'P0_AUTHORIZATION_LEGACY_NO_MOCKS_GREEN'
 
