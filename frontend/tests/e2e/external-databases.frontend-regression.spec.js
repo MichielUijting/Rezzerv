@@ -6,6 +6,8 @@ import {
   expectRouteLoads,
 } from './helpers/rezzervAssertions.js';
 
+test.use({ storageState: 'playwright/.auth/superuser.json' })
+
 async function routeReceiptItems(page, items) {
   await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
     await route.fulfill({
