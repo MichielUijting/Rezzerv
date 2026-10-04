@@ -17,6 +17,7 @@ export function useResizableColumnWidths(defaultWidths) {
   const [widths, setWidths] = useState(() => ({ ...defaultWidths }))
   const widthsRef = useRef(widths)
   const defaultsRef = useRef(defaultWidths || {})
+  const defaultsSignatureRef = useRef(defaultWidthsSignature)
 
   useEffect(() => {
     widthsRef.current = widths
@@ -24,7 +25,11 @@ export function useResizableColumnWidths(defaultWidths) {
 
   useEffect(() => {
     defaultsRef.current = defaultWidths || {}
-    setWidths({ ...defaultWidths })
+    if (defaultsSignatureRef.current === defaultWidthsSignature) return
+    defaultsSignatureRef.current = defaultWidthsSignature
+    const next = { ...defaultWidths }
+    widthsRef.current = next
+    setWidths(next)
   }, [defaultWidthsSignature])
 
   function setColumnWidth(columnKey, nextWidth) {
@@ -33,7 +38,11 @@ export function useResizableColumnWidths(defaultWidths) {
       minimumWidth,
       Math.round(Number(nextWidth) || minimumWidth),
     )
-    setWidths((current) => ({ ...current, [columnKey]: normalizedWidth }))
+    setWidths((current) => {
+      const next = { ...current, [columnKey]: normalizedWidth }
+      widthsRef.current = next
+      return next
+    })
   }
 
   function setColumnWidths(nextWidths) {
@@ -46,6 +55,7 @@ export function useResizableColumnWidths(defaultWidths) {
           Math.round(Number(nextWidth) || minimumWidth),
         )
       }
+      widthsRef.current = next
       return next
     })
   }
