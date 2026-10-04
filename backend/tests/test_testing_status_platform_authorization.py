@@ -164,7 +164,7 @@ def test_platform_admin_revocation_applies_on_next_status_permission_check(
     with auth_engine.begin() as conn:
         conn.execute(text("""
             UPDATE auth_platform_user_roles
-            SET active = 0
+            SET active = FALSE
             WHERE user_id = 'platform-admin'
               AND role_key = 'platform.platform_admin'
         """))
