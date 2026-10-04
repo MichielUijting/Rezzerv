@@ -61,7 +61,7 @@ export default function DataTable({
 }) {
   const visibleColumns = useMemo(() => columns.filter((column) => column && column.hidden !== true), [columns])
   const defaultWidths = useMemo(() => buildDefaultWidths(visibleColumns), [visibleColumns])
-  const { widths, startResize } = useResizableColumnWidths(defaultWidths)
+  const { widths, setColumnWidth } = useResizableColumnWidths(defaultWidths)
   const headerRowRef = useRef(null)
   const [stickyHeaderOffset, setStickyHeaderOffset] = useState(42)
 
@@ -106,6 +106,12 @@ export default function DataTable({
     const next = nextSortState(activeSort, columnKey, sortDefaults)
     if (typeof onSortChange === 'function') return onSortChange(next)
     setInternalSort(next)
+  }
+
+  function handleColumnResize(columnIndex, nextWidth) {
+    const column = visibleColumns[columnIndex]
+    if (!column?.key) return
+    setColumnWidth(column.key, nextWidth)
   }
 
   const filteredData = useMemo(() => data.filter((row) => visibleColumns.every((column) => {
@@ -168,6 +174,7 @@ export default function DataTable({
         tableStyle={mergedTableStyle}
         dataTestId={dataTestId}
         resizableColumns
+        onColumnResize={handleColumnResize}
       >
         <colgroup>
           {visibleColumns.map((column) => <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />)}
@@ -179,7 +186,6 @@ export default function DataTable({
                 key={column.key}
                 columnKey={column.key}
                 widths={widths}
-                onStartResize={startResize}
                 className={column.align === 'right' ? 'rz-num' : column.className || ''}
                 sortable={Boolean(column.sortable)}
                 isSorted={activeSort?.key === column.key}
