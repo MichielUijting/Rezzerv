@@ -46,6 +46,7 @@ export default function Table({
   children,
 }) {
   const resizeRef = useRef(null)
+  const committedWidthsRef = useRef(null)
   const wrapperRef = useRef(null)
 
   useEffect(() => {
@@ -65,6 +66,23 @@ export default function Table({
       })
     })
   }, [children])
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    const table = wrapper?.querySelector('table')
+    const committedWidths = committedWidthsRef.current
+    if (!table || !Array.isArray(committedWidths) || committedWidths.length === 0) return
+    const headerCount = table.querySelectorAll('thead tr:first-child th').length
+    if (headerCount !== committedWidths.length) {
+      committedWidthsRef.current = null
+      return
+    }
+    const colgroup = ensureResizableColgroup(table, committedWidths)
+    committedWidths.forEach((width, index) => {
+      const col = colgroup.children[index]
+      if (col) col.style.width = `${width}px`
+    })
+  }, [children, tableStyle])
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -146,6 +164,7 @@ export default function Table({
     document.body.classList.remove('rz-table-column-resizing')
     resizeRef.current = null
     const finalWidths = activeResize.lastWidths || activeResize.startWidths
+    committedWidthsRef.current = [...finalWidths]
     onColumnResize?.(
       activeResize.columnIndex,
       finalWidths[activeResize.columnIndex],
