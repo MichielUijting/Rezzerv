@@ -1,7 +1,10 @@
 name: GPC catalog assignment validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/catalog_gpc_routes.py'
       - 'backend/app/api/catalog_routes.py'

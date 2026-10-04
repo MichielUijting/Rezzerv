@@ -1,7 +1,10 @@
 name: Frontteam personal household validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/frontteam_household_provisioning.py'
       - 'backend/app/services/server_session_service.py'
