@@ -1,7 +1,10 @@
 name: F5 PostgreSQL unbounded quantity decimals regression
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:

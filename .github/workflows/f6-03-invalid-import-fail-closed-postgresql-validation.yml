@@ -1,7 +1,10 @@
 name: F6-03 invalid import fail-closed PostgreSQL validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/tests/e2e/f6-03-invalid-import-fail-closed.fullstack.spec.js'
       - 'frontend/src/features/receipts/KassaPage.jsx'

@@ -1,7 +1,10 @@
 name: F6-04 interrupted mutation safe resume PostgreSQL validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/f6_failure_injection.py'
       - 'backend/app/services/f6_interrupted_mutation_injection.py'
