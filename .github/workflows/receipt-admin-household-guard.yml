@@ -1,7 +1,10 @@
 name: Receipt parser diagnosis route cleanup
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:

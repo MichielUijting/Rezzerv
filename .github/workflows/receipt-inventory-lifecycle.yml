@@ -1,7 +1,10 @@
 name: Receipt inventory lifecycle validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/receipt_inventory_lifecycle_service.py'
       - 'backend/app/services/temporal_inventory_service.py'
