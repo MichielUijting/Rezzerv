@@ -4,6 +4,8 @@ import {
   expectNoConsoleErrors,
 } from './helpers/rezzervAssertions.js';
 
+test.use({ storageState: 'playwright/.auth/superuser.json' })
+
 function receiptItemsPayload() {
   return {
     items: [
