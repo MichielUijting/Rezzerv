@@ -156,12 +156,15 @@ jobs:
             http://localhost:8011/api/auth/login)"
           test "$login_status" = '200'
 
+          missing_email="${F6_05_MISSING_TARGET_USER_ID}@missing.invalid"
+          missing_payload="$(jq -nc --arg email "$missing_email" '{email:$email}')"
           missing_status="$(curl --silent --show-error \
             -b f6-05-ip-owner.cookies \
             -o f6-05-platform-missing-target.json \
             -w '%{http_code}' \
-            -X POST \
-            "http://localhost:8011/api/platform/authorizations/users/${F6_05_MISSING_TARGET_USER_ID}/platform-admin/grant")"
+            -H 'Content-Type: application/json' \
+            -d "$missing_payload" \
+            http://localhost:8011/api/ip-owner/superusers)"
           test "$missing_status" = '404'
           test "$(jq -r '.detail' f6-05-platform-missing-target.json)" = 'Gebruiker niet gevonden'
           echo 'F6_05_PLATFORM_MISSING_TARGET_404_GREEN'

@@ -24,6 +24,7 @@ jobs:
         working-directory: backend
     env:
       PYTHONPATH: .
+      DATABASE_URL: sqlite:///:memory:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

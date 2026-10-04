@@ -107,11 +107,36 @@ def main() -> int:
         """))
         conn.execute(text("""
             INSERT INTO gpc_bricks(brick_code, description)
-            VALUES ('10000025', 'Bananas')
+            VALUES ('10005897', 'Bananen (Cavendish)')
         """))
         conn.execute(text("""
             INSERT INTO global_product_gpc_bricks(global_product_id, brick_code)
-            VALUES ('global-product-bananen', '10000025')
+            VALUES ('global-product-bananen', '10005897')
+        """))
+        conn.execute(text("""
+            CREATE TABLE gpc_product_groups (
+                gpc_brick_code TEXT PRIMARY KEY,
+                gpc_brick_name TEXT,
+                gpc_class_code TEXT,
+                gpc_class_name TEXT,
+                gpc_family_code TEXT,
+                gpc_family_name TEXT,
+                gpc_segment_code TEXT,
+                gpc_segment_name TEXT,
+                language_code TEXT,
+                active INTEGER
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO gpc_product_groups(
+                gpc_brick_code, gpc_brick_name, gpc_class_code, gpc_class_name,
+                gpc_family_code, gpc_family_name, gpc_segment_code, gpc_segment_name,
+                language_code, active
+            ) VALUES (
+                '10005897', 'Bananen (Cavendish)', '50250200', 'Bananen',
+                '50250000', 'Fruit - Onbewerkt/Onverwerkt (Vers)',
+                '50000000', 'Levensmiddelen/Dranken', 'nl', 1
+            )
         """))
         conn.execute(text("""
             CREATE TABLE household_articles (
@@ -168,7 +193,7 @@ def main() -> int:
         assert global_candidate["source_id"] == "global-product-bananen", global_product_results
         assert global_candidate["brand"] == "Albert Heijn", global_product_results
         assert global_candidate["primary_gtin"] == "8718265184886", global_product_results
-        assert global_candidate["product_type_name"] == "Bananas", global_product_results
+        assert global_candidate["product_type_name"] == "Bananen (Cavendish)", global_product_results
         assert global_candidate["image_url"] == "https://images.example.test/bananen.jpg", global_product_results
 
         product_type_results = search_shopping_catalog(

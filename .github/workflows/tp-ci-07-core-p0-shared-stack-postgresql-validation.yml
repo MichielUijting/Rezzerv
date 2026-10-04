@@ -140,8 +140,9 @@ jobs:
               exit 1
             fi
             grep -F 'home-tile-superuser' "$spec"
-            grep -F 'Platformbeheerder toekennen' "$spec"
-            grep -F 'Definitief toekennen' "$spec"
+            grep -F 'ip-owner-superusers-tile' "$spec"
+            grep -F 'Superuser maken' "$spec"
+            grep -F 'Definitief Superuser maken' "$spec"
             echo 'TP_CI_07_PLATFORM_NO_CORE_SHORTCUTS_GREEN'
           fi
           if [[ "$RUN_UNPACKING" == 'true' ]]; then
