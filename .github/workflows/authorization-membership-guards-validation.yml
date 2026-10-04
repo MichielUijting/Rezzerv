@@ -1,7 +1,10 @@
 name: Authorization membership guards validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/authorization_membership_service.py'
       - 'backend/app/cli/migrate_authorization_memberships.py'

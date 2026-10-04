@@ -1,7 +1,10 @@
 name: Authorization matrix acceptance
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/**'
       - 'backend/app/services/**authorization**'

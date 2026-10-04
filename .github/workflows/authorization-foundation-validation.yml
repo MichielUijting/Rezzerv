@@ -1,7 +1,10 @@
 name: Authorization foundation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/tests/test_authorization_foundation_contract.py'
