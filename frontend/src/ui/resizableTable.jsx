@@ -36,6 +36,20 @@ export function useResizableColumnWidths(defaultWidths) {
     setWidths((current) => ({ ...current, [columnKey]: normalizedWidth }))
   }
 
+  function setColumnWidths(nextWidths) {
+    setWidths((current) => {
+      const next = { ...current }
+      for (const [columnKey, nextWidth] of Object.entries(nextWidths || {})) {
+        const minimumWidth = minimumWidthFor(defaultsRef.current, columnKey)
+        next[columnKey] = Math.max(
+          minimumWidth,
+          Math.round(Number(nextWidth) || minimumWidth),
+        )
+      }
+      return next
+    })
+  }
+
   function startResize(columnKey, event) {
     event.preventDefault()
     event.stopPropagation()
@@ -69,7 +83,7 @@ export function useResizableColumnWidths(defaultWidths) {
     window.addEventListener('mouseup', handleMouseUp)
   }
 
-  return { widths, startResize, setColumnWidth }
+  return { widths, startResize, setColumnWidth, setColumnWidths }
 }
 
 export function ResizableHeaderCell({
