@@ -1,7 +1,10 @@
 name: F7-01 CI orchestration audit validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:

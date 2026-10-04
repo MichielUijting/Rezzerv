@@ -1,7 +1,10 @@
 name: F8 PO Acceptance Pack contract
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:
