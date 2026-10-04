@@ -213,6 +213,12 @@ def _resolve_platform_context_roles(
             detail="Geen geldige accountcontext beschikbaar.",
         )
 
+    if "platform.ip_owner" in platform_roles and platform_roles != frozenset({"platform.ip_owner"}):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
+
     if system_roles and FRONTTEAM_PLATFORM_ROLE in platform_roles:
         raise HTTPException(
             status_code=403,
