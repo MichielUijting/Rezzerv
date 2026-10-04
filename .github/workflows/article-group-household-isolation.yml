@@ -40,5 +40,4 @@ jobs:
       - name: Voer A-B-isolatiecontract uit
         env:
           PYTHONPATH: backend
-          DATABASE_URL: sqlite:///${{ runner.temp }}/rezzerv-unused-runtime.db
         run: python -m app.testing.article_group_household_isolation_contract

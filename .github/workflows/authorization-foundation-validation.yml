@@ -14,9 +14,6 @@ on:
 jobs:
   validate-authorization-foundation:
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: sqlite:////tmp/rezzerv-authorization-validation.db
-      SQLITE_RUNTIME_VOLUME: github-actions-tmp
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
