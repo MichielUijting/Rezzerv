@@ -119,14 +119,14 @@ export default function SettingsMyAccountPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Mijn account</h2>
-              <p style={{ margin: 0, color: '#667085' }}>Bekijk je inlogadres en beheer je wachtwoord.</p>
+              <p style={{ margin: 0, color: '#000000' }}>Bekijk je inlogadres en beheer je wachtwoord.</p>
             </div>
           </div>
 
           <section style={{ display: 'grid', gap: '12px' }} aria-labelledby="account-identity-title">
             <div>
               <h3 id="account-identity-title" style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Accountgegevens</h3>
-              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>Dit is het e-mailadres waarmee je bij Inhuis inlogt.</p>
+              <p style={{ margin: 0, color: '#000000', fontSize: '14px' }}>Dit is het e-mailadres waarmee je bij Inhuis inlogt.</p>
             </div>
             <form onSubmit={saveProfile} style={{ display: 'grid', gap: '12px' }} data-testid="my-account-profile-form">
               <Input
@@ -160,7 +160,7 @@ export default function SettingsMyAccountPage() {
           <section style={{ display: 'grid', gap: '12px' }} aria-labelledby="account-password-title">
             <div>
               <h3 id="account-password-title" style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Wachtwoord wijzigen</h3>
-              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>
+              <p style={{ margin: 0, color: '#000000', fontSize: '14px' }}>
                 Na een succesvolle wijziging blijf je op dit apparaat ingelogd. Andere actieve sessies worden ingetrokken.
               </p>
             </div>
@@ -219,7 +219,7 @@ export default function SettingsMyAccountPage() {
           <section style={{ display: 'grid', gap: '12px' }} aria-labelledby="account-session-title">
             <div>
               <h3 id="account-session-title" style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Sessie</h3>
-              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>
+              <p style={{ margin: 0, color: '#000000', fontSize: '14px' }}>
                 Log uit om deze actieve sessie op de server direct ongeldig te maken.
               </p>
             </div>
