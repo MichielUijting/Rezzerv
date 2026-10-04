@@ -52,21 +52,27 @@ const sourceRoot = path.join(frontendRoot, 'src')
 const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx'])
 const sharedResizeFiles = new Set([
   'src/ui/Table.jsx',
+  'src/ui/DataTable.jsx',
   'src/ui/resizableTable.jsx',
   'src/ui/tableResize.js',
 ])
 
 const tableSource = fs.readFileSync(path.join(frontendRoot, 'src/ui/Table.jsx'), 'utf8')
 const dataTableSource = fs.readFileSync(path.join(frontendRoot, 'src/ui/DataTable.jsx'), 'utf8')
+const resizableTableSource = fs.readFileSync(path.join(frontendRoot, 'src/ui/resizableTable.jsx'), 'utf8')
 
-assert(!tableSource.includes('ensureResizableColgroup'),
-  'Table mag geen eigen colgroup-resize-authority bevatten')
-assert(!tableSource.includes('committedWidthsRef'),
-  'Table mag geen tweede committed breedtestaat bevatten')
-assert(!tableSource.includes('col.style.width'),
-  'Table mag kolombreedtes niet rechtstreeks in het DOM schrijven')
-assert(tableSource.includes('onColumnResize?.(') && tableSource.includes('nextWidths'),
-  'Table moet berekende breedtes uitsluitend doorgeven aan de state-owner')
+assert(!tableSource.includes('resizeTableBoundary'),
+  'Table mag geen eigen resizeberekening bevatten')
+assert(!tableSource.includes('onColumnResize'),
+  'Table mag geen tweede resize-callbackpad bevatten')
+assert(!tableSource.includes('rz-table-column-resizing'),
+  'Table mag geen resize-state beheren')
+assert(resizableTableSource.includes("onMouseDown={(event) => onStartResize?.(columnKey, event)}"),
+  'De expliciete separator moet het exacte columnKey aan de resize-hook doorgeven')
+assert(resizableTableSource.includes("pointerEvents: 'auto'"),
+  'De expliciete separator moet zelf het pointerdoel zijn')
+assert(dataTableSource.includes('onStartResize={startResize}'),
+  'DataTable moet de gedeelde resize-hook aan iedere headerseparator koppelen')
 assert(dataTableSource.includes("style={{ width: `${widths[column.key] || column.width || 120}px` }}"),
   'DataTable moet kolombreedtes vanuit React-state naar het colgroup renderen')
 const lowLevelResizePatterns = [
