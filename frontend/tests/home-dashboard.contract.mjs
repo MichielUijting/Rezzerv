@@ -143,8 +143,9 @@ assert.match(householdSettings, /'household\.admin': 'Beheerder'/)
 assert.doesNotMatch(householdSettings, /Geavanceerd lid \(bestaande rol\)/)
 assert.doesNotMatch(householdSettings, /Kijker \(bestaande rol\)/)
 
-assert.match(mobileKassa, /URLSearchParams\(window\.location\.search\)\.get\('receipt'\)/)
-assert.match(mobileKassa, /URLSearchParams\(window\.location\.search\)\.get\('view'\)/)
+assert.match(mobileKassa, /const searchParams = new URLSearchParams\(window\.location\.search\)/)
+assert.match(mobileKassa, /const requestedReceiptId = searchParams\.get\('receipt'\) \|\| ''/)
+assert.match(mobileKassa, /const requestedView = searchParams\.get\('view'\) \|\| ''/)
 assert.match(mobileKassa, /requestedView === 'bonnen'/)
 
 console.log('HOME_DASHBOARD_CONTRACT_GREEN')
