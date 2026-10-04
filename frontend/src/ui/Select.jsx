@@ -150,8 +150,20 @@ export default function Select({
 
   useLayoutEffect(() => {
     if (!isOpen || activeIndex < 0) return
-    const activeOption = listboxRef.current?.querySelector(`[data-select-option-index="${activeIndex}"]`)
-    activeOption?.scrollIntoView({ block: 'nearest' })
+    const listbox = listboxRef.current
+    const activeOption = listbox?.querySelector(`[data-select-option-index="${activeIndex}"]`)
+    if (!listbox || !activeOption) return
+
+    const optionTop = activeOption.offsetTop
+    const optionBottom = optionTop + activeOption.offsetHeight
+    const viewportTop = listbox.scrollTop
+    const viewportBottom = viewportTop + listbox.clientHeight
+
+    if (optionTop < viewportTop) {
+      listbox.scrollTop = optionTop
+    } else if (optionBottom > viewportBottom) {
+      listbox.scrollTop = optionBottom - listbox.clientHeight
+    }
   }, [isOpen, activeIndex])
 
   function openMenu() {
