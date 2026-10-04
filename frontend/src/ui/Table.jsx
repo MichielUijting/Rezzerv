@@ -134,21 +134,24 @@ export default function Table({
       const col = activeResize.colgroup.children[columnIndex]
       if (col) col.style.width = `${nextWidth}px`
     })
-    onColumnResize?.(
-      activeResize.columnIndex,
-      nextWidths[activeResize.columnIndex],
-      nextWidths,
-    )
+    activeResize.lastWidths = nextWidths
     event.preventDefault()
-  }, [onColumnResize])
+  }, [])
 
   const handleResizeEnd = useCallback(() => {
-    if (!resizeRef.current) return
+    const activeResize = resizeRef.current
+    if (!activeResize) return
     document.removeEventListener('mousemove', handleResizeMove)
     document.removeEventListener('mouseup', handleResizeEnd)
     document.body.classList.remove('rz-table-column-resizing')
     resizeRef.current = null
-  }, [handleResizeMove])
+    const finalWidths = activeResize.lastWidths || activeResize.startWidths
+    onColumnResize?.(
+      activeResize.columnIndex,
+      finalWidths[activeResize.columnIndex],
+      finalWidths,
+    )
+  }, [handleResizeMove, onColumnResize])
 
   const handleMouseDown = useCallback((event) => {
     if (!resizableColumns || event.button !== 0) return
@@ -184,6 +187,7 @@ export default function Table({
       columnIndex,
       startX: event.clientX,
       startWidths: widths,
+      lastWidths: widths,
     }
 
     document.body.classList.add('rz-table-column-resizing')
