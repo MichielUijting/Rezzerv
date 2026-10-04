@@ -71,11 +71,11 @@ def auth_engine():
 
 def _context(user_id: str) -> ServerSessionContext:
     now = datetime.now(timezone.utc)
-    if user_id in {"superuser", "ip-owner"}:
+    if user_id == "superuser":
         context_type = "system"
         household_id = "0"
         role = "owner"
-    elif user_id == "platform-admin":
+    elif user_id in {"platform-admin", "ip-owner"}:
         context_type = "none"
         household_id = None
         role = None
@@ -129,7 +129,7 @@ def test_fixture_lifecycle_classifier_is_exact_and_reuses_existing_permission():
 @pytest.mark.parametrize(
     ("user_id", "allowed"),
     [
-        ("ip-owner", True),
+        ("ip-owner", False),
         ("platform-admin", True),
         ("superuser", False),
         ("support-reader", False),

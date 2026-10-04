@@ -221,6 +221,11 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, Any]:
             status_code=403,
             detail="Geen geldige accountcontext beschikbaar.",
         )
+    if "platform.ip_owner" in platform_roles and platform_roles != frozenset({"platform.ip_owner"}):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige accountcontext beschikbaar.",
+        )
     if system_roles and is_frontteam:
         raise HTTPException(
             status_code=403,
