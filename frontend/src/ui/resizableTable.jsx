@@ -88,14 +88,18 @@ export function useResizableColumnWidths(defaultWidths) {
         delta,
         MIN_RESIZABLE_COLUMN_WIDTH,
       )
-      setWidths(Object.fromEntries(orderedKeys.map((key, index) => [key, nextWidths[index]])))
+      const next = Object.fromEntries(orderedKeys.map((key, index) => [key, nextWidths[index]]))
+      widthsRef.current = next
+      setWidths(next)
     }
 
     function handleMouseUp() {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+      document.body.classList.remove('rz-table-column-resizing')
     }
 
+    document.body.classList.add('rz-table-column-resizing')
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
   }
@@ -153,9 +157,10 @@ export function ResizableHeaderCell({
           cursor: 'col-resize',
           userSelect: 'none',
           touchAction: 'none',
-          pointerEvents: 'none',
+          pointerEvents: 'auto',
           zIndex: 4,
         }}
+        onMouseDown={(event) => onStartResize?.(columnKey, event)}
       />
     </th>
   )
