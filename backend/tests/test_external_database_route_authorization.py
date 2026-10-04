@@ -119,7 +119,7 @@ def test_superuser_v2_can_use_functional_external_product_capabilities():
         engine.dispose()
 
 
-def test_ip_owner_existing_platform_permission_matrix_is_honored_without_special_case():
+def test_ip_owner_has_no_external_database_authority():
     engine, conn = build_connection()
     try:
         for method, path in (
@@ -127,12 +127,14 @@ def test_ip_owner_existing_platform_permission_matrix_is_honored_without_special
             ("POST", "/api/external-databases/retailers/lidl/match-preview"),
             ("POST", "/api/external-databases/catalog/unlink"),
         ):
-            assert authorize_external_database_request(
-                conn,
-                user_id="ip-owner",
-                method=method,
-                path=path,
-            ) == required_external_database_permission(method, path)
+            with pytest.raises(HTTPException) as exc:
+                authorize_external_database_request(
+                    conn,
+                    user_id="ip-owner",
+                    method=method,
+                    path=path,
+                )
+            assert exc.value.status_code == 403
     finally:
         conn.close()
         engine.dispose()
