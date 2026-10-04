@@ -23,19 +23,23 @@ def _engine():
     return create_engine("sqlite+pysqlite:///:memory:")
 
 
+SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS = {
+    "platform.support_access.read",
+    "platform.support_access.mutate",
+}
+
+
 def test_active_superuser_authority_is_exact_v2_target_and_separate_from_admin():
     expected = set(V2_SUPERUSER_TARGET_PERMISSIONS)
 
     assert ACTIVE_SUPERUSER_PLATFORM_PERMISSIONS == expected
     assert ACTIVE_V1_1_SUPERUSER_PLATFORM_PERMISSIONS == expected
     assert ROLE_PERMISSIONS["platform.superuser"] == expected
-    assert not (expected & PLATFORM_ADMIN_PERMISSIONS)
+    assert (expected & PLATFORM_ADMIN_PERMISSIONS) == SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS
     assert "platform.special_roles.manage" not in expected
 
     assert ROLE_PERMISSIONS["platform.platform_admin"] == PLATFORM_ADMIN_PERMISSIONS
-    assert IP_OWNER_PERMISSIONS == (
-        expected | PLATFORM_ADMIN_PERMISSIONS | {"platform.special_roles.manage"}
-    )
+    assert IP_OWNER_PERMISSIONS == {"platform.special_roles.manage"}
 
 
 def test_foundation_reseeds_existing_superuser_from_v1_style_grants_to_exact_v2():
@@ -98,7 +102,9 @@ def test_existing_superuser_evaluator_allows_v2_functional_scope_only():
                 conn,
                 user_id="existing-superuser",
                 permission_key=permission_key,
-            ).allowed is False, permission_key
+            ).allowed is (
+                permission_key in SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS
+            ), permission_key
 
         assert evaluate_platform_permission(
             conn,
@@ -131,6 +137,6 @@ def test_superuser_public_system_session_projects_v2_without_admin_or_special_ro
     assert payload["is_platform_superuser"] is True
     assert granted == expected
     assert set(payload["supported_permissions"]) == expected
-    assert not (PLATFORM_ADMIN_PERMISSIONS & granted)
+    assert (PLATFORM_ADMIN_PERMISSIONS & granted) == SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS
     assert "platform.special_roles.manage" not in granted
     assert "platform_roles" not in payload
