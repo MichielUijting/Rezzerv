@@ -1,7 +1,10 @@
 name: PostgreSQL GPC residual authority
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/versions/20260829_11_gpc_assignment_translation_authority.py'
       - 'backend/app/api/catalog_gpc_routes.py'

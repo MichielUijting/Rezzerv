@@ -1,7 +1,10 @@
 name: PostgreSQL day article Direct authority
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/versions/20260829_12_day_article_direct_authority.py'
       - 'backend/app/services/day_article_service.py'

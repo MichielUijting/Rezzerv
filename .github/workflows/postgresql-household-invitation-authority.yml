@@ -1,7 +1,10 @@
 name: PostgreSQL household invitation authority
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/versions/20260829_13_household_invitation_authority.py'
       - 'backend/app/services/household_invitation_service.py'
