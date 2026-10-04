@@ -1,7 +1,10 @@
 name: Platform Admin 9.1.7 acceptance closure validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - '.github/workflows/platform-admin-acceptance-closure-validation.yml'
       - 'backend/app/api/platform_*.py'
