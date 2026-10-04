@@ -145,22 +145,8 @@ def _cleanup(conn, product_id: str | None = None) -> None:
 
 
 def _cleanup_fallback_reference(conn) -> None:
-    conn.execute(
-        text("DELETE FROM gpc_bricks WHERE brick_code = :code"),
-        {"code": FALLBACK_BRICK_CODE},
-    )
-    conn.execute(
-        text("DELETE FROM gpc_classes WHERE class_code = :code"),
-        {"code": FALLBACK_CLASS_CODE},
-    )
-    conn.execute(
-        text("DELETE FROM gpc_families WHERE family_code = :code"),
-        {"code": FALLBACK_FAMILY_CODE},
-    )
-    conn.execute(
-        text("DELETE FROM gpc_segments WHERE segment_code = :code"),
-        {"code": FALLBACK_SEGMENT_CODE},
-    )
+    # De volledige Nederlandse referentie deelt classes/families/segmenten tussen
+    # duizenden Bricks. Verwijder alleen de projecties van deze test-Brick.
     conn.execute(
         text("DELETE FROM product_inventory_groups WHERE inventory_group_key = :key"),
         {"key": f"gpc:{FALLBACK_BRICK_CODE}"},
@@ -169,7 +155,10 @@ def _cleanup_fallback_reference(conn) -> None:
         text("DELETE FROM gpc_product_groups WHERE gpc_brick_code = :code"),
         {"code": FALLBACK_BRICK_CODE},
     )
-
+    conn.execute(
+        text("DELETE FROM gpc_bricks WHERE brick_code = :code"),
+        {"code": FALLBACK_BRICK_CODE},
+    )
 
 def _assert_complete_reference_fallback(engine) -> None:
     with engine.begin() as conn:

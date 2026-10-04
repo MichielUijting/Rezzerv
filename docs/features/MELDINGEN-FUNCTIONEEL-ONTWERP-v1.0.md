@@ -35,16 +35,16 @@ Meldingen ondersteunt communicatie tussen Inhuis-gebruikers en centraal Platform
 
 ### Superuser en IP-eigenaar
 
-- behouden toegang tot dezelfde Platformbeheer-inbox via hun bestaande supportpermissies;
-- gebruiken geen afzonderlijke Superuser-supportomgeving meer;
-- de oude route `/superuser/meldingen` is uitsluitend een compatibiliteitsredirect naar `/platform/meldingen`;
-- de bestaande bevoegdheid om Frontteamrollen toe te kennen of in te trekken blijft ongewijzigd.
+- Superusers gebruiken de gedeelde Platformbeheer-inbox via `platform.support_access.read` en `platform.support_access.mutate`;
+- Superusers gebruiken geen afzonderlijke supportomgeving; de oude route `/superuser/meldingen` is uitsluitend een compatibiliteitsredirect naar `/platform/meldingen`;
+- Frontteamrollen toekennen of intrekken blijft een Superuserfunctie;
+- de IP-eigenaar heeft geen support-, meldingen- of Frontteambevoegdheid en beheert uitsluitend Superusers.
 
 ### Beheerder, Gebruiker en Frontteam
 
 Een huishoudrol op zichzelf geeft geen platformbrede supporttoegang of broadcastrecht.
 
-Alleen een gebruiker met de aanvullende platformrol `platform.frontteam` en de bijbehorende Frontteam-berichtpermissies mag vanuit het eigen huishouden een gesprek met Platformbeheer starten en daarop antwoorden. De bestaande huishoudrol blijft daarbij ongewijzigd. Het toekennen of intrekken van `platform.frontteam` blijft voorbehouden aan de daarvoor bevoegde Superuser/IP-eigenaar en wordt server-side afgedwongen en geaudit.
+Alleen een gebruiker met de aanvullende platformrol `platform.frontteam` en de bijbehorende Frontteam-berichtpermissies mag vanuit het eigen huishouden een gesprek met Platformbeheer starten en daarop antwoorden. De bestaande huishoudrol blijft daarbij ongewijzigd. Het toekennen of intrekken van `platform.frontteam` blijft voorbehouden aan de daarvoor bevoegde Superuser en wordt server-side afgedwongen en geaudit.
 
 ## Functioneel gedrag
 
@@ -114,7 +114,7 @@ Container-rebuilds mogen bestaande meldingen niet verwijderen.
 
 - Huishoudroutes gebruiken de actuele server-side sessie en actieve huishoudcontext.
 - Platformroutes vereisen `platform.support_access.read` of `platform.support_access.mutate`.
-- Broadcast vereist `platform.support_access.mutate`; Platformbeheerder en de bestaande bevoegde Superuser/IP-eigenaar voldoen daaraan.
+- Broadcast vereist `platform.support_access.mutate`; Platformbeheerder en Superuser voldoen daaraan. De IP-eigenaar niet.
 - Gebruikers mogen geen gesprekken van andere gebruikers openen, beantwoorden of verwijderen.
 
 ## Positieve PO-acceptatie
