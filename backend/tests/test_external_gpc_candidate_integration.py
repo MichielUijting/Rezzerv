@@ -17,11 +17,11 @@ def test_external_classifier_exposes_top_five_candidate_contract():
     assert '"suggestions": suggestions' in service
     assert "suggestions[:5]" in service
     assert "list_official_gpc_bricks" in reference
-    assert "gpc_translations" in reference
-    assert "brick_description_nl" in reference
-    assert "class_description_nl" in reference
-    assert "family_description_en" in reference
-    assert '"matching_policy": "dutch_gpc_primary_semantic_english_fallback"' in service
+    assert "gpc_product_groups" in reference
+    assert "ensure_bundled_dutch_gpc_reference" in reference
+    assert "'gs1_gpc_nl' AS reference_source" in reference
+    assert "gpc_bricks_2026_05_en.json" not in reference
+    assert '"matching_policy": "dutch_gpc_only"' in service
     assert "search_text=_payload_text(payload, 'search_text', 'receipt_line_text')" in routes
     assert "product_intent=_payload_text(payload, 'product_intent', 'candidate_product_intent')" in routes
     assert "category_tags=payload.get('category_tags')" in routes
