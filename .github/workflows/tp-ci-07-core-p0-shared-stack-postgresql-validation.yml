@@ -492,9 +492,9 @@ jobs:
           grep -F 'P0_L4_07_SUPERUSER_SYSTEM_CONTEXT_GREEN' frontend/p0-l4-07-browser.log
           grep -F 'P0_L4_07_SUPERUSER_READ_ONLY_BROWSER_GREEN' frontend/p0-l4-07-browser.log
           grep -F 'P0_L4_07_SUPERUSER_NO_IP_OWNER_AUTHORITY_GREEN' frontend/p0-l4-07-browser.log
-          grep -F 'P0_L4_07_IP_OWNER_SYSTEM_CONTEXT_GREEN' frontend/p0-l4-07-browser.log
-          grep -F 'P0_L4_07_IP_OWNER_PROTECTED_BROWSER_GREEN' frontend/p0-l4-07-browser.log
-          grep -F 'P0_L4_07_IP_OWNER_ROLE_GRANT_THROUGH_UI_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_IP_OWNER_NONE_CONTEXT_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_IP_OWNER_SUPERUSER_ONLY_UI_GREEN' frontend/p0-l4-07-browser.log
+          grep -F 'P0_L4_07_IP_OWNER_SUPERUSER_GRANT_REVOKE_GREEN' frontend/p0-l4-07-browser.log
           test -s frontend/p0-l4-07-browser-proof.json
           test -s frontend/p0-l4-07-superuser-browser-proof.json
           test -s frontend/p0-l4-07-ip-owner-browser-proof.json
