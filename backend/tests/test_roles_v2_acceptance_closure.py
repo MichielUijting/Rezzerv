@@ -29,6 +29,12 @@ from app.testing.server_session_contract import create_server_session_contract_s
 from app.testing.authorization_schema_fixture import install_authorization_schema
 
 
+SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS = {
+    "platform.support_access.read",
+    "platform.support_access.mutate",
+}
+
+
 def _platform_permissions(role_key: str) -> set[str]:
     return {
         permission
@@ -44,7 +50,7 @@ def test_v2_platform_role_permission_boundaries_are_exact():
     assert ROLE_PERMISSIONS["platform.frontteam"] == set(FRONTTEAM_PLATFORM_PERMISSIONS)
     assert ROLE_PERMISSIONS["platform.ip_owner"] == set(IP_OWNER_PERMISSIONS)
 
-    assert not (V2_SUPERUSER_TARGET_PERMISSIONS & PLATFORM_ADMIN_PERMISSIONS)
+    assert (V2_SUPERUSER_TARGET_PERMISSIONS & PLATFORM_ADMIN_PERMISSIONS) == SUPERUSER_PLATFORM_ADMIN_SHARED_PERMISSIONS
     assert "platform.special_roles.manage" not in V2_SUPERUSER_TARGET_PERMISSIONS
     assert "platform.special_roles.manage" not in PLATFORM_ADMIN_PERMISSIONS
     assert IP_OWNER_PERMISSIONS == {"platform.special_roles.manage"}
@@ -76,7 +82,7 @@ def test_existing_function_domains_follow_v2_role_partition():
     assert "platform.support_access.mutate" in superuser
     assert "platform.support_access.mutate" not in ip_owner
     assert "platform.support_access.mutate" not in frontteam
-    assert "platform.support_access.mutate" not in platform_admin
+    assert "platform.support_access.mutate" in platform_admin
 
     # Externe productbronnen zijn functioneel voor Frontteam/Superuser, niet IP-owner.
     for permission in {
@@ -182,4 +188,3 @@ def test_ip_owner_none_session_projects_only_superuser_management_without_role_l
             if allowed and permission.startswith("platform.")
         }
         assert projected_platform_permissions == {"platform.special_roles.manage"}
-
