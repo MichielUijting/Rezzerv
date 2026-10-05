@@ -270,7 +270,7 @@ if %BACKEND_HEALTH_MAX_ATTEMPTS% LSS 1 set /a BACKEND_HEALTH_MAX_ATTEMPTS=1
 set /a BACKEND_HEALTH_ATTEMPTS+=1
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-RestMethod -Uri '%BACKEND_HEALTH_URL%' -TimeoutSec 2; if ($r.status -eq 'ok') { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
 if %errorlevel% equ 0 (
-  set /a BACKEND_WAITED_SECONDS=(BACKEND_HEALTH_ATTEMPTS-1)*2
+  set /a BACKEND_WAITED_SECONDS=BACKEND_HEALTH_ATTEMPTS*2-2
   echo     Backend health is groen na ongeveer !BACKEND_WAITED_SECONDS! seconden.
   exit /b 0
 )
