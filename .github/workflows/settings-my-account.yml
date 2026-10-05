@@ -59,6 +59,7 @@ jobs:
         working-directory: backend
         env:
           PYTHONPATH: .
+          DATABASE_URL: sqlite:///${{ github.workspace }}/.ci-data/settings-my-account.db
         run: |
           python tests/consumer_account_management_selftest.py
           python tests/consumer_account_route_policy_selftest.py
