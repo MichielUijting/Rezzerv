@@ -1,7 +1,10 @@
 name: GPC live language validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - "backend/app/cli/validate_live_gpc_languages.py"
       - "backend/app/cli/build_dutch_gpc_reference.py"

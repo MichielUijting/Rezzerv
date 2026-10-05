@@ -1,4 +1,5 @@
 name: External relation batch decision platform authorization validation
+# draft-ci-router: routed
 
 on:
   push:
@@ -19,6 +20,8 @@ on:
       - 'backend/tests/test_hybrid_regression_platform_authorization.py'
       - '.github/workflows/external-relation-batch-decision-platform-authorization.yml'
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/**'
       - 'backend/app/api/system_routes.py'

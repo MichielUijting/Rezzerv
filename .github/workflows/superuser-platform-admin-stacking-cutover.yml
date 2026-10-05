@@ -1,7 +1,10 @@
 name: Superuser Platform Admin stacking cutover validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/server_session_routes.py'
       - 'backend/app/services/server_session_service.py'

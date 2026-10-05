@@ -1,7 +1,10 @@
 name: Dynamic Home navigation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/household_onboarding_routes.py'
       - 'backend/tests/dynamic_navigation_product_projection_selftest.py'

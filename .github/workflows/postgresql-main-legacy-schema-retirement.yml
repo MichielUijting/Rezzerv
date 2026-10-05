@@ -1,7 +1,10 @@
 name: PostgreSQL main.py legacy schema retirement
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/main.py'
       - 'backend/app/startup/**'

@@ -1,7 +1,10 @@
 name: Functional acceptance matrix validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'quality/acceptance/**'
       - 'docs/TEST_MATRIX.md'

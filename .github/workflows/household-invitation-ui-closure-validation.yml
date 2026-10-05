@@ -1,7 +1,10 @@
 name: Household invitation UI closure validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/legacy_household_member_creation_closure.py'
       - 'backend/app/api/router.py'

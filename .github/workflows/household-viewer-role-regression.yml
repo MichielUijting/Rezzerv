@@ -1,7 +1,10 @@
 name: Household viewer role regression
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/src/lib/authSession.js'
       - 'frontend/tests/household-viewer-role-regression.mjs'

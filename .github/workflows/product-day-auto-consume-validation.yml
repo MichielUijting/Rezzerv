@@ -1,7 +1,10 @@
 name: Product-day auto-consume validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/main.py'
       - 'backend/app/services/product_day_auto_consume_service.py'

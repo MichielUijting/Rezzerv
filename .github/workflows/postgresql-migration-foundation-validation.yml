@@ -1,7 +1,10 @@
 name: PostgreSQL migration foundation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/Dockerfile'
       - 'backend/alembic.ini'
@@ -53,8 +56,8 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           python scripts/ci/validate_alembic_head_literals.py --self-test
@@ -137,7 +140,11 @@ jobs:
           python-version: '3.11'
 
       - name: Build exact current backend image
-        run: docker build -t rezzerv-migration-runtime ./backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 600s \
+            docker build --progress=plain -t rezzerv-migration-runtime ./backend
 
       - name: Prepare existing unversioned SQLite baseline
         shell: bash

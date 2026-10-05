@@ -1,7 +1,10 @@
 name: F6-05 authorization and functional 4xx closure
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/server_session_routes.py'
       - 'backend/app/api/platform_authorizations_routes.py'

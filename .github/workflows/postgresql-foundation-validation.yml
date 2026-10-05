@@ -1,7 +1,10 @@
 name: PostgreSQL foundation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/db.py'
       - 'backend/app/migration_db.py'

@@ -1,7 +1,10 @@
 name: Support message role routing
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/src/features/home/HomePage.jsx'
       - 'frontend/src/features/support/**'

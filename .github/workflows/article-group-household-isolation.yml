@@ -1,7 +1,10 @@
 name: Article group household isolation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:
@@ -34,8 +37,11 @@ jobs:
             backend/app/services/article_group_secure_store.py \
             backend/app/testing/article_group_household_isolation_contract.py
 
+      - name: Bereid bestaande compatibility-datamap voor
+        run: |
+          sudo install -d -o "$(id -u)" -g "$(id -g)" /app/data
+
       - name: Voer A-B-isolatiecontract uit
         env:
           PYTHONPATH: backend
-          DATABASE_URL: sqlite:///${{ runner.temp }}/rezzerv-unused-runtime.db
         run: python -m app.testing.article_group_household_isolation_contract

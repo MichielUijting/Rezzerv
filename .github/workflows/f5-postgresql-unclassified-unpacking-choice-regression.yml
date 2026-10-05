@@ -1,7 +1,10 @@
 name: F5 PostgreSQL unclassified unpacking choice regression
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/main.py'
       - 'frontend/src/features/stores/**'

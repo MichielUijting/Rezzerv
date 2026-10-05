@@ -1,7 +1,10 @@
 name: F6 final formal closure validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - "quality/acceptance/f6_failure_recovery_gap_audit.json"
       - "quality/acceptance/p0_residual_closure.json"

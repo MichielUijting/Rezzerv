@@ -1,7 +1,10 @@
 name: Authorization foundation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/tests/test_authorization_foundation_contract.py'
@@ -11,9 +14,6 @@ on:
 jobs:
   validate-authorization-foundation:
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: sqlite:////tmp/rezzerv-authorization-validation.db
-      SQLITE_RUNTIME_VOLUME: github-actions-tmp
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

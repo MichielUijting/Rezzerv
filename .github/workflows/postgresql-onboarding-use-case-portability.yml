@@ -1,7 +1,10 @@
 name: PostgreSQL onboarding use-case portability
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/versions/20260829_10_household_product_use_case_authority.py'
       - 'backend/app/services/household_capability_expansion_service.py'

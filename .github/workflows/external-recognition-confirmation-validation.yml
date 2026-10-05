@@ -1,7 +1,10 @@
 name: External recognition confirmation validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/external_recognition_confirmation.py'
       - 'backend/app/services/external_database_matchflow_evidence.py'

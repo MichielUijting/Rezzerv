@@ -1,7 +1,10 @@
 name: F6-02 temporary failure safe retry PostgreSQL validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     branches:
       - main
     paths:

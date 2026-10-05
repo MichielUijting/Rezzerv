@@ -1,7 +1,10 @@
 name: PostgreSQL receipt residual portability
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/alembic/versions/20260829_15_receipt_store_chain_schema_authority.py'
       - 'backend/app/main.py'

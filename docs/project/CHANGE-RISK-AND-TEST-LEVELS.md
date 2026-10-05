@@ -85,6 +85,21 @@ direct, en ontbrekende/niet-definitieve step-evidence na afloop van de grace
 faalt alsnog gesloten. Exacte kandidaat-SHA, workflowconclusie en vereiste
 authoritydekking blijven ongewijzigd verplicht.
 
+## Draft scheduling vóór regressie-uitvoering
+
+De risicoclassificatie blijft altijd gebaseerd op de volledige `base...head`-kandidaatdelta. Dat betekent echter niet dat iedere Draft-push alle workflows uit die volledige diff opnieuw hoeft te **starten**.
+
+Voor workflows die expliciet door de centrale Draft-router zijn gemarkeerd geldt:
+
+- Draft-`synchronize`: scheduling gebeurt op de directe `previous-head...new-head` delta;
+- het bestaande `pull_request.paths`-contract van de workflow is de dependency-map;
+- een eerdere rode run wordt in de eerstvolgende repair-cyclus opnieuw geselecteerd;
+- dezelfde SHA krijgt geen dubbele run wanneer geldige queued/running/groene evidence al bestaat;
+- Ready/finale kandidaat valt terug op de volledige bestaande PR-pathselectie;
+- deze schedulingoptimalisatie kan het definitieve S/M/L-niveau nooit verlagen en kan F7 Full exact-candidate nooit vervangen.
+
+Niet-gerouteerde onafhankelijke CI blijft rechtstreeks gelden. Het systeem optimaliseert daarmee scheduling zonder een authority stil te verwijderen.
+
 ## Incrementele carry-forward van reeds groen zwaar bewijs
 
 Naast de strikte finale version-only route mag tijdens ontwikkeling zwaar

@@ -1,7 +1,10 @@
 name: F6 failure recovery gap audit validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'quality/acceptance/f6_failure_recovery_gap_audit.json'
       - 'quality/acceptance/p0_residual_closure.json'
@@ -43,7 +46,7 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail

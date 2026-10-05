@@ -1,7 +1,10 @@
 name: PR253 full frontend regression
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/src/**'
       - 'frontend/tests/e2e/**'

@@ -128,6 +128,23 @@ Bij database-/startupinfrastructuur horen daarnaast expliciet:
 
 Bij wijzigingen aan de Kassabon → Voorraad → Bijna-op-keten of de ketenrunner hoort daarnaast de canonical 12/12 PostgreSQL-ketentest groen te zijn.
 
+## Centrale Draft CI-router: schedule-first vóór carry-forward
+
+Naast carry-forward gebruikt Inhuis een centrale Draft-router om het aantal GitHub Actions-runs al **vóór scheduling** te beperken. De kernreden is dat GitHub `pull_request.paths` op een synchronize-event tegen de volledige PR-diff beoordeelt; daardoor kan een oude, grote PR-diff anders bij iedere kleine reparatie opnieuw tientallen workflows activeren.
+
+De workflow `.github/workflows/draft-ci-targeted-router.yml` gebruikt `scripts/ci/draft_workflow_router.py` en hanteert fail-closed deze regels:
+
+- op een Draft-`synchronize` wordt primair de delta `previous-head...new-head` gebruikt;
+- de bestaande `pull_request.paths` van iedere gerouteerde workflow blijven de dependency-authority; er is dus geen tweede handmatige padlijst;
+- alleen workflows die expliciet met `# draft-ci-router: routed` zijn gemarkeerd én een veilige `workflow_dispatch` hebben, worden door de router beheerd;
+- een eerder rode gerouteerde workflow wordt bij de volgende repair-push opnieuw geselecteerd, ook wanneer alleen een ondersteunend bestand buiten zijn gewone pathfilter is gewijzigd;
+- een reeds queued/running of groene run op exact dezelfde SHA wordt niet dubbel gestart;
+- onbekende routerfouten falen de centrale routercheck; zij leiden niet tot stil overslaan;
+- bij `ready_for_review` keren gerouteerde workflows terug naar hun normale volledige PR-pathcontract en wordt de Draft-optimalisatie niet als finale dekking gebruikt;
+- F7 Full exact-candidate blijft buiten deze optimalisatie.
+
+Hierdoor wordt de Draft repair-loop **schedule-first**: eerst zo weinig mogelijk workflows starten, daarna binnen de daadwerkelijk relevante zware workflows eventueel carry-forward of targeted rerun toepassen.
+
 ## Incrementele carry-forward tijdens een Draft PR
 
 GitHub beoordeelt `pull_request.paths` tegen de volledige PR-diff. Daardoor kan

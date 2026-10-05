@@ -185,7 +185,25 @@ jobs:
           grep -F 'F7_01_CI_ORCHESTRATION_AUDIT_GREEN' f7-pr-fast-orchestration-map.log
           echo 'F7_PR_FAST_CHEAP_AUTHORITIES_GREEN'
 
+      - name: Record Draft fast-loop without shared aggregation
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'F7_PR_FAST_DRAFT_TARGETED_GREEN'
+            echo "Draft candidate: $CANDIDATE_SHA"
+            echo 'Shared full-stack aggregation is deferred until Ready for review.'
+          } | tee f7-pr-fast-wait.log
+          {
+            echo '## F7-02 Draft fast-loop'
+            echo
+            echo 'Cheap candidate authorities are green.'
+            echo 'Shared full-stack aggregation is intentionally deferred until Ready for review.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Aggregate selected shared workflow results for exact candidate
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}

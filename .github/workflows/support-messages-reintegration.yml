@@ -1,7 +1,10 @@
 name: Support messages reintegration
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/support_message_session_adapter.py'
       - 'backend/app/session_entrypoint.py'

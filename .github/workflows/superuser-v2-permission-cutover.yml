@@ -1,7 +1,10 @@
 name: Superuser v2 permission cutover validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/server_session_service.py'

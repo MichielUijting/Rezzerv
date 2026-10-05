@@ -1,7 +1,10 @@
 name: Settings v2 information architecture validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'frontend/src/features/settings/**'
       - 'frontend/src/app/router/AppRouter.jsx'

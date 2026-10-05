@@ -1,7 +1,10 @@
 name: Onboarding v2 acceptance closure validation
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - '.github/workflows/onboarding-v2-acceptance-closure-validation.yml'
       - '.github/actions/postgresql-acceptance-foundation/action.yml'

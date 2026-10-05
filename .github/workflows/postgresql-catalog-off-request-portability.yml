@@ -1,7 +1,10 @@
 name: PostgreSQL catalog/OFF request portability
+# draft-ci-router: routed
 
 on:
   pull_request:
+    types:
+      - ready_for_review
     paths:
       - 'backend/app/api/catalog_routes.py'
       - 'backend/app/api/product_inventory_group_routes.py'
