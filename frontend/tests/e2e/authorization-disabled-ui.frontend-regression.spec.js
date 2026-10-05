@@ -58,6 +58,13 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
       body: JSON.stringify({}),
     })
   })
+  await page.route('**/api/features', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    })
+  })
 }
 
 async function dismissSuccessFeedback(page) {
