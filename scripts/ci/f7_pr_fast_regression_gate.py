@@ -191,9 +191,17 @@ def run_matches_pr_context(run: dict, pr_number: str, base_sha: str) -> bool:
     return False
 
 
-def api(repo: str, workflow: str, sha: str, token: str, pr_number: str = "", base_sha: str = "") -> dict | None:
+def api(
+    repo: str,
+    workflow: str,
+    sha: str,
+    token: str,
+    pr_number: str = "",
+    base_sha: str = "",
+    candidate_ref: str = "",
+) -> dict | None:
     workflow_id = urllib.parse.quote(Path(workflow).name, safe="")
-    query = urllib.parse.urlencode({"event": "pull_request", "head_sha": sha, "per_page": 20})
+    query = urllib.parse.urlencode({"head_sha": sha, "per_page": 20})
     url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_id}/runs?{query}"
     request = urllib.request.Request(url, headers={
         "Authorization": f"Bearer {token}",
@@ -206,14 +214,47 @@ def api(repo: str, workflow: str, sha: str, token: str, pr_number: str = "", bas
             data = json.load(response)
     except Exception as exc:
         die(f"Actions API error for {workflow}: {type(exc).__name__}: {exc}")
-    runs = [
-        r for r in data.get("workflow_runs", [])
-        if r.get("head_sha") == sha
-        and r.get("event") == "pull_request"
-        and (not pr_number or run_matches_pr_context(r, pr_number, base_sha))
-    ]
+    runs = []
+    for run in data.get("workflow_runs", []):
+        if run.get("head_sha") != sha:
+            continue
+        event = run.get("event")
+        if event == "pull_request":
+            if pr_number and not run_matches_pr_context(run, pr_number, base_sha):
+                continue
+        elif event == "workflow_dispatch":
+            if candidate_ref and str(run.get("head_branch") or "") != candidate_ref:
+                continue
+        else:
+            continue
+        runs.append(run)
     runs.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
     return runs[0] if runs else None
+
+
+def dispatch(repo: str, workflow: str, candidate_ref: str, token: str) -> None:
+    req(bool(candidate_ref), "candidate ref missing for workflow dispatch")
+    workflow_id = urllib.parse.quote(Path(workflow).name, safe="")
+    url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_id}/dispatches"
+    payload = json.dumps({"ref": candidate_ref, "inputs": {"authority": "both"}}).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "rezzerv-f7-pr-fast-gate",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            if response.status not in {204}:
+                die(f"workflow dispatch returned HTTP {response.status}: {workflow}")
+    except Exception as exc:
+        die(f"Actions dispatch error for {workflow}: {type(exc).__name__}: {exc}")
 
 
 def cmd_wait(args: argparse.Namespace) -> int:
@@ -244,6 +285,7 @@ def cmd_wait(args: argparse.Namespace) -> int:
     deadline = time.monotonic() + int(cfg.get("timeout_seconds", 7200))
     poll = int(cfg.get("poll_seconds", 15))
     resolved: dict[str, dict] = {}
+    dispatched: set[str] = set()
     while len(resolved) < len(selected):
         pending = []
         for cluster in selected:
@@ -260,6 +302,7 @@ def cmd_wait(args: argparse.Namespace) -> int:
                     token,
                     args.pr_number or "",
                     args.base_sha or "",
+                    args.candidate_ref or "",
                 )
                 if candidate and candidate.get("status") == "completed" and candidate.get("conclusion") == "success":
                     run = candidate
@@ -272,9 +315,14 @@ def cmd_wait(args: argparse.Namespace) -> int:
                     token,
                     args.pr_number or "",
                     args.base_sha or "",
+                    args.candidate_ref or "",
                 )
             if not run:
-                pending.append(f"{cid}:missing")
+                if cid not in dispatched:
+                    dispatch(args.repo, cluster["workflow_file"], args.candidate_ref or "", token)
+                    dispatched.add(cid)
+                    print(f"F7_PR_FAST_DISPATCHED {cid} workflow={cluster['workflow_file']}")
+                pending.append(f"{cid}:dispatched_waiting")
                 continue
             status, conclusion = run.get("status"), run.get("conclusion")
             print(f"F7_PR_FAST_RUN {cid} run={run.get('id')} status={status} conclusion={conclusion}")
@@ -329,6 +377,7 @@ def main() -> int:
     w.add_argument("--source-sha", default="")
     w.add_argument("--pr-number", default="")
     w.add_argument("--base-sha", default="")
+    w.add_argument("--candidate-ref", default="")
     w.add_argument("--evidence", default="f7-pr-fast-regression-evidence.json")
     w.set_defaults(func=cmd_wait)
     args = parser.parse_args()
