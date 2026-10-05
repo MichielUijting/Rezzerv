@@ -7,7 +7,6 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   deleteHouseholdMember,
   fetchHouseholdMembers,
-  updateHouseholdName,
 } from './services/householdMembersService'
 import {
   createHouseholdInvitation,
@@ -127,7 +126,6 @@ export default function SettingsHouseholdPage() {
   const [busyInvitationId, setBusyInvitationId] = useState(null)
   const [memberToRemove, setMemberToRemove] = useState(null)
   const [invitationToRevoke, setInvitationToRevoke] = useState(null)
-  const [householdNameDraft, setHouseholdNameDraft] = useState('')
 
   const isAdmin = Boolean(data?.is_household_admin)
   const canManageInvitations = payloadCanManageInvitations(data)
@@ -140,24 +138,8 @@ export default function SettingsHouseholdPage() {
     authorization.members.map((member) => [String(member.email || '').toLowerCase(), member]),
   ), [authorization.members])
 
-  function syncHouseholdName(payload) {
-    const nextName = String(payload?.household_name || '').trim()
-    if (!nextName) return
-    try {
-      window.localStorage.setItem('rezzerv_household_name', nextName)
-      const rawContext = window.localStorage.getItem('rezzerv_auth_context')
-      if (!rawContext) return
-      const parsed = JSON.parse(rawContext)
-      if (!parsed || typeof parsed !== 'object') return
-      parsed.active_household_name = nextName
-      window.localStorage.setItem('rezzerv_auth_context', JSON.stringify(parsed))
-    } catch {}
-  }
-
   function applyPayload(payload) {
     setData(payload)
-    setHouseholdNameDraft(String(payload?.household_name || ''))
-    syncHouseholdName(payload)
   }
 
   async function refreshAuthorization() {
@@ -215,11 +197,6 @@ export default function SettingsHouseholdPage() {
     } finally {
       setIsSaving(false)
     }
-  }
-
-  async function handleHouseholdNameSubmit(event) {
-    event.preventDefault()
-    await runMutation(() => updateHouseholdName({ name: householdNameDraft }), 'Huishoudnaam opgeslagen.', { refreshRoles: false })
   }
 
   async function handleCreateInvitation(event) {
@@ -296,28 +273,15 @@ export default function SettingsHouseholdPage() {
           <div className="rz-household-layout">
             <div className="rz-household-header">
               <div>
-                <h2 className="rz-household-title">Huishouden</h2>
-                <p className="rz-household-subtitle">Beheer de naam, gekoppelde gebruikers en hun rol binnen het huishouden.</p>
+                <h2 className="rz-household-title">Gebruikers &amp; rollen</h2>
+                <p className="rz-household-subtitle">Beheer gekoppelde Inhuis-gebruikers, uitnodigingen en hun rol binnen het huishouden.</p>
                 <p className="rz-household-summary">{householdSummary}</p>
-                {!isLoading && !isAdmin ? <p className="rz-household-warning">Alleen een Beheerder kan de huishoudnaam, gebruikers en rollen wijzigen.</p> : null}
+                {!isLoading && !isAdmin ? <p className="rz-household-warning">Alleen een Beheerder kan gebruikers uitnodigen, rollen wijzigen of gebruikers ontkoppelen.</p> : null}
               </div>
             </div>
 
             {isLoading ? <div>Huishouden laden…</div> : (
               <>
-                <section className="rz-household-name-section">
-                  <div>
-                    <h3 className="rz-household-section-title">Naam huishouden</h3>
-                    <p className="rz-household-section-copy">Deze naam wordt gebruikt in de actieve huishoudcontext en in uitnodigingen.</p>
-                  </div>
-                  <form onSubmit={handleHouseholdNameSubmit} className="rz-form rz-household-name-form">
-                    <div className="rz-household-form-field rz-household-form-field--wide">
-                      <Input label="Huishoudnaam" value={householdNameDraft} onChange={(event) => setHouseholdNameDraft(event.target.value)} disabled={!isAdmin || isSaving} required maxLength={120} data-testid="household-name-input" />
-                    </div>
-                    {isAdmin ? <div className="rz-household-form-actions"><Button type="submit" disabled={isSaving || !String(householdNameDraft || '').trim() || String(householdNameDraft || '').trim() === String(data?.household_name || '').trim()} data-testid="household-name-save">Naam opslaan</Button></div> : null}
-                  </form>
-                </section>
-
                 <section className="rz-household-form-section">
                   <div>
                     <h3 className="rz-household-section-title">Gekoppelde gebruikers</h3>
