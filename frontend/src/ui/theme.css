@@ -213,7 +213,7 @@ body:has([data-testid="mobile-app-chrome"]) [data-testid="app-feedback-bar-scrol
 }
 
 body:has([data-testid="mobile-app-chrome"]) :where([data-testid^="app-feedback-"][data-testid$="-overlay"]):not(:has([data-testid$="-primary-button"])):not(:has([data-testid$="-secondary-button"])):not(:has(.rz-input)) {
-  padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important;
+  padding-bottom: calc(90px + env(safe-area-inset-bottom)) !important;
 }
 
 
