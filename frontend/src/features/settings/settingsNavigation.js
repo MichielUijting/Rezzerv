@@ -25,7 +25,7 @@ const SETTINGS_CONTEXTS = ['regular', 'system']
 const HOUSEHOLD_SETTINGS_CONTEXTS = ['regular']
 
 export const SETTINGS_ROOT_POLICY = {
-  allowedContexts: HOUSEHOLD_SETTINGS_CONTEXTS,
+  allowedContexts: SETTINGS_CONTEXTS,
   allowViewer: true,
 }
 
@@ -155,7 +155,7 @@ const SETTINGS_TILES = [
     relevance: 'always',
     section: 'household',
     scope: 'household',
-    allowedContexts: SETTINGS_CONTEXTS,
+    allowedContexts: HOUSEHOLD_SETTINGS_CONTEXTS,
     allowViewer: false,
   },
   {
