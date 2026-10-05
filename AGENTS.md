@@ -112,8 +112,13 @@ Voor scripts die de PO zelf lokaal moet uitvoeren gelden aanvullend de
 PO-werkafspraken uit `docs/project/CHATGPT-CODEX-WORKRULES.md`: voerbaar vanuit
 de repository-root, beginnen met `CLS`, opnieuw `CLS` vlak vóór relevante
 terugkoppeloutput, duidelijke gewone-taalmeldingen en geen onnodig handmatig
-verplaatsen/vervangen van bestanden door de PO. Leg geen persoonsgebonden
-absolute lokale paden vast in de publieke repository.
+verplaatsen/vervangen van bestanden door de PO. Voor normale lokale PR-tests is
+het daar vastgelegde bewezen patroon bindend: veilige branchselectie,
+`git merge --ff-only`, exacte head-SHA-controle en daarna de officiële
+`start.bat`-route; geen hard reset en geen zelfbedachte Docker-/Compose-/
+volume-/poortorchestratie om de normale runtime heen. Diagnosescripts zijn
+standaard read-only/fail-closed en gebruiken de bestaande repositoryconfiguratie.
+Leg geen persoonsgebonden absolute lokale paden vast in de publieke repository.
 
 ## 4. Harde domeincontracten
 
