@@ -63,14 +63,19 @@ jobs:
           --health-retries=20
 
     env:
-      DATABASE_URL: postgresql://rezzerv_app@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv
-      MIGRATION_DATABASE_URL: postgresql://rezzerv_migrator@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv
       RECEIPT_STORAGE_ROOT: /tmp/rezzerv-receipts/raw
       REZZERV_RECEIPT_STARTUP_REMBG_WARMUP: 'false'
       REZZERV_RECEIPT_STARTUP_PADDLE_WARMUP: 'false'
       REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'true'
 
     steps:
+      - name: Export isolated PostgreSQL connection
+        shell: bash
+        run: |
+          echo "POSTGRES_PORT=${{ job.services.postgres.ports[5432] }}" >> "$GITHUB_ENV"
+          echo "DATABASE_URL=postgresql://rezzerv_app@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv" >> "$GITHUB_ENV"
+          echo "MIGRATION_DATABASE_URL=postgresql://rezzerv_migrator@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -91,7 +96,7 @@ jobs:
 
       - name: Configure migration and runtime roles
         run: |
-          psql -h 127.0.0.1 -p ${{ job.services.postgres.ports[5432] }} -U postgres -d rezzerv -v ON_ERROR_STOP=1 <<'SQL'
+          psql -h 127.0.0.1 -p "$POSTGRES_PORT" -U postgres -d rezzerv -v ON_ERROR_STOP=1 <<'SQL'
           REVOKE CREATE ON SCHEMA public FROM PUBLIC;
           CREATE ROLE rezzerv_migrator LOGIN;
           CREATE ROLE rezzerv_app LOGIN;
@@ -190,11 +195,11 @@ jobs:
       - name: Prove runtime role has no schema CREATE privilege
         run: |
           for privilege in SELECT INSERT UPDATE DELETE; do
-            test "$(psql -h 127.0.0.1 -p ${{ job.services.postgres.ports[5432] }} -U postgres -d rezzerv -Atc "SELECT has_table_privilege('rezzerv_app', 'public.purchase_import_line_inventory_handling_overrides', '$privilege')")" = "t"
+            test "$(psql -h 127.0.0.1 -p "$POSTGRES_PORT" -U postgres -d rezzerv -Atc "SELECT has_table_privilege('rezzerv_app', 'public.purchase_import_line_inventory_handling_overrides', '$privilege')")" = "t"
           done
           echo 'POSTGRESQL_RUNTIME_DML_PRIVILEGES_RECONCILED_GREEN'
-          test "$(psql -h 127.0.0.1 -p ${{ job.services.postgres.ports[5432] }} -U postgres -d rezzerv -Atc "SELECT has_schema_privilege('rezzerv_app', 'public', 'CREATE')")" = "f"
-          if psql -h 127.0.0.1 -p ${{ job.services.postgres.ports[5432] }} -U rezzerv_app -d rezzerv -v ON_ERROR_STOP=1 -c 'CREATE TABLE runtime_ddl_should_fail(id integer)'; then
+          test "$(psql -h 127.0.0.1 -p "$POSTGRES_PORT" -U postgres -d rezzerv -Atc "SELECT has_schema_privilege('rezzerv_app', 'public', 'CREATE')")" = "f"
+          if psql -h 127.0.0.1 -p "$POSTGRES_PORT" -U rezzerv_app -d rezzerv -v ON_ERROR_STOP=1 -c 'CREATE TABLE runtime_ddl_should_fail(id integer)'; then
             echo 'Runtime role unexpectedly created a table' >&2
             exit 1
           fi
