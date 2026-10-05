@@ -3,6 +3,7 @@ import Table from './Table'
 import Pagination from './Pagination.jsx'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from './resizableTable.jsx'
 import { nextSortState, sortItems } from './sorting'
+import { useMobileAppViewport } from '../app/mobileViewport.js'
 
 function normalizeText(value) {
   return String(value ?? '').trim().toLowerCase()
@@ -59,6 +60,8 @@ export default function DataTable({
   pageSize = 10,
   paginationActions = null,
 }) {
+  const isMobileViewport = useMobileAppViewport()
+  const effectivePagination = Boolean(pagination || isMobileViewport)
   const visibleColumns = useMemo(() => columns.filter((column) => column && column.hidden !== true), [columns])
   const defaultWidths = useMemo(() => buildDefaultWidths(visibleColumns), [visibleColumns])
   const { widths, setColumnWidth } = useResizableColumnWidths(defaultWidths)
@@ -140,16 +143,16 @@ export default function DataTable({
   }, [filteredData, visibleColumns, activeSort])
 
   const normalizedPageSize = Math.max(Number(pageSize) || 10, 1)
-  const pageCount = pagination ? Math.max(Math.ceil(sortedData.length / normalizedPageSize), 1) : 1
+  const pageCount = effectivePagination ? Math.max(Math.ceil(sortedData.length / normalizedPageSize), 1) : 1
 
-  useEffect(() => { setPage(1) }, [activeFilters, activeSort, data, normalizedPageSize, pagination])
+  useEffect(() => { setPage(1) }, [activeFilters, activeSort, data, normalizedPageSize, effectivePagination])
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   const displayData = useMemo(() => {
-    if (!pagination) return sortedData
+    if (!effectivePagination) return sortedData
     const start = (page - 1) * normalizedPageSize
     return sortedData.slice(start, start + normalizedPageSize)
-  }, [pagination, sortedData, page, normalizedPageSize])
+  }, [effectivePagination, sortedData, page, normalizedPageSize])
 
   const wrapperClasses = ['rz-data-table-wrapper', wrapperClassName].filter(Boolean).join(' ')
   const tableClasses = [
@@ -251,7 +254,7 @@ export default function DataTable({
         </tbody>
         {typeof renderFooter === 'function' ? renderFooter({ columns: visibleColumns, data: displayData }) : null}
       </Table>
-      {(pagination || paginationActions) ? (
+      {(effectivePagination || paginationActions) ? (
         <div className="rz-data-table-controls">
           <span aria-hidden="true" />
           <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />

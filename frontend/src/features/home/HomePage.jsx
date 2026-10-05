@@ -166,7 +166,7 @@ export default function HomePage() {
     )
   }
 
-  if (!actionAvailability.ready) {
+  if (!actionAvailability.ready && !isMobileViewport) {
     return (
       <div className="rz-screen" data-testid="home-action-availability-loading">
         <Header title="Startpagina" />

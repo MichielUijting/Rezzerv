@@ -223,6 +223,22 @@ function ForecastChart({ values = [], onBarActivate = null }) {
   </div>
 }
 
+
+function EmptyDashboardChart() {
+  return <div className="rz-dashboard-comparison-chart" aria-label="Grafiek wordt opgebouwd" aria-busy="true">
+    <div className="rz-dashboard-y-axis" aria-hidden="true">
+      <span>–</span>
+      <span>–</span>
+      <span>0</span>
+    </div>
+    <div className="rz-dashboard-chart-plot">
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--top" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--mid" />
+      <div className="rz-dashboard-gridline rz-dashboard-gridline--base" />
+    </div>
+  </div>
+}
+
 export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fijn dat je er weer bent.' }) {
   const navigate = useNavigate()
   const [dashboard, setDashboard] = useState(null)
@@ -353,6 +369,14 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
     return cardOrder.map((key) => byKey.get(key)).filter(Boolean)
   }, [cards, cardOrder])
 
+  const loadingCards = useMemo(() => ([
+    { key: 'uitgaven-vorig-jaar', title: 'Uitgaven t.o.v. vorig jaar', value: '–', detail: 'Grafiek wordt opgebouwd', chart: <EmptyDashboardChart /> },
+    { key: 'uitgaven', title: 'Uitgaven', value: '–', detail: 'Grafiek wordt opgebouwd', chart: <EmptyDashboardChart /> },
+    { key: 'winkels', title: 'Bezochte winkels', value: '–', detail: 'Grafiek wordt opgebouwd', chart: <EmptyDashboardChart /> },
+    { key: 'begroting', title: 'Begrote uitgaven', value: '–', detail: 'Grafiek wordt opgebouwd', chart: <EmptyDashboardChart /> },
+  ]), [])
+  const visibleCards = dashboard ? orderedCards : loadingCards
+
   function moveCard(draggedKey, targetKey) {
     if (!draggedKey || !targetKey || draggedKey === targetKey) return
     setCardOrder((current) => {
@@ -460,8 +484,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
 
       {!dashboard && !error ? <p role="status">Dashboard inlezen.</p> : null}
 
-      {dashboard ? <>
-        <div className="rz-dashboard-period-switch" role="group" aria-label="Periode grafieken">
+      <div className="rz-dashboard-period-switch" role="group" aria-label="Periode grafieken">
           {PERIODS.map((item) => (
             <button
               key={item.key}
@@ -474,19 +497,20 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
               {item.label}
             </button>
           ))}
-        </div>
+      </div>
 
-        <section className="rz-dashboard-grid" aria-label="Huishoudoverzicht">
-          {orderedCards.map((card) => (
+      <section className="rz-dashboard-grid" aria-label="Huishoudoverzicht">
+          {visibleCards.map((card) => (
             <button
               type="button"
               key={card.key}
               className={'rz-dashboard-card' + (draggingKey === card.key ? ' is-dragging' : '')}
-              onClick={() => openCard(card)}
-              onPointerDown={(event) => handleCardPointerDown(event, card.key)}
-              onPointerMove={handleCardPointerMove}
-              onPointerUp={finishCardDrag}
-              onPointerCancel={cancelCardDrag}
+              onClick={() => dashboard && openCard(card)}
+              onPointerDown={dashboard ? (event) => handleCardPointerDown(event, card.key) : undefined}
+              onPointerMove={dashboard ? handleCardPointerMove : undefined}
+              onPointerUp={dashboard ? finishCardDrag : undefined}
+              onPointerCancel={dashboard ? cancelCardDrag : undefined}
+              aria-disabled={!dashboard}
               data-dashboard-card-key={card.key}
               data-testid={'dashboard-card-' + card.key}
             >
@@ -496,9 +520,9 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
               {card.chart}
             </button>
           ))}
-        </section>
+      </section>
 
-        <div className="rz-dashboard-shared-legend" aria-label="Legenda dashboardgrafieken">
+      {dashboard ? <div className="rz-dashboard-shared-legend" aria-label="Legenda dashboardgrafieken">
           <div className="rz-dashboard-legend">
             <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--current" />Huidige periode</span>
             <span><i className="rz-dashboard-legend-swatch rz-dashboard-legend-swatch--previous" />Vergelijkingsperiode</span>
@@ -511,8 +535,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
               </span>
             ))}
           </div> : null}
-        </div>
-      </> : null}
+      </div> : null}
     </section>
   </main>
 }

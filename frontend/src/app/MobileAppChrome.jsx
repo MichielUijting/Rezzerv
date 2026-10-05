@@ -25,16 +25,7 @@ import { useMobileAppViewport } from './mobileViewport.js'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import './mobileAppChrome.css'
 
-const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/meer', icon: 'menu' }
-
-function mobileNavIconType(key) {
-  if (key === 'meldingen') return 'bell'
-  if (key === 'voorraad') return 'inventory'
-  if (key === 'bijna-op') return 'clock'
-  if (key === 'winkelen') return 'cart'
-  if (key === 'kassabonnen' || key === 'kassa') return 'receipt'
-  return 'menu'
-}
+const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/meer', iconType: 'menu', showLabel: true }
 
 function activeActionKey(pathname = '') {
   const normalizedPath = String(pathname || '')
@@ -86,7 +77,8 @@ function MobileBottomNavigationRuntime({ context, pathname }) {
       key: tile.key,
       label: tile.label,
       route: ACTION_ROUTE_BY_KEY[tile.key],
-      icon: mobileNavIconType(tile.key),
+      icon: tile.icon,
+      showLabel: false,
     }))
     return [...selected, MORE_NAV_ITEM]
   }, [activeKey, availableActionTiles, context?.user_id])

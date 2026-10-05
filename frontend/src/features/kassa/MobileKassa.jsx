@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Button from '../../ui/Button'
 import Tabs from '../../ui/Tabs'
+import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import './mobileKassa.css'
@@ -386,6 +387,12 @@ export default function MobileKassa() {
 
   const lines = receiptLines(receipt)
   const activeLines = lines.filter((line) => !line.is_deleted)
+  const filteredReceipts = useMemo(
+    () => receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())),
+    [receipts, receiptFilter],
+  )
+  const receiptPagination = useMobilePagination(filteredReceipts, receiptFilter)
+  const linePagination = useMobilePagination(activeLines, receiptId(receipt))
   const lineSum = activeLines.reduce((sum, line) => sum + (Number(line.display_line_total ?? line.line_total) || 0), 0)
   const lineDiscount = activeLines.reduce((sum, line) => sum + (Number(line.discount_amount) || 0), 0)
   const receiptDiscount = Number(receipt?.discount_total_effective ?? receipt?.discount_total ?? 0) || 0
@@ -427,12 +434,12 @@ export default function MobileKassa() {
           <div className="rz-mobile-kassa-list-actions"><input type="file" accept="image/*,application/pdf" hidden ref={uploadRef} aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} /><Button type="button" variant="secondary" disabled={busy} onClick={() => uploadRef.current?.click()}>Bonbestand uploaden</Button><Button type="button" onClick={startCamera}>Nieuwe scan</Button></div>
           <input className="rz-mobile-kassa-search" aria-label="Zoek kassabonnen" placeholder="Zoek winkel of status" value={receiptFilter} onChange={(event) => setReceiptFilter(event.target.value)} />
           <div className="rz-mobile-kassa-bulk">
-            <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receipts.length > 0 && receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())).every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds(event.target.checked ? receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())).map(receiptId) : [])} /> Alles</label>
+            <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receiptPagination.pageItems.length > 0 && receiptPagination.pageItems.every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds(event.target.checked ? receiptPagination.pageItems.map(receiptId) : [])} /> Alles</label>
             <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
           </div>
           {receiptsLoading ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
           {receiptsLoadError ? <div className="rz-mobile-kassa-empty" role="alert">Kassabonnen konden niet worden geladen. <Button type="button" onClick={() => loadReceipts().catch(() => {})}>Opnieuw proberen</Button></div> : null}
-          {!receiptsLoading && !receiptsLoadError && receipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div> : receipts.filter((item) => `${item.store_name || ''} ${item.po_norm_status_label || item.inbox_status || ''}`.toLowerCase().includes(receiptFilter.toLowerCase())).map((item) => (
+          {!receiptsLoading && !receiptsLoadError && filteredReceipts.length === 0 ? <div className="rz-mobile-kassa-empty">Nog geen opgeslagen kassabonnen voor dit huishouden.</div> : receiptPagination.pageItems.map((item) => (
             <div key={receiptId(item)} className="rz-mobile-kassa-receipt-card">
               <label className="rz-mobile-kassa-select"><input type="checkbox" checked={selectedReceiptIds.includes(receiptId(item))} onChange={(event) => setSelectedReceiptIds((current) => event.target.checked ? [...current, receiptId(item)] : current.filter((id) => id !== receiptId(item)))} /> Selecteer bon</label>
               <button type="button" className="rz-mobile-kassa-open" onClick={() => openReceipt(receiptId(item))}>
@@ -442,6 +449,7 @@ export default function MobileKassa() {
               </button>
             </div>
           ))}
+          <MobilePaginationControls {...receiptPagination} ariaLabel="Paginering Bonnen" />
         </main>
       ) : null}
 
@@ -481,7 +489,7 @@ export default function MobileKassa() {
                     <Button type="button" disabled={busy} onClick={addReceiptLine}>Artikel opslaan</Button>
                   </div>
                 ) : null}
-                {lines.filter((line) => !line.is_deleted).map((line, index) => (
+                {linePagination.pageItems.map((line, index) => (
                   <div key={String(line.id || line.receipt_line_id || index)} className="rz-mobile-kassa-edit-line">
                     <label className="rz-mobile-kassa-select"><input type="checkbox" checked={selectedLineIds.includes(String(line.id || line.receipt_line_id))} onChange={(event) => setSelectedLineIds((current) => event.target.checked ? [...current, String(line.id || line.receipt_line_id)] : current.filter((id) => id !== String(line.id || line.receipt_line_id)))} /> Regel {index + 1}</label>
                     {[
@@ -495,6 +503,7 @@ export default function MobileKassa() {
                     ))}
                   </div>
                 ))}
+                <MobilePaginationControls {...linePagination} ariaLabel="Paginering Bonregels" />
                 <div className="rz-mobile-kassa-bulk">
                   <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={exportLines}>Exporteren</Button>
                   <Button type="button" variant="secondary" disabled={!selectedLineIds.length || busy} onClick={confirmDeleteLines}>Verwijderen</Button>
@@ -512,6 +521,7 @@ export default function MobileKassa() {
 }
 
 function ReceiptSummary({ receipt, lines, editable, onHeaderChange, onLineChange }) {
+  const summaryPagination = useMobilePagination(lines, receiptId(receipt))
   return (
     <section className="rz-mobile-kassa-summary">
       <div className="rz-mobile-kassa-receipt-head">
@@ -519,7 +529,7 @@ function ReceiptSummary({ receipt, lines, editable, onHeaderChange, onLineChange
         <span>{dateLabel(receipt.purchase_at)} · {money(receipt.total_amount, receipt.currency)}</span>
       </div>
       <div className="rz-mobile-kassa-lines">
-        {lines.length === 0 ? <div>Geen artikelregels herkend.</div> : lines.map((line, index) => {
+        {lines.length === 0 ? <div>Geen artikelregels herkend.</div> : summaryPagination.pageItems.map((line, index) => {
           const id = String(line?.id || line?.receipt_line_id || index)
           const name = line.normalized_label || line.display_label || line.article_name || line.raw_label || 'Onbekend artikel'
           return (
@@ -531,6 +541,7 @@ function ReceiptSummary({ receipt, lines, editable, onHeaderChange, onLineChange
           )
         })}
       </div>
+      <MobilePaginationControls {...summaryPagination} ariaLabel="Paginering Bonregels" />
     </section>
   )
 }

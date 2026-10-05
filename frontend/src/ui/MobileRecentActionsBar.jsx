@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import './mobileComponents.css'
 
-function MobileActionIcon({ type }) {
+function MobileActionIcon({ type, icon }) {
+  if (icon) return <span className="rz-mobile-action-bar-desktop-icon" aria-hidden="true">{icon}</span>
   if (type === 'bell') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -67,12 +68,13 @@ export default function MobileRecentActionsBar({
         <Link
           key={item.key}
           to={item.route}
-          className="rz-mobile-action-bar-item"
+          className={`rz-mobile-action-bar-item${item.showLabel ? '' : ' rz-mobile-action-bar-item--icon-only'}`}
+          aria-label={item.label}
           data-testid={`${testId}-${item.key}`}
           onClick={() => onAction?.(item)}
         >
-          <span className="rz-mobile-action-bar-icon"><MobileActionIcon type={item.icon} /></span>
-          <span>{item.label}</span>
+          <span className="rz-mobile-action-bar-icon"><MobileActionIcon type={item.iconType} icon={item.icon} /></span>
+          {item.showLabel ? <span>{item.label}</span> : null}
         </Link>
       ))}
     </nav>

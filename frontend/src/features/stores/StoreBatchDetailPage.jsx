@@ -9,6 +9,7 @@ import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Select from '../../ui/Select.jsx'
+import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
 import {
@@ -1842,6 +1843,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     })
   }, [filteredLineUiStates, tableSort, locationOptions, articleGroupOptions, isMobileViewport])
 
+  const mobileLinePagination = useMobilePagination(
+    visibleLineUiStates,
+    [searchValue, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, tableSort.key, tableSort.direction].join('|'),
+  )
+  const renderedLineUiStates = isMobileViewport ? mobileLinePagination.pageItems : visibleLineUiStates
+
   const activeDetailEntry = useMemo(() => (
     lineUiStates.find((entry) => String(entry.line.id) === String(receiptLineId || activeDetailLineId))
       || null
@@ -1915,7 +1922,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }
 
   function toggleSelectAllVisible() {
-    const visibleIds = visibleLineUiStates.map((entry) => entry.line.id)
+    const visibleIds = renderedLineUiStates.map((entry) => entry.line.id)
     const visibleIdSet = new Set(visibleIds)
     const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedLineIds.includes(id))
     setSelectedLineIds((current) => {
@@ -1928,7 +1935,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
 
 
-  const allVisibleSelected = visibleLineUiStates.length > 0 && visibleLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
+  const allVisibleSelected = renderedLineUiStates.length > 0 && renderedLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
 
   const tabContent = {
     Bonregels: (
@@ -1976,9 +1983,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 </tr>
               </thead>
               <tbody>
-                {visibleLineUiStates.length === 0 ? (
+                {renderedLineUiStates.length === 0 ? (
                   <tr><td colSpan={5}>Geen open bonregels in deze selectie.</td></tr>
-                ) : visibleLineUiStates.map((entry) => {
+                ) : renderedLineUiStates.map((entry) => {
                   const { line } = entry
                   const selected = entry.isSelected
                   const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : ''].filter(Boolean).join(' ')
@@ -2086,6 +2093,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 })}
               </tbody>
             </Table>
+            {isMobileViewport ? <MobilePaginationControls {...mobileLinePagination} ariaLabel="Paginering Bonregels Uitpakken" /> : null}
 
           </>) : null}
 

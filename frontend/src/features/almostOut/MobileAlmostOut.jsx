@@ -4,6 +4,7 @@ import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Button from '../../ui/Button'
 import Select from '../../ui/Select.jsx'
 import CatalogArticleThumbnail from '../../ui/CatalogArticleThumbnail.jsx'
+import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
 import {
   buildMobileAlmostOutRows,
@@ -101,6 +102,10 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
     })
   }, [locationFilter, locationTrackingEnabled, query, rows, sortKey])
 
+  const almostOutPagination = useMobilePagination(
+    filteredRows,
+    [query, locationFilter, sortKey, locationTrackingEnabled].join('|'),
+  )
   const hasActiveFilters = Boolean(query || (locationTrackingEnabled && locationFilter))
 
   function clearFilters() {
@@ -193,7 +198,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
 
         {!error && filteredRows.length > 0 ? (
           <section className="rz-mobile-inventory-list" aria-label="Bijna-op-artikelen">
-            {filteredRows.map((row) => {
+            {almostOutPagination.pageItems.map((row) => {
               const title = row.householdName || row.primaryName
               const contextParts = []
               if (row.productName && row.productName !== title) contextParts.push(row.productName)
@@ -254,6 +259,7 @@ export default function MobileAlmostOut({ locationTrackingEnabled = true }) {
             })}
           </section>
         ) : null}
+        <MobilePaginationControls {...almostOutPagination} ariaLabel="Paginering Bijna op" />
       </main>
     </div>
   )
