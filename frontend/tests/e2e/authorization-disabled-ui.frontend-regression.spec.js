@@ -28,7 +28,7 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
       }),
     })
   })
-  await page.route('**/api/session/households', async (route) => {
+  await page.route(/\/api\/session\/households(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
