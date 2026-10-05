@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import logging
 import os
 import secrets
 from threading import RLock
@@ -50,6 +51,7 @@ class _AHProxyPathConvertor(Convertor):
 
 register_url_convertor("ahproxy", _AHProxyPathConvertor())
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _FLOW_COOKIE = "inhuis_ah_oauth_flow"
 _FLOW_TTL = timedelta(minutes=5)
@@ -337,15 +339,37 @@ async def proxy_ah_login(path: str, request: Request):
     headers = build_ah_forward_headers(request, backend_origin=flow.backend_origin)
 
     body = await request.body()
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
-        upstream = await client.request(
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            upstream = await client.request(
+                request.method,
+                upstream_url,
+                headers=headers,
+                content=body if body else None,
+            )
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "AH OAuth proxy request failed: method=%s path=/%s error=%s",
             request.method,
-            upstream_url,
-            headers=headers,
-            content=body if body else None,
+            path,
+            type(exc).__name__,
         )
+        raise
 
     content_type = str(upstream.headers.get("content-type") or "")
+    location = str(upstream.headers.get("location") or "")
+    location_parsed = urlparse(location) if location else None
+    location_summary = ""
+    if location_parsed is not None:
+        location_summary = f"{location_parsed.scheme}://{location_parsed.netloc}{location_parsed.path}"
+    logger.info(
+        "AH OAuth proxy response: method=%s path=/%s status=%s content_type=%s location=%s",
+        request.method,
+        path,
+        upstream.status_code,
+        content_type.split(";", 1)[0],
+        location_summary,
+    )
     payload = upstream.content
     if any(marker in content_type.lower() for marker in ("text/html", "javascript", "json")):
         payload = rewrite_ah_oauth_body(payload, backend_origin=flow.backend_origin)
