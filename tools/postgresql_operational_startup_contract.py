@@ -123,7 +123,7 @@ def main() -> None:
             "backend port rehearsal override",
         ),
         (
-            'if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=90"',
+            'if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=300"',
             "startup wait rehearsal override",
         ),
         ('if /I "%REZZERV_STARTUP_NO_BROWSER%"=="1"', "browser suppression"),
