@@ -78,8 +78,8 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
     The receipt objects rebuilt at 20260830_02, the password-reset table at
     20260902_01, the receipt quantity-column rebuilds at 20260903_01, the
     inventory quantity-column rebuilds at 20260908_01, the Startpagina action
-    order table at 20260915_01 and the household profile/resident schema at
-    20261005_01 are migration-owned extensions to the immutable SQLite baseline. Their contracts are validated semantically below. Every
+    order table at 20260915_01 and the current household profile/resident schema
+    are migration-owned extensions to the immutable SQLite baseline. Their contracts are validated semantically below. Every
     unrelated schema block remains in the immutable byte comparison.
     """
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
