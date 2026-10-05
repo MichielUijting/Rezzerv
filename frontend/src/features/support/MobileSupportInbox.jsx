@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
+import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import { createHouseholdThread, listHouseholdThreads, listHouseholdNotifications, markHouseholdNotificationRead } from './supportApi.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
 import { canCurrentUserPerform } from '../../lib/authSession.js'
@@ -58,6 +59,7 @@ export default function MobileSupportInbox({ onOpenThread, authContext = null })
       .sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
   }, [filter, notifications, threads])
 
+  const notificationPagination = useMobilePagination(items, filter)
   const unreadCount = notifications.filter((item) => !item.read_at).length
 
   async function submitNew(event) {
@@ -100,7 +102,7 @@ export default function MobileSupportInbox({ onOpenThread, authContext = null })
         </div>
         {error ? <p role="status">{error}</p> : null}
         <div className="rz-mobile-support-list">
-          {items.map((item) => (
+          {notificationPagination.pageItems.map((item) => (
             <button key={item.id} type="button" className={'rz-mobile-support-card rz-mobile-support-card--' + (item.severity || 'message')} onClick={() => openItem(item)}>
               <span className="rz-mobile-support-meta">{item.kind === 'messages' ? 'BERICHT · ' : 'INHUIS · '}{String(item.category).toUpperCase()} · {stamp(item.createdAt)}</span>
               <span className="rz-mobile-support-title">{item.title}{item.unread ? <i aria-label="Ongelezen" /> : null}</span>
@@ -110,6 +112,7 @@ export default function MobileSupportInbox({ onOpenThread, authContext = null })
           ))}
           {!items.length ? <div className="rz-mobile-support-empty"><strong>Geen nieuwe meldingen</strong><span>Alles is op dit moment bijgewerkt.</span></div> : null}
         </div>
+        <MobilePaginationControls {...notificationPagination} ariaLabel="Paginering Meldingen" />
       </main>
     </div>
   )
