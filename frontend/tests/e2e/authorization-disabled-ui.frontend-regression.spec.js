@@ -28,6 +28,22 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
       }),
     })
   })
+  await page.route('**/api/session/households', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        active_household_id: HOUSEHOLD_ID,
+        items: [{
+          household_id: HOUSEHOLD_ID,
+          household_name: 'Testhuishouden',
+          context_type: 'regular',
+          role: displayRole,
+          display_role: displayRole,
+        }],
+      }),
+    })
+  })
   await page.route('**/api/onboarding', async (route) => {
     await route.fulfill({
       status: 200,
