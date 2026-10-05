@@ -20,13 +20,13 @@ assert.deepEqual(
   SETTINGS_SECTIONS.map((section) => section.key),
   ['account', 'household', 'usage', 'help'],
 )
-assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
+assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
 assert.equal(SETTINGS_TILES.length, 15)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
-  assert.ok(['personal', 'household', 'platform'].includes(tile.scope))
-  assert.deepEqual(tile.allowedContexts, tile.key === 'frontteam' ? ['system'] : ['regular', 'system'])
+  assert.ok(['personal', 'household'].includes(tile.scope))
+  assert.deepEqual(tile.allowedContexts, ['regular'])
   assert.equal(typeof tile.allowViewer, 'boolean')
 }
 
@@ -49,6 +49,7 @@ for (const tile of SETTINGS_TILES) {
     'locations',
     'store-import',
     'store-connections',
+    'household-profile',
     'household',
     'authorizations',
     'household-automation',
@@ -57,7 +58,7 @@ for (const tile of SETTINGS_TILES) {
   ])
   assert.deepEqual(sectionKeys(navigation), {
     account: ['accessibility', 'account', 'article-details', 'privacy-data-sharing'],
-    household: ['household', 'authorizations'],
+    household: ['household-profile', 'household', 'authorizations'],
     usage: [
       'capabilities',
       'article-groups',
@@ -94,6 +95,7 @@ for (const tile of SETTINGS_TILES) {
     'privacy-data-sharing',
     'store-import',
     'store-connections',
+    'household-profile',
     'household',
     'authorizations',
     'household-automation',
@@ -102,7 +104,7 @@ for (const tile of SETTINGS_TILES) {
   ])
   assert.deepEqual(sectionKeys(navigation), {
     account: ['accessibility', 'account', 'article-details', 'privacy-data-sharing'],
-    household: ['household', 'authorizations'],
+    household: ['household-profile', 'household', 'authorizations'],
     usage: ['capabilities', 'article-groups', 'store-import', 'store-connections', 'household-automation', 'almost-out'],
     help: ['help-about'],
   })
@@ -128,6 +130,7 @@ for (const tile of SETTINGS_TILES) {
     'privacy-data-sharing',
     'store-import',
     'store-connections',
+    'household-profile',
     'household',
     'authorizations',
     'help-about',
@@ -155,6 +158,7 @@ for (const tile of SETTINGS_TILES) {
     'article-groups',
     'privacy-data-sharing',
     'locations',
+    'household-profile',
     'household',
     'authorizations',
     'household-automation',
@@ -187,6 +191,7 @@ for (const tile of SETTINGS_TILES) {
     'locations',
     'store-import',
     'store-connections',
+    'household-profile',
     'household',
     'authorizations',
     'almost-out',
@@ -207,8 +212,8 @@ for (const tile of SETTINGS_TILES) {
     contextType: 'system',
     onboarding: null,
   })
-  assert.ok(keys(systemNavigation).includes('frontteam'))
-  assert.equal(systemNavigation.tiles.find((tile) => tile.key === 'frontteam')?.permission, 'platform.frontteam_roles.manage')
+  assert.deepEqual(keys(systemNavigation), [])
+  assert.equal(systemNavigation.tiles.find((tile) => tile.key === 'frontteam'), undefined)
 }
 
 console.log('DYNAMIC_SETTINGS_NAVIGATION_CONTRACT_GREEN')
