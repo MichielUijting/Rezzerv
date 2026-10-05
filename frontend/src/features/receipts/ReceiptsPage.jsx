@@ -11,6 +11,7 @@ import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { useMobileAppViewport } from '../../app/mobileViewport.js'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
+import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import './mobileReceipts.css'
 
 export default function ReceiptsPage() {
@@ -130,8 +131,8 @@ export default function ReceiptsPage() {
   }
 
   function toggleSelectAllVisible() {
-    if (!listItems.length) return
-    const visibleIds = listItems.map((item) => item.batch_id)
+    if (!mobileVisibleItems.length) return
+    const visibleIds = mobileVisibleItems.map((item) => item.batch_id)
     const allVisibleSelected = visibleIds.every((id) => selectedBatchIds.includes(id))
     setSelectedBatchIds(allVisibleSelected ? [] : visibleIds)
   }
@@ -206,7 +207,12 @@ export default function ReceiptsPage() {
     }
   }
 
-  const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedBatchIds.includes(item.batch_id))
+  const mobileReceiptPagination = useMobilePagination(
+    listItems,
+    [filters.winkel, filters.datum, filters.status, tableSort.key, tableSort.direction].join('|'),
+  )
+  const mobileVisibleItems = isMobileViewport ? mobileReceiptPagination.pageItems : listItems
+  const allVisibleSelected = mobileVisibleItems.length > 0 && mobileVisibleItems.every((item) => selectedBatchIds.includes(item.batch_id))
 
   if (isMobileViewport) {
     return (
@@ -239,7 +245,7 @@ export default function ReceiptsPage() {
 
           {!isLoading && !hasLoadError && listItems.length > 0 ? (
             <div className="rz-mobile-inventory-list rz-mobile-unpack-list">
-              {listItems.map((item) => {
+              {mobileVisibleItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
                 return (
                   <div key={item.batch_id} className={`rz-mobile-inventory-card rz-mobile-unpack-card${selected ? ' rz-mobile-unpack-card--selected' : ''}`} data-testid={`mobile-receipt-batch-${item.batch_id}`} onClick={() => navigate(`/kassabonnen/batch/${encodeURIComponent(item.batch_id)}`)}>
@@ -256,6 +262,7 @@ export default function ReceiptsPage() {
               })}
             </div>
           ) : null}
+          <MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" />
 
           {selectedBatchIds.length > 0 ? (
             <div className="rz-mobile-unpack-actions">
