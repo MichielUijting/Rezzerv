@@ -13,7 +13,7 @@
 
 .rz-mobile-app-bottom-space {
   display: block;
-  height: calc(64px + env(safe-area-inset-bottom));
+  height: calc(84px + env(safe-area-inset-bottom));
   pointer-events: none;
 }
 
