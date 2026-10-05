@@ -11,7 +11,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.db import engine
-from app.api.ah_oauth_proxy_routes import (
+from app.api.receipt_ah_oauth_proxy_routes import (
     build_ah_oauth_launch_url,
     create_ah_oauth_flow,
 )
