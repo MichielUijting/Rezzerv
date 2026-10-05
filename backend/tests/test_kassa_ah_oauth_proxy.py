@@ -4,6 +4,7 @@ import asyncio
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import Request
+from starlette.routing import Match
 
 from app.api import receipt_ah_oauth_proxy_routes as oauth
 from app.integrations.retailer_accounts.ah import AHAccountSession
@@ -79,6 +80,32 @@ def test_launch_sets_short_lived_httponly_flow_cookie(monkeypatch) -> None:
     assert "inhuis_ah_oauth_flow=" in cookie
     assert "httponly" in cookie
     assert "samesite=lax" in cookie
+
+
+def test_proxy_route_never_matches_inhuis_api_or_control_paths() -> None:
+    proxy_route = next(
+        route for route in oauth.router.routes
+        if getattr(route, "path", "") == "/{path:ahproxy}"
+    )
+
+    def match_for(path: str) -> Match:
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "root_path": "",
+            "headers": [],
+        }
+        return proxy_route.matches(scope)[0]
+
+    assert match_for("/login") == Match.FULL
+    assert match_for("/assets/app.js") == Match.FULL
+    assert match_for("/api/auth/login") == Match.NONE
+    assert match_for("/api/auth/register") == Match.NONE
+    assert match_for("/api/platform/primary-color") == Match.NONE
+    assert match_for("/ah-oauth/callback") == Match.NONE
+    assert match_for("/openapi.json") == Match.NONE
+    assert match_for("/docs") == Match.NONE
 
 
 def test_proxy_rewrites_appie_callback_and_sanitizes_login_cookie() -> None:
