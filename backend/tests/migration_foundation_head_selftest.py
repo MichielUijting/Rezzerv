@@ -16,13 +16,15 @@ from app.alembic_head_authority import repository_head_revision
 
 
 HEAD_REVISION = repository_head_revision()
-EXPECTED_POSTGRESQL_APPLICATION_TABLES = 93
+EXPECTED_POSTGRESQL_APPLICATION_TABLES = 95
 PASSWORD_RESET_TABLE = "account_password_reset_tokens"
 HOME_ACTION_ORDER_TABLE = "platform_home_action_order"
 HOME_SETTINGS_TABLE = "platform_home_settings"
 HOUSEHOLD_NOTIFICATIONS_TABLE = "household_notifications"
 FRONTTEAM_MEMBERSHIP_TABLE = "frontteam_memberships"
 RETAILER_ACCOUNT_CREDENTIALS_TABLE = "retailer_account_credentials"
+HOUSEHOLD_PROFILE_TABLE = "household_profiles"
+HOUSEHOLD_RESIDENT_TABLE = "household_residents"
 RECEIPT_HOUSEHOLD_TABLES = ("receipt_sources", "raw_receipts", "receipt_tables")
 MANUAL_SOURCE_TRIGGER = "trg_raw_receipts_ensure_manual_source"
 QUANTITY_CONTRACT_TABLES = ("purchase_import_lines", "receipt_table_lines")
@@ -36,6 +38,8 @@ _SQLITE_HEAD_EXTENSION_TABLES = {
     HOUSEHOLD_NOTIFICATIONS_TABLE,
     FRONTTEAM_MEMBERSHIP_TABLE,
     RETAILER_ACCOUNT_CREDENTIALS_TABLE,
+    HOUSEHOLD_PROFILE_TABLE,
+    HOUSEHOLD_RESIDENT_TABLE,
     *QUANTITY_CONTRACT_TABLES,
     *INVENTORY_QUANTITY_CONTRACT_TABLES,
 }
@@ -73,9 +77,9 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
 
     The receipt objects rebuilt at 20260830_02, the password-reset table at
     20260902_01, the receipt quantity-column rebuilds at 20260903_01, the
-    inventory quantity-column rebuilds at 20260908_01 and the Startpagina action
-    order table at 20260915_01 are migration-owned extensions to the immutable
-    SQLite baseline. Their contracts are validated semantically below. Every
+    inventory quantity-column rebuilds at 20260908_01, the Startpagina action
+    order table at 20260915_01 and the current household profile/resident schema
+    are migration-owned extensions to the immutable SQLite baseline. Their contracts are validated semantically below. Every
     unrelated schema block remains in the immutable byte comparison.
     """
     blocks = [block for block in schema.rstrip().split("\n\n") if block.strip()]
@@ -84,6 +88,19 @@ def _remove_locked_sqlite_head_extensions(schema: str) -> str:
         header = block.splitlines()[0].strip()
         if any(f"(table={table_name})" in header for table_name in _SQLITE_HEAD_EXTENSION_TABLES):
             continue
+        if "(table=app_users)" in header:
+            block = re.sub(
+                r",\s*display_name\s+TEXT(?=\s*\))",
+                "",
+                block,
+                flags=re.IGNORECASE,
+            )
+            block = re.sub(
+                r"display_name\s+TEXT\s*,",
+                "",
+                block,
+                flags=re.IGNORECASE,
+            )
         if "(table=global_products)" in header or "(table=external_product_candidates)" in header:
             block = re.sub(
                 r",\s*image_url\s+TEXT(?=\s*\))",
@@ -485,6 +502,117 @@ def _assert_home_action_order_authority(connection) -> None:
         print("SQLITE_HOME_ACTION_ORDER_SCHEMA_AUTHORITY_GREEN")
 
 
+
+def _assert_household_profile_schema(connection) -> None:
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    for table_name in (HOUSEHOLD_PROFILE_TABLE, HOUSEHOLD_RESIDENT_TABLE):
+        if table_name not in tables:
+            raise AssertionError(f"Alembic head is missing {table_name}")
+
+    app_user_columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns("app_users")
+    }
+    display_name = app_user_columns.get("display_name")
+    if display_name is None:
+        raise AssertionError("app_users.display_name is missing")
+    if not isinstance(display_name["type"], sa.Text):
+        raise AssertionError(
+            f"app_users.display_name must be TEXT, got {display_name['type']}"
+        )
+    if not bool(display_name.get("nullable")):
+        raise AssertionError("app_users.display_name must remain nullable")
+
+    profile_columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns(HOUSEHOLD_PROFILE_TABLE)
+    }
+    expected_profile_columns = {
+        "household_id",
+        "street",
+        "house_number",
+        "house_number_addition",
+        "postal_code",
+        "city",
+        "country_code",
+        "preferred_stores_json",
+        "shopping_interval_days",
+        "default_reserve_days",
+        "created_at",
+        "updated_at",
+    }
+    missing_profile = expected_profile_columns - set(profile_columns)
+    if missing_profile:
+        raise AssertionError(
+            f"{HOUSEHOLD_PROFILE_TABLE} missing columns: {sorted(missing_profile)}"
+        )
+    if tuple(
+        inspector.get_pk_constraint(HOUSEHOLD_PROFILE_TABLE).get("constrained_columns") or ()
+    ) != ("household_id",):
+        raise AssertionError(f"{HOUSEHOLD_PROFILE_TABLE} primary key drift")
+
+    resident_columns = {
+        str(item.get("name") or ""): item
+        for item in inspector.get_columns(HOUSEHOLD_RESIDENT_TABLE)
+    }
+    expected_resident_columns = {
+        "id",
+        "household_id",
+        "first_name",
+        "last_name",
+        "resident_type",
+        "birth_date",
+        "age_band",
+        "linked_user_id",
+        "created_at",
+        "updated_at",
+    }
+    missing_resident = expected_resident_columns - set(resident_columns)
+    if missing_resident:
+        raise AssertionError(
+            f"{HOUSEHOLD_RESIDENT_TABLE} missing columns: {sorted(missing_resident)}"
+        )
+    if tuple(
+        inspector.get_pk_constraint(HOUSEHOLD_RESIDENT_TABLE).get("constrained_columns") or ()
+    ) != ("id",):
+        raise AssertionError(f"{HOUSEHOLD_RESIDENT_TABLE} primary key drift")
+
+    indexes = {
+        str(index.get("name") or ""): index
+        for index in inspector.get_indexes(HOUSEHOLD_RESIDENT_TABLE)
+    }
+    household_index = indexes.get("ix_household_residents_household")
+    if (
+        household_index is None
+        or bool(household_index.get("unique"))
+        or tuple(household_index.get("column_names") or ()) != ("household_id",)
+    ):
+        raise AssertionError("Invalid ix_household_residents_household")
+
+    linked_index = indexes.get("uq_household_resident_linked_user")
+    if (
+        linked_index is None
+        or not bool(linked_index.get("unique"))
+        or tuple(linked_index.get("column_names") or ()) != ("household_id", "linked_user_id")
+    ):
+        raise AssertionError("Invalid uq_household_resident_linked_user")
+
+    if connection.dialect.name == "sqlite":
+        linked_sql = connection.execute(text(
+            "SELECT sql FROM sqlite_master "
+            "WHERE type='index' AND name='uq_household_resident_linked_user'"
+        )).scalar_one_or_none()
+        normalized = " ".join(str(linked_sql or "").lower().split())
+        if "linked_user_id is not null" not in normalized:
+            raise AssertionError(
+                "SQLite uq_household_resident_linked_user must remain partial on linked_user_id IS NOT NULL"
+            )
+        print("SQLITE_HOUSEHOLD_PROFILE_SCHEMA_GREEN")
+    else:
+        print("POSTGRESQL_HOUSEHOLD_PROFILE_SCHEMA_GREEN")
+
+
 def main() -> None:
     foundation_test.HEAD_REVISION = HEAD_REVISION
     foundation_test.EXPECTED_POSTGRESQL_APPLICATION_TABLES = EXPECTED_POSTGRESQL_APPLICATION_TABLES
@@ -505,6 +633,7 @@ def main() -> None:
             _assert_home_action_order_authority(connection)
             _assert_catalog_image_authority(connection)
             _assert_household_representative_image_authority(connection)
+            _assert_household_profile_schema(connection)
     finally:
         engine.dispose()
 

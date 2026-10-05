@@ -8,6 +8,7 @@ const memberServiceSource = fs.readFileSync(path.join(settingsRoot, 'services/ho
 const invitationServiceSource = fs.readFileSync(path.join(settingsRoot, 'services/householdInvitationsService.js'), 'utf8')
 
 const checks = [
+  ['users_roles_heading', pageSource.includes('Gebruikers &amp; rollen')],
   ['invitation_heading', pageSource.includes('Gebruiker uitnodigen')],
   ['email_only_copy', pageSource.includes('Vul alleen het e-mailadres in.')],
   ['invitation_submit', pageSource.includes('Uitnodiging versturen')],

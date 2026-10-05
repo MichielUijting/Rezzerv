@@ -296,8 +296,8 @@ export default function SettingsHouseholdPage() {
           <div className="rz-household-layout">
             <div className="rz-household-header">
               <div>
-                <h2 className="rz-household-title">Huishouden</h2>
-                <p className="rz-household-subtitle">Beheer de naam, gekoppelde gebruikers en hun rol binnen het huishouden.</p>
+                <h2 className="rz-household-title">Gebruikers &amp; rollen</h2>
+                <p className="rz-household-subtitle">Beheer de naam, gekoppelde gebruikers, uitnodigingen en hun rol binnen het huishouden.</p>
                 <p className="rz-household-summary">{householdSummary}</p>
                 {!isLoading && !isAdmin ? <p className="rz-household-warning">Alleen een Beheerder kan de huishoudnaam, gebruikers en rollen wijzigen.</p> : null}
               </div>

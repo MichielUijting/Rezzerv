@@ -1,5 +1,4 @@
 export const DEFAULT_PRIMARY_COLOR = '#005F6A'
-export const PRIMARY_COLOR_STORAGE_KEY = 'inhuis.ui.primary-color'
 
 const PRIMARY_COLOR_TOKENS = [
   '--color-brand-primary',
@@ -43,17 +42,25 @@ export function applyPrimaryColorPreference(value) {
 }
 
 export function readPrimaryColorPreference() {
-  if (typeof window === 'undefined') return DEFAULT_PRIMARY_COLOR
-  try {
-    const stored = normalizePrimaryColor(window.localStorage.getItem(PRIMARY_COLOR_STORAGE_KEY))
-    return stored && isReadablePrimaryColor(stored) ? stored : DEFAULT_PRIMARY_COLOR
-  } catch {
-    return DEFAULT_PRIMARY_COLOR
-  }
+  if (typeof document === 'undefined') return DEFAULT_PRIMARY_COLOR
+  return normalizePrimaryColor(document.documentElement.dataset.inhuisPrimaryColor) || DEFAULT_PRIMARY_COLOR
 }
 
 export function initializePrimaryColorPreference() {
-  return applyPrimaryColorPreference(readPrimaryColorPreference())
+  const initial = applyPrimaryColorPreference(DEFAULT_PRIMARY_COLOR)
+  if (typeof fetch !== 'undefined') {
+    fetch('/api/platform/primary-color', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        const color = normalizePrimaryColor(payload?.primary_color)
+        if (color && isReadablePrimaryColor(color)) applyPrimaryColorPreference(color)
+      })
+      .catch(() => {})
+  }
+  return initial
 }
 
 export function writePrimaryColorPreference(value) {
@@ -62,19 +69,9 @@ export function writePrimaryColorPreference(value) {
   if (!isReadablePrimaryColor(color)) {
     throw new Error('Kies een donkerdere kleur zodat witte tekst goed leesbaar blijft.')
   }
-  try {
-    window.localStorage.setItem(PRIMARY_COLOR_STORAGE_KEY, color)
-  } catch {
-    throw new Error('De kleurvoorkeur kon niet op dit apparaat worden opgeslagen.')
-  }
   return applyPrimaryColorPreference(color)
 }
 
 export function resetPrimaryColorPreference() {
-  try {
-    window.localStorage.removeItem(PRIMARY_COLOR_STORAGE_KEY)
-  } catch {
-    // De standaardkleur kan ook zonder opslag direct worden toegepast.
-  }
   return applyPrimaryColorPreference(DEFAULT_PRIMARY_COLOR)
 }

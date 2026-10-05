@@ -28,6 +28,7 @@ jobs:
         run: |
           TEST_PASSWORD="Rt$(cat /proc/sys/kernel/random/uuid | tr -d '-')"
           echo "REZZERV_SUPERGEBRUIKER_PASSWORD=$TEST_PASSWORD" >> "$GITHUB_ENV"
+          echo "REZZERV_TEST_SUPERUSER_PASSWORD=$TEST_PASSWORD" >> "$GITHUB_ENV"
           echo "PLAYWRIGHT_TEST_ADMIN_PASSWORD=$TEST_PASSWORD" >> "$GITHUB_ENV"
       - name: Build application images
         run: docker compose build backend frontend

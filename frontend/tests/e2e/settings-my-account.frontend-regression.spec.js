@@ -27,6 +27,29 @@ async function seedRegularAccountSession(page) {
       }),
     })
   })
+  await page.route('**/api/account/profile', async (route) => {
+    if (route.request().method() === 'PUT') {
+      const payload = await route.request().postDataJSON()
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          email: 'account@example.com',
+          display_name: payload?.display_name || 'Account gebruiker',
+          message: 'Naam opgeslagen.',
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        email: 'account@example.com',
+        display_name: 'Account gebruiker',
+      }),
+    })
+  })
   await page.route('**/api/onboarding', async (route) => {
     await route.fulfill({
       status: 200,

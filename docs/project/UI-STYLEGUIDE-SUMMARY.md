@@ -131,6 +131,18 @@ Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele 
 
 Andere mobiele kernschermen worden niet stilzwijgend meegewijzigd. Totdat zij expliciet worden gemigreerd mogen zij tijdelijk nog de eerdere visuele shell gebruiken. Nieuwe of aangepaste tests borgen de actuele groene wallpaper, maar mogen blur, individuele zwevende schaduwcards of de oude sticky CTA niet opnieuw afdwingen.
 
+
+## Platformbrede primaire Inhuis-kleur vanaf 5 oktober 2026
+
+De primaire Inhuis-kleur is een **platformbrede functionele weergave-instelling** en geen persoonlijke apparaatvoorkeur.
+
+- de standaardkleur blijft `#005F6A`;
+- alleen een bevoegde **Superuser** kan de primaire kleur wijzigen of naar de standaard terugzetten;
+- de ingestelde kleur geldt voor alle gebruikers en apparaten via de centrale primaire kleurtokens en wordt bij het laden centraal toegepast;
+- een aangepaste kleur moet voldoende contrast met witte tekst behouden; minimaal WCAG-contrastverhouding 4,5:1;
+- gewone huishoudinstellingen tonen geen eigen primaire-kleurkiezer;
+- deze platforminstelling wijzigt geen autorisatie-, huishoud- of functionele domeingrenzen.
+
 ## Ontwerpprincipes
 
 Inhuis is:

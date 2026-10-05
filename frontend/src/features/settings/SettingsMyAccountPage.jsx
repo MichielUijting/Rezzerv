@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
-import { apiPost } from '../../lib/apiClient.js'
+import { API_BASE_URL, apiPost } from '../../lib/apiClient.js'
 import { logoutServerSession, readStoredAuthContext } from '../../lib/authSession.js'
 
 export default function SettingsMyAccountPage() {
   const context = readStoredAuthContext()
+  const [displayName, setDisplayName] = useState('')
+  const [isProfileSaving, setIsProfileSaving] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [newPasswordRepeat, setNewPasswordRepeat] = useState('')
@@ -15,6 +17,42 @@ export default function SettingsMyAccountPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    fetch(`${API_BASE_URL}/api/account/profile`, { credentials: 'include', headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload?.detail || 'Accountprofiel kon niet worden geladen.')
+        if (active) setDisplayName(String(payload?.display_name || ''))
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError?.message || 'Accountprofiel kon niet worden geladen.')
+      })
+    return () => { active = false }
+  }, [])
+
+  async function saveProfile(event) {
+    event.preventDefault()
+    clearFeedback()
+    setIsProfileSaving(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/account/profile`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ display_name: displayName }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload?.detail || 'Naam opslaan mislukt.')
+      setDisplayName(String(payload?.display_name || displayName))
+      setMessage(payload?.message || 'Naam opgeslagen.')
+    } catch (saveError) {
+      setError(saveError?.message || 'Naam opslaan mislukt.')
+    } finally {
+      setIsProfileSaving(false)
+    }
+  }
 
   function clearFeedback() {
     setMessage('')
@@ -81,29 +119,48 @@ export default function SettingsMyAccountPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Mijn account</h2>
-              <p style={{ margin: 0, color: '#667085' }}>Bekijk je inlogadres en beheer je wachtwoord.</p>
+              <p style={{ margin: 0, color: '#000000' }}>Bekijk je inlogadres en beheer je wachtwoord.</p>
             </div>
           </div>
 
           <section style={{ display: 'grid', gap: '12px' }} aria-labelledby="account-identity-title">
             <div>
               <h3 id="account-identity-title" style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Accountgegevens</h3>
-              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>Dit is het e-mailadres waarmee je bij Inhuis inlogt.</p>
+              <p style={{ margin: 0, color: '#000000', fontSize: '14px' }}>Dit is het e-mailadres waarmee je bij Inhuis inlogt.</p>
             </div>
-            <Input
-              label="E-mailadres"
-              type="email"
-              value={context?.email || ''}
-              readOnly
-              aria-readonly="true"
-              data-testid="my-account-email"
-            />
+            <form onSubmit={saveProfile} style={{ display: 'grid', gap: '12px' }} data-testid="my-account-profile-form">
+              <Input
+                label="Naam"
+                value={displayName}
+                onChange={(event) => {
+                  clearFeedback()
+                  setDisplayName(event.target.value)
+                }}
+                required
+                maxLength={120}
+                disabled={isProfileSaving}
+                data-testid="my-account-display-name"
+              />
+              <Input
+                label="E-mailadres"
+                type="email"
+                value={context?.email || ''}
+                readOnly
+                aria-readonly="true"
+                data-testid="my-account-email"
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button type="submit" disabled={isProfileSaving || !displayName.trim()} data-testid="my-account-profile-save">
+                  {isProfileSaving ? 'Opslaan…' : 'Naam opslaan'}
+                </Button>
+              </div>
+            </form>
           </section>
 
           <section style={{ display: 'grid', gap: '12px' }} aria-labelledby="account-password-title">
             <div>
               <h3 id="account-password-title" style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Wachtwoord wijzigen</h3>
-              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>
+              <p style={{ margin: 0, color: '#000000', fontSize: '14px' }}>
                 Na een succesvolle wijziging blijf je op dit apparaat ingelogd. Andere actieve sessies worden ingetrokken.
               </p>
             </div>
@@ -162,7 +219,7 @@ export default function SettingsMyAccountPage() {
           <section style={{ display: 'grid', gap: '12px' }} aria-labelledby="account-session-title">
             <div>
               <h3 id="account-session-title" style={{ margin: '0 0 4px 0', fontSize: '17px' }}>Sessie</h3>
-              <p style={{ margin: 0, color: '#667085', fontSize: '14px' }}>
+              <p style={{ margin: 0, color: '#000000', fontSize: '14px' }}>
                 Log uit om deze actieve sessie op de server direct ongeldig te maken.
               </p>
             </div>
