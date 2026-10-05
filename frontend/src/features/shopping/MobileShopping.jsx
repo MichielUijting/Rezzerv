@@ -4,6 +4,7 @@ import SearchCandidateList from '../../ui/SearchCandidateList.jsx'
 import MobileArticleRow from '../../ui/MobileArticleRow.jsx'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../../ui/QuantityStepper.jsx'
+import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import Select from '../../ui/Select.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession.js'
@@ -132,6 +133,9 @@ export default function MobileShopping() {
     () => (list.items || []).filter((item) => item.checked),
     [list.items],
   )
+  const toBuyPagination = useMobilePagination(toBuyItems, String(toBuyItems.length))
+  const cartPagination = useMobilePagination(cartItems, String(cartItems.length))
+
   const candidateItems = useMemo(() => {
     if (catalogResults.length > 0) return catalogResults
     const query = catalogQuery.trim()
@@ -391,11 +395,12 @@ export default function MobileShopping() {
               </div>
               {toBuyItems.length ? (
                 <div className="rz-mobile-shopping-list">
-                  {toBuyItems.map(renderShoppingRow)}
+                  {toBuyPagination.pageItems.map(renderShoppingRow)}
                 </div>
               ) : (
                 <div className="rz-mobile-shopping-empty-section">Alles uit deze lijst zit in je winkelwagen.</div>
               )}
+              <MobilePaginationControls {...toBuyPagination} ariaLabel="Paginering Nog te kopen" />
             </section>
 
             <section className="rz-mobile-shopping-group" aria-label="In winkelwagen" data-testid="mobile-shopping-cart">
@@ -405,9 +410,10 @@ export default function MobileShopping() {
               </div>
               {cartItems.length ? (
                 <div className="rz-mobile-shopping-list">
-                  {cartItems.map(renderShoppingRow)}
+                  {cartPagination.pageItems.map(renderShoppingRow)}
                 </div>
               ) : null}
+              <MobilePaginationControls {...cartPagination} ariaLabel="Paginering In winkelwagen" />
             </section>
           </div>
         ) : null}
