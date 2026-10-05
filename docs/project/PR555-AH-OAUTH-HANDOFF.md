@@ -77,16 +77,21 @@ Hiervoor is toegevoegd:
 - start.bat roept die helper aan;
 - docker-compose.yml geeft REZZERV_BACKEND_PUBLIC_URL door aan backend.
 
-### 2a. Huidige hosts-bestand-oplossing werkt, maar is UX-technisch niet definitief
+### 2a. UAC/hosts-bestand-oplossing vervangen door DNS-hostname zonder systeemwijziging
 
-De functioneel bewezen oplossing met `ah-login.inhuis.test -> 127.0.0.1` gebruikt nu een helper die het Windows hosts-bestand aanpast. Dat werkt technisch, maar Windows toont daarvoor een UAC/beheerdersmelding ("toestaan dat deze app wijzigingen aan uw apparaat aanbrengt"). De PO heeft dit als te zwaar en onprettig ervaren voor een normale Inhuis-opstart.
+De functioneel bewezen oplossing met `ah-login.inhuis.test -> 127.0.0.1` gebruikte tijdelijk een helper die het Windows hosts-bestand aanpaste. Dat werkte technisch, maar veroorzaakte een UAC/beheerdersmelding en is daarom niet geschikt als normale Inhuis-opstart.
 
-Daarom geldt bij hervatten:
-- de huidige hosts-bestand-oplossing is **functioneel bewijs**, niet de gewenste eindoplossing;
-- voorkom dat normale `start.bat` of een gewone gebruikersflow administratorrechten vraagt of systeemconfiguratie wijzigt;
-- onderzoek als voorkeursrichting een geldige hostname die via gewone DNS al naar `127.0.0.1` resolveert, zodat geen hosts-bestandswijziging/UAC nodig is;
-- een kandidaat zoals `ah-login.127-0-0-1.sslip.io` is genoemd als mogelijke richting, maar moet vóór implementatie nog objectief worden gevalideerd met AH/hCaptcha en de lokale OAuth-flow;
-- verwijder pas daarna de hosts-helper uit de definitieve oplossing als het alternatief functioneel bewezen is.
+De kandidaat is nu aangepast:
+- standaard AH OAuth-host: `ah-login.127-0-0-1.sslip.io`;
+- sslip.io resolveert hostnamen met een ingebed IP-adres via gewone DNS naar dat IP-adres;
+- hierdoor blijft de browser een geldige hostname zien terwijl verkeer lokaal op `127.0.0.1` eindigt;
+- `start.bat` wijzigt geen Windows hosts-bestand meer;
+- `scripts/ensure-ah-oauth-host.ps1` is verwijderd;
+- geen administratorprompt/UAC meer nodig voor de normale startup.
+
+Nog vereist vóór Ready:
+- deze nieuwe DNS-hostroute lokaal opnieuw functioneel valideren met AH-login + hCaptcha + automatische callback;
+- pas daarna geldt de UAC-vrije variant als definitief functioneel bewezen.
 
 ### 3. Proxy moet browserheaders grotendeels behouden
 De bewezen ah-mcp / appie-go aanpak behoudt browserheaders en herschrijft alleen noodzakelijke transport-/origin-informatie.
@@ -144,7 +149,7 @@ Lokaal door PO bevestigd:
 - bonnen zijn daadwerkelijk zichtbaar in **Kassa**.
 
 Nog uitzoeken:
-1. vervang de functioneel werkende hosts-bestand/UAC-oplossing door een oplossing zonder administratorprompt of systeemwijziging, bij voorkeur via een vooraf resolveerbare development-hostname; valideer die route eerst objectief;
+1. valideer de nieuwe UAC-vrije hostroute `ah-login.127-0-0-1.sslip.io` lokaal met AH-login, hCaptcha en callback;
 2. welke ene bon faalt en waarom;
 3. of tweede sync volledig idempotent is / geen duplicaten toevoegt;
 4. voortgangsweergave tijdens sync, bijvoorbeeld teller of progressbar.
@@ -154,7 +159,7 @@ Nog uitzoeken:
 Bij hervatten:
 1. actuele main, PR-head, open PRs en repositoryregels opnieuw controleren;
 2. deze overdracht en de actuele diff als uitgangspunt nemen;
-3. eerst de lokale OAuth-hostoplossing gebruikersvriendelijk maken zonder UAC/hosts-bestandswijziging en opnieuw functioneel valideren;
+3. de nieuwe UAC-vrije sslip.io-hostroute lokaal functioneel valideren;
 4. daarna de ene mislukte bon gericht diagnosticeren;
 5. vervolgens voortgangsweergave toevoegen en tweede sync op duplicaten valideren;
 6. alleen relevante falende checks gericht herstellen;
