@@ -15,7 +15,6 @@ from app.api.ah_oauth_proxy_routes import (
     build_ah_oauth_launch_url,
     create_ah_oauth_flow,
 )
-from app.integrations.retailer_accounts import build_ah_login_url
 from app.integrations.retailer_receipts import (
     SUPPORTED_RETAILER_PROVIDERS,
     RetailerReceiptEnvelope,
