@@ -10,10 +10,18 @@ from app.api import receipt_ah_oauth_proxy_routes as oauth
 from app.integrations.retailer_accounts.ah import AHAccountSession
 
 
-def _request(*, host: str = "localhost", port: int = 5174, cookie: str = "") -> Request:
+def _request(
+    *,
+    host: str = "localhost",
+    port: int = 5174,
+    cookie: str = "",
+    extra_headers: dict[str, str] | None = None,
+) -> Request:
     headers = [(b"host", f"{host}:{port}".encode("ascii"))]
     if cookie:
         headers.append((b"cookie", cookie.encode("ascii")))
+    for name, value in (extra_headers or {}).items():
+        headers.append((name.lower().encode("ascii"), value.encode("ascii")))
     scope = {
         "type": "http",
         "http_version": "1.1",
@@ -106,6 +114,43 @@ def test_proxy_route_never_matches_inhuis_api_or_control_paths() -> None:
     assert match_for("/ah-oauth/callback") == Match.NONE
     assert match_for("/openapi.json") == Match.NONE
     assert match_for("/docs") == Match.NONE
+
+
+def test_proxy_preserves_browser_headers_needed_by_login_controls() -> None:
+    request = _request(
+        host="localhost",
+        port=8011,
+        cookie="inhuis_ah_oauth_flow=secret; ah_session=kept",
+        extra_headers={
+            "accept": "application/json",
+            "accept-encoding": "gzip, deflate, br",
+            "content-length": "123",
+            "origin": "http://localhost:8011",
+            "referer": "http://localhost:8011/login?client_id=appie-ios",
+            "sec-fetch-site": "same-origin",
+            "sec-fetch-mode": "cors",
+            "sec-ch-ua": '"Chromium";v="140"',
+            "x-requested-with": "fetch",
+        },
+    )
+
+    headers = oauth.build_ah_forward_headers(
+        request,
+        backend_origin="http://localhost:8011",
+    )
+
+    assert headers["accept"] == "application/json"
+    assert headers["sec-fetch-site"] == "same-origin"
+    assert headers["sec-fetch-mode"] == "cors"
+    assert headers["sec-ch-ua"] == '"Chromium";v="140"'
+    assert headers["x-requested-with"] == "fetch"
+    assert headers["origin"] == "https://login.ah.nl"
+    assert headers["referer"] == "https://login.ah.nl/login?client_id=appie-ios"
+    assert headers["cookie"] == "ah_session=kept"
+    assert "host" not in headers
+    assert "accept-encoding" not in headers
+    assert "content-length" not in headers
+    assert "inhuis_ah_oauth_flow" not in headers["cookie"]
 
 
 def test_proxy_rewrites_appie_callback_and_sanitizes_login_cookie() -> None:
