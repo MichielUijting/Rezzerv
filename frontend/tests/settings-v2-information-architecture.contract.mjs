@@ -40,7 +40,7 @@ const expectedTiles = {
   'article-details': { section: 'account', scope: 'personal', permission: null, allowViewer: true },
   'privacy-data-sharing': { section: 'account', scope: 'personal', permission: null, allowViewer: true },
   'household-profile': { section: 'household', scope: 'household', permission: 'household_settings.view', allowViewer: true },
-  household: { section: 'household', scope: 'household', permission: 'members.view', allowViewer: true },
+  household: { section: 'household', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
   authorizations: { section: 'household', scope: 'household', permission: null, allowViewer: true },
   capabilities: { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
   'article-groups': { section: 'usage', scope: 'household', permission: 'article_groups.manage', allowViewer: false },
