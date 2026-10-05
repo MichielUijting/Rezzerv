@@ -309,3 +309,11 @@
   cursor: default;
   opacity: 0.35;
 }
+
+
+.rz-mobile-shopping-complete {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding: 0 14px 14px;
+}
