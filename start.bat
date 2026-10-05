@@ -7,8 +7,10 @@ set "COMPOSE_ENV="
 set "COMPOSE_ARGS=-f docker-compose.yml -f docker-compose.postgresql.yml --profile postgresql"
 if not defined REZZERV_FRONTEND_PORT set "REZZERV_FRONTEND_PORT=5174"
 if not defined REZZERV_BACKEND_PORT set "REZZERV_BACKEND_PORT=8011"
-if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=90"
+if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=300"
 if not defined REZZERV_APP_BASE_URL set "REZZERV_APP_BASE_URL=http://localhost:%REZZERV_FRONTEND_PORT%"
+if not defined REZZERV_AH_OAUTH_HOST set "REZZERV_AH_OAUTH_HOST=ah-login.127-0-0-1.sslip.io"
+if not defined REZZERV_BACKEND_PUBLIC_URL set "REZZERV_BACKEND_PUBLIC_URL=http://%REZZERV_AH_OAUTH_HOST%:%REZZERV_BACKEND_PORT%"
 set "FRONTEND_PORT=%REZZERV_FRONTEND_PORT%"
 set "BACKEND_PORT=%REZZERV_BACKEND_PORT%"
 set "STARTUP_WAIT_SECONDS=%REZZERV_STARTUP_WAIT_SECONDS%"
@@ -76,9 +78,8 @@ if %errorlevel% neq 0 (
 
 echo [4/6] Application containers started from freshly built images.
 
-echo [5/6] Wachten %STARTUP_WAIT_SECONDS% seconden zodat backend volledig kan opstarten...
-timeout /t %STARTUP_WAIT_SECONDS% /nobreak >nul
-echo     Waiting for PostgreSQL backend and frontend...
+echo [5/6] Wachten tot backend gezond is ^(maximaal %STARTUP_WAIT_SECONDS% seconden^)...
+echo     PostgreSQL backend en frontend zijn gestart; health wordt nu direct gevolgd.
 call :WaitForBackendHealth || exit /b 1
 call :VerifyRuntimeDatabase || exit /b 1
 call :WaitForFrontend %FRONTEND_URL% || exit /b 1
@@ -265,17 +266,27 @@ exit /b 0
 
 :WaitForBackendHealth
 set /a BACKEND_HEALTH_ATTEMPTS=0
+set /a BACKEND_HEALTH_MAX_ATTEMPTS=(STARTUP_WAIT_SECONDS+1)/2
+if %BACKEND_HEALTH_MAX_ATTEMPTS% LSS 1 set /a BACKEND_HEALTH_MAX_ATTEMPTS=1
 :wait_backend_health
 set /a BACKEND_HEALTH_ATTEMPTS+=1
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-RestMethod -Uri '%BACKEND_HEALTH_URL%' -TimeoutSec 2; if ($r.status -eq 'ok') { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
-if %errorlevel% equ 0 exit /b 0
-if %BACKEND_HEALTH_ATTEMPTS% GEQ 40 (
-  echo [ERROR] Backend healthcheck werd niet op tijd groen.
+if %errorlevel% equ 0 (
+  set /a BACKEND_WAITED_SECONDS=BACKEND_HEALTH_ATTEMPTS*2-2
+  echo     Backend health is groen na ongeveer !BACKEND_WAITED_SECONDS! seconden.
+  exit /b 0
+)
+set /a BACKEND_WAITED_SECONDS=BACKEND_HEALTH_ATTEMPTS*2
+if %BACKEND_HEALTH_ATTEMPTS% GEQ %BACKEND_HEALTH_MAX_ATTEMPTS% (
+  echo [ERROR] Backend healthcheck werd niet groen binnen %STARTUP_WAIT_SECONDS% seconden.
+  echo [INFO] Laatste backendlogs:
   docker compose %COMPOSE_ENV% %COMPOSE_ARGS% logs backend --tail 120
   pause
   exit /b 1
 )
-timeout /t 2 >nul
+set /a BACKEND_PROGRESS_MOD=BACKEND_HEALTH_ATTEMPTS%%10
+if !BACKEND_PROGRESS_MOD! EQU 0 echo     Nog bezig met backend startup... ongeveer !BACKEND_WAITED_SECONDS! seconden verstreken.
+timeout /t 2 /nobreak >nul
 goto wait_backend_health
 
 :VerifyRuntimeDatabase

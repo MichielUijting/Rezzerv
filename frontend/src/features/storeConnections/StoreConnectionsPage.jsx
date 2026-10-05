@@ -62,8 +62,6 @@ export default function StoreConnectionsPage() {
   const [editingCode, setEditingCode] = useState('')
   const [cardNumber, setCardNumber] = useState('')
   const [ahConnection, setAhConnection] = useState({ connected: false, persistence: 'encrypted_database' })
-  const [ahLoginUrl, setAhLoginUrl] = useState('')
-  const [ahCode, setAhCode] = useState('')
   const [ahBusy, setAhBusy] = useState(false)
   const [lidlWebProgress, setLidlWebProgress] = useState('')
   const [jumboPocProgress, setJumboPocProgress] = useState('')
@@ -106,6 +104,28 @@ export default function StoreConnectionsPage() {
   useEffect(() => {
     loadPageData()
   }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ahResult = params.get('ah')
+    if (!ahResult) return
+    if (ahResult === 'connected') {
+      showFeedback({
+        variant: 'success',
+        title: 'Albert Heijn gekoppeld',
+        message: 'De koppeling is veilig opgeslagen. Nieuwe digitale AH-bonnen kunnen nu rechtstreeks in Inhuis worden opgehaald.',
+      })
+    } else if (ahResult === 'error') {
+      showFeedback({
+        variant: 'error',
+        title: 'Albert Heijn koppelen',
+        message: 'De AH-login kon niet worden afgerond. Probeer de koppeling opnieuw.',
+      })
+    }
+    params.delete('ah')
+    const query = params.toString()
+    window.history.replaceState(null, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash)
+  }, [showFeedback])
 
   useEffect(() => {
     let importedCount = 0
@@ -265,54 +285,19 @@ export default function StoreConnectionsPage() {
   async function startAhLogin() {
     setAhBusy(true)
     try {
-      const data = await fetchJson('/api/receipts/retailers/ah/connect')
-      setAhLoginUrl(data?.login_url || '')
+      const returnTo = window.location.origin + '/instellingen/winkelkoppelingen'
+      const data = await fetchJson(
+        '/api/receipts/retailers/ah/connect?return_to=' + encodeURIComponent(returnTo),
+      )
       if (!data?.login_url) throw new Error('AH-loginadres ontbreekt.')
-      window.open(data.login_url, '_blank', 'noopener,noreferrer')
-      showFeedback({
-        variant: 'info',
-        title: 'Albert Heijn koppelen',
-        message: 'Rond de AH-login af in het geopende venster.',
-        detail: 'Kopieer daarna de appie://login-exit?code=... link of alleen de code en plak die hieronder.',
-      })
+      window.location.assign(data.login_url)
     } catch (err) {
+      setAhBusy(false)
       showFeedback({
         variant: 'error',
         title: 'Albert Heijn koppelen',
         message: normalizeErrorMessage(err?.message) || 'De AH-login kon niet worden gestart.',
       })
-    } finally {
-      setAhBusy(false)
-    }
-  }
-
-  async function completeAhLogin() {
-    const value = String(ahCode || '').trim()
-    if (!value) {
-      showFeedback({ variant: 'warning', message: 'Plak eerst de AH-redirect of autorisatiecode.' })
-      return
-    }
-    setAhBusy(true)
-    try {
-      const result = await fetchJson('/api/receipts/retailers/ah/connect', {
-        method: 'POST',
-        body: JSON.stringify({ code_or_redirect: value }),
-      })
-      setAhConnection(result)
-      setAhCode('')
-      showFeedback({
-        variant: 'success',
-        title: 'Albert Heijn gekoppeld',
-        message: 'De koppeling is veilig opgeslagen. Inhuis haalt voortaan automatisch nieuwe AH-bonnen op wanneer je Kassa opent.',
-      })
-    } catch (err) {
-      showFeedback({
-        variant: 'error',
-        title: 'Albert Heijn koppelen',
-        message: normalizeErrorMessage(err?.message) || 'De AH-koppeling kon niet worden voltooid.',
-      })
-    } finally {
-      setAhBusy(false)
     }
   }
 
@@ -346,8 +331,6 @@ export default function StoreConnectionsPage() {
     try {
       const result = await fetchJson('/api/receipts/retailers/ah/connect', { method: 'DELETE' })
       setAhConnection(result)
-      setAhCode('')
-      setAhLoginUrl('')
       showFeedback({ variant: 'success', message: 'Albert Heijn is ontkoppeld.' })
     } catch (err) {
       showFeedback({
@@ -433,31 +416,16 @@ export default function StoreConnectionsPage() {
             </div>
 
             {!ahConnection?.connected ? (
-              <>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <Button type="button" onClick={startAhLogin} disabled={ahBusy || isLoading} data-testid="ah-connect-start">
-                    Open AH-login
-                  </Button>
-                  {ahLoginUrl ? (
-                    <Button type="button" variant="secondary" onClick={() => window.open(ahLoginUrl, '_blank', 'noopener,noreferrer')} disabled={ahBusy}>
-                      AH-login opnieuw openen
-                    </Button>
-                  ) : null}
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <div style={{ color: '#667085' }}>
+                  Je logt één keer rechtstreeks bij Albert Heijn in. Inhuis ontvangt de bevestiging automatisch; je hoeft geen code of link te kopiëren.
                 </div>
-                <Input
-                  label="AH-redirect of autorisatiecode"
-                  value={ahCode}
-                  onChange={(event) => setAhCode(event.target.value)}
-                  disabled={ahBusy}
-                  data-testid="ah-connect-code"
-                  placeholder="appie://login-exit?code=..."
-                />
                 <div>
-                  <Button type="button" onClick={completeAhLogin} disabled={ahBusy || !String(ahCode || '').trim()} data-testid="ah-connect-complete">
-                    Koppeling afronden
+                  <Button type="button" onClick={startAhLogin} disabled={ahBusy || isLoading} data-testid="ah-connect-start">
+                    {ahBusy ? 'AH-login openen…' : 'Albert Heijn koppelen'}
                   </Button>
                 </div>
-              </>
+              </div>
             ) : (
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 <Button type="button" onClick={syncAhReceipts} disabled={ahBusy} data-testid="ah-sync-receipts">
