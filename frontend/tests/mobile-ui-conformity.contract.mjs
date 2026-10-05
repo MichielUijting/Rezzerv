@@ -168,7 +168,7 @@ assert.match(
 )
 assert.match(
   themeCss,
-  /body:has\(\[data-testid="mobile-app-chrome"\]\)[\s\S]*padding-bottom:\s*calc\(70px \+ env\(safe-area-inset-bottom\)\)\s*!important;/,
+  /body:has\(\[data-testid="mobile-app-chrome"\]\)[\s\S]*padding-bottom:\s*calc\(90px \+ env\(safe-area-inset-bottom\)\)\s*!important;/,
 )
 
 // One shared mobile back control is used by both module and generic headers.
