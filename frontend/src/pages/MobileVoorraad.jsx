@@ -5,6 +5,7 @@ import Select from '../ui/Select.jsx'
 import MobileArticleRow from '../ui/MobileArticleRow.jsx'
 import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
 import QuantityStepper from '../ui/QuantityStepper.jsx'
+import { MobilePaginationControls, useMobilePagination } from '../ui/MobilePagination.jsx'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import {
   fetchJsonWithAuth,
@@ -275,6 +276,10 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
     })
   }, [groupFilter, locationFilter, locationTrackingEnabled, query, rows, sortKey])
 
+  const inventoryPagination = useMobilePagination(
+    filteredRows,
+    [query, locationFilter, groupFilter, sortKey, locationTrackingEnabled].join('|'),
+  )
   const hasActiveFilters = Boolean(query || groupFilter || (locationTrackingEnabled && locationFilter))
 
   function clearFilters() {
@@ -399,7 +404,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
 
         {!error && filteredRows.length > 0 ? (
           <section className="rz-mobile-inventory-list" aria-label="Voorraadartikelen">
-            {filteredRows.map((row) => {
+            {inventoryPagination.pageItems.map((row) => {
               const detailTarget = row.detailId
                 ? `/voorraad/${encodeURIComponent(row.detailId)}?artikel=${encodeURIComponent(row.articleName || row.householdName)}`
                 : ''
@@ -464,6 +469,7 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
             })}
           </section>
         ) : null}
+        <MobilePaginationControls {...inventoryPagination} ariaLabel="Paginering Voorraad" />
       </main>
 
     </div>
