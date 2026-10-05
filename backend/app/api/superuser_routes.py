@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import base64
 import hashlib
+import re
 
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -24,6 +25,8 @@ SUPERUSER_TABS = ("Overzicht", "Huishoudens", "Gebruik", "Kassabonnen", "Systeem
 TREND_DAYS = 7
 LOGIN_BACKGROUND_KEY = "login_background_jpeg_base64"
 LOGIN_BACKGROUND_MAX_BYTES = 8 * 1024 * 1024
+PRIMARY_COLOR_KEY = "primary_ui_color"
+DEFAULT_PRIMARY_COLOR = "#005F6A"
 
 
 def _read_platform_setting(conn, key: str) -> str | None:
@@ -42,6 +45,43 @@ def _write_platform_setting(conn, key: str, value: str, actor_user_id: str) -> N
             updated_by = EXCLUDED.updated_by,
             updated_at = CURRENT_TIMESTAMP
     """), {"key": key, "value": value, "updated_by": actor_user_id})
+
+
+def _normalize_primary_color(value: object) -> str:
+    match = re.fullmatch(r"#?([0-9a-fA-F]{6})", str(value or "").strip())
+    if not match:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Vul een geldige hexkleur in, bijvoorbeeld {DEFAULT_PRIMARY_COLOR}.",
+        )
+    return f"#{match.group(1).upper()}"
+
+
+def _primary_color_contrast_with_white(value: str) -> float:
+    color = _normalize_primary_color(value)
+
+    def linear(channel: int) -> float:
+        normalized = channel / 255.0
+        return normalized / 12.92 if normalized <= 0.04045 else ((normalized + 0.055) / 1.055) ** 2.4
+
+    red = linear(int(color[1:3], 16))
+    green = linear(int(color[3:5], 16))
+    blue = linear(int(color[5:7], 16))
+    luminance = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+    return 1.05 / (luminance + 0.05)
+
+
+def _primary_color_payload(conn) -> dict:
+    stored = _read_platform_setting(conn, PRIMARY_COLOR_KEY)
+    try:
+        color = _normalize_primary_color(stored) if stored else DEFAULT_PRIMARY_COLOR
+    except HTTPException:
+        color = DEFAULT_PRIMARY_COLOR
+    return {
+        "primary_color": color,
+        "default_primary_color": DEFAULT_PRIMARY_COLOR,
+        "configured": bool(stored),
+    }
 
 
 def _login_background_payload(conn) -> dict:
@@ -418,6 +458,52 @@ def _platform_usage(conn) -> dict:
 
 def create_superuser_router(engine: Engine) -> APIRouter:
     router = APIRouter()
+
+    @router.get("/api/platform/primary-color")
+    def primary_color_status():
+        with engine.begin() as conn:
+            return _primary_color_payload(conn)
+
+    @router.put("/api/superuser/primary-color")
+    async def update_primary_color(request: Request):
+        with engine.begin() as conn:
+            context = _require_platform_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
+            payload = await request.json()
+            color = _normalize_primary_color((payload or {}).get("primary_color"))
+            if _primary_color_contrast_with_white(color) < 4.5:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Kies een donkerdere kleur zodat witte tekst goed leesbaar blijft.",
+                )
+            _write_platform_setting(conn, PRIMARY_COLOR_KEY, color, context.user_id)
+            write_authorization_audit(
+                conn,
+                actor_user_id=context.user_id,
+                actor_type="platform_superuser",
+                action="superuser.primary_color.updated",
+                object_type="platform_home_settings",
+                object_id=PRIMARY_COLOR_KEY,
+                new_value={"primary_color": color},
+                reason="Superuser wijzigde de platformbrede primaire Inhuis-kleur",
+            )
+            return _primary_color_payload(conn)
+
+    @router.delete("/api/superuser/primary-color")
+    def reset_primary_color(request: Request):
+        with engine.begin() as conn:
+            context = _require_platform_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
+            conn.execute(text("DELETE FROM platform_home_settings WHERE setting_key = :key"), {"key": PRIMARY_COLOR_KEY})
+            write_authorization_audit(
+                conn,
+                actor_user_id=context.user_id,
+                actor_type="platform_superuser",
+                action="superuser.primary_color.reset",
+                object_type="platform_home_settings",
+                object_id=PRIMARY_COLOR_KEY,
+                new_value={"primary_color": DEFAULT_PRIMARY_COLOR},
+                reason="Superuser herstelde de standaard primaire Inhuis-kleur",
+            )
+            return _primary_color_payload(conn)
 
     @router.get("/api/platform/login-background")
     def login_background_status():
