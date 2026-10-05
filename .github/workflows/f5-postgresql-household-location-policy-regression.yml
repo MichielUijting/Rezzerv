@@ -53,14 +53,19 @@ jobs:
           --health-retries 20
     env:
       PYTHONPATH: backend
-      DATABASE_URL: postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv_f5_location_policy_ci
-      MIGRATION_DATABASE_URL: postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv_f5_location_policy_ci
       REZZERV_DATASTORE_POLICY: postgresql-only
       REZZERV_SESSION_COOKIE_SECURE: 'false'
       REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO: 'false'
       REZZERV_TEST_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
+      - name: Export isolated PostgreSQL connection
+        shell: bash
+        run: |
+          echo "POSTGRES_PORT=${{ job.services.postgres.ports[5432] }}" >> "$GITHUB_ENV"
+          echo "DATABASE_URL=postgresql+psycopg://rezzerv_app:rezzerv_app_ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv_f5_location_policy_ci" >> "$GITHUB_ENV"
+          echo "MIGRATION_DATABASE_URL=postgresql+psycopg://rezzerv_migrator:rezzerv_migrator_ci@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv_f5_location_policy_ci" >> "$GITHUB_ENV"
+
       - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
@@ -86,7 +91,7 @@ jobs:
           database-name: rezzerv_f5_location_policy_ci
           bootstrap-user: rezzerv_bootstrap
           bootstrap-password: rezzerv_bootstrap_ci
-          port: '${{ job.services.postgres.ports[5432] }}'
+          port: '${{ env.POSTGRES_PORT }}'
           migrator-password: rezzerv_migrator_ci
           runtime-password: rezzerv_app_ci
           migration-mode: alembic
