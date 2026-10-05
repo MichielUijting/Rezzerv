@@ -4,6 +4,7 @@ import Button from '../../ui/Button'
 import CatalogProductImage from './CatalogProductImage'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
 import Select from '../../ui/Select.jsx'
+import Pagination from '../../ui/Pagination.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './mobileCatalog.css'
 
@@ -160,11 +161,9 @@ export default function MobileCatalogPage() {
         ) : null}
 
         {!error && total > PAGE_SIZE ? (
-          <nav className="rz-mobile-catalog-pagination" aria-label="Paginering Catalogus">
-            <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => setPage((value) => Math.max(1, value - 1))}>Vorige</Button>
-            <span>Pagina {currentPage} van {pageCount}</span>
-            <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Volgende</Button>
-          </nav>
+          <div className="rz-mobile-catalog-pagination" aria-label="Paginering Catalogus">
+            <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} disabled={isLoading} />
+          </div>
         ) : null}
       </main>
     </div>
