@@ -113,6 +113,16 @@ Niet standaard vragen tijdens de eerste onboarding:
 
 Een instelling wordt bij voorkeur pas gevraagd wanneer de gebruiker begrijpt **waarom** die nodig is.
 
+### 5.1 Huishoudprofiel na de minimale onboarding
+
+De minimale onboarding blijft bewust klein. De bredere huishoudcontext die Inhuis later gebruikt voor voorraad-, boodschappen- en prognosefuncties wordt beheerd via **Instellingen → Huishoudprofiel** en is dus geen verplichte drempel om Inhuis te starten.
+
+De canonieke lijst met deze gegevens, hun doel, privacygrens en roltoewijzing staat in:
+
+> **`docs/product/INHUIS-INSTELLINGEN-GEGEVENS-EN-ROLLEN.md`**
+
+Daarin is onder meer vastgelegd dat bewoners losstaan van app-accounts, dat het aantal bewoners uit de bewonerslijst wordt afgeleid en dat gedeelde huishoudgegevens door de huishoud-Beheerder worden beheerd.
+
 ---
 
 ## 6. Profiel: Inhuis halen
