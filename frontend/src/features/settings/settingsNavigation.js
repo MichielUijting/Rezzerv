@@ -21,7 +21,7 @@ export const SETTINGS_SECTIONS = [
   },
 ]
 
-const SETTINGS_CONTEXTS = ['regular', 'system']
+const SETTINGS_CONTEXTS = ['regular']
 
 export const SETTINGS_ROOT_POLICY = {
   allowedContexts: SETTINGS_CONTEXTS,
@@ -43,7 +43,7 @@ const SETTINGS_TILES = [
   {
     key: 'account',
     title: 'Mijn account',
-    description: 'E-mailadres en wachtwoord',
+    description: 'Naam, e-mailadres en wachtwoord',
     to: '/instellingen/mijn-account',
     relevance: 'always',
     section: 'account',
@@ -134,28 +134,28 @@ const SETTINGS_TILES = [
     allowViewer: false,
   },
   {
-    key: 'frontteam',
-    title: 'Frontteam beheren',
-    description: 'Ken aanvullende Frontteambevoegdheden toe aan bestaande gebruikers',
-    to: '/instellingen/frontteam',
-    permission: 'platform.frontteam_roles.manage',
-    relevance: 'always',
-    section: 'household',
-    scope: 'platform',
-    allowedContexts: ['system'],
-    allowViewer: false,
-  },
-  {
-    key: 'household',
-    title: 'Huishouden',
-    description: 'Naam, leden en rollen beheren',
-    to: '/instellingen/huishouden',
-    permission: 'household_settings.manage',
+    key: 'household-profile',
+    title: 'Huishoudprofiel',
+    description: 'Adres, bewoners en huishoudbrede winkel- en voorraadvoorkeuren',
+    to: '/instellingen/huishoudprofiel',
+    permission: 'household_settings.view',
     relevance: 'always',
     section: 'household',
     scope: 'household',
     allowedContexts: SETTINGS_CONTEXTS,
-    allowViewer: false,
+    allowViewer: true,
+  },
+  {
+    key: 'household',
+    title: 'Gebruikers & rollen',
+    description: 'Gebruikers, uitnodigingen en rollen beheren',
+    to: '/instellingen/huishouden',
+    permission: 'members.view',
+    relevance: 'always',
+    section: 'household',
+    scope: 'household',
+    allowedContexts: SETTINGS_CONTEXTS,
+    allowViewer: true,
   },
   {
     key: 'authorizations',
