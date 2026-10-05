@@ -31,25 +31,25 @@ assert.deepEqual(
   'Settings v2 moet exact de vier canonical informatiesecties definiëren',
 )
 
-assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
+assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
 
 const expectedTiles = {
-  accessibility: { section: 'account', scope: 'personal', permission: null, allowViewer: true },
-  account: { section: 'account', scope: 'personal', permission: null, allowViewer: true },
-  'article-details': { section: 'account', scope: 'personal', permission: null, allowViewer: true },
-  'privacy-data-sharing': { section: 'account', scope: 'personal', permission: null, allowViewer: true },
-  'household-profile': { section: 'household', scope: 'household', permission: 'household_settings.view', allowViewer: true },
-  household: { section: 'household', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
-  authorizations: { section: 'household', scope: 'household', permission: null, allowViewer: true },
-  capabilities: { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
-  'article-groups': { section: 'usage', scope: 'household', permission: 'article_groups.manage', allowViewer: false },
-  locations: { section: 'usage', scope: 'household', permission: 'locations.manage', allowViewer: false },
-  'store-import': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
-  'store-connections': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
-  'household-automation': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
-  'almost-out': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false },
-  'help-about': { section: 'help', scope: 'personal', permission: null, allowViewer: true },
+  accessibility: { section: 'account', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
+  account: { section: 'account', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
+  'article-details': { section: 'account', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
+  'privacy-data-sharing': { section: 'account', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
+  'household-profile': { section: 'household', scope: 'household', permission: 'household_settings.view', allowViewer: true, contexts: ['regular'] },
+  household: { section: 'household', scope: 'household', permission: 'household_settings.manage', allowViewer: false, contexts: ['regular'] },
+  authorizations: { section: 'household', scope: 'household', permission: null, allowViewer: true, contexts: ['regular'] },
+  capabilities: { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false, contexts: ['regular'] },
+  'article-groups': { section: 'usage', scope: 'household', permission: 'article_groups.manage', allowViewer: false, contexts: ['regular'] },
+  locations: { section: 'usage', scope: 'household', permission: 'locations.manage', allowViewer: false, contexts: ['regular'] },
+  'store-import': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false, contexts: ['regular'] },
+  'store-connections': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false, contexts: ['regular'] },
+  'household-automation': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false, contexts: ['regular'] },
+  'almost-out': { section: 'usage', scope: 'household', permission: 'household_settings.manage', allowViewer: false, contexts: ['regular'] },
+  'help-about': { section: 'help', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
 }
 
 assert.equal(SETTINGS_TILES.length, Object.keys(expectedTiles).length)
@@ -60,7 +60,7 @@ for (const [key, expected] of Object.entries(expectedTiles)) {
   assert.equal(tile.scope, expected.scope)
   assert.equal(tile.permission ?? null, expected.permission)
   assert.equal(tile.allowViewer, expected.allowViewer)
-  assert.deepEqual(tile.allowedContexts, ['regular'])
+  assert.deepEqual(tile.allowedContexts, expected.contexts)
 }
 
 for (const deferredKey of ['notifications', 'recipes']) {
