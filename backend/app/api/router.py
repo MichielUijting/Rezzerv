@@ -35,6 +35,7 @@ from app.api.picnic_email_import_source_closure import (
 )
 from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
 from app.api.retailer_receipt_routes import router as retailer_receipt_router
+from app.api.ah_oauth_proxy_routes import router as ah_oauth_proxy_router
 from app.api.platform_audit_routes import router as platform_audit_router
 from app.api.platform_authorizations_routes import router as platform_authorizations_router
 from app.api.platform_feature_flags_routes import router as platform_feature_flags_router
@@ -121,3 +122,6 @@ api_router.include_router(debug_router)
 api_router.include_router(receipt_db_snapshot_router)
 api_router.include_router(kassa_regression_router)
 api_router.include_router(kassa_smoke_router)
+# Keep the AH OAuth root proxy last: it is a catch-all only for browsers that
+# carry a valid short-lived AH flow cookie.
+api_router.include_router(ah_oauth_proxy_router)
