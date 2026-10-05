@@ -20,13 +20,13 @@ assert.deepEqual(
   SETTINGS_SECTIONS.map((section) => section.key),
   ['account', 'household', 'usage', 'help'],
 )
-assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular'])
+assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
 assert.equal(SETTINGS_TILES.length, 15)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
   assert.ok(['personal', 'household'].includes(tile.scope))
-  assert.deepEqual(tile.allowedContexts, ['regular'])
+  assert.deepEqual(tile.allowedContexts, tile.scope === 'personal' ? ['regular', 'system'] : ['regular'])
   assert.equal(typeof tile.allowViewer, 'boolean')
 }
 
@@ -212,7 +212,13 @@ for (const tile of SETTINGS_TILES) {
     contextType: 'system',
     onboarding: null,
   })
-  assert.deepEqual(keys(systemNavigation), [])
+  assert.deepEqual(keys(systemNavigation), [
+    'accessibility',
+    'account',
+    'article-details',
+    'privacy-data-sharing',
+    'help-about',
+  ])
   assert.equal(systemNavigation.tiles.find((tile) => tile.key === 'frontteam'), undefined)
 }
 
