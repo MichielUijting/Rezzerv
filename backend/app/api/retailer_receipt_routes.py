@@ -7,10 +7,14 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.db import engine
+from app.api.ah_oauth_proxy_routes import (
+    build_ah_oauth_launch_url,
+    create_ah_oauth_flow,
+)
 from app.integrations.retailer_accounts import build_ah_login_url
 from app.integrations.retailer_receipts import (
     SUPPORTED_RETAILER_PROVIDERS,
@@ -87,16 +91,24 @@ def import_structured_retailer_receipt(
 
 @router.get("/ah/connect")
 def start_ah_account_connection(
+    request: Request,
+    return_to: str | None = Query(default=None, max_length=2048),
     authorization: Optional[str] = Header(None),
 ):
     household_id = _authorized_household_id(authorization)
+    flow = create_ah_oauth_flow(
+        request,
+        household_id=household_id,
+        return_to=return_to,
+    )
     return {
         **ah_session_status(engine, household_id),
-        "login_url": build_ah_login_url(),
-        "redirect_uri": "appie://login-exit",
+        "login_url": build_ah_oauth_launch_url(flow),
+        "redirect_uri": "automatic",
+        "expires_at": flow.expires_at.isoformat(),
         "instructions": (
-            "Open de AH-login, rond de aanmelding af en stuur daarna de volledige "
-            "appie://login-exit?code=... redirect of alleen de code naar POST /ah/connect."
+            "Open de AH-login en rond de aanmelding af. "
+            "Inhuis ontvangt de AH-callback automatisch en slaat de koppeling versleuteld op."
         ),
     }
 
