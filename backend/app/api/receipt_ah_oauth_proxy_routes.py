@@ -23,6 +23,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
+from starlette.convertors import Convertor, register_url_convertor
 
 from app.db import engine
 from app.integrations.retailer_accounts.ah import (
@@ -33,6 +34,21 @@ from app.integrations.retailer_accounts.ah import (
 )
 from app.services.retailer_account_secure_store import save_ah_session
 
+class _AHProxyPathConvertor(Convertor):
+    # The OAuth proxy is intentionally root-relative for AH login assets, but it
+    # must never be eligible for Inhuis API/control/documentation routes. Keeping
+    # those paths outside the route regex prevents the catch-all from shadowing
+    # canonical endpoints even if router ordering changes.
+    regex = r"(?!(?:api|ah-oauth)(?:/|$)|(?:docs|redoc)(?:/|$)|openapi\.json$).+"
+
+    def convert(self, value: str) -> str:
+        return value
+
+    def to_string(self, value: str) -> str:
+        return str(value)
+
+
+register_url_convertor("ahproxy", _AHProxyPathConvertor())
 router = APIRouter()
 
 _FLOW_COOKIE = "inhuis_ah_oauth_flow"
@@ -256,7 +272,7 @@ async def ah_oauth_callback(request: Request, code: str | None = None):
 
 
 @router.api_route(
-    "/{path:path}",
+    "/{path:ahproxy}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     include_in_schema=False,
 )
