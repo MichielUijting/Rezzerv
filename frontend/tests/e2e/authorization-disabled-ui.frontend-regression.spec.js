@@ -44,6 +44,13 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
       }),
     })
   })
+  await page.route('**/api/action-buttons', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [], welcome_text: 'Fijn dat je er weer bent.' }),
+    })
+  })
   await page.route('**/api/onboarding', async (route) => {
     await route.fulfill({
       status: 200,
