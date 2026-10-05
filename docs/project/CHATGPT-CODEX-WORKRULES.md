@@ -44,6 +44,24 @@ Deze regels vullen `AGENTS.md` en `docs/project/DEVELOPMENT-TEST-RELEASE.md` aan
     - bevat opnieuw `CLS` vlak vóór de relevante output die de PO eventueel terug naar ChatGPT moet kopiëren/uploaden;
     - geeft duidelijke succes-/foutmeldingen in gewone taal;
     - gebruikt waar mogelijk repository-relatieve paden en veilige controles vóór mutaties.
+20a. **Bewezen lokaal PO-testscriptpatroon is de standaard en wordt hergebruikt, niet opnieuw ontworpen.** Voor een normale lokale functionele PR-test:
+    - controleert het script eerst dat de repository bestaat en dat de werkmap schoon is;
+    - haalt het uitsluitend de bedoelde remote taakbranch op;
+    - activeert het een bestaande lokale taakbranch met `git switch <branch>`, of maakt het die eenmalig veilig aan met `git switch --track -c <branch> origin/<branch>`;
+    - werkt het de lokale taakbranch uitsluitend bij met `git merge --ff-only origin/<branch>`;
+    - voert het **geen** `git reset --hard`, `git checkout -B` of andere destructieve branch-reset uit;
+    - controleert het vóór startup de exacte verwachte head-SHA en stopt fail-closed bij een afwijking;
+    - start het Inhuis daarna uitsluitend via de officiële `start.bat` in de repository-root, tenzij de taak aantoonbaar een andere reeds bestaande officiële repositoryroute vereist;
+    - laat het Docker Compose-project, poorten, volumes, databasebinding en startupvolgorde over aan de bestaande repositoryconfiguratie en `start.bat`; het script verzint of forceert daar geen alternatieve runtime-architectuur omheen.
+20b. Een lokaal PO-testscript mag **niet** zelfstandig Docker-projectnamen, Compose-projectnamen, container-ID's, poorten, volumes of databasevolumes afleiden, kiezen, herschrijven, stoppen, verwijderen of vervangen wanneer de normale `start.bat`-route daarvoor al de repository-authority is. Afwijken mag alleen voor een expliciete diagnose- of herstelopdracht nadat de actuele runtime eerst objectief is vastgesteld. Zo'n afwijking wordt zo smal mogelijk gehouden en verwijdert nooit volumes of data zonder afzonderlijke expliciete PO-toestemming.
+20c. Voor een **diagnosescript** geldt standaard read-only/fail-closed:
+    - gebruik de bestaande Compose-configuratie uit de repository en, indien aanwezig, de normale `.env`-route;
+    - lees alleen containers, logs, status of databasegegevens die voor de diagnose nodig zijn;
+    - start, stopt, migreert, reset of verwijdert niets tenzij dat expliciet onderdeel is van de diagnoseopdracht en vooraf als mutatie is benoemd;
+    - schrijf diagnose-output bij voorkeur naar één begrijpelijk tekstbestand voor de PO;
+    - diagnostische noodgrepen worden nooit stilzwijgend gepromoveerd tot het nieuwe normale PO-testpatroon.
+20d. Wanneer een eerder bewezen PO-test- of diagnosescript voor hetzelfde type taak beschikbaar is, wordt dat patroon eerst inhoudelijk hergebruikt. Alleen taakvariabelen zoals branch, PR, verwachte SHA, URL en functionele testinstructie worden aangepast, tenzij een aantoonbare repositorywijziging een andere aanpak noodzakelijk maakt. Nieuwe orchestratielogica wordt niet toegevoegd zonder concrete noodzaak.
+20e. Lokale PO-scripts mogen persoonsgebonden paden gebruiken wanneer zij door ChatGPT rechtstreeks aan de PO worden geleverd en de projectinstructies dat lokale pad voorschrijven; zulke paden worden niet in de publieke repository vastgelegd. Repositoryscripts zelf blijven generiek en repository-relatief.
 21. Absolute, persoonsgebonden lokale paden en andere workstationdetails worden niet in deze publieke repository vastgelegd. Zulke details blijven in de ChatGPT-projectinstructies of lokale configuratie. Repositoryscripts gebruiken generieke/repository-relatieve paden.
 22. **Parallel lokaal PO-testen tijdens CI is de standaardwerkwijze.** Zodra een functioneel testbare wijziging op de actieve taakbranch is gecommit en gepusht, maakt ChatGPT/Codex diezelfde branch direct lokaal testbaar voor de PO. Er wordt niet eerst gewacht tot alle GitHub Actions groen zijn, tenzij lokaal starten aantoonbaar onveilig, onmogelijk of inhoudelijk zinloos is.
 23. De lokale PO-testroute controleert vóór startup minimaal de bedoelde branch en de exacte head-SHA. De PO test daarmee aantoonbaar dezelfde kandidaat die op dat moment in GitHub staat.
