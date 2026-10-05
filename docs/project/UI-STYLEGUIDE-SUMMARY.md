@@ -114,6 +114,7 @@ Voor het mobiele scherm **Boodschappen** geldt aanvullend:
 - een klik/tik op een bestaand zoekresultaat geldt direct als toevoegen; een aparte vaste knop **Toevoegen** wordt niet getoond;
 - als de zoekactie geen kandidaat oplevert, verschijnt in dezelfde dropdown altijd de optie **Toevoegen: [ingevoerde tekst]** om het artikel uitsluitend aan de lokale boodschappenlijst toe te voegen;
 - handmatige vrije invoer zonder zoekresultaat kan daarnaast met Enter worden toegevoegd.
+- de actie **Boodschappen afgerond** staat rechtsonder onder de sectie **In winkelwagen**, na lijst en paginering, met duidelijke verticale tussenruimte zodat de knop niet tegen de lijst aansluit;
 
 
 ## Mobiele paginering en onderste actiebalk vanaf 5 oktober 2026
