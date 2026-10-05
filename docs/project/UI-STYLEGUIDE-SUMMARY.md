@@ -138,7 +138,7 @@ De primaire Inhuis-kleur is een **platformbrede functionele weergave-instelling*
 
 - de standaardkleur blijft `#005F6A`;
 - alleen een bevoegde **Superuser** kan de primaire kleur wijzigen of naar de standaard terugzetten;
-- de ingestelde kleur geldt voor alle gebruikers en apparaten via de centrale primaire kleurtokens;
+- de ingestelde kleur geldt voor alle gebruikers en apparaten via de centrale primaire kleurtokens en wordt bij het laden centraal toegepast;
 - een aangepaste kleur moet voldoende contrast met witte tekst behouden; minimaal WCAG-contrastverhouding 4,5:1;
 - gewone huishoudinstellingen tonen geen eigen primaire-kleurkiezer;
 - deze platforminstelling wijzigt geen autorisatie-, huishoud- of functionele domeingrenzen.
