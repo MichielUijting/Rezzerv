@@ -9,6 +9,8 @@ if not defined REZZERV_FRONTEND_PORT set "REZZERV_FRONTEND_PORT=5174"
 if not defined REZZERV_BACKEND_PORT set "REZZERV_BACKEND_PORT=8011"
 if not defined REZZERV_STARTUP_WAIT_SECONDS set "REZZERV_STARTUP_WAIT_SECONDS=300"
 if not defined REZZERV_APP_BASE_URL set "REZZERV_APP_BASE_URL=http://localhost:%REZZERV_FRONTEND_PORT%"
+if not defined REZZERV_AH_OAUTH_HOST set "REZZERV_AH_OAUTH_HOST=ah-login.inhuis.test"
+if not defined REZZERV_BACKEND_PUBLIC_URL set "REZZERV_BACKEND_PUBLIC_URL=http://%REZZERV_AH_OAUTH_HOST%:%REZZERV_BACKEND_PORT%"
 set "FRONTEND_PORT=%REZZERV_FRONTEND_PORT%"
 set "BACKEND_PORT=%REZZERV_BACKEND_PORT%"
 set "STARTUP_WAIT_SECONDS=%REZZERV_STARTUP_WAIT_SECONDS%"
@@ -45,6 +47,7 @@ echo ==================
 echo.
 
 call :ValidateProjectStructure || exit /b 1
+call :EnsureAHOAuthHost || exit /b 1
 call :EnsureDockerRunning || exit /b 1
 call :SanitizeRepoRuntimeArtifacts || exit /b 1
 call :ValidateCompose || exit /b 1
@@ -177,6 +180,23 @@ if exist "%cd%\frontend\node_modules\.vite" rmdir /s /q "%cd%\frontend\node_modu
 if exist "%cd%\frontend\.vite" rmdir /s /q "%cd%\frontend\.vite"
 for /r "%cd%" %%f in (*.pyc) do del /q "%%f" 2>nul
 for /d /r "%cd%" %%d in (__pycache__) do rmdir /s /q "%%d" 2>nul
+exit /b 0
+
+:EnsureAHOAuthHost
+echo Controleren van lokale AH OAuth-host...
+if not exist "%REPO_DIR%\scripts\ensure-ah-oauth-host.ps1" (
+  echo [ERROR] AH OAuth host-helper ontbreekt: scripts\ensure-ah-oauth-host.ps1
+  pause
+  exit /b 1
+)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_DIR%\scripts\ensure-ah-oauth-host.ps1" -Hostname "%REZZERV_AH_OAUTH_HOST%" -Address "127.0.0.1"
+if errorlevel 1 (
+  echo [ERROR] Lokale AH OAuth-host kon niet veilig worden geconfigureerd.
+  echo AH-login wordt niet gestart via localhost omdat hCaptcha dat weigert.
+  pause
+  exit /b 1
+)
+echo     AH OAuth-host: %REZZERV_BACKEND_PUBLIC_URL%
 exit /b 0
 
 :EnsureDockerRunning
