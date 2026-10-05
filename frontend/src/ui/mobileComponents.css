@@ -106,6 +106,22 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.rz-mobile-action-bar-item--icon-only {
+  grid-template-rows: 1fr;
+}
+
+.rz-mobile-action-bar-item--icon-only .rz-mobile-action-bar-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.rz-mobile-action-bar-desktop-icon {
+  display: inline-grid;
+  place-items: center;
+  font-size: var(--font-size-ui-title);
+  line-height: 1;
+}
+
 .rz-mobile-action-bar-item:focus-visible {
   outline: 2px solid var(--color-mobile-ui-primary);
   outline-offset: -2px;
