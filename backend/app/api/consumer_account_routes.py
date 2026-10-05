@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
+from sqlalchemy import text
 
 from app.db import engine
 from app.services.consumer_account_management_service import (
@@ -25,6 +26,20 @@ from app.services.session_request_context import resolve_current_server_session
 
 
 router = APIRouter()
+
+
+class ConsumerProfileUpdateRequest(BaseModel):
+    display_name: str
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, value: str) -> str:
+        normalized = " ".join(str(value or "").strip().split())
+        if not normalized:
+            raise ValueError("Naam is verplicht")
+        if len(normalized) > 120:
+            raise ValueError("Naam mag maximaal 120 tekens bevatten")
+        return normalized
 
 
 class ConsumerPasswordChangeRequest(BaseModel):
@@ -107,6 +122,45 @@ def _request_ip(request: Request) -> str | None:
     # Trust only the direct peer. Proxy-header trust belongs at the deployment boundary,
     # not inside this public authentication endpoint.
     return request.client.host if request.client is not None else None
+
+
+@router.get("/api/account/profile")
+def get_account_profile() -> dict:
+    context = _require_regular_consumer_session()
+    with engine.begin() as conn:
+        row = conn.execute(text("""
+            SELECT email, display_name
+            FROM app_users
+            WHERE id = :user_id
+            LIMIT 1
+        """), {"user_id": str(context.user_id)}).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Account niet gevonden.")
+    return {
+        "email": str(row.get("email") or context.email),
+        "display_name": str(row.get("display_name") or "").strip(),
+    }
+
+
+@router.put("/api/account/profile")
+def update_account_profile(payload: ConsumerProfileUpdateRequest) -> dict:
+    context = _require_regular_consumer_session()
+    with engine.begin() as conn:
+        result = conn.execute(text("""
+            UPDATE app_users
+            SET display_name = :display_name
+            WHERE id = :user_id
+        """), {
+            "display_name": payload.display_name,
+            "user_id": str(context.user_id),
+        })
+        if int(result.rowcount or 0) != 1:
+            raise HTTPException(status_code=404, detail="Account niet gevonden.")
+    return {
+        "email": context.email,
+        "display_name": payload.display_name,
+        "message": "Naam opgeslagen.",
+    }
 
 
 @router.post("/api/account/password")
