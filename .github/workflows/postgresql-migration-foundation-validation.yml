@@ -216,7 +216,7 @@ jobs:
           POSTGRES_USER: rezzerv
           POSTGRES_PASSWORD: rezzerv-ci-migrations
         ports:
-          - 5432:5432
+          - 5432
         options: >-
           --health-cmd "pg_isready -U rezzerv -d rezzerv_migrations"
           --health-interval 5s
@@ -240,8 +240,8 @@ jobs:
       - name: Validate PostgreSQL lineage, authority and zero-residual contract
         env:
           PYTHONPATH: backend
-          DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:5432/rezzerv_migrations
-          MIGRATION_DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:5432/rezzerv_migrations
+          DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv_migrations
+          MIGRATION_DATABASE_URL: postgresql://rezzerv:rezzerv-ci-migrations@127.0.0.1:${{ job.services.postgres.ports[5432] }}/rezzerv_migrations
           REZZERV_EXPECT_MIGRATION_MODE: postgresql-lineage
           DATABASE_CONNECT_TIMEOUT_SECONDS: '5'
           DATABASE_POOL_SIZE: '2'
