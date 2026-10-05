@@ -123,6 +123,7 @@ Voor mobiele viewports van maximaal 720 px gelden aanvullend de volgende app-bre
 
 - tabellen, kaartreeksen en andere gegevenslijsten tonen per pagina maximaal **10 voorkomens**;
 - gedeelde mobiele lijsten gebruiken de centrale pagineringscomponent; schermspecifieke paginering wordt alleen behouden wanneer de backend al server-side pagina's van maximaal 10 levert, zoals de Catalogus;
+- `MobilePagination` (`src/ui/MobilePagination.jsx`) is de canonieke centrale component voor mobiele paginering van reeksen en lijsten; nieuwe feature-specifieke mobiele paginering is niet toegestaan wanneer dit component volstaat;
 - de regel geldt onder meer voor Voorraad, Catalogus, Bijna op, Boodschappen, Meldingen, Kassa en Uitpakken, inclusief bon- en bonregellijsten;
 - paginering verandert uitsluitend de presentatie van de reeds beschikbare gegevens en geen autorisatie-, selectie-, filter-, sorteer- of domeinregels;
 - de vaste onderste actiebalk toont bij de vier directe acties alleen het bestaande actie-icoon; uitsluitend **Meer** behoudt zichtbare tekst;
