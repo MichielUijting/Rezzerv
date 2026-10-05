@@ -220,6 +220,51 @@ def _clean_forward_cookie(cookie_header: str) -> str:
     return "; ".join(pairs)
 
 
+_REQUEST_HEADER_EXCLUDE = {
+    "host",
+    "content-length",
+    "connection",
+    "proxy-connection",
+    "keep-alive",
+    "transfer-encoding",
+    "te",
+    "trailer",
+    "upgrade",
+    "accept-encoding",
+    "cookie",
+}
+
+
+def build_ah_forward_headers(request: Request, *, backend_origin: str) -> dict[str, str]:
+    # Keep the browser request as intact as possible. AH's login page includes
+    # anti-bot/captcha requests whose browser/client-hint headers matter. This
+    # mirrors the proven ah-mcp reverse-proxy behaviour: only transport-specific
+    # headers and our own flow cookie are removed, while Origin/Referer are
+    # rewritten to the real AH login origin.
+    headers = {
+        name: value
+        for name, value in request.headers.items()
+        if name.lower() not in _REQUEST_HEADER_EXCLUDE
+    }
+
+    cookie_header = _clean_forward_cookie(request.headers.get("cookie", ""))
+    if cookie_header:
+        headers["cookie"] = cookie_header
+
+    if request.headers.get("origin"):
+        headers["origin"] = AH_LOGIN_BASE_URL
+
+    referer = str(request.headers.get("referer") or "")
+    if referer:
+        if referer.startswith(backend_origin):
+            referer = AH_LOGIN_BASE_URL + referer[len(backend_origin):]
+        else:
+            referer = AH_LOGIN_BASE_URL + "/"
+        headers["referer"] = referer
+
+    return headers
+
+
 def _return_with_status(flow: AHOAuthFlow, status: str) -> str:
     parsed = urlparse(flow.return_to)
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
@@ -289,18 +334,7 @@ async def proxy_ah_login(path: str, request: Request):
     if query:
         upstream_url += f"?{query}"
 
-    headers: dict[str, str] = {}
-    for name in ("accept", "accept-language", "content-type", "user-agent"):
-        value = request.headers.get(name)
-        if value:
-            headers[name] = value
-    cookie_header = _clean_forward_cookie(request.headers.get("cookie", ""))
-    if cookie_header:
-        headers["cookie"] = cookie_header
-    if request.headers.get("origin"):
-        headers["origin"] = AH_LOGIN_BASE_URL
-    if request.headers.get("referer"):
-        headers["referer"] = AH_LOGIN_BASE_URL + "/"
+    headers = build_ah_forward_headers(request, backend_origin=flow.backend_origin)
 
     body = await request.body()
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
