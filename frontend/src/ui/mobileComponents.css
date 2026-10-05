@@ -48,7 +48,7 @@
 .rz-mobile-module-header h1 {
   margin: 0;
   color: var(--color-ui-primary-text);
-  font-size: var(--font-size-ui-title);
+  font-size: calc(var(--font-size-ui-title) * 2);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -83,7 +83,7 @@
   z-index: 30;
   display: grid;
   grid-template-columns: repeat(var(--rz-mobile-action-count, 5), minmax(0, 1fr));
-  min-height: calc(60px + env(safe-area-inset-bottom));
+  min-height: calc(80px + env(safe-area-inset-bottom));
   padding: 4px 4px env(safe-area-inset-bottom);
   border-top: 1px solid #dfe4e1;
   background: rgba(255, 255, 255, 0.98);
@@ -91,12 +91,12 @@
 
 .rz-mobile-action-bar-item {
   display: grid;
-  grid-template-rows: 26px auto;
+  grid-template-rows: 44px auto;
   place-items: center;
   align-content: center;
   gap: 1px;
   min-width: 0;
-  min-height: 56px;
+  min-height: 72px;
   padding: 3px 2px;
   color: #626a65;
   font-size: var(--font-size-ui-body);
@@ -111,8 +111,8 @@
 }
 
 .rz-mobile-action-bar-item--icon-only .rz-mobile-action-bar-icon {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
 }
 
 .rz-mobile-action-bar-desktop-icon {
@@ -131,13 +131,13 @@
 .rz-mobile-action-bar-icon {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 44px;
+  height: 44px;
 }
 
 .rz-mobile-action-bar-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 44px;
+  height: 44px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
