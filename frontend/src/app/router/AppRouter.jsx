@@ -24,7 +24,7 @@ import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHou
 import SettingsAlmostOutPage from '../../features/settings/SettingsAlmostOutPage'
 import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
 import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage'
-import SettingsFrontteamPage from '../../features/settings/SettingsFrontteamPage.jsx'
+import SettingsHouseholdProfilePage from '../../features/settings/SettingsHouseholdProfilePage.jsx'
 import SettingsAuthorizationPage from '../../features/settings/SettingsAuthorizationPage.jsx'
 import SettingsLocationsRoutePage from '../../features/settings/SettingsLocationsRoutePage.jsx'
 import SettingsMyAccountPage from '../../features/settings/SettingsMyAccountPage.jsx'
@@ -211,8 +211,9 @@ const router = createBrowserRouter([
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettingsRoute settingKey="almost-out"><SettingsAlmostOutPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/winkelimport', element: <ProtectedSettingsRoute settingKey="store-import"><SettingsStoreImportPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/winkelkoppelingen', element: <ProtectedSettingsRoute settingKey="store-connections"><StoreConnectionsPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/huishoudprofiel', element: <ProtectedSettingsRoute settingKey="household-profile"><SettingsHouseholdProfilePage /></ProtectedSettingsRoute> },
   { path: '/instellingen/huishouden', element: <ProtectedSettingsRoute settingKey="household"><SettingsHouseholdPage /></ProtectedSettingsRoute> },
-  { path: '/instellingen/frontteam', element: <ProtectedSettingsRoute settingKey="frontteam"><SettingsFrontteamPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/frontteam', element: <ProtectedSuperuser><Navigate to="/superuser" replace /></ProtectedSuperuser> },
   { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettingsRoute settingKey="authorizations"><SettingsAuthorizationPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/locaties', element: <ProtectedSettingsRoute settingKey="locations"><SettingsLocationsRoutePage /></ProtectedSettingsRoute> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettingsRoute settingKey="locations"><Navigate to="/instellingen/locaties" replace /></ProtectedSettingsRoute> },
