@@ -64,6 +64,14 @@ export const APPROVED_UI_COMPONENTS = Object.freeze([
     contractTests: ['tests/ui-component-reuse.contract.mjs'],
   },
   {
+    id: 'mobile-pagination',
+    source: 'src/ui/MobilePagination.jsx',
+    publicApi: 'MobilePagination',
+    purpose: 'Canonieke mobiele paginering voor reeksen en lijsten met maximaal tien zichtbare items per pagina.',
+    reuseRule: 'Gebruik MobilePagination voor mobiele reeksen en lijsten die paginering nodig hebben; maak geen feature-specifieke mobiele paginering.',
+    contractTests: ['tests/mobile-pagination.contract.mjs', 'tests/ui-component-reuse.contract.mjs'],
+  },
+  {
     id: 'mobile-module-header',
     source: 'src/ui/MobileModuleHeader.jsx',
     publicApi: 'MobileModuleHeader',
