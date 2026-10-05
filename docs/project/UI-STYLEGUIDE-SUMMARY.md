@@ -115,6 +115,19 @@ Voor het mobiele scherm **Boodschappen** geldt aanvullend:
 - als de zoekactie geen kandidaat oplevert, verschijnt in dezelfde dropdown altijd de optie **Toevoegen: [ingevoerde tekst]** om het artikel uitsluitend aan de lokale boodschappenlijst toe te voegen;
 - handmatige vrije invoer zonder zoekresultaat kan daarnaast met Enter worden toegevoegd.
 
+
+## Mobiele paginering en onderste actiebalk vanaf 5 oktober 2026
+
+Voor mobiele viewports van maximaal 720 px gelden aanvullend de volgende app-brede presentatieafspraken:
+
+- tabellen, kaartreeksen en andere gegevenslijsten tonen per pagina maximaal **10 voorkomens**;
+- gedeelde mobiele lijsten gebruiken de centrale pagineringscomponent; schermspecifieke paginering wordt alleen behouden wanneer de backend al server-side pagina's van maximaal 10 levert, zoals de Catalogus;
+- de regel geldt onder meer voor Voorraad, Catalogus, Bijna op, Boodschappen, Meldingen, Kassa en Uitpakken, inclusief bon- en bonregellijsten;
+- paginering verandert uitsluitend de presentatie van de reeds beschikbare gegevens en geen autorisatie-, selectie-, filter-, sorteer- of domeinregels;
+- de vaste onderste actiebalk toont bij de vier directe acties alleen het bestaande actie-icoon; uitsluitend **Meer** behoudt zichtbare tekst;
+- de directe actie-iconen zijn **44 x 44 px**; dit is tweemaal de eerdere 22 x 22 px icoonmaat en verandert de centrale 14/16px teksttypografie niet;
+- de mobiele content reserveert voldoende onderruimte voor de grotere vaste actiebalk zodat lijstinhoud, overlays en feedback niet achter de navigatie verdwijnen.
+
 ## Mobiele ontwerpbaseline vanaf 22 september 2026
 
 Voor mobiele modulehoofschermen geldt, te beginnen met **Voorraad**, de visuele grammatica uit het door de PO aangeleverde ontwerpvoorstel:
