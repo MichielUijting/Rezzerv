@@ -29,7 +29,7 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: write
 
 concurrency:
   group: f7-pr-fast-${{ github.event.pull_request.number || inputs.candidate_sha || github.ref }}
@@ -46,6 +46,7 @@ jobs:
       BASE_REF: ${{ inputs.base_ref || github.event.pull_request.base.ref || 'main' }}
       PR_BODY: ${{ github.event.pull_request.body || '' }}
       PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      CANDIDATE_REF: ${{ github.head_ref || github.ref_name }}
       PREVIOUS_SHA: ${{ github.event.before || '' }}
       GATE_CONFIG: quality/ci/f7_pr_fast_regression_gate.json
       RISK_POLICY: quality/ci/change_risk_policy.json
@@ -216,6 +217,7 @@ jobs:
             --source-sha "${{ steps.carry.outputs.source_sha }}" \
             --pr-number "$PR_NUMBER" \
             --base-sha "$BASE_SHA" \
+            --candidate-ref "$CANDIDATE_REF" \
             --evidence f7-pr-fast-regression-evidence.json \
             | tee f7-pr-fast-wait.log
           if [[ '${{ steps.plan.outputs.mode }}' == 'live' ]]; then
