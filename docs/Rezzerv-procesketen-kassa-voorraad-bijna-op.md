@@ -1,7 +1,7 @@
 # Rezzerv-procesketen: van Kassa naar Voorraad, Bijna op en Boodschappen
 
 **Status:** normatieve functionele en technische documentatie  
-**Scope:** Kassa, kassabonverwerking, artikelmodellering, Uitpakken, voorraadverwerking, Bijna op en Boodschappen  
+**Scope:** Kassa, kassabonverwerking, artikelmodellering, Uitpakken, voorraadverwerking, Bijna op en Boodschappen
 **Gerelateerde domeinen:** universele artikelen, producttype, huishoudartikelen, locaties, inventory events en Spaartegoeden
 
 Onderstaand schema beschrijft de totale keten van Kassa en kassabonverwerking via artikelmodellering en voorraadverwerking tot en met de signalering **Bijna op**. Het schema maakt ook zichtbaar waar universele artikelen, producttypen en huishoudartikelen in de keten horen en waarom spaar- en koopzegels niet naar Voorraad gaan.
