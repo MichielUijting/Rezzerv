@@ -3,7 +3,7 @@ import { fetchJsonWithAuth, getAuthHeaders } from '../../../lib/authSession'
 
 export const RECEIPT_SCANNER_OPTIONS = [
   { value: 'inhuis', label: 'Inhuis-scanner', description: 'De huidige ingebouwde kassabonscanner van Inhuis.' },
-  { value: 'in-huis-demo', label: 'Alternatieve scanner (Claude)', description: 'Gebruikt de alternatieve bonherkenning op de achtergrond. Je blijft volledig in Inhuis; Kassa en Uitpakken blijven ongewijzigd.' },
+  { value: 'in-huis-demo', label: 'AI', description: 'Gebruikt AI-bonherkenning op de achtergrond. Je blijft volledig in Inhuis; Kassa en Uitpakken blijven ongewijzigd.' },
 ]
 
 export const STORE_IMPORT_SIMPLIFICATION_LEVELS = [
