@@ -113,10 +113,14 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
     streamRef.current = null
     setCameraOptimizing(!deviceId)
     try {
-      const selection = await openReceiptCamera({ deviceId, previewVideo: videoRef.current })
+      const selection = await openReceiptCamera({ deviceId })
       streamRef.current = selection.stream
       setCameraDevices(selection.devices)
       activeCameraIdRef.current = selection.activeDeviceId
+      if (videoRef.current) {
+        videoRef.current.srcObject = selection.stream
+        await videoRef.current.play().catch(() => {})
+      }
       return true
     } catch (error) {
       const denied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'
@@ -432,7 +436,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
               fit="cover"
             />
             {cameraOptimizing ? (
-              <div className="rz-mobile-kassa-ai-guide-label">Beste camera kiezen…</div>
+              <div className="rz-mobile-kassa-ai-guide-label">Camera met hoogste resolutie kiezen…</div>
             ) : scannerProvider === 'in-huis-demo' ? (
               <div className="rz-mobile-kassa-ai-guide-label">AI zoekt de randen van de kassabon</div>
             ) : (

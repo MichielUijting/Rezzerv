@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { calculateSharpnessScore } from '../src/features/kassa/receiptCamera.js'
+import { cameraPixelCapacity } from '../src/features/kassa/receiptCamera.js'
 const wrapper=readFileSync(new URL('../src/features/kassa/KassaPage.jsx',import.meta.url),'utf8')
 const mobile=readFileSync(new URL('../src/features/kassa/MobileKassa.jsx',import.meta.url),'utf8')
 const camera=readFileSync(new URL('../src/features/kassa/receiptCamera.js',import.meta.url),'utf8')
@@ -54,15 +54,12 @@ assert.match(camera,/deviceId: \{ exact: deviceId \}/)
 assert.match(camera,/width: \{ ideal: IDEAL_RECEIPT_WIDTH \}/)
 assert.match(camera,/height: \{ ideal: IDEAL_RECEIPT_HEIGHT \}/)
 assert.match(camera,/focusMode: 'continuous'/)
-assert.match(camera,/ultra.?wide/)
-assert.match(camera,/telephoto/)
-assert.match(camera,/measureVisiblePreviewSharpness/)
-assert.match(camera,/previewVideo/)
-assert.match(camera,/SHARPNESS_SETTLE_MS = 1100/)
-assert.match(camera,/SHARPNESS_FRAME_COUNT = 5/)
-assert.match(camera,/calculateSharpnessScore/)
+assert.match(camera,/autoSelectHighestResolutionCamera/)
+assert.match(camera,/cameraPixelCapacity/)
+assert.match(camera,/capabilities\?\.width\?\.max/)
+assert.match(camera,/capabilities\?\.height\?\.max/)
+assert.match(mobile,/Camera met hoogste resolutie kiezen…/)
 assert.match(mobile,/onClick=\{takePhoto\}/)
-assert.match(mobile,/Beste camera kiezen…/)
 assert.match(mobile,/cameraOptimizing/)
 assert.match(mobile,/mobile-kassa-camera-permission/)
 assert.match(mobile,/testId: 'mobile-kassa-feedback'/)
@@ -87,17 +84,15 @@ assert.match(mobile,/Vul eerst de winkel in bij Bonkop/)
 assert.doesNotMatch(mobile,/return fileRef\.current\?\.click\(\)/)
 console.log('MOBILE_KASSA_CONTRACT_GREEN')
 
-const flat = new Uint8ClampedArray(8 * 8 * 4)
-for (let i = 0; i < flat.length; i += 4) {
-  flat[i] = 128; flat[i + 1] = 128; flat[i + 2] = 128; flat[i + 3] = 255
+
+const highResTrack = {
+  getCapabilities: () => ({ width: { max: 3840 }, height: { max: 2160 } }),
+  getSettings: () => ({ width: 1920, height: 1080 }),
 }
-const edges = new Uint8ClampedArray(8 * 8 * 4)
-for (let y = 0; y < 8; y += 1) {
-  for (let x = 0; x < 8; x += 1) {
-    const p = (y * 8 + x) * 4
-    const value = (x + y) % 2 === 0 ? 0 : 255
-    edges[p] = value; edges[p + 1] = value; edges[p + 2] = value; edges[p + 3] = 255
-  }
+const fallbackTrack = {
+  getCapabilities: () => ({}),
+  getSettings: () => ({ width: 1920, height: 1080 }),
 }
-assert.ok(calculateSharpnessScore(edges, 8, 8) > calculateSharpnessScore(flat, 8, 8))
-console.log('SHARP_CAMERA_SCORE_GREEN')
+assert.equal(cameraPixelCapacity(highResTrack), 3840 * 2160)
+assert.equal(cameraPixelCapacity(fallbackTrack), 1920 * 1080)
+console.log('CAMERA_RESOLUTION_SELECTION_GREEN')
