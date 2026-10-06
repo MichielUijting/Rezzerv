@@ -7196,6 +7196,7 @@ class ArticleAutomationOverrideUpdateRequest(BaseModel):
 
 class StoreImportSimplificationUpdateRequest(BaseModel):
     store_import_simplification_level: str
+    receipt_scanner_provider: str = RECEIPT_SCANNER_PROVIDER_DEFAULT
 
     @field_validator("store_import_simplification_level")
     @classmethod
@@ -7203,6 +7204,14 @@ class StoreImportSimplificationUpdateRequest(BaseModel):
         normalized = normalize_store_import_simplification_level(value)
         if normalized not in STORE_IMPORT_SIMPLIFICATION_ALLOWED:
             raise ValueError("Ongeldig vereenvoudigingsniveau")
+        return normalized
+
+    @field_validator("receipt_scanner_provider")
+    @classmethod
+    def validate_receipt_scanner_provider(cls, value):
+        normalized = str(value or "").strip().lower()
+        if normalized not in RECEIPT_SCANNER_PROVIDER_ALLOWED:
+            raise ValueError("Ongeldige kassabonscanner")
         return normalized
 
 
@@ -13009,10 +13018,17 @@ def update_store_import_settings(payload: StoreImportSimplificationUpdateRequest
     household_id = str(context['active_household_id'])
     with engine.begin() as conn:
         level = set_household_store_import_simplification_level(conn, household_id, payload.store_import_simplification_level)
+        receipt_scanner_provider = set_household_receipt_scanner_provider(
+            conn,
+            household_id,
+            payload.receipt_scanner_provider,
+        )
     return {
         "household_id": household_id,
         "store_import_simplification_level": level,
+        "receipt_scanner_provider": receipt_scanner_provider,
         "can_edit_store_import_simplification_level": True,
+        "can_edit_receipt_scanner_provider": True,
         "is_household_admin": True,
     }
 
