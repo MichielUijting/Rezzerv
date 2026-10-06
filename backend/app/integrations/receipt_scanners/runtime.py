@@ -20,6 +20,10 @@ DEFAULT_PROVIDER = "rezzerv-legacy"
 DEFAULT_TIMEOUT_SECONDS = 90.0
 DEFAULT_MAX_FILE_BYTES = 15_000_000
 CONTRACT_VERSION = "1.0"
+IN_HUIS_DEMO_DEFAULT_SUBMIT_PATH = "/scan"
+IN_HUIS_DEMO_DEFAULT_POLL_PATH = "/scan/{job_id}"
+IN_HUIS_DEMO_DEFAULT_API_KEY_HEADER = "X-API-Key"
+IN_HUIS_DEMO_DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 
 
 def _configured_provider_code() -> str:
@@ -46,6 +50,29 @@ def _configured_max_file_bytes() -> int:
     if value <= 0:
         raise ProviderConfigurationError("REZZERV_RECEIPT_SCANNER_MAX_FILE_BYTES must be positive")
     return value
+
+
+def _configured_in_huis_demo_request_timeout_seconds() -> float:
+    raw = str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_REQUEST_TIMEOUT_SECONDS", IN_HUIS_DEMO_DEFAULT_REQUEST_TIMEOUT_SECONDS))
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ProviderConfigurationError("REZZERV_IN_HUIS_DEMO_SCANNER_REQUEST_TIMEOUT_SECONDS must be numeric") from exc
+    if value <= 0:
+        raise ProviderConfigurationError("REZZERV_IN_HUIS_DEMO_SCANNER_REQUEST_TIMEOUT_SECONDS must be positive")
+    return value
+
+
+def _build_in_huis_demo_provider() -> InHuisDemoScannerAdapter:
+    return InHuisDemoScannerAdapter(
+        base_url=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_BASE_URL", "") or "").strip(),
+        api_key=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_API_KEY", "") or "").strip() or None,
+        api_key_header=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_API_KEY_HEADER", IN_HUIS_DEMO_DEFAULT_API_KEY_HEADER) or IN_HUIS_DEMO_DEFAULT_API_KEY_HEADER).strip(),
+        submit_path=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_SUBMIT_PATH", IN_HUIS_DEMO_DEFAULT_SUBMIT_PATH) or IN_HUIS_DEMO_DEFAULT_SUBMIT_PATH).strip(),
+        poll_path=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_POLL_PATH", IN_HUIS_DEMO_DEFAULT_POLL_PATH) or IN_HUIS_DEMO_DEFAULT_POLL_PATH).strip(),
+        request_timeout_seconds=_configured_in_huis_demo_request_timeout_seconds(),
+        max_file_bytes=_configured_max_file_bytes(),
+    )
 
 
 def validate_receipt_scanner_configuration() -> None:
@@ -86,7 +113,7 @@ def _gateway_for_provider(provider_code: str | None) -> ReceiptScannerGateway:
     if normalized == "inhuis":
         return get_receipt_scanner_gateway()
     if normalized == "in-huis-demo":
-        provider = InHuisDemoScannerAdapter(max_file_bytes=_configured_max_file_bytes())
+        provider = _build_in_huis_demo_provider()
         registry = ProviderRegistry([provider], active_provider_code=provider.provider_code)
         return ReceiptScannerGateway(registry, timeout_seconds=_configured_timeout_seconds())
     raise ProviderConfigurationError(f"Unknown household receipt scanner provider {normalized!r}")
