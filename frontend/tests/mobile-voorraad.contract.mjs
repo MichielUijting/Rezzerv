@@ -72,8 +72,11 @@ assert.match(mobileSource, /MobileArticleRow/)
 assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
 assert.match(mobileSource, /gpcBrickName/)
-assert.match(mobileSource, /GPC-groep:/)
-assert.match(mobileSource, /GPC-familie:/)
+assert.doesNotMatch(mobileSource, /GPC-groep:/)
+assert.match(mobileSource, /Productfamilie:/)
+assert.match(mobileSource, /Locatie:/)
+assert.match(mobileSource, /Sublocatie:/)
+assert.doesNotMatch(mobileSource, /row\.articleGroup \|\| 'Niet ingedeeld'/)
 
 
 

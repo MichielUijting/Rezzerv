@@ -417,15 +417,12 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                 <MobileArticleRow
                   key={row.id}
                   title={row.householdName}
-                  subtitle={row.productName && row.productName !== row.householdName ? row.productName : ''}
+                  subtitle=""
                   meta={[
                     row.gpcBrickName ? `Brick: ${row.gpcBrickName}` : '',
-                    row.gpcClassName ? `GPC-groep: ${row.gpcClassName}` : '',
-                    row.gpcFamilyName ? `GPC-familie: ${row.gpcFamilyName}` : '',
-                    row.articleGroup || 'Niet ingedeeld',
-                    locationTrackingEnabled
-                      ? (row.sublocation ? `${row.location} / ${row.sublocation}` : row.location)
-                      : '',
+                    row.gpcFamilyName ? `Productfamilie: ${row.gpcFamilyName}` : '',
+                    locationTrackingEnabled && row.location && row.location !== 'Geen locatie' ? `Locatie: ${row.location}` : '',
+                    locationTrackingEnabled && row.sublocation ? `Sublocatie: ${row.sublocation}` : '',
                   ].filter(Boolean)}
                   imageUrl={row.imageUrl}
                   imageProductName={row.productName || row.householdName}

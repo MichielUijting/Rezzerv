@@ -953,3 +953,10 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Een deeplink naar **Kassa → Bonnen** initialiseert de mobiele Kassa direct in de bonnenlijst; het camerascherm wordt daarbij niet eerst kort getoond.
 - Bij geselecteerde bonnen staat **Goedkeuren** links van **Verwijderen**, met de standaard centrale marge tussen beide acties.
 - Batchgoedkeuring hergebruikt per bon de bestaande canonieke receipt-goedkeurroute. Bonnen die niet kunnen worden goedgekeurd blijven geselecteerd en worden expliciet gemeld; geslaagde bonnen gaan volgens de bestaande flow naar Uitpakken.
+
+
+### Voorraad-hoofdscherm en Kassa-volgorde — 6 oktober 2026
+
+- Het hoofdscherm **Voorraad** toont naast artikelnaam en aantal uitsluitend de gebruikte metadata **Brick**, **Productfamilie**, **Locatie** en **Sublocatie**. Lege locatievelden worden niet als placeholdermetadata getoond.
+- **GPC-groep/Class**, Artikelgroep en een tweede productnaam worden niet meer als extra metadata in het Voorraad-hoofdscherm getoond; zij blijven waar van toepassing beschikbaar in detail- of beheercontext.
+- De open bonnen in **Kassa** worden op aankoopdatum oplopend weergegeven: de oudste bon staat bovenaan. Bij gelijke of ontbrekende aankoopdatum is aanmaaktijd de stabiele vervolgsortering.

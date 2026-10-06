@@ -11767,7 +11767,7 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                   AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('approved', 'approved_override')
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
-                ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
+                ORDER BY COALESCE(rt.purchase_at, rt.created_at) ASC, rt.created_at ASC, rt.id ASC
                 """
             ),
             {'household_id': effective_household_id},
