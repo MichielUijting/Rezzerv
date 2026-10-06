@@ -95,3 +95,46 @@ def test_sync_fetches_details_only_for_new_ah_receipts(tmp_path, monkeypatch):
     assert result["receipts_skipped_known"] == 1
     assert result["receipts_processed"] == 1
     assert result["last_sync_at"] == "2026-09-30T12:05:00+00:00"
+
+
+def test_count_pending_ah_receipts_does_not_import(monkeypatch):
+    engine = object()
+    session = AHAccountSession(
+        "access",
+        "refresh",
+        datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    saved_sessions: list[AHAccountSession] = []
+    monkeypatch.setattr(sync_service, "get_ah_session", lambda _engine, _household_id: session)
+    monkeypatch.setattr(
+        sync_service,
+        "save_ah_session",
+        lambda _engine, _household_id, value: saved_sessions.append(value),
+    )
+    monkeypatch.setattr(
+        sync_service,
+        "get_known_ah_receipt_ids",
+        lambda _engine, _household_id: {"known-1"},
+    )
+    monkeypatch.setattr(
+        sync_service,
+        "import_retailer_receipt",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("tellen mag niet importeren")),
+    )
+
+    client = FakeClient()
+    result = sync_service.count_pending_ah_receipts(
+        engine,
+        household_id="household-a",
+        client=client,
+    )
+
+    assert result == {
+        "provider": "ah",
+        "connected": True,
+        "count_available": True,
+        "pending_downloads": 1,
+        "receipts_found": 2,
+    }
+    assert client.detail_calls == []
+    assert saved_sessions == [session]
