@@ -981,3 +981,11 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 
 
 - Het mobiele **Kassa**-icoon is een eenvoudige betaalpas in de centrale groene Inhuis-kleur; het eerdere kassaregister-icoon vervalt.
+
+
+### Mobiel Uitpakken — functionele parity met desktop — 6 oktober 2026
+
+- In het mobiele kassabondetail heeft iedere bonregel een zichtbare actie **Details**. Die opent dezelfde bestaande bonartikeldetailfunctie als desktop, inclusief barcode/GTIN-controle, barcodecamera, universeel artikel en koppelen.
+- Mobiel biedt boven de bonregels dezelfde functionele filtermogelijkheden voor zoeken, status, mapping en locatie, plus **Filters wissen**. De mobiele tabelkop blijft verborgen; de functionaliteit verhuist naar touchgeschikte centrale bediening.
+- De bestaande bulkacties **Exporteren**, **Locatie toepassen** en **Naar voorraad** blijven dezelfde functies gebruiken als desktop.
+- Autorisaties blijven leidend: een Viewer kan details bekijken maar geen locatie, artikelgroep, barcodekoppeling of voorraadverwerking wijzigen; locatie-aanmaak blijft uitsluitend beschikbaar voor de huishoud-Beheerder; reeds verwerkte regels zijn in detail alleen-lezen.
