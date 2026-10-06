@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const pagination = readFileSync(new URL('../src/ui/MobilePagination.jsx', import.meta.url), 'utf8')
+const centralPagination = readFileSync(new URL('../src/ui/Pagination.jsx', import.meta.url), 'utf8')
 const dataTable = readFileSync(new URL('../src/ui/DataTable.jsx', import.meta.url), 'utf8')
 const inventory = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
 const catalog = readFileSync(new URL('../src/features/catalog/MobileCatalogPage.jsx', import.meta.url), 'utf8')
@@ -16,10 +17,11 @@ const mobileCss = readFileSync(new URL('../src/ui/mobileComponents.css', import.
 assert.match(pagination, /export const MOBILE_PAGE_SIZE = 10/)
 assert.match(pagination, /slice\(start, start \+ MOBILE_PAGE_SIZE\)/)
 assert.match(pagination, /<Pagination[\s\S]*page=\{page\}[\s\S]*pageCount=\{pageCount\}/)
-assert.match(pagination, /first: 'Eerste'/)
-assert.match(pagination, /previous: '−'/)
-assert.match(pagination, /next: '\+'/)
-assert.match(pagination, /last: Number\.isFinite/)
+assert.match(pagination, /<Pagination page=\{page\} pageCount=\{pageCount\} onPageChange=\{setPage\} \/>/)
+assert.match(centralPagination, /first: labels\?\.first \?\? '1'/)
+assert.match(centralPagination, /previous: labels\?\.previous \?\? '−'/)
+assert.match(centralPagination, /next: labels\?\.next \?\? '\+'/)
+assert.match(centralPagination, /last: labels\?\.last \?\? \(Number\.isFinite/)
 
 assert.match(dataTable, /const effectivePagination = Boolean\(pagination \|\| isMobileViewport\)/)
 assert.match(dataTable, /pageSize = 10/)

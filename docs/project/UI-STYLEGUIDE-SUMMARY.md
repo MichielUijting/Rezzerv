@@ -941,10 +941,11 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Het Voorraad-icoon blijft een stellingkast; de dooscontouren zijn fijner dan de kastlijnen. Rechtsboven en links in het midden staan bewust geen dozen.
 
 
-### Mobiele paginering — 6 oktober 2026
+### App-brede paginering — 6 oktober 2026
 
-- De centrale mobiele paginering gebruikt de labels **Eerste**, **−**, **+** en als laatste knop het bekende totale aantal pagina's. Alleen wanneer het totaal technisch niet bepaalbaar is, luidt de laatste knop **Einde**.
-- De desktop-paginering behoudt **Eerste / Vorige / Volgende / Laatste**.
+- Alle pagineringscomponenten gebruiken centraal dezelfde bediening: **1**, **−**, **+** en als laatste knop het bekende totale aantal pagina's.
+- Alleen wanneer het totale aantal pagina's technisch niet bepaalbaar is, luidt de laatste knop **Einde**.
+- Schermen introduceren geen eigen afwijkende labels voor Eerste/Vorige/Volgende/Laatste; de gedeelde `Pagination`-component is hiervoor de UI-authority.
 
 
 ### Mobiele Kassa — directe bonnenlijst en batchgoedkeuring — 6 oktober 2026

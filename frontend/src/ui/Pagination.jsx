@@ -5,10 +5,10 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
   const totalPages = Math.max(Number(pageCount) || 1, 1)
   const navigationDisabled = disabled || totalPages <= 1
   const resolvedLabels = {
-    first: labels?.first ?? 'Eerste',
-    previous: labels?.previous ?? 'Vorige',
-    next: labels?.next ?? 'Volgende',
-    last: labels?.last ?? 'Laatste',
+    first: labels?.first ?? '1',
+    previous: labels?.previous ?? '−',
+    next: labels?.next ?? '+',
+    last: labels?.last ?? (Number.isFinite(Number(pageCount)) && Number(pageCount) > 0 ? String(totalPages) : 'Einde'),
   }
 
   return (
