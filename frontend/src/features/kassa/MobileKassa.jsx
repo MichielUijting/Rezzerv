@@ -5,6 +5,7 @@ import Tabs from '../../ui/Tabs'
 import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
+import LiveReceiptCornerGuide from './components/LiveReceiptCornerGuide.jsx'
 import './mobileKassa.css'
 
 function money(value, currency = 'EUR') {
@@ -28,7 +29,7 @@ function mobileScanErrorMessage(detail) {
   return normalizeErrorMessage(raw) || 'Bon kon niet worden verwerkt. Probeer opnieuw.'
 }
 
-export default function MobileKassa() {
+export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   const { showFeedback } = useAppFeedback()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
@@ -404,11 +405,22 @@ export default function MobileKassa() {
   return (
     <div className="rz-mobile-kassa" data-testid="mobile-kassa-page">
       <MobileModuleHeader title={mode === 'list' ? 'Bonnen' : mode === 'detail' ? 'Kassabon' : mode === 'review' ? 'Bon controleren' : 'Kassa'} testId="mobile-kassa-header" />
+      <div className="rz-mobile-kassa-scanner-status" data-testid="mobile-kassa-scanner-status">
+        Actieve scanner: <strong>{scannerProvider === 'in-huis-demo' ? 'AI' : 'Inhuis'}</strong>
+      </div>
 
       {mode === 'camera' ? (
         <main className="rz-mobile-kassa-camera" data-testid="mobile-kassa-camera">
-          <video ref={videoRef} playsInline muted className="rz-mobile-kassa-video" />
-          <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
+          <div className="rz-mobile-kassa-video-stage">
+            <video ref={videoRef} playsInline muted className="rz-mobile-kassa-video" />
+            <LiveReceiptCornerGuide
+              videoRef={videoRef}
+              householdId={householdId}
+              enabled={scannerProvider === 'in-huis-demo'}
+              fit="cover"
+            />
+            <div className="rz-mobile-kassa-guide">{scannerProvider === 'in-huis-demo' ? 'AI zoekt de randen van de kassabon' : 'Plaats de kassabon binnen het vlak'}</div>
+          </div>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value=''; if (file) uploadImage(file) }} />
           <input ref={uploadRef} type="file" accept="image/*,application/pdf" hidden aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} />
           <div className="rz-mobile-kassa-camera-actions">
