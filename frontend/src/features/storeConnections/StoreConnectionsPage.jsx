@@ -3,6 +3,7 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
+import DataTable from '../../ui/DataTable.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared.jsx'
 import {
@@ -18,37 +19,7 @@ import {
   JUMBO_POC_FRAGMENT_PREFIX,
   buildJumboPocBookmarklet,
 } from './jumboReceiptPocBridge.js'
-
-function formatLastSync(value) {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
-  return new Intl.DateTimeFormat('nl-NL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
-function deriveRows(providers, connections) {
-  const byCode = new Map((connections || []).map((connection) => [connection.store_provider_code, connection]))
-  return (providers || []).map((provider) => {
-    const connection = byCode.get(provider.code) || null
-    const isLinked = !!connection && connection.connection_status === 'active'
-    return {
-      providerCode: provider.code,
-      providerName: provider.name || provider.code,
-      connection,
-      statusLabel: isLinked ? 'gekoppeld' : 'niet gekoppeld',
-      actionLabel: isLinked ? 'Wijzigen' : 'Koppelen',
-      typeLabel: isLinked ? (connection.connection_type || 'klantenkaart') : 'klantenkaart',
-      lastSyncLabel: isLinked ? formatLastSync(connection.last_sync_at || connection.linked_at) : '—',
-      cardNumber: connection?.external_account_ref || '',
-    }
-  }).sort((a, b) => a.providerName.localeCompare(b.providerName, 'nl'))
-}
+import { deriveStoreConnectionRows, formatLastSync } from './storeConnectionsModel.js'
 
 export default function StoreConnectionsPage() {
   const { showFeedback } = useAppFeedback()
@@ -67,13 +38,67 @@ export default function StoreConnectionsPage() {
   const [jumboPocProgress, setJumboPocProgress] = useState('')
   const [jumboPocResult, setJumboPocResult] = useState(null)
 
-  const rows = useMemo(() => deriveRows(providers, connections), [providers, connections])
+  const rows = useMemo(
+    () => deriveStoreConnectionRows(providers, connections, ahConnection),
+    [providers, connections, ahConnection],
+  )
   const editingRow = rows.find((row) => row.providerCode === editingCode) || null
   const lidlBookmarklet = useMemo(() => buildLidlWebBookmarklet(window.location.origin), [])
   const jumboPocBookmarklet = useMemo(
     () => buildJumboPocBookmarklet(window.location.origin + window.location.pathname),
     [],
   )
+
+  const storeConnectionColumns = useMemo(() => [
+    {
+      key: 'providerName',
+      header: 'Winkel',
+      width: 180,
+      renderCell: (row) => <span data-testid={`store-connection-name-${row.providerCode}`}>{row.providerName}</span>,
+    },
+    {
+      key: 'typeLabel',
+      header: 'Type koppeling',
+      width: 190,
+      renderCell: (row) => <span data-testid={`store-connection-type-${row.providerCode}`}>{row.typeLabel}</span>,
+    },
+    {
+      key: 'statusLabel',
+      header: 'Status',
+      width: 130,
+      renderCell: (row) => <span data-testid={`store-connection-status-${row.providerCode}`}>{row.statusLabel}</span>,
+    },
+    {
+      key: 'lastSyncLabel',
+      header: 'Laatste synchronisatie',
+      width: 210,
+      renderCell: (row) => <span data-testid={`store-connection-sync-${row.providerCode}`}>{row.lastSyncLabel}</span>,
+    },
+    {
+      key: 'action',
+      header: 'Actie',
+      width: 210,
+      renderCell: (row) => (
+        <div>
+          <Button
+            type="button"
+            variant={(row.connectionSource === 'ah_account' && row.statusLabel === 'gekoppeld') || row.connection ? 'secondary' : 'primary'}
+            data-testid={`store-connection-action-${row.providerCode}`}
+            onClick={() => handleStoreConnectionAction(row)}
+            disabled={isLoading || isSaving}
+          >
+            {row.actionLabel}
+          </Button>
+          <div
+            data-testid={`store-connection-ref-${row.providerCode}`}
+            style={{ fontSize: 'var(--font-size-ui-body)', marginTop: '6px' }}
+          >
+            {row.cardNumber || '—'}
+          </div>
+        </div>
+      ),
+    },
+  ], [isLoading, isSaving])
 
   async function loadAhStatus() {
     const data = await fetchJson('/api/receipts/retailers/ah/status')
@@ -354,6 +379,18 @@ export default function StoreConnectionsPage() {
     setCardNumber('')
   }
 
+  function handleStoreConnectionAction(row) {
+    if (row?.connectionSource === 'ah_account') {
+      closeEditor()
+      document.querySelector('[data-testid="ah-digital-receipts"]')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+      return
+    }
+    openEditor(row)
+  }
+
   async function handleSave() {
     if (!editingRow || !household) return
     const trimmed = String(cardNumber || '').trim()
@@ -573,46 +610,17 @@ export default function StoreConnectionsPage() {
           {error ? <div className="rz-inline-feedback" data-testid="store-connections-error">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback-success" data-testid="store-connections-status">{status}</div> : null}
 
-          <div style={{ overflowX: 'auto' }}>
-            <table className="rz-table" data-testid="store-connections-table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>Winkel</th>
-                  <th>Type koppeling</th>
-                  <th>Status</th>
-                  <th>Laatste synchronisatie</th>
-                  <th>Actie</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.providerCode} data-testid={`store-connection-row-${row.providerCode}`}>
-                    <td data-testid={`store-connection-name-${row.providerCode}`}>{row.providerName}</td>
-                    <td data-testid={`store-connection-type-${row.providerCode}`}>{row.typeLabel}</td>
-                    <td data-testid={`store-connection-status-${row.providerCode}`}>{row.statusLabel}</td>
-                    <td data-testid={`store-connection-sync-${row.providerCode}`}>{row.lastSyncLabel}</td>
-                    <td>
-                      <Button
-                        type="button"
-                        variant={row.connection ? 'secondary' : 'primary'}
-                        data-testid={`store-connection-action-${row.providerCode}`}
-                        onClick={() => openEditor(row)}
-                        disabled={isLoading || isSaving}
-                      >
-                        {row.actionLabel}
-                      </Button>
-                      <div data-testid={`store-connection-ref-${row.providerCode}`} style={{ fontSize: '12px', color: '#667085', marginTop: '6px' }}>
-                        {row.cardNumber || '—'}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!rows.length ? (
-                  <tr><td colSpan={5}>Geen winkels beschikbaar.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={storeConnectionColumns}
+            data={rows}
+            getRowKey={(row) => row.providerCode}
+            emptyMessage="Geen winkels beschikbaar."
+            dataTestId="store-connections-table"
+            tableClassName="rz-store-review-table"
+            stickyHeader={false}
+            stickyFilters={false}
+            tableStyle={{ width: 'auto' }}
+          />
         </Card>
 
         {editingRow ? (
