@@ -33,14 +33,14 @@ export async function getStoreImportSimplificationSettings() {
   return data
 }
 
-export async function saveStoreImportSimplificationSettings(store_import_simplification_level) {
+export async function saveStoreImportSimplificationSettings(store_import_simplification_level, receipt_scanner_provider) {
   const response = await fetchJsonWithAuth(`${API_BASE_URL}/api/household/store-import-settings`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
     },
-    body: JSON.stringify({ store_import_simplification_level }),
+    body: JSON.stringify({ store_import_simplification_level, receipt_scanner_provider }),
   })
 
   const data = await response.json().catch(() => ({}))
