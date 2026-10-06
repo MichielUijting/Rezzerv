@@ -116,6 +116,8 @@ from app.services.receipt_duplicate_guard import (
     StructuredReceiptDuplicateCandidate,
     dedupe_receipts_for_household,
     evaluate_structured_receipt_duplicate,
+    find_existing_receipt_by_content_hash,
+    find_existing_receipt_by_fingerprint,
 )
 from app.integrations.receipt_scanners.runtime import (
     scan_receipt_content_via_gateway,
