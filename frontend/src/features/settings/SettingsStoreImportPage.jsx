@@ -9,7 +9,6 @@ import {
   getStoreImportSimplificationLabel,
   getStoreImportSimplificationSettings,
   saveStoreImportSimplificationSettings,
-  saveReceiptScannerProvider,
 } from './services/storeImportSimplificationService'
 import { sortOptionObjects } from '../../ui/sorting'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
@@ -96,13 +95,13 @@ export default function SettingsStoreImportPage() {
     setIsSaving(true)
     setSaveError('')
     try {
-      const saved = await saveStoreImportSimplificationSettings(level)
-      const scannerSaved = await saveReceiptScannerProvider(receiptScannerProvider)
+      const saved = await saveStoreImportSimplificationSettings(level, receiptScannerProvider)
       const nextLevel = saved?.store_import_simplification_level || level
+      const nextScannerProvider = saved?.receipt_scanner_provider || receiptScannerProvider
       setLevel(nextLevel)
-      setCanEdit(Boolean(saved?.can_edit_store_import_simplification_level))
-      setReceiptScannerProvider(scannerSaved?.receipt_scanner_provider || receiptScannerProvider)
-      setLastSavedSnapshot(stableStringify({ level: nextLevel, receiptScannerProvider: scannerSaved?.receipt_scanner_provider || receiptScannerProvider }))
+      setCanEdit(Boolean(saved?.can_edit_store_import_simplification_level && saved?.can_edit_receipt_scanner_provider))
+      setReceiptScannerProvider(nextScannerProvider)
+      setLastSavedSnapshot(stableStringify({ level: nextLevel, receiptScannerProvider: nextScannerProvider }))
       queueSuccessMessage('Opgeslagen')
       return true
     } catch (error) {
