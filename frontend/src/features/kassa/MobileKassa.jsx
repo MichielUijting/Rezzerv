@@ -34,7 +34,6 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   const { showFeedback } = useAppFeedback()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
-  const fileRef = useRef(null)
   const uploadRef = useRef(null)
   const [mode, setMode] = useState('camera')
   const [householdId, setHouseholdId] = useState('')
@@ -217,27 +216,21 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   }
 
   async function takePhoto() {
-    if (!fileRef.current) {
-      showFeedback({ variant: 'warning', title: 'Camera niet beschikbaar', message: 'De telefooncamera kon niet worden geopend.' })
+    const video = videoRef.current
+    if (!streamRef.current?.active) {
+      await startCamera()
       return
     }
-    stopReceiptCameraStream(streamRef.current)
-    streamRef.current = null
-    fileRef.current.click()
-  }
-
-  async function handleNativeCameraPhoto(event) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) {
-      await openCamera(activeCameraIdRef.current)
+    if (!video?.videoWidth || !video?.videoHeight) {
+      showFeedback({ variant: 'warning', title: 'Camera nog niet gereed', message: 'Wacht tot de camera beeld geeft en probeer opnieuw.', testId: 'mobile-kassa-camera-not-ready' })
       return
     }
-    await uploadImage(file)
-  }
-
-  async function handleNativeCameraCancel() {
-    await openCamera(activeCameraIdRef.current)
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d')?.drawImage(video, 0, 0)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+    if (blob) await uploadImage(new File([blob], `kassabon-${Date.now()}.jpg`, { type: 'image/jpeg' }))
   }
 
   async function cancelReview() {
@@ -444,21 +437,11 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
               <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
             )}
           </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={handleNativeCameraPhoto}
-            onCancel={handleNativeCameraCancel}
-          />
           <input ref={uploadRef} type="file" accept="image/*,application/pdf" hidden aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} />
           <div className="rz-mobile-kassa-camera-actions">
             <Button type="button" onClick={showReceiptList}>Bonnen</Button>
             <Button type="button" onClick={takePhoto} disabled={busy} aria-label="Maak foto van kassabon">Foto nemen</Button>
           </div>
-          <div className="rz-mobile-kassa-camera-hint">Foto nemen gebruikt de telefooncamera voor de scherpste opname.</div>
           {cameraDevices.length > 1 ? (
             <Button type="button" variant="secondary" disabled={busy} onClick={switchCamera} data-testid="mobile-kassa-switch-camera">Camera wisselen</Button>
           ) : null}
