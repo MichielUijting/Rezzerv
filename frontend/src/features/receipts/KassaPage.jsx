@@ -14,6 +14,7 @@ import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import ReceiptStatusBadge from '../kassa/components/ReceiptStatusBadge.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import DetailInfoRow from '../kassa/components/DetailInfoRow.jsx'
+import LiveReceiptCornerGuide from '../kassa/components/LiveReceiptCornerGuide.jsx'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -1933,7 +1934,7 @@ function ReceiptUploadInputs({ fileInputRef, cameraInputRef, emailInputRef, onLa
   )
 }
 
-export default function KassaPage() {
+export default function KassaPage({ scannerProvider = 'inhuis' }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { showFeedback } = useAppFeedback()
@@ -3326,6 +3327,9 @@ export default function KassaPage() {
                   <div style={{ color: '#667085', marginTop: '4px' }}>
                     Zie direct welke bonnen nieuw zijn, controle nodig hebben of al gecontroleerd zijn.
                   </div>
+                  <div style={{ marginTop: '8px', fontSize: '14px' }} data-testid="kassa-scanner-status">
+                    Actieve scanner: <strong>{scannerProvider === 'in-huis-demo' ? 'AI' : 'Inhuis'}</strong>
+                  </div>
                 </div>
                 <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
                   <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading} data-testid="kassa-add-receipt-button">{isUploading ? 'Uploaden...' : 'Bon toevoegen'}</Button>
@@ -3589,7 +3593,20 @@ export default function KassaPage() {
         <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', padding: '16px 20px 20px' }}>
           <div className="rz-modal-card" role="dialog" aria-modal="true" aria-label="Camera kassabon" data-testid="kassa-live-camera-modal" style={{ width: 'min(900px, 100%)', padding: '24px', gap: '16px' }}>
             <h2 className="rz-modal-title">Kassabon fotograferen</h2>
-            <video ref={desktopCameraVideoRef} playsInline muted autoPlay data-testid="kassa-live-camera-video" style={{ width: '100%', maxHeight: '65vh', objectFit: 'contain', background: '#111', borderRadius: '12px' }} />
+            <div style={{ position: 'relative', width: '100%', maxHeight: '65vh', background: '#111', borderRadius: '12px', overflow: 'hidden' }}>
+              <video ref={desktopCameraVideoRef} playsInline muted autoPlay data-testid="kassa-live-camera-video" style={{ width: '100%', maxHeight: '65vh', objectFit: 'contain', display: 'block' }} />
+              <LiveReceiptCornerGuide
+                videoRef={desktopCameraVideoRef}
+                householdId={householdId}
+                enabled={scannerProvider === 'in-huis-demo'}
+                fit="contain"
+              />
+              {scannerProvider === 'in-huis-demo' ? (
+                <div style={{ position: 'absolute', top: '12px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '8px 12px', borderRadius: '999px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                  AI zoekt de randen van de kassabon
+                </div>
+              ) : null}
+            </div>
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
               <Button type="button" variant="secondary" onClick={cancelDesktopLiveCamera}>Annuleren</Button>
               <Button type="button" variant="primary" onClick={captureDesktopCameraPhoto} data-testid="kassa-live-camera-shutter">Foto maken</Button>
