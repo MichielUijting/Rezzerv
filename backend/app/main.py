@@ -1134,6 +1134,9 @@ MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
 STORE_IMPORT_SIMPLIFICATION_KEY = "store_import_simplification_level"
 STORE_IMPORT_SIMPLIFICATION_ALLOWED = {"voorzichtig", "gebalanceerd", "maximaal_gemak"}
 STORE_IMPORT_SIMPLIFICATION_DEFAULT = "gebalanceerd"
+RECEIPT_SCANNER_PROVIDER_KEY = "receipt_scanner_provider"
+RECEIPT_SCANNER_PROVIDER_ALLOWED = {"inhuis", "in-huis-demo"}
+RECEIPT_SCANNER_PROVIDER_DEFAULT = "inhuis"
 HOUSEHOLD_AUTO_CONSUME_KEY = "consumable_auto_deduction_mode"
 HOUSEHOLD_AUTO_CONSUME_LEGACY_KEY = "auto_consume_on_repurchase"
 ARTICLE_AUTO_CONSUME_OVERRIDES_KEY = "article_auto_consume_overrides"
@@ -6285,6 +6288,44 @@ def set_household_store_import_simplification_level(conn, household_id: str, val
 
 
 
+def normalize_receipt_scanner_provider(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized not in RECEIPT_SCANNER_PROVIDER_ALLOWED:
+        return RECEIPT_SCANNER_PROVIDER_DEFAULT
+    return normalized
+
+
+def get_household_receipt_scanner_provider(conn, household_id: str) -> str:
+    row = conn.execute(
+        text(
+            "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
+        ),
+        {"household_id": str(household_id), "setting_key": RECEIPT_SCANNER_PROVIDER_KEY},
+    ).mappings().first()
+    return normalize_receipt_scanner_provider(row["setting_value"] if row else None)
+
+
+def set_household_receipt_scanner_provider(conn, household_id: str, value: str) -> str:
+    normalized = normalize_receipt_scanner_provider(value)
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_settings (id, household_id, setting_key, setting_value, updated_at)
+            VALUES (:id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP)
+            ON CONFLICT(household_id, setting_key)
+            DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "household_id": str(household_id),
+            "setting_key": RECEIPT_SCANNER_PROVIDER_KEY,
+            "setting_value": normalized,
+        },
+    )
+    return normalized
+
+
 def normalize_almost_out_prediction_enabled(value: Any) -> bool:
     return normalize_bool_setting(value)
 
@@ -7162,6 +7203,18 @@ class StoreImportSimplificationUpdateRequest(BaseModel):
         normalized = normalize_store_import_simplification_level(value)
         if normalized not in STORE_IMPORT_SIMPLIFICATION_ALLOWED:
             raise ValueError("Ongeldig vereenvoudigingsniveau")
+        return normalized
+
+
+class ReceiptScannerProviderUpdateRequest(BaseModel):
+    receipt_scanner_provider: str
+
+    @field_validator("receipt_scanner_provider")
+    @classmethod
+    def validate_provider(cls, value):
+        normalized = normalize_receipt_scanner_provider(value)
+        if normalized not in RECEIPT_SCANNER_PROVIDER_ALLOWED:
+            raise ValueError("Ongeldige kassabonscanner")
         return normalized
 
 
@@ -10609,6 +10662,8 @@ def import_uploaded_receipt_payload(
         if reject_non_receipt and not result.get('receipt_table_id'):
             raise ValueError('Gedeelde inhoud is niet als bruikbare kassabon herkend.')
         return result
+    with engine.begin() as conn:
+        scanner_provider = get_household_receipt_scanner_provider(conn, str(household_id))
     result = ingest_receipt(
         engine=engine,
         receipt_storage_root=RECEIPT_STORAGE_ROOT,
@@ -10622,6 +10677,7 @@ def import_uploaded_receipt_payload(
         failed_store_name=failed_store_name,
         failed_purchase_at=failed_purchase_at,
         include_debug=include_debug,
+        scanner_provider=scanner_provider,
     )
     return _normalized_purchase_at_or_fallback(str(result.get('receipt_table_id') or ''), result)
 
@@ -12581,6 +12637,7 @@ def get_household(authorization: Optional[str] = Header(None)):
     household = get_household_payload_for_user(user)
     with engine.begin() as conn:
         household["store_import_simplification_level"] = get_household_store_import_simplification_level(conn, household["id"])
+        household["receipt_scanner_provider"] = get_household_receipt_scanner_provider(conn, household["id"])
         try:
             product_configuration = resolve_household_product_configuration(conn, household["id"])
         except LookupError:
@@ -12935,10 +12992,13 @@ def get_store_import_settings(authorization: Optional[str] = Header(None)):
     can_edit = context['display_role'] == 'admin'
     with engine.begin() as conn:
         level = get_household_store_import_simplification_level(conn, household_id)
+        receipt_scanner_provider = get_household_receipt_scanner_provider(conn, household_id)
     return {
         "household_id": household_id,
         "store_import_simplification_level": level,
+        "receipt_scanner_provider": receipt_scanner_provider,
         "can_edit_store_import_simplification_level": can_edit,
+        "can_edit_receipt_scanner_provider": can_edit,
         "is_household_admin": can_edit,
     }
 
@@ -12953,6 +13013,20 @@ def update_store_import_settings(payload: StoreImportSimplificationUpdateRequest
         "household_id": household_id,
         "store_import_simplification_level": level,
         "can_edit_store_import_simplification_level": True,
+        "is_household_admin": True,
+    }
+
+
+@app.put("/api/household/receipt-scanner-provider")
+def update_receipt_scanner_provider(payload: ReceiptScannerProviderUpdateRequest, authorization: Optional[str] = Header(None)):
+    context = require_household_admin_context(authorization)
+    household_id = str(context['active_household_id'])
+    with engine.begin() as conn:
+        provider = set_household_receipt_scanner_provider(conn, household_id, payload.receipt_scanner_provider)
+    return {
+        "household_id": household_id,
+        "receipt_scanner_provider": provider,
+        "can_edit_receipt_scanner_provider": True,
         "is_household_admin": True,
     }
 
