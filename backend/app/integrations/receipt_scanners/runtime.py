@@ -19,6 +19,10 @@ DEFAULT_PROVIDER = "rezzerv-legacy"
 DEFAULT_TIMEOUT_SECONDS = 90.0
 DEFAULT_MAX_FILE_BYTES = 15_000_000
 CONTRACT_VERSION = "1.0"
+IN_HUIS_DEMO_DEFAULT_SUBMIT_PATH = "/scan"
+IN_HUIS_DEMO_DEFAULT_POLL_PATH = "/scan/{job_id}"
+IN_HUIS_DEMO_DEFAULT_API_KEY_HEADER = "X-API-Key"
+IN_HUIS_DEMO_DEFAULT_REQUEST_TIMEOUT_SECONDS = 90.0
 
 
 def _configured_provider_code() -> str:
@@ -45,6 +49,33 @@ def _configured_max_file_bytes() -> int:
     if value <= 0:
         raise ProviderConfigurationError("REZZERV_RECEIPT_SCANNER_MAX_FILE_BYTES must be positive")
     return value
+
+
+def _configured_in_huis_demo_request_timeout_seconds() -> float:
+    raw = str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_REQUEST_TIMEOUT_SECONDS", IN_HUIS_DEMO_DEFAULT_REQUEST_TIMEOUT_SECONDS))
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ProviderConfigurationError("REZZERV_IN_HUIS_DEMO_SCANNER_REQUEST_TIMEOUT_SECONDS must be numeric") from exc
+    if value <= 0:
+        raise ProviderConfigurationError("REZZERV_IN_HUIS_DEMO_SCANNER_REQUEST_TIMEOUT_SECONDS must be positive")
+    return value
+
+
+def _build_in_huis_demo_provider():
+    # Keep the optional HTTP provider dependency out of the default scanner
+    # boundary. It is loaded only when the household explicitly selects AI.
+    from .adapters.in_huis_demo import InHuisDemoScannerAdapter
+
+    return InHuisDemoScannerAdapter(
+        base_url=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_BASE_URL", "") or "").strip(),
+        api_key=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_API_KEY", "") or "").strip() or None,
+        api_key_header=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_API_KEY_HEADER", IN_HUIS_DEMO_DEFAULT_API_KEY_HEADER) or IN_HUIS_DEMO_DEFAULT_API_KEY_HEADER).strip(),
+        submit_path=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_SUBMIT_PATH", IN_HUIS_DEMO_DEFAULT_SUBMIT_PATH) or IN_HUIS_DEMO_DEFAULT_SUBMIT_PATH).strip(),
+        poll_path=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_POLL_PATH", IN_HUIS_DEMO_DEFAULT_POLL_PATH) or IN_HUIS_DEMO_DEFAULT_POLL_PATH).strip(),
+        request_timeout_seconds=_configured_in_huis_demo_request_timeout_seconds(),
+        max_file_bytes=_configured_max_file_bytes(),
+    )
 
 
 def validate_receipt_scanner_configuration() -> None:
@@ -80,7 +111,31 @@ def _structured_retailer_gateway() -> ReceiptScannerGateway:
     return ReceiptScannerGateway(registry, timeout_seconds=_configured_timeout_seconds())
 
 
-def scan_receipt_content_via_gateway(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
+def _gateway_for_provider(provider_code: str | None) -> ReceiptScannerGateway:
+    normalized = str(provider_code or "inhuis").strip().lower()
+    if normalized == "inhuis":
+        return get_receipt_scanner_gateway()
+    if normalized == "in-huis-demo":
+        provider = _build_in_huis_demo_provider()
+        registry = ProviderRegistry([provider], active_provider_code=provider.provider_code)
+        return ReceiptScannerGateway(registry, timeout_seconds=_configured_timeout_seconds())
+    raise ProviderConfigurationError(f"Unknown household receipt scanner provider {normalized!r}")
+
+
+def detect_receipt_corners_via_provider(
+    file_bytes: bytes,
+    mime_type: str,
+    provider_code: str | None,
+) -> dict:
+    normalized = str(provider_code or "inhuis").strip().lower()
+    if normalized != "in-huis-demo":
+        return {"active": False, "corners": None, "image_width": 0, "image_height": 0}
+    provider = _build_in_huis_demo_provider()
+    result = provider.detect_live(file_bytes, mime_type)
+    return {"active": True, **result}
+
+
+def scan_receipt_content_via_gateway(file_bytes: bytes, filename: str, mime_type: str, provider_code: str | None = None) -> ReceiptParseResult:
     scan_id = f"rscan_{uuid.uuid4().hex}"
     request = ScanRequestV1.from_bytes(
         scan_id=scan_id,
@@ -88,6 +143,6 @@ def scan_receipt_content_via_gateway(file_bytes: bytes, filename: str, mime_type
         filename=filename,
         mime_type=mime_type,
     )
-    gateway = _structured_retailer_gateway() if mime_type == RETAILER_RECEIPT_MIME else get_receipt_scanner_gateway()
+    gateway = _structured_retailer_gateway() if mime_type == RETAILER_RECEIPT_MIME else _gateway_for_provider(provider_code)
     canonical = gateway.scan(request)
     return canonical_to_receipt_parse_result(canonical)

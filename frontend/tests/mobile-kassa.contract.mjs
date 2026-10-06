@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { cameraPixelCapacity } from '../src/features/kassa/receiptCamera.js'
 const wrapper=readFileSync(new URL('../src/features/kassa/KassaPage.jsx',import.meta.url),'utf8')
 const mobile=readFileSync(new URL('../src/features/kassa/MobileKassa.jsx',import.meta.url),'utf8')
+const camera=readFileSync(new URL('../src/features/kassa/receiptCamera.js',import.meta.url),'utf8')
 const chrome=readFileSync(new URL('../src/app/MobileAppChrome.jsx',import.meta.url),'utf8')
 assert.match(wrapper,/useMobileAppViewport/)
 assert.match(wrapper,/MobileKassa/)
-assert.match(mobile,/getUserMedia/)
-assert.match(mobile,/facingMode/)
+assert.match(camera,/getUserMedia/)
+assert.match(camera,/facingMode/)
 assert.match(mobile,/data-testid="mobile-kassa-camera"/)
 assert.match(mobile,/Bon controleren/)
 assert.match(mobile,/>Annuleren</)
@@ -45,7 +47,24 @@ assert.match(mobile,/\/api\/receipts\/delete/)
 assert.match(mobile,/Geen kassabon herkend/)
 assert.match(mobile,/ReceiptBodyV1/)
 assert.match(mobile,/Foto nemen/)
+assert.match(mobile,/Camera wisselen/)
+assert.match(mobile,/mobile-kassa-switch-camera/)
+assert.match(camera,/enumerateDevices/)
+assert.match(camera,/deviceId: \{ exact: deviceId \}/)
+assert.match(camera,/width: \{ ideal: IDEAL_RECEIPT_WIDTH \}/)
+assert.match(camera,/height: \{ ideal: IDEAL_RECEIPT_HEIGHT \}/)
+assert.match(camera,/focusMode: 'continuous'/)
+assert.match(camera,/autoSelectHighestResolutionCamera/)
+assert.match(camera,/cameraPixelCapacity/)
+assert.match(camera,/PREFERRED_CAMERA_STORAGE_KEY/)
+assert.match(camera,/rememberPreferredReceiptCamera/)
+assert.match(camera,/selectionReason: 'remembered-success'/)
+assert.match(mobile,/rememberPreferredReceiptCamera\(activeCameraIdRef\.current\)/)
+assert.match(camera,/capabilities\?\.width\?\.max/)
+assert.match(camera,/capabilities\?\.height\?\.max/)
+assert.match(mobile,/Camera kiezen…/)
 assert.match(mobile,/onClick=\{takePhoto\}/)
+assert.match(mobile,/cameraOptimizing/)
 assert.match(mobile,/mobile-kassa-camera-permission/)
 assert.match(mobile,/testId: 'mobile-kassa-feedback'/)
 assert.doesNotMatch(mobile,/rz-mobile-kassa-message\" role=\"status\"/)
@@ -68,3 +87,16 @@ assert.doesNotMatch(mobile,/variant=\"secondary\" onClick=\{showReceiptList\}>Bo
 assert.match(mobile,/Vul eerst de winkel in bij Bonkop/)
 assert.doesNotMatch(mobile,/return fileRef\.current\?\.click\(\)/)
 console.log('MOBILE_KASSA_CONTRACT_GREEN')
+
+
+const highResTrack = {
+  getCapabilities: () => ({ width: { max: 3840 }, height: { max: 2160 } }),
+  getSettings: () => ({ width: 1920, height: 1080 }),
+}
+const fallbackTrack = {
+  getCapabilities: () => ({}),
+  getSettings: () => ({ width: 1920, height: 1080 }),
+}
+assert.equal(cameraPixelCapacity(highResTrack), 3840 * 2160)
+assert.equal(cameraPixelCapacity(fallbackTrack), 1920 * 1080)
+console.log('CAMERA_RESOLUTION_SELECTION_GREEN')

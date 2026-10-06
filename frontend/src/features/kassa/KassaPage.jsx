@@ -7,6 +7,19 @@ import MobileKassa from './MobileKassa.jsx'
 export default function KassaPage() {
   const isMobile = useMobileAppViewport()
   const [syncRevision, setSyncRevision] = useState(0)
+  const [scannerProvider, setScannerProvider] = useState('inhuis')
+
+  useEffect(() => {
+    let cancelled = false
+    fetchJson('/api/household/store-import-settings')
+      .then((settings) => {
+        if (!cancelled) setScannerProvider(settings?.receipt_scanner_provider || 'inhuis')
+      })
+      .catch(() => {
+        if (!cancelled) setScannerProvider('inhuis')
+      })
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -36,6 +49,6 @@ export default function KassaPage() {
   }, [])
 
   return isMobile
-    ? <MobileKassa key={`mobile-${syncRevision}`} />
-    : <DesktopKassaPage key={`desktop-${syncRevision}`} />
+    ? <MobileKassa key={`mobile-${syncRevision}`} scannerProvider={scannerProvider} />
+    : <DesktopKassaPage key={`desktop-${syncRevision}`} scannerProvider={scannerProvider} />
 }

@@ -8,6 +8,10 @@
 *.sqlite
 *.sqlite3
 
+# Local secrets / external source checkout
+.env
+external/in-huis-demo/
+
 # Python env / cache
 .venv/
 venv/

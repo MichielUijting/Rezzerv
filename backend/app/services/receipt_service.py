@@ -55,7 +55,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Iterable
 
-from sqlalchemy import bindparam, inspect, text
+from sqlalchemy import text
 
 from app.receipt_ingestion.line_classifier import classify_receipt_text_line
 from app.receipt_ingestion.receipt_line_semantics import derive_receipt_line_semantics
@@ -82,7 +82,6 @@ from app.receipt_ingestion.fingerprints import (
     _is_plausible_purchase_at,
     _is_plausible_total_amount,
     _normalize_fingerprint_text,
-    build_receipt_fingerprint_from_parse_result,
 )
 from app.receipt_ingestion.service_parts.source_detection import (
     detect_mime_type,
@@ -112,6 +111,13 @@ from app.services.receipt_reimport_lineage_service import (
     load_deleted_reimport_lineage,
     resolve_reimport_logical_line_key,
     was_prior_line_validated,
+)
+from app.services.receipt_duplicate_guard import (
+    StructuredReceiptDuplicateCandidate,
+    dedupe_receipts_for_household,
+    evaluate_structured_receipt_duplicate,
+    find_existing_receipt_by_content_hash,
+    find_existing_receipt_by_fingerprint,
 )
 from app.integrations.receipt_scanners.runtime import (
     scan_receipt_content_via_gateway,
@@ -238,248 +244,6 @@ def _looks_like_fuzzy_total_label(value: str | None) -> bool:
         .replace('!', 'l')
     )
     return normalized in {'totaal', 'totall', 'totaai'}
-
-
-def _column_exists(conn, table_name: str, column_name: str) -> bool:
-    columns = inspect(conn).get_columns(table_name)
-    return any(str(column.get('name') or '').lower() == column_name.lower() for column in columns)
-
-
-def _load_line_groups(conn, receipt_table_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
-    groups: dict[str, list[dict[str, Any]]] = {receipt_table_id: [] for receipt_table_id in receipt_table_ids}
-    if not receipt_table_ids:
-        return groups
-    stmt = text(
-        'SELECT receipt_table_id, raw_label, normalized_label, line_total FROM receipt_table_lines WHERE receipt_table_id IN :receipt_table_ids ORDER BY receipt_table_id, line_index'
-    ).bindparams(bindparam('receipt_table_ids', expanding=True))
-    rows = conn.execute(stmt, {'receipt_table_ids': receipt_table_ids}).mappings().all()
-    for row in rows:
-        groups.setdefault(str(row['receipt_table_id']), []).append(dict(row))
-    return groups
-
-
-def _fingerprint_from_stored_receipt(row: dict[str, Any], lines: list[dict[str, Any]]) -> str:
-    purchase_at = row.get('purchase_at') if _is_plausible_purchase_at(row.get('purchase_at')) else None
-    total_amount = _parse_decimal(str(row.get('total_amount'))) if row.get('total_amount') is not None else None
-    if not _is_plausible_total_amount(total_amount):
-        total_amount = None
-    return _build_receipt_fingerprint(row.get('store_name'), purchase_at, total_amount, lines)
-
-
-_REIMPORT_ALLOWED_WORKFLOW_STATES = {'removed_reimport_allowed', 'legacy_deleted'}
-
-
-def _blocks_receipt_reimport(workflow_state: str | None) -> bool:
-    normalized = str(workflow_state or 'active').strip().lower() or 'active'
-    return normalized not in _REIMPORT_ALLOWED_WORKFLOW_STATES
-
-
-def find_existing_receipt_by_content_hash(
-    conn,
-    household_id: str,
-    sha256_hash: str,
-) -> dict[str, Any] | None:
-    if not sha256_hash:
-        return None
-    rows = conn.execute(
-        text(
-            """
-            SELECT
-                rr.id AS raw_receipt_id,
-                rr.raw_status,
-                rr.original_filename,
-                rr.sha256_hash,
-                rr.deleted_at AS raw_deleted_at,
-                rt.id AS receipt_table_id,
-                rt.store_name,
-                rt.store_branch,
-                rt.purchase_at,
-                rt.total_amount,
-                rt.parse_status,
-                rt.line_count,
-                rt.workflow_state,
-                rt.approved_at,
-                rt.deleted_at AS receipt_deleted_at
-            FROM raw_receipts rr
-            LEFT JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
-            WHERE rr.household_id = :household_id
-              AND rr.sha256_hash = :sha256_hash
-            ORDER BY
-                CASE
-                    WHEN rt.id IS NOT NULL
-                     AND COALESCE(NULLIF(TRIM(rt.workflow_state), ''), 'active')
-                         NOT IN ('removed_reimport_allowed', 'legacy_deleted')
-                    THEN 0
-                    WHEN rt.id IS NULL AND rr.deleted_at IS NULL
-                    THEN 1
-                    ELSE 2
-                END,
-                COALESCE(rt.updated_at, rr.created_at) DESC,
-                rr.id DESC
-            """
-        ),
-        {'household_id': household_id, 'sha256_hash': sha256_hash},
-    ).mappings().all()
-    for row in rows:
-        row_dict = dict(row)
-        if row_dict.get('receipt_table_id'):
-            if _blocks_receipt_reimport(row_dict.get('workflow_state')):
-                return row_dict
-            continue
-        if row_dict.get('raw_deleted_at') is None:
-            return row_dict
-    return None
-
-
-def find_existing_receipt_by_fingerprint(conn, household_id: str, fingerprint: str) -> dict[str, Any] | None:
-    if not fingerprint:
-        return None
-    rows = conn.execute(
-        text(
-            """
-            SELECT
-                rt.id AS receipt_table_id,
-                rr.id AS raw_receipt_id,
-                rr.original_filename,
-                rr.sha256_hash,
-                rr.deleted_at AS raw_deleted_at,
-                rt.store_name,
-                rt.store_branch,
-                rt.purchase_at,
-                rt.total_amount,
-                rt.parse_status,
-                rt.line_count,
-                rt.workflow_state,
-                rt.approved_at,
-                rt.deleted_at AS receipt_deleted_at
-            FROM receipt_tables rt
-            JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-            WHERE rt.household_id = :household_id
-              AND COALESCE(NULLIF(TRIM(rt.workflow_state), ''), 'active')
-                  NOT IN ('removed_reimport_allowed', 'legacy_deleted')
-            ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
-            """
-        ),
-        {'household_id': household_id},
-    ).mappings().all()
-    if not rows:
-        return None
-    line_groups = _load_line_groups(conn, [str(row['receipt_table_id']) for row in rows])
-    for row in rows:
-        candidate_fingerprint = _fingerprint_from_stored_receipt(
-            dict(row),
-            line_groups.get(str(row['receipt_table_id']), []),
-        )
-        if candidate_fingerprint and candidate_fingerprint == fingerprint:
-            return dict(row)
-    return None
-
-
-def dedupe_receipts_for_household(engine, household_id: str) -> dict[str, Any]:
-    effective_household_id = str(household_id or '').strip()
-    if not effective_household_id:
-        return {'deduped_count': 0, 'kept_count': 0, 'duplicate_table_ids': []}
-
-    with engine.begin() as conn:
-        has_rt_deleted = _column_exists(conn, 'receipt_tables', 'deleted_at')
-        has_rr_deleted = _column_exists(conn, 'raw_receipts', 'deleted_at')
-        where_parts = ['rt.household_id = :household_id']
-        if has_rt_deleted:
-            where_parts.append('rt.deleted_at IS NULL')
-        if has_rr_deleted:
-            where_parts.append('rr.deleted_at IS NULL')
-        rows = conn.execute(
-            text(
-                f"""
-                SELECT
-                    rt.id AS receipt_table_id,
-                    rr.id AS raw_receipt_id,
-                    rt.store_name,
-                    rt.purchase_at,
-                    rt.total_amount,
-                    rt.created_at,
-                    rt.parse_status,
-                    rr.raw_status
-                FROM receipt_tables rt
-                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-                WHERE {' AND '.join(where_parts)}
-                ORDER BY COALESCE(rt.purchase_at, rt.created_at) ASC, rt.created_at ASC, rt.id ASC
-                """
-            ),
-            {'household_id': effective_household_id},
-        ).mappings().all()
-
-        if not rows:
-            return {'deduped_count': 0, 'kept_count': 0, 'duplicate_table_ids': []}
-
-        receipt_table_ids = [str(row['receipt_table_id']) for row in rows]
-        line_groups = _load_line_groups(conn, receipt_table_ids)
-        seen: dict[str, dict[str, Any]] = {}
-        duplicate_rows: list[dict[str, Any]] = []
-
-        for row in rows:
-            row_dict = dict(row)
-            fingerprint = _fingerprint_from_stored_receipt(row_dict, line_groups.get(str(row['receipt_table_id']), []))
-            if not fingerprint:
-                continue
-            keeper = seen.get(fingerprint)
-            if keeper is None:
-                seen[fingerprint] = row_dict
-                continue
-            duplicate_rows.append({
-                'receipt_table_id': str(row['receipt_table_id']),
-                'raw_receipt_id': str(row['raw_receipt_id']),
-                'keep_raw_receipt_id': str(keeper['raw_receipt_id']),
-            })
-
-        if duplicate_rows:
-            conn.execute(
-                text(
-                    """
-                    UPDATE raw_receipts
-                    SET duplicate_of_raw_receipt_id = COALESCE(duplicate_of_raw_receipt_id, :keep_raw_receipt_id),
-                        raw_status = CASE WHEN raw_status = 'failed' THEN raw_status ELSE 'duplicate' END
-                    WHERE id = :raw_receipt_id
-                    """
-                ),
-                duplicate_rows,
-            )
-            if has_rr_deleted:
-                conn.execute(
-                    text('UPDATE raw_receipts SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP) WHERE id = :raw_receipt_id'),
-                    duplicate_rows,
-                )
-            conn.execute(
-                text(
-                    """
-                    UPDATE receipt_tables
-                    SET parse_status = CASE WHEN parse_status = 'failed' THEN parse_status ELSE 'duplicate' END,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :receipt_table_id
-                    """
-                ),
-                duplicate_rows,
-            )
-            if has_rt_deleted:
-                conn.execute(
-                    text('UPDATE receipt_tables SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = :receipt_table_id'),
-                    duplicate_rows,
-                )
-
-    return {
-        'deduped_count': len(duplicate_rows),
-        'kept_count': len(rows) - len(duplicate_rows),
-        'duplicate_table_ids': [row['receipt_table_id'] for row in duplicate_rows],
-    }
-
-
-
-
-
-
-
-
-
 
 
 def _extract_savings_action_lines(lines: list[str], store_name: str | None = None) -> list[dict[str, Any]]:
@@ -2051,39 +1815,53 @@ def _store_raw_file(storage_root: Path, household_id: str, raw_receipt_id: str, 
     return str(target_path)
 
 
-def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False, create_failed_receipt_table: bool = False, failed_store_name: str | None = None, failed_purchase_at: str | None = None, include_debug: bool = False) -> dict[str, Any]:
+def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False, create_failed_receipt_table: bool = False, failed_store_name: str | None = None, failed_purchase_at: str | None = None, include_debug: bool = False, scanner_provider: str | None = None) -> dict[str, Any]:
     detected_mime = detect_mime_type(filename, file_bytes, mime_type)
     digest = sha256_hex(file_bytes)
-    reimport_lineage = None
-    with engine.begin() as conn:
-        duplicate = find_existing_receipt_by_content_hash(
-            conn,
-            household_id,
-            digest,
-        )
-        if duplicate:
-            response = _build_duplicate_receipt_response(duplicate)
-            workflow_state = str(duplicate.get('workflow_state') or '').strip().lower()
-            response['duplicate_reason'] = 'content_hash'
-            if workflow_state:
-                response['workflow_state'] = workflow_state
-            if workflow_state == 'archived':
-                response['duplicate_message'] = (
-                    'Deze kassabon is al eerder opgenomen en staat in Archief. '
-                    'Dezelfde bon kan niet opnieuw worden ingelezen.'
-                )
-            return response
-        reimport_lineage = load_deleted_reimport_lineage(conn, household_id, digest)
 
-    parse_result = scan_receipt_content_via_gateway(file_bytes, filename, detected_mime)
+    # Scanner/parser is uitsluitend verantwoordelijk voor structurering.
+    # Duplicatecontrole is een afzonderlijke acceptance gate ná volledige parsing.
+    parse_result = scan_receipt_content_via_gateway(
+        file_bytes,
+        filename,
+        detected_mime,
+        provider_code=scanner_provider,
+    )
+
+    candidate = StructuredReceiptDuplicateCandidate(
+        source_sha256=digest,
+        store_name=parse_result.store_name if parse_result.is_receipt else None,
+        purchase_at=parse_result.purchase_at if parse_result.is_receipt else None,
+        total_amount=parse_result.total_amount if parse_result.is_receipt else None,
+        lines=tuple(parse_result.lines or ()) if parse_result.is_receipt else tuple(),
+    )
+    with engine.begin() as conn:
+        duplicate_assessment = evaluate_structured_receipt_duplicate(
+            conn,
+            household_id=household_id,
+            candidate=candidate,
+        )
+    if duplicate_assessment.is_duplicate:
+        duplicate = duplicate_assessment.existing_receipt or {}
+        response = _build_duplicate_receipt_response(duplicate)
+        response['duplicate_reason'] = duplicate_assessment.reason
+        workflow_state = str(duplicate.get('workflow_state') or '').strip().lower()
+        if workflow_state:
+            response['workflow_state'] = workflow_state
+        if workflow_state == 'archived':
+            response['duplicate_message'] = (
+                'Deze kassabon is al eerder opgenomen en staat in Archief. '
+                'Dezelfde bon kan niet opnieuw worden ingelezen.'
+            )
+        return response
+
     if reject_non_receipt and not parse_result.is_receipt:
         raise ValueError('Gedeelde inhoud is niet als bruikbare kassabon herkend.')
-    parse_fingerprint = build_receipt_fingerprint_from_parse_result(parse_result) if parse_result.is_receipt else ''
-    if parse_fingerprint:
-        with engine.begin() as conn:
-            existing_by_fingerprint = find_existing_receipt_by_fingerprint(conn, household_id, parse_fingerprint)
-            if existing_by_fingerprint:
-                return _build_duplicate_receipt_response(existing_by_fingerprint)
+
+    reimport_lineage = None
+    with engine.begin() as conn:
+        reimport_lineage = load_deleted_reimport_lineage(conn, household_id, digest)
+
     raw_receipt_id = uuid.uuid4().hex
     storage_path = _store_raw_file(receipt_storage_root, household_id, raw_receipt_id, filename, file_bytes)
 

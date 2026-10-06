@@ -22,6 +22,14 @@ De Receipt Ingestion-laag verwerkt de bron naar bonmetadata en kassabonregels. H
 
 De ruwe bron blijft auditbaar. Genormaliseerde waarden worden gebruikt voor review, matching en vervolgverwerking.
 
+### Scanner-onafhankelijke duplicate acceptance gate
+
+De scanner/parser levert uitsluitend een volledig gestructureerde bonkandidaat op. **Pas daarna**, en vóór de bon als nieuwe kassabon wordt geaccepteerd en opgeslagen, voert Inhuis een afzonderlijke duplicatecontrole uit. Deze controle is een zelfstandig receipt-component en kent geen OCR-, AI-, retailer- of scannerimplementatie.
+
+De gate gebruikt huishoudgebonden bronidentiteit (SHA-256) én een inhoudelijke fingerprint op basis van gestructureerde bonfeiten. Daardoor blijft duplicatecontrole behouden wanneer een scanner, OCR-engine of parser later wordt vervangen of verwijderd. Alleen expliciet voor herimport vrijgegeven lifecycle-statussen mogen de bestaande bonhistorie passeren.
+
+Deze duplicatecontrole bewijst dat een bon niet reeds als dezelfde kassabon aanwezig is; zij is geen fraude- of echtheidsdetectie van de winkelbon zelf.
+
 ## 3. Classificatie van kassabonregels
 
 Iedere regel wordt functioneel geclassificeerd. De belangrijkste uitkomsten zijn:

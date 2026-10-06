@@ -5,6 +5,8 @@ import Tabs from '../../ui/Tabs'
 import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePagination.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
+import LiveReceiptCornerGuide from './components/LiveReceiptCornerGuide.jsx'
+import { openReceiptCamera, rememberPreferredReceiptCamera, stopReceiptCameraStream } from './receiptCamera.js'
 import './mobileKassa.css'
 
 function money(value, currency = 'EUR') {
@@ -28,11 +30,10 @@ function mobileScanErrorMessage(detail) {
   return normalizeErrorMessage(raw) || 'Bon kon niet worden verwerkt. Probeer opnieuw.'
 }
 
-export default function MobileKassa() {
+export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   const { showFeedback } = useAppFeedback()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
-  const fileRef = useRef(null)
   const uploadRef = useRef(null)
   const [mode, setMode] = useState('camera')
   const [householdId, setHouseholdId] = useState('')
@@ -47,6 +48,9 @@ export default function MobileKassa() {
   const [newLine, setNewLine] = useState({ article_name: '', quantity: 1, unit: '', unit_price: '', line_total: '' })
   const [receiptFilter, setReceiptFilter] = useState('')
   const [cameraError, setCameraError] = useState('')
+  const [cameraDevices, setCameraDevices] = useState([])
+  const [cameraOptimizing, setCameraOptimizing] = useState(false)
+  const activeCameraIdRef = useRef('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -91,35 +95,50 @@ export default function MobileKassa() {
   }
 
   function showReceiptList() {
-    streamRef.current?.getTracks?.().forEach((track) => track.stop())
+    stopReceiptCameraStream(streamRef.current)
     streamRef.current = null
+    activeCameraIdRef.current = ''
     setReceipt(null)
     setSelectedLineIds([])
     setMode('list')
     loadReceipts().catch(() => {})
   }
 
-  async function openCamera() {
+  async function openCamera(deviceId = '') {
     setMode('camera')
     setReceipt(null)
     setMessage('')
     setCameraError('')
-    streamRef.current?.getTracks?.().forEach((track) => track.stop())
+    stopReceiptCameraStream(streamRef.current)
     streamRef.current = null
+    setCameraOptimizing(!deviceId)
     try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera is niet rechtstreeks beschikbaar.')
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-      streamRef.current = stream
+      const selection = await openReceiptCamera({ deviceId })
+      streamRef.current = selection.stream
+      setCameraDevices(selection.devices)
+      activeCameraIdRef.current = selection.activeDeviceId
       if (videoRef.current) {
-        videoRef.current.srcObject = stream
+        videoRef.current.srcObject = selection.stream
         await videoRef.current.play().catch(() => {})
       }
+      return true
     } catch (error) {
       const denied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'
       setCameraError(denied ? 'Cameratoegang is geweigerd.' : 'De camera kon niet worden geopend.')
-      showFeedback({ variant: 'warning', title: 'Cameratoegang', message: denied ? 'Geef Inhuis cameratoegang in de browserinstellingen en probeer opnieuw.' : 'Controleer of je camera beschikbaar is en probeer opnieuw.', primaryActionLabel: 'Opnieuw proberen', onPrimaryAction: () => openCamera(), secondaryActionLabel: 'Sluiten', testId: 'mobile-kassa-camera-permission' })
+      showFeedback({ variant: 'warning', title: 'Cameratoegang', message: denied ? 'Geef Inhuis cameratoegang in de browserinstellingen en probeer opnieuw.' : 'Controleer of je camera beschikbaar is en probeer opnieuw.', primaryActionLabel: 'Opnieuw proberen', onPrimaryAction: () => openCamera(deviceId), secondaryActionLabel: 'Sluiten', testId: 'mobile-kassa-camera-permission' })
       return false
+    } finally {
+      setCameraOptimizing(false)
     }
+  }
+
+  async function switchCamera() {
+    if (cameraDevices.length < 2) return
+    const currentIndex = cameraDevices.findIndex((device) => device.deviceId === activeCameraIdRef.current)
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % cameraDevices.length : 0
+    const nextDeviceId = String(cameraDevices[nextIndex].deviceId || '')
+    const opened = await openCamera(nextDeviceId)
+    if (opened && activeCameraIdRef.current) rememberPreferredReceiptCamera(activeCameraIdRef.current)
   }
 
   async function startCamera() {
@@ -167,7 +186,7 @@ export default function MobileKassa() {
     }).catch(() => { if (!cancelled) setCameraError('Kassa kon niet worden gestart.') })
     return () => {
       cancelled = true
-      streamRef.current?.getTracks?.().forEach((track) => track.stop())
+      stopReceiptCameraStream(streamRef.current)
     }
   }, [])
 
@@ -190,6 +209,9 @@ export default function MobileKassa() {
       const id = String(result?.receipt_table_id || result?.existing_receipt?.receipt_table_id || '')
       if (!id) throw new Error('Inhuis herkent geen bruikbare kassabon.')
       const detail = await fetchJson(`/api/receipts/${encodeURIComponent(id)}`)
+      if (source === 'camera' && activeCameraIdRef.current) {
+        rememberPreferredReceiptCamera(activeCameraIdRef.current)
+      }
       streamRef.current?.getTracks?.().forEach((track) => track.stop())
       streamRef.current = null
       setReceipt(detail)
@@ -216,7 +238,7 @@ export default function MobileKassa() {
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     canvas.getContext('2d')?.drawImage(video, 0, 0)
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86))
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
     if (blob) await uploadImage(new File([blob], `kassabon-${Date.now()}.jpg`, { type: 'image/jpeg' }))
   }
 
@@ -404,17 +426,36 @@ export default function MobileKassa() {
   return (
     <div className="rz-mobile-kassa" data-testid="mobile-kassa-page">
       <MobileModuleHeader title={mode === 'list' ? 'Bonnen' : mode === 'detail' ? 'Kassabon' : mode === 'review' ? 'Bon controleren' : 'Kassa'} testId="mobile-kassa-header" />
+      <div className="rz-mobile-kassa-scanner-status" data-testid="mobile-kassa-scanner-status">
+        Actieve scanner: <strong>{scannerProvider === 'in-huis-demo' ? 'AI' : 'Inhuis'}</strong>
+      </div>
 
       {mode === 'camera' ? (
         <main className="rz-mobile-kassa-camera" data-testid="mobile-kassa-camera">
-          <video ref={videoRef} playsInline muted className="rz-mobile-kassa-video" />
-          <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value=''; if (file) uploadImage(file) }} />
+          <div className="rz-mobile-kassa-video-stage">
+            <video ref={videoRef} playsInline muted className="rz-mobile-kassa-video" />
+            <LiveReceiptCornerGuide
+              videoRef={videoRef}
+              householdId={householdId}
+              enabled={scannerProvider === 'in-huis-demo'}
+              fit="cover"
+            />
+            {cameraOptimizing ? (
+              <div className="rz-mobile-kassa-ai-guide-label">Camera kiezen…</div>
+            ) : scannerProvider === 'in-huis-demo' ? (
+              <div className="rz-mobile-kassa-ai-guide-label">AI zoekt de randen van de kassabon</div>
+            ) : (
+              <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
+            )}
+          </div>
           <input ref={uploadRef} type="file" accept="image/*,application/pdf" hidden aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} />
           <div className="rz-mobile-kassa-camera-actions">
             <Button type="button" onClick={showReceiptList}>Bonnen</Button>
-            <Button type="button" onClick={takePhoto} disabled={busy} aria-label="Maak foto van kassabon">Foto nemen</Button>
+            <Button type="button" onClick={takePhoto} disabled={busy || cameraOptimizing} aria-label="Maak foto van kassabon">Foto nemen</Button>
           </div>
+          {cameraDevices.length > 1 ? (
+            <Button type="button" variant="secondary" disabled={busy} onClick={switchCamera} data-testid="mobile-kassa-switch-camera">Camera wisselen</Button>
+          ) : null}
           <Button type="button" variant="secondary" disabled={busy} onClick={() => uploadRef.current?.click()}>Bonbestand uploaden</Button>
         </main>
       ) : null}

@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import {
+  RECEIPT_SCANNER_OPTIONS,
   STORE_IMPORT_SIMPLIFICATION_LEVELS,
   getStoreImportSimplificationLabel,
   getStoreImportSimplificationSettings,
@@ -23,6 +24,7 @@ function stableStringify(value) {
 export default function SettingsStoreImportPage() {
   const navigate = useNavigate()
   const [level, setLevel] = useState('gebalanceerd')
+  const [receiptScannerProvider, setReceiptScannerProvider] = useState('inhuis')
   const [canEdit, setCanEdit] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -32,7 +34,7 @@ export default function SettingsStoreImportPage() {
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const dismissTimerRef = useRef(null)
-  const currentSnapshot = useMemo(() => stableStringify({ level }), [level])
+  const currentSnapshot = useMemo(() => stableStringify({ level, receiptScannerProvider }), [level, receiptScannerProvider])
   const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
   const blocker = useBlocker(isDirty)
 
@@ -48,8 +50,9 @@ export default function SettingsStoreImportPage() {
         if (!active) return
         const nextLevel = data?.store_import_simplification_level || 'gebalanceerd'
         setLevel(nextLevel)
+        setReceiptScannerProvider(data?.receipt_scanner_provider || 'inhuis')
         setCanEdit(Boolean(data?.can_edit_store_import_simplification_level))
-        setLastSavedSnapshot(stableStringify({ level: nextLevel }))
+        setLastSavedSnapshot(stableStringify({ level: nextLevel, receiptScannerProvider: data?.receipt_scanner_provider || 'inhuis' }))
       } catch (error) {
         if (!active) return
         setLoadError(error?.message || 'Instellingen konden niet worden geladen.')
@@ -92,11 +95,13 @@ export default function SettingsStoreImportPage() {
     setIsSaving(true)
     setSaveError('')
     try {
-      const saved = await saveStoreImportSimplificationSettings(level)
+      const saved = await saveStoreImportSimplificationSettings(level, receiptScannerProvider)
       const nextLevel = saved?.store_import_simplification_level || level
+      const nextScannerProvider = saved?.receipt_scanner_provider || receiptScannerProvider
       setLevel(nextLevel)
-      setCanEdit(Boolean(saved?.can_edit_store_import_simplification_level))
-      setLastSavedSnapshot(stableStringify({ level: nextLevel }))
+      setCanEdit(Boolean(saved?.can_edit_store_import_simplification_level && saved?.can_edit_receipt_scanner_provider))
+      setReceiptScannerProvider(nextScannerProvider)
+      setLastSavedSnapshot(stableStringify({ level: nextLevel, receiptScannerProvider: nextScannerProvider }))
       queueSuccessMessage('Opgeslagen')
       return true
     } catch (error) {
@@ -182,6 +187,29 @@ export default function SettingsStoreImportPage() {
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
               {loadError ? <div className="rz-inline-feedback rz-inline-feedback--error">{loadError}</div> : null}
+              <section data-testid="receipt-scanner-provider-settings" style={{ display: 'grid', gap: '10px' }}>
+                <div>
+                  <div style={{ fontWeight: 600 }}>Kassabonscanner</div>
+                  <div style={{ marginTop: '4px' }}>
+                    Kies één keer welke scanner nieuwe foto- en bestandsbonnen analyseert. Deze keuze geldt voor het hele huishouden en kan later hier worden aangepast. De bestaande bonnenlijst en verwerking naar Uitpakken blijven hetzelfde.
+                  </div>
+                </div>
+                <div role="radiogroup" aria-label="Kassabonscanner" style={{ display: 'grid', gap: '8px' }}>
+                  {RECEIPT_SCANNER_OPTIONS.map((option) => (
+                    <label key={option.value} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '10px', alignItems: 'start', padding: '12px', border: '1px solid #dfe4ea', borderRadius: '6px' }}>
+                      <input
+                        type="radio"
+                        name="receipt-scanner-provider"
+                        value={option.value}
+                        checked={receiptScannerProvider === option.value}
+                        onChange={(event) => setReceiptScannerProvider(event.target.value)}
+                        disabled={!canEdit || isSaving}
+                      />
+                      <span><strong>{option.label}</strong><br />{option.description}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
               <div className="rz-store-import-desktop">
               <div className="rz-automation-setting-card" style={{ alignItems: 'stretch' }}>
                 <div className="rz-automation-setting-copy">
