@@ -162,3 +162,15 @@ assert.match(mobileKassa, /const requestedView = searchParams\.get\('view'\) \|\
 assert.match(mobileKassa, /requestedView === 'bonnen'/)
 
 console.log('HOME_DASHBOARD_CONTRACT_GREEN')
+
+assert.match(home, /rz-dashboard-status--notifications/)
+assert.match(home, /rz-dashboard-status--shopping/)
+assert.match(home, /rz-dashboard-status--open-receipts/)
+assert.match(home, /rz-dashboard-status--downloadable-receipts/)
+assert.match(home, /rz-dashboard-status--almost-out/)
+assert.match(homeCss, /#F8DADA/)
+assert.match(homeCss, /#DDECF8/)
+assert.match(homeCss, /#E9DFF4/)
+assert.match(homeCss, /#FFF2BF/)
+assert.match(homeCss, /#EADACB/)
+assert.match(mobileChrome, /MANDATORY_BOTTOM_NAV_KEY = 'bijna-op'/)

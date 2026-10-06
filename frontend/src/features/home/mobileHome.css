@@ -587,3 +587,15 @@
   gap:6px;
   min-width:0;
 }
+
+
+.rz-dashboard-status--notifications{background:#F8DADA !important;color:var(--color-text-primary) !important}
+.rz-dashboard-status--shopping{background:#DDECF8 !important;color:var(--color-text-primary) !important}
+.rz-dashboard-status--open-receipts{background:#E9DFF4 !important;color:var(--color-text-primary) !important}
+.rz-dashboard-status--downloadable-receipts{background:#FFF2BF !important;color:var(--color-text-primary) !important}
+.rz-dashboard-status--almost-out{background:#EADACB !important;color:var(--color-text-primary) !important}
+.rz-dashboard-status--notifications strong,
+.rz-dashboard-status--shopping strong,
+.rz-dashboard-status--open-receipts strong,
+.rz-dashboard-status--downloadable-receipts strong,
+.rz-dashboard-status--almost-out strong{color:var(--color-text-primary)}

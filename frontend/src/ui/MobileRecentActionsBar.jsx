@@ -10,7 +10,7 @@ function MobileActionIcon({ type, icon }) {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 3.5h16v17H4zM4 9h16M4 15h16" />
-        <path d="M6 5.5h4v3H6zM13 5.5h5v3h-5zM6 11h6v3H6zM14 11h4v3h-4zM6 17h5v2H6zM13 17h5v2h-5z" />
+        <path className="rz-shelf-box" d="M6 5.5h4v3H6zM14 11h4v3h-4zM6 17h5v2H6zM13 17h5v2h-5z" />
       </svg>
     )
   }
@@ -38,7 +38,7 @@ function MobileActionIcon({ type, icon }) {
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 5v14h16" />
         <path d="m6 8 4 3 3-2 5 6" />
-        <path d="m15 15 3 .2-.2-3" />
+        <path className="rz-almost-out-arrow" d="m15 15 3 .2-.2-3" />
       </svg>
     )
   }

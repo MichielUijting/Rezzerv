@@ -931,3 +931,11 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - **Kassa** gebruikt in de mobiele actiebalk een kassa/register als icoon, niet een kassabon.
 - **Uitpakken** gebruikt in de mobiele actiebalk een boodschappentas met horizontale kleurstrepen.
 - Op de mobiele Superuser-route staat de globale **Terug**-bediening links in een eigen sticky donkergroene headerbalk; zij scrollt niet weg met de pagina-inhoud.
+
+
+### Mobiele dashboardkleuren en actiebalkiconen — 6 oktober 2026
+
+- De vijf mobiele dashboardstatusknoppen gebruiken lichte pastelachtergronden zodat gewone donkere tekst leesbaar blijft: Meldingen pastelrood, Boodschappen pastelblauw, Bonnen open pastelpaars, Bonnen downloaden pastelgeel en Bijna op pastelbruin.
+- De grote cursieve **i** van Meldingen is oranje.
+- Bij het icoon **Bijna op** is uitsluitend de neerwaartse pijl oranje; de overige lijnen behouden de reguliere actiebalkkleur.
+- Het Voorraad-icoon blijft een stellingkast; de dooscontouren zijn fijner dan de kastlijnen. Rechtsboven en links in het midden staan bewust geen dozen.

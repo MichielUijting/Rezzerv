@@ -491,28 +491,28 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
       {error ? <div className="rz-dashboard-error" role="alert">{error}</div> : null}
 
       <div className="rz-dashboard-status" aria-label="Actuele status">
-        <button type="button" onClick={() => openStatus('meldingen')} data-testid="dashboard-status-notifications">
+        <button type="button" onClick={() => openStatus('meldingen')} className="rz-dashboard-status--notifications" data-testid="dashboard-status-notifications">
           <strong>{dashboard?.status?.notifications ?? '–'}</strong>
           <span>Meldingen</span>
         </button>
-        <button type="button" onClick={() => openStatus('winkelen')} data-testid="dashboard-status-shopping">
+        <button type="button" onClick={() => openStatus('winkelen')} className="rz-dashboard-status--shopping" data-testid="dashboard-status-shopping">
           <strong>{dashboard?.status?.shopping ?? '–'}</strong>
           <span>Boodschappen</span>
         </button>
-        <button type="button" onClick={() => openStatus('bonnen-open')} data-testid="dashboard-status-open-receipts">
+        <button type="button" onClick={() => openStatus('bonnen-open')} className="rz-dashboard-status--open-receipts" data-testid="dashboard-status-open-receipts">
           <strong>{dashboard?.status?.put_away ?? '–'}</strong>
           <span>Bonnen open</span>
         </button>
         <button
           type="button"
           onClick={() => openStatus('bonnen-downloaden')}
-          data-testid="dashboard-status-downloadable-receipts"
+          className="rz-dashboard-status--downloadable-receipts" data-testid="dashboard-status-downloadable-receipts"
           title={pendingReceipts?.count_available === false ? 'Aantal kon niet live worden opgehaald' : 'Nog te downloaden bonnen uit automatisch telbare winkelkoppelingen'}
         >
           <strong>{pendingReceipts?.count_available === false ? '–' : (pendingReceipts?.pending_downloads ?? '–')}</strong>
           <span>Bonnen downloaden</span>
         </button>
-        <button type="button" onClick={() => openStatus('bijna-op')} data-testid="dashboard-status-almost-out">
+        <button type="button" onClick={() => openStatus('bijna-op')} className="rz-dashboard-status--almost-out" data-testid="dashboard-status-almost-out">
           <strong>{almostOutCount ?? '–'}</strong>
           <span>Bijna op</span>
         </button>
