@@ -412,11 +412,11 @@ def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
     if not receipt_ids:
         return 0, 0
 
-    eligible_lines = [
-        row
+    eligible_receipt_ids = {
+        str(row.get("receipt_table_id") or "")
         for row in _eligible_receipt_lines(conn, household_id)
         if str(row.get("receipt_table_id") or "") in receipt_ids
-    ]
+    }
 
     batches = _household_rows(conn, "purchase_import_batches", household_id)
     batch_columns = _columns(conn, "purchase_import_batches")
@@ -431,30 +431,36 @@ def _put_away_counts(conn: Connection, household_id: str) -> tuple[int, int]:
                 if receipt_id in receipt_ids:
                     receipt_batch_by_receipt[receipt_id] = str(batch.get("id") or "")
 
-    kassa = sum(
-        1
-        for row in eligible_lines
-        if str(row.get("receipt_table_id") or "") not in receipt_batch_by_receipt
-    )
+    kassa_receipt_ids = {
+        receipt_id
+        for receipt_id in eligible_receipt_ids
+        if receipt_id not in receipt_batch_by_receipt
+    }
 
     if not receipt_batch_by_receipt or "purchase_import_lines" not in _tables(conn):
-        return int(kassa), 0
+        return len(kassa_receipt_ids), 0
 
     import_columns = _columns(conn, "purchase_import_lines")
     if "batch_id" not in import_columns or "processing_status" not in import_columns:
-        return int(kassa), 0
+        return len(kassa_receipt_ids), 0
 
-    receipt_batch_ids = set(receipt_batch_by_receipt.values())
-    unpack = 0
+    receipt_by_batch_id = {
+        batch_id: receipt_id
+        for receipt_id, batch_id in receipt_batch_by_receipt.items()
+        if batch_id
+    }
+    unpack_receipt_ids: set[str] = set()
     for row in _all_rows(conn, "purchase_import_lines"):
-        if str(row.get("batch_id") or "") not in receipt_batch_ids:
+        receipt_id = receipt_by_batch_id.get(str(row.get("batch_id") or ""))
+        if not receipt_id:
             continue
         if str(row.get("processing_status") or "pending").strip().lower() == "processed":
             continue
         if "review_decision" in import_columns and str(row.get("review_decision") or "pending").strip().lower() == "removed":
             continue
-        unpack += 1
-    return int(kassa), int(unpack)
+        unpack_receipt_ids.add(receipt_id)
+
+    return len(kassa_receipt_ids), len(unpack_receipt_ids)
 
 
 
