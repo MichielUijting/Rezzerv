@@ -7,6 +7,7 @@ from functools import lru_cache
 from app.receipt_ingestion.service_parts.receipt_result_helpers import ReceiptParseResult
 
 from .adapters.rezzerv_legacy import RezzervLegacyScannerAdapter
+from .adapters.in_huis_demo import InHuisDemoScannerAdapter
 from .adapters.retailer_structured import StructuredRetailerReceiptScannerAdapter
 from app.integrations.retailer_receipts import RETAILER_RECEIPT_MIME
 from .errors import ProviderConfigurationError
@@ -80,7 +81,18 @@ def _structured_retailer_gateway() -> ReceiptScannerGateway:
     return ReceiptScannerGateway(registry, timeout_seconds=_configured_timeout_seconds())
 
 
-def scan_receipt_content_via_gateway(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
+def _gateway_for_provider(provider_code: str | None) -> ReceiptScannerGateway:
+    normalized = str(provider_code or "inhuis").strip().lower()
+    if normalized == "inhuis":
+        return get_receipt_scanner_gateway()
+    if normalized == "in-huis-demo":
+        provider = InHuisDemoScannerAdapter(max_file_bytes=_configured_max_file_bytes())
+        registry = ProviderRegistry([provider], active_provider_code=provider.provider_code)
+        return ReceiptScannerGateway(registry, timeout_seconds=_configured_timeout_seconds())
+    raise ProviderConfigurationError(f"Unknown household receipt scanner provider {normalized!r}")
+
+
+def scan_receipt_content_via_gateway(file_bytes: bytes, filename: str, mime_type: str, provider_code: str | None = None) -> ReceiptParseResult:
     scan_id = f"rscan_{uuid.uuid4().hex}"
     request = ScanRequestV1.from_bytes(
         scan_id=scan_id,
@@ -88,6 +100,6 @@ def scan_receipt_content_via_gateway(file_bytes: bytes, filename: str, mime_type
         filename=filename,
         mime_type=mime_type,
     )
-    gateway = _structured_retailer_gateway() if mime_type == RETAILER_RECEIPT_MIME else get_receipt_scanner_gateway()
+    gateway = _structured_retailer_gateway() if mime_type == RETAILER_RECEIPT_MIME else _gateway_for_provider(provider_code)
     canonical = gateway.scan(request)
     return canonical_to_receipt_parse_result(canonical)
