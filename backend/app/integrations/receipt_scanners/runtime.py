@@ -7,7 +7,6 @@ from functools import lru_cache
 from app.receipt_ingestion.service_parts.receipt_result_helpers import ReceiptParseResult
 
 from .adapters.rezzerv_legacy import RezzervLegacyScannerAdapter
-from .adapters.in_huis_demo import InHuisDemoScannerAdapter
 from .adapters.retailer_structured import StructuredRetailerReceiptScannerAdapter
 from app.integrations.retailer_receipts import RETAILER_RECEIPT_MIME
 from .errors import ProviderConfigurationError
@@ -63,7 +62,11 @@ def _configured_in_huis_demo_request_timeout_seconds() -> float:
     return value
 
 
-def _build_in_huis_demo_provider() -> InHuisDemoScannerAdapter:
+def _build_in_huis_demo_provider():
+    # Keep the optional HTTP provider dependency out of the default scanner
+    # boundary. It is loaded only when the household explicitly selects AI.
+    from .adapters.in_huis_demo import InHuisDemoScannerAdapter
+
     return InHuisDemoScannerAdapter(
         base_url=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_BASE_URL", "") or "").strip(),
         api_key=str(os.getenv("REZZERV_IN_HUIS_DEMO_SCANNER_API_KEY", "") or "").strip() or None,
