@@ -6,6 +6,7 @@ import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePa
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import LiveReceiptCornerGuide from './components/LiveReceiptCornerGuide.jsx'
+import { openReceiptCamera, stopReceiptCameraStream } from './receiptCamera.js'
 import './mobileKassa.css'
 
 function money(value, currency = 'EUR') {
@@ -48,6 +49,8 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   const [newLine, setNewLine] = useState({ article_name: '', quantity: 1, unit: '', unit_price: '', line_total: '' })
   const [receiptFilter, setReceiptFilter] = useState('')
   const [cameraError, setCameraError] = useState('')
+  const [cameraDevices, setCameraDevices] = useState([])
+  const activeCameraIdRef = useRef('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -92,35 +95,45 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   }
 
   function showReceiptList() {
-    streamRef.current?.getTracks?.().forEach((track) => track.stop())
+    stopReceiptCameraStream(streamRef.current)
     streamRef.current = null
+    activeCameraIdRef.current = ''
     setReceipt(null)
     setSelectedLineIds([])
     setMode('list')
     loadReceipts().catch(() => {})
   }
 
-  async function openCamera() {
+  async function openCamera(deviceId = '') {
     setMode('camera')
     setReceipt(null)
     setMessage('')
     setCameraError('')
-    streamRef.current?.getTracks?.().forEach((track) => track.stop())
+    stopReceiptCameraStream(streamRef.current)
     streamRef.current = null
     try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera is niet rechtstreeks beschikbaar.')
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-      streamRef.current = stream
+      const selection = await openReceiptCamera({ deviceId })
+      streamRef.current = selection.stream
+      setCameraDevices(selection.devices)
+      activeCameraIdRef.current = selection.activeDeviceId
       if (videoRef.current) {
-        videoRef.current.srcObject = stream
+        videoRef.current.srcObject = selection.stream
         await videoRef.current.play().catch(() => {})
       }
+      return true
     } catch (error) {
       const denied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'
       setCameraError(denied ? 'Cameratoegang is geweigerd.' : 'De camera kon niet worden geopend.')
-      showFeedback({ variant: 'warning', title: 'Cameratoegang', message: denied ? 'Geef Inhuis cameratoegang in de browserinstellingen en probeer opnieuw.' : 'Controleer of je camera beschikbaar is en probeer opnieuw.', primaryActionLabel: 'Opnieuw proberen', onPrimaryAction: () => openCamera(), secondaryActionLabel: 'Sluiten', testId: 'mobile-kassa-camera-permission' })
+      showFeedback({ variant: 'warning', title: 'Cameratoegang', message: denied ? 'Geef Inhuis cameratoegang in de browserinstellingen en probeer opnieuw.' : 'Controleer of je camera beschikbaar is en probeer opnieuw.', primaryActionLabel: 'Opnieuw proberen', onPrimaryAction: () => openCamera(deviceId), secondaryActionLabel: 'Sluiten', testId: 'mobile-kassa-camera-permission' })
       return false
     }
+  }
+
+  async function switchCamera() {
+    if (cameraDevices.length < 2) return
+    const currentIndex = cameraDevices.findIndex((device) => device.deviceId === activeCameraIdRef.current)
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % cameraDevices.length : 0
+    await openCamera(cameraDevices[nextIndex].deviceId)
   }
 
   async function startCamera() {
@@ -168,7 +181,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
     }).catch(() => { if (!cancelled) setCameraError('Kassa kon niet worden gestart.') })
     return () => {
       cancelled = true
-      streamRef.current?.getTracks?.().forEach((track) => track.stop())
+      stopReceiptCameraStream(streamRef.current)
     }
   }, [])
 
@@ -431,6 +444,9 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
             <Button type="button" onClick={showReceiptList}>Bonnen</Button>
             <Button type="button" onClick={takePhoto} disabled={busy} aria-label="Maak foto van kassabon">Foto nemen</Button>
           </div>
+          {cameraDevices.length > 1 ? (
+            <Button type="button" variant="secondary" disabled={busy} onClick={switchCamera} data-testid="mobile-kassa-switch-camera">Camera wisselen</Button>
+          ) : null}
           <Button type="button" variant="secondary" disabled={busy} onClick={() => uploadRef.current?.click()}>Bonbestand uploaden</Button>
         </main>
       ) : null}
