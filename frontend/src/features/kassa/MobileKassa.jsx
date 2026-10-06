@@ -419,7 +419,11 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
               enabled={scannerProvider === 'in-huis-demo'}
               fit="cover"
             />
-            <div className="rz-mobile-kassa-guide">{scannerProvider === 'in-huis-demo' ? 'AI zoekt de randen van de kassabon' : 'Plaats de kassabon binnen het vlak'}</div>
+            {scannerProvider === 'in-huis-demo' ? (
+              <div className="rz-mobile-kassa-ai-guide-label">AI zoekt de randen van de kassabon</div>
+            ) : (
+              <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
+            )}
           </div>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value=''; if (file) uploadImage(file) }} />
           <input ref={uploadRef} type="file" accept="image/*,application/pdf" hidden aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} />
