@@ -75,7 +75,7 @@ def test_external_provider_posts_testkit_multipart_contract_and_accepts_sync_res
         assert http_request.method == "POST"
         assert http_request.url.path == "/scan"
         assert http_request.headers["x-api-key"] == "secret"
-        body = http_request.content
+        body = http_request.read()
         assert b'name="scan_id"' in body
         assert request.scan_id.encode() in body
         assert b'name="schema_version"' in body
@@ -115,7 +115,7 @@ def test_external_provider_supports_202_and_poll_contract():
                 "provider": {"code": "in-huis-demo", "job_id": "job async/1"},
                 "status": "queued",
             })
-        assert http_request.url.path == "/scan/job%20async%2F1"
+        assert http_request.url.raw_path == b"/scan/job%20async%2F1"
         return httpx.Response(200, json=_completed_payload(request))
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
