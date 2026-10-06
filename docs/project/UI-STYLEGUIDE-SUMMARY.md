@@ -843,6 +843,7 @@ Vaste regels:
 - Selectievakjes bij bonregels en bulkselectie gebruiken `accent-color: var(--color-mobile-ui-primary)`; een hard gecodeerde primaire hexkleur is niet toegestaan, zodat de persoonlijke Weergave-instelling ook hier doorwerkt.
 - De mobiele kassabon toont uitsluitend de tabs **Bonregels** en **Bonkop**. De bestaande desktop-Kassa behoudt daarnaast **Bron**.
 - De mobiele camera-, bestandsupload-, boncorrectie- en goedkeuracties gebruiken de bestaande centrale knop- en overlaycomponenten. De mobiele totalencontrole blijft onderdeel van het kassabondetail.
+- Live camerabegeleiding in Kassa, waaronder de AI-bonranddetectielabels en camerahints, gebruikt uitsluitend `--font-size-ui-body`; feature-CSS introduceert hiervoor geen lokale 12px/13px-lettergrootte.
 
 
 ### Mobiel hoofdlocaties toevoegen in Instellingen (29 september 2026)

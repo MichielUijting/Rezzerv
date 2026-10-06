@@ -7,6 +7,7 @@ on:
       - 'backend/app/main.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/receipt_service.py'
+      - 'backend/app/services/receipt_duplicate_guard.py'
       - 'backend/app/services/receipt_reimport_lineage_service.py'
       - 'backend/app/services/receipt_lifecycle_foundation_service.py'
       - 'backend/tests/test_receipt_reimport_lineage_service.py'
@@ -28,6 +29,7 @@ on:
       - 'backend/app/main.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/app/services/receipt_service.py'
+      - 'backend/app/services/receipt_duplicate_guard.py'
       - 'backend/app/services/receipt_reimport_lineage_service.py'
       - 'backend/app/services/receipt_lifecycle_foundation_service.py'
       - 'backend/tests/test_receipt_reimport_lineage_service.py'
@@ -62,6 +64,7 @@ jobs:
             backend/app/main.py \
             backend/app/session_entrypoint.py \
             backend/app/services/receipt_service.py \
+            backend/app/services/receipt_duplicate_guard.py \
             backend/app/services/receipt_reimport_lineage_service.py \
             backend/app/services/receipt_lifecycle_foundation_service.py
 
@@ -83,6 +86,7 @@ jobs:
           main = Path('backend/app/main.py').read_text(encoding='utf-8')
           session_entrypoint = Path('backend/app/session_entrypoint.py').read_text(encoding='utf-8')
           service = Path('backend/app/services/receipt_service.py').read_text(encoding='utf-8')
+          duplicate_guard = Path('backend/app/services/receipt_duplicate_guard.py').read_text(encoding='utf-8')
           lineage = Path('backend/app/services/receipt_reimport_lineage_service.py').read_text(encoding='utf-8')
           foundation = Path('backend/app/services/receipt_lifecycle_foundation_service.py').read_text(encoding='utf-8')
           with gzip.open('backend/alembic/baseline_sqlite.sql.gz', 'rt', encoding='utf-8') as handle:
@@ -125,14 +129,14 @@ jobs:
               'def find_existing_receipt_by_content_hash(',
               'def find_existing_receipt_by_fingerprint(',
               "_REIMPORT_ALLOWED_WORKFLOW_STATES = {'removed_reimport_allowed', 'legacy_deleted'}",
-              'duplicate = find_existing_receipt_by_content_hash(',
+              'exact = find_existing_receipt_by_content_hash(',
           ]
           for token in required_global_dedupe_tokens:
-              assert token in service, f'Globaal bon-dedupecontract ontbreekt: {token}'
+              assert token in duplicate_guard, f'Globaal bon-dedupecontract ontbreekt: {token}'
 
-          fingerprint_start = service.index('def find_existing_receipt_by_fingerprint(')
-          fingerprint_end = service.index('def dedupe_receipts_for_household(', fingerprint_start)
-          fingerprint_block = service[fingerprint_start:fingerprint_end]
+          fingerprint_start = duplicate_guard.index('def find_existing_receipt_by_fingerprint(')
+          fingerprint_end = duplicate_guard.index('def evaluate_structured_receipt_duplicate(', fingerprint_start)
+          fingerprint_block = duplicate_guard[fingerprint_start:fingerprint_end]
           assert 'rt.deleted_at IS NULL' not in fingerprint_block, 'Fingerprint-dedupe mag Uitpakken/Voorraad/Archief-historie niet uitsluiten'
           assert "'removed_reimport_allowed', 'legacy_deleted'" in fingerprint_block, 'Alleen expliciet verwijderde bonnen mogen opnieuw worden ingelezen'
           unpack_start = foundation.index('def apply_unpack_receipt_lifecycle_action(')
@@ -222,7 +226,7 @@ jobs:
               'archived_receipts',
               'receipt_inventory_events',
           ]
-          combined = '\n'.join([main, session_entrypoint, service, lineage, foundation])
+          combined = '\n'.join([main, session_entrypoint, service, duplicate_guard, lineage, foundation])
           for table in forbidden_tables:
               create_token = f'CREATE TABLE IF NOT EXISTS {table}'
               assert create_token not in combined, f'Parallelle lifecycle-tabel verboden: {table}'
