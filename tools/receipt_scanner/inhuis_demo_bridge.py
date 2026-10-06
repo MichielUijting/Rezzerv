@@ -227,6 +227,8 @@ def health():
             "provider": PROVIDER_CODE,
             "model": str(getattr(scan_engine, "CLAUDE_MODEL", "") or "") or None,
             "headless": True,
+            "bridge_version": 2,
+            "capabilities": {"live_corner_detection": True},
         }
     )
 
