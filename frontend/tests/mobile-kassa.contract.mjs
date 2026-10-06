@@ -6,7 +6,7 @@ const camera=readFileSync(new URL('../src/features/kassa/receiptCamera.js',impor
 const chrome=readFileSync(new URL('../src/app/MobileAppChrome.jsx',import.meta.url),'utf8')
 assert.match(wrapper,/useMobileAppViewport/)
 assert.match(wrapper,/MobileKassa/)
-assert.match(mobile,/getUserMedia/)
+assert.match(camera,/getUserMedia/)
 assert.match(camera,/facingMode/)
 assert.match(mobile,/data-testid="mobile-kassa-camera"/)
 assert.match(mobile,/Bon controleren/)
