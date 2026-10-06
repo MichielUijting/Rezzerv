@@ -619,7 +619,6 @@ export default function StoreConnectionsPage() {
             tableClassName="rz-store-review-table"
             stickyHeader={false}
             stickyFilters={false}
-            tableStyle={{ width: 'auto' }}
           />
         </Card>
 
