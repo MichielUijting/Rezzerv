@@ -30,7 +30,7 @@ function drawGuide(canvas, video, result, fit) {
   }))
 
   const rootStyle = getComputedStyle(document.documentElement)
-  const primary = rootStyle.getPropertyValue('--color-ui-primary').trim() || '#ffffff'
+  const primary = rootStyle.getPropertyValue('--color-ui-primary-dark').trim() || '#184A32'
 
   context.save()
   context.lineWidth = 4
