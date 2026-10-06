@@ -1,7 +1,7 @@
-# Rezzerv-procesketen: van Kassa naar Voorraad en Bijna op
+# Rezzerv-procesketen: van Kassa naar Voorraad, Bijna op en Boodschappen
 
 **Status:** normatieve functionele en technische documentatie  
-**Scope:** Kassa, kassabonverwerking, artikelmodellering, Uitpakken, voorraadverwerking en Bijna op  
+**Scope:** Kassa, kassabonverwerking, artikelmodellering, Uitpakken, voorraadverwerking, Bijna op en Boodschappen  
 **Gerelateerde domeinen:** universele artikelen, producttype, huishoudartikelen, locaties, inventory events en Spaartegoeden
 
 Onderstaand schema beschrijft de totale keten van Kassa en kassabonverwerking via artikelmodellering en voorraadverwerking tot en met de signalering **Bijna op**. Het schema maakt ook zichtbaar waar universele artikelen, producttypen en huishoudartikelen in de keten horen en waarom spaar- en koopzegels niet naar Voorraad gaan.
@@ -193,7 +193,29 @@ Het scherm **Bijna op** presenteert signalen en vormt input voor een toekomstig 
 
 Een toekomstige automatische actie vereist expliciete productregels, toestemming en uitschakelbaarheid. Inzichten blijven afgeleid van de voorraad-SSOT.
 
-## 14. Architectuurregels voor de totale keten
+## 14. Van Bijna op naar Boodschappen
+
+**Bijna op** is de signaleringslaag; **Boodschappen** is de expliciete gebruikerslijst voor voorgenomen aankopen. De overgang tussen beide hoort bij dezelfde primaire keten, maar verandert de voorraad niet.
+
+Functioneel gelden de volgende regels:
+
+- een gebruiker kan een Bijna-op-signaal expliciet toevoegen aan de actieve Boodschappenlijst;
+- de overgang gebruikt waar mogelijk het `household_article_id` als functioneel anker en projecteert de bijbehorende canonieke productidentiteit naar de shopping-listbron;
+- `amount_to_buy` is een advieswaarde uit Bijna op. Wanneer deze veilig naar een boodschappenhoeveelheid kan worden vertaald, mag die als voorstel worden overgenomen; de gebruiker kan de hoeveelheid daarna wijzigen;
+- toevoegen aan Boodschappen maakt **geen** `inventory_event` aan en wijzigt actuele voorraad, minimumvoorraad of ideale voorraad niet;
+- een Bijna-op-signaal verdwijnt niet doordat het artikel aan Boodschappen is toegevoegd. Het signaal volgt uitsluitend de actuele voorraadprojectie en de geldende bijna-op-regels;
+- de bestaande deduplicatieregel van Boodschappen blijft gelden: dezelfde canonieke kandidaat op dezelfde actieve lijst verhoogt de bestaande hoeveelheid in plaats van een tweede regel te maken;
+- alleen dezelfde zichtbare naam is onvoldoende om boodschappenregels stil samen te voegen;
+- afvinken of verplaatsen naar **In winkelwagen** wijzigt geen voorraad. Voorraad verandert pas opnieuw door een geldige latere voorraadmutatie, bijvoorbeeld via een nieuwe kassabon en Uitpakken;
+- huishoudisolatie geldt over de volledige overgang: een gebruiker kan alleen signalen en boodschappen van het actieve, toegestane huishouden lezen of muteren.
+
+Hiermee vormt de gebruikerscyclus één gesloten primaire keten:
+
+`Scannen → Kassabon completeren → Acceptatie/duplicate gate → Uitpakken → Voorraad → Bijna op → Boodschappen → nieuwe aankoop → nieuwe kassabon`.
+
+De keten blijft bewust event-based: Boodschappen is intentie, de kassabon is aankoopbewijs en alleen de gecontroleerde voorraadverwerking schrijft voorraadmutaties.
+
+## 15. Architectuurregels voor de totale keten
 
 1. Kassa en receipt ingestion zijn invoerlagen, geen voorraadlaag.
 2. Kassabonregels worden eerst geclassificeerd en beoordeeld.
@@ -203,12 +225,14 @@ Een toekomstige automatische actie vereist expliciete productregels, toestemming
 6. Voorraad is event-based en per locatie herleidbaar.
 7. Uitpakken vormt de gecontroleerde overgang van aankoopregel naar inventory event wanneer locatie-toewijzing actief is; zonder Uitpakken mag de expliciete directe voorraadroute gewone STOCK locatievrij verwerken.
 8. Bijna op gebruikt de voorraadprojectie en huishoudspecifieke grenzen.
-9. Spaar- en koopzegels gaan naar Spaartegoeden en nooit naar fysieke Voorraad.
-10. Onzekere matches, mappings of voorspellingen blijven zichtbaar reviewbaar en worden niet stil als waarheid verwerkt.
-11. Locatiebeheer vanuit Uitpakken hergebruikt dezelfde locatie-/sublocatiedata en dezelfde Admin-only backendroutes als centraal locatiebeheer; er bestaat geen tweede CRUD-implementatie.
-12. Een nieuw aangemaakte locatie of sublocatie wordt pas als gekozen beschouwd nadat de serveropslag is geslaagd en de actuele opties opnieuw zijn geladen.
+9. De overgang van Bijna op naar Boodschappen is een expliciete gebruikersactie en wijzigt de voorraad niet.
+10. Boodschappen blijft intentie; alleen een latere geldige kassabon-/voorraadverwerking kan nieuwe voorraad schrijven.
+11. Spaar- en koopzegels gaan naar Spaartegoeden en nooit naar fysieke Voorraad.
+12. Onzekere matches, mappings of voorspellingen blijven zichtbaar reviewbaar en worden niet stil als waarheid verwerkt.
+13. Locatiebeheer vanuit Uitpakken hergebruikt dezelfde locatie-/sublocatiedata en dezelfde Admin-only backendroutes als centraal locatiebeheer; er bestaat geen tweede CRUD-implementatie.
+14. Een nieuw aangemaakte locatie of sublocatie wordt pas als gekozen beschouwd nadat de serveropslag is geslaagd en de actuele opties opnieuw zijn geladen.
 
-## 15. Ketenacceptatiecriteria
+## 16. Ketenacceptatiecriteria
 
 De totale keten is functioneel geborgd wanneer:
 
@@ -227,9 +251,12 @@ De totale keten is functioneel geborgd wanneer:
 - de voorraadprojectie overeenkomt met de inventory events;
 - Voorraad alleen gegevens van het actieve huishouden toont;
 - Bijna op dezelfde voorraadprojectie en huishoudinstellingen gebruikt;
+- een Bijna-op-signaal expliciet naar Boodschappen kan worden toegevoegd zonder voorraadmutatie;
+- dezelfde canonieke kandidaat op de actieve Boodschappenlijst niet als stille duplicaatregel ontstaat;
+- afvinken of in de winkelwagen zetten geen voorraadmutatie veroorzaakt;
 - elk signaal doorklikbaar en uitlegbaar blijft tot huishoudartikel, locatie en mutatiebron.
 
-## 16. Canonical technische regressieborging — PostgreSQL
+## 17. Canonical technische regressieborging — PostgreSQL
 
 De actuele technische authority voor deze keten is PostgreSQL-only. De oude route met `run-receipt-inventory-chain-v2.ps1` en een tijdelijke SQLite-runtime is **geen officiële ketenrunner meer**.
 
@@ -240,7 +267,7 @@ De normale operationele start en de volledige ketentest zijn twee afzonderlijke 
 
 Een groene `start.bat` mag daarom niet als vervanging voor de ketentest worden gerapporteerd.
 
-### 16.1 Officiële lokale ketenrunner
+### 17.1 Officiële lokale ketenrunner
 
 Voer vanuit de repositoryroot uit:
 
@@ -261,7 +288,7 @@ De runner gebruikt:
 
 De normale operationele `rezzerv_postgres`-volume wordt niet als testdatabase gebruikt en wordt door deze runner niet verwijderd.
 
-### 16.2 De twaalf verplichte stappen
+### 17.2 De twaalf verplichte stappen
 
 De runner rapporteert exact twaalf stappen:
 
@@ -278,7 +305,7 @@ De runner rapporteert exact twaalf stappen:
 11. **Verbruik voorraad 5 naar 1 en controleer Bijna op** — signaal verandert van `NEE` naar `JA`.
 12. **Controleer PostgreSQL/DML-only eindbewijs** — runtime-`CREATE` is geweigerd en de migration credential is tijdens de businessketen afwezig.
 
-### 16.3 Verplicht groen eindbewijs
+### 17.3 Verplicht groen eindbewijs
 
 De keten is alleen technisch groen wanneer de runner eindigt met:
 
@@ -297,7 +324,7 @@ Koopzegels buiten fysieke voorraad: JA
 
 Deze markers zijn onderdeel van het testcontract. Een gedeeltelijke run, een geserveerde frontend of alleen een groene healthcheck is geen 12/12-ketenbewijs.
 
-### 16.4 Cleanup en Windows/PowerShell-contract
+### 17.4 Cleanup en Windows/PowerShell-contract
 
 Na het inhoudelijke 12/12-bewijs ruimt de runner uitsluitend zijn eigen geïsoleerde Compose-project, testnetwerk en testvolumes op.
 
@@ -311,7 +338,7 @@ De uiteindelijke PowerShell-exitcode is `0`.
 
 Docker schrijft normale stop/remove-progress deels naar stderr. Die normale progress mag niet als `NativeCommandError` worden behandeld. Een echte non-zero `docker compose down`-exitcode blijft daarentegen wel een fout en wordt door de runner als non-zero scriptexitcode doorgegeven.
 
-### 16.5 CI-borging
+### 17.5 CI-borging
 
 De workflow `.github/workflows/receipt-inventory-chain-post-merge.yml` is de verplichte Receipt inventory chain merge gate voor relevante receipt-/inventorywijzigingen.
 
@@ -329,7 +356,7 @@ De merge-gate bewijst onder meer:
 
 De CI-PowerShelljob gebruikt `-DisplayValidatedResult` voor de presentatiecheck. Wanneer de Windows/native-command- of cleanupimplementatie zelf wijzigt, moet daarnaast de echte runner op Windows worden uitgevoerd.
 
-### 16.6 Relatie met overige regressies
+### 17.6 Relatie met overige regressies
 
 Frontend-, autorisatie-, recognition-, onboarding- en overige regressiegates blijven van toepassing volgens hun eigen wijzigingsscope. Zij vervangen de canonical receipt/inventory-keten niet, en de ketentest vervangt die andere gates evenmin.
 
