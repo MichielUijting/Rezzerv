@@ -16,3 +16,5 @@
 .rz-mobile-kassa-totals--warning{border-color:#d5a44e}
 .rz-mobile-kassa-camera>.rz-button-secondary{display:block;margin:8px 12px 12px;width:calc(100% - 24px)}
 .rz-mobile-kassa-list-actions{display:flex;flex-wrap:wrap;gap:8px}
+
+.rz-mobile-kassa-ai-guide-label{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:2;background:rgba(0,0,0,.65);color:#fff;padding:8px 12px;border-radius:999px;font-size:13px;white-space:nowrap;pointer-events:none}
