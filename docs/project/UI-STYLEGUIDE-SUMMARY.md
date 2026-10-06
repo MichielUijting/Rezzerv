@@ -945,3 +945,10 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 
 - De centrale mobiele paginering gebruikt de labels **Eerste**, **−**, **+** en als laatste knop het bekende totale aantal pagina's. Alleen wanneer het totaal technisch niet bepaalbaar is, luidt de laatste knop **Einde**.
 - De desktop-paginering behoudt **Eerste / Vorige / Volgende / Laatste**.
+
+
+### Mobiele Kassa — directe bonnenlijst en batchgoedkeuring — 6 oktober 2026
+
+- Een deeplink naar **Kassa → Bonnen** initialiseert de mobiele Kassa direct in de bonnenlijst; het camerascherm wordt daarbij niet eerst kort getoond.
+- Bij geselecteerde bonnen staat **Goedkeuren** links van **Verwijderen**, met de standaard centrale marge tussen beide acties.
+- Batchgoedkeuring hergebruikt per bon de bestaande canonieke receipt-goedkeurroute. Bonnen die niet kunnen worden goedgekeurd blijven geselecteerd en worden expliciet gemeld; geslaagde bonnen gaan volgens de bestaande flow naar Uitpakken.
