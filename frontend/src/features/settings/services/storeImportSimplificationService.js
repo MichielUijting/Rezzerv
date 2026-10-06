@@ -1,6 +1,11 @@
 import { API_BASE_URL } from '../../../lib/apiClient'
 import { fetchJsonWithAuth, getAuthHeaders } from '../../../lib/authSession'
 
+export const RECEIPT_SCANNER_OPTIONS = [
+  { value: 'inhuis', label: 'Inhuis-scanner', description: 'De huidige ingebouwde kassabonscanner van Inhuis.' },
+  { value: 'in-huis-demo', label: 'Alternatieve scanner', description: 'De alternatieve scanner gebaseerd op Meesdeboer/in-huis-demo. Bestaande bonnen en Uitpakken blijven in Inhuis.' },
+]
+
 export const STORE_IMPORT_SIMPLIFICATION_LEVELS = [
   { value: 'voorzichtig', label: 'Voorzichtig', description: 'Alleen voorstellen, jij controleert alles.' },
   { value: 'gebalanceerd', label: 'Gebalanceerd', description: 'Bekende keuzes worden voorbereid, twijfel blijft open.' },
@@ -50,4 +55,18 @@ export async function saveStoreImportSimplificationSettings(store_import_simplif
 export function subscribeToStoreImportSimplificationUpdates(listener) {
   window.addEventListener(EVENT_NAME, listener)
   return () => window.removeEventListener(EVENT_NAME, listener)
+}
+
+export async function saveReceiptScannerProvider(receipt_scanner_provider) {
+  const response = await fetchJsonWithAuth(`${API_BASE_URL}/api/household/receipt-scanner-provider`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ receipt_scanner_provider }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data?.detail || 'Kassabonscanner kon niet worden opgeslagen.')
+  return data
 }
