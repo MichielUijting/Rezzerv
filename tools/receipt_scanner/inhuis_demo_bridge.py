@@ -11,6 +11,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
+import cv2
+import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -225,6 +227,36 @@ def health():
             "provider": PROVIDER_CODE,
             "model": str(getattr(scan_engine, "CLAUDE_MODEL", "") or "") or None,
             "headless": True,
+        }
+    )
+
+
+@app.post("/detect-live")
+def detect_live():
+    if not _authorized():
+        return jsonify({"error": "ongeldige scanner-servicekey"}), 401
+
+    upload = request.files.get("file")
+    if upload is None:
+        return jsonify({"error": "file is verplicht"}), 400
+
+    content = upload.read()
+    if not content:
+        return jsonify({"error": "leeg bestand"}), 400
+    if len(content) > 2_500_000:
+        return jsonify({"error": "live cameraframe is te groot"}), 413
+
+    image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        return jsonify({"error": "cameraframe kon niet worden gelezen"}), 422
+
+    height, width = image.shape[:2]
+    corners = scan_engine.detect(image)
+    return jsonify(
+        {
+            "corners": corners.tolist() if corners is not None else None,
+            "image_width": int(width),
+            "image_height": int(height),
         }
     )
 
