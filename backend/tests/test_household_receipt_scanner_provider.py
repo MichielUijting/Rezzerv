@@ -130,3 +130,31 @@ def test_external_provider_supports_202_and_poll_contract():
 
     assert result.status == "completed"
     assert calls == ["POST /scan", "GET /scan/job%20async%2F1"]
+
+
+def test_external_provider_supports_live_corner_detection():
+    def handler(http_request: httpx.Request) -> httpx.Response:
+        assert http_request.method == "POST"
+        assert http_request.url.path == "/detect-live"
+        assert http_request.headers["x-api-key"] == "secret"
+        body = http_request.read()
+        assert b'name="file"; filename="camera-frame.jpg"' in body
+        return httpx.Response(200, json={
+            "corners": [[10, 20], [210, 18], [215, 420], [8, 425]],
+            "image_width": 240,
+            "image_height": 480,
+        })
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = InHuisDemoScannerAdapter(
+            base_url="https://scanner.example.test",
+            api_key="secret",
+            client=client,
+        )
+        result = provider.detect_live(b"jpeg-frame", "image/jpeg")
+
+    assert result == {
+        "corners": [[10, 20], [210, 18], [215, 420], [8, 425]],
+        "image_width": 240,
+        "image_height": 480,
+    }
