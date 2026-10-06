@@ -7212,7 +7212,7 @@ class ReceiptScannerProviderUpdateRequest(BaseModel):
     @field_validator("receipt_scanner_provider")
     @classmethod
     def validate_provider(cls, value):
-        normalized = normalize_receipt_scanner_provider(value)
+        normalized = str(value or "").strip().lower()
         if normalized not in RECEIPT_SCANNER_PROVIDER_ALLOWED:
             raise ValueError("Ongeldige kassabonscanner")
         return normalized
