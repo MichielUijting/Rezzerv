@@ -414,12 +414,12 @@ export default function MobileShopping() {
                 </div>
               ) : null}
               <MobilePaginationControls {...cartPagination} ariaLabel="Paginering In winkelwagen" />
-              <div className="rz-mobile-shopping-complete">
-                <Button type="button" variant="primary" onClick={completeShopping} disabled={saving || Number(list.item_count || 0) === 0} data-testid="mobile-shopping-complete">
-                  Boodschappen afgerond
-                </Button>
-              </div>
             </section>
+            <div className="rz-mobile-shopping-complete">
+              <Button type="button" variant="primary" onClick={completeShopping} disabled={saving || Number(list.item_count || 0) === 0} data-testid="mobile-shopping-complete">
+                Boodschappen afgerond
+              </Button>
+            </div>
           </div>
         ) : null}
       </main>

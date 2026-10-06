@@ -103,19 +103,22 @@ export default function MobileRecentActionsBar({
       data-testid={testId}
       style={{ '--rz-mobile-action-count': items.length }}
     >
-      {items.map((item) => (
-        <Link
-          key={item.key}
-          to={item.route}
-          className={`rz-mobile-action-bar-item${item.showLabel ? '' : ' rz-mobile-action-bar-item--icon-only'}`}
-          aria-label={item.label}
-          data-testid={`${testId}-${item.key}`}
-          onClick={() => onAction?.(item)}
-        >
+      {items.map((item) => {
+        const className = `rz-mobile-action-bar-item${item.showLabel ? '' : ' rz-mobile-action-bar-item--icon-only'}`
+        const content = <>
           <span className="rz-mobile-action-bar-icon"><MobileActionIcon type={item.iconType} icon={item.icon} /></span>
           {item.showLabel ? <span>{item.label}</span> : null}
-        </Link>
-      ))}
+        </>
+        return item.actionOnly ? (
+          <button key={item.key} type="button" className={className} aria-label={item.label} data-testid={`${testId}-${item.key}`} onClick={() => onAction?.(item)}>
+            {content}
+          </button>
+        ) : (
+          <Link key={item.key} to={item.route} className={className} aria-label={item.label} data-testid={`${testId}-${item.key}`} onClick={() => onAction?.(item)}>
+            {content}
+          </Link>
+        )
+      })}
     </nav>
   )
 }

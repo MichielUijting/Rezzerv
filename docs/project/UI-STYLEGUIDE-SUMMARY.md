@@ -971,3 +971,10 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 
 - De automatische goedkeurpoort hergebruikt exact dezelfde interne receipt-approval authority als handmatig Goedkeuren. Automatisch goedkeuren staat **geen** totalenoverride toe en stopt bij een afgeleide/default aankoopdatum of een winkelnaam die gebruikerscontrole vereist.
 - Voor reeds binnengehaalde digitale winkelbonnen wordt de instelling eveneens toegepast voordat de open Kassa-wachtrij wordt getoond, zodat complete bonnen rechtstreeks naar Uitpakken doorstromen.
+
+
+### Mobiele Boodschappen en Meer-popup — 6 oktober 2026
+
+- **Boodschappen afgerond** staat buiten en direct onder de sectie/tabel **In winkelwagen**, met de standaard tussenruimte.
+- De mobiele actie **Meer** opent een modale popup boven de huidige pagina en navigeert niet naar een afzonderlijk Meer-scherm.
+- Een keuze uit de popup sluit deze en opent daarna de gekozen functie; tikken buiten de popup of op sluiten laat de huidige pagina intact.

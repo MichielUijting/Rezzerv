@@ -25,7 +25,7 @@ import { useMobileAppViewport } from './mobileViewport.js'
 import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import './mobileAppChrome.css'
 
-const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/meer', iconType: 'menu', showLabel: true }
+const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '', iconType: 'menu', showLabel: true, actionOnly: true }
 const MANDATORY_BOTTOM_NAV_KEY = 'bijna-op'
 const MOBILE_ICON_TYPE_BY_KEY = Object.freeze({
   meldingen: 'info',
@@ -44,6 +44,8 @@ function activeActionKey(pathname = '') {
 }
 
 function MobileBottomNavigationRuntime({ context, pathname }) {
+  const navigate = useNavigate()
+  const [showMore, setShowMore] = useState(false)
   const features = useFeatureAvailability()
   const actionAvailability = useActionButtonAvailability({
     enabled: Boolean(context && context.context_type !== 'none'),
@@ -110,15 +112,52 @@ function MobileBottomNavigationRuntime({ context, pathname }) {
     return [...selected, MORE_NAV_ITEM]
   }, [activeKey, availableActionTiles, context?.user_id])
 
+  const bottomKeys = useMemo(() => new Set(bottomNavItems.filter((item) => item.key !== 'meer').map((item) => item.key)), [bottomNavItems])
+  const moreTiles = useMemo(() => {
+    const remaining = availableActionTiles.filter((tile) => !bottomKeys.has(tile.key))
+    return remaining.length ? remaining : availableActionTiles
+  }, [availableActionTiles, bottomKeys])
+
+  function openMoreTile(tile) {
+    const route = ACTION_ROUTE_BY_KEY[tile.key]
+    if (!route) return
+    recordRecentAction(tile.key, context)
+    setShowMore(false)
+    navigate(route)
+  }
+
   return (
+    <>
     <MobileRecentActionsBar
       items={bottomNavItems}
       testId="mobile-global-bottom-nav"
       ariaLabel="Mobiele hoofdnavigatie"
       onAction={(item) => {
-        if (item.key !== 'meer') recordRecentAction(item.key, context)
+        if (item.key === 'meer') {
+          setShowMore(true)
+          return
+        }
+        recordRecentAction(item.key, context)
       }}
     />
+    {showMore ? (
+      <div className="rz-mobile-more-overlay" role="presentation" onClick={() => setShowMore(false)}>
+        <section className="rz-mobile-more-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-more-dialog-title" data-testid="mobile-more-dialog" onClick={(event) => event.stopPropagation()}>
+          <div className="rz-mobile-more-dialog-header">
+            <strong id="mobile-more-dialog-title">Meer</strong>
+            <button type="button" aria-label="Sluit Meer" onClick={() => setShowMore(false)}>×</button>
+          </div>
+          <div className="rz-mobile-more-dialog-list">
+            {moreTiles.map((tile) => (
+              <button key={tile.key} type="button" onClick={() => openMoreTile(tile)} data-testid={`mobile-more-dialog-${tile.key}`}>
+                {tile.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    ) : null}
+    </>
   )
 }
 
