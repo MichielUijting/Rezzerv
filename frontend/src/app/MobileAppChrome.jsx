@@ -26,6 +26,15 @@ import { useAppFeedback } from '../ui/AppFeedbackProvider.jsx'
 import './mobileAppChrome.css'
 
 const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '/meer', iconType: 'menu', showLabel: true }
+const MANDATORY_BOTTOM_NAV_KEY = 'bijna-op'
+const MOBILE_ICON_TYPE_BY_KEY = Object.freeze({
+  meldingen: 'info',
+  voorraad: 'shelf',
+  kassa: 'register',
+  kassabonnen: 'shopping-bag',
+  'bijna-op': 'almost-out',
+  winkelen: 'cart',
+})
 
 function activeActionKey(pathname = '') {
   const normalizedPath = String(pathname || '')
@@ -68,18 +77,36 @@ function MobileBottomNavigationRuntime({ context, pathname }) {
 
   const activeKey = activeActionKey(pathname)
   const bottomNavItems = useMemo(() => {
-    const selected = selectRecentActionTiles({
+    const mandatoryTile = availableActionTiles.find((tile) => tile.key === MANDATORY_BOTTOM_NAV_KEY) || null
+    const excludedKeys = [MANDATORY_BOTTOM_NAV_KEY]
+    if (activeKey && activeKey !== MANDATORY_BOTTOM_NAV_KEY) excludedKeys.push(activeKey)
+
+    const recentTiles = selectRecentActionTiles({
       recentKeys: readRecentActionKeys(context),
       availableTiles: availableActionTiles,
-      excludeKeys: activeKey ? [activeKey] : [],
-      limit: 4,
-    }).map((tile) => ({
-      key: tile.key,
-      label: tile.label,
-      route: ACTION_ROUTE_BY_KEY[tile.key],
-      icon: tile.icon,
-      showLabel: false,
-    }))
+      excludeKeys: excludedKeys,
+      limit: mandatoryTile ? 3 : 4,
+    })
+
+    const uniqueTiles = []
+    const seen = new Set()
+    for (const tile of [mandatoryTile, ...recentTiles].filter(Boolean)) {
+      if (seen.has(tile.key)) continue
+      seen.add(tile.key)
+      uniqueTiles.push(tile)
+    }
+
+    const selected = uniqueTiles.slice(0, 4).map((tile) => {
+      const iconType = MOBILE_ICON_TYPE_BY_KEY[tile.key] || null
+      return {
+        key: tile.key,
+        label: tile.label,
+        route: ACTION_ROUTE_BY_KEY[tile.key],
+        iconType,
+        icon: iconType ? null : tile.icon,
+        showLabel: false,
+      }
+    })
     return [...selected, MORE_NAV_ITEM]
   }, [activeKey, availableActionTiles, context?.user_id])
 
@@ -139,9 +166,19 @@ export default function MobileAppChrome({ children }) {
     })
   }
 
+  const isSuperuserRoute = location.pathname === '/superuser' || location.pathname.startsWith('/superuser/')
+
   return (
     <div className="rz-mobile-app-chrome" data-testid="mobile-app-chrome">
-      <MobileBackControl testId="mobile-global-back" onBack={location.pathname === '/home' ? handleHomeBack : location.pathname === '/kassa' || location.pathname === '/kassa/nieuw' ? handleKassaBack : null} />
+      {isSuperuserRoute ? (
+        <header className="rz-mobile-superuser-header" data-testid="mobile-superuser-header">
+          <MobileBackControl testId="mobile-global-back" />
+          <strong>Superuser</strong>
+          <span className="rz-mobile-superuser-header-mark" aria-label="InHuis">InHuis</span>
+        </header>
+      ) : (
+        <MobileBackControl testId="mobile-global-back" onBack={location.pathname === '/home' ? handleHomeBack : location.pathname === '/kassa' || location.pathname === '/kassa/nieuw' ? handleKassaBack : null} />
+      )}
       {children}
       <div className="rz-mobile-app-bottom-space" aria-hidden="true" />
       <MobileBottomNavigationRuntime context={context} pathname={location.pathname} />

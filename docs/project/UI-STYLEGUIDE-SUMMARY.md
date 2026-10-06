@@ -921,3 +921,13 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - **Bonnen open** telt unieke kassabonnen die in Kassa of Uitpakken nog niet volledig naar Voorraad zijn verwerkt; bonregels worden niet als afzonderlijke bonnen geteld.
 - **Bonnen downloaden** toont uitsluitend een live, objectief bepaalbaar aantal uit persistent gekoppelde winkelaccounts. Browser-assisted koppelingen zonder server-side boninventaris worden niet stil als nul meegeteld.
 - **Bijna op** toont het actuele aantal Bijna-op-signalen en opent rechtstreeks de module Bijna op.
+
+
+## Mobiele actiebalk en Superuser-header vanaf 6 oktober 2026
+
+- De globale mobiele onderste actiebalk bevat geen dubbele acties. **Bijna op** is een vaste beschikbare actie; de overige posities worden uniek aangevuld uit recente beschikbare acties, gevolgd door **Meer**.
+- In de mobiele actiebalk gebruikt **Meldingen** een grote cursieve donkergroene letter **i** als informatie-icoon.
+- **Voorraad** gebruikt in de mobiele actiebalk een stellingkast met dozen als icoon.
+- **Kassa** gebruikt in de mobiele actiebalk een kassa/register als icoon, niet een kassabon.
+- **Uitpakken** gebruikt in de mobiele actiebalk een boodschappentas met horizontale kleurstrepen.
+- Op de mobiele Superuser-route staat de globale **Terug**-bediening links in een eigen sticky donkergroene headerbalk; zij scrollt niet weg met de pagina-inhoud.

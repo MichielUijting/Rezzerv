@@ -258,3 +258,25 @@
   justify-content: flex-end;
   min-width: 0;
 }
+
+
+.rz-mobile-action-icon-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--color-mobile-ui-primary);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 40px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.rz-mobile-action-bar-icon .rz-bag-stripe {
+  stroke-width: 2.4;
+}
+.rz-mobile-action-bar-icon .rz-bag-stripe--1 { stroke: #E46B5D; }
+.rz-mobile-action-bar-icon .rz-bag-stripe--2 { stroke: #E5B94F; }
+.rz-mobile-action-bar-icon .rz-bag-stripe--3 { stroke: #28A99E; }

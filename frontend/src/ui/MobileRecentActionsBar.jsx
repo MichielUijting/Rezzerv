@@ -3,6 +3,45 @@ import './mobileComponents.css'
 
 function MobileActionIcon({ type, icon }) {
   if (icon) return <span className="rz-mobile-action-bar-desktop-icon" aria-hidden="true">{icon}</span>
+  if (type === 'info') {
+    return <span className="rz-mobile-action-icon-info" aria-hidden="true">i</span>
+  }
+  if (type === 'shelf') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 3.5h16v17H4zM4 9h16M4 15h16" />
+        <path d="M6 5.5h4v3H6zM13 5.5h5v3h-5zM6 11h6v3H6zM14 11h4v3h-4zM6 17h5v2H6zM13 17h5v2h-5z" />
+      </svg>
+    )
+  }
+  if (type === 'register') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 3.5h9v5H6zM5 9h12l2 4v7H4v-7l1-4Z" />
+        <path d="M7 12h2M11 12h2M15 12h2M7 15h2M11 15h2M15 15h2M7 18h10" />
+      </svg>
+    )
+  }
+  if (type === 'shopping-bag') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 8h12l1 12H5L6 8Z" />
+        <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+        <path className="rz-bag-stripe rz-bag-stripe--1" d="M6.2 11h11.6" />
+        <path className="rz-bag-stripe rz-bag-stripe--2" d="M5.9 14h12.2" />
+        <path className="rz-bag-stripe rz-bag-stripe--3" d="M5.7 17h12.6" />
+      </svg>
+    )
+  }
+  if (type === 'almost-out') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 5v14h16" />
+        <path d="m6 8 4 3 3-2 5 6" />
+        <path d="m15 15 3 .2-.2-3" />
+      </svg>
+    )
+  }
   if (type === 'bell') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
