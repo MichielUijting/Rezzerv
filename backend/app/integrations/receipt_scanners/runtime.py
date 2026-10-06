@@ -119,6 +119,19 @@ def _gateway_for_provider(provider_code: str | None) -> ReceiptScannerGateway:
     raise ProviderConfigurationError(f"Unknown household receipt scanner provider {normalized!r}")
 
 
+def detect_receipt_corners_via_provider(
+    file_bytes: bytes,
+    mime_type: str,
+    provider_code: str | None,
+) -> dict:
+    normalized = str(provider_code or "inhuis").strip().lower()
+    if normalized != "in-huis-demo":
+        return {"active": False, "corners": None, "image_width": 0, "image_height": 0}
+    provider = _build_in_huis_demo_provider()
+    result = provider.detect_live(file_bytes, mime_type)
+    return {"active": True, **result}
+
+
 def scan_receipt_content_via_gateway(file_bytes: bytes, filename: str, mime_type: str, provider_code: str | None = None) -> ReceiptParseResult:
     scan_id = f"rscan_{uuid.uuid4().hex}"
     request = ScanRequestV1.from_bytes(
