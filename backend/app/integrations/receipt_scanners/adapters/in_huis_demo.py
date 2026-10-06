@@ -195,6 +195,38 @@ class InHuisDemoScannerAdapter:
         except ValueError as exc:
             raise ContractValidationError("Alternatieve kassabonscanner gaf bij polling geen geldige JSON terug.") from exc
 
+    def detect_live(self, file_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
+        response = self._request(
+            "POST",
+            f"{self._base_url}/detect-live",
+            headers=self._headers(),
+            files={"file": ("camera-frame.jpg", file_bytes, mime_type or "image/jpeg")},
+        )
+        if response.status_code != 200:
+            raise ReceiptScannerError(
+                f"AI-scanner kon de bonranden niet bepalen (HTTP {response.status_code}).",
+                code="PROVIDER_UNAVAILABLE",
+                retryable=response.status_code >= 500,
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ContractValidationError("AI-scanner gaf voor bonranddetectie geen geldige JSON terug.") from exc
+        if not isinstance(payload, dict):
+            raise ContractValidationError("AI-scanner gaf voor bonranddetectie geen JSON-object terug.")
+        corners = payload.get("corners")
+        if corners is not None and (
+            not isinstance(corners, list)
+            or len(corners) != 4
+            or any(not isinstance(point, list) or len(point) != 2 for point in corners)
+        ):
+            raise ContractValidationError("AI-scanner gaf ongeldige bonhoeken terug.")
+        return {
+            "corners": corners,
+            "image_width": int(payload.get("image_width") or 0),
+            "image_height": int(payload.get("image_height") or 0),
+        }
+
     def cancel(self, provider_job_id: str) -> None:
         # Canonical testkit v1.0 defines no HTTP cancellation endpoint.
         return None
