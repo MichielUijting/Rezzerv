@@ -913,3 +913,11 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Onderaan staan mobiel uitsluitend **Leegmaken** en **Opslaan**. Een aparte knop **Annuleren** wordt niet getoond omdat de globale mobiele **Terug**-bediening die navigatiefunctie vervult.
 - Na succesvol opslaan blijft het bestaande gedrag gelden: de aankoop wordt aan Voorraad toegevoegd en de gebruiker keert terug naar **Voorraad**.
 - Mobiele invoervelden en acties hebben minimaal circa 44 px touchhoogte, gebruiken uitsluitend de centrale body-/titeltypografie en volgen de app-brede primaire kleur en knopgeometrie.
+
+
+## Mobiel dashboardstatus vanaf 6 oktober 2026
+
+- De mobiele dashboardstatus gebruikt vijf directe statusknoppen: **Meldingen**, **Boodschappen**, **Bonnen open**, **Bonnen downloaden** en **Bijna op**.
+- **Bonnen open** telt unieke kassabonnen die in Kassa of Uitpakken nog niet volledig naar Voorraad zijn verwerkt; bonregels worden niet als afzonderlijke bonnen geteld.
+- **Bonnen downloaden** toont uitsluitend een live, objectief bepaalbaar aantal uit persistent gekoppelde winkelaccounts. Browser-assisted koppelingen zonder server-side boninventaris worden niet stil als nul meegeteld.
+- **Bijna op** toont het actuele aantal Bijna-op-signalen en opent rechtstreeks de module Bijna op.

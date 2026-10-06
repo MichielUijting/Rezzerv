@@ -14,7 +14,7 @@
 
 .rz-dashboard-status{
   display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-template-columns:repeat(5,minmax(0,1fr));
   overflow:hidden;
   border:1px solid var(--color-border-default);
   border-radius:var(--radius-md);
@@ -37,7 +37,7 @@
 }
 .rz-dashboard-status button:last-child{border-right:0}
 .rz-dashboard-status strong{font-size:var(--font-size-ui-title);color:var(--color-mobile-ui-primary)}
-.rz-dashboard-status span{font-size:var(--font-size-ui-body);text-align:center;line-height:1.15}
+.rz-dashboard-status span{font-size:var(--font-size-ui-body);text-align:center;line-height:1.05;overflow-wrap:anywhere}
 .rz-dashboard-status button:focus-visible,
 .rz-dashboard-card:focus-visible,
 .rz-dashboard-detail-close:focus-visible{

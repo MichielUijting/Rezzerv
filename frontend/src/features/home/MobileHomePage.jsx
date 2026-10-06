@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MobileModuleHeader from '../../ui/MobileModuleHeader.jsx'
-import { fetchHouseholdDashboard } from './dashboardApi.js'
+import { fetchAlmostOutCount, fetchHouseholdDashboard, fetchRetailerPendingReceiptSummary } from './dashboardApi.js'
 import { readDashboardCardOrder, writeDashboardCardOrder } from './dashboardCardOrder.js'
 import './mobileHome.css'
 
@@ -242,6 +242,8 @@ function EmptyDashboardChart() {
 export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fijn dat je er weer bent.' }) {
   const navigate = useNavigate()
   const [dashboard, setDashboard] = useState(null)
+  const [almostOutCount, setAlmostOutCount] = useState(null)
+  const [pendingReceipts, setPendingReceipts] = useState(null)
   const [error, setError] = useState('')
   const [periodKey, setPeriodKey] = useState('days')
   const [cardOrder, setCardOrder] = useState(() => readDashboardCardOrder(context))
@@ -265,6 +267,25 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
         if (!active) return
         setError(exc?.message || 'Dashboard kon niet worden geladen.')
       })
+    return () => { active = false }
+  }, [context?.active_household_id, context?.user_id])
+
+  useEffect(() => {
+    let active = true
+    setAlmostOutCount(null)
+    setPendingReceipts(null)
+
+    const householdId = String(context?.active_household_id || '').trim()
+    if (householdId) {
+      fetchAlmostOutCount(householdId)
+        .then((count) => { if (active) setAlmostOutCount(count) })
+        .catch(() => { if (active) setAlmostOutCount(null) })
+    }
+
+    fetchRetailerPendingReceiptSummary()
+      .then((summary) => { if (active) setPendingReceipts(summary) })
+      .catch(() => { if (active) setPendingReceipts({ count_available: false, pending_downloads: null }) })
+
     return () => { active = false }
   }, [context?.active_household_id, context?.user_id])
 
@@ -455,8 +476,10 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
   function openStatus(key) {
     if (key === 'meldingen') return onOpenTile({ key: 'meldingen', clickable: true })
     if (key === 'winkelen') return onOpenTile({ key: 'winkelen', clickable: true })
-    if (key === 'opbergen') return navigate('/kassa?view=bonnen')
-    return onOpenTile({ key: 'kassabonnen', clickable: true })
+    if (key === 'bonnen-open') return navigate('/kassa?view=bonnen')
+    if (key === 'bonnen-downloaden') return navigate('/instellingen/winkelkoppelingen')
+    if (key === 'bijna-op') return onOpenTile({ key: 'bijna-op', clickable: true })
+    return undefined
   }
 
   return <main className="rz-mobile-home" data-testid="mobile-home-page">
@@ -476,9 +499,22 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
           <strong>{dashboard?.status?.shopping ?? '–'}</strong>
           <span>Boodschappen</span>
         </button>
-        <button type="button" onClick={() => openStatus('opbergen')} data-testid="dashboard-status-put-away">
+        <button type="button" onClick={() => openStatus('bonnen-open')} data-testid="dashboard-status-open-receipts">
           <strong>{dashboard?.status?.put_away ?? '–'}</strong>
-          <span>Nog opbergen</span>
+          <span>Bonnen open</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openStatus('bonnen-downloaden')}
+          data-testid="dashboard-status-downloadable-receipts"
+          title={pendingReceipts?.count_available === false ? 'Aantal kon niet live worden opgehaald' : 'Nog te downloaden bonnen uit automatisch telbare winkelkoppelingen'}
+        >
+          <strong>{pendingReceipts?.count_available === false ? '–' : (pendingReceipts?.pending_downloads ?? '–')}</strong>
+          <span>Bonnen downloaden</span>
+        </button>
+        <button type="button" onClick={() => openStatus('bijna-op')} data-testid="dashboard-status-almost-out">
+          <strong>{almostOutCount ?? '–'}</strong>
+          <span>Bijna op</span>
         </button>
       </div>
 

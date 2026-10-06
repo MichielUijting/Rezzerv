@@ -51,3 +51,26 @@ export async function fetchHouseholdDashboardDrilldown({
   if (!response.ok) throw new Error(payload?.detail || 'Dashboarddetail kon niet worden geladen.')
   return payload
 }
+
+
+export async function fetchAlmostOutCount(householdId) {
+  const normalizedHouseholdId = String(householdId || '').trim()
+  if (!normalizedHouseholdId) return null
+  const response = await fetchJsonWithAuth(`/api/households/${encodeURIComponent(normalizedHouseholdId)}/almost-out`, {
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload?.detail || 'Bijna-op-aantal kon niet worden geladen.')
+  return Array.isArray(payload?.items) ? payload.items.length : 0
+}
+
+export async function fetchRetailerPendingReceiptSummary() {
+  const response = await fetchJsonWithAuth('/api/receipts/retailers/pending-summary', {
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload?.detail || 'Downloadbare bonnen konden niet worden geteld.')
+  return payload
+}
