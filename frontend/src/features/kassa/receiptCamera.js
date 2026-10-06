@@ -1,11 +1,10 @@
 const IDEAL_RECEIPT_WIDTH = 2560
 const IDEAL_RECEIPT_HEIGHT = 1440
-const SHARPNESS_SAMPLE_WIDTH = 240
-const SHARPNESS_SETTLE_MS = 450
-const SHARPNESS_FRAME_GAP_MS = 110
-const SHARPNESS_FRAME_COUNT = 3
+const SHARPNESS_SAMPLE_WIDTH = 320
+const SHARPNESS_SETTLE_MS = 1100
+const SHARPNESS_FRAME_GAP_MS = 140
+const SHARPNESS_FRAME_COUNT = 5
 const MAX_AUTO_CAMERA_CANDIDATES = 5
-const PREFERRED_CAMERA_STORAGE_KEY = 'inhuis.receipt-camera.preferred-device.v2'
 
 function wait(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -21,11 +20,9 @@ function likelyFrontCamera(device) {
 
 function cameraHeuristicScore(device, currentDeviceId = '') {
   const label = normalizedLabel(device)
-  let score = device?.deviceId && device.deviceId === currentDeviceId ? 20 : 0
-  if (/(back|rear|environment|achter|main|wide|1x)/i.test(label)) score += 40
+  let score = device?.deviceId && device.deviceId === currentDeviceId ? 10 : 0
+  if (/(back|rear|environment|achter|main|wide|1x)/i.test(label)) score += 30
   if (likelyFrontCamera(device)) score -= 200
-  if (/(ultra.?wide|ultrawide|0[.,]5x|0[.,]6x)/i.test(label)) score -= 25
-  if (/(telephoto|tele\b|zoom)/i.test(label)) score -= 15
   return score
 }
 
@@ -50,7 +47,7 @@ async function applyReceiptFocus(track) {
       await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
     }
   } catch {
-    // Autofocus-capabilities verschillen per browser/toestel; camerabeeld blijft bruikbaar.
+    // Autofocus-capabilities verschillen per browser/toestel.
   }
 }
 
@@ -81,10 +78,10 @@ export function calculateSharpnessScore(rgba, width, height) {
     gray[index] = (rgba[pixel] * 0.299) + (rgba[pixel + 1] * 0.587) + (rgba[pixel + 2] * 0.114)
   }
 
-  const xStart = Math.max(1, Math.floor(width * 0.12))
-  const xEnd = Math.min(width - 1, Math.ceil(width * 0.88))
-  const yStart = Math.max(1, Math.floor(height * 0.12))
-  const yEnd = Math.min(height - 1, Math.ceil(height * 0.88))
+  const xStart = Math.max(1, Math.floor(width * 0.15))
+  const xEnd = Math.min(width - 1, Math.ceil(width * 0.85))
+  const yStart = Math.max(1, Math.floor(height * 0.15))
+  const yEnd = Math.min(height - 1, Math.ceil(height * 0.85))
   let sum = 0
   let sumSquares = 0
   let count = 0
@@ -105,17 +102,22 @@ export function calculateSharpnessScore(rgba, width, height) {
   return Math.max(0, (sumSquares / count) - (mean * mean))
 }
 
-async function waitForVideoReady(video) {
-  if (video.videoWidth > 0 && video.videoHeight > 0) return
+async function attachStreamToPreview(previewVideo, stream) {
+  if (!previewVideo) throw new Error('Cameravoorbeeld ontbreekt.')
+  previewVideo.srcObject = stream
+  await previewVideo.play().catch(() => {})
+  if (previewVideo.videoWidth > 0 && previewVideo.videoHeight > 0) return
+
   await new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {
       cleanup()
-      reject(new Error('Camera gaf niet op tijd een meetbaar beeld.'))
-    }, 1800)
+      reject(new Error('Camera gaf niet op tijd beeld.'))
+    }, 2500)
     const cleanup = () => {
       window.clearTimeout(timer)
-      video.removeEventListener('loadeddata', ready)
-      video.removeEventListener('error', failed)
+      previewVideo.removeEventListener('loadedmetadata', ready)
+      previewVideo.removeEventListener('loadeddata', ready)
+      previewVideo.removeEventListener('error', failed)
     }
     const ready = () => {
       cleanup()
@@ -123,25 +125,19 @@ async function waitForVideoReady(video) {
     }
     const failed = () => {
       cleanup()
-      reject(new Error('Camera kon niet voor scherpte worden gemeten.'))
+      reject(new Error('Camera kon niet worden weergegeven.'))
     }
-    video.addEventListener('loadeddata', ready, { once: true })
-    video.addEventListener('error', failed, { once: true })
+    previewVideo.addEventListener('loadedmetadata', ready, { once: true })
+    previewVideo.addEventListener('loadeddata', ready, { once: true })
+    previewVideo.addEventListener('error', failed, { once: true })
   })
 }
 
-async function measureStreamSharpness(stream) {
-  const video = document.createElement('video')
-  video.muted = true
-  video.playsInline = true
-  video.srcObject = stream
-  await video.play()
-  await waitForVideoReady(video)
+async function measureVisiblePreviewSharpness(previewVideo) {
   await wait(SHARPNESS_SETTLE_MS)
-
-  const ratio = video.videoHeight / Math.max(1, video.videoWidth)
+  const ratio = previewVideo.videoHeight / Math.max(1, previewVideo.videoWidth)
   const width = SHARPNESS_SAMPLE_WIDTH
-  const height = Math.max(90, Math.round(width * ratio))
+  const height = Math.max(120, Math.round(width * ratio))
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -150,119 +146,88 @@ async function measureStreamSharpness(stream) {
 
   const scores = []
   for (let frame = 0; frame < SHARPNESS_FRAME_COUNT; frame += 1) {
-    context.drawImage(video, 0, 0, width, height)
+    context.drawImage(previewVideo, 0, 0, width, height)
     const image = context.getImageData(0, 0, width, height)
     scores.push(calculateSharpnessScore(image.data, width, height))
     if (frame + 1 < SHARPNESS_FRAME_COUNT) await wait(SHARPNESS_FRAME_GAP_MS)
   }
-  video.pause()
-  video.srcObject = null
+
   scores.sort((left, right) => left - right)
   return scores[Math.floor(scores.length / 2)] || 0
 }
 
-function readPreferredCameraId() {
-  try {
-    return String(window.localStorage?.getItem(PREFERRED_CAMERA_STORAGE_KEY) || '')
-  } catch {
-    return ''
-  }
-}
-
-function rememberPreferredCameraId(deviceId) {
-  if (!deviceId) return
-  try {
-    window.localStorage?.setItem(PREFERRED_CAMERA_STORAGE_KEY, deviceId)
-  } catch {
-    // Opslag is optioneel; de automatische meting blijft per sessie bruikbaar.
-  }
-}
-
 function streamFacingMode(stream) {
-  const settings = stream?.getVideoTracks?.()[0]?.getSettings?.() || {}
-  return String(settings.facingMode || '')
+  return String(stream?.getVideoTracks?.()[0]?.getSettings?.().facingMode || '')
 }
 
-async function autoSelectSharpestCamera(devices, initialStream, initialDeviceId) {
+async function scoreCameraOnVisiblePreview(deviceId, previewVideo) {
+  const stream = await requestReceiptStream(deviceId)
+  try {
+    if (streamFacingMode(stream) === 'user') return { score: -1, stream: null }
+    await attachStreamToPreview(previewVideo, stream)
+    const score = await measureVisiblePreviewSharpness(previewVideo)
+    return { score, stream }
+  } catch (error) {
+    stopReceiptCameraStream(stream)
+    throw error
+  }
+}
+
+async function autoSelectSharpestCamera(devices, initialStream, initialDeviceId, previewVideo) {
   const ranked = rankReceiptCameras(devices, initialDeviceId)
   const usable = ranked.filter((device) => !likelyFrontCamera(device)).slice(0, MAX_AUTO_CAMERA_CANDIDATES)
-  if (usable.length < 2) {
+  if (usable.length < 2 || !previewVideo) {
+    await attachStreamToPreview(previewVideo, initialStream)
     return { stream: initialStream, activeDeviceId: initialDeviceId, scores: [] }
   }
 
-  const storedId = readPreferredCameraId()
-  if (storedId && usable.some((device) => device.deviceId === storedId)) {
-    if (storedId === initialDeviceId) {
-      return { stream: initialStream, activeDeviceId: initialDeviceId, scores: [] }
-    }
-    try {
-      const storedStream = await requestReceiptStream(storedId)
-      if (streamFacingMode(storedStream) !== 'user') {
-        stopReceiptCameraStream(initialStream)
-        return { stream: storedStream, activeDeviceId: storedId, scores: [] }
-      }
-      stopReceiptCameraStream(storedStream)
-    } catch {
-      // Een oude deviceId kan door browser/OS veranderen; meet dan opnieuw.
-    }
-  }
+  stopReceiptCameraStream(initialStream)
 
   const scores = []
-  let currentStream = initialStream
-  let currentId = initialDeviceId
+  let best = null
 
   for (const device of usable) {
-    let candidateStream = null
     const candidateId = String(device.deviceId || '')
     try {
-      if (candidateId === initialDeviceId && currentStream) {
-        candidateStream = currentStream
-      } else {
-        candidateStream = await requestReceiptStream(candidateId)
-      }
-      if (streamFacingMode(candidateStream) === 'user') {
-        scores.push({ deviceId: candidateId, score: -1 })
-      } else {
-        const score = await measureStreamSharpness(candidateStream)
-        scores.push({ deviceId: candidateId, score })
+      const result = await scoreCameraOnVisiblePreview(candidateId, previewVideo)
+      scores.push({ deviceId: candidateId, score: result.score })
+      if (result.stream && (!best || result.score > best.score)) {
+        if (best?.stream) stopReceiptCameraStream(best.stream)
+        best = { deviceId: candidateId, score: result.score, stream: result.stream }
+      } else if (result.stream) {
+        stopReceiptCameraStream(result.stream)
       }
     } catch {
       scores.push({ deviceId: candidateId, score: -1 })
-    } finally {
-      if (candidateStream && candidateStream !== currentStream) stopReceiptCameraStream(candidateStream)
     }
   }
 
-  const best = scores
-    .filter((entry) => entry.score >= 0)
-    .sort((left, right) => right.score - left.score)[0]
-
-  if (!best?.deviceId || best.deviceId === currentId) {
-    if (best?.deviceId) rememberPreferredCameraId(best.deviceId)
-    return { stream: currentStream, activeDeviceId: currentId, scores }
+  if (!best?.stream) {
+    const fallback = await requestReceiptStream(initialDeviceId)
+    await attachStreamToPreview(previewVideo, fallback)
+    return { stream: fallback, activeDeviceId: initialDeviceId, scores }
   }
 
-  stopReceiptCameraStream(currentStream)
-  currentStream = await requestReceiptStream(best.deviceId)
-  currentId = String(currentStream.getVideoTracks?.()[0]?.getSettings?.().deviceId || best.deviceId)
-  rememberPreferredCameraId(currentId)
-  return { stream: currentStream, activeDeviceId: currentId, scores }
+  await attachStreamToPreview(previewVideo, best.stream)
+  const actualId = String(best.stream.getVideoTracks?.()[0]?.getSettings?.().deviceId || best.deviceId)
+  return { stream: best.stream, activeDeviceId: actualId, scores }
 }
 
-export async function openReceiptCamera({ deviceId = '' } = {}) {
+export async function openReceiptCamera({ deviceId = '', previewVideo = null } = {}) {
   let stream = await requestReceiptStream(deviceId)
-  let settings = stream.getVideoTracks?.()[0]?.getSettings?.() || {}
+  const settings = stream.getVideoTracks?.()[0]?.getSettings?.() || {}
   let activeDeviceId = String(settings.deviceId || deviceId || '')
 
   let devices = []
   try {
     devices = await navigator.mediaDevices.enumerateDevices()
   } catch {
+    if (previewVideo) await attachStreamToPreview(previewVideo, stream)
     return { stream, devices: [], activeDeviceId, sharpnessScores: [] }
   }
 
   if (deviceId) {
-    rememberPreferredCameraId(activeDeviceId || deviceId)
+    if (previewVideo) await attachStreamToPreview(previewVideo, stream)
     return {
       stream,
       devices: rankReceiptCameras(devices, activeDeviceId),
@@ -272,7 +237,7 @@ export async function openReceiptCamera({ deviceId = '' } = {}) {
   }
 
   try {
-    const selected = await autoSelectSharpestCamera(devices, stream, activeDeviceId)
+    const selected = await autoSelectSharpestCamera(devices, stream, activeDeviceId, previewVideo)
     stream = selected.stream
     activeDeviceId = selected.activeDeviceId
     return {
@@ -282,6 +247,7 @@ export async function openReceiptCamera({ deviceId = '' } = {}) {
       sharpnessScores: selected.scores,
     }
   } catch {
+    if (previewVideo) await attachStreamToPreview(previewVideo, stream).catch(() => {})
     return {
       stream,
       devices: rankReceiptCameras(devices, activeDeviceId),

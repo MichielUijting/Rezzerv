@@ -49,6 +49,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   const [receiptFilter, setReceiptFilter] = useState('')
   const [cameraError, setCameraError] = useState('')
   const [cameraDevices, setCameraDevices] = useState([])
+  const [cameraOptimizing, setCameraOptimizing] = useState(false)
   const activeCameraIdRef = useRef('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -110,21 +111,20 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
     setCameraError('')
     stopReceiptCameraStream(streamRef.current)
     streamRef.current = null
+    setCameraOptimizing(!deviceId)
     try {
-      const selection = await openReceiptCamera({ deviceId })
+      const selection = await openReceiptCamera({ deviceId, previewVideo: videoRef.current })
       streamRef.current = selection.stream
       setCameraDevices(selection.devices)
       activeCameraIdRef.current = selection.activeDeviceId
-      if (videoRef.current) {
-        videoRef.current.srcObject = selection.stream
-        await videoRef.current.play().catch(() => {})
-      }
       return true
     } catch (error) {
       const denied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'
       setCameraError(denied ? 'Cameratoegang is geweigerd.' : 'De camera kon niet worden geopend.')
       showFeedback({ variant: 'warning', title: 'Cameratoegang', message: denied ? 'Geef Inhuis cameratoegang in de browserinstellingen en probeer opnieuw.' : 'Controleer of je camera beschikbaar is en probeer opnieuw.', primaryActionLabel: 'Opnieuw proberen', onPrimaryAction: () => openCamera(deviceId), secondaryActionLabel: 'Sluiten', testId: 'mobile-kassa-camera-permission' })
       return false
+    } finally {
+      setCameraOptimizing(false)
     }
   }
 
@@ -431,7 +431,9 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
               enabled={scannerProvider === 'in-huis-demo'}
               fit="cover"
             />
-            {scannerProvider === 'in-huis-demo' ? (
+            {cameraOptimizing ? (
+              <div className="rz-mobile-kassa-ai-guide-label">Beste camera kiezen…</div>
+            ) : scannerProvider === 'in-huis-demo' ? (
               <div className="rz-mobile-kassa-ai-guide-label">AI zoekt de randen van de kassabon</div>
             ) : (
               <div className="rz-mobile-kassa-guide">Plaats de kassabon binnen het vlak</div>
@@ -440,7 +442,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
           <input ref={uploadRef} type="file" accept="image/*,application/pdf" hidden aria-label="Bonbestand kiezen" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadImage(file, 'upload') }} />
           <div className="rz-mobile-kassa-camera-actions">
             <Button type="button" onClick={showReceiptList}>Bonnen</Button>
-            <Button type="button" onClick={takePhoto} disabled={busy} aria-label="Maak foto van kassabon">Foto nemen</Button>
+            <Button type="button" onClick={takePhoto} disabled={busy || cameraOptimizing} aria-label="Maak foto van kassabon">Foto nemen</Button>
           </div>
           {cameraDevices.length > 1 ? (
             <Button type="button" variant="secondary" disabled={busy} onClick={switchCamera} data-testid="mobile-kassa-switch-camera">Camera wisselen</Button>
