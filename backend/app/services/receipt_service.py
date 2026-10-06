@@ -2051,7 +2051,7 @@ def _store_raw_file(storage_root: Path, household_id: str, raw_receipt_id: str, 
     return str(target_path)
 
 
-def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False, create_failed_receipt_table: bool = False, failed_store_name: str | None = None, failed_purchase_at: str | None = None, include_debug: bool = False) -> dict[str, Any]:
+def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False, create_failed_receipt_table: bool = False, failed_store_name: str | None = None, failed_purchase_at: str | None = None, include_debug: bool = False, scanner_provider: str | None = None) -> dict[str, Any]:
     detected_mime = detect_mime_type(filename, file_bytes, mime_type)
     digest = sha256_hex(file_bytes)
     reimport_lineage = None
@@ -2075,7 +2075,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             return response
         reimport_lineage = load_deleted_reimport_lineage(conn, household_id, digest)
 
-    parse_result = scan_receipt_content_via_gateway(file_bytes, filename, detected_mime)
+    parse_result = scan_receipt_content_via_gateway(file_bytes, filename, detected_mime, provider_code=scanner_provider)
     if reject_non_receipt and not parse_result.is_receipt:
         raise ValueError('Gedeelde inhoud is niet als bruikbare kassabon herkend.')
     parse_fingerprint = build_receipt_fingerprint_from_parse_result(parse_result) if parse_result.is_receipt else ''
