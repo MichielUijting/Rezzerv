@@ -11110,6 +11110,36 @@ def run_receipt_status_baseline_diagnosis(household_id: Optional[str] = None):
     return report
 
 
+@app.post("/api/receipts/scanner/detect-live")
+async def detect_live_receipt_corners(
+    household_id: str = Form(...),
+    file: UploadFile = File(...),
+):
+    effective_household_id = str(household_id or "").strip()
+    if not effective_household_id:
+        raise HTTPException(status_code=400, detail="Huishouden ontbreekt")
+    with engine.begin() as conn:
+        scanner_provider = get_household_receipt_scanner_provider(conn, effective_household_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Cameraframe is leeg")
+    try:
+        from app.integrations.receipt_scanners.runtime import detect_receipt_corners_via_provider
+        return detect_receipt_corners_via_provider(
+            file_bytes,
+            file.content_type or "image/jpeg",
+            scanner_provider,
+        )
+    except Exception as exc:
+        logger.warning("Live bonranddetectie mislukt voor huishouden %s: %s", effective_household_id, exc)
+        return {
+            "active": scanner_provider == "in-huis-demo",
+            "corners": None,
+            "image_width": 0,
+            "image_height": 0,
+        }
+
+
 @app.post("/api/receipts/share-import")
 async def import_shared_receipt(
     household_id: str = Form(...),
