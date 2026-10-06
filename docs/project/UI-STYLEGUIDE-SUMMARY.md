@@ -960,3 +960,10 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Het hoofdscherm **Voorraad** toont naast artikelnaam en aantal uitsluitend de gebruikte metadata **Brick**, **Productfamilie**, **Locatie** en **Sublocatie**. Lege locatievelden worden niet als placeholdermetadata getoond.
 - **GPC-groep/Class**, Artikelgroep en een tweede productnaam worden niet meer als extra metadata in het Voorraad-hoofdscherm getoond; zij blijven waar van toepassing beschikbaar in detail- of beheercontext.
 - De open bonnen in **Kassa** worden op aankoopdatum oplopend weergegeven: de oudste bon staat bovenaan. Bij gelijke of ontbrekende aankoopdatum is aanmaaktijd de stabiele vervolgsortering.
+
+
+### Huishoudinstelling automatische kassabongoedkeuring — 6 oktober 2026
+
+- **Instellingen → Winkelimport** bevat per huishouden de instelling **Kassabonnen automatisch goedkeuren**; de veilige standaardwaarde is **uit**.
+- Alleen een huishoud-**Beheerder** mag deze instelling wijzigen. Een reguliere **Gebruiker** kan de instelling niet aan- of uitzetten; de backend handhaaft dit met dezelfde admin-authority als de overige huishoudbrede Winkelimport-instellingen.
+- Wanneer automatische goedkeuring aan staat, mag alleen een technisch complete bon met geldige winkel, aankoopdatum, ten minste één geldige bonregel en sluitende totalen automatisch naar **Uitpakken** gaan. Twijfel of een totalenafwijking blijft fail-closed in **Kassa**.

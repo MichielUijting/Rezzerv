@@ -1137,6 +1137,8 @@ STORE_IMPORT_SIMPLIFICATION_DEFAULT = "gebalanceerd"
 RECEIPT_SCANNER_PROVIDER_KEY = "receipt_scanner_provider"
 RECEIPT_SCANNER_PROVIDER_ALLOWED = {"inhuis", "in-huis-demo"}
 RECEIPT_SCANNER_PROVIDER_DEFAULT = "inhuis"
+RECEIPT_AUTO_APPROVE_KEY = "receipt_auto_approve"
+RECEIPT_AUTO_APPROVE_DEFAULT = False
 HOUSEHOLD_AUTO_CONSUME_KEY = "consumable_auto_deduction_mode"
 HOUSEHOLD_AUTO_CONSUME_LEGACY_KEY = "auto_consume_on_repurchase"
 ARTICLE_AUTO_CONSUME_OVERRIDES_KEY = "article_auto_consume_overrides"
@@ -6326,6 +6328,37 @@ def set_household_receipt_scanner_provider(conn, household_id: str, value: str) 
     return normalized
 
 
+def get_household_receipt_auto_approve(conn, household_id: str) -> bool:
+    row = conn.execute(
+        text(
+            "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
+        ),
+        {"household_id": str(household_id), "setting_key": RECEIPT_AUTO_APPROVE_KEY},
+    ).mappings().first()
+    return normalize_bool_setting(row["setting_value"] if row else RECEIPT_AUTO_APPROVE_DEFAULT)
+
+
+def set_household_receipt_auto_approve(conn, household_id: str, enabled: bool) -> bool:
+    normalized = normalize_bool_setting(enabled)
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_settings (id, household_id, setting_key, setting_value, updated_at)
+            VALUES (:id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP)
+            ON CONFLICT(household_id, setting_key)
+            DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "household_id": str(household_id),
+            "setting_key": RECEIPT_AUTO_APPROVE_KEY,
+            "setting_value": "true" if normalized else "false",
+        },
+    )
+    return normalized
+
+
 def normalize_almost_out_prediction_enabled(value: Any) -> bool:
     return normalize_bool_setting(value)
 
@@ -7197,6 +7230,7 @@ class ArticleAutomationOverrideUpdateRequest(BaseModel):
 class StoreImportSimplificationUpdateRequest(BaseModel):
     store_import_simplification_level: str
     receipt_scanner_provider: str = RECEIPT_SCANNER_PROVIDER_DEFAULT
+    receipt_auto_approve: bool = RECEIPT_AUTO_APPROVE_DEFAULT
 
     @field_validator("store_import_simplification_level")
     @classmethod
@@ -13032,12 +13066,15 @@ def get_store_import_settings(authorization: Optional[str] = Header(None)):
     with engine.begin() as conn:
         level = get_household_store_import_simplification_level(conn, household_id)
         receipt_scanner_provider = get_household_receipt_scanner_provider(conn, household_id)
+        receipt_auto_approve = get_household_receipt_auto_approve(conn, household_id)
     return {
         "household_id": household_id,
         "store_import_simplification_level": level,
         "receipt_scanner_provider": receipt_scanner_provider,
+        "receipt_auto_approve": receipt_auto_approve,
         "can_edit_store_import_simplification_level": can_edit,
         "can_edit_receipt_scanner_provider": can_edit,
+        "can_edit_receipt_auto_approve": can_edit,
         "is_household_admin": can_edit,
     }
 
@@ -13053,12 +13090,19 @@ def update_store_import_settings(payload: StoreImportSimplificationUpdateRequest
             household_id,
             payload.receipt_scanner_provider,
         )
+        receipt_auto_approve = set_household_receipt_auto_approve(
+            conn,
+            household_id,
+            payload.receipt_auto_approve,
+        )
     return {
         "household_id": household_id,
         "store_import_simplification_level": level,
         "receipt_scanner_provider": receipt_scanner_provider,
+        "receipt_auto_approve": receipt_auto_approve,
         "can_edit_store_import_simplification_level": True,
         "can_edit_receipt_scanner_provider": True,
+        "can_edit_receipt_auto_approve": True,
         "is_household_admin": True,
     }
 
