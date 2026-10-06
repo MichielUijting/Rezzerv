@@ -989,3 +989,6 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Mobiel biedt boven de bonregels dezelfde functionele filtermogelijkheden voor zoeken, status, mapping en locatie, plus **Filters wissen**. De mobiele tabelkop blijft verborgen; de functionaliteit verhuist naar touchgeschikte centrale bediening.
 - De bestaande bulkacties **Exporteren**, **Locatie toepassen** en **Naar voorraad** blijven dezelfde functies gebruiken als desktop.
 - Autorisaties blijven leidend: een Viewer kan details bekijken maar geen locatie, artikelgroep, barcodekoppeling of voorraadverwerking wijzigen; locatie-aanmaak blijft uitsluitend beschikbaar voor de huishoud-Beheerder; reeds verwerkte regels zijn in detail alleen-lezen.
+
+
+- In het mobiele **Uitpakken**-overzicht blijven de bulkacties **Exporteren** en **Verwijderen** altijd zichtbaar. Zolang geen kassabon is geselecteerd zijn beide knoppen inactief; bij één of meer geselecteerde bonnen worden zij actief. Zo blijft beschikbare functionaliteit zichtbaar zonder een ongeldige actie toe te staan.

@@ -67,3 +67,8 @@ assert.match(detailSource, /disabled=\{lineBusy \|\| isViewer \|\| activeDetailE
 assert.match(detailSource, /disabled=\{!canLinkBarcode\}/)
 assert.match(detailSource, /receipt-bulk-location-button[\s\S]*isViewer/)
 assert.match(detailSource, /receipt-process-button[\s\S]*isViewer/)
+
+assert.match(receiptsSource, /data-testid="mobile-unpack-bulk-actions"/)
+assert.match(receiptsSource, /data-testid="mobile-unpack-export"[\s\S]*disabled=\{selectedBatchIds\.length === 0\}/)
+assert.match(receiptsSource, /data-testid="mobile-unpack-delete"[\s\S]*disabled=\{selectedBatchIds\.length === 0\}/)
+assert.doesNotMatch(receiptsSource, /selectedBatchIds\.length > 0 \? \([\s\S]*rz-mobile-unpack-actions/)

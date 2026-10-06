@@ -264,12 +264,26 @@ export default function ReceiptsPage() {
           ) : null}
           <MobilePaginationControls {...mobileReceiptPagination} ariaLabel="Paginering Uitpakken" />
 
-          {selectedBatchIds.length > 0 ? (
-            <div className="rz-mobile-unpack-actions">
-              <Button type="button" variant="secondary" onClick={handleExport}>Exporteren</Button>
-              <Button type="button" variant="secondary" onClick={handleDeleteSelected}>Verwijderen</Button>
-            </div>
-          ) : null}
+          <div className="rz-mobile-unpack-actions" data-testid="mobile-unpack-bulk-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleExport}
+              disabled={selectedBatchIds.length === 0}
+              data-testid="mobile-unpack-export"
+            >
+              Exporteren
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleDeleteSelected}
+              disabled={selectedBatchIds.length === 0}
+              data-testid="mobile-unpack-delete"
+            >
+              Verwijderen
+            </Button>
+          </div>
 
         </main>
 
