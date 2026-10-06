@@ -1,6 +1,7 @@
 const IDEAL_RECEIPT_WIDTH = 3840
 const IDEAL_RECEIPT_HEIGHT = 2160
 const MAX_AUTO_CAMERA_CANDIDATES = 6
+const PREFERRED_CAMERA_STORAGE_KEY = 'inhuis.receipt-camera.preferred-device.v3'
 
 function normalizedLabel(device) {
   return String(device?.label || '').trim().toLowerCase()
@@ -28,6 +29,24 @@ export function rankReceiptCameras(devices, currentDeviceId = '') {
 
 export function stopReceiptCameraStream(stream) {
   stream?.getTracks?.().forEach((track) => track.stop())
+}
+
+export function rememberPreferredReceiptCamera(deviceId) {
+  const normalized = String(deviceId || '').trim()
+  if (!normalized) return
+  try {
+    window.localStorage?.setItem(PREFERRED_CAMERA_STORAGE_KEY, normalized)
+  } catch {
+    // Opslag is optioneel; de scanner blijft zonder voorkeursopslag werken.
+  }
+}
+
+function readPreferredReceiptCamera() {
+  try {
+    return String(window.localStorage?.getItem(PREFERRED_CAMERA_STORAGE_KEY) || '')
+  } catch {
+    return ''
+  }
 }
 
 async function applyReceiptFocus(track) {
@@ -158,11 +177,34 @@ export async function openReceiptCamera({ deviceId = '' } = {}) {
   }
 
   if (deviceId) {
+    rememberPreferredReceiptCamera(activeDeviceId || deviceId)
     return {
       stream,
       devices: rankReceiptCameras(devices, activeDeviceId),
       activeDeviceId,
       cameraResolutions: [],
+      selectionReason: 'manual',
+    }
+  }
+
+  const storedDeviceId = readPreferredReceiptCamera()
+  const storedDevice = devices.find((device) => device.deviceId === storedDeviceId && !likelyFrontCamera(device))
+  if (storedDeviceId && storedDevice) {
+    try {
+      stopReceiptCameraStream(stream)
+      const preferredStream = await requestReceiptStream(storedDeviceId)
+      const preferredId = String(preferredStream.getVideoTracks?.()[0]?.getSettings?.().deviceId || storedDeviceId)
+      return {
+        stream: preferredStream,
+        devices: rankReceiptCameras(devices, preferredId),
+        activeDeviceId: preferredId,
+        cameraResolutions: [],
+        selectionReason: 'remembered-success',
+      }
+    } catch {
+      // Device-id kan na een browser/OS-update ongeldig zijn; val dan terug op automatische selectie.
+      stream = await requestReceiptStream()
+      activeDeviceId = String(stream.getVideoTracks?.()[0]?.getSettings?.().deviceId || '')
     }
   }
 
@@ -175,6 +217,7 @@ export async function openReceiptCamera({ deviceId = '' } = {}) {
       devices: rankReceiptCameras(devices, activeDeviceId),
       activeDeviceId,
       cameraResolutions: selected.resolutions,
+      selectionReason: 'highest-resolution',
     }
   } catch {
     return {
@@ -182,6 +225,7 @@ export async function openReceiptCamera({ deviceId = '' } = {}) {
       devices: rankReceiptCameras(devices, activeDeviceId),
       activeDeviceId,
       cameraResolutions: [],
+      selectionReason: 'fallback',
     }
   }
 }

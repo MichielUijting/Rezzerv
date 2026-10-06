@@ -6,7 +6,7 @@ import { MobilePaginationControls, useMobilePagination } from '../../ui/MobilePa
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import LiveReceiptCornerGuide from './components/LiveReceiptCornerGuide.jsx'
-import { openReceiptCamera, stopReceiptCameraStream } from './receiptCamera.js'
+import { openReceiptCamera, rememberPreferredReceiptCamera, stopReceiptCameraStream } from './receiptCamera.js'
 import './mobileKassa.css'
 
 function money(value, currency = 'EUR') {
@@ -136,7 +136,9 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
     if (cameraDevices.length < 2) return
     const currentIndex = cameraDevices.findIndex((device) => device.deviceId === activeCameraIdRef.current)
     const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % cameraDevices.length : 0
-    await openCamera(cameraDevices[nextIndex].deviceId)
+    const nextDeviceId = String(cameraDevices[nextIndex].deviceId || '')
+    const opened = await openCamera(nextDeviceId)
+    if (opened && activeCameraIdRef.current) rememberPreferredReceiptCamera(activeCameraIdRef.current)
   }
 
   async function startCamera() {
@@ -207,6 +209,9 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
       const id = String(result?.receipt_table_id || result?.existing_receipt?.receipt_table_id || '')
       if (!id) throw new Error('Inhuis herkent geen bruikbare kassabon.')
       const detail = await fetchJson(`/api/receipts/${encodeURIComponent(id)}`)
+      if (source === 'camera' && activeCameraIdRef.current) {
+        rememberPreferredReceiptCamera(activeCameraIdRef.current)
+      }
       streamRef.current?.getTracks?.().forEach((track) => track.stop())
       streamRef.current = null
       setReceipt(detail)
@@ -436,7 +441,7 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
               fit="cover"
             />
             {cameraOptimizing ? (
-              <div className="rz-mobile-kassa-ai-guide-label">Camera met hoogste resolutie kiezen…</div>
+              <div className="rz-mobile-kassa-ai-guide-label">Camera kiezen…</div>
             ) : scannerProvider === 'in-huis-demo' ? (
               <div className="rz-mobile-kassa-ai-guide-label">AI zoekt de randen van de kassabon</div>
             ) : (
