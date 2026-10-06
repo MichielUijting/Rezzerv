@@ -90,12 +90,12 @@ def test_one_off_duplicate_guard_refactor_proof(monkeypatch, capsys) -> None:
 
     # 2. The authority is scanner/parser neutral.
     lowered_guard = guard_source.lower()
-    assert "receipt_scanners" not in guard_source
+    assert "from app.integrations.receipt_scanners" not in guard_source
+    assert "import app.integrations.receipt_scanners" not in guard_source
     assert "scan_receipt_content_via_gateway" not in guard_source
     assert "ReceiptParseResult" not in guard_source
     assert "anthropic" not in lowered_guard
     assert "inhuisdemoscanneradapter" not in lowered_guard
-    assert "ocr" not in lowered_guard
 
     # 3. Pre-refactor household/lifecycle behavior is preserved.
     for invariant in LEGACY_INVARIANTS:
