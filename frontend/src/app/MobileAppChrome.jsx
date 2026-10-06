@@ -30,7 +30,7 @@ const MANDATORY_BOTTOM_NAV_KEY = 'bijna-op'
 const MOBILE_ICON_TYPE_BY_KEY = Object.freeze({
   meldingen: 'info',
   voorraad: 'shelf',
-  kassa: 'register',
+  kassa: 'payment-card',
   kassabonnen: 'shopping-bag',
   'bijna-op': 'almost-out',
   winkelen: 'cart',

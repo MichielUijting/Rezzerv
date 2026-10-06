@@ -149,7 +149,7 @@ assert.match(mobileChrome, /const seen = new Set\(\)/)
 assert.match(mobileChrome, /rz-mobile-superuser-header/)
 assert.match(mobileChrome, /meldingen: 'info'/)
 assert.match(mobileChrome, /voorraad: 'shelf'/)
-assert.match(mobileChrome, /kassa: 'register'/)
+assert.match(mobileChrome, /kassa: 'payment-card'/)
 assert.match(mobileChrome, /kassabonnen: 'shopping-bag'/)
 
 assert.match(authSettings, /'household\.member': 'Gebruiker'/)
@@ -179,3 +179,5 @@ assert.match(homeCss, /#EADACB/)
 assert.match(mobileChrome, /MANDATORY_BOTTOM_NAV_KEY = 'bijna-op'/)
 
 assert.match(mobileChrome, /aria-modal="true"/)
+
+assert.match(mobileChrome, /kassa: 'payment-card'/)

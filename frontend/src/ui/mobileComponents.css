@@ -284,3 +284,8 @@
 
 .rz-mobile-action-bar-icon .rz-almost-out-arrow{stroke:#D97706;stroke-width:2.4}
 .rz-mobile-action-bar-icon .rz-shelf-box{stroke-width:.85}
+
+
+.rz-mobile-action-bar-icon .rz-payment-card-icon{
+  color:var(--color-mobile-ui-primary);
+}

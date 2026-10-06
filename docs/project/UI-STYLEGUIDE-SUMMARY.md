@@ -928,7 +928,7 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - De globale mobiele onderste actiebalk bevat geen dubbele acties. **Bijna op** is een vaste beschikbare actie; de overige posities worden uniek aangevuld uit recente beschikbare acties, gevolgd door **Meer**.
 - In de mobiele actiebalk gebruikt **Meldingen** een grote cursieve donkergroene letter **i** als informatie-icoon.
 - **Voorraad** gebruikt in de mobiele actiebalk een stellingkast met dozen als icoon.
-- **Kassa** gebruikt in de mobiele actiebalk een kassa/register als icoon, niet een kassabon.
+- **Kassa** gebruikt in de mobiele actiebalk een groene betaalpas als icoon.
 - **Uitpakken** gebruikt in de mobiele actiebalk een boodschappentas met horizontale kleurstrepen.
 - Op de mobiele Superuser-route staat de globale **Terug**-bediening links in een eigen sticky donkergroene headerbalk; zij scrollt niet weg met de pagina-inhoud.
 
@@ -978,3 +978,6 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - **Boodschappen afgerond** staat buiten en direct onder de sectie/tabel **In winkelwagen**, met de standaard tussenruimte.
 - De mobiele actie **Meer** opent een modale popup boven de huidige pagina en navigeert niet naar een afzonderlijk Meer-scherm.
 - Een keuze uit de popup sluit deze en opent daarna de gekozen functie; tikken buiten de popup of op sluiten laat de huidige pagina intact.
+
+
+- Het mobiele **Kassa**-icoon is een eenvoudige betaalpas in de centrale groene Inhuis-kleur; het eerdere kassaregister-icoon vervalt.

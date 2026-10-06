@@ -14,11 +14,12 @@ function MobileActionIcon({ type, icon }) {
       </svg>
     )
   }
-  if (type === 'register') {
+  if (type === 'payment-card') {
     return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 3.5h9v5H6zM5 9h12l2 4v7H4v-7l1-4Z" />
-        <path d="M7 12h2M11 12h2M15 12h2M7 15h2M11 15h2M15 15h2M7 18h10" />
+      <svg className="rz-payment-card-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="6" width="17" height="12" rx="2" />
+        <path d="M3.5 10h17" />
+        <path d="M7 14h4" />
       </svg>
     )
   }
