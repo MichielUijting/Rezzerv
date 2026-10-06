@@ -10704,6 +10704,8 @@ def import_uploaded_receipt_payload(
         )
         if reject_non_receipt and not result.get('receipt_table_id'):
             raise ValueError('Gedeelde inhoud is niet als bruikbare kassabon herkend.')
+        if not result.get('duplicate') and result.get('receipt_table_id'):
+            result['auto_approval'] = auto_approve_receipt_if_enabled(result.get('receipt_table_id'), str(household_id))
         return result
     with engine.begin() as conn:
         scanner_provider = get_household_receipt_scanner_provider(conn, str(household_id))
@@ -10722,7 +10724,10 @@ def import_uploaded_receipt_payload(
         include_debug=include_debug,
         scanner_provider=scanner_provider,
     )
-    return _normalized_purchase_at_or_fallback(str(result.get('receipt_table_id') or ''), result)
+    result = _normalized_purchase_at_or_fallback(str(result.get('receipt_table_id') or ''), result)
+    if not result.get('duplicate') and result.get('receipt_table_id'):
+        result['auto_approval'] = auto_approve_receipt_if_enabled(result.get('receipt_table_id'), str(household_id))
+    return result
 
 
 def store_receipt_email_metadata(raw_receipt_id: str, household_id: str, payload: dict[str, Any]):
@@ -11879,6 +11884,7 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
 def list_receipts(householdId: str = Query(...), authorization: Optional[str] = Header(None)):
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    _auto_approve_pending_receipts_for_household(effective_household_id)
     with engine.begin() as conn:
         rows = conn.execute(
             text(
@@ -12519,97 +12525,194 @@ def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest
     return get_receipt_detail(receipt_table_id, authorization)
 
 
+def _approve_receipt_table_in_transaction(
+    conn,
+    receipt_table_id: str,
+    *,
+    user_email: str,
+    allow_totals_override: bool,
+):
+    header = conn.execute(
+        text("SELECT id, store_name, purchase_at, total_amount FROM receipt_tables WHERE id = :id LIMIT 1"),
+        {'id': receipt_table_id},
+    ).mappings().first()
+    if not header:
+        raise HTTPException(status_code=404, detail='Bon niet gevonden')
+
+    store_name = str(header.get('store_name') or '').strip()
+    purchase_at = str(header.get('purchase_at') or '').strip()
+    if not store_name:
+        raise HTTPException(status_code=400, detail='Winkel is verplicht voordat je de bon kunt goedkeuren')
+    if not purchase_at:
+        raise HTTPException(status_code=400, detail='Aankoopdatum is verplicht voordat je de bon kunt goedkeuren')
+
+    valid_line_count = conn.execute(
+        text("""
+        SELECT COUNT(*)
+        FROM receipt_table_lines
+        WHERE receipt_table_id = :receipt_table_id
+          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND TRIM(COALESCE(corrected_raw_label, raw_label, '')) <> ''
+        """),
+        {'receipt_table_id': receipt_table_id},
+    ).scalar()
+    if int(valid_line_count or 0) < 1:
+        raise HTTPException(status_code=400, detail='Voeg minimaal één geldige bonregel toe voordat je goedkeurt')
+
+    line_total_sum = conn.execute(
+        text("SELECT COALESCE(SUM(COALESCE(corrected_line_total, line_total, 0)), 0) FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, FALSE) = FALSE"),
+        {'receipt_table_id': receipt_table_id},
+    ).scalar()
+    discount_total = conn.execute(
+        text("SELECT COALESCE(discount_total, 0) FROM receipt_tables WHERE id = :receipt_table_id LIMIT 1"),
+        {'receipt_table_id': receipt_table_id},
+    ).scalar()
+    total_amount = header.get('total_amount')
+    totals_match = total_amount is not None
+    if total_amount is not None:
+        try:
+            totals_match = abs(float(total_amount) - (float(line_total_sum or 0) + float(discount_total or 0))) < 0.01
+        except Exception:
+            totals_match = False
+
+    if not totals_match and not allow_totals_override:
+        raise HTTPException(status_code=409, detail='Totaalbedrag wijkt af; automatische goedkeuring is gestopt')
+
+    next_status = 'approved' if totals_match else 'approved_override'
+    normalized_user_email = str(user_email or '').strip().lower()
+    conn.execute(
+        text("""
+        UPDATE receipt_tables
+        SET parse_status = :parse_status,
+            line_count = :line_count,
+            approved_by_user_email = :user_email,
+            approved_at = CURRENT_TIMESTAMP,
+            corrected_by_user_email = :user_email,
+            reviewed_at = CURRENT_TIMESTAMP,
+            totals_overridden = :totals_overridden,
+            totals_override_by_user_email = CASE WHEN :totals_overridden IS TRUE THEN :user_email ELSE NULL END,
+            totals_override_at = CASE WHEN :totals_overridden IS TRUE THEN CURRENT_TIMESTAMP ELSE NULL END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = :id
+        """),
+        {
+            'id': receipt_table_id,
+            'line_count': int(valid_line_count or 0),
+            'user_email': normalized_user_email,
+            'parse_status': next_status,
+            'totals_overridden': not totals_match,
+        },
+    )
+
+    line_ids = [
+        str(row[0])
+        for row in conn.execute(
+            text("SELECT id FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, FALSE) = FALSE ORDER BY line_index ASC, created_at ASC"),
+            {'receipt_table_id': receipt_table_id},
+        ).fetchall()
+        if row[0]
+    ]
+    for current_line_id in line_ids:
+        sync_receipt_table_line_product_links(
+            conn,
+            receipt_table_id,
+            current_line_id,
+            create_global_product=False,
+            create_household_article=False,
+        )
+
+    receipt_header = conn.execute(
+        text("""
+        SELECT id AS receipt_table_id, household_id, store_name, store_branch, purchase_at, created_at, currency
+        FROM receipt_tables
+        WHERE id = :id
+        LIMIT 1
+        """),
+        {'id': receipt_table_id},
+    ).mappings().first()
+    batch_id = ensure_unpack_batch_for_receipt(conn, dict(receipt_header)) if receipt_header else None
+    return {'receipt_table_id': receipt_table_id, 'batch_id': batch_id, 'parse_status': next_status}
+
+
+def auto_approve_receipt_if_enabled(receipt_table_id: str | None, household_id: str) -> dict[str, Any]:
+    normalized_receipt_id = str(receipt_table_id or '').strip()
+    normalized_household_id = str(household_id or '').strip()
+    if not normalized_receipt_id or not normalized_household_id:
+        return {'enabled': False, 'approved': False, 'reason': 'missing_receipt_or_household'}
+
+    with engine.begin() as conn:
+        if not get_household_receipt_auto_approve(conn, normalized_household_id):
+            return {'enabled': False, 'approved': False, 'reason': 'disabled'}
+
+        row = conn.execute(
+            text("""
+            SELECT household_id, approved_at, store_name_source, purchase_at_source
+            FROM receipt_tables
+            WHERE id = :id AND deleted_at IS NULL
+            LIMIT 1
+            """),
+            {'id': normalized_receipt_id},
+        ).mappings().first()
+        if not row or str(row.get('household_id') or '') != normalized_household_id:
+            return {'enabled': True, 'approved': False, 'reason': 'receipt_not_available'}
+        if row.get('approved_at') is not None:
+            return {'enabled': True, 'approved': True, 'reason': 'already_approved'}
+        if str(row.get('store_name_source') or '').strip().lower() == 'user_required':
+            return {'enabled': True, 'approved': False, 'reason': 'store_requires_review'}
+        if str(row.get('purchase_at_source') or '').strip().lower() == 'import_default':
+            return {'enabled': True, 'approved': False, 'reason': 'purchase_date_requires_review'}
+
+        try:
+            result = _approve_receipt_table_in_transaction(
+                conn,
+                normalized_receipt_id,
+                user_email='inhuis-auto-approval',
+                allow_totals_override=False,
+            )
+        except HTTPException as exc:
+            if exc.status_code in {400, 409}:
+                return {'enabled': True, 'approved': False, 'reason': str(exc.detail or 'review_required')}
+            raise
+        return {'enabled': True, 'approved': True, 'reason': 'approved', **result}
+
+
+def _auto_approve_pending_receipts_for_household(household_id: str) -> None:
+    normalized_household_id = str(household_id or '').strip()
+    if not normalized_household_id:
+        return
+    with engine.begin() as conn:
+        if not get_household_receipt_auto_approve(conn, normalized_household_id):
+            return
+        receipt_ids = [
+            str(row[0])
+            for row in conn.execute(
+                text("""
+                SELECT id
+                FROM receipt_tables
+                WHERE household_id = :household_id
+                  AND approved_at IS NULL
+                  AND deleted_at IS NULL
+                ORDER BY COALESCE(purchase_at, created_at) ASC, created_at ASC, id ASC
+                """),
+                {'household_id': normalized_household_id},
+            ).fetchall()
+            if row[0]
+        ]
+    for current_receipt_id in receipt_ids:
+        auto_approve_receipt_if_enabled(current_receipt_id, normalized_household_id)
+
+
 @app.post("/api/receipts/{receipt_table_id}/approve")
 def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = Header(None)):
     with engine.begin() as conn:
         context = require_receipt_write_context(conn, receipt_table_id, authorization)
-        header = conn.execute(
-            text("SELECT id, store_name, purchase_at, total_amount FROM receipt_tables WHERE id = :id LIMIT 1"),
-            {'id': receipt_table_id},
-        ).mappings().first()
-        if not header:
-            raise HTTPException(status_code=404, detail='Bon niet gevonden')
-        store_name = str(header.get('store_name') or '').strip()
-        purchase_at = str(header.get('purchase_at') or '').strip()
-        if not store_name:
-            raise HTTPException(status_code=400, detail='Winkel is verplicht voordat je de bon kunt goedkeuren')
-        if not purchase_at:
-            raise HTTPException(status_code=400, detail='Aankoopdatum is verplicht voordat je de bon kunt goedkeuren')
-        valid_line_count = conn.execute(
-            text("""
-            SELECT COUNT(*)
-            FROM receipt_table_lines
-            WHERE receipt_table_id = :receipt_table_id
-              AND COALESCE(is_deleted, FALSE) = FALSE
-              AND TRIM(COALESCE(corrected_raw_label, raw_label, '')) <> ''
-            """),
-            {'receipt_table_id': receipt_table_id},
-        ).scalar()
-        if int(valid_line_count or 0) < 1:
-            raise HTTPException(status_code=400, detail='Voeg minimaal één geldige bonregel toe voordat je goedkeurt')
-        line_total_sum = conn.execute(
-            text("SELECT COALESCE(SUM(COALESCE(corrected_line_total, line_total, 0)), 0) FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, FALSE) = FALSE"),
-            {'receipt_table_id': receipt_table_id},
-        ).scalar()
-        discount_total = conn.execute(
-            text("SELECT COALESCE(discount_total, 0) FROM receipt_tables WHERE id = :receipt_table_id LIMIT 1"),
-            {'receipt_table_id': receipt_table_id},
-        ).scalar()
-        total_amount = header.get('total_amount')
-        user_email = str(context.get('email') or '').strip().lower()
-        totals_match = True
-        if total_amount is not None:
-            try:
-                totals_match = abs(float(total_amount) - (float(line_total_sum or 0) + float(discount_total or 0))) < 0.01
-            except Exception:
-                totals_match = False
-        next_status = 'approved' if totals_match else 'approved_override'
-        conn.execute(
-            text("""
-            UPDATE receipt_tables
-            SET parse_status = :parse_status,
-                line_count = :line_count,
-                approved_by_user_email = :user_email,
-                approved_at = CURRENT_TIMESTAMP,
-                corrected_by_user_email = :user_email,
-                reviewed_at = CURRENT_TIMESTAMP,
-                totals_overridden = :totals_overridden,
-                totals_override_by_user_email = CASE WHEN :totals_overridden IS TRUE THEN :user_email ELSE NULL END,
-                totals_override_at = CASE WHEN :totals_overridden IS TRUE THEN CURRENT_TIMESTAMP ELSE NULL END,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-            """),
-            {
-                'id': receipt_table_id,
-                'line_count': int(valid_line_count or 0),
-                'user_email': user_email,
-                'parse_status': next_status,
-                'totals_overridden': not totals_match,
-            },
+        _approve_receipt_table_in_transaction(
+            conn,
+            receipt_table_id,
+            user_email=str(context.get('email') or ''),
+            allow_totals_override=True,
         )
-        line_ids = [
-            str(row[0])
-            for row in conn.execute(
-                text("SELECT id FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, FALSE) = FALSE ORDER BY line_index ASC, created_at ASC"),
-                {'receipt_table_id': receipt_table_id},
-            ).fetchall()
-            if row[0]
-        ]
-        for current_line_id in line_ids:
-            sync_receipt_table_line_product_links(conn, receipt_table_id, current_line_id, create_global_product=False, create_household_article=False)
-        receipt_header = conn.execute(
-            text("""
-            SELECT id AS receipt_table_id, household_id, store_name, store_branch, purchase_at, created_at, currency
-            FROM receipt_tables
-            WHERE id = :id
-            LIMIT 1
-            """),
-            {'id': receipt_table_id},
-        ).mappings().first()
-        if receipt_header:
-            ensure_unpack_batch_for_receipt(conn, dict(receipt_header))
     return get_receipt_detail(receipt_table_id, authorization)
-
 
 @app.post("/api/receipts/{receipt_table_id}/reparse")
 def reparse_receipt_table(receipt_table_id: str, authorization: Optional[str] = Header(None)):

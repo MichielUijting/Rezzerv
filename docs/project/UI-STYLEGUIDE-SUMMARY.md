@@ -967,3 +967,7 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - **Instellingen → Winkelimport** bevat per huishouden de instelling **Kassabonnen automatisch goedkeuren**; de veilige standaardwaarde is **uit**.
 - Alleen een huishoud-**Beheerder** mag deze instelling wijzigen. Een reguliere **Gebruiker** kan de instelling niet aan- of uitzetten; de backend handhaaft dit met dezelfde admin-authority als de overige huishoudbrede Winkelimport-instellingen.
 - Wanneer automatische goedkeuring aan staat, mag alleen een technisch complete bon met geldige winkel, aankoopdatum, ten minste één geldige bonregel en sluitende totalen automatisch naar **Uitpakken** gaan. Twijfel of een totalenafwijking blijft fail-closed in **Kassa**.
+
+
+- De automatische goedkeurpoort hergebruikt exact dezelfde interne receipt-approval authority als handmatig Goedkeuren. Automatisch goedkeuren staat **geen** totalenoverride toe en stopt bij een afgeleide/default aankoopdatum of een winkelnaam die gebruikerscontrole vereist.
+- Voor reeds binnengehaalde digitale winkelbonnen wordt de instelling eveneens toegepast voordat de open Kassa-wachtrij wordt getoond, zodat complete bonnen rechtstreeks naar Uitpakken doorstromen.
