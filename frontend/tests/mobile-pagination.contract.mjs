@@ -15,7 +15,11 @@ const mobileCss = readFileSync(new URL('../src/ui/mobileComponents.css', import.
 
 assert.match(pagination, /export const MOBILE_PAGE_SIZE = 10/)
 assert.match(pagination, /slice\(start, start \+ MOBILE_PAGE_SIZE\)/)
-assert.match(pagination, /<Pagination page=\{page\} pageCount=\{pageCount\}/)
+assert.match(pagination, /<Pagination[\s\S]*page=\{page\}[\s\S]*pageCount=\{pageCount\}/)
+assert.match(pagination, /first: 'Eerste'/)
+assert.match(pagination, /previous: '−'/)
+assert.match(pagination, /next: '\+'/)
+assert.match(pagination, /last: Number\.isFinite/)
 
 assert.match(dataTable, /const effectivePagination = Boolean\(pagination \|\| isMobileViewport\)/)
 assert.match(dataTable, /pageSize = 10/)

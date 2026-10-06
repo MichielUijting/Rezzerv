@@ -28,7 +28,17 @@ export function MobilePaginationControls({ page, pageCount, setPage, ariaLabel =
   if (pageCount <= 1) return null
   return (
     <div className="rz-mobile-pagination" aria-label={ariaLabel}>
-      <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
+      <Pagination
+        page={page}
+        pageCount={pageCount}
+        onPageChange={setPage}
+        labels={{
+          first: 'Eerste',
+          previous: '−',
+          next: '+',
+          last: Number.isFinite(Number(pageCount)) && Number(pageCount) > 0 ? String(pageCount) : 'Einde',
+        }}
+      />
     </div>
   )
 }

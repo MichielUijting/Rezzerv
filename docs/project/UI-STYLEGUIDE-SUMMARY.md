@@ -939,3 +939,9 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - De grote cursieve **i** van Meldingen is oranje.
 - Bij het icoon **Bijna op** is uitsluitend de neerwaartse pijl oranje; de overige lijnen behouden de reguliere actiebalkkleur.
 - Het Voorraad-icoon blijft een stellingkast; de dooscontouren zijn fijner dan de kastlijnen. Rechtsboven en links in het midden staan bewust geen dozen.
+
+
+### Mobiele paginering — 6 oktober 2026
+
+- De centrale mobiele paginering gebruikt de labels **Eerste**, **−**, **+** en als laatste knop het bekende totale aantal pagina's. Alleen wanneer het totaal technisch niet bepaalbaar is, luidt de laatste knop **Einde**.
+- De desktop-paginering behoudt **Eerste / Vorige / Volgende / Laatste**.
