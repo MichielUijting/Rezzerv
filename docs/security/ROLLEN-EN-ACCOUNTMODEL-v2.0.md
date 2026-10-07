@@ -58,6 +58,29 @@ niet stilzwijgend ten gunste van v1.1 worden opgelost.
 - In ieder regulier huishouden moet altijd minimaal één Beheerder overblijven.
 - Is geen platformrol.
 
+### 2.2.1 Meerdere reguliere huishoudens per account
+
+Een regulier Inhuis-account mag lid zijn van meerdere reguliere huishoudens.
+
+- Een gebruiker kan vanuit **Instellingen → Mijn huishoudens** een extra regulier
+  huishouden aanmaken.
+- De maker wordt automatisch **Beheerder** van dat nieuwe huishouden.
+- Het nieuwe huishouden krijgt een eigen initiële onboardingstatus en doorloopt
+  zijn eigen inrichting; bestaande huishoudens en hun configuratie blijven intact.
+- Rollen blijven per huishouden afzonderlijk: hetzelfde account kan bijvoorbeeld
+  Beheerder zijn in huishouden A en Gebruiker in huishouden B.
+- Een huishouden mag door een Beheerder worden verwijderd wanneer:
+  1. het niet het op dat moment actieve huishouden is;
+  2. de actor in het doelhuishouden canoniek `household.admin` is;
+  3. geen ander actief lid meer in dat huishouden aanwezig is.
+- Verwijderen vereist een expliciete destructieve bevestiging en verwijdert de
+  huishoudidentiteit en huishoudgebonden data, maar niet het gebruikersaccount,
+  de inloggegevens of andere huishoudlidmaatschappen.
+- Een actief huishouden moet eerst worden verlaten door naar een ander huishouden
+  te wisselen; dit voorkomt een sessie zonder geldige huishoudcontext.
+- Frontteam blijft in de huidige runtime beperkt tot het eigen persoonlijke
+  huishouden en kan daarom via deze route geen extra huishouden maken of verwijderen.
+
 ### 2.3 Frontteamlid
 
 Frontteamlid is een aanvullende speciale functionele rol.

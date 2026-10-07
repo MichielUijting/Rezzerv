@@ -19,6 +19,7 @@ const SETTINGS_SECTION_ICONS = {
 
 const SETTINGS_TILE_ICONS = {
   account: '✉',
+  'my-households': '⌂',
   'article-details': '☷',
   'privacy-data-sharing': '◇',
   'household-profile': '⌂',

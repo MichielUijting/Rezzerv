@@ -37,6 +37,7 @@ assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
 const expectedTiles = {
   accessibility: { section: 'account', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
   account: { section: 'account', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
+  'my-households': { section: 'household', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular'] },
   'article-details': { section: 'account', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
   'privacy-data-sharing': { section: 'account', scope: 'personal', permission: null, allowViewer: true, contexts: ['regular', 'system'] },
   'household-profile': { section: 'household', scope: 'household', permission: 'household_settings.view', allowViewer: true, contexts: ['regular'] },
@@ -90,6 +91,7 @@ assert.doesNotMatch(appRouterSource, /function ProtectedSettings\(/)
 
 for (const [path, key] of [
   ['/instellingen/mijn-account', 'account'],
+  ['/instellingen/mijn-huishoudens', 'my-households'],
   ['/instellingen/mogelijkheden', 'capabilities'],
   ['/instellingen/artikeldetails/veldzichtbaarheid', 'article-details'],
   ['/instellingen/artikelgroepen', 'article-groups'],

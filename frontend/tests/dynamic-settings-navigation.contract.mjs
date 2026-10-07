@@ -22,11 +22,12 @@ assert.deepEqual(
 )
 assert.deepEqual(SETTINGS_ROOT_POLICY.allowedContexts, ['regular', 'system'])
 assert.equal(SETTINGS_ROOT_POLICY.allowViewer, true)
-assert.equal(SETTINGS_TILES.length, 15)
+assert.equal(SETTINGS_TILES.length, 16)
 for (const tile of SETTINGS_TILES) {
   assert.ok(['account', 'household', 'usage', 'help'].includes(tile.section))
   assert.ok(['personal', 'household'].includes(tile.scope))
-  assert.deepEqual(tile.allowedContexts, tile.scope === 'personal' ? ['regular', 'system'] : ['regular'])
+  const expectedContexts = tile.key === 'my-households' ? ['regular'] : (tile.scope === 'personal' ? ['regular', 'system'] : ['regular'])
+  assert.deepEqual(tile.allowedContexts, expectedContexts)
   assert.equal(typeof tile.allowViewer, 'boolean')
 }
 
@@ -42,6 +43,7 @@ for (const tile of SETTINGS_TILES) {
   assert.deepEqual(keys(navigation), [
     'accessibility',
     'account',
+    'my-households',
     'capabilities',
     'article-details',
     'article-groups',
@@ -58,7 +60,7 @@ for (const tile of SETTINGS_TILES) {
   ])
   assert.deepEqual(sectionKeys(navigation), {
     account: ['accessibility', 'account', 'article-details', 'privacy-data-sharing'],
-    household: ['household-profile', 'household', 'authorizations'],
+    household: ['my-households', 'household-profile', 'household', 'authorizations'],
     usage: [
       'capabilities',
       'article-groups',
@@ -89,6 +91,7 @@ for (const tile of SETTINGS_TILES) {
   assert.deepEqual(keys(navigation), [
     'accessibility',
     'account',
+    'my-households',
     'capabilities',
     'article-details',
     'article-groups',
@@ -104,7 +107,7 @@ for (const tile of SETTINGS_TILES) {
   ])
   assert.deepEqual(sectionKeys(navigation), {
     account: ['accessibility', 'account', 'article-details', 'privacy-data-sharing'],
-    household: ['household-profile', 'household', 'authorizations'],
+    household: ['my-households', 'household-profile', 'household', 'authorizations'],
     usage: ['capabilities', 'article-groups', 'store-import', 'store-connections', 'household-automation', 'almost-out'],
     help: ['help-about'],
   })
@@ -126,6 +129,7 @@ for (const tile of SETTINGS_TILES) {
   assert.deepEqual(keys(navigation), [
     'accessibility',
     'account',
+    'my-households',
     'capabilities',
     'privacy-data-sharing',
     'store-import',
@@ -153,6 +157,7 @@ for (const tile of SETTINGS_TILES) {
   assert.deepEqual(keys(navigation), [
     'accessibility',
     'account',
+    'my-households',
     'capabilities',
     'article-details',
     'article-groups',
@@ -184,6 +189,7 @@ for (const tile of SETTINGS_TILES) {
   assert.deepEqual(keys(navigation), [
     'accessibility',
     'account',
+    'my-households',
     'capabilities',
     'article-details',
     'article-groups',

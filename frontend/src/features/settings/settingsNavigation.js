@@ -53,6 +53,17 @@ const SETTINGS_TILES = [
     allowViewer: true,
   },
   {
+    key: 'my-households',
+    title: 'Mijn huishoudens',
+    description: 'Maak een extra huishouden of beheer je huishoudlidmaatschappen',
+    to: '/instellingen/mijn-huishoudens',
+    relevance: 'always',
+    section: 'household',
+    scope: 'personal',
+    allowedContexts: HOUSEHOLD_SETTINGS_CONTEXTS,
+    allowViewer: true,
+  },
+  {
     key: 'capabilities',
     title: 'Wat wil je met Inhuis doen?',
     description: 'Voeg later extra mogelijkheden toe zonder opnieuw te beginnen',
