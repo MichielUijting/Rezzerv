@@ -1011,3 +1011,11 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Bij één huishouden, een niet-reguliere context of een fout bij het ophalen van huishoudens wordt de wisselaar fail-closed niet getoond.
 - Deze regel verandert geen styling, maatvoering of design tokens van de header; zij borgt alleen dat de bestaande wisselbediening niet zichtbaar blijft zonder actuele server-side authority.
 - De zichtbaarheid van deze bediening is daarmee onderdeel van de gedeelde Header-contractafspraak en mag niet door alleen client-side telling van huishoudens worden afgeleid.
+
+
+### App-breed mobiel: Exporteren is desktop-only — 7 oktober 2026
+
+- Op de centrale mobiele viewport (`<=720px`) wordt de actie **Exporteren** nergens in Inhuis gebruikerszichtbaar aangeboden, ongeacht module, overzicht of detailscherm.
+- Desktopweergaven (`>720px`) behouden bestaande exportfunctionaliteit ongewijzigd.
+- Deze app-brede mobiele regel vervangt oudere mobiele afspraken waarin **Exporteren** nog als zichtbare bulk- of detailactie werd genoemd.
+- De exportcode hoeft niet per module te worden verwijderd; de gedeelde Button-authority markeert de exacte actie **Exporteren** en de centrale mobiele styling verbergt die uitsluitend op de mobiele viewport.
