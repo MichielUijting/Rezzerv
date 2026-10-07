@@ -31,6 +31,7 @@ const mobileUnpackCss = readFileSync(new URL('../src/features/receipts/mobileRec
 const mobileAppChromeCss = readFileSync(new URL('../src/app/mobileAppChrome.css', import.meta.url), 'utf8')
 const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', import.meta.url), 'utf8')
 const themeCss = readFileSync(new URL('../src/ui/theme.css', import.meta.url), 'utf8')
+const buttonSource = readFileSync(new URL('../src/ui/Button.jsx', import.meta.url), 'utf8')
 
 // Sole visual conformance authority for mobile roots already migrated to the
 // new PO-approved design. Functional mobile contracts remain separate.
@@ -225,3 +226,10 @@ assert.match(mobileAppChromeCss, /left:\s*8px/)
 assert.match(mobileHomeSource, /openStatus\('meldingen'\)/)
 assert.match(mobileHomeSource, /key: 'meldingen', clickable: true/)
 assert.doesNotMatch(mobileAppChromeSource, /function mobileNavIconType/)
+
+
+// Exporteren is app-breed desktop-only op de centrale mobiele viewport.
+assert.match(buttonSource, /children\.trim\(\)\.toLowerCase\(\) === 'exporteren'/)
+assert.match(buttonSource, /data-mobile-export-action=\{isExportAction \? 'true' : undefined\}/)
+assert.match(themeCss, /button\[data-mobile-export-action="true"\]/)
+assert.match(themeCss, /@media \(max-width: 720px\)/)
