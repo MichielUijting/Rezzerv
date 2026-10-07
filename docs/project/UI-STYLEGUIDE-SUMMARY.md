@@ -994,15 +994,17 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Het mobiele **Kassa**-icoon is een eenvoudige betaalpas in de centrale groene Inhuis-kleur; het eerdere kassaregister-icoon vervalt.
 
 
-### Mobiel Uitpakken — functionele parity met desktop — 6 oktober 2026
+### Mobiel Uitpakken — Kassabondetail in dezelfde UI-lijn als Kassa — 7 oktober 2026
 
+- Het mobiele Kassabondetail in **Uitpakken** opent direct op **Bonregels**; de desktop-tabs **Bonregels** en **Diagnose** worden op mobiel niet getoond.
+- Boven de bonregels staat op mobiel één gecombineerd zoek-/filterveld. Dit veld zoekt over artikeltekst, status en statusreden, mapping, locatie, artikelgroep en de aanduiding dat een regel al naar voorraad is verwerkt.
+- De eerdere losse mobiele filters voor status, mapping en locatie en de afzonderlijke actie **Filters wissen** vervallen in dit detail; desktop behoudt zijn bestaande tabel- en filterbediening.
+- De bonregels blijven op mobiel als compacte kaart-/lijstweergave met paginering staan, in dezelfde mobiele detailtaal als **Kassa**.
 - In het mobiele kassabondetail heeft iedere bonregel een zichtbare actie **Details**. Die opent dezelfde bestaande bonartikeldetailfunctie als desktop, inclusief barcode/GTIN-controle, barcodecamera, universeel artikel en koppelen.
-- Mobiel biedt boven de bonregels dezelfde functionele filtermogelijkheden voor zoeken, status, mapping en locatie, plus **Filters wissen**. De mobiele tabelkop blijft verborgen; de functionaliteit verhuist naar touchgeschikte centrale bediening.
-- De bestaande bulkacties **Exporteren**, **Locatie toepassen** en **Naar voorraad** blijven dezelfde functies gebruiken als desktop.
+- Een huishoud-Beheerder gebruikt op mobiel dezelfde locatiepicker als desktop en kan daarin inline **+ Nieuwe locatie** en **+ Nieuwe sublocatie** gebruiken; de nieuw aangemaakte keuze wordt via de bestaande flow direct op de bonregel toegepast.
+- De actie **Exporteren** wordt in het mobiele Uitpakken-Kassabondetail niet getoond; desktop blijft ongewijzigd.
 - Autorisaties blijven leidend: een Viewer kan details bekijken maar geen locatie, artikelgroep, barcodekoppeling of voorraadverwerking wijzigen; locatie-aanmaak blijft uitsluitend beschikbaar voor de huishoud-Beheerder; reeds verwerkte regels zijn in detail alleen-lezen.
 
-
-- In het mobiele **Uitpakken**-overzicht blijven de bulkacties **Exporteren** en **Verwijderen** altijd zichtbaar. Zolang geen kassabon is geselecteerd zijn beide knoppen inactief; bij één of meer geselecteerde bonnen worden zij actief. Zo blijft beschikbare functionaliteit zichtbaar zonder een ongeldige actie toe te staan.
 
 
 ### Huishoudwisselaar in de header — 7 oktober 2026
