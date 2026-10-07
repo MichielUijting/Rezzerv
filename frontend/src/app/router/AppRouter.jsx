@@ -28,6 +28,7 @@ import SettingsHouseholdProfilePage from '../../features/settings/SettingsHouseh
 import SettingsAuthorizationPage from '../../features/settings/SettingsAuthorizationPage.jsx'
 import SettingsLocationsRoutePage from '../../features/settings/SettingsLocationsRoutePage.jsx'
 import SettingsMyAccountPage from '../../features/settings/SettingsMyAccountPage.jsx'
+import SettingsMyHouseholdsPage from '../../features/settings/SettingsMyHouseholdsPage.jsx'
 import SettingsAccessibilityPage from '../../features/settings/SettingsAccessibilityPage.jsx'
 import SettingsHelpAboutPage from '../../features/settings/SettingsHelpAboutPage.jsx'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
@@ -202,6 +203,7 @@ const router = createBrowserRouter([
   { path: '/instellingen', element: <ProtectedSettingsRoute><SettingsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/toegankelijkheid', element: <Protected><SettingsAccessibilityPage /></Protected> },
   { path: '/instellingen/mijn-account', element: <ProtectedSettingsRoute settingKey="account"><SettingsMyAccountPage /></ProtectedSettingsRoute> },
+  { path: '/instellingen/mijn-huishoudens', element: <ProtectedSettingsRoute settingKey="my-households"><SettingsMyHouseholdsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/mogelijkheden', element: <ProtectedSettingsRoute settingKey="capabilities"><SettingsCapabilitiesPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettingsRoute settingKey="article-details"><SettingsArticleFieldsPage /></ProtectedSettingsRoute> },
   { path: '/instellingen/artikelgroepen', element: <ProtectedSettingsRoute settingKey="article-groups"><SettingsArticleGroupsPage /></ProtectedSettingsRoute> },
