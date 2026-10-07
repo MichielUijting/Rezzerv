@@ -27,6 +27,7 @@ import './mobileAppChrome.css'
 
 const MORE_NAV_ITEM = { key: 'meer', label: 'Meer', route: '', iconType: 'menu', showLabel: true, actionOnly: true }
 const MANDATORY_BOTTOM_NAV_KEY = 'bijna-op'
+const DEFAULT_FIXED_ACTION_BAR_KEYS = Object.freeze(['winkelen', 'kassa', 'kassabonnen', 'voorraad'])
 const MOBILE_ICON_TYPE_BY_KEY = Object.freeze({
   meldingen: 'info',
   voorraad: 'shelf',
@@ -79,26 +80,37 @@ function MobileBottomNavigationRuntime({ context, pathname }) {
 
   const activeKey = activeActionKey(pathname)
   const bottomNavItems = useMemo(() => {
-    const mandatoryTile = availableActionTiles.find((tile) => tile.key === MANDATORY_BOTTOM_NAV_KEY) || null
-    const excludedKeys = [MANDATORY_BOTTOM_NAV_KEY]
-    if (activeKey && activeKey !== MANDATORY_BOTTOM_NAV_KEY) excludedKeys.push(activeKey)
+    let selectedTiles = []
 
-    const recentTiles = selectRecentActionTiles({
-      recentKeys: readRecentActionKeys(context),
-      availableTiles: availableActionTiles,
-      excludeKeys: excludedKeys,
-      limit: mandatoryTile ? 3 : 4,
-    })
+    if (actionAvailability.actionBarLocked) {
+      const byKey = new Map(availableActionTiles.map((tile) => [tile.key, tile]))
+      const fixedKeys = actionAvailability.fixedActionBarKeys?.length
+        ? actionAvailability.fixedActionBarKeys
+        : DEFAULT_FIXED_ACTION_BAR_KEYS
+      selectedTiles = fixedKeys.map((key) => byKey.get(key)).filter(Boolean).slice(0, 4)
+    } else {
+      const mandatoryTile = availableActionTiles.find((tile) => tile.key === MANDATORY_BOTTOM_NAV_KEY) || null
+      const excludedKeys = [MANDATORY_BOTTOM_NAV_KEY]
+      if (activeKey && activeKey !== MANDATORY_BOTTOM_NAV_KEY) excludedKeys.push(activeKey)
 
-    const uniqueTiles = []
-    const seen = new Set()
-    for (const tile of [mandatoryTile, ...recentTiles].filter(Boolean)) {
-      if (seen.has(tile.key)) continue
-      seen.add(tile.key)
-      uniqueTiles.push(tile)
+      const recentTiles = selectRecentActionTiles({
+        recentKeys: readRecentActionKeys(context),
+        availableTiles: availableActionTiles,
+        excludeKeys: excludedKeys,
+        limit: mandatoryTile ? 3 : 4,
+      })
+
+      const uniqueTiles = []
+      const seen = new Set()
+      for (const tile of [mandatoryTile, ...recentTiles].filter(Boolean)) {
+        if (seen.has(tile.key)) continue
+        seen.add(tile.key)
+        uniqueTiles.push(tile)
+      }
+      selectedTiles = uniqueTiles.slice(0, 4)
     }
 
-    const selected = uniqueTiles.slice(0, 4).map((tile) => {
+    const selected = selectedTiles.map((tile) => {
       const iconType = MOBILE_ICON_TYPE_BY_KEY[tile.key] || null
       return {
         key: tile.key,
@@ -110,7 +122,13 @@ function MobileBottomNavigationRuntime({ context, pathname }) {
       }
     })
     return [...selected, MORE_NAV_ITEM]
-  }, [activeKey, availableActionTiles, context?.user_id])
+  }, [
+    activeKey,
+    actionAvailability.actionBarLocked,
+    actionAvailability.fixedActionBarKeys,
+    availableActionTiles,
+    context?.user_id,
+  ])
 
   const bottomKeys = useMemo(() => new Set(bottomNavItems.filter((item) => item.key !== 'meer').map((item) => item.key)), [bottomNavItems])
   const moreTiles = useMemo(() => {
