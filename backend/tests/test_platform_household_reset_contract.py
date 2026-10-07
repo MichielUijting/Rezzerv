@@ -225,9 +225,9 @@ def test_postgresql_reset_removes_target_data_but_preserves_identity_and_other_h
                 text(
                     """
                     INSERT INTO household_memberships(
-                        id, household_id, user_email, user_id, role, created_at, updated_at
+                        id, household_id, user_email, role, created_at, updated_at
                     ) VALUES (
-                        :id, :household_id, :email, :user_id, 'admin',
+                        :id, :household_id, :email, 'admin',
                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                     )
                     """
@@ -236,7 +236,6 @@ def test_postgresql_reset_removes_target_data_but_preserves_identity_and_other_h
                     "id": target_membership_id,
                     "household_id": target,
                     "email": target_email,
-                    "user_id": target_user_id,
                 },
             )
             conn.execute(
