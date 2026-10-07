@@ -225,7 +225,7 @@ def _target_predicate(
 
     next_stack = (*stack, table_name)
     for index, edge in enumerate(fks[table_name]):
-        if edge.parent_table not in reset_tables:
+        if edge.parent_table not in reset_tables or edge.parent_table == table_name:
             continue
         parent_alias = f"p{len(stack)}_{index}"
         parent_predicate = _target_predicate(
