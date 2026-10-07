@@ -4,10 +4,19 @@ import Card from '../../ui/Card.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
 async function loadActionButtons() {
-  const response = await fetchJsonWithAuth('/api/platform/action-buttons')
+  const [response, actionBarResponse] = await Promise.all([
+    fetchJsonWithAuth('/api/platform/action-buttons'),
+    fetchJsonWithAuth('/api/platform/mobile-action-bar'),
+  ])
   const payload = await response.json().catch(() => ({}))
+  const actionBarPayload = await actionBarResponse.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload?.detail || 'Acties op de Startpagina konden niet worden geladen.')
-  return { items: Array.isArray(payload?.items) ? payload.items : [], welcomeText: String(payload?.welcome_text || 'Fijn dat je er weer bent.') }
+  if (!actionBarResponse.ok) throw new Error(actionBarPayload?.detail || 'Actiebalkinstelling kon niet worden geladen.')
+  return {
+    items: Array.isArray(payload?.items) ? payload.items : [],
+    welcomeText: String(payload?.welcome_text || 'Fijn dat je er weer bent.'),
+    actionBarLocked: Boolean(actionBarPayload?.locked),
+  }
 }
 
 async function saveWelcomeText(value) {
@@ -15,6 +24,17 @@ async function saveWelcomeText(value) {
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload?.detail || 'Welkomsttekst kon niet worden opgeslagen.')
   return String(payload?.welcome_text || value)
+}
+
+async function saveMobileActionBarLocked(locked) {
+  const response = await fetchJsonWithAuth('/api/superuser/mobile-action-bar', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locked }),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload?.detail || 'Actiebalkinstelling kon niet worden opgeslagen.')
+  return Boolean(payload?.locked)
 }
 
 async function saveActionButton(key, enabled) {
@@ -54,6 +74,8 @@ export default function SuperuserActionButtonsSection() {
   const [items, setItems] = useState([])
   const [welcomeText, setWelcomeText] = useState('Fijn dat je er weer bent.')
   const [savingWelcomeText, setSavingWelcomeText] = useState(false)
+  const [actionBarLocked, setActionBarLocked] = useState(true)
+  const [savingActionBarLocked, setSavingActionBarLocked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(null)
@@ -67,7 +89,14 @@ export default function SuperuserActionButtonsSection() {
     let active = true
     setLoading(true)
     loadActionButtons()
-      .then((payload) => { if (active) { setItems(payload.items); setWelcomeText(payload.welcomeText); setError('') } })
+      .then((payload) => {
+        if (active) {
+          setItems(payload.items)
+          setWelcomeText(payload.welcomeText)
+          setActionBarLocked(payload.actionBarLocked)
+          setError('')
+        }
+      })
       .catch((requestError) => { if (active) setError(requestError?.message || 'Acties op de Startpagina konden niet worden geladen.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -79,6 +108,21 @@ export default function SuperuserActionButtonsSection() {
     try { const saved = await saveWelcomeText(welcomeText); setWelcomeText(saved); window.dispatchEvent(new Event('rezzerv-action-buttons-changed')) }
     catch (requestError) { setError(requestError?.message || 'Welkomsttekst kon niet worden opgeslagen.') }
     finally { setSavingWelcomeText(false) }
+  }
+
+  async function persistActionBarLocked(nextLocked) {
+    if (savingActionBarLocked) return
+    setSavingActionBarLocked(true)
+    setError('')
+    try {
+      const saved = await saveMobileActionBarLocked(nextLocked)
+      setActionBarLocked(saved)
+      window.dispatchEvent(new Event('rezzerv-action-buttons-changed'))
+    } catch (requestError) {
+      setError(requestError?.message || 'Actiebalkinstelling kon niet worden opgeslagen.')
+    } finally {
+      setSavingActionBarLocked(false)
+    }
   }
 
   function propose(item) {
@@ -149,6 +193,25 @@ export default function SuperuserActionButtonsSection() {
         <label htmlFor="startpagina-welcome-text"><strong>Persoonlijke welkomsttekst</strong></label>
         <input id="startpagina-welcome-text" value={welcomeText} maxLength={160} onChange={(event) => setWelcomeText(event.target.value)} />
         <div><Button type="button" disabled={savingWelcomeText || !welcomeText.trim()} onClick={persistWelcomeText}>{savingWelcomeText ? 'Opslaan…' : 'Welkomsttekst opslaan'}</Button></div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 8, maxWidth: 720, margin: '18px 0 24px' }} data-testid="superuser-mobile-action-bar-setting">
+        <label htmlFor="mobile-action-bar-locked"><strong>Actiebalk vastzetten</strong></label>
+        <p style={{ margin: 0 }}>
+          Bij Ja staan op mobiel altijd Winkelen, Kassa, Uitpakken en Voorraad direct in de actiebalk. Alle overige beschikbare acties staan onder Meer.
+        </p>
+        <select
+          id="mobile-action-bar-locked"
+          value={actionBarLocked ? 'yes' : 'no'}
+          disabled={loading || savingActionBarLocked}
+          onChange={(event) => void persistActionBarLocked(event.target.value === 'yes')}
+        >
+          <option value="yes">Ja</option>
+          <option value="no">Nee</option>
+        </select>
+        <div role="status" aria-live="polite">
+          {savingActionBarLocked ? 'Actiebalkinstelling opslaan…' : ('Actiebalk vastzetten: ' + (actionBarLocked ? 'Ja' : 'Nee'))}
+        </div>
       </div>
 
       <div role="status" aria-live="polite" data-testid="superuser-action-order-status">
