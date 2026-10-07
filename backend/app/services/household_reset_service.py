@@ -38,6 +38,41 @@ class ForeignKeyEdge:
     parent_columns: tuple[str, ...]
 
 
+# Legacy parts of the application predate full database-FK enforcement. Keep
+# these proven ownership edges explicit so a full reset cannot leave dependent
+# household data behind merely because PostgreSQL has no formal constraint.
+MANUAL_FK_EDGES: dict[str, tuple[ForeignKeyEdge, ...]] = {
+    "sublocations": (
+        ForeignKeyEdge("spaces", ("space_id",), ("id",)),
+    ),
+    "receipt_table_lines": (
+        ForeignKeyEdge("receipt_tables", ("receipt_table_id",), ("id",)),
+    ),
+    "receipt_inbound_events": (
+        ForeignKeyEdge("receipt_tables", ("receipt_table_id",), ("id",)),
+        ForeignKeyEdge("raw_receipts", ("raw_receipt_id",), ("id",)),
+    ),
+    "receipt_email_messages": (
+        ForeignKeyEdge("raw_receipts", ("raw_receipt_id",), ("id",)),
+    ),
+    "purchase_import_lines": (
+        ForeignKeyEdge("purchase_import_batches", ("batch_id",), ("id",)),
+    ),
+    "external_product_candidates": (
+        ForeignKeyEdge("purchase_import_lines", ("purchase_import_line_id",), ("id",)),
+    ),
+    "household_article_settings": (
+        ForeignKeyEdge("household_articles", ("household_article_id",), ("id",)),
+    ),
+    "household_article_notes": (
+        ForeignKeyEdge("household_articles", ("household_article_id",), ("id",)),
+    ),
+    "support_messages": (
+        ForeignKeyEdge("support_threads", ("thread_id",), ("id",)),
+    ),
+}
+
+
 def _quote(conn: Connection, identifier: str) -> str:
     return conn.dialect.identifier_preparer.quote(str(identifier))
 
@@ -127,7 +162,11 @@ def _membership_snapshot(conn: Connection, household_id: str) -> tuple[int, tupl
     return len(rows), identities
 
 
-def _foreign_keys(inspector, table_name: str) -> tuple[ForeignKeyEdge, ...]:
+def _foreign_keys(
+    inspector,
+    table_name: str,
+    columns: dict[str, set[str]],
+) -> tuple[ForeignKeyEdge, ...]:
     edges: list[ForeignKeyEdge] = []
     for fk in inspector.get_foreign_keys(table_name):
         parent = str(fk.get("referred_table") or "").strip()
@@ -136,6 +175,17 @@ def _foreign_keys(inspector, table_name: str) -> tuple[ForeignKeyEdge, ...]:
         if not parent or not local or len(local) != len(remote):
             continue
         edges.append(ForeignKeyEdge(parent, local, remote))
+
+    for edge in MANUAL_FK_EDGES.get(table_name, ()):
+        if edge.parent_table not in columns:
+            continue
+        if not set(edge.local_columns).issubset(columns.get(table_name, set())):
+            continue
+        if not set(edge.parent_columns).issubset(columns.get(edge.parent_table, set())):
+            continue
+        if edge not in edges:
+            edges.append(edge)
+
     return tuple(edges)
 
 
@@ -143,7 +193,10 @@ def _discover_reset_tables(conn: Connection) -> tuple[set[str], dict[str, tuple[
     inspector = inspect(conn)
     tables = set(inspector.get_table_names())
     columns = {table: _table_columns(inspector, table) for table in tables}
-    fks = {table: _foreign_keys(inspector, table) for table in tables}
+    fks = {
+        table: _foreign_keys(inspector, table, columns)
+        for table in tables
+    }
 
     reset_tables = {
         table
