@@ -117,6 +117,17 @@ Voor het mobiele scherm **Boodschappen** geldt aanvullend:
 - de actie **Boodschappen afgerond** staat rechtsonder onder de sectie **In winkelwagen**, na lijst en paginering, met duidelijke verticale tussenruimte zodat de knop niet tegen de lijst aansluit;
 
 
+## Superuser-override mobiele actiebalk vanaf 7 oktober 2026
+
+De Superuser kan platformbreed de mobiele actiebalk tijdelijk vastzetten via de instelling **Actiebalk vastzetten (Ja/Nee)** onder **Superuser → Actieknoppen**.
+
+- standaardwaarde voor deze wijziging is **Ja**;
+- bij **Ja** staan de vier primaire procesacties in deze vaste volgorde direct op de mobiele actiebalk: **Winkelen**, **Kassa**, **Uitpakken**, **Voorraad**;
+- **Meer** blijft als vijfde bediening beschikbaar en bevat alle overige beschikbare hoofdfuncties;
+- de vaste selectie vervangt zolang de instelling op Ja staat de normale selectie op basis van recente acties en de eerdere verplichte directe positie van **Bijna op**;
+- bestaande routeautorisatie, rollen, permissies en functionele beschikbaarheid blijven leidend; de override verleent geen extra rechten;
+- bij **Nee** gebruikt de mobiele actiebalk opnieuw de bestaande dynamische/recent-gebruikte selectie.
+
 ## Mobiele paginering en onderste actiebalk vanaf 5 oktober 2026
 
 Voor mobiele viewports van maximaal 720 px gelden aanvullend de volgende app-brede presentatieafspraken:
