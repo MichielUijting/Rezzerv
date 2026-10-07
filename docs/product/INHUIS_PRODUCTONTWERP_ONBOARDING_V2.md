@@ -593,6 +593,27 @@ Belangrijke randvoorwaarde:
 
 ---
 
+## 18.1 Extra huishouden na eerste onboarding
+
+De initiële onboarding hoort bij één huishouden, niet bij het account als geheel.
+
+Na de eerste inrichting kan een regulier account via **Instellingen → Mijn
+huishoudens → Nieuw huishouden maken** een extra huishouden starten. Inhuis:
+
+1. maakt een nieuwe reguliere huishoudidentiteit;
+2. maakt de huidige gebruiker Beheerder van dat huishouden;
+3. zet uitsluitend voor het nieuwe huishouden onboarding op `not_started`;
+4. maakt het nieuwe huishouden actief;
+5. opent de normale onboarding vanaf **Waar wil je Inhuis mee beginnen?**.
+
+De reeds ingerichte huishoudens worden daarbij niet gewijzigd en hoeven niet
+opnieuw door onboarding.
+
+Een eerder extra huishouden kan als onderdeel van bijvoorbeeld verhuizen of
+opnieuw beginnen worden verwijderd, maar alleen wanneer de Beheerder daar het
+enige actieve lid is en eerst naar een ander huishouden is gewisseld. Het
+gebruikersaccount en de overige huishoudens blijven behouden.
+
 ## 19. Uitnodigingen
 
 De productrichting is een echte uitnodigingsflow:
