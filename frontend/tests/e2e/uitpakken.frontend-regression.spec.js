@@ -672,7 +672,7 @@ test.describe('Uitpakken frontend-regressie', () => {
       return json({ ok: true });
     });
 
-    await page.goto(`/kassabonnen?batch=${batchId}`);
+    await page.goto(`/kassabonnen/batch/${batchId}`);
 
     await expect(page.getByRole('tab', { name: 'Bonregels', exact: true })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Diagnose', exact: true })).toHaveCount(0);
