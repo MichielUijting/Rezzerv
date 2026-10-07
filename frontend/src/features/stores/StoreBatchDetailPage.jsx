@@ -1811,14 +1811,34 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         if (activeSummaryFilter === 'new_mapping' && entry.mappingState !== 'new') return false
         if (activeSummaryFilter !== 'new_mapping' && entry.statusKey !== activeSummaryFilter) return false
       }
-      if (statusFilter !== 'all' && entry.statusKey !== statusFilter) return false
-      if (mappingFilter !== 'all' && entry.mappingState !== mappingFilter) return false
-      if (locationFilter === 'filled' && !entry.hasValidLocation) return false
-      if (locationFilter === 'missing' && entry.hasValidLocation) return false
-      if (searchNeedle && !entry.searchText.includes(searchNeedle)) return false
+
+      if (!isMobileViewport) {
+        if (statusFilter !== 'all' && entry.statusKey !== statusFilter) return false
+        if (mappingFilter !== 'all' && entry.mappingState !== mappingFilter) return false
+        if (locationFilter === 'filled' && !entry.hasValidLocation) return false
+        if (locationFilter === 'missing' && entry.hasValidLocation) return false
+      }
+
+      if (searchNeedle) {
+        const locationLabel = locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''
+        const articleGroupLabel = articleGroupOptions.find((group) => String(group.id) === String(entry.draft.articleGroupId || ''))?.name || ''
+        const mappingLabel = entry.mappingState === 'known'
+          ? 'bekende mapping'
+          : entry.mappingState === 'new'
+            ? 'nieuwe mapping'
+            : 'onbekende mapping'
+        const processingLabel = entry.processingStatus === 'processed' ? 'al naar voorraad verwerkt' : ''
+        const searchableText = isMobileViewport
+          ? [entry.searchText, entry.statusLabel, entry.statusReason, mappingLabel, locationLabel, articleGroupLabel, processingLabel]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+          : entry.searchText
+        if (!searchableText.includes(searchNeedle)) return false
+      }
       return true
     })
-  }, [lineUiStates, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, searchValue])
+  }, [lineUiStates, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, searchValue, isMobileViewport, locationOptions, articleGroupOptions])
   const selectedLineStates = useMemo(() => {
     const selectedSet = new Set(selectedLineIds)
     return lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
@@ -1948,7 +1968,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <div style={{ color: 'var(--color-ui-primary)' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
+              {!isMobileViewport ? <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button> : null}
               <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">Locatie toepassen</Button>
               <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch || isViewer} data-testid="receipt-process-button">Naar voorraad</Button>
             </div>
@@ -1957,37 +1977,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · {isMobileViewport ? 'Al naar voorraad' : 'Verwerkt'}: {summaryCounts.processed}</div>
 
           {isMobileViewport ? (
-            <section className="rz-mobile-unpack-line-filters" aria-label="Bonregels filteren" data-testid="mobile-unpack-line-filters">
+            <section className="rz-mobile-unpack-search-filter" aria-label="Bonregels zoeken en filteren" data-testid="mobile-unpack-search-filter">
               <input
                 className="rz-input"
                 type="search"
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
-                placeholder="Zoek bonartikel"
-                aria-label="Zoek bonartikel"
+                placeholder="Zoek of filter bonregels"
+                aria-label="Zoek of filter bonregels"
+                data-testid="mobile-unpack-search-filter-input"
               />
-              <Select
-                value={statusFilter}
-                options={STATUS_FILTERS.map((filter) => ({ value: filter.key, label: filter.label }))}
-                onChange={setStatusFilter}
-                ariaLabel="Filter op status"
-                dataTestId="mobile-unpack-status-filter"
-              />
-              <Select
-                value={mappingFilter}
-                options={MAPPING_FILTERS.map((filter) => ({ value: filter.key, label: filter.label }))}
-                onChange={setMappingFilter}
-                ariaLabel="Filter op mapping"
-                dataTestId="mobile-unpack-mapping-filter"
-              />
-              <Select
-                value={locationFilter}
-                options={LOCATION_FILTERS.map((filter) => ({ value: filter.key, label: filter.label }))}
-                onChange={setLocationFilter}
-                ariaLabel="Filter op locatie"
-                dataTestId="mobile-unpack-location-filter"
-              />
-              <Button type="button" variant="secondary" onClick={resetFilters} data-testid="mobile-unpack-reset-filters">Filters wissen</Button>
             </section>
           ) : null}
 
@@ -2674,9 +2673,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       {isLoading ? (
         <div>Bongegevens laden…</div>
       ) : batch ? (
-        <Tabs tabs={['Bonregels', 'Diagnose']}>
-          {(activeTab) => tabContent[activeTab]}
-        </Tabs>
+        isMobileViewport
+          ? tabContent.Bonregels
+          : (
+            <Tabs tabs={['Bonregels', 'Diagnose']}>
+              {(activeTab) => tabContent[activeTab]}
+            </Tabs>
+          )
       ) : (
         <div>Geen kassabon beschikbaar.</div>
       )}

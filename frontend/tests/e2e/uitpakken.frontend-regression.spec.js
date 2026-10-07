@@ -661,6 +661,19 @@ test.describe('Uitpakken frontend-regressie', () => {
 
     await page.goto(`/kassabonnen?batch=${batchId}`);
 
+    await expect(page.getByRole('tab', { name: 'Bonregels', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Diagnose', exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('mobile-unpack-search-filter-input')).toBeVisible();
+    await expect(page.getByTestId('mobile-unpack-status-filter')).toHaveCount(0);
+    await expect(page.getByTestId('mobile-unpack-mapping-filter')).toHaveCount(0);
+    await expect(page.getByTestId('mobile-unpack-location-filter')).toHaveCount(0);
+    await expect(page.getByTestId('receipt-export-button')).toHaveCount(0);
+
+    const combinedFilter = page.getByTestId('mobile-unpack-search-filter-input');
+    await combinedFilter.fill('actie nodig');
+    await expect(page.getByTestId(`receipt-line-${lineId}`)).toBeVisible();
+    await combinedFilter.fill('');
+
     const inlineCreate = page.getByTestId(`mobile-unpack-add-location-${lineId}`);
     await expect(inlineCreate).toBeVisible();
     await expect(inlineCreate).toContainText('Nieuwe locatie / sublocatie');

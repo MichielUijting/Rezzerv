@@ -264,3 +264,8 @@
   .rz-mobile-unpack-line-filters > .rz-input:first-child,
   .rz-mobile-unpack-line-filters > button:last-child{grid-column:auto}
 }
+
+
+/* Mobile Uitpakken uses the same compact single-search pattern as mobile Kassa details. */
+.rz-mobile-unpack-search-filter { display:grid; width:100%; }
+.rz-mobile-unpack-search-filter .rz-input { width:100%; min-height:44px; background:#fff; }
