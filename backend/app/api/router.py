@@ -40,6 +40,7 @@ from app.api.platform_audit_routes import router as platform_audit_router
 from app.api.platform_authorizations_routes import router as platform_authorizations_router
 from app.api.platform_feature_flags_routes import router as platform_feature_flags_router
 from app.api.platform_integrations_routes import router as platform_integrations_router
+from app.api.platform_household_reset_routes import router as platform_household_reset_router
 from app.api.platform_logs_routes import router as platform_logs_router
 from app.api.platform_sessions_routes import router as platform_sessions_router
 from app.api.platform_users_routes import router as platform_users_router
@@ -115,6 +116,7 @@ api_router.include_router(platform_audit_router)
 api_router.include_router(platform_authorizations_router)
 api_router.include_router(platform_logs_router)
 api_router.include_router(platform_integrations_router)
+api_router.include_router(platform_household_reset_router)
 api_router.include_router(platform_feature_flags_router)
 api_router.include_router(platform_sessions_router)
 api_router.include_router(platform_users_router)

@@ -27,6 +27,8 @@ LOGIN_BACKGROUND_KEY = "login_background_jpeg_base64"
 LOGIN_BACKGROUND_MAX_BYTES = 8 * 1024 * 1024
 PRIMARY_COLOR_KEY = "primary_ui_color"
 DEFAULT_PRIMARY_COLOR = "#005F6A"
+MOBILE_ACTION_BAR_LOCK_KEY = "mobile_action_bar_locked"
+DEFAULT_MOBILE_ACTION_BAR_LOCKED = True
 
 
 def _read_platform_setting(conn, key: str) -> str | None:
@@ -90,6 +92,19 @@ def _login_background_payload(conn) -> dict:
         return {"configured": False, "revision": None}
     digest = hashlib.sha256(encoded.encode("ascii")).hexdigest()[:16]
     return {"configured": True, "revision": digest}
+
+
+def _mobile_action_bar_payload(conn) -> dict:
+    stored = _read_platform_setting(conn, MOBILE_ACTION_BAR_LOCK_KEY)
+    if stored is None:
+        locked = DEFAULT_MOBILE_ACTION_BAR_LOCKED
+    else:
+        locked = str(stored).strip().lower() in {"1", "true", "yes", "on"}
+    return {
+        "locked": locked,
+        "default_locked": DEFAULT_MOBILE_ACTION_BAR_LOCKED,
+        "fixed_keys": ["winkelen", "kassa", "kassabonnen", "voorraad"],
+    }
 
 
 def _validate_jpeg(content: bytes) -> None:
@@ -463,6 +478,37 @@ def create_superuser_router(engine: Engine) -> APIRouter:
     def primary_color_status():
         with engine.begin() as conn:
             return _primary_color_payload(conn)
+
+    @router.get("/api/platform/mobile-action-bar")
+    def mobile_action_bar_status():
+        with engine.begin() as conn:
+            return _mobile_action_bar_payload(conn)
+
+    @router.put("/api/superuser/mobile-action-bar")
+    async def update_mobile_action_bar(request: Request):
+        with engine.begin() as conn:
+            context = _require_platform_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
+            payload = await request.json()
+            locked = (payload or {}).get("locked")
+            if not isinstance(locked, bool):
+                raise HTTPException(status_code=400, detail="Actiebalk vastzetten moet Ja of Nee zijn.")
+            _write_platform_setting(
+                conn,
+                MOBILE_ACTION_BAR_LOCK_KEY,
+                "true" if locked else "false",
+                context.user_id,
+            )
+            write_authorization_audit(
+                conn,
+                actor_user_id=context.user_id,
+                actor_type="platform_superuser",
+                action="superuser.mobile_action_bar.updated",
+                object_type="platform_home_settings",
+                object_id=MOBILE_ACTION_BAR_LOCK_KEY,
+                new_value={"locked": locked},
+                reason="Superuser wijzigde de platformbrede mobiele actiebalk-override",
+            )
+            return _mobile_action_bar_payload(conn)
 
     @router.put("/api/superuser/primary-color")
     async def update_primary_color(request: Request):

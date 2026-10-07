@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import uuid
 
 from sqlalchemy import inspect, text
@@ -10,6 +8,11 @@ from sqlalchemy.engine import Connection
 from app.services.authorization_membership_service import (
     create_canonical_membership_role,
     resolve_effective_household_role,
+)
+from app.services.household_reset_service import (
+    HouseholdResetConflictError,
+    HouseholdResetNotFoundError,
+    reset_household_data,
 )
 from app.services.household_onboarding_service import start_new_household_onboarding
 from app.services.server_session_service import (
@@ -22,67 +25,9 @@ from app.services.server_session_service import (
 DEFAULT_ADDITIONAL_HOUSEHOLD_NAME = "Nieuw huishouden"
 SYSTEM_HOUSEHOLD_ID = "0"
 
-PRESERVED_TABLES = frozenset({
-    "app_users",
-    "auth_audit_log",
-    "auth_platform_user_roles",
-    "server_sessions",
-    "household_registry",
-})
-
-@dataclass(frozen=True)
-class OwnershipEdge:
-    parent_table: str
-    local_columns: tuple[str, ...]
-    parent_columns: tuple[str, ...]
-
-
-# Legacy parts of Inhuis contain logical ownership relations that are not all
-# represented as PostgreSQL foreign keys. These edges keep deletion complete.
-MANUAL_OWNERSHIP_EDGES: dict[str, tuple[OwnershipEdge, ...]] = {
-    "sublocations": (
-        OwnershipEdge("spaces", ("space_id",), ("id",)),
-    ),
-    "receipt_table_lines": (
-        OwnershipEdge("receipt_tables", ("receipt_table_id",), ("id",)),
-    ),
-    "receipt_inbound_events": (
-        OwnershipEdge("receipt_tables", ("receipt_table_id",), ("id",)),
-        OwnershipEdge("raw_receipts", ("raw_receipt_id",), ("id",)),
-    ),
-    "receipt_email_messages": (
-        OwnershipEdge("raw_receipts", ("raw_receipt_id",), ("id",)),
-    ),
-    "purchase_import_lines": (
-        OwnershipEdge("purchase_import_batches", ("batch_id",), ("id",)),
-    ),
-    "external_product_candidates": (
-        OwnershipEdge("purchase_import_lines", ("purchase_import_line_id",), ("id",)),
-    ),
-    "household_article_settings": (
-        OwnershipEdge("household_articles", ("household_article_id",), ("id",)),
-    ),
-    "household_article_notes": (
-        OwnershipEdge("household_articles", ("household_article_id",), ("id",)),
-    ),
-    "support_messages": (
-        OwnershipEdge("support_threads", ("thread_id",), ("id",)),
-    ),
-    "auth_membership_roles": (
-        OwnershipEdge("household_memberships", ("membership_id",), ("id",)),
-    ),
-    "auth_membership_permission_overrides": (
-        OwnershipEdge("household_memberships", ("membership_id",), ("id",)),
-    ),
-}
-
-
 class HouseholdLifecycleConflictError(RuntimeError):
     pass
 
-
-class HouseholdLifecycleNotFoundError(LookupError):
-    pass
 
 
 def _columns(conn: Connection, table_name: str) -> set[str]:
@@ -97,10 +42,6 @@ def _columns(conn: Connection, table_name: str) -> set[str]:
 
 def _pick(columns: set[str], *candidates: str) -> str | None:
     return next((candidate for candidate in candidates if candidate in columns), None)
-
-
-def _quote(conn: Connection, identifier: str) -> str:
-    return conn.dialect.identifier_preparer.quote(str(identifier))
 
 
 def _normalize_household_name(value: str) -> str:
@@ -327,143 +268,6 @@ def household_deletion_eligibility(
     }
 
 
-def _ownership_edges(
-    inspector,
-    table_name: str,
-    columns_by_table: dict[str, set[str]],
-) -> tuple[OwnershipEdge, ...]:
-    edges: list[OwnershipEdge] = []
-    for fk in inspector.get_foreign_keys(table_name):
-        parent = str(fk.get("referred_table") or "").strip()
-        local = tuple(str(value) for value in (fk.get("constrained_columns") or ()) if value)
-        remote = tuple(str(value) for value in (fk.get("referred_columns") or ()) if value)
-        if parent and local and len(local) == len(remote):
-            edges.append(OwnershipEdge(parent, local, remote))
-
-    for edge in MANUAL_OWNERSHIP_EDGES.get(table_name, ()):
-        if edge.parent_table not in columns_by_table:
-            continue
-        if not set(edge.local_columns).issubset(columns_by_table.get(table_name, set())):
-            continue
-        if not set(edge.parent_columns).issubset(columns_by_table.get(edge.parent_table, set())):
-            continue
-        if edge not in edges:
-            edges.append(edge)
-    return tuple(edges)
-
-
-def _discover_household_tables(
-    conn: Connection,
-) -> tuple[set[str], dict[str, tuple[OwnershipEdge, ...]], dict[str, set[str]]]:
-    inspector = inspect(conn)
-    tables = set(inspector.get_table_names())
-    columns = {table: _columns(conn, table) for table in tables}
-    edges = {
-        table: _ownership_edges(inspector, table, columns)
-        for table in tables
-    }
-
-    targets = {
-        table
-        for table in tables
-        if table not in PRESERVED_TABLES and "household_id" in columns[table]
-    }
-    changed = True
-    while changed:
-        changed = False
-        for child in sorted(tables - PRESERVED_TABLES - targets):
-            if any(edge.parent_table in targets for edge in edges[child]):
-                targets.add(child)
-                changed = True
-    return targets, edges, columns
-
-
-def _child_first_order(
-    tables: set[str],
-    edges: dict[str, tuple[OwnershipEdge, ...]],
-) -> list[str]:
-    outgoing = {
-        table: {
-            edge.parent_table
-            for edge in edges[table]
-            if edge.parent_table in tables and edge.parent_table != table
-        }
-        for table in tables
-    }
-    incoming = {table: 0 for table in tables}
-    for parents in outgoing.values():
-        for parent in parents:
-            incoming[parent] += 1
-
-    ready = sorted(table for table, count in incoming.items() if count == 0)
-    order: list[str] = []
-    while ready:
-        table = ready.pop(0)
-        order.append(table)
-        for parent in sorted(outgoing[table]):
-            incoming[parent] -= 1
-            if incoming[parent] == 0:
-                ready.append(parent)
-                ready.sort()
-
-    if len(order) != len(tables):
-        cycle = sorted(table for table, count in incoming.items() if count > 0)
-        raise HouseholdLifecycleConflictError(
-            "Huishouden verwijderen is fail-closed gestopt door cyclische datarelaties: "
-            + ", ".join(cycle)
-        )
-    return order
-
-
-def _target_predicate(
-    conn: Connection,
-    *,
-    table_name: str,
-    alias: str,
-    target_tables: set[str],
-    edges: dict[str, tuple[OwnershipEdge, ...]],
-    columns: dict[str, set[str]],
-    stack: tuple[str, ...] = (),
-) -> str:
-    if table_name in stack:
-        raise HouseholdLifecycleConflictError(
-            f"Cyclische verwijderpredicate gedetecteerd bij {table_name}."
-        )
-
-    clauses: list[str] = []
-    if "household_id" in columns[table_name]:
-        clauses.append(
-            f"CAST({alias}.{_quote(conn, 'household_id')} AS TEXT)=:household_id"
-        )
-
-    next_stack = (*stack, table_name)
-    for index, edge in enumerate(edges[table_name]):
-        if edge.parent_table not in target_tables or edge.parent_table == table_name:
-            continue
-        parent_alias = f"p{len(stack)}_{index}"
-        parent_predicate = _target_predicate(
-            conn,
-            table_name=edge.parent_table,
-            alias=parent_alias,
-            target_tables=target_tables,
-            edges=edges,
-            columns=columns,
-            stack=next_stack,
-        )
-        if not parent_predicate:
-            continue
-        joins = " AND ".join(
-            f"{parent_alias}.{_quote(conn, parent_col)}="
-            f"{alias}.{_quote(conn, local_col)}"
-            for local_col, parent_col in zip(edge.local_columns, edge.parent_columns)
-        )
-        clauses.append(
-            f"EXISTS (SELECT 1 FROM {_quote(conn, edge.parent_table)} {parent_alias} "
-            f"WHERE {joins} AND ({parent_predicate}))"
-        )
-    return " OR ".join(f"({clause})" for clause in clauses)
-
-
 def delete_additional_household(
     conn: Connection,
     *,
@@ -489,83 +293,100 @@ def delete_additional_household(
             "system_or_missing": "Dit huishouden kan niet worden verwijderd.",
             "not_found": "Huishouden niet gevonden.",
         }
-        raise HouseholdLifecycleConflictError(messages.get(reason, "Huishouden kan niet veilig worden verwijderd."))
+        raise HouseholdLifecycleConflictError(
+            messages.get(reason, "Huishouden kan niet veilig worden verwijderd.")
+        )
 
     expected = f"VERWIJDER {target}"
     if str(confirmation or "").strip() != expected:
-        raise HouseholdLifecycleConflictError(f"Bevestiging klopt niet. Typ exact: {expected}")
+        raise HouseholdLifecycleConflictError(
+            f"Bevestiging klopt niet. Typ exact: {expected}"
+        )
 
-    target_tables, edges, columns = _discover_household_tables(conn)
-    order = _child_first_order(target_tables, edges)
-    deleted_by_table: dict[str, int] = {}
+    # Gebruik dezelfde fail-closed purge-engine als Platformbeheer → Herstel.
+    # Deze verwijdert alle huishoudinhoud, maar bewaart hier tijdelijk de
+    # identity-/membership-shell zodat we die daarna gecontroleerd kunnen
+    # verwijderen voor de expliciete lifecycle-delete.
+    try:
+        reset_result = reset_household_data(
+            conn,
+            target,
+            confirmation=f"RESET {target}",
+        )
+    except (HouseholdResetConflictError, HouseholdResetNotFoundError) as exc:
+        raise HouseholdLifecycleConflictError(str(exc)) from exc
 
-    # Revoke stale sessions pointing to the soon-to-be deleted household while
-    # preserving account/session audit history.
+    deleted_by_table = dict(reset_result.get("deleted_by_table") or {})
+
+    # De canonical reset trekt sessies al in. Voor een huishouden dat daarna
+    # werkelijk verdwijnt, mag geen stale foreign-key/contextreferentie blijven.
     session_columns = _columns(conn, "server_sessions")
-    if {"active_household_id", "revoked_at"}.issubset(session_columns):
-        now = datetime.now(timezone.utc)
-        assignments = ["revoked_at=COALESCE(revoked_at, :now)", "active_household_id=NULL"]
-        if "updated_at" in session_columns:
-            assignments.append("updated_at=:now")
+    if "active_household_id" in session_columns:
         conn.execute(
             text(
-                "UPDATE server_sessions SET " + ", ".join(assignments)
-                + " WHERE CAST(active_household_id AS TEXT)=:household_id"
-            ),
-            {"now": now, "household_id": target},
-        )
-
-    for table_name in order:
-        predicate = _target_predicate(
-            conn,
-            table_name=table_name,
-            alias="target",
-            target_tables=target_tables,
-            edges=edges,
-            columns=columns,
-        )
-        if not predicate:
-            continue
-        result = conn.execute(
-            text(
-                f"DELETE FROM {_quote(conn, table_name)} AS target "
-                f"WHERE {predicate}"
+                "UPDATE server_sessions SET active_household_id=NULL "
+                "WHERE CAST(active_household_id AS TEXT)=:household_id"
             ),
             {"household_id": target},
         )
-        if int(result.rowcount or 0):
-            deleted_by_table[table_name] = int(result.rowcount or 0)
+
+    for table_name in ("auth_membership_roles", "household_memberships"):
+        columns = _columns(conn, table_name)
+        if "household_id" not in columns:
+            raise HouseholdLifecycleConflictError(
+                f"{table_name} mist household_id; verwijderen is afgebroken."
+            )
+        result = conn.execute(
+            text(
+                f"DELETE FROM {table_name} "
+                "WHERE CAST(household_id AS TEXT)=:household_id"
+            ),
+            {"household_id": target},
+        )
+        count = int(result.rowcount or 0)
+        if count:
+            deleted_by_table[table_name] = count
 
     registry_columns = _columns(conn, "household_registry")
     registry_id = _pick(registry_columns, "id", "household_id")
     if not registry_id:
-        raise HouseholdLifecycleConflictError("Huishoudregister wijkt af; verwijderen is afgebroken.")
-
+        raise HouseholdLifecycleConflictError(
+            "Huishoudregister wijkt af; verwijderen is afgebroken."
+        )
     result = conn.execute(
         text(
-            f"DELETE FROM household_registry WHERE CAST({registry_id} AS TEXT)=:household_id"
+            f"DELETE FROM household_registry "
+            f"WHERE CAST({registry_id} AS TEXT)=:household_id"
         ),
         {"household_id": target},
     )
     if int(result.rowcount or 0) != 1:
-        raise HouseholdLifecycleConflictError("Huishouden kon niet eenduidig worden verwijderd.")
+        raise HouseholdLifecycleConflictError(
+            "Huishouden kon niet eenduidig worden verwijderd."
+        )
+    deleted_by_table["household_registry"] = 1
 
-    # Clean the historical mirror only when it exists and uses the same identity.
+    # Historische mirror alleen opruimen wanneer die bestaat en dezelfde
+    # huishoudidentiteit gebruikt.
     if inspect(conn).has_table("households"):
         legacy_columns = _columns(conn, "households")
         legacy_id = _pick(legacy_columns, "id", "household_id")
         if legacy_id:
-            conn.execute(
+            legacy = conn.execute(
                 text(
-                    f"DELETE FROM households WHERE CAST({legacy_id} AS TEXT)=:household_id"
+                    f"DELETE FROM households "
+                    f"WHERE CAST({legacy_id} AS TEXT)=:household_id"
                 ),
                 {"household_id": target},
             )
+            legacy_count = int(legacy.rowcount or 0)
+            if legacy_count:
+                deleted_by_table["households"] = legacy_count
 
     return {
         "deleted": True,
         "household_id": target,
         "household_name": str(eligibility.get("household_name") or "Huishouden"),
-        "deleted_row_count": sum(deleted_by_table.values()) + 1,
+        "deleted_row_count": sum(deleted_by_table.values()),
         "deleted_by_table": dict(sorted(deleted_by_table.items())),
     }

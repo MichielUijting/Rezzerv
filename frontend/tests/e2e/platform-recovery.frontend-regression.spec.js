@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 const RECOVERY_PERMISSION = 'platform.recovery.manage'
 const PURGE_ENDPOINT = '**/api/admin/receipts/purge-archived'
+const RESET_ENDPOINT = '**/api/platform/recovery/reset-household'
 
 const noneSession = {
   user: { id: 'platform-recovery-user', email: 'platform-recovery@example.test' },
@@ -126,4 +127,95 @@ test('recovery direct route stays closed without permission and performs no purg
   await expect(page).toHaveURL(/\/home$/)
   await expect(page.getByTestId('none-session-home')).toBeVisible()
   expect(purgeCalls).toBe(0)
+})
+
+
+test('platformbeheerder kan huishouden alleen resetten na exacte RESET-bevestiging', async ({ page }) => {
+  await mockSession(page, noneSession)
+  const resetRequests = []
+
+  await page.route(RESET_ENDPOINT, async (route) => {
+    const request = route.request()
+    resetRequests.push({
+      method: request.method(),
+      body: request.postDataJSON(),
+      headers: request.headers(),
+    })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'reset',
+        household_id: 'household-reset-target',
+        deleted_row_count: 42,
+        preserved_member_count: 2,
+        sessions_revoked: 2,
+        audit_id: 'audit-reset-1',
+      }),
+    })
+  })
+
+  await page.goto('/platform/herstel')
+  const targetInput = page.getByTestId('platform-reset-household-id')
+  const openButton = page.getByRole('button', { name: 'Huishouden volledig resetten', exact: true })
+
+  await expect(openButton).toBeDisabled()
+  await targetInput.fill('household-reset-target')
+  await expect(openButton).toBeEnabled()
+  await openButton.click()
+
+  await expect(page.getByTestId('platform-reset-household-confirmation')).toBeVisible()
+  await expect(targetInput).toBeDisabled()
+  expect(resetRequests).toEqual([])
+
+  const confirmationInput = page.getByTestId('platform-reset-household-confirmation-text')
+  const confirmButton = page.getByRole('button', { name: 'Huishouden definitief resetten', exact: true })
+
+  await expect(confirmButton).toBeDisabled()
+  await confirmationInput.fill('household-reset-target')
+  await expect(confirmButton).toBeDisabled()
+  await confirmationInput.fill('RESET household-reset-target')
+  await expect(confirmButton).toBeEnabled()
+  await confirmButton.click()
+
+  await expect(page.getByTestId('platform-reset-household-result')).toContainText(
+    'Huishouden household-reset-target is volledig gereset.',
+  )
+  await expect(page.getByTestId('platform-reset-household-result')).toContainText(
+    '42 huishoudrecord(s) verwijderd',
+  )
+  await expect(page.getByTestId('platform-reset-household-result')).toContainText(
+    '2 lidmaatschap(pen) behouden',
+  )
+  await expect(page.getByTestId('platform-reset-household-result')).toContainText(
+    '2 sessie(s) ingetrokken',
+  )
+  await expect(page.getByTestId('platform-reset-household-result')).toContainText('audit-reset-1')
+
+  expect(resetRequests).toHaveLength(1)
+  expect(resetRequests[0].method).toBe('POST')
+  expect(resetRequests[0].body).toEqual({
+    household_id: 'household-reset-target',
+    confirmation: 'RESET household-reset-target',
+  })
+  expect(resetRequests[0].headers.authorization).toBeUndefined()
+  expect(resetRequests[0].headers['x-admin-key']).toBeUndefined()
+})
+
+test('huishoudreset kan worden geannuleerd zonder resetrequest', async ({ page }) => {
+  await mockSession(page, noneSession)
+  let resetCalls = 0
+  await page.route(RESET_ENDPOINT, async (route) => {
+    resetCalls += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"reset"}' })
+  })
+
+  await page.goto('/platform/herstel')
+  await page.getByTestId('platform-reset-household-id').fill('household-reset-target')
+  await page.getByRole('button', { name: 'Huishouden volledig resetten', exact: true }).click()
+  await page.getByTestId('platform-reset-household-confirmation-text').fill('RESET household-reset-target')
+  await page.getByTestId('platform-reset-household-confirmation').getByRole('button', { name: 'Annuleren', exact: true }).click()
+
+  await expect(page.getByTestId('platform-reset-household-confirmation')).toHaveCount(0)
+  expect(resetCalls).toBe(0)
 })

@@ -66,6 +66,19 @@ async function mockApi(page, actor, state) {
     if (path === '/api/onboarding') return json({ onboarding_status: 'completed', primary_use_case: null })
     if (path === '/api/features') return json({ features: { [gerechtenKey]: state.gerechtenEnabled } })
 
+    if (path === '/api/platform/mobile-action-bar') {
+      if (request.method() === 'PUT') {
+        if (!superuser) return json({}, 403)
+        const payload = request.postDataJSON()
+        state.actionBarLocked = Boolean(payload.locked)
+      }
+      return json({
+        locked: state.actionBarLocked,
+        default_locked: true,
+        fixed_keys: ['winkelen', 'kassa', 'kassabonnen', 'voorraad'],
+      })
+    }
+
     if (path === '/api/action-buttons') {
       state.productReads++
       if (state.productGate?.promise) await state.productGate.promise
@@ -122,6 +135,7 @@ function initialState(overrides = {}) {
     updates: [],
     orderUpdates: [],
     order: [shoppingKey, inventoryKey, gerechtenKey],
+    actionBarLocked: true,
     ...overrides,
   }
 }

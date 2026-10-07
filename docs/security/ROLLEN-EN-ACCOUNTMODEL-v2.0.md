@@ -116,6 +116,7 @@ Superuser is een speciaal functioneel platformaccount.
 - Ontvangt en beantwoordt Frontteammeldingen.
 - Stuurt meldingen en peilingen naar Frontteamleden.
 - Kan Frontteamlidmaatschap bij bestaande reguliere gebruikers toekennen en intrekken; dit is een aanvullende platformrol en wijzigt hun eigen huishouden of huishoudrol niet.
+- Kan platformbrede functionele presentatie-instellingen beheren, waaronder de tijdelijke vaste mobiele actiebalk; dit wijzigt geen gebruikersrechten of backend-autorisatie.
 - Beheert de centrale catalogus en universele artikelen.
 - Kan universele artikelen toevoegen of corrigeren en waar nodig gecontroleerd
   koppelingen herstellen.
@@ -144,7 +145,15 @@ Platformbeheerder is een speciaal technisch platformaccount.
   - achtergrondprocessen en herstelacties;
   - technische koppelingen;
   - technische platformconfiguratie;
-  - audit- en beheerhistorie.
+  - audit- en beheerhistorie;
+  - een expliciet bevestigde technische huishoudreset via Platformbeheer → Herstel.
+- De huishoudreset verwijdert huishoudspecifieke inhoud en instellingen maar behoudt
+  het huishoudrecord, lidmaatschappen, householdrollen, gebruikersaccounts,
+  wachtwoord-/inlogidentiteit en auditgeschiedenis. Actieve sessies van het
+  doelhuishouden worden ingetrokken.
+- De reset verleent geen leesrecht op huishoudinhoud: het doel wordt uitsluitend
+  via een expliciet household ID gekozen, systeemhuishouden 0 is uitgesloten en
+  de operatie wordt fail-closed en transactioneel uitgevoerd.
 - Deze technische functies vormen bij livegang een uitbreidbare basisset.
 - Krijgt alleen vanwege de technische rol geen toegang tot de inhoud van
   reguliere huishoudens.
@@ -198,6 +207,17 @@ Bescherming van de IP-eigenaar:
 | Superuser | Heeft geen regulier huishouden en wel toegang tot gedeeld systeemhuishouden 0. |
 | Platformbeheerder | Heeft geen regulier huishouden en geen automatische toegang tot huishouden 0. |
 | IP-eigenaar | Heeft geen regulier huishouden en geen toegang tot huishouden 0. |
+### 4.1 Wisselen tussen reguliere huishoudens
+
+Een reguliere gebruiker kan tussen huishoudens wisselen wanneer hetzelfde account
+minimaal twee actieve reguliere huishoudlidmaatschappen heeft. Dit is geen aparte
+Beheerderbevoegdheid: de actuele huishoudrol wordt per doelhuishouden opnieuw
+server-side bepaald. De wisseloptie wordt uitsluitend getoond wanneer
+`/api/session/households` expliciet `can_switch_households=true` retourneert.
+Bij één huishouden, een niet-reguliere context of een fout bij het bepalen van de
+beschikbare huishoudens wordt de wisseloptie niet getoond. Frontteamcontext is in
+de huidige runtime tot het eigen actieve huishouden begrensd.
+
 | Privégebruik platformaccounts | Een Superuser, Platformbeheerder of IP-eigenaar gebruikt voor privégebruik een afzonderlijk regulier account. |
 | Rolstapeling | Eén platformaccount mag Superuser én Platformbeheerder zijn. Frontteamlid is door de verplichte reguliere huishoudcontext een andere constructie. IP-eigenaarschap blijft een afzonderlijke beschermde rol en wordt niet met operationele platformrollen gestapeld. |
 
