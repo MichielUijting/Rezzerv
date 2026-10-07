@@ -23,3 +23,11 @@ assert.match(superuser, /Winkelen, Kassa, Uitpakken en Voorraad/)
 assert.match(superuser, /Alle overige beschikbare acties staan onder Meer/)
 
 console.log('MOBILE_ACTION_BAR_LOCK_CONTRACT_GREEN')
+
+assert.match(chrome, /instellingen: 'settings'/)
+const iconSource = readFileSync(new URL('../src/ui/MobileRecentActionsBar.jsx', import.meta.url), 'utf8')
+const iconCss = readFileSync(new URL('../src/ui/mobileComponents.css', import.meta.url), 'utf8')
+assert.match(iconSource, /type === 'settings'/)
+assert.match(iconSource, /rz-mobile-action-settings-icon/)
+assert.match(iconCss, /\.rz-mobile-action-settings-icon[\s\S]*var\(--color-mobile-ui-primary\)/)
+assert.match(iconCss, /background:\s*color-mix\(in srgb, var\(--color-mobile-ui-primary\) 14%, #ffffff\)/)
