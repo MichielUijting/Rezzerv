@@ -35,6 +35,7 @@ const MOBILE_ICON_TYPE_BY_KEY = Object.freeze({
   kassabonnen: 'shopping-bag',
   'bijna-op': 'almost-out',
   winkelen: 'cart',
+  instellingen: 'settings',
 })
 
 function activeActionKey(pathname = '') {
