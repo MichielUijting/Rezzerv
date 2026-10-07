@@ -95,7 +95,10 @@ jobs:
         run: |
           PYTHONPATH=. python -m py_compile \
             app/services/authorization_foundation_service.py \
-            tests/platform_admin_acceptance_closure_selftest.py
+            app/services/household_reset_service.py \
+            app/api/platform_household_reset_routes.py \
+            tests/platform_admin_acceptance_closure_selftest.py \
+            tests/test_platform_household_reset_contract.py
 
       - name: Run 9.1.7 executable closure contract
         working-directory: backend
@@ -129,6 +132,7 @@ jobs:
             tests/test_test_orchestration_platform_route_authorization.py \
             tests/test_platform_background_jobs_ui_contract.py \
             tests/test_archived_receipt_purge_platform_authorization.py \
+            tests/test_platform_household_reset_contract.py \
             tests/test_technical_schema_platform_route_authorization.py \
             tests/test_fixture_lifecycle_platform_authorization.py \
             tests/test_platform_feature_flags_route_authorization.py

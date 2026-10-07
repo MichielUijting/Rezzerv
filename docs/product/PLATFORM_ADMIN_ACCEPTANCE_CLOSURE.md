@@ -72,7 +72,7 @@ De lijn omvat naast de none-native route- en navigatiefundering onder andere:
 - Technische configuratie met expliciet bevestigde canonical acties;
 - Testfixtures met expliciete bevestiging en vaste fixtureacties;
 - Achtergrondtaken voor uitsluitend self-contained taken;
-- Herstel met expliciet operationeel target en destructieve bevestiging;
+- Herstel met expliciet operationeel target en destructieve bevestiging, waaronder een transactionele huishoudreset die de identity-/membership-shell en audit bewaart en geen huishoudinhoud projecteert;
 - Integraties als secret-vrije statusprojectie;
 - Featureflags met canonical registry en tweede bevestiging;
 - Sessiebeheer met veilige session-id-projectie en targeted revoke;
