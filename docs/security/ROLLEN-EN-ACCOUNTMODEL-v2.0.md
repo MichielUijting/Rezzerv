@@ -175,6 +175,17 @@ Bescherming van de IP-eigenaar:
 | Superuser | Heeft geen regulier huishouden en wel toegang tot gedeeld systeemhuishouden 0. |
 | Platformbeheerder | Heeft geen regulier huishouden en geen automatische toegang tot huishouden 0. |
 | IP-eigenaar | Heeft geen regulier huishouden en geen toegang tot huishouden 0. |
+### 4.1 Wisselen tussen reguliere huishoudens
+
+Een reguliere gebruiker kan tussen huishoudens wisselen wanneer hetzelfde account
+minimaal twee actieve reguliere huishoudlidmaatschappen heeft. Dit is geen aparte
+Beheerderbevoegdheid: de actuele huishoudrol wordt per doelhuishouden opnieuw
+server-side bepaald. De wisseloptie wordt uitsluitend getoond wanneer
+`/api/session/households` expliciet `can_switch_households=true` retourneert.
+Bij één huishouden, een niet-reguliere context of een fout bij het bepalen van de
+beschikbare huishoudens wordt de wisseloptie niet getoond. Frontteamcontext is in
+de huidige runtime tot het eigen actieve huishouden begrensd.
+
 | Privégebruik platformaccounts | Een Superuser, Platformbeheerder of IP-eigenaar gebruikt voor privégebruik een afzonderlijk regulier account. |
 | Rolstapeling | Eén platformaccount mag Superuser én Platformbeheerder zijn. Frontteamlid is door de verplichte reguliere huishoudcontext een andere constructie. IP-eigenaarschap blijft een afzonderlijke beschermde rol en wordt niet met operationele platformrollen gestapeld. |
 
