@@ -384,8 +384,9 @@ def _shopping_count(conn: Connection, household_id: str) -> int:
             continue
         if "household_id" in item_columns and str(row.get("household_id") or "") != str(household_id):
             continue
-        if not _truthy(row.get("checked")):
-            count += 1
+        # Een aangevinkte regel staat "In winkelwagen", maar blijft onderdeel van
+        # dezelfde actieve boodschappenlijst totdat die lijst wordt afgerond.
+        count += 1
     return count
 
 

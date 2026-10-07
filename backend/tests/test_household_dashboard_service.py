@@ -317,7 +317,10 @@ def test_dashboard_counts_only_real_purchases_and_deduplicates_store_visit_per_d
         assert len(dashboard["forecast"]["views"]["months"]) == 4
 
         assert dashboard["status"]["notifications"] == 1
-        assert dashboard["status"]["shopping"] == 1
+
+        # Boodschappen telt alle regels op de actieve lijst: zowel "Nog te kopen"
+        # (checked=False) als "In winkelwagen" (checked=True).
+        assert dashboard["status"]["shopping"] == 2
 
         # Bonnen open telt unieke bonnen, niet bonregels:
         # r2 en de nog niet goedgekeurde r5 staan in Kassa; r1 staat in Uitpakken
