@@ -1003,3 +1003,10 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 
 
 - In het mobiele **Uitpakken**-overzicht blijven de bulkacties **Exporteren** en **Verwijderen** altijd zichtbaar. Zolang geen kassabon is geselecteerd zijn beide knoppen inactief; bij één of meer geselecteerde bonnen worden zij actief. Zo blijft beschikbare functionaliteit zichtbaar zonder een ongeldige actie toe te staan.
+
+
+### Huishoudwisselaar in de header — 7 oktober 2026
+
+- De huishoudwisselaar in de gedeelde header wordt uitsluitend getoond wanneer de backend expliciet `can_switch_households=true` retourneert én er meer dan één beschikbaar regulier huishouden is.
+- Bij één huishouden, een niet-reguliere context of een fout bij het ophalen van huishoudens wordt de wisselaar fail-closed niet getoond.
+- Deze regel verandert geen styling, maatvoering of design tokens van de header; zij borgt alleen dat de bestaande wisselbediening niet zichtbaar blijft zonder actuele server-side authority.
