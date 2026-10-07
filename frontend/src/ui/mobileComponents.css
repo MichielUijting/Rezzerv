@@ -258,3 +258,34 @@
   justify-content: flex-end;
   min-width: 0;
 }
+
+
+.rz-mobile-action-icon-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: #D97706;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 40px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.rz-mobile-action-bar-icon .rz-bag-stripe {
+  stroke-width: 2.4;
+}
+.rz-mobile-action-bar-icon .rz-bag-stripe--1 { stroke: #E46B5D; }
+.rz-mobile-action-bar-icon .rz-bag-stripe--2 { stroke: #E5B94F; }
+.rz-mobile-action-bar-icon .rz-bag-stripe--3 { stroke: var(--color-mobile-ui-primary); }
+
+
+.rz-mobile-action-bar-icon .rz-almost-out-arrow{stroke:#D97706;stroke-width:2.4}
+.rz-mobile-action-bar-icon .rz-shelf-box{stroke-width:.85}
+
+
+.rz-mobile-action-bar-icon .rz-payment-card-icon{
+  color:var(--color-mobile-ui-primary);
+}

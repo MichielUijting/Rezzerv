@@ -100,3 +100,9 @@ const fallbackTrack = {
 assert.equal(cameraPixelCapacity(highResTrack), 3840 * 2160)
 assert.equal(cameraPixelCapacity(fallbackTrack), 1920 * 1080)
 console.log('CAMERA_RESOLUTION_SELECTION_GREEN')
+
+assert.match(mobile, /requestedView === 'bonnen' \? 'list' : 'camera'/)
+assert.match(mobile, /async function approveSelectedReceipts\(\)/)
+assert.match(mobile, /mobile-kassa-bulk-actions/)
+assert.match(mobile, />Goedkeuren<\/Button>/)
+assert.match(mobile, />Verwijderen<\/Button>/)

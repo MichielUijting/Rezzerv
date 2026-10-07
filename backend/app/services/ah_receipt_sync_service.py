@@ -43,6 +43,43 @@ def disconnect_ah_account(engine: Engine, *, household_id: str) -> dict[str, Any
     return ah_session_status(engine, household_id)
 
 
+
+def count_pending_ah_receipts(
+    engine: Engine,
+    *,
+    household_id: str,
+    limit: int = 100,
+    client: AHReceiptClient | None = None,
+) -> dict[str, Any]:
+    """Count AH receipts that can still be imported without importing them."""
+    session = get_ah_session(engine, household_id)
+    if session is None:
+        return {
+            "provider": "ah",
+            "connected": False,
+            "count_available": True,
+            "pending_downloads": 0,
+            "receipts_found": 0,
+        }
+
+    owns_client = client is None
+    active_client = client or AHReceiptClient()
+    try:
+        session, summaries = active_client.list_receipts(session, limit=limit)
+        save_ah_session(engine, household_id, session)
+        known_ids = get_known_ah_receipt_ids(engine, household_id)
+        pending = [summary for summary in summaries if summary.receipt_id not in known_ids]
+        return {
+            "provider": "ah",
+            "connected": True,
+            "count_available": True,
+            "pending_downloads": len(pending),
+            "receipts_found": len(summaries),
+        }
+    finally:
+        if owns_client:
+            active_client.close()
+
 def sync_ah_receipts(
     engine: Engine,
     receipt_storage_root: Path,

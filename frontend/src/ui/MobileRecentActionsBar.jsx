@@ -3,6 +3,46 @@ import './mobileComponents.css'
 
 function MobileActionIcon({ type, icon }) {
   if (icon) return <span className="rz-mobile-action-bar-desktop-icon" aria-hidden="true">{icon}</span>
+  if (type === 'info') {
+    return <span className="rz-mobile-action-icon-info" aria-hidden="true">i</span>
+  }
+  if (type === 'shelf') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 3.5h16v17H4zM4 9h16M4 15h16" />
+        <path className="rz-shelf-box" d="M6 5.5h4v3H6zM14 11h4v3h-4zM6 17h5v2H6zM13 17h5v2h-5z" />
+      </svg>
+    )
+  }
+  if (type === 'payment-card') {
+    return (
+      <svg className="rz-payment-card-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="6" width="17" height="12" rx="2" />
+        <path d="M3.5 10h17" />
+        <path d="M7 14h4" />
+      </svg>
+    )
+  }
+  if (type === 'shopping-bag') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 8h12l1 12H5L6 8Z" />
+        <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+        <path className="rz-bag-stripe rz-bag-stripe--1" d="M6.2 11h11.6" />
+        <path className="rz-bag-stripe rz-bag-stripe--2" d="M5.9 14h12.2" />
+        <path className="rz-bag-stripe rz-bag-stripe--3" d="M5.7 17h12.6" />
+      </svg>
+    )
+  }
+  if (type === 'almost-out') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 5v14h16" />
+        <path d="m6 8 4 3 3-2 5 6" />
+        <path className="rz-almost-out-arrow" d="m15 15 3 .2-.2-3" />
+      </svg>
+    )
+  }
   if (type === 'bell') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -64,19 +104,22 @@ export default function MobileRecentActionsBar({
       data-testid={testId}
       style={{ '--rz-mobile-action-count': items.length }}
     >
-      {items.map((item) => (
-        <Link
-          key={item.key}
-          to={item.route}
-          className={`rz-mobile-action-bar-item${item.showLabel ? '' : ' rz-mobile-action-bar-item--icon-only'}`}
-          aria-label={item.label}
-          data-testid={`${testId}-${item.key}`}
-          onClick={() => onAction?.(item)}
-        >
+      {items.map((item) => {
+        const className = `rz-mobile-action-bar-item${item.showLabel ? '' : ' rz-mobile-action-bar-item--icon-only'}`
+        const content = <>
           <span className="rz-mobile-action-bar-icon"><MobileActionIcon type={item.iconType} icon={item.icon} /></span>
           {item.showLabel ? <span>{item.label}</span> : null}
-        </Link>
-      ))}
+        </>
+        return item.actionOnly ? (
+          <button key={item.key} type="button" className={className} aria-label={item.label} data-testid={`${testId}-${item.key}`} onClick={() => onAction?.(item)}>
+            {content}
+          </button>
+        ) : (
+          <Link key={item.key} to={item.route} className={className} aria-label={item.label} data-testid={`${testId}-${item.key}`} onClick={() => onAction?.(item)}>
+            {content}
+          </Link>
+        )
+      })}
     </nav>
   )
 }

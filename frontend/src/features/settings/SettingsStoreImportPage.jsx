@@ -25,6 +25,7 @@ export default function SettingsStoreImportPage() {
   const navigate = useNavigate()
   const [level, setLevel] = useState('gebalanceerd')
   const [receiptScannerProvider, setReceiptScannerProvider] = useState('inhuis')
+  const [receiptAutoApprove, setReceiptAutoApprove] = useState(false)
   const [canEdit, setCanEdit] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -34,7 +35,7 @@ export default function SettingsStoreImportPage() {
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const dismissTimerRef = useRef(null)
-  const currentSnapshot = useMemo(() => stableStringify({ level, receiptScannerProvider }), [level, receiptScannerProvider])
+  const currentSnapshot = useMemo(() => stableStringify({ level, receiptScannerProvider, receiptAutoApprove }), [level, receiptScannerProvider, receiptAutoApprove])
   const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
   const blocker = useBlocker(isDirty)
 
@@ -51,8 +52,13 @@ export default function SettingsStoreImportPage() {
         const nextLevel = data?.store_import_simplification_level || 'gebalanceerd'
         setLevel(nextLevel)
         setReceiptScannerProvider(data?.receipt_scanner_provider || 'inhuis')
-        setCanEdit(Boolean(data?.can_edit_store_import_simplification_level))
-        setLastSavedSnapshot(stableStringify({ level: nextLevel, receiptScannerProvider: data?.receipt_scanner_provider || 'inhuis' }))
+        setReceiptAutoApprove(Boolean(data?.receipt_auto_approve))
+        setCanEdit(Boolean(data?.can_edit_store_import_simplification_level && data?.can_edit_receipt_auto_approve))
+        setLastSavedSnapshot(stableStringify({
+          level: nextLevel,
+          receiptScannerProvider: data?.receipt_scanner_provider || 'inhuis',
+          receiptAutoApprove: Boolean(data?.receipt_auto_approve),
+        }))
       } catch (error) {
         if (!active) return
         setLoadError(error?.message || 'Instellingen konden niet worden geladen.')
@@ -95,13 +101,18 @@ export default function SettingsStoreImportPage() {
     setIsSaving(true)
     setSaveError('')
     try {
-      const saved = await saveStoreImportSimplificationSettings(level, receiptScannerProvider)
+      const saved = await saveStoreImportSimplificationSettings(level, receiptScannerProvider, receiptAutoApprove)
       const nextLevel = saved?.store_import_simplification_level || level
       const nextScannerProvider = saved?.receipt_scanner_provider || receiptScannerProvider
       setLevel(nextLevel)
       setCanEdit(Boolean(saved?.can_edit_store_import_simplification_level && saved?.can_edit_receipt_scanner_provider))
       setReceiptScannerProvider(nextScannerProvider)
-      setLastSavedSnapshot(stableStringify({ level: nextLevel, receiptScannerProvider: nextScannerProvider }))
+      setReceiptAutoApprove(Boolean(saved?.receipt_auto_approve))
+      setLastSavedSnapshot(stableStringify({
+        level: nextLevel,
+        receiptScannerProvider: nextScannerProvider,
+        receiptAutoApprove: Boolean(saved?.receipt_auto_approve),
+      }))
       queueSuccessMessage('Opgeslagen')
       return true
     } catch (error) {
@@ -210,6 +221,27 @@ export default function SettingsStoreImportPage() {
                   ))}
                 </div>
               </section>
+
+              <section data-testid="receipt-auto-approve-settings" style={{ display: 'grid', gap: '10px' }}>
+                <div>
+                  <div style={{ fontWeight: 600 }}>Kassabonnen automatisch goedkeuren</div>
+                  <div style={{ marginTop: '4px' }}>
+                    Als dit aan staat, gaan technisch complete kassabonnen direct door naar Uitpakken. Bonnen die niet veilig automatisch kunnen worden goedgekeurd blijven in Kassa voor controle.
+                  </div>
+                </div>
+                <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={receiptAutoApprove}
+                    onChange={(event) => setReceiptAutoApprove(event.target.checked)}
+                    disabled={!canEdit || isSaving}
+                    data-testid="receipt-auto-approve-toggle"
+                  />
+                  <span>Automatisch goedkeuren</span>
+                </label>
+                {!canEdit ? <div className="rz-inline-feedback rz-inline-feedback--warning">Alleen de beheerder van het huishouden kan dit wijzigen.</div> : null}
+              </section>
+
               <div className="rz-store-import-desktop">
               <div className="rz-automation-setting-card" style={{ alignItems: 'stretch' }}>
                 <div className="rz-automation-setting-copy">

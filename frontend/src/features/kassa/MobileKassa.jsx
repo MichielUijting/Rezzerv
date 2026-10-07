@@ -35,7 +35,10 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const uploadRef = useRef(null)
-  const [mode, setMode] = useState('camera')
+  const [mode, setMode] = useState(() => {
+    const requestedView = new URLSearchParams(window.location.search).get('view') || ''
+    return requestedView === 'bonnen' ? 'list' : 'camera'
+  })
   const [householdId, setHouseholdId] = useState('')
   const [receipts, setReceipts] = useState([])
   const [receiptsLoading, setReceiptsLoading] = useState(false)
@@ -387,6 +390,46 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
     URL.revokeObjectURL(url)
   }
 
+  async function approveSelectedReceipts() {
+    const ids = Array.from(new Set(selectedReceiptIds.map((id) => String(id || '').trim()).filter(Boolean)))
+    if (!ids.length || busy) return
+
+    setBusy(true)
+    const approvedIds = []
+    const failed = []
+    try {
+      for (const id of ids) {
+        try {
+          await fetchJson(`/api/receipts/${encodeURIComponent(id)}/approve`, { method: 'POST' })
+          approvedIds.push(id)
+        } catch (error) {
+          failed.push({ id, message: normalizeErrorMessage(error?.message) || 'Goedkeuren mislukt.' })
+        }
+      }
+
+      await loadReceipts()
+      setSelectedReceiptIds(failed.map((item) => item.id))
+
+      if (failed.length === 0) {
+        showFeedback({
+          variant: 'success',
+          message: `${approvedIds.length} kassabon${approvedIds.length === 1 ? '' : 'nen'} goedgekeurd voor Uitpakken.`,
+          key: 'mobile-kassa-batch-approve-success',
+        })
+      } else {
+        showFeedback({
+          variant: 'warning',
+          title: 'Niet alle bonnen zijn goedgekeurd',
+          message: `${approvedIds.length} gelukt, ${failed.length} niet gelukt. De mislukte bonnen blijven geselecteerd.`,
+          detail: failed.map((item) => item.message).join(' · '),
+          key: 'mobile-kassa-batch-approve-partial',
+        })
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function approve() {
     if (!receiptId(receipt) || busy) return
     if (!String(receipt.store_name || '').trim()) {
@@ -476,7 +519,10 @@ export default function MobileKassa({ scannerProvider = 'inhuis' }) {
           <input className="rz-mobile-kassa-search" aria-label="Zoek kassabonnen" placeholder="Zoek winkel of status" value={receiptFilter} onChange={(event) => setReceiptFilter(event.target.value)} />
           <div className="rz-mobile-kassa-bulk">
             <label><input type="checkbox" aria-label="Selecteer alle zichtbare bonnen" checked={receiptPagination.pageItems.length > 0 && receiptPagination.pageItems.every((item) => selectedReceiptIds.includes(receiptId(item)))} onChange={(event) => setSelectedReceiptIds(event.target.checked ? receiptPagination.pageItems.map(receiptId) : [])} /> Alles</label>
-            <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
+            <div className="rz-mobile-kassa-bulk-actions">
+              <Button type="button" disabled={!selectedReceiptIds.length || busy} onClick={approveSelectedReceipts}>Goedkeuren</Button>
+              <Button type="button" variant="secondary" disabled={!selectedReceiptIds.length || busy} onClick={() => confirmDeleteReceipts(selectedReceiptIds)}>Verwijderen</Button>
+            </div>
           </div>
           {receiptsLoading ? <div className="rz-mobile-kassa-empty" role="status">Kassabonnen laden…</div> : null}
           {receiptsLoadError ? <div className="rz-mobile-kassa-empty" role="alert">Kassabonnen konden niet worden geladen. <Button type="button" onClick={() => loadReceipts().catch(() => {})}>Opnieuw proberen</Button></div> : null}

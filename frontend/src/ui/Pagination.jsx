@@ -1,9 +1,15 @@
 import Button from './Button.jsx'
 
-export default function Pagination({ page = 1, pageCount = 1, onPageChange, disabled = false }) {
+export default function Pagination({ page = 1, pageCount = 1, onPageChange, disabled = false, labels = null }) {
   const currentPage = Math.min(Math.max(Number(page) || 1, 1), Math.max(Number(pageCount) || 1, 1))
   const totalPages = Math.max(Number(pageCount) || 1, 1)
   const navigationDisabled = disabled || totalPages <= 1
+  const resolvedLabels = {
+    first: labels?.first ?? '1',
+    previous: labels?.previous ?? '−',
+    next: labels?.next ?? '+',
+    last: labels?.last ?? (Number.isFinite(Number(pageCount)) && Number(pageCount) > 0 ? String(totalPages) : 'Einde'),
+  }
 
   return (
     <nav
@@ -17,7 +23,7 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
         disabled={navigationDisabled || currentPage <= 1}
         onClick={() => onPageChange?.(1)}
       >
-        Eerste
+        {resolvedLabels.first}
       </Button>
       <Button
         type="button"
@@ -25,7 +31,7 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
         disabled={navigationDisabled || currentPage <= 1}
         onClick={() => onPageChange?.(currentPage - 1)}
       >
-        Vorige
+        {resolvedLabels.previous}
       </Button>
       <span className="rz-pagination-page-indicator" aria-current="page">
         Pagina {currentPage} van {totalPages}
@@ -36,7 +42,7 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
         disabled={navigationDisabled || currentPage >= totalPages}
         onClick={() => onPageChange?.(currentPage + 1)}
       >
-        Volgende
+        {resolvedLabels.next}
       </Button>
       <Button
         type="button"
@@ -44,7 +50,7 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
         disabled={navigationDisabled || currentPage >= totalPages}
         onClick={() => onPageChange?.(totalPages)}
       >
-        Laatste
+        {resolvedLabels.last}
       </Button>
     </nav>
   )

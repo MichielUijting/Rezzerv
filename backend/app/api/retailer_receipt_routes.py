@@ -21,6 +21,7 @@ from app.integrations.retailer_receipts import (
 )
 from app.services.ah_receipt_sync_service import (
     connect_ah_account,
+    count_pending_ah_receipts,
     disconnect_ah_account,
     sync_ah_receipts,
 )
@@ -144,6 +145,36 @@ def remove_ah_account_connection(
 ):
     household_id = _authorized_household_id(authorization)
     return disconnect_ah_account(engine, household_id=household_id)
+
+
+@router.get("/pending-summary")
+def get_retailer_pending_receipt_summary(
+    authorization: Optional[str] = Header(None),
+):
+    household_id = _authorized_household_id(authorization)
+    try:
+        ah = count_pending_ah_receipts(
+            engine,
+            household_id=household_id,
+            limit=100,
+        )
+    except (httpx.HTTPError, ValueError):
+        status = ah_session_status(engine, household_id)
+        ah = {
+            "provider": "ah",
+            "connected": bool(status.get("connected")),
+            "count_available": False,
+            "pending_downloads": None,
+            "receipts_found": None,
+        }
+
+    return {
+        "pending_downloads": ah.get("pending_downloads"),
+        "count_available": bool(ah.get("count_available")),
+        "providers": [ah],
+        "coverage": "persistent_retailer_connections",
+        "browser_assisted_providers": ["lidl", "jumbo"],
+    }
 
 
 @router.post("/ah/sync")

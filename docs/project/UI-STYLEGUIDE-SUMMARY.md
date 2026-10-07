@@ -913,3 +913,82 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - Onderaan staan mobiel uitsluitend **Leegmaken** en **Opslaan**. Een aparte knop **Annuleren** wordt niet getoond omdat de globale mobiele **Terug**-bediening die navigatiefunctie vervult.
 - Na succesvol opslaan blijft het bestaande gedrag gelden: de aankoop wordt aan Voorraad toegevoegd en de gebruiker keert terug naar **Voorraad**.
 - Mobiele invoervelden en acties hebben minimaal circa 44 px touchhoogte, gebruiken uitsluitend de centrale body-/titeltypografie en volgen de app-brede primaire kleur en knopgeometrie.
+
+
+## Mobiel dashboardstatus vanaf 6 oktober 2026
+
+- De mobiele dashboardstatus gebruikt vijf directe statusknoppen: **Meldingen**, **Boodschappen**, **Bonnen open**, **Bonnen downloaden** en **Bijna op**.
+- **Bonnen open** telt unieke kassabonnen die in Kassa of Uitpakken nog niet volledig naar Voorraad zijn verwerkt; bonregels worden niet als afzonderlijke bonnen geteld.
+- **Bonnen downloaden** toont uitsluitend een live, objectief bepaalbaar aantal uit persistent gekoppelde winkelaccounts. Browser-assisted koppelingen zonder server-side boninventaris worden niet stil als nul meegeteld.
+- **Bijna op** toont het actuele aantal Bijna-op-signalen en opent rechtstreeks de module Bijna op.
+
+
+## Mobiele actiebalk en Superuser-header vanaf 6 oktober 2026
+
+- De globale mobiele onderste actiebalk bevat geen dubbele acties. **Bijna op** is een vaste beschikbare actie; de overige posities worden uniek aangevuld uit recente beschikbare acties, gevolgd door **Meer**.
+- In de mobiele actiebalk gebruikt **Meldingen** een grote cursieve donkergroene letter **i** als informatie-icoon.
+- **Voorraad** gebruikt in de mobiele actiebalk een stellingkast met dozen als icoon.
+- **Kassa** gebruikt in de mobiele actiebalk een groene betaalpas als icoon.
+- **Uitpakken** gebruikt in de mobiele actiebalk een boodschappentas met horizontale kleurstrepen.
+- Op de mobiele Superuser-route staat de globale **Terug**-bediening links in een eigen sticky donkergroene headerbalk; zij scrollt niet weg met de pagina-inhoud.
+
+
+### Mobiele dashboardkleuren en actiebalkiconen — 6 oktober 2026
+
+- De vijf mobiele dashboardstatusknoppen gebruiken lichte pastelachtergronden zodat gewone donkere tekst leesbaar blijft: Meldingen pastelrood, Boodschappen pastelblauw, Bonnen open pastelpaars, Bonnen downloaden pastelgeel en Bijna op pastelbruin.
+- De grote cursieve **i** van Meldingen is oranje.
+- Bij het icoon **Bijna op** is uitsluitend de neerwaartse pijl oranje; de overige lijnen behouden de reguliere actiebalkkleur.
+- Het Voorraad-icoon blijft een stellingkast; de dooscontouren zijn fijner dan de kastlijnen. Rechtsboven en links in het midden staan bewust geen dozen.
+
+
+### App-brede paginering — 6 oktober 2026
+
+- Alle pagineringscomponenten gebruiken centraal dezelfde bediening: **1**, **−**, **+** en als laatste knop het bekende totale aantal pagina's.
+- Alleen wanneer het totale aantal pagina's technisch niet bepaalbaar is, luidt de laatste knop **Einde**.
+- Schermen introduceren geen eigen afwijkende labels voor Eerste/Vorige/Volgende/Laatste; de gedeelde `Pagination`-component is hiervoor de UI-authority.
+
+
+### Mobiele Kassa — directe bonnenlijst en batchgoedkeuring — 6 oktober 2026
+
+- Een deeplink naar **Kassa → Bonnen** initialiseert de mobiele Kassa direct in de bonnenlijst; het camerascherm wordt daarbij niet eerst kort getoond.
+- Bij geselecteerde bonnen staat **Goedkeuren** links van **Verwijderen**, met de standaard centrale marge tussen beide acties.
+- Batchgoedkeuring hergebruikt per bon de bestaande canonieke receipt-goedkeurroute. Bonnen die niet kunnen worden goedgekeurd blijven geselecteerd en worden expliciet gemeld; geslaagde bonnen gaan volgens de bestaande flow naar Uitpakken.
+
+
+### Voorraad-hoofdscherm en Kassa-volgorde — 6 oktober 2026
+
+- Het hoofdscherm **Voorraad** toont naast artikelnaam en aantal uitsluitend de gebruikte metadata **Brick**, **Productfamilie**, **Locatie** en **Sublocatie**. Lege locatievelden worden niet als placeholdermetadata getoond.
+- **GPC-groep/Class**, Artikelgroep en een tweede productnaam worden niet meer als extra metadata in het Voorraad-hoofdscherm getoond; zij blijven waar van toepassing beschikbaar in detail- of beheercontext.
+- De open bonnen in **Kassa** worden op aankoopdatum oplopend weergegeven: de oudste bon staat bovenaan. Bij gelijke of ontbrekende aankoopdatum is aanmaaktijd de stabiele vervolgsortering.
+
+
+### Huishoudinstelling automatische kassabongoedkeuring — 6 oktober 2026
+
+- **Instellingen → Winkelimport** bevat per huishouden de instelling **Kassabonnen automatisch goedkeuren**; de veilige standaardwaarde is **uit**.
+- Alleen een huishoud-**Beheerder** mag deze instelling wijzigen. Een reguliere **Gebruiker** kan de instelling niet aan- of uitzetten; de backend handhaaft dit met dezelfde admin-authority als de overige huishoudbrede Winkelimport-instellingen.
+- Wanneer automatische goedkeuring aan staat, mag alleen een technisch complete bon met geldige winkel, aankoopdatum, ten minste één geldige bonregel en sluitende totalen automatisch naar **Uitpakken** gaan. Twijfel of een totalenafwijking blijft fail-closed in **Kassa**.
+
+
+- De automatische goedkeurpoort hergebruikt exact dezelfde interne receipt-approval authority als handmatig Goedkeuren. Automatisch goedkeuren staat **geen** totalenoverride toe en stopt bij een afgeleide/default aankoopdatum of een winkelnaam die gebruikerscontrole vereist.
+- Voor reeds binnengehaalde digitale winkelbonnen wordt de instelling eveneens toegepast voordat de open Kassa-wachtrij wordt getoond, zodat complete bonnen rechtstreeks naar Uitpakken doorstromen.
+
+
+### Mobiele Boodschappen en Meer-popup — 6 oktober 2026
+
+- **Boodschappen afgerond** staat buiten en direct onder de sectie/tabel **In winkelwagen**, met de standaard tussenruimte.
+- De mobiele actie **Meer** opent een modale popup boven de huidige pagina en navigeert niet naar een afzonderlijk Meer-scherm.
+- Een keuze uit de popup sluit deze en opent daarna de gekozen functie; tikken buiten de popup of op sluiten laat de huidige pagina intact.
+
+
+- Het mobiele **Kassa**-icoon is een eenvoudige betaalpas in de centrale groene Inhuis-kleur; het eerdere kassaregister-icoon vervalt.
+
+
+### Mobiel Uitpakken — functionele parity met desktop — 6 oktober 2026
+
+- In het mobiele kassabondetail heeft iedere bonregel een zichtbare actie **Details**. Die opent dezelfde bestaande bonartikeldetailfunctie als desktop, inclusief barcode/GTIN-controle, barcodecamera, universeel artikel en koppelen.
+- Mobiel biedt boven de bonregels dezelfde functionele filtermogelijkheden voor zoeken, status, mapping en locatie, plus **Filters wissen**. De mobiele tabelkop blijft verborgen; de functionaliteit verhuist naar touchgeschikte centrale bediening.
+- De bestaande bulkacties **Exporteren**, **Locatie toepassen** en **Naar voorraad** blijven dezelfde functies gebruiken als desktop.
+- Autorisaties blijven leidend: een Viewer kan details bekijken maar geen locatie, artikelgroep, barcodekoppeling of voorraadverwerking wijzigen; locatie-aanmaak blijft uitsluitend beschikbaar voor de huishoud-Beheerder; reeds verwerkte regels zijn in detail alleen-lezen.
+
+
+- In het mobiele **Uitpakken**-overzicht blijven de bulkacties **Exporteren** en **Verwijderen** altijd zichtbaar. Zolang geen kassabon is geselecteerd zijn beide knoppen inactief; bij één of meer geselecteerde bonnen worden zij actief. Zo blijft beschikbare functionaliteit zichtbaar zonder een ongeldige actie toe te staan.
