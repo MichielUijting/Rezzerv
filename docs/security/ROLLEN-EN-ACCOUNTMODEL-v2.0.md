@@ -121,7 +121,15 @@ Platformbeheerder is een speciaal technisch platformaccount.
   - achtergrondprocessen en herstelacties;
   - technische koppelingen;
   - technische platformconfiguratie;
-  - audit- en beheerhistorie.
+  - audit- en beheerhistorie;
+  - een expliciet bevestigde technische huishoudreset via Platformbeheer → Herstel.
+- De huishoudreset verwijdert huishoudspecifieke inhoud en instellingen maar behoudt
+  het huishoudrecord, lidmaatschappen, householdrollen, gebruikersaccounts,
+  wachtwoord-/inlogidentiteit en auditgeschiedenis. Actieve sessies van het
+  doelhuishouden worden ingetrokken.
+- De reset verleent geen leesrecht op huishoudinhoud: het doel wordt uitsluitend
+  via een expliciet household ID gekozen, systeemhuishouden 0 is uitgesloten en
+  de operatie wordt fail-closed en transactioneel uitgevoerd.
 - Deze technische functies vormen bij livegang een uitbreidbare basisset.
 - Krijgt alleen vanwege de technische rol geen toegang tot de inhoud van
   reguliere huishoudens.
