@@ -20,6 +20,7 @@ on:
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/authorization_membership_service.py'
       - 'backend/app/services/consumer_account_provisioning.py'
+      - 'backend/app/services/multi_household_lifecycle_service.py'
       - 'backend/app/services/household_invitation_acceptance_service.py'
       - 'backend/app/services/household_invitation_delivery_service.py'
       - 'backend/app/services/household_invitation_service.py'
@@ -29,6 +30,7 @@ on:
       - 'backend/app/testing/postgresql_acceptance_foundation.py'
       - 'backend/app/testing/postgresql_onboarding_selftest_fixture.py'
       - 'backend/tests/onboarding_household_membership_api_selftest.py'
+      - 'backend/tests/multi_household_lifecycle_selftest.py'
   workflow_dispatch:
 
 permissions:
@@ -101,7 +103,9 @@ jobs:
             backend/app/api/household_invitation_acceptance_routes.py \
             backend/app/api/household_invitation_routes.py \
             backend/app/api/server_session_routes.py \
-            backend/app/api/session_household_routes.py
+            backend/app/api/session_household_routes.py \
+            backend/app/services/multi_household_lifecycle_service.py \
+            backend/tests/multi_household_lifecycle_selftest.py
 
       - name: Validate onboarding and household membership through real PostgreSQL API
         shell: bash
@@ -120,6 +124,17 @@ jobs:
           grep -F 'PASS accepted_token_replay_cannot_duplicate_membership' onboarding-household-membership-api.log
           grep -F 'ONBOARDING_HOUSEHOLD_MEMBERSHIP_API_POSTGRESQL_GREEN' onboarding-household-membership-api.log
 
+      - name: Validate additional household create/delete lifecycle on PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/tests/multi_household_lifecycle_selftest.py | tee multi-household-lifecycle.log
+          grep -F 'PASS additional_household_created_as_admin_with_fresh_onboarding' multi-household-lifecycle.log
+          grep -F 'PASS household_with_other_member_cannot_be_deleted' multi-household-lifecycle.log
+          grep -F 'PASS sole_admin_can_delete_nonactive_household_without_losing_account_or_other_household' multi-household-lifecycle.log
+          grep -F 'PASS active_household_must_be_switched_away_before_delete' multi-household-lifecycle.log
+          grep -F 'MULTI_HOUSEHOLD_LIFECYCLE_POSTGRESQL_GREEN' multi-household-lifecycle.log
+
       - name: Upload F3-02 evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,5 +143,6 @@ jobs:
           path: |
             onboarding-membership-shared-postgresql-foundation.log
             onboarding-household-membership-api.log
+            multi-household-lifecycle.log
           if-no-files-found: error
           retention-days: 7
