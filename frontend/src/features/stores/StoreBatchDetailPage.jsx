@@ -2073,7 +2073,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             }}
                           />
                           {canManageLocations && !isViewer && entry.processingStatus !== 'processed' ? (
-                            <button type="button" className="rz-mobile-unpack-add-location" data-testid={`mobile-unpack-add-location-${line.id}`} onClick={() => openLocationManagement(line.id, 'handling')}>+ Locatie / sublocatie toevoegen</button>
+                            <button
+                              type="button"
+                              className="rz-mobile-unpack-add-location"
+                              data-testid={`mobile-unpack-add-location-${line.id}`}
+                              onClick={() => openLocationPicker(line.id, 'handling')}
+                            >
+                              + Nieuwe locatie / sublocatie
+                            </button>
                           ) : null}
                           </div>
                         ) : (
