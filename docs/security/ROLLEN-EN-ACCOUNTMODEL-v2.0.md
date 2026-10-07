@@ -93,6 +93,7 @@ Superuser is een speciaal functioneel platformaccount.
 - Ontvangt en beantwoordt Frontteammeldingen.
 - Stuurt meldingen en peilingen naar Frontteamleden.
 - Kan Frontteamlidmaatschap bij bestaande reguliere gebruikers toekennen en intrekken; dit is een aanvullende platformrol en wijzigt hun eigen huishouden of huishoudrol niet.
+- Kan platformbrede functionele presentatie-instellingen beheren, waaronder de tijdelijke vaste mobiele actiebalk; dit wijzigt geen gebruikersrechten of backend-autorisatie.
 - Beheert de centrale catalogus en universele artikelen.
 - Kan universele artikelen toevoegen of corrigeren en waar nodig gecontroleerd
   koppelingen herstellen.

@@ -289,3 +289,21 @@
 .rz-mobile-action-bar-icon .rz-payment-card-icon{
   color:var(--color-mobile-ui-primary);
 }
+
+
+.rz-mobile-action-settings-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-mobile-ui-primary) 14%, #ffffff);
+  color: var(--color-mobile-ui-primary);
+}
+
+.rz-mobile-action-settings-icon svg {
+  width: 34px;
+  height: 34px;
+  stroke: currentColor;
+  stroke-width: 1.9;
+}
