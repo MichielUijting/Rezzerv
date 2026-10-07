@@ -1956,6 +1956,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
 
   const allVisibleSelected = renderedLineUiStates.length > 0 && renderedLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
+  const mobileSelectableLineIds = isMobileViewport
+    ? lineUiStates.filter((entry) => entry.processingStatus !== 'processed').map((entry) => entry.line.id)
+    : []
+  const allMobileLinesSelected = mobileSelectableLineIds.length > 0 && mobileSelectableLineIds.every((id) => selectedLineIds.includes(id))
+
+  function toggleSelectAllMobileLines() {
+    if (!isMobileViewport || mobileSelectableLineIds.length === 0) return
+    const selectableSet = new Set(mobileSelectableLineIds)
+    setSelectedLineIds((current) => {
+      const retained = current.filter((id) => !selectableSet.has(id))
+      return allMobileLinesSelected ? retained : [...retained, ...mobileSelectableLineIds]
+    })
+  }
 
   const tabContent = {
     Bonregels: (
@@ -1963,21 +1976,39 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-detail-page">
           {!isReceiptLineDetail ? (<>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
-            <div style={{ display: 'grid', gap: '4px' }}>
-                            <div style={{ color: 'var(--color-ui-primary)' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
-              <div style={{ color: 'var(--color-ui-primary)' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
-            </div>
+            {isMobileViewport ? (
+              <div className="rz-mobile-unpack-receipt-title" data-testid="mobile-unpack-receipt-title">
+                {batch?.store_label || batch?.store_name || providerLabel(activeProvider)} · {batch?.purchase_date || 'Onbekende datum'}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '4px' }}>
+                <div style={{ color: 'var(--color-ui-primary)' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+                <div style={{ color: 'var(--color-ui-primary)' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               {!isMobileViewport ? <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button> : null}
-              <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">Locatie toepassen</Button>
+              <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">{isMobileViewport ? 'Pas standaardlocatie toe' : 'Locatie toepassen'}</Button>
               <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch || isViewer} data-testid="receipt-process-button">Naar voorraad</Button>
             </div>
           </div>
 
-          <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · {isMobileViewport ? 'Al naar voorraad' : 'Verwerkt'}: {summaryCounts.processed}</div>
+          {!isMobileViewport ? (
+            <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
+          ) : null}
 
           {isMobileViewport ? (
-            <section className="rz-mobile-unpack-search-filter" aria-label="Bonregels zoeken en filteren" data-testid="mobile-unpack-search-filter">
+            <>
+              <label className="rz-mobile-unpack-select-all-lines" data-testid="mobile-unpack-select-all-lines">
+                <input
+                  type="checkbox"
+                  checked={allMobileLinesSelected}
+                  onChange={toggleSelectAllMobileLines}
+                  aria-label="Selecteer alle artikelregels"
+                />
+                <span>Alle artikelen</span>
+              </label>
+              <section className="rz-mobile-unpack-search-filter" aria-label="Bonregels zoeken en filteren" data-testid="mobile-unpack-search-filter">
               <input
                 className="rz-input"
                 type="search"
@@ -1987,7 +2018,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 aria-label="Zoek of filter bonregels"
                 data-testid="mobile-unpack-search-filter-input"
               />
-            </section>
+              </section>
+            </>
           ) : null}
 
           <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths), '--rz-sticky-header-offset': '36px' }}>
@@ -2022,7 +2054,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 ) : renderedLineUiStates.map((entry) => {
                   const { line } = entry
                   const selected = entry.isSelected
-                  const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : ''].filter(Boolean).join(' ')
+                  const mobileReadinessClass = !isMobileViewport
+                    ? ''
+                    : entry.processingStatus === 'processed'
+                      ? 'rz-mobile-unpack-row--processed'
+                      : entry.statusKey === 'ready'
+                        ? 'rz-mobile-unpack-row--ready'
+                        : 'rz-mobile-unpack-row--action-needed'
+                  const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : '', mobileReadinessClass].filter(Boolean).join(' ')
                   return (
                     <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onClickCapture={isMobileViewport && entry.processingStatus === 'processed' ? () => showUitpakkenFeedback('info', 'Artikel al naar voorraad overgezet.', { key: `already-in-stock-${line.id}` }) : undefined} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
                       <td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} /></td>

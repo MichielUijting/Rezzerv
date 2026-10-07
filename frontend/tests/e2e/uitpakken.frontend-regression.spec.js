@@ -205,7 +205,7 @@ test.describe('Uitpakken frontend-regressie', () => {
             store_label: 'Lidl',
             purchase_date: '2026-07-17',
             inbox_status: 'Gecontroleerd',
-            summary: { total: 1 },
+            summary: { total: 2 },
           }],
         }),
       });
@@ -537,6 +537,7 @@ test.describe('Uitpakken frontend-regressie', () => {
 
     const batchId = 'mobile-inline-location-create';
     const lineId = 'mobile-inline-location-line';
+    const readyLineId = 'mobile-ready-line';
     const spaces = [{ id: 'space-keuken', naam: 'Keuken', active: true }];
     const targetLocationWrites = [];
 
@@ -634,6 +635,18 @@ test.describe('Uitpakken frontend-regressie', () => {
             processing_status: 'pending',
             review_decision: 'selected',
             match_status: 'matched',
+          }, {
+            id: readyLineId,
+            article_name_raw: 'PASTA',
+            quantity_raw: 1,
+            unit_raw: 'stuk',
+            matched_household_article_id: 'article-mosterd',
+            suggested_household_article_id: 'article-mosterd',
+            resolved_household_article_name: 'Pasta',
+            target_location_id: 'space-keuken',
+            processing_status: 'pending',
+            review_decision: 'selected',
+            match_status: 'matched',
           }],
         });
       }
@@ -668,6 +681,19 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect(page.getByTestId('mobile-unpack-mapping-filter')).toHaveCount(0);
     await expect(page.getByTestId('mobile-unpack-location-filter')).toHaveCount(0);
     await expect(page.getByTestId('receipt-export-button')).toHaveCount(0);
+    await expect(page.getByTestId('mobile-unpack-receipt-title')).toHaveText('Lidl · 2026-10-07');
+    await expect(page.getByText(/Status:.*Vereenvoudigingsniveau:/)).toHaveCount(0);
+    await expect(page.getByText(/^Totaal:/)).toHaveCount(0);
+    await expect(page.getByTestId('receipt-bulk-location-button')).toHaveText('Pas standaardlocatie toe');
+
+    const selectAll = page.getByTestId('mobile-unpack-select-all-lines').getByRole('checkbox');
+    await expect(selectAll).toBeVisible();
+    await selectAll.check();
+    await expect(page.getByTestId(`receipt-line-select-${lineId}`)).toBeChecked();
+    await expect(page.getByTestId(`receipt-line-select-${readyLineId}`)).toBeChecked();
+
+    await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveClass(/rz-mobile-unpack-row--action-needed/);
+    await expect(page.getByTestId(`receipt-line-${readyLineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
 
     const combinedFilter = page.getByTestId('mobile-unpack-search-filter-input');
     await combinedFilter.fill('actie nodig');

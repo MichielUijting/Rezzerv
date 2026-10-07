@@ -269,3 +269,35 @@
 /* Mobile Uitpakken uses the same compact single-search pattern as mobile Kassa details. */
 .rz-mobile-unpack-search-filter { display:grid; width:100%; }
 .rz-mobile-unpack-search-filter .rz-input { width:100%; min-height:44px; background:#fff; }
+
+
+/* Mobiel Uitpakken: rustige titel, alles-selectie en visuele gereedheidsstatus. */
+.rz-mobile-unpack-receipt-title {
+  color: var(--color-ui-primary);
+  font-size: var(--font-size-ui-title);
+  font-weight: 600;
+  line-height: 1.25;
+}
+.rz-mobile-unpack-select-all-lines {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.rz-mobile-unpack-select-all-lines input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-ui-primary);
+}
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr.rz-mobile-unpack-row--ready {
+  background: #EEF7F0;
+}
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr.rz-mobile-unpack-row--action-needed {
+  background: #FFF1DC;
+}
+.rz-mobile-unpack-detail-page .rz-store-workbench-table tbody tr.rz-mobile-unpack-row--processed {
+  background: #fff;
+}

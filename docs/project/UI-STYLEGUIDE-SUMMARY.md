@@ -1003,6 +1003,11 @@ Op alle mobiele lijst- en instellingenschermen met een detailroute wordt de voll
 - In het mobiele kassabondetail heeft iedere bonregel een zichtbare actie **Details**. Die opent dezelfde bestaande bonartikeldetailfunctie als desktop, inclusief barcode/GTIN-controle, barcodecamera, universeel artikel en koppelen.
 - Een huishoud-Beheerder gebruikt op mobiel dezelfde locatiepicker als desktop en kan daarin inline **+ Nieuwe locatie** en **+ Nieuwe sublocatie** gebruiken; de nieuw aangemaakte keuze wordt via de bestaande flow direct op de bonregel toegepast.
 - De actie **Exporteren** wordt in het mobiele Uitpakken-Kassabondetail niet getoond; desktop blijft ongewijzigd.
+- De kassabonkop toont mobiel alleen **Winkel · aankoopdatum** als duidelijke donkergroene bloktitel; technische status-, regelaantal- en vereenvoudigingstoelichting wordt daar niet getoond.
+- Boven de bonregels staat één checkbox **Alle artikelen** waarmee alle nog niet verwerkte artikelregels van de kassabon in één keer worden geselecteerd, ook wanneer ze over meerdere mobiele pagina's zijn verdeeld.
+- De mobiele bulkactie voor locatie heet **Pas standaardlocatie toe**.
+- De mobiele samenvattingsregel **Totaal / Klaar / Actie nodig / Al naar voorraad** wordt niet getoond.
+- Bonregels die klaar zijn om naar Voorraad te gaan hebben een lichtgroene achtergrond; open bonregels die nog niet klaar zijn hebben een lichtoranje achtergrond; reeds verwerkte regels blijven neutraal en alleen-lezen.
 - Autorisaties blijven leidend: een Viewer kan details bekijken maar geen locatie, artikelgroep, barcodekoppeling of voorraadverwerking wijzigen; locatie-aanmaak blijft uitsluitend beschikbaar voor de huishoud-Beheerder; reeds verwerkte regels zijn in detail alleen-lezen.
 
 
