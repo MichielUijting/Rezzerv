@@ -21,6 +21,7 @@ export default function Header({ title }) {
   const location = useLocation();
   const [authContext, setAuthContext] = useState(() => readStoredAuthContext());
   const [households, setHouseholds] = useState([]);
+  const [canSwitchHouseholds, setCanSwitchHouseholds] = useState(false);
   const [switching, setSwitching] = useState(false);
 
   const email = String(authContext?.email || authContext?.user_id || "").trim();
@@ -41,6 +42,7 @@ export default function Header({ title }) {
     async function loadHouseholds() {
       if (!email || authContext?.context_type !== "regular") {
         setHouseholds([]);
+        setCanSwitchHouseholds(false);
         return;
       }
       try {
@@ -50,10 +52,25 @@ export default function Header({ title }) {
           headers: { Accept: "application/json" },
           cache: "no-store",
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (!cancelled) {
+            setHouseholds([]);
+            setCanSwitchHouseholds(false);
+          }
+          return;
+        }
         const data = await response.json().catch(() => ({}));
-        if (!cancelled) setHouseholds(Array.isArray(data?.items) ? data.items : []);
-      } catch {}
+        if (!cancelled) {
+          const items = Array.isArray(data?.items) ? data.items : [];
+          setHouseholds(items);
+          setCanSwitchHouseholds(data?.can_switch_households === true && items.length > 1);
+        }
+      } catch {
+        if (!cancelled) {
+          setHouseholds([]);
+          setCanSwitchHouseholds(false);
+        }
+      }
     }
     loadHouseholds();
     return () => { cancelled = true; };
@@ -87,7 +104,7 @@ export default function Header({ title }) {
           {showHouseholdLine && (
             <div className="rz-header-subtitle">Huishouden: {household}</div>
           )}
-          {households.length > 1 && (
+          {canSwitchHouseholds && (
             <label className="rz-header-subtitle" style={{ display: "block", marginTop: 4 }}>
               <span className="sr-only">Wissel huishouden</span>
               <select
