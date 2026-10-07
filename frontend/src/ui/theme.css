@@ -231,3 +231,11 @@ select {
   font-size: var(--font-size-ui-body);
   font-weight: 400;
 }
+
+
+/* PO rule 2026-10-07: Exporteren is desktop-only throughout Inhuis. */
+@media (max-width: 720px) {
+  button[data-mobile-export-action="true"] {
+    display: none !important;
+  }
+}
