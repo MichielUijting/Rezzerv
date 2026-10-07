@@ -205,7 +205,7 @@ test.describe('Uitpakken frontend-regressie', () => {
             store_label: 'Lidl',
             purchase_date: '2026-07-17',
             inbox_status: 'Gecontroleerd',
-            summary: { total: 1 },
+            summary: { total: 2 },
           }],
         }),
       });
@@ -529,6 +529,193 @@ test.describe('Uitpakken frontend-regressie', () => {
     ).toBe(false);
 
     await expectNoConsoleErrors(consoleErrors);
+  });
+
+
+  test('Mobiele Beheerder kan vanuit Uitpakken inline een nieuwe locatie toevoegen', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const batchId = 'mobile-inline-location-create';
+    const lineId = 'mobile-inline-location-line';
+    const readyLineId = 'mobile-ready-line';
+    const spaces = [{ id: 'space-keuken', naam: 'Keuken', active: true }];
+    const targetLocationWrites = [];
+
+    await page.route('**/api/**', async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const path = url.pathname;
+      const method = request.method();
+      const json = (body, status = 200) => route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+
+      const adminPermissions = {
+        'admin.access': true,
+        'locations.manage': true,
+        'article.create': true,
+        'receipts.process': true,
+      };
+
+      if (path === '/api/session' && method === 'GET') {
+        return json({
+          user_id: 'mobile-admin',
+          email: 'mobile-admin@rezzerv.test',
+          active_household_id: '1',
+          active_household_name: 'Mobiel huishouden',
+          context_type: 'regular',
+          role: 'admin',
+          display_role: 'Beheerder',
+          membership_count: 1,
+          can_switch_households: false,
+          memberships: [{ household_id: '1', role: 'admin' }],
+          permissions: adminPermissions,
+          is_viewer: false,
+          can_process_receipts: true,
+          is_platform_superuser: false,
+        });
+      }
+
+      if (path === '/api/household' && method === 'GET') {
+        return json({
+          id: '1',
+          active_household_id: '1',
+          display_role: 'Beheerder',
+          role: 'admin',
+          is_viewer: false,
+          permissions: adminPermissions,
+          location_tracking_level: 'global',
+          store_import_simplification_level: 'gebalanceerd',
+        });
+      }
+
+      if (path === '/api/store-providers' && method === 'GET') return json([{ code: 'lidl', name: 'Lidl' }]);
+      if (path === '/api/store-review-articles' && method === 'GET') return json([{ id: 'article-mosterd', name: 'Mosterd', label: 'Mosterd' }]);
+      if (path === '/api/spaces' && method === 'GET') return json({ items: spaces });
+      if (path === '/api/sublocations' && method === 'GET') return json({ items: [] });
+
+      if (path === '/api/spaces' && method === 'POST') {
+        const body = request.postDataJSON();
+        spaces.push({ id: 'space-garage', naam: body.naam, active: true });
+        return json({ ok: true });
+      }
+
+      if (path === '/api/unpack-start-batches' && method === 'GET') {
+        return json({
+          items: [{
+            batch_id: batchId,
+            store_provider_code: 'lidl',
+            store_label: 'Lidl',
+            purchase_date: '2026-10-07',
+            inbox_status: 'Gecontroleerd',
+            summary: { total: 1 },
+          }],
+        });
+      }
+
+      if (path === `/api/purchase-import-batches/${batchId}` && method === 'GET') {
+        return json({
+          batch_id: batchId,
+          store_provider_code: 'lidl',
+          store_label: 'Lidl',
+          purchase_date: '2026-10-07',
+          import_status: 'review',
+          household_id: '1',
+          lines: [{
+            id: lineId,
+            article_name_raw: 'MOSTERD',
+            quantity_raw: 1,
+            unit_raw: 'stuk',
+            matched_household_article_id: 'article-mosterd',
+            suggested_household_article_id: 'article-mosterd',
+            resolved_household_article_name: 'Mosterd',
+            target_location_id: '',
+            processing_status: 'pending',
+            review_decision: 'selected',
+            match_status: 'matched',
+          }, {
+            id: readyLineId,
+            article_name_raw: 'PASTA',
+            quantity_raw: 1,
+            unit_raw: 'stuk',
+            matched_household_article_id: 'article-mosterd',
+            suggested_household_article_id: 'article-mosterd',
+            resolved_household_article_name: 'Pasta',
+            target_location_id: 'space-keuken',
+            processing_status: 'pending',
+            review_decision: 'selected',
+            match_status: 'matched',
+          }],
+        });
+      }
+
+      if (path === `/api/purchase-import-lines/${lineId}/target-location` && method === 'POST') {
+        const body = request.postDataJSON();
+        targetLocationWrites.push(body);
+        return json({ ok: true, target_location_id: body.target_location_id });
+      }
+
+      if (path === '/api/households/1/articles/inventory-handling/batch' && method === 'POST') {
+        return json({ items: [{ id: 'article-mosterd', default_inventory_handling: 'STOCK' }] });
+      }
+      if (path === '/api/households/1/purchase-import-lines/inventory-handling-overrides/batch' && method === 'POST') {
+        return json({ items: [] });
+      }
+      if (path === `/api/households/1/purchase-import-lines/${lineId}/inventory-handling-override` && method === 'PUT') {
+        return json({ inventory_handling_override: request.postDataJSON().inventory_handling_override });
+      }
+
+      if (path === '/api/article-groups' && method === 'GET') return json({ items: [] });
+      if (method === 'GET') return json({ items: [] });
+      return json({ ok: true });
+    });
+
+    await page.goto(`/kassabonnen/batch/${batchId}`);
+
+    await expect(page.getByRole('tab', { name: 'Bonregels', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Diagnose', exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('mobile-unpack-search-filter-input')).toBeVisible();
+    await expect(page.getByTestId('mobile-unpack-status-filter')).toHaveCount(0);
+    await expect(page.getByTestId('mobile-unpack-mapping-filter')).toHaveCount(0);
+    await expect(page.getByTestId('mobile-unpack-location-filter')).toHaveCount(0);
+    await expect(page.getByTestId('receipt-export-button')).toHaveCount(0);
+    await expect(page.getByTestId('mobile-unpack-receipt-title')).toHaveText('Lidl · 2026-10-07');
+    await expect(page.getByText(/Status:.*Vereenvoudigingsniveau:/)).toHaveCount(0);
+    await expect(page.getByText(/^Totaal:/)).toHaveCount(0);
+    await expect(page.getByTestId('receipt-bulk-location-button')).toHaveText('Pas standaardlocatie toe');
+
+    const selectAll = page.getByTestId('mobile-unpack-select-all-lines').getByRole('checkbox');
+    await expect(selectAll).toBeVisible();
+    await selectAll.check();
+    await expect(page.getByTestId(`receipt-line-select-${lineId}`)).toBeChecked();
+    await expect(page.getByTestId(`receipt-line-select-${readyLineId}`)).toBeChecked();
+
+    await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveClass(/rz-mobile-unpack-row--action-needed/);
+    await expect(page.getByTestId(`receipt-line-${readyLineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
+
+    const combinedFilter = page.getByTestId('mobile-unpack-search-filter-input');
+    await combinedFilter.fill('actie nodig');
+    await expect(page.getByTestId(`receipt-line-${lineId}`)).toBeVisible();
+    await combinedFilter.fill('');
+
+    const inlineCreate = page.getByTestId(`mobile-unpack-add-location-${lineId}`);
+    await expect(inlineCreate).toBeVisible();
+    await expect(inlineCreate).toContainText('Nieuwe locatie / sublocatie');
+
+    await inlineCreate.click();
+
+    await expect(page.getByRole('dialog', { name: 'Locatie / sublocatie kiezen' })).toBeVisible();
+    await expect(page.getByTestId('receipt-location-create-space')).toBeVisible();
+    await expect(page.getByTestId('receipt-location-create-sublocation')).toBeVisible();
+
+    await page.getByTestId('receipt-location-create-space').click();
+    await page.getByTestId('receipt-location-create-name').fill('Garage');
+    await page.getByTestId('receipt-location-create-save').click();
+
+    await expect.poll(() => spaces.map((space) => space.naam)).toContain('Garage');
+    await expect.poll(() => targetLocationWrites.map((write) => write.target_location_id)).toContain('space-garage');
   });
 
 });

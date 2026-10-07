@@ -1811,14 +1811,34 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         if (activeSummaryFilter === 'new_mapping' && entry.mappingState !== 'new') return false
         if (activeSummaryFilter !== 'new_mapping' && entry.statusKey !== activeSummaryFilter) return false
       }
-      if (statusFilter !== 'all' && entry.statusKey !== statusFilter) return false
-      if (mappingFilter !== 'all' && entry.mappingState !== mappingFilter) return false
-      if (locationFilter === 'filled' && !entry.hasValidLocation) return false
-      if (locationFilter === 'missing' && entry.hasValidLocation) return false
-      if (searchNeedle && !entry.searchText.includes(searchNeedle)) return false
+
+      if (!isMobileViewport) {
+        if (statusFilter !== 'all' && entry.statusKey !== statusFilter) return false
+        if (mappingFilter !== 'all' && entry.mappingState !== mappingFilter) return false
+        if (locationFilter === 'filled' && !entry.hasValidLocation) return false
+        if (locationFilter === 'missing' && entry.hasValidLocation) return false
+      }
+
+      if (searchNeedle) {
+        const locationLabel = locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''
+        const articleGroupLabel = articleGroupOptions.find((group) => String(group.id) === String(entry.draft.articleGroupId || ''))?.name || ''
+        const mappingLabel = entry.mappingState === 'known'
+          ? 'bekende mapping'
+          : entry.mappingState === 'new'
+            ? 'nieuwe mapping'
+            : 'onbekende mapping'
+        const processingLabel = entry.processingStatus === 'processed' ? 'al naar voorraad verwerkt' : ''
+        const searchableText = isMobileViewport
+          ? [entry.searchText, entry.statusLabel, entry.statusReason, mappingLabel, locationLabel, articleGroupLabel, processingLabel]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+          : entry.searchText
+        if (!searchableText.includes(searchNeedle)) return false
+      }
       return true
     })
-  }, [lineUiStates, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, searchValue])
+  }, [lineUiStates, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, searchValue, isMobileViewport, locationOptions, articleGroupOptions])
   const selectedLineStates = useMemo(() => {
     const selectedSet = new Set(selectedLineIds)
     return lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
@@ -1936,6 +1956,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
 
   const allVisibleSelected = renderedLineUiStates.length > 0 && renderedLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
+  const mobileSelectableLineIds = isMobileViewport
+    ? lineUiStates.filter((entry) => entry.processingStatus !== 'processed').map((entry) => entry.line.id)
+    : []
+  const allMobileLinesSelected = mobileSelectableLineIds.length > 0 && mobileSelectableLineIds.every((id) => selectedLineIds.includes(id))
+
+  function toggleSelectAllMobileLines() {
+    if (!isMobileViewport || mobileSelectableLineIds.length === 0) return
+    const selectableSet = new Set(mobileSelectableLineIds)
+    setSelectedLineIds((current) => {
+      const retained = current.filter((id) => !selectableSet.has(id))
+      return allMobileLinesSelected ? retained : [...retained, ...mobileSelectableLineIds]
+    })
+  }
 
   const tabContent = {
     Bonregels: (
@@ -1943,52 +1976,50 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-detail-page">
           {!isReceiptLineDetail ? (<>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
-            <div style={{ display: 'grid', gap: '4px' }}>
-                            <div style={{ color: 'var(--color-ui-primary)' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
-              <div style={{ color: 'var(--color-ui-primary)' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
-            </div>
+            {isMobileViewport ? (
+              <div className="rz-mobile-unpack-receipt-title" data-testid="mobile-unpack-receipt-title">
+                {batch?.store_label || batch?.store_name || providerLabel(activeProvider)} · {batch?.purchase_date || 'Onbekende datum'}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '4px' }}>
+                <div style={{ color: 'var(--color-ui-primary)' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+                <div style={{ color: 'var(--color-ui-primary)' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
-              <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">Locatie toepassen</Button>
+              {!isMobileViewport ? <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button> : null}
+              <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">{isMobileViewport ? 'Pas standaardlocatie toe' : 'Locatie toepassen'}</Button>
               <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch || isViewer} data-testid="receipt-process-button">Naar voorraad</Button>
             </div>
           </div>
 
-          <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · {isMobileViewport ? 'Al naar voorraad' : 'Verwerkt'}: {summaryCounts.processed}</div>
+          {!isMobileViewport ? (
+            <div style={{ color: 'var(--color-ui-primary)' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
+          ) : null}
 
           {isMobileViewport ? (
-            <section className="rz-mobile-unpack-line-filters" aria-label="Bonregels filteren" data-testid="mobile-unpack-line-filters">
+            <>
+              <label className="rz-mobile-unpack-select-all-lines" data-testid="mobile-unpack-select-all-lines">
+                <input
+                  type="checkbox"
+                  checked={allMobileLinesSelected}
+                  onChange={toggleSelectAllMobileLines}
+                  aria-label="Selecteer alle artikelregels"
+                />
+                <span>Alle artikelen</span>
+              </label>
+              <section className="rz-mobile-unpack-search-filter" aria-label="Bonregels zoeken en filteren" data-testid="mobile-unpack-search-filter">
               <input
                 className="rz-input"
                 type="search"
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
-                placeholder="Zoek bonartikel"
-                aria-label="Zoek bonartikel"
+                placeholder="Zoek of filter bonregels"
+                aria-label="Zoek of filter bonregels"
+                data-testid="mobile-unpack-search-filter-input"
               />
-              <Select
-                value={statusFilter}
-                options={STATUS_FILTERS.map((filter) => ({ value: filter.key, label: filter.label }))}
-                onChange={setStatusFilter}
-                ariaLabel="Filter op status"
-                dataTestId="mobile-unpack-status-filter"
-              />
-              <Select
-                value={mappingFilter}
-                options={MAPPING_FILTERS.map((filter) => ({ value: filter.key, label: filter.label }))}
-                onChange={setMappingFilter}
-                ariaLabel="Filter op mapping"
-                dataTestId="mobile-unpack-mapping-filter"
-              />
-              <Select
-                value={locationFilter}
-                options={LOCATION_FILTERS.map((filter) => ({ value: filter.key, label: filter.label }))}
-                onChange={setLocationFilter}
-                ariaLabel="Filter op locatie"
-                dataTestId="mobile-unpack-location-filter"
-              />
-              <Button type="button" variant="secondary" onClick={resetFilters} data-testid="mobile-unpack-reset-filters">Filters wissen</Button>
-            </section>
+              </section>
+            </>
           ) : null}
 
           <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths), '--rz-sticky-header-offset': '36px' }}>
@@ -2023,7 +2054,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 ) : renderedLineUiStates.map((entry) => {
                   const { line } = entry
                   const selected = entry.isSelected
-                  const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : ''].filter(Boolean).join(' ')
+                  const mobileReadinessClass = !isMobileViewport
+                    ? ''
+                    : entry.processingStatus === 'processed'
+                      ? 'rz-mobile-unpack-row--processed'
+                      : entry.statusKey === 'ready'
+                        ? 'rz-mobile-unpack-row--ready'
+                        : 'rz-mobile-unpack-row--action-needed'
+                  const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : '', mobileReadinessClass].filter(Boolean).join(' ')
                   return (
                     <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onClickCapture={isMobileViewport && entry.processingStatus === 'processed' ? () => showUitpakkenFeedback('info', 'Artikel al naar voorraad overgezet.', { key: `already-in-stock-${line.id}` }) : undefined} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
                       <td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} /></td>
@@ -2073,7 +2111,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             }}
                           />
                           {canManageLocations && !isViewer && entry.processingStatus !== 'processed' ? (
-                            <button type="button" className="rz-mobile-unpack-add-location" data-testid={`mobile-unpack-add-location-${line.id}`} onClick={() => openLocationManagement(line.id, 'handling')}>+ Locatie / sublocatie toevoegen</button>
+                            <button
+                              type="button"
+                              className="rz-mobile-unpack-add-location"
+                              data-testid={`mobile-unpack-add-location-${line.id}`}
+                              onClick={() => openLocationPicker(line.id, 'handling')}
+                            >
+                              + Nieuwe locatie / sublocatie
+                            </button>
                           ) : null}
                           </div>
                         ) : (
@@ -2667,9 +2712,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       {isLoading ? (
         <div>Bongegevens laden…</div>
       ) : batch ? (
-        <Tabs tabs={['Bonregels', 'Diagnose']}>
-          {(activeTab) => tabContent[activeTab]}
-        </Tabs>
+        isMobileViewport
+          ? tabContent.Bonregels
+          : (
+            <Tabs tabs={['Bonregels', 'Diagnose']}>
+              {(activeTab) => tabContent[activeTab]}
+            </Tabs>
+          )
       ) : (
         <div>Geen kassabon beschikbaar.</div>
       )}
