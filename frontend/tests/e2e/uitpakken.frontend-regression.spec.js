@@ -651,7 +651,7 @@ test.describe('Uitpakken frontend-regressie', () => {
             target_location_id: 'space-keuken',
             selected_article_group_id: 'group-existing',
             processing_status: 'pending',
-            review_decision: 'pending',
+            review_decision: 'ignored',
             match_status: 'matched',
           }],
         });
@@ -706,6 +706,8 @@ test.describe('Uitpakken frontend-regressie', () => {
     // A fully completed receipt line is green without selecting it for processing.
     await expect(page.getByTestId(`receipt-line-select-${readyLineId}`)).not.toBeChecked();
     await expect(page.getByTestId(`receipt-line-${readyLineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
+    // An unchecked, previously ignored row that is now fully complete is green.
+    await expect(page.getByTestId(`receipt-line-status-${readyLineId}`)).toHaveText('ready');
 
     const selectAll = page.getByTestId('mobile-unpack-select-all-lines').getByRole('checkbox');
     await expect(selectAll).toBeVisible();
@@ -747,6 +749,7 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect.poll(() => savedArticleGroupId).toBe('group-frisdrank');
     await expect(page.getByTestId(`receipt-line-article-group-select-${lineId}`)).toContainText('Frisdrank');
     await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
+    await expect(page.getByTestId(`receipt-line-status-${lineId}`)).toHaveText('ready');
   });
 
 });
