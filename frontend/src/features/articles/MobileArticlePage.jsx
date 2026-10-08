@@ -201,20 +201,6 @@ export default function MobileArticlePage() {
     showFeedback({ variant: 'error', message, testId: 'mobile-article-feedback' })
   }
 
-  function warnMissingStockLocation() {
-    showFeedback({
-      variant: 'warning',
-      message: 'Dit artikel heeft nog geen voorraadlocatie. Wijs eerst een locatie en sublocatie toe via Locaties.',
-      testId: 'mobile-article-feedback',
-    })
-  }
-
-  function selectedStockHasNoLocation() {
-    return locationTrackingEnabled && selectedRow
-      && !String(selectedRow.spaceId || '').trim()
-      && !String(selectedRow.sublocationId || '').trim()
-  }
-
   async function refreshInventory() {
     const inventory = await fetchMobileInventoryRows()
     setLiveRows(inventory)
@@ -223,10 +209,6 @@ export default function MobileArticlePage() {
   async function changeInventory(direction) {
     if (!canEditInventory || inventoryBusy || !householdArticleId || !selectedRow?.id) return
     if (direction < 0 && selectedRow.quantity <= 0) return
-    if (selectedStockHasNoLocation()) {
-      warnMissingStockLocation()
-      return
-    }
 
     setInventoryBusy(true)
     try {
@@ -256,10 +238,6 @@ export default function MobileArticlePage() {
     const normalizedQuantity = Number(String(nextQuantity ?? '').replace(',', '.'))
     if (!Number.isFinite(normalizedQuantity) || normalizedQuantity < 0) return
     if (normalizedQuantity === Number(displayedQuantity)) return
-    if (selectedStockHasNoLocation()) {
-      warnMissingStockLocation()
-      return
-    }
 
     setInventoryBusy(true)
     try {
