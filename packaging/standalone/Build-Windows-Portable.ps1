@@ -38,21 +38,30 @@ try {
 New-Item -ItemType Directory -Path $package -Force | Out-Null
 try {
   Copy-Item -LiteralPath $RuntimeSource -Destination (Join-Path $package "runtime") -Recurse
-  Copy-Item -LiteralPath (Join-Path $root "backend") -Destination (Join-Path $package "backend") -Recurse
+  $backendPath = Join-Path $package "backend"
+  New-Item -ItemType Directory -Path $backendPath | Out-Null
+  foreach ($name in @("app","alembic","alembic.ini","receipt_ingestion","sitecustomize.py","VERSION.txt")) {
+    $source = Join-Path (Join-Path $root "backend") $name
+    if (-not (Test-Path -LiteralPath $source)) { throw "Backendonderdeel ontbreekt: $source" }
+    Copy-Item -LiteralPath $source -Destination $backendPath -Recurse
+  }
   Copy-Item -LiteralPath (Join-Path $root "frontend\dist") -Destination (Join-Path $package "www") -Recurse
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot "portable_start.py") -Destination $package
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot "portable_server.py") -Destination $package
+  Copy-Item -LiteralPath (Join-Path $PSScriptRoot "portable_db.py") -Destination $package
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Portable-Start.cmd") -Destination (Join-Path $package "Start InHuis.cmd")
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Portable-Uninstall.cmd") -Destination (Join-Path $package "Uninstall InHuis.cmd")
   $commit = (git -C $root rev-parse HEAD).Trim()
   if ($LASTEXITCODE -ne 0) { throw "Git-commit niet gevonden." }
   Set-Content -LiteralPath (Join-Path $package "VERSION.txt") -Value $commit -Encoding ascii
-  # Python virtualenvs and back-end development directories must not be shipped.
+  # Source code only: no backend .env, private data or local developer secrets.
   foreach ($name in @(".venv", "__pycache__", "tests")) {
     $unwanted = Join-Path (Join-Path $package "backend") $name
     if (Test-Path -LiteralPath $unwanted) { Remove-Item -LiteralPath $unwanted -Recurse -Force }
   }
   New-Item -ItemType Directory -Path (Join-Path $package "data") | Out-Null
+  & $python -c "import sys; from pathlib import Path; p=Path(sys.argv[1]); assert (p / 'backend/app').is_dir(); assert (p / 'www/index.html').is_file(); assert (p / 'portable_db.py').is_file()" $package
+  if ($LASTEXITCODE -ne 0) { throw "Pakketcontrole mislukt." }
   Compress-Archive -Path $package -DestinationPath $zip -CompressionLevel Optimal
   Write-Host "Concept-ZIP gemaakt: $zip"
   Write-Warning "NIET DISTRIBUEREN: vereiste schone Windows-machine test, OCR-/native DLL-controle en uninstall-check."
