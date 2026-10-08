@@ -97,6 +97,9 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
       locatie: normalizeLocationName(entry?.locatie ?? entry?.space_name),
       sublocatie: normalizeSubLocationName(entry?.sublocatie ?? entry?.sublocation_name),
       aantal: formatQuantity(entry?.aantal ?? entry?.quantity),
+      unassigned: !entry?.space_id && !entry?.sublocation_id
+        && !String(entry?.locatie ?? entry?.space_name ?? '').trim()
+        && !String(entry?.sublocatie ?? entry?.sublocation_name ?? '').trim(),
     }))
   }, [locations])
 
@@ -107,6 +110,8 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
   }, [transferForm.targetSpaceId, sublocations])
 
   const selectedRow = useMemo(() => locationRows.find((row) => row.inventoryId === transferForm.inventoryId) || null, [locationRows, transferForm.inventoryId])
+  const isLocationAssignment = Boolean(selectedRow?.unassigned)
+  const transferMaxQuantity = selectedRow ? Number(selectedRow.aantal) || 0 : 0
 
   function resetFeedback() {
     setTransferError('')
@@ -122,7 +127,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
       sourceSublocationId: String(row?.sourceSublocationId || ''),
       targetSpaceId: '',
       targetSublocationId: '',
-      quantity: '',
+      quantity: row?.aantal || '',
       note: '',
     })
   }
@@ -137,6 +142,11 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
       if (field === 'targetSpaceId') {
         return { ...current, targetSpaceId: value, targetSublocationId: '' }
       }
+      if (field === 'quantity') {
+        const maxQuantity = Number(selectedRow?.aantal) || 0
+        const numeric = Number(value)
+        return { ...current, quantity: value === '' ? '' : (Number.isFinite(numeric) && numeric > maxQuantity ? String(maxQuantity) : value) }
+      }
       return { ...current, [field]: value }
     })
   }
@@ -145,6 +155,11 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
     event.preventDefault()
     if (!canMutate || !householdArticleId) return
     resetFeedback()
+    const quantity = Number(transferForm.quantity)
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > transferMaxQuantity) {
+      setTransferError('Kies een aantal groter dan nul en niet hoger dan de beschikbare voorraad.')
+      return
+    }
     setTransferBusy(true)
 
     try {
@@ -156,7 +171,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
         body: JSON.stringify({
           inventory_id: transferForm.inventoryId || undefined,
           article_name: articleName,
-          quantity: Number(transferForm.quantity),
+          quantity,
           note: String(transferForm.note || '').trim() || undefined,
           from_space_id: transferForm.sourceSpaceId || undefined,
           from_sublocation_id: transferForm.sourceSublocationId || undefined,
@@ -169,7 +184,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
         throw new Error(data?.detail || 'Voorraadverplaatsing kon niet worden opgeslagen.')
       }
       await onInventoryChanged()
-      setTransferSuccess('Voorraad is verplaatst. Locaties, Voorraad en Historie zijn ververst.')
+      setTransferSuccess(isLocationAssignment ? 'Locatie toegewezen. Voorraad en Historie zijn ververst.' : 'Voorraad is verplaatst. Locaties, Voorraad en Historie zijn ververst.')
       setTransferForm(buildTransferForm())
     } catch (error) {
       setTransferError(error?.message || 'Voorraadverplaatsing kon niet worden opgeslagen.')
@@ -194,10 +209,10 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
         <div className="rz-stock-actions-header">
           <div>
             <h3 className="rz-locations-group-title rz-article-detail-section-title">Alle locaties</h3>
-            <div className="rz-stock-actions-help">{canMutate ? 'Gebruik Verplaatsen om voorraad van de ene sublocatie naar een andere sublocatie te verplaatsen.' : 'Je kunt de voorraadlocaties inzien. Alleen een beheerder kan voorraad verplaatsen.'}</div>
+            <div className="rz-stock-actions-help">{canMutate ? 'Gebruik Locatie toewijzen voor voorraad zonder locatie; anders kun je voorraad verplaatsen.' : 'Je kunt de voorraadlocaties inzien. Alleen een beheerder kan voorraad verplaatsen.'}</div>
           </div>
           <div className="rz-stock-action-buttons" data-testid="article-location-actions">
-            <Button type="button" variant="secondary" disabled={!canMutate || !householdArticleId || !locationRows.length} onClick={() => openTransferForm(locationRows[0])} data-testid="article-location-action-transfer">Verplaatsen</Button>
+            <Button type="button" variant="secondary" disabled={!canMutate || !householdArticleId || !locationRows.length} onClick={() => openTransferForm(locationRows[0])} data-testid="article-location-action-transfer">{locationRows[0]?.unassigned ? 'Locatie toewijzen' : 'Verplaatsen'}</Button>
           </div>
         </div>
         <div className="rz-locations-group-body rz-article-detail-section-body">
@@ -208,7 +223,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
 
           {canMutate && transferForm.inventoryId ? (
             <form className="rz-stock-mutation-form" onSubmit={handleTransferSubmit} data-testid="article-location-transfer-form">
-              <div className="rz-stock-mutation-title">Actie: Verplaatsen</div>
+              <div className="rz-stock-mutation-title">Actie: {isLocationAssignment ? 'Locatie toewijzen' : 'Verplaatsen'}</div>
               {selectedRow ? <div className="rz-stock-selected-row-summary" data-testid="article-location-selected-row">Geselecteerd: {selectedRow.locatie} / {selectedRow.sublocatie} — huidige voorraad {selectedRow.aantal}</div> : null}
               <label className="rz-input-field">
                 <div className="rz-label">Doelruimte</div>
@@ -228,7 +243,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
                   ))}
                 </select>
               </label>
-              <Input label="Aantal" type="number" min="0" value={transferForm.quantity} onChange={(formEvent) => handleFormChange('quantity', formEvent.target.value)} disabled={transferBusy} />
+              <Input label="Aantal" type="number" min="0" max={String(transferMaxQuantity)} value={transferForm.quantity} onChange={(formEvent) => handleFormChange('quantity', formEvent.target.value)} disabled={transferBusy} />
               <Input label="Notitie (optioneel)" type="text" value={transferForm.note} onChange={(formEvent) => handleFormChange('note', formEvent.target.value)} disabled={transferBusy} />
               <div className="rz-stock-mutation-actions">
                 <Button type="button" variant="secondary" onClick={closeTransferForm} disabled={transferBusy}>Annuleren</Button>
