@@ -8249,7 +8249,7 @@ def create_inventory_event(
     price: float | None = None,
     currency: str | None = None,
     barcode: str | None = None,
-): 
+):
     safe_location = require_resolved_location(resolved_location)
     household_article_id = resolve_or_create_inventory_household_article(
         conn,
