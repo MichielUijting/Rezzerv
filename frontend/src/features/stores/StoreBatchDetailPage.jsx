@@ -1699,7 +1699,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         statusKey = 'ignored'
         statusLabel = 'Genegeerd'
         statusReason = 'Door gebruiker overgeslagen.'
-      } else if (reviewDecision === 'selected' || isSelected) {
+      } else if (reviewDecision === 'selected' || isSelected || isProcessable) {
+        // A fully completed receipt line is visually ready even if it has not
+        // been checked for batch processing. Checking the box remains explicit.
         if (saveState.dirty) {
           statusKey = 'action_needed'
           statusLabel = 'Actie nodig'
