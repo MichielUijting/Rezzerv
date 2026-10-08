@@ -1045,6 +1045,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       }
       setLocationCreateMode('')
       const locationLinked = await applyPickedLocation(String(created.id), nextOptions)
+      if (locationLinked === 'pending') {
+        showUitpakkenFeedback('info', `Locatie ${name} aangemaakt. Kies nog hoe deze aan het artikel wordt gekoppeld.`)
+        return
+      }
       if (!locationLinked) {
         throw new Error('De nieuwe locatie is aangemaakt maar niet aan de bonregel gekoppeld.')
       }
@@ -1103,7 +1107,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         locationId: nextLocationId,
       })
       closeLocationPicker()
-      return false
+      return 'pending'
     }
 
     const saved = await persistLineDraft(
