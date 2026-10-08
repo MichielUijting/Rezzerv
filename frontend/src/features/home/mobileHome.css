@@ -8,9 +8,6 @@
 .rz-mobile-home-inner{width:min(100%,640px);margin:0 auto;display:grid;gap:16px}
 .rz-mobile-home-welcome{margin:4px 0 0;font-size:var(--font-size-ui-title);line-height:1.35;display:flex;align-items:baseline;gap:5px;flex-wrap:wrap}
 .rz-mobile-home-subtitle{margin:-8px 0 2px;font-size:var(--font-size-ui-body);color:var(--color-text-primary)}
-.rz-inhuis-wordmark{display:inline-flex;align-items:baseline;white-space:nowrap;font-size:var(--font-size-ui-title);line-height:1}
-.rz-inhuis-wordmark-in{font-family:'Segoe Script','Brush Script MT',cursive;font-weight:900;font-style:italic;color:rgb(40 169 158);display:inline-block;font-size:var(--font-size-ui-title);transform:scale(1.08) skew(-4deg) rotate(-1deg);transform-origin:left bottom;margin-right:6px}
-.rz-inhuis-wordmark-huis{font-family:Arial,sans-serif;font-weight:800;color:var(--color-mobile-ui-primary)}
 
 .rz-dashboard-status{
   display:grid;
