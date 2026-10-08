@@ -109,6 +109,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
     return sublocations.filter((entry) => String(entry?.space_id || '') === String(transferForm.targetSpaceId))
   }, [transferForm.targetSpaceId, sublocations])
 
+  const defaultTransferRow = locationRows.find((row) => row.unassigned && Number(row.aantal) > 0) || locationRows[0]
   const selectedRow = useMemo(() => locationRows.find((row) => row.inventoryId === transferForm.inventoryId) || null, [locationRows, transferForm.inventoryId])
   const isLocationAssignment = Boolean(selectedRow?.unassigned)
   const transferMaxQuantity = selectedRow ? Number(selectedRow.aantal) || 0 : 0
@@ -212,7 +213,7 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
             <div className="rz-stock-actions-help">{canMutate ? 'Gebruik Locatie toewijzen voor voorraad zonder locatie; anders kun je voorraad verplaatsen.' : 'Je kunt de voorraadlocaties inzien. Alleen een beheerder kan voorraad verplaatsen.'}</div>
           </div>
           <div className="rz-stock-action-buttons" data-testid="article-location-actions">
-            <Button type="button" variant="secondary" disabled={!canMutate || !householdArticleId || !locationRows.length} onClick={() => openTransferForm(locationRows[0])} data-testid="article-location-action-transfer">{locationRows[0]?.unassigned ? 'Locatie toewijzen' : 'Verplaatsen'}</Button>
+            <Button type="button" variant="secondary" disabled={!canMutate || !householdArticleId || !locationRows.length} onClick={() => openTransferForm(defaultTransferRow)} data-testid="article-location-action-transfer">{defaultTransferRow?.unassigned ? 'Locatie toewijzen' : 'Verplaatsen'}</Button>
           </div>
         </div>
         <div className="rz-locations-group-body rz-article-detail-section-body">
