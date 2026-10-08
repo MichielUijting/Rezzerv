@@ -2,6 +2,7 @@
 
 Status: **canonieke UI-bron** voor gebruikerszichtbare vormgeving en interactiepatronen in Inhuis.  
 Laatst inhoudelijk vastgesteld door de PO: 25 september 2026.
+Aanvullend PO-besluit over de uniforme mobiele header en compacte Voorraad: 8 oktober 2026.
 
 Deze styleguide is de actuele leesbare UI-bron voor nieuwe schermen en wijzigingen aan bestaande schermen. Historische styleguidedocumenten blijven audittrail, maar nieuwe UI-beslissingen worden hier geconsolideerd. Bij een conflict met een oudere UI-notitie geldt deze canonieke styleguide, tenzij de PO expliciet een nieuwere afwijking heeft vastgesteld.
 
@@ -25,6 +26,22 @@ De keuze tussen desktop-/tabelpresentatie en een beschikbare mobiele presentatie
 - tabletgedrag volgt dezelfde viewportregel; oriëntatie, split-screen of browserweergave kan daardoor de effectieve variant veranderen;
 - locatieconfiguratie bepaalt alleen welke locatiegegevens, filters en sorteringen binnen een scherm beschikbaar zijn, niet de keuze van de schermvariant;
 - toekomstige responsive schermwrappers gebruiken dezelfde centrale `MOBILE_APP_MEDIA_QUERY`/viewport-hook en introduceren geen eigen rol- of permissiegate voor presentatiekeuze.
+
+## Gedeelde mobiele header en compacte voorraad — 8 oktober 2026
+
+Voor alle **aangemelde Inhuis-schermen** op mobiele viewports (maximaal 720px) geldt één uniforme, sticky applicatieheader:
+
+- De header wordt centraal gerenderd door `MobileAppChrome` via `MobileModuleHeader` en staat boven de scherminhoud, met `position: sticky; top: 0`. De Terug-knop blijft **in de header** zichtbaar tijdens scrollen, links uitgelijnd. De paginatitel staat ernaast en het Inhuis-logo staat rechts.
+- De bestaande `BrandLogo` is de enige herbruikbare logobron voor de header; schermen onderhouden geen eigen mobiele woordmerken of afzonderlijke zwevende Terug-knoppen.
+- In de mobiele app-shell zijn oude schermheaders niet afzonderlijk zichtbaar; op desktop blijven de bestaande headers en gebruikerscontext onveranderd.
+- Dit contract geldt voor alle door de aangemelde router beschermde schermen, waaronder dashboard, Voorraad, Boodschappen, Uitpakken, Catalogus, Instellingen, onboarding, detailpagina's en platformfuncties. Publieke toegangsschermen (login, registratie en wachtwoordherstel) behouden hun eigen toegangspresentatie.
+- De gedeelde Terug-knop bewaart bestaande uitzonderingen: vanaf Dashboard vraagt de knop bevestiging voor verlaten/uitloggen en in Kassa krijgt de actuele Kassa-flow eerst de gelegenheid interne navigatie af te handelen.
+
+Voor de **mobiele Voorraadlijst** geldt daarnaast:
+
+- Per artikel worden de classificatieregels `Brick` en `Productfamilie` niet getoond, zodat meer artikelen op het scherm passen. De GS1/GPC-gegevens blijven in het datamodel en bij zoeken beschikbaar.
+- De pagineringscomponent heeft een normale tussenruimte van 12px boven de bediening en zit niet direct tegen de lijst.
+- Bij gewone plus/min-/exacte voorraadwijzigingen verandert de zichtbare hoeveelheid direct, zonder succesmelding; bij een opslagfout herstelt de vorige hoeveelheid en verschijnt wel een foutmelding. Een geslaagde mutatie vereist geen volledige herlaadactie van de lijst.
 
 ## Mobiele Instellingenbaseline vanaf 27 september 2026
 

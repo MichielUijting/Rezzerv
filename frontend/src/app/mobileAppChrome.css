@@ -3,80 +3,55 @@
   position: relative;
 }
 
-.rz-mobile-app-chrome > .rz-mobile-back-control {
-  display: inline-flex;
-  position: fixed;
-  top: calc(7px + env(safe-area-inset-top));
-  left: 8px;
-  z-index: 100;
+/* One sticky app header on every protected mobile route. The global
+   navigation and branding are never positioned independently of the bar. */
+.rz-mobile-app-chrome > .rz-mobile-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 110;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: calc(58px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 14px 0 8px;
+}
+
+.rz-mobile-app-header .rz-mobile-module-header-leading {
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rz-mobile-app-header .rz-mobile-module-header-leading h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rz-mobile-app-header .rz-mobile-module-header-brand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.rz-mobile-app-header .rz-brandlogo-header {
+  display: block;
+  width: auto;
+  height: 44px;
+  max-width: 92px;
+  object-fit: contain;
+}
+
+/* Retain legacy module markup for its test hooks, but do not render an
+   independent second page header or its duplicated wordmark. */
+.rz-mobile-app-chrome .rz-mobile-module-header:not(.rz-mobile-app-header),
+.rz-mobile-app-chrome .rz-header {
+  display: none;
 }
 
 .rz-mobile-app-bottom-space {
   display: block;
   height: calc(84px + env(safe-area-inset-bottom));
   pointer-events: none;
-}
-
-/* Settings uses the same single sticky application header as other mobile
-   screens: Back left, page title beside it and the Inhuis mark on the right. */
-.rz-mobile-app-chrome:has(.rz-settings-shell) > .rz-mobile-back-control {
-  position: fixed !important;
-  top: calc(12px + env(safe-area-inset-top)) !important;
-  left: 10px !important;
-  z-index: 101 !important;
-}
-
-.rz-mobile-app-chrome:has(.rz-settings-shell) .rz-header {
-  position: sticky;
-  top: 0;
-  z-index: 90;
-  min-height: 64px;
-  padding-left: 76px;
-}
-
-.rz-mobile-app-chrome:has(.rz-settings-shell) .rz-header-titleblock {
-  justify-content: center;
-}
-
-.rz-mobile-app-chrome:has(.rz-header) .rz-header,
-.rz-mobile-app-chrome:has(.rz-mobile-module-header) .rz-mobile-module-header {
-  padding-left: 76px;
-}
-
-.rz-mobile-app-chrome:not(:has(.rz-header, .rz-mobile-module-header, .rz-mobile-superuser-header)) {
-  padding-top: calc(58px + env(safe-area-inset-top));
-}
-
-.rz-mobile-superuser-header {
-  position: sticky;
-  top: 0;
-  z-index: 110;
-  min-height: calc(58px + env(safe-area-inset-top));
-  padding: env(safe-area-inset-top) 14px 0 8px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  background: var(--color-mobile-ui-primary);
-  border-bottom: 1px solid rgba(26, 26, 26, 0.18);
-}
-
-.rz-mobile-superuser-header > .rz-mobile-back-control {
-  position: static;
-  align-self: center;
-}
-
-.rz-mobile-superuser-header > strong {
-  min-width: 0;
-  color: var(--color-ui-primary-text);
-  font-size: var(--font-size-ui-title);
-  font-weight: 700;
-}
-
-.rz-mobile-superuser-header-mark {
-  color: var(--color-ui-primary-text);
-  font-size: var(--font-size-ui-body);
-  font-weight: 700;
 }
 
 .rz-mobile-more-overlay{position:fixed;inset:0;z-index:140;display:flex;align-items:flex-end;justify-content:center;padding:16px 12px calc(var(--size-app-bar-mobile) + 18px + env(safe-area-inset-bottom));background:rgba(0,0,0,.28)}

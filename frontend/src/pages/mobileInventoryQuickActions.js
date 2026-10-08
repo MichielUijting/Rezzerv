@@ -63,3 +63,19 @@ export function buildExactInventoryMutation(row, nextQuantity) {
     note: 'Exact aantal aangepast via mobiele Voorraad.',
   }
 }
+
+
+// Update only the affected inventory identity; preserve all unrelated list metadata.
+// The server's row_new_quantity can reconcile the same identity without a full reload.
+export function applyInventoryRowQuantity(rows, groupId, inventoryId, nextQuantity) {
+  const quantity = Number(nextQuantity)
+  if (!Number.isFinite(quantity) || quantity < 0) return rows
+  return rows.flatMap((row) => {
+    if (row.id !== groupId) return [row]
+    const entries = (row.inventoryEntries || []).map((entry) => (
+      entry.inventoryId === inventoryId ? { ...entry, quantity } : entry
+    )).filter((entry) => entry.quantity > 0)
+    const total = entries.reduce((sum, entry) => sum + entry.quantity, 0)
+    return total > 0 ? [{ ...row, inventoryEntries: entries, quantity: total }] : []
+  })
+}

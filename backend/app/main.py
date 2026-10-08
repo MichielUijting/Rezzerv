@@ -17505,7 +17505,7 @@ def set_purchase_import_line_article_group(
                 """
                 UPDATE purchase_import_lines
                 SET selected_article_group_id = :article_group_id,
-                    review_decision = CASE WHEN :article_group_id IS NULL THEN 'pending' ELSE review_decision END,
+                    review_decision = CASE WHEN CAST(:article_group_id AS TEXT) IS NULL THEN 'pending' ELSE review_decision END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :line_id
                 """

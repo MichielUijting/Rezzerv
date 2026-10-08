@@ -71,13 +71,12 @@ assert.match(mobileHomeSource, /rz-dashboard-grid/)
 assert.match(mobileHomeSource, /rz-dashboard-shared-legend/)
 assert.match(mobileHomeSource, /aria-label="Productfamilies"/)
 assert.match(mobileHomeSource, /openBarDrilldown/)
-assert.match(mobileHomeSource, /rz-inhuis-wordmark-in/)
+assert.doesNotMatch(mobileHomeSource, /function InHuisWordmark\(/)
 assert.match(mobileHomeSource, /function EmptyDashboardChart\(\)/)
 assert.match(mobileHomeSource, /const visibleCards = dashboard \? orderedCards : loadingCards/)
 assert.match(mobileHomeSource, /aria-disabled=\{!dashboard\}/)
 assert.match(desktopHomeSource, /if \(!actionAvailability\.ready && !isMobileViewport\)/)
-assert.match(mobileHomeCss, /color:\s*rgb\(40 169 158\)/i)
-assert.match(mobileHomeCss, /Segoe Script/)
+assert.doesNotMatch(mobileHomeCss, /rz-inhuis-wordmark/)
 assert.match(mobileHomeCss, /url\('\/inhuis-green-wallpaper\.svg'\)/)
 
 assert.match(mobileInventorySource, /data-testid="mobile-inventory-page"/)
@@ -98,9 +97,59 @@ assert.match(
   mobileComponentsCss,
   /\.rz-mobile-module-header\s*\{[\s\S]*background:\s*var\(--color-mobile-ui-primary\);/,
 )
-assert.match(mobileModuleHeaderSource, /rz-mobile-module-header-wordmark/)
-assert.match(mobileComponentsCss, /\.rz-mobile-module-header-wordmark-huis\s*\{[\s\S]*color:\s*#fff;/i)
-assert.match(mobileComponentsCss, /\.rz-mobile-module-header-wordmark-in\s*\{[\s\S]*color:\s*rgb\(40 169 158\);/i)
+assert.match(mobileModuleHeaderSource, /import BrandLogo from '\.\/BrandLogo\.jsx'/)
+assert.match(mobileModuleHeaderSource, /<BrandLogo variant="header" \/>/)
+assert.match(mobileAppChromeSource, /<MobileModuleHeader[\s\S]*className="rz-mobile-app-header"[\s\S]*showBack/)
+assert.match(mobileAppChromeSource, /mobileRouteTitle\(location\.pathname\)/)
+
+// Settings, every nested settings screen, and onboarding must use the same
+// app-shell header above their content; no detached or per-screen back control.
+const settingsPageSource = readFileSync(new URL('../src/features/settings/SettingsPage.jsx', import.meta.url), 'utf8')
+const onboardingPageSource = readFileSync(new URL('../src/features/onboarding/OnboardingPage.jsx', import.meta.url), 'utf8')
+assert.match(routerSource, /path: '\/onboarding', element: <Protected><OnboardingRoute \/><\/Protected>/)
+assert.match(routerSource, /path: '\/instellingen', element: <ProtectedSettingsRoute><SettingsPage \/><\/ProtectedSettingsRoute>/)
+assert.match(mobileAppChromeSource, /\['\/instellingen\/', 'Instellingen'\]/)
+assert.match(mobileAppChromeSource, /\['\/instellingen', 'Instellingen'\]/)
+assert.match(mobileAppChromeSource, /\['\/onboarding', 'Welkom bij Inhuis'\]/)
+assert.match(settingsPageSource, /<AppShell title="Instellingen"/)
+assert.match(onboardingPageSource, /<Header title=/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome \.rz-mobile-module-header:not\(\.rz-mobile-app-header\),[\s\S]*\.rz-mobile-app-chrome \.rz-header\s*\{[\s\S]*display:\s*none;/)
+
+// Audit every declared application page, not only specific modules.
+// Public authentication/reset entry screens have their own entry-flow UI;
+// all authenticated application pages must be wrapped by MobileAppChrome.
+const routeDeclarations = routerSource.split('\n').filter((line) => /\{ path: '\/[^']+'/.test(line))
+const publicRoutes = new Set([
+  '/login', '/registreren', '/wachtwoord-vergeten', '/wachtwoord-herstellen',
+  '/uitnodiging/:token', '/reset-session',
+])
+const protectedRouteDeclarations = routeDeclarations.filter((line) => {
+  const path = line.match(/path: '([^']+)'/)?.[1]
+  return path && !publicRoutes.has(path) && path !== '/'
+})
+assert.ok(protectedRouteDeclarations.length > 35, 'Audit must cover the complete authenticated router')
+for (const declaration of protectedRouteDeclarations) {
+  assert.match(
+    declaration,
+    /element: <Protected(?:Permission|SettingsRoute|Frontteam|Superuser)?(?:\s|>)/,
+    `Mobile header missing on route: ${declaration}`,
+  )
+}
+assert.match(routerSource, /const platformRoutes = PLATFORM_NAVIGATION_ITEMS\.map/)
+assert.match(routerSource, /\.\.\.platformRoutes/)
+assert.match(routerSource, /<MobileAppChrome>\{children\}<\/MobileAppChrome>/)
+assert.match(routerSource, /<MobileAppChrome>[\s\S]*<SettingsGuard/)
+assert.match(routerSource, /<MobileAppChrome>[\s\S]*<SuperuserGuard/)
+// Neither a regular mobile screen nor the Superuser route may render a second
+// global header or a detached fixed-position back button.
+assert.doesNotMatch(mobileAppChromeSource, /rz-mobile-superuser-header-mark|<MobileBackControl/)
+assert.doesNotMatch(mobileAppChromeCss, /rz-mobile-superuser-header\s*\{/)
+assert.doesNotMatch(mobileAppChromeCss, /\.rz-mobile-app-chrome\s*>\s*\.rz-mobile-back-control/)
+
+
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome \.rz-mobile-module-header:not\(\.rz-mobile-app-header\)/)
 assert.match(
   mobileInventoryCss,
   /\.rz-mobile-inventory-list\s*\{[\s\S]*background:\s*#ffffff;/i,
@@ -145,7 +194,8 @@ for (const responsiveSource of [inventoryResponsiveSource, almostOutResponsiveSo
   assert.doesNotMatch(responsiveSource, /isMobileInventoryEligibleContext|isPlatformSuperuser|isHouseholdAdmin|display_role|context_type\s*===\s*['"]system['"]/)
 }
 assert.match(mobileAppChromeSource, /MobileRecentActionsBar/)
-assert.match(mobileAppChromeSource, /<MobileBackControl[^>]*testId="mobile-global-back"[^>]*onBack=\{location\.pathname === '\/home' \? handleHomeBack : location\.pathname === '\/kassa' \|\| location\.pathname === '\/kassa\/nieuw' \? handleKassaBack : null\}[^>]*\/>/)
+assert.match(mobileAppChromeSource, /backTestId="mobile-global-back"/)
+assert.match(mobileModuleHeaderSource, /<MobileBackControl testId=\{backTestId\} onBack=\{onBack\} \/>/)
 assert.match(mobileAppChromeSource, /function handleKassaBack\(\)/)
 assert.match(mobileAppChromeSource, /new Event\('inhuis:mobile-kassa-back', \{ cancelable: true \}\)/)
 assert.match(mobileAppChromeSource, /title: 'Inhuis verlaten'/)
@@ -186,15 +236,10 @@ assert.match(
   mobileComponentsCss,
   /\.rz-mobile-back-control\s*\{[\s\S]*min-height:\s*44px;[\s\S]*background:\s*var\(--color-mobile-ui-primary\);/,
 )
-assert.match(
-  mobileAppChromeCss,
-  /\.rz-mobile-app-chrome > \.rz-mobile-back-control\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*position:\s*fixed;[\s\S]*left:\s*8px;/,
-)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-header \.rz-brandlogo-header/)
 assert.match(mobileAppChromeCss, /\.rz-mobile-app-bottom-space\s*\{[\s\S]*display:\s*block;/)
-assert.match(
-  mobileAppChromeCss,
-  /\.rz-mobile-app-chrome:not\(:has\(\.rz-header, \.rz-mobile-module-header, \.rz-mobile-superuser-header\)\)\s*\{[\s\S]*padding-top:\s*calc\(58px \+ env\(safe-area-inset-top\)\);/,
-)
+assert.doesNotMatch(mobileAppChromeCss, /position:\s*fixed;[\s\S]*\.rz-mobile-back-control/)
+
 
 assert.match(mobileArticleSource, /<MobileModuleHeader title="Artikel in Voorraad" testId="mobile-article-header" \/>/)
 assert.doesNotMatch(mobileArticleSource, /mobile-article-back-to-inventory|navigate\('\/voorraad'\)/)
@@ -220,7 +265,7 @@ console.log('MOBILE_UI_CONFORMITY_GREEN')
 
 assert.match(mobileAppChromeSource, /inhuis:mobile-home-back/)
 assert.match(mobileComponentsCss, /min-width:\s*56px/)
-assert.match(mobileAppChromeCss, /left:\s*8px/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
 
 // Meldingen blijft als dashboardstatus doorklikbaar en als actie beschikbaar in de globale onderbalk.
 assert.match(mobileHomeSource, /openStatus\('meldingen'\)/)

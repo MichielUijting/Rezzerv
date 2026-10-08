@@ -540,6 +540,9 @@ test.describe('Uitpakken frontend-regressie', () => {
     const readyLineId = 'mobile-ready-line';
     const spaces = [{ id: 'space-keuken', naam: 'Keuken', active: true }];
     const targetLocationWrites = [];
+    let savedLocationId = '';
+    let savedArticleGroupId = '';
+    const articleGroups = [{ id: 'group-existing', name: 'Voorraadgroep', status: 'active', household_id: '1' }];
 
     await page.route('**/api/**', async (route) => {
       const request = route.request();
@@ -556,6 +559,7 @@ test.describe('Uitpakken frontend-regressie', () => {
         'admin.access': true,
         'locations.manage': true,
         'article.create': true,
+        'article_group.create': true,
         'receipts.process': true,
       };
 
@@ -631,7 +635,8 @@ test.describe('Uitpakken frontend-regressie', () => {
             matched_household_article_id: 'article-mosterd',
             suggested_household_article_id: 'article-mosterd',
             resolved_household_article_name: 'Mosterd',
-            target_location_id: '',
+            target_location_id: savedLocationId,
+            selected_article_group_id: savedArticleGroupId,
             processing_status: 'pending',
             review_decision: 'selected',
             match_status: 'matched',
@@ -644,8 +649,9 @@ test.describe('Uitpakken frontend-regressie', () => {
             suggested_household_article_id: 'article-mosterd',
             resolved_household_article_name: 'Pasta',
             target_location_id: 'space-keuken',
+            selected_article_group_id: 'group-existing',
             processing_status: 'pending',
-            review_decision: 'selected',
+            review_decision: 'ignored',
             match_status: 'matched',
           }],
         });
@@ -654,6 +660,7 @@ test.describe('Uitpakken frontend-regressie', () => {
       if (path === `/api/purchase-import-lines/${lineId}/target-location` && method === 'POST') {
         const body = request.postDataJSON();
         targetLocationWrites.push(body);
+        savedLocationId = String(body.target_location_id || '');
         return json({ ok: true, target_location_id: body.target_location_id });
       }
 
@@ -667,7 +674,17 @@ test.describe('Uitpakken frontend-regressie', () => {
         return json({ inventory_handling_override: request.postDataJSON().inventory_handling_override });
       }
 
-      if (path === '/api/article-groups' && method === 'GET') return json({ items: [] });
+      if (path === '/api/article-groups' && method === 'GET') return json({ items: articleGroups });
+      if (path === '/api/article-groups' && method === 'POST') {
+        const name = String(request.postDataJSON().name || '');
+        const group = { id: 'group-frisdrank', name, status: 'active', household_id: '1' };
+        articleGroups.push(group);
+        return json({ ok: true, item: group });
+      }
+      if (path === `/api/purchase-import-lines/${lineId}/article-group` && method === 'POST') {
+        savedArticleGroupId = String(request.postDataJSON().article_group_id || '');
+        return json({ ok: true, selected_article_group_id: savedArticleGroupId });
+      }
       if (method === 'GET') return json({ items: [] });
       return json({ ok: true });
     });
@@ -685,6 +702,12 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect(page.getByText(/Status:.*Vereenvoudigingsniveau:/)).toHaveCount(0);
     await expect(page.getByText(/^Totaal:/)).toHaveCount(0);
     await expect(page.getByTestId('receipt-bulk-location-button')).toHaveText('Pas standaardlocatie toe');
+
+    // A fully completed receipt line is green without selecting it for processing.
+    await expect(page.getByTestId(`receipt-line-select-${readyLineId}`)).not.toBeChecked();
+    await expect(page.getByTestId(`receipt-line-${readyLineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
+    // An unchecked, previously ignored row that is now fully complete is green.
+    await expect(page.getByTestId(`receipt-line-status-${readyLineId}`)).toHaveText('ready');
 
     const selectAll = page.getByTestId('mobile-unpack-select-all-lines').getByRole('checkbox');
     await expect(selectAll).toBeVisible();
@@ -716,6 +739,22 @@ test.describe('Uitpakken frontend-regressie', () => {
 
     await expect.poll(() => spaces.map((space) => space.naam)).toContain('Garage');
     await expect.poll(() => targetLocationWrites.map((write) => write.target_location_id)).toContain('space-garage');
+    await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toContainText('Garage');
+
+    await page.getByTestId(`receipt-line-article-group-select-${lineId}`).click();
+    const groupPopover = page.getByTestId(`receipt-line-article-group-select-${lineId}-popover`);
+    await groupPopover.getByRole('searchbox').fill('Frisdrank');
+    await expect(groupPopover.getByRole('option', { name: 'Voorraadgroep' })).toHaveCount(0);
+    await expect(groupPopover.getByRole('option', { name: 'Artikelgroep toevoegen', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Nieuwe artikelgroep' })).toHaveCount(0);
+    await groupPopover.getByRole('option', { name: 'Artikelgroep toevoegen', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Nieuwe artikelgroep' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Nieuwe artikelgroep' }).getByRole('textbox')).toHaveValue('Frisdrank');
+    await page.getByRole('button', { name: 'Opslaan en koppelen' }).click();
+    await expect.poll(() => savedArticleGroupId).toBe('group-frisdrank');
+    await expect(page.getByTestId(`receipt-line-article-group-select-${lineId}`)).toContainText('Frisdrank');
+    await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
+    await expect(page.getByTestId(`receipt-line-status-${lineId}`)).toHaveText('ready');
   });
 
 });

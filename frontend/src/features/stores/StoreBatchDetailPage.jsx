@@ -1044,7 +1044,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         }
       }
       setLocationCreateMode('')
-      await applyPickedLocation(String(created.id), nextOptions)
+      const locationLinked = await applyPickedLocation(String(created.id), nextOptions)
+      if (locationLinked === 'pending') {
+        showUitpakkenFeedback('info', `Locatie ${name} aangemaakt. Kies nog hoe deze aan het artikel wordt gekoppeld.`)
+        return
+      }
+      if (!locationLinked) {
+        throw new Error('De nieuwe locatie is aangemaakt maar niet aan de bonregel gekoppeld.')
+      }
       showUitpakkenFeedback('success', `${mode === 'space' ? 'Locatie' : 'Sublocatie'} ${name} is toegevoegd en geselecteerd.`, { key: `uitpakken-location-created-${mode}-${created.id}` })
     } catch (createError) {
       const message = normalizeErrorMessage(createError?.message || createError)
@@ -1069,7 +1076,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
       for (const entry of targetEntries) {
         const saved = await persistLineDraft(entry.line, { locationId: nextLocationId }, { suppressSuccessFeedback: true })
-        if (!saved) return
+        if (!saved) return false
       }
 
       setStatus(nextLocationId
@@ -1077,19 +1084,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         : `Locatie verwijderd bij ${targetEntries.length} geselecteerde regel(s).`
       )
       closeLocationPicker()
-      return
+      return true
     }
 
     const pickerEntry = lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
     if (!pickerEntry) {
       closeLocationPicker()
-      return
+      return false
     }
 
     if (locationPickerSaveMode === 'handling') {
       const saved = await handleLocationChoice(pickerEntry, nextLocationId, locationOptionsOverride || locationOptions)
       if (saved) closeLocationPicker()
-      return
+      return saved
     }
 
     const hasArticle = Boolean(String(pickerEntry.draft?.articleId || pickerEntry.line?.matched_household_article_id || '').trim())
@@ -1100,7 +1107,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         locationId: nextLocationId,
       })
       closeLocationPicker()
-      return
+      return 'pending'
     }
 
     const saved = await persistLineDraft(
@@ -1109,6 +1116,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       { defaultLocationPolicy: 'line_only' }
     )
     if (saved) closeLocationPicker()
+    return saved
   }
 
   async function confirmDefaultLocationChoice(defaultLocationPolicy) {
@@ -1202,6 +1210,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         })
       }
       const refreshedBatch = await refreshBatch(batch.batch_id)
+      const persistedLine = refreshedBatch?.lines?.find((candidate) => String(candidate.id) === String(line.id))
+      if (!persistedLine) {
+        throw new Error('De bijgewerkte bonregel kon niet opnieuw worden geladen.')
+      }
+      if (articleGroupChanged && String(persistedLine.selected_article_group_id || '') !== nextArticleGroupId) {
+        throw new Error('De artikelgroep is niet aan de bonregel gekoppeld. Probeer opnieuw.')
+      }
+      if (locationChanged && String(persistedLine.target_location_id || '') !== nextLocationId) {
+        throw new Error('De locatie is niet bij de bonregel opgeslagen. Probeer opnieuw.')
+      }
+      if (articleChanged && String(persistedLine.matched_household_article_id || '') !== nextArticleId) {
+        throw new Error('Het artikel is niet aan de bonregel gekoppeld. Probeer opnieuw.')
+      }
       await refreshLocationOptions()
       setLineSaveState((current) => ({
         ...current,
@@ -1276,10 +1297,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
   }
 
-  function openCreateArticleGroup(lineId) {
+  function openCreateArticleGroup(lineId, suggestedName = '') {
     if (!canCreateArticleGroup) return
     setNewArticleGroupLineId(String(lineId || ''))
-    setNewArticleGroupName('')
+    setNewArticleGroupName(String(suggestedName || '').trim())
     setError('')
     setStatus('')
   }
@@ -1331,7 +1352,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       )
       setArticleGroupOptions(nextGroups)
 
-      await persistLineDraft(targetLine, { articleGroupId: createdId }, { suppressSuccessFeedback: true })
+      const linked = await persistLineDraft(targetLine, { articleGroupId: createdId }, {
+        suppressSuccessFeedback: true,
+        throwOnError: true,
+      })
+      if (!linked) throw new Error('De nieuwe artikelgroep kon niet aan de bonregel worden gekoppeld.')
       setNewArticleGroupLineId('')
       setNewArticleGroupName('')
       showUitpakkenFeedback(
@@ -1658,6 +1683,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         isProcessable,
       } = selectionState
 
+      // Display readiness needs the user's chosen group as well as the processing fields.
+      // It must not depend on the persisted review_decision or a checkbox.
+      const isVisuallyComplete = isProcessable && hasArticleGroup && !saveState.dirty
+
       let statusKey = 'new'
       let statusLabel = 'Nieuw'
       let statusReason = 'Regel wacht nog op beoordeling.'
@@ -1670,6 +1699,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         statusKey = 'action_needed'
         statusLabel = 'Actie nodig'
         statusReason = line.processing_error || 'Vorige verwerking mislukte; controleer deze regel.'
+      } else if (isVisuallyComplete) {
+        statusKey = 'ready'
+        statusLabel = 'Klaar'
+        statusReason = 'Locatie en artikelgroep zijn ingevuld; regel is klaar voor verwerking.'
       } else if (reviewDecision === 'ignored' && !isSelected) {
         statusKey = 'ignored'
         statusLabel = 'Genegeerd'
@@ -2060,7 +2093,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       ? 'rz-mobile-unpack-row--processed'
                       : entry.statusKey === 'ready'
                         ? 'rz-mobile-unpack-row--ready'
-                        : 'rz-mobile-unpack-row--action-needed'
+                        : entry.statusKey === 'action_needed'
+                          ? 'rz-mobile-unpack-row--action-needed'
+                          : 'rz-mobile-unpack-row--new'
                   const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : '', mobileReadinessClass].filter(Boolean).join(' ')
                   return (
                     <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onClickCapture={isMobileViewport && entry.processingStatus === 'processed' ? () => showUitpakkenFeedback('info', 'Artikel al naar voorraad overgezet.', { key: `already-in-stock-${line.id}` }) : undefined} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
@@ -2096,7 +2131,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                             value={entry.draft.locationId || ''}
                             options={[
                               { value: '', label: 'Kies locatie' },
-                              ...locationOptions.filter((location) => location.type === 'sublocation').map((location) => ({ value: String(location.id), label: location.label })),
+                              ...locationOptions.filter((location) => location.type === 'sublocation' || !location.has_sublocations).map((location) => ({ value: String(location.id), label: location.label })),
                               { value: '__choose_location__', label: 'Locatie kiezen of toevoegen...' },
                             ]}
                             disabled={isViewer || entry.processingStatus === 'processed'}
@@ -2143,14 +2178,15 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   options={[
                     { value: '', label: 'Niet ingedeeld' },
                     ...articleGroupOptions.map((group) => ({ value: String(group.id), label: group.name })),
-                    ...(canCreateArticleGroup ? [{ value: '__add_article_group__', label: 'Artikelgroep toevoegen...' }] : []),
+                    ...(canCreateArticleGroup ? [{ value: '__add_article_group__', label: 'Artikelgroep toevoegen' }] : []),
                   ]}
+                  persistentOptionValues={canCreateArticleGroup ? ['__add_article_group__'] : []}
                   disabled={isViewer || entry.processingStatus === 'processed'}
                   ariaLabel={`Artikelgroep voor ${line.article_name_raw}`}
                   dataTestId={`receipt-line-article-group-select-${line.id}`}
-                  onChange={(nextValue) => {
+                  onChange={(nextValue, searchQuery) => {
                     if (nextValue === '__add_article_group__') {
-                      openCreateArticleGroup(line.id)
+                      openCreateArticleGroup(line.id, searchQuery)
                       return
                     }
                     persistLineDraft(line, { articleGroupId: nextValue })
@@ -2174,7 +2210,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 >
                   <option value="">Niet ingedeeld</option>
                   {articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                  {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}
+                  {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}
                 </select>
               )}
             </td>
@@ -2227,7 +2263,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div><dt>Aantal</dt><dd>{formatQuantity(line.quantity_raw, line.unit_raw)}</dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Locatie / sublocatie</dt><dd><button type="button" className="rz-input rz-store-select" data-testid={`receipt-line-location-select-${line.id}`} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} onClick={() => openLocationPicker(line.id)}>{selectedLocationLabel || 'Kies locatie'}</button></dd></div>
 
-                  <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}</select></dd></div>
+                  <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}</select></dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd><BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} /></dd></div>
                   <div className="rz-receipt-line-detail__wide">
                     <dt>Universeel artikel</dt>

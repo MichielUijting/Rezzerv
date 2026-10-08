@@ -10,6 +10,7 @@ import {
   selectRecentActionTiles,
 } from '../src/features/home/recentActionUsage.js'
 import {
+  applyInventoryRowQuantity,
   buildExactInventoryMutation,
   buildQuickInventoryMutation,
   selectExactInventoryTarget,
@@ -25,6 +26,7 @@ const routerSource = readFileSync(new URL('../src/app/router/AppRouter.jsx', imp
 const selectorSource = readFileSync(new URL('../src/pages/VoorraadResponsive.jsx', import.meta.url), 'utf8')
 const selectorCss = readFileSync(new URL('../src/pages/voorraadResponsive.css', import.meta.url), 'utf8')
 const mobileSource = readFileSync(new URL('../src/pages/MobileVoorraad.jsx', import.meta.url), 'utf8')
+const mobileStockCss = readFileSync(new URL('../src/pages/mobileVoorraad.css', import.meta.url), 'utf8')
 const mobileAppChromeSource = readFileSync(new URL('../src/app/MobileAppChrome.jsx', import.meta.url), 'utf8')
 const homeSource = readFileSync(new URL('../src/features/home/HomePage.jsx', import.meta.url), 'utf8')
 
@@ -77,7 +79,9 @@ assert.match(mobileSource, /imageUrl:\s*String\(item\?\.image_url/)
 assert.match(mobileSource, /imageUrl=\{row\.imageUrl\}/)
 assert.match(mobileSource, /gpcBrickName/)
 assert.doesNotMatch(mobileSource, /GPC-groep:/)
-assert.match(mobileSource, /Productfamilie:/)
+assert.doesNotMatch(mobileSource, /row\.gpcBrickName \? `Brick:/)
+assert.doesNotMatch(mobileSource, /row\.gpcFamilyName \? `Productfamilie:/)
+assert.match(mobileStockCss, /\.rz-mobile-inventory-content > \.rz-mobile-pagination\s*\{\s*margin-top:\s*12px;/)
 assert.match(mobileSource, /Locatie:/)
 assert.match(mobileSource, /Sublocatie:/)
 assert.doesNotMatch(mobileSource, /row\.articleGroup \|\| 'Niet ingedeeld'/)
@@ -164,5 +168,38 @@ assert.equal(buildExactInventoryMutation(exactRow, -1), null)
 assert.match(mobileSource, /useAppFeedback\(\)/)
 assert.match(mobileSource, /showFeedback\(\{[\s\S]*testId: 'mobile-inventory-quick-feedback'/)
 assert.doesNotMatch(mobileSource, /mutationFeedback|setMutationFeedback/)
+
+// Immediate UI updates retain unrelated rows and locations without network fetches.
+const initialRows = [
+  { id: 'household:a', quantity: 5, inventoryEntries: [
+    { inventoryId: 'a-1', quantity: 3 }, { inventoryId: 'a-2', quantity: 2 },
+  ], articleGroup: 'Overig' },
+  { id: 'household:b', quantity: 4, inventoryEntries: [{ inventoryId: 'b-1', quantity: 4 }] },
+]
+const optimistic = applyInventoryRowQuantity(initialRows, 'household:a', 'a-1', 4)
+assert.equal(optimistic[0].quantity, 6)
+assert.equal(optimistic[0].inventoryEntries[0].quantity, 4)
+assert.equal(optimistic[0].articleGroup, 'Overig')
+assert.strictEqual(optimistic[1], initialRows[1])
+assert.equal(initialRows[0].quantity, 5)
+assert.equal(applyInventoryRowQuantity(initialRows, 'household:b', 'b-1', 0).length, 1)
+assert.strictEqual(applyInventoryRowQuantity(initialRows, 'household:a', 'a-1', -1), initialRows)
+assert.match(mobileSource, /setRows\(\(current\) => applyInventoryRowQuantity/)
+assert.match(mobileSource, /setRows\(previousRows\)/)
+// Initial page load and explicit retry must still fetch authoritative inventory.
+// Quick +/- and exact mutations must never trigger that expensive full reload.
+assert.match(mobileSource, /async function reload\(\) \{[\s\S]*setRows\(await loadMobileInventory\(\)\)/)
+const mutationBlock = mobileSource.slice(
+  mobileSource.indexOf('  async function submitInventoryMutation('),
+  mobileSource.indexOf('  async function mutateQuickInventory('),
+)
+assert.ok(mutationBlock.includes('setRows((current) => applyInventoryRowQuantity'))
+assert.doesNotMatch(mutationBlock, /loadMobileInventory\(|\breload\(|setRows\(await /)
+assert.doesNotMatch(mobileSource, /variant: 'success'/)
+
+// A pre-existing locationless row remains editable after Waar Inhuis is enabled.
+assert.doesNotMatch(mobileSource, /requiresStockLocationAssignment|warnAssignLocationFirst/)
+assert.match(mobileSource, /buildQuickInventoryMutation\(row, direction\)/)
+assert.match(mobileSource, /buildExactInventoryMutation\(row, nextQuantity\)/)
 
 console.log('MOBILE_VOORRAAD_CONTRACT_GREEN')

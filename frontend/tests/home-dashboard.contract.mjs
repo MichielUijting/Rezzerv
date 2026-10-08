@@ -146,7 +146,12 @@ assert.match(mobileChrome, /setShowMore\(true\)/)
 assert.doesNotMatch(mobileChrome, /label: 'Meer', route: '\/meer'/)
 assert.match(mobileChrome, /MANDATORY_BOTTOM_NAV_KEY = 'bijna-op'/)
 assert.match(mobileChrome, /const seen = new Set\(\)/)
-assert.match(mobileChrome, /rz-mobile-superuser-header/)
+// The Superuser route uses the same global sticky mobile header as every
+// protected application route; do not require the removed standalone header.
+assert.match(mobileChrome, /const isSuperuserRoute = location\.pathname === '\/superuser'/)
+assert.match(mobileChrome, /<MobileModuleHeader[\s\S]*className="rz-mobile-app-header"[\s\S]*showBack[\s\S]*backTestId="mobile-global-back"/)
+assert.match(mobileChrome, /\['\/superuser', 'Superuser'\]/)
+assert.doesNotMatch(mobileChrome, /rz-mobile-superuser-header-mark|<header className="rz-mobile-superuser-header"/)
 assert.match(mobileChrome, /meldingen: 'info'/)
 assert.match(mobileChrome, /voorraad: 'shelf'/)
 assert.match(mobileChrome, /kassa: 'payment-card'/)
