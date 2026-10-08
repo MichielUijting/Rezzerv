@@ -101,6 +101,21 @@ assert.match(mobileModuleHeaderSource, /import BrandLogo from '\.\/BrandLogo\.js
 assert.match(mobileModuleHeaderSource, /<BrandLogo variant="header" \/>/)
 assert.match(mobileAppChromeSource, /<MobileModuleHeader[\s\S]*className="rz-mobile-app-header"[\s\S]*showBack/)
 assert.match(mobileAppChromeSource, /mobileRouteTitle\(location\.pathname\)/)
+
+// Settings, every nested settings screen, and onboarding must use the same
+// app-shell header above their content; no detached or per-screen back control.
+const settingsPageSource = readFileSync(new URL('../src/features/settings/SettingsPage.jsx', import.meta.url), 'utf8')
+const onboardingPageSource = readFileSync(new URL('../src/features/onboarding/OnboardingPage.jsx', import.meta.url), 'utf8')
+assert.match(routerSource, /path: '\/onboarding', element: <Protected><OnboardingRoute \/><\/Protected>/)
+assert.match(routerSource, /path: '\/instellingen', element: <ProtectedSettingsRoute><SettingsPage \/><\/ProtectedSettingsRoute>/)
+assert.match(mobileAppChromeSource, /\['\/instellingen\/', 'Instellingen'\]/)
+assert.match(mobileAppChromeSource, /\['\/instellingen', 'Instellingen'\]/)
+assert.match(mobileAppChromeSource, /\['\/onboarding', 'Welkom bij Inhuis'\]/)
+assert.match(settingsPageSource, /<AppShell title="Instellingen"/)
+assert.match(onboardingPageSource, /<Header title=/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
+assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome \.rz-mobile-module-header:not\(\.rz-mobile-app-header\),[\s\S]*\.rz-mobile-app-chrome \.rz-header\s*\{[\s\S]*display:\s*none;/)
+
 assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
 assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome \.rz-mobile-module-header:not\(\.rz-mobile-app-header\)/)
 assert.match(
