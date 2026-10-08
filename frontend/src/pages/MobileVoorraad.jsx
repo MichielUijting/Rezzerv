@@ -396,8 +396,6 @@ export default function MobileVoorraad({ locationTrackingEnabled = true }) {
                   title={row.householdName}
                   subtitle=""
                   meta={[
-                    row.gpcBrickName ? `Brick: ${row.gpcBrickName}` : '',
-                    row.gpcFamilyName ? `Productfamilie: ${row.gpcFamilyName}` : '',
                     locationTrackingEnabled && row.location && row.location !== 'Geen locatie' ? `Locatie: ${row.location}` : '',
                     locationTrackingEnabled && row.sublocation ? `Sublocatie: ${row.sublocation}` : '',
                   ].filter(Boolean)}
