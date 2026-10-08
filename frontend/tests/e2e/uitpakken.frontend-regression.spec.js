@@ -542,7 +542,7 @@ test.describe('Uitpakken frontend-regressie', () => {
     const targetLocationWrites = [];
     let savedLocationId = '';
     let savedArticleGroupId = '';
-    const articleGroups = [];
+    const articleGroups = [{ id: 'group-existing', name: 'Voorraadgroep', status: 'active', household_id: '1' }];
 
     await page.route('**/api/**', async (route) => {
       const request = route.request();
@@ -649,8 +649,9 @@ test.describe('Uitpakken frontend-regressie', () => {
             suggested_household_article_id: 'article-mosterd',
             resolved_household_article_name: 'Pasta',
             target_location_id: 'space-keuken',
+            selected_article_group_id: 'group-existing',
             processing_status: 'pending',
-            review_decision: 'selected',
+            review_decision: 'pending',
             match_status: 'matched',
           }],
         });
@@ -702,6 +703,10 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect(page.getByText(/^Totaal:/)).toHaveCount(0);
     await expect(page.getByTestId('receipt-bulk-location-button')).toHaveText('Pas standaardlocatie toe');
 
+    // A fully completed receipt line is green without selecting it for processing.
+    await expect(page.getByTestId(`receipt-line-select-${readyLineId}`)).not.toBeChecked();
+    await expect(page.getByTestId(`receipt-line-${readyLineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
+
     const selectAll = page.getByTestId('mobile-unpack-select-all-lines').getByRole('checkbox');
     await expect(selectAll).toBeVisible();
     await selectAll.check();
@@ -741,6 +746,7 @@ test.describe('Uitpakken frontend-regressie', () => {
     await page.getByRole('button', { name: 'Opslaan en koppelen' }).click();
     await expect.poll(() => savedArticleGroupId).toBe('group-frisdrank');
     await expect(page.getByTestId(`receipt-line-article-group-select-${lineId}`)).toContainText('Frisdrank');
+    await expect(page.getByTestId(`receipt-line-${lineId}`)).toHaveClass(/rz-mobile-unpack-row--ready/);
   });
 
 });
