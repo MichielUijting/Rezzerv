@@ -1683,6 +1683,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         isProcessable,
       } = selectionState
 
+      // Display readiness needs the user's chosen group as well as the processing fields.
+      // It must not depend on the persisted review_decision or a checkbox.
+      const isVisuallyComplete = isProcessable && hasArticleGroup && !saveState.dirty
+
       let statusKey = 'new'
       let statusLabel = 'Nieuw'
       let statusReason = 'Regel wacht nog op beoordeling.'
@@ -1695,13 +1699,15 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         statusKey = 'action_needed'
         statusLabel = 'Actie nodig'
         statusReason = line.processing_error || 'Vorige verwerking mislukte; controleer deze regel.'
+      } else if (isVisuallyComplete) {
+        statusKey = 'ready'
+        statusLabel = 'Klaar'
+        statusReason = 'Locatie en artikelgroep zijn ingevuld; regel is klaar voor verwerking.'
       } else if (reviewDecision === 'ignored' && !isSelected) {
         statusKey = 'ignored'
         statusLabel = 'Genegeerd'
         statusReason = 'Door gebruiker overgeslagen.'
-      } else if (reviewDecision === 'selected' || isSelected || isProcessable) {
-        // A fully completed receipt line is visually ready even if it has not
-        // been checked for batch processing. Checking the box remains explicit.
+      } else if (reviewDecision === 'selected' || isSelected) {
         if (saveState.dirty) {
           statusKey = 'action_needed'
           statusLabel = 'Actie nodig'
@@ -2087,7 +2093,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       ? 'rz-mobile-unpack-row--processed'
                       : entry.statusKey === 'ready'
                         ? 'rz-mobile-unpack-row--ready'
-                        : 'rz-mobile-unpack-row--action-needed'
+                        : entry.statusKey === 'action_needed'
+                          ? 'rz-mobile-unpack-row--action-needed'
+                          : 'rz-mobile-unpack-row--new'
                   const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : '', mobileReadinessClass].filter(Boolean).join(' ')
                   return (
                     <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title={entry.processingStatus === 'processed' ? 'Artikel al naar voorraad overgezet.' : isMobileViewport ? undefined : 'Dubbelklik om bonartikeldetails te openen'} onClickCapture={isMobileViewport && entry.processingStatus === 'processed' ? () => showUitpakkenFeedback('info', 'Artikel al naar voorraad overgezet.', { key: `already-in-stock-${line.id}` }) : undefined} onDoubleClick={isMobileViewport ? undefined : () => openReceiptLineDetail(line.id)}>
