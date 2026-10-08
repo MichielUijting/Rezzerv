@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import BrandLogo from './BrandLogo.jsx'
 import './mobileComponents.css'
 
 export function MobileBackControl({ testId = 'mobile-global-back', onBack = null }) {
@@ -30,18 +31,24 @@ export function MobileBackControl({ testId = 'mobile-global-back', onBack = null
   )
 }
 
-export default function MobileModuleHeader({ title, testId = 'mobile-module-header', showBack = false, onBack = null, backLabel = 'Terug', trailingAction = null }) {
+export default function MobileModuleHeader({
+  title,
+  testId = 'mobile-module-header',
+  showBack = false,
+  onBack = null,
+  backLabel = 'Terug',
+  backTestId = 'mobile-global-back',
+  trailingAction = null,
+  className = '',
+}) {
   return (
-    <header className="rz-mobile-module-header" data-testid={testId}>
+    <header className={`rz-mobile-module-header ${className}`.trim()} data-testid={testId}>
       <div className="rz-mobile-module-header-leading">
-        {showBack ? <button type="button" className="rz-mobile-back-control" onClick={onBack}>{backLabel}</button> : null}
+        {showBack ? <MobileBackControl testId={backTestId} onBack={onBack} /> : null}
         <h1>{title}</h1>
       </div>
       {trailingAction ? <div className="rz-mobile-module-header-trailing">{trailingAction}</div> : (
-        <span className="rz-mobile-module-header-wordmark" aria-label="InHuis">
-          <span className="rz-mobile-module-header-wordmark-in">In</span>
-          <span className="rz-mobile-module-header-wordmark-huis">Huis</span>
-        </span>
+        <div className="rz-mobile-module-header-brand"><BrandLogo variant="header" /></div>
       )}
     </header>
   )
