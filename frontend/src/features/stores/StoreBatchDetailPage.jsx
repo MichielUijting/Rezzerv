@@ -1297,10 +1297,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
   }
 
-  function openCreateArticleGroup(lineId) {
+  function openCreateArticleGroup(lineId, suggestedName = '') {
     if (!canCreateArticleGroup) return
     setNewArticleGroupLineId(String(lineId || ''))
-    setNewArticleGroupName('')
+    setNewArticleGroupName(String(suggestedName || '').trim())
     setError('')
     setStatus('')
   }
@@ -2178,14 +2178,15 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   options={[
                     { value: '', label: 'Niet ingedeeld' },
                     ...articleGroupOptions.map((group) => ({ value: String(group.id), label: group.name })),
-                    ...(canCreateArticleGroup ? [{ value: '__add_article_group__', label: 'Artikelgroep toevoegen...' }] : []),
+                    ...(canCreateArticleGroup ? [{ value: '__add_article_group__', label: 'Artikelgroep toevoegen' }] : []),
                   ]}
+                  persistentOptionValues={canCreateArticleGroup ? ['__add_article_group__'] : []}
                   disabled={isViewer || entry.processingStatus === 'processed'}
                   ariaLabel={`Artikelgroep voor ${line.article_name_raw}`}
                   dataTestId={`receipt-line-article-group-select-${line.id}`}
-                  onChange={(nextValue) => {
+                  onChange={(nextValue, searchQuery) => {
                     if (nextValue === '__add_article_group__') {
-                      openCreateArticleGroup(line.id)
+                      openCreateArticleGroup(line.id, searchQuery)
                       return
                     }
                     persistLineDraft(line, { articleGroupId: nextValue })
@@ -2209,7 +2210,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 >
                   <option value="">Niet ingedeeld</option>
                   {articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                  {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}
+                  {canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}
                 </select>
               )}
             </td>
@@ -2262,7 +2263,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div><dt>Aantal</dt><dd>{formatQuantity(line.quantity_raw, line.unit_raw)}</dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Locatie / sublocatie</dt><dd><button type="button" className="rz-input rz-store-select" data-testid={`receipt-line-location-select-${line.id}`} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} onClick={() => openLocationPicker(line.id)}>{selectedLocationLabel || 'Kies locatie'}</button></dd></div>
 
-                  <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}</select></dd></div>
+                  <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Niet ingedeeld</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen</option> : null}</select></dd></div>
                   <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd><BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy || isViewer || activeDetailEntry.processingStatus === 'processed'} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} /></dd></div>
                   <div className="rz-receipt-line-detail__wide">
                     <dt>Universeel artikel</dt>
