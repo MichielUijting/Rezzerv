@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import MobileRecentActionsBar from '../ui/MobileRecentActionsBar.jsx'
-import { MobileBackControl } from '../ui/MobileModuleHeader.jsx'
+import MobileModuleHeader from '../ui/MobileModuleHeader.jsx'
 import {
   AUTH_CONTEXT_CHANGED_EVENT,
   canCurrentUserPerform,
@@ -37,6 +37,39 @@ const MOBILE_ICON_TYPE_BY_KEY = Object.freeze({
   winkelen: 'cart',
   instellingen: 'settings',
 })
+
+const MOBILE_ROUTE_TITLES = Object.freeze([
+  ['/dashboard', 'Inzichten'],
+  ['/voorraad/incidentele-aankoop', 'Incidentele aankoop'],
+  ['/voorraad/', 'Artikel in Voorraad'],
+  ['/voorraad', 'Voorraad'],
+  ['/kassabonnen/batch/', 'Kassabon'],
+  ['/kassabonnen', 'Uitpakken'],
+  ['/kassa', 'Kassa'],
+  ['/catalogus/', 'Artikel in Catalogus'],
+  ['/catalogus', 'Catalogus'],
+  ['/winkelen', 'Boodschappen'],
+  ['/bijna-op', 'Bijna op'],
+  ['/meldingen', 'Meldingen'],
+  ['/instellingen/locaties', 'Locaties'],
+  ['/instellingen/', 'Instellingen'],
+  ['/instellingen', 'Instellingen'],
+  ['/superuser', 'Superuser'],
+  ['/platform', 'Platformbeheer'],
+  ['/productgroepen', 'Productgroepen'],
+  ['/spaartegoeden', 'Spaartegoeden'],
+  ['/externe-databases', 'Externe databases'],
+  ['/onboarding', 'Instellingen'],
+  ['/home', 'Dashboard'],
+])
+
+function mobileRouteTitle(pathname = '') {
+  const normalized = String(pathname || '')
+  const matched = MOBILE_ROUTE_TITLES.find(([prefix]) => (
+    normalized === prefix || normalized.startsWith(prefix.endsWith('/') ? prefix : prefix + '/')
+  ))
+  return matched?.[1] || 'Inhuis'
+}
 
 function activeActionKey(pathname = '') {
   const normalizedPath = String(pathname || '')
@@ -225,18 +258,22 @@ export default function MobileAppChrome({ children }) {
   }
 
   const isSuperuserRoute = location.pathname === '/superuser' || location.pathname.startsWith('/superuser/')
+  const backHandler = location.pathname === '/home'
+    ? handleHomeBack
+    : location.pathname === '/kassa' || location.pathname === '/kassa/nieuw'
+      ? handleKassaBack
+      : null
 
   return (
     <div className="rz-mobile-app-chrome" data-testid="mobile-app-chrome">
-      {isSuperuserRoute ? (
-        <header className="rz-mobile-superuser-header" data-testid="mobile-superuser-header">
-          <MobileBackControl testId="mobile-global-back" />
-          <strong>Superuser</strong>
-          <span className="rz-mobile-superuser-header-mark" aria-label="InHuis">InHuis</span>
-        </header>
-      ) : (
-        <MobileBackControl testId="mobile-global-back" onBack={location.pathname === '/home' ? handleHomeBack : location.pathname === '/kassa' || location.pathname === '/kassa/nieuw' ? handleKassaBack : null} />
-      )}
+      <MobileModuleHeader
+        title={mobileRouteTitle(location.pathname)}
+        className="rz-mobile-app-header"
+        testId={isSuperuserRoute ? 'mobile-superuser-header' : 'mobile-global-header'}
+        showBack
+        backTestId="mobile-global-back"
+        onBack={backHandler}
+      />
       {children}
       <div className="rz-mobile-app-bottom-space" aria-hidden="true" />
       <MobileBottomNavigationRuntime context={context} pathname={location.pathname} />
