@@ -11,6 +11,7 @@ import time
 import webbrowser
 from pathlib import Path
 from urllib.request import urlopen
+from portable_db import initialize, database_url
 
 BASE = Path(__file__).resolve().parent
 RUNTIME = BASE / "runtime"
@@ -50,14 +51,12 @@ def begin():
     env = os.environ.copy()
     env["PGPORT"] = "15432"
     env["PGHOST"] = "127.0.0.1"
-    if not (DB / "PG_VERSION").exists():
-        # Local-only, temporary database. The server never listens on a non-loopback address.
-        run([INITDB, "-D", DB, "-U", "inhuis", "-A", "trust", "--encoding=UTF8"], env=env)
+    user, password = initialize(INITDB, DB, DATA, env)
     run([PG_CTL, "-D", DB, "-l", LOG / "postgres.log", "-o",
          "-h 127.0.0.1 -p 15432", "-w", "start"], env=env)
     env.update({
-        "DATABASE_URL": "postgresql://inhuis@127.0.0.1:15432/postgres",
-        "MIGRATION_DATABASE_URL": "postgresql://inhuis@127.0.0.1:15432/postgres",
+        "DATABASE_URL": database_url(user, password),
+        "MIGRATION_DATABASE_URL": database_url(user, password),
         "REZZERV_DATASTORE_POLICY": "postgresql-only",
         "REZZERV_EMAIL_ENABLED": "false",
         "REZZERV_RESEND_API_KEY": "",
@@ -78,8 +77,14 @@ def begin():
     env["REZZERV_SUPERGEBRUIKER_PASSWORD"] = secret_file.read_text(encoding="ascii")
     # Preflight intentionally retained: do not skip real schema migration.
     backend_env = env | {"PYTHONPATH": str(BASE / "backend")}
-    with (LOG / "preflight.log").open("a", encoding="utf-8") as logfile:
-        run([PYTHON, "-m", "app.runtime_preflight"], env=backend_env, cwd=BASE / "backend")
+    try:
+        with (LOG / "preflight.log").open("a", encoding="utf-8") as logfile:
+            subprocess.run([str(PYTHON), "-m", "app.runtime_preflight"], env=backend_env,
+                           cwd=BASE / "backend", stdout=logfile, stderr=subprocess.STDOUT,
+                           check=True)
+    except Exception:
+        run([PG_CTL, "-D", DB, "-m", "fast", "-w", "stop"], env=env)
+        raise
     backend_log = (LOG / "backend.log").open("a", encoding="utf-8")
     backend = subprocess.Popen(
         [str(PYTHON), "-m", "uvicorn", "app.session_entrypoint:app",
@@ -96,7 +101,7 @@ def begin():
             if backend.poll() is not None or frontend.poll() is not None:
                 raise RuntimeError("Een InHuis-proces is voortijdig gestopt; zie data/logs.")
             try:
-                with urlopen(f"http://127.0.0.1:{PORT}/api/health", timeout=1):
+                with urlopen(f"http://127.0.0.1:{PORT}/", timeout=1):
                     break
             except Exception:
                 time.sleep(1)
