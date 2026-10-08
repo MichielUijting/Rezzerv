@@ -541,6 +541,8 @@ test.describe('Uitpakken frontend-regressie', () => {
     const spaces = [{ id: 'space-keuken', naam: 'Keuken', active: true }];
     const targetLocationWrites = [];
     let savedLocationId = '';
+    let savedArticleGroupId = '';
+    const articleGroups = [];
 
     await page.route('**/api/**', async (route) => {
       const request = route.request();
@@ -557,6 +559,7 @@ test.describe('Uitpakken frontend-regressie', () => {
         'admin.access': true,
         'locations.manage': true,
         'article.create': true,
+        'article_group.create': true,
         'receipts.process': true,
       };
 
@@ -633,6 +636,7 @@ test.describe('Uitpakken frontend-regressie', () => {
             suggested_household_article_id: 'article-mosterd',
             resolved_household_article_name: 'Mosterd',
             target_location_id: savedLocationId,
+            selected_article_group_id: savedArticleGroupId,
             processing_status: 'pending',
             review_decision: 'selected',
             match_status: 'matched',
@@ -669,7 +673,17 @@ test.describe('Uitpakken frontend-regressie', () => {
         return json({ inventory_handling_override: request.postDataJSON().inventory_handling_override });
       }
 
-      if (path === '/api/article-groups' && method === 'GET') return json({ items: [] });
+      if (path === '/api/article-groups' && method === 'GET') return json({ items: articleGroups });
+      if (path === '/api/article-groups' && method === 'POST') {
+        const name = String(request.postDataJSON().name || '');
+        const group = { id: 'group-frisdrank', name, status: 'active', household_id: '1' };
+        articleGroups.push(group);
+        return json({ ok: true, item: group });
+      }
+      if (path === `/api/purchase-import-lines/${lineId}/article-group` && method === 'POST') {
+        savedArticleGroupId = String(request.postDataJSON().article_group_id || '');
+        return json({ ok: true, selected_article_group_id: savedArticleGroupId });
+      }
       if (method === 'GET') return json({ items: [] });
       return json({ ok: true });
     });
@@ -719,6 +733,13 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect.poll(() => spaces.map((space) => space.naam)).toContain('Garage');
     await expect.poll(() => targetLocationWrites.map((write) => write.target_location_id)).toContain('space-garage');
     await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toContainText('Garage');
+
+    await page.getByTestId(`receipt-line-article-group-select-${lineId}`).selectOption('__add_article_group__');
+    await expect(page.getByRole('dialog', { name: 'Nieuwe artikelgroep' })).toBeVisible();
+    await page.getByRole('dialog', { name: 'Nieuwe artikelgroep' }).getByRole('textbox').fill('Frisdrank');
+    await page.getByRole('button', { name: 'Opslaan en koppelen' }).click();
+    await expect.poll(() => savedArticleGroupId).toBe('group-frisdrank');
+    await expect(page.getByTestId(`receipt-line-article-group-select-${lineId}`)).toHaveValue('group-frisdrank');
   });
 
 });
