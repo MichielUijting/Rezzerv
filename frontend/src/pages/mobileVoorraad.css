@@ -157,6 +157,10 @@
   background: var(--color-mobile-ui-primary) !important;
 }
 
+.rz-mobile-inventory-content > .rz-mobile-pagination {
+  margin-top: 12px;
+}
+
 .rz-mobile-inventory-list {
   overflow: hidden;
   border: 1px solid var(--rz-mobile-proposal-line);
