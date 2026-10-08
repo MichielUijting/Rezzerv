@@ -19,10 +19,6 @@ function firstName(context) {
   return candidate.charAt(0).toUpperCase() + candidate.slice(1)
 }
 
-function InHuisWordmark() {
-  return <span className="rz-inhuis-wordmark" aria-label="InHuis"><span className="rz-inhuis-wordmark-in">In</span><span className="rz-inhuis-wordmark-huis">Huis</span></span>
-}
-
 function euro(value) {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
 }
@@ -485,7 +481,7 @@ export default function MobileHomePage({ context, onOpenTile, welcomeText = 'Fij
   return <main className="rz-mobile-home" data-testid="mobile-home-page">
     <MobileModuleHeader title="Dashboard" testId="mobile-home-header" />
     <section className="rz-mobile-home-inner">
-      <h1 className="rz-mobile-home-welcome">Welkom {name} <InHuisWordmark /></h1>
+      <h1 className="rz-mobile-home-welcome">Welkom {name} </h1>
       <p className="rz-mobile-home-subtitle">{welcomeText}</p>
 
       {error ? <div className="rz-dashboard-error" role="alert">{error}</div> : null}
