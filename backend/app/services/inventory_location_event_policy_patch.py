@@ -73,6 +73,17 @@ def _canonical_event_location(
             # historical state, not new API input. Resolve the canonical NULL/NULL
             # location without weakening validation of supplied locations.
             return resolve_inventory_location(conn, household_id)
+        if not candidate.get("space_id") and not candidate.get("sublocation_id"):
+            # A previously stored NULL/NULL stock row remains editable after
+            # Wat Inhuis -> Waar Inhuis. Provenance comes from the trusted
+            # inventory-row adapter, not a new user-supplied location payload.
+            # Never relax the policy for new stock or transfer destinations.
+            return {
+                "location_id": None,
+                "space_id": None,
+                "sublocation_id": None,
+                "location_label": "",
+            }
 
     return resolve_inventory_location(
         conn,
