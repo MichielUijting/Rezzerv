@@ -116,6 +116,38 @@ assert.match(onboardingPageSource, /<Header title=/)
 assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
 assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome \.rz-mobile-module-header:not\(\.rz-mobile-app-header\),[\s\S]*\.rz-mobile-app-chrome \.rz-header\s*\{[\s\S]*display:\s*none;/)
 
+// Audit every declared application page, not only specific modules.
+// Public authentication/reset entry screens have their own entry-flow UI;
+// all authenticated application pages must be wrapped by MobileAppChrome.
+const routeDeclarations = routerSource.split('\n').filter((line) => /\{ path: '\/[^']+'/.test(line))
+const publicRoutes = new Set([
+  '/login', '/registreren', '/wachtwoord-vergeten', '/wachtwoord-herstellen',
+  '/uitnodiging/:token', '/reset-session',
+])
+const protectedRouteDeclarations = routeDeclarations.filter((line) => {
+  const path = line.match(/path: '([^']+)'/)?.[1]
+  return path && !publicRoutes.has(path) && path !== '/'
+})
+assert.ok(protectedRouteDeclarations.length > 35, 'Audit must cover the complete authenticated router')
+for (const declaration of protectedRouteDeclarations) {
+  assert.match(
+    declaration,
+    /element: <Protected(?:Permission|SettingsRoute|Frontteam|Superuser)?(?:\s|>)/,
+    `Mobile header missing on route: ${declaration}`,
+  )
+}
+assert.match(routerSource, /const platformRoutes = PLATFORM_NAVIGATION_ITEMS\.map/)
+assert.match(routerSource, /\.\.\.platformRoutes/)
+assert.match(routerSource, /<MobileAppChrome>\{children\}<\/MobileAppChrome>/)
+assert.match(routerSource, /<MobileAppChrome>[\s\S]*<SettingsGuard/)
+assert.match(routerSource, /<MobileAppChrome>[\s\S]*<SuperuserGuard/)
+// Neither a regular mobile screen nor the Superuser route may render a second
+// global header or a detached fixed-position back button.
+assert.doesNotMatch(mobileAppChromeSource, /rz-mobile-superuser-header-mark|<MobileBackControl/)
+assert.doesNotMatch(mobileAppChromeCss, /rz-mobile-superuser-header\s*\{/)
+assert.doesNotMatch(mobileAppChromeCss, /\.rz-mobile-app-chrome\s*>\s*\.rz-mobile-back-control/)
+
+
 assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome > \.rz-mobile-app-header\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/)
 assert.match(mobileAppChromeCss, /\.rz-mobile-app-chrome \.rz-mobile-module-header:not\(\.rz-mobile-app-header\)/)
 assert.match(
