@@ -540,6 +540,7 @@ test.describe('Uitpakken frontend-regressie', () => {
     const readyLineId = 'mobile-ready-line';
     const spaces = [{ id: 'space-keuken', naam: 'Keuken', active: true }];
     const targetLocationWrites = [];
+    let savedLocationId = '';
 
     await page.route('**/api/**', async (route) => {
       const request = route.request();
@@ -631,7 +632,7 @@ test.describe('Uitpakken frontend-regressie', () => {
             matched_household_article_id: 'article-mosterd',
             suggested_household_article_id: 'article-mosterd',
             resolved_household_article_name: 'Mosterd',
-            target_location_id: '',
+            target_location_id: savedLocationId,
             processing_status: 'pending',
             review_decision: 'selected',
             match_status: 'matched',
@@ -654,6 +655,7 @@ test.describe('Uitpakken frontend-regressie', () => {
       if (path === `/api/purchase-import-lines/${lineId}/target-location` && method === 'POST') {
         const body = request.postDataJSON();
         targetLocationWrites.push(body);
+        savedLocationId = String(body.target_location_id || '');
         return json({ ok: true, target_location_id: body.target_location_id });
       }
 
@@ -716,6 +718,7 @@ test.describe('Uitpakken frontend-regressie', () => {
 
     await expect.poll(() => spaces.map((space) => space.naam)).toContain('Garage');
     await expect.poll(() => targetLocationWrites.map((write) => write.target_location_id)).toContain('space-garage');
+    await expect(page.getByTestId(`receipt-line-location-select-${lineId}`)).toContainText('Garage');
   });
 
 });
