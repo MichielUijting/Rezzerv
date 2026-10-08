@@ -186,7 +186,15 @@ assert.equal(applyInventoryRowQuantity(initialRows, 'household:b', 'b-1', 0).len
 assert.strictEqual(applyInventoryRowQuantity(initialRows, 'household:a', 'a-1', -1), initialRows)
 assert.match(mobileSource, /setRows\(\(current\) => applyInventoryRowQuantity/)
 assert.match(mobileSource, /setRows\(previousRows\)/)
-assert.doesNotMatch(mobileSource, /setRows\(await loadMobileInventory\(\)\)/)
+// Initial page load and explicit retry must still fetch authoritative inventory.
+// Quick +/- and exact mutations must never trigger that expensive full reload.
+assert.match(mobileSource, /async function reload\(\) \{[\s\S]*setRows\(await loadMobileInventory\(\)\)/)
+const mutationBlock = mobileSource.slice(
+  mobileSource.indexOf('  async function submitInventoryMutation('),
+  mobileSource.indexOf('  async function mutateQuickInventory('),
+)
+assert.ok(mutationBlock.includes('setRows((current) => applyInventoryRowQuantity'))
+assert.doesNotMatch(mutationBlock, /loadMobileInventory\(|\breload\(|setRows\(await /)
 assert.doesNotMatch(mobileSource, /variant: 'success'/)
 
 // A pre-existing locationless row remains editable after Waar Inhuis is enabled.
